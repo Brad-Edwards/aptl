@@ -8,7 +8,7 @@ from aces_contracts.diagnostics import Diagnostic
 
 
 @dataclass(frozen=True)
-class NodeRealization:
+class NodeRealization(object):
     """APTL realization data for one ACES node resource."""
 
     address: str
@@ -38,7 +38,7 @@ class NodeRealization:
 
 
 @dataclass(frozen=True)
-class NetworkRealization:
+class NetworkRealization(object):
     """APTL realization data for one ACES network resource."""
 
     address: str
@@ -58,7 +58,7 @@ class NetworkRealization:
 
 
 @dataclass(frozen=True)
-class PlacementRealization:
+class PlacementRealization(object):
     """APTL realization data for one node-scoped provisioning binding."""
 
     address: str
@@ -78,7 +78,7 @@ class PlacementRealization:
 
 
 @dataclass(frozen=True)
-class AptlRealization:
+class AptlRealization(object):
     """Result of interpreting ACES provisioning content for APTL."""
 
     profiles: frozenset[str]

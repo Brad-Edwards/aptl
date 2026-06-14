@@ -38,15 +38,15 @@ SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest
 sh: ss: not found
 Active Internet connections (only servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 127.0.0.11:40651        0.0.0.0:*               LISTEN      -
-udp        0      0 127.0.0.11:58703        0.0.0.0:*                           -
+tcp        0      0 127.0.0.11:35529        0.0.0.0:*               LISTEN      -
+udp        0      0 127.0.0.11:48383        0.0.0.0:*                           -
 --outbound-connections--
 sh: ss: not found
 Active Internet connections (w/o servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 172.20.0.6:46306        172.20.0.20:5001        ESTABLISHED 1/orborus
+tcp        0      0 172.20.0.7:43194        172.20.0.20:5001        ESTABLISHED 1/orborus
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51170/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/198/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/197/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/56/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51177/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51177/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107912/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/198/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/197/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/56/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107918/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107918/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -139,11 +139,8 @@ Seccomp_filters:	1
 --process-tree--
 PID   PPID  USER     COMMAND
     1     0 root     ./orborus
-   49     1 root     [timeout]
-   62     1 root     [timeout]
-   75     1 root     [timeout]
-   88     1 root     [timeout]
-  311     1 root     [timeout]
- 1670     0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --pid1-capabilities--   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
- 1694  1670 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --pid1-capabilities--   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
- 1695  1694 root     ps -eo pid,ppid,user,args
+ 1435     1 root     [timeout]
+ 2855     1 root     [timeout]
+ 4212     0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --pid1-capabilities--   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+ 4236  4212 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || cat /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6 || true) 2>&1   printf "%s\n" --outbound-connections--   (ss -ntp || netstat -ntp || cat /proc/net/tcp /proc/net/tcp6 || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --sudoers--   (cat /etc/sudoers 2>/dev/null; ls /etc/sudoers.d 2>/dev/null) || true   printf "%s\n" --pid1-capabilities--   grep -E "^(CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs|Seccomp)" /proc/1/status 2>/dev/null || true   printf "%s\n" --process-tree--   (ps -eo pid,ppid,user,args 2>/dev/null || ps -ef || for p in /proc/[0-9]*; do printf "%s %s\n" "${p#/proc/}" "$(tr "\0" " " < "$p/cmdline" 2>/dev/null)"; done) 2>&1
+ 4237  4236 root     ps -eo pid,ppid,user,args

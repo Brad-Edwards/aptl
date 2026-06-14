@@ -590,6 +590,11 @@ services:
       - shuffle-backend
     networks:
       aptl-security:
+        # Pinned so the orborus asset has a stable, reproducible address
+        # for the ACES inventory capture. It was previously DHCP-assigned,
+        # which let its address drift between capture runs (.6 vs .7) and
+        # made the inventory evidence bundle internally inconsistent.
+        ipv4_address: 172.20.0.7
 
   shuffle-opensearch:
     profiles: ["soc"]

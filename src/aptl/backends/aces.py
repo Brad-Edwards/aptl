@@ -207,7 +207,8 @@ class AptlProvisioner(object):
             config=self.config,
         )
 
-    def _invalid_plan_diagnostics(self, plan: object) -> list[Diagnostic]:
+    @staticmethod
+    def _invalid_plan_diagnostics(plan: object) -> list[Diagnostic]:
         if isinstance(plan, ProvisioningPlan):
             return []
         return [

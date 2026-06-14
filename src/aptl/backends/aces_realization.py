@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -26,120 +25,32 @@ from aptl.backends.aces_profiles import (
     node_aliases,
     normalize_identifier,
 )
+from aptl.backends.aces_realization_model import (
+    AptlRealization,
+    NetworkRealization,
+    NodeRealization,
+    PlacementRealization,
+)
+from aptl.backends.aces_realization_values import (
+    first_nonempty_string as _first_nonempty_string,
+    mapping as _mapping,
+    network_names as _network_names,
+    optional_bool as _optional_bool,
+    optional_string as _optional_string,
+    placement_target_values as _placement_target_values,
+    resolve_target_address as _resolve_target_address,
+    resource_name as _resource_name,
+    runtime_spec as _runtime_spec,
+    service_names as _service_names,
+    static_addresses as _static_addresses,
+    string_list as _string_list,
+)
 from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
 
 PLACEMENT_RESOURCE_TYPES = frozenset(
     {"feature-binding", "content-placement", "account-placement"}
 )
-
-
-@dataclass(frozen=True)
-class NodeRealization(object):
-    """APTL realization data for one ACES node resource."""
-
-    address: str
-    name: str
-    aliases: tuple[str, ...]
-    profiles: tuple[str, ...]
-    services: tuple[str, ...]
-    rendered_configs: tuple[str, ...]
-    evidence_paths: tuple[str, ...]
-    telemetry_paths: tuple[str, ...]
-    networks: tuple[str, ...]
-    static_addresses: tuple[str, ...]
-
-    def details(self) -> dict[str, object]:
-        return {
-            "address": self.address,
-            "name": self.name,
-            "aliases": list(self.aliases),
-            "profiles": list(self.profiles),
-            "services": list(self.services),
-            "rendered_configs": list(self.rendered_configs),
-            "evidence_paths": list(self.evidence_paths),
-            "telemetry_paths": list(self.telemetry_paths),
-            "networks": list(self.networks),
-            "static_addresses": list(self.static_addresses),
-        }
-
-
-@dataclass(frozen=True)
-class NetworkRealization(object):
-    """APTL realization data for one ACES network resource."""
-
-    address: str
-    name: str
-    cidr: str | None
-    gateway: str | None
-    internal: bool | None
-
-    def details(self) -> dict[str, object]:
-        return {
-            "address": self.address,
-            "name": self.name,
-            "cidr": self.cidr,
-            "gateway": self.gateway,
-            "internal": self.internal,
-        }
-
-
-@dataclass(frozen=True)
-class PlacementRealization(object):
-    """APTL realization data for one node-scoped provisioning binding."""
-
-    address: str
-    resource_type: str
-    name: str
-    target_address: str
-    target_node: str | None
-
-    def details(self) -> dict[str, object]:
-        return {
-            "address": self.address,
-            "resource_type": self.resource_type,
-            "name": self.name,
-            "target_address": self.target_address,
-            "target_node": self.target_node,
-        }
-
-
-@dataclass(frozen=True)
-class AptlRealization(object):
-    """Result of interpreting ACES provisioning content for APTL."""
-
-    profiles: frozenset[str]
-    nodes: tuple[NodeRealization, ...]
-    networks: tuple[NetworkRealization, ...]
-    placements: tuple[PlacementRealization, ...]
-    diagnostics: tuple[Diagnostic, ...]
-
-    def details(self) -> dict[str, object]:
-        resource_counts = {
-            "account-placement": sum(
-                placement.resource_type == "account-placement"
-                for placement in self.placements
-            ),
-            "content-placement": sum(
-                placement.resource_type == "content-placement"
-                for placement in self.placements
-            ),
-            "feature-binding": sum(
-                placement.resource_type == "feature-binding"
-                for placement in self.placements
-            ),
-            "network": len(self.networks),
-            "node": len(self.nodes),
-        }
-        return {
-            "profiles": sorted(self.profiles),
-            "resource_counts": {
-                key: value for key, value in sorted(resource_counts.items()) if value
-            },
-            "nodes": [node.details() for node in self.nodes],
-            "networks": [network.details() for network in self.networks],
-            "placements": [placement.details() for placement in self.placements],
-        }
 
 
 def interpret_provisioning_plan(
@@ -152,38 +63,70 @@ def interpret_provisioning_plan(
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
+    profile_index = _load_profile_index(project_dir, diagnostics)
+    if profile_index is None:
+        return _empty_realization(diagnostics)
+
+    payload_resources = _payload_resources(plan, diagnostics)
+    nodes, networks, profiles = _realize_nodes_and_networks(
+        payload_resources,
+        profile_index,
+        diagnostics,
+    )
+    placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
+    _append_profile_diagnostics(profiles, config, diagnostics)
+
+    return _realization_from_parts(nodes, networks, placements, profiles, diagnostics)
+
+
+def _load_profile_index(
+    project_dir: Path,
+    diagnostics: list[Diagnostic],
+) -> ComposeProfileIndex | None:
+    """Load the compose profile index and record redacted load failures."""
+
     try:
-        profile_index = load_compose_profile_index(project_dir)
+        return load_compose_profile_index(project_dir)
     except (OSError, ValueError, yaml.YAMLError) as exc:
-        return _empty_realization(
-            [
-                *diagnostics,
-                diagnostic(
-                    "aptl.provisioner.compose-profile-index-failed",
-                    PROVISIONING_ADDRESS,
-                    redact(str(exc)),
-                ),
-            ]
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.compose-profile-index-failed",
+                PROVISIONING_ADDRESS,
+                redact(str(exc)),
+            )
         )
+        return None
+
+
+def _payload_resources(
+    plan: ProvisioningPlan,
+    diagnostics: list[Diagnostic],
+) -> list[PlannedResource]:
+    """Return supported resources with mapping payloads and report invalid ones."""
 
     supported_resources = [
         resource
         for resource in plan.resources.values()
         if resource.resource_type in SUPPORTED_RESOURCE_TYPES
     ]
-    invalid_payloads = _invalid_payload_diagnostics(supported_resources)
-    diagnostics.extend(invalid_payloads)
-    payload_resources = [
+    diagnostics.extend(_invalid_payload_diagnostics(supported_resources))
+    return [
         resource
         for resource in supported_resources
         if isinstance(resource.payload, Mapping)
     ]
 
+
+def _realize_nodes_and_networks(
+    payload_resources: list[PlannedResource],
+    profile_index: ComposeProfileIndex,
+    diagnostics: list[Diagnostic],
+) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
+    """Realize node and network resources before resolving placements."""
+
     nodes: list[NodeRealization] = []
     networks: list[NetworkRealization] = []
-    placements: list[PlacementRealization] = []
     profiles: set[str] = set()
-
     for resource in payload_resources:
         payload = resource.payload
         if resource.resource_type == "node":
@@ -191,20 +134,38 @@ def interpret_provisioning_plan(
             nodes.append(node)
             profiles.update(node.profiles)
             if not node.profiles:
-                diagnostics.append(
-                    diagnostic(
-                        "aptl.provisioner.node-profile-unresolved",
-                        resource.address,
-                        (
-                            "ACES node resource does not declare content that "
-                            "maps to an APTL compose profile."
-                        ),
-                    )
-                )
+                _append_node_profile_diagnostic(resource, diagnostics)
         elif resource.resource_type == "network":
             networks.append(_realize_network(resource, payload))
+    return nodes, networks, profiles
 
-    node_lookup = _node_lookup(nodes)
+
+def _append_node_profile_diagnostic(
+    resource: PlannedResource,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Record a diagnostic for a node without an APTL profile mapping."""
+
+    diagnostics.append(
+        diagnostic(
+            "aptl.provisioner.node-profile-unresolved",
+            resource.address,
+            (
+                "ACES node resource does not declare content that "
+                "maps to an APTL compose profile."
+            ),
+        )
+    )
+
+
+def _realize_placements(
+    payload_resources: list[PlannedResource],
+    node_lookup: dict[str, str],
+    diagnostics: list[Diagnostic],
+) -> list[PlacementRealization]:
+    """Resolve supported placement resources against realized nodes."""
+
+    placements: list[PlacementRealization] = []
     for resource in payload_resources:
         if resource.resource_type in PLACEMENT_RESOURCE_TYPES:
             placement, placement_diagnostics = _realize_placement(
@@ -215,6 +176,15 @@ def interpret_provisioning_plan(
             diagnostics.extend(placement_diagnostics)
             if placement is not None:
                 placements.append(placement)
+    return placements
+
+
+def _append_profile_diagnostics(
+    profiles: set[str],
+    config: AptlConfig,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Record diagnostics for missing or disabled compose-profile matches."""
 
     if not profiles:
         diagnostics.append(
@@ -241,6 +211,16 @@ def interpret_provisioning_plan(
             )
         )
 
+
+def _realization_from_parts(
+    nodes: list[NodeRealization],
+    networks: list[NetworkRealization],
+    placements: list[PlacementRealization],
+    profiles: set[str],
+    diagnostics: list[Diagnostic],
+) -> AptlRealization:
+    """Build the stable realization value from collected resource parts."""
+
     return AptlRealization(
         profiles=frozenset(profiles),
         nodes=tuple(sorted(nodes, key=lambda item: item.address)),
@@ -251,6 +231,8 @@ def interpret_provisioning_plan(
 
 
 def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
+    """Build an empty realization that carries validation diagnostics."""
+
     return AptlRealization(
         profiles=frozenset(),
         nodes=(),
@@ -263,6 +245,8 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
 def _invalid_payload_diagnostics(
     resources: list[PlannedResource],
 ) -> list[Diagnostic]:
+    """Report supported resources whose payload cannot be interpreted."""
+
     diagnostics: list[Diagnostic] = []
     for resource in resources:
         if isinstance(resource.payload, Mapping):
@@ -285,6 +269,8 @@ def _realize_node(
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
 ) -> NodeRealization:
+    """Realize a node resource into APTL profile and runtime details."""
+
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
     profiles = profile_hints | profile_index.profiles_for_aliases(aliases)
@@ -310,6 +296,8 @@ def _realize_network(
     resource: PlannedResource,
     payload: Mapping[str, Any],
 ) -> NetworkRealization:
+    """Realize a network resource into APTL network details."""
+
     spec = _mapping(payload.get("spec"))
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
     properties = _mapping(infra_spec.get("properties")) if infra_spec else None
@@ -327,6 +315,8 @@ def _realize_placement(
     payload: Mapping[str, Any],
     node_lookup: dict[str, str],
 ) -> tuple[PlacementRealization | None, list[Diagnostic]]:
+    """Realize a placement resource or return its diagnostics."""
+
     target_values = _placement_target_values(resource.resource_type, payload)
     target_address = _resolve_target_address(target_values, node_lookup)
     if target_address is None:
@@ -356,6 +346,8 @@ def _realize_placement(
 
 
 def _node_lookup(nodes: list[NodeRealization]) -> dict[str, str]:
+    """Index node addresses and aliases for placement target resolution."""
+
     lookup: dict[str, str] = {}
     for node in nodes:
         values = {node.address, node.name, *node.aliases}
@@ -367,150 +359,3 @@ def _node_lookup(nodes: list[NodeRealization]) -> dict[str, str]:
             if normalized:
                 lookup[normalized] = node.address
     return lookup
-
-
-def _placement_target_values(
-    resource_type: str,
-    payload: Mapping[str, Any],
-) -> tuple[str, ...]:
-    if resource_type == "feature-binding":
-        return _payload_string_values(payload, ("node_address", "node_name"))
-    if resource_type == "content-placement":
-        return _payload_string_values(payload, ("target_address", "target_node"))
-    if resource_type == "account-placement":
-        return _payload_string_values(payload, ("target_address", "node_name"))
-    return ()
-
-
-def _resolve_target_address(
-    target_values: tuple[str, ...],
-    node_lookup: dict[str, str],
-) -> str | None:
-    for value in target_values:
-        if value in node_lookup:
-            return node_lookup[value]
-        normalized = normalize_identifier(value)
-        if normalized in node_lookup:
-            return node_lookup[normalized]
-    return None
-
-
-def _resource_name(address: str, payload: Mapping[str, Any]) -> str:
-    return _first_nonempty_string(_payload_string_values(payload, ("name",))) or address
-
-
-def _runtime_spec(
-    payload: Mapping[str, Any],
-    spec: Mapping[str, Any] | None,
-) -> Mapping[str, Any] | None:
-    for container in (payload, spec):
-        if container is None:
-            continue
-        runtime = container.get("runtime")
-        if isinstance(runtime, Mapping):
-            return runtime
-        aptl = container.get("aptl")
-        if isinstance(aptl, Mapping):
-            return aptl
-    return None
-
-
-def _service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
-    if node_spec is None:
-        return set()
-    services = node_spec.get("services")
-    if not isinstance(services, list):
-        return set()
-    names: set[str] = set()
-    for service in services:
-        if not isinstance(service, Mapping):
-            continue
-        name = service.get("name")
-        if isinstance(name, str) and name.strip():
-            names.add(name)
-    return names
-
-
-def _network_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
-    if infra_spec is None:
-        return set()
-    return _string_values(infra_spec.get("links"))
-
-
-def _static_addresses(infra_spec: Mapping[str, Any] | None) -> set[str]:
-    if infra_spec is None:
-        return set()
-    properties = infra_spec.get("properties")
-    addresses: set[str] = set()
-    if isinstance(properties, list):
-        for item in properties:
-            if isinstance(item, Mapping):
-                addresses.update(_string_values(item.values()))
-    elif isinstance(properties, Mapping):
-        for key in ("address", "ip", "ipv4_address", "static_address"):
-            value = properties.get(key)
-            if isinstance(value, str) and value.strip():
-                addresses.add(value)
-    return addresses
-
-
-def _string_list(
-    payload: Mapping[str, Any] | None,
-    key: str,
-) -> set[str]:
-    if payload is None:
-        return set()
-    return _string_values(payload.get(key))
-
-
-def _string_values(raw: object) -> set[str]:
-    if isinstance(raw, str):
-        return {raw} if raw.strip() else set()
-    if isinstance(raw, Mapping):
-        raw = raw.values()
-    if isinstance(raw, list | tuple | set | frozenset):
-        return {str(value) for value in raw if str(value).strip()}
-    return set()
-
-
-def _payload_string_values(
-    payload: Mapping[str, Any],
-    keys: tuple[str, ...],
-) -> tuple[str, ...]:
-    values: list[str] = []
-    for key in keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            values.append(value)
-    return tuple(values)
-
-
-def _first_nonempty_string(values: tuple[str, ...]) -> str | None:
-    for value in values:
-        if value.strip():
-            return value
-    return None
-
-
-def _optional_string(
-    payload: Mapping[str, Any] | None,
-    key: str,
-) -> str | None:
-    if payload is None:
-        return None
-    value = payload.get(key)
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _optional_bool(
-    payload: Mapping[str, Any] | None,
-    key: str,
-) -> bool | None:
-    if payload is None:
-        return None
-    value = payload.get(key)
-    return value if isinstance(value, bool) else None
-
-
-def _mapping(value: object) -> Mapping[str, Any] | None:
-    return value if isinstance(value, Mapping) else None

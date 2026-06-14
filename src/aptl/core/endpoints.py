@@ -135,6 +135,14 @@ ENDPOINT_REGISTRY: tuple[EndpointRegistryEntry, ...] = (
         transport_protocol="tcp",
         ssh_user="labadmin",
     ),
+    EndpointRegistryEntry(
+        container_name="aptl-workstation",
+        display_name="Workstation",
+        kind="ssh",
+        target_port=22,
+        transport_protocol="tcp",
+        ssh_user="labadmin",
+    ),
 )
 
 
@@ -256,6 +264,35 @@ def build_service_endpoints(
     return endpoints
 
 
+def _build_ssh_endpoint(
+    entry: EndpointRegistryEntry, container: ContainerSnapshot
+) -> SSHEndpoint | None:
+    """Project one running SSH registry entry onto its reachable endpoint.
+
+    Lab SSH targets sit on internal-only networks with no published host
+    port (issue #293), so they are addressed by container IP — the host
+    reaches them over the bridge — and the endpoint connects to the
+    container-side target port directly, not a remapped host port.
+    Returns ``None`` when the container has no host-reachable IP.
+    """
+    # Registry invariant: kind="ssh" entries always carry an ssh_user.
+    # The assert documents this for the type checker without leaving an
+    # unreachable defensive branch.
+    assert entry.ssh_user is not None
+    host = select_ssh_host(container.networks)
+    if host is None:
+        return None
+    command = f"ssh -i {_SSH_KEY_PATH} {entry.ssh_user}@{host}"
+    return SSHEndpoint(
+        name=entry.display_name,
+        host=host,
+        port=entry.target_port,
+        user=entry.ssh_user,
+        key_path=_SSH_KEY_PATH,
+        command=command,
+    )
+
+
 def build_ssh_endpoints(
     containers: list[ContainerSnapshot],
 ) -> list[SSHEndpoint]:
@@ -268,27 +305,46 @@ def build_ssh_endpoints(
         container = by_name.get(entry.container_name)
         if container is None or not _running(container):
             continue
-        # Registry invariant: kind="ssh" entries always carry an ssh_user.
-        # The assert documents this for the type checker without leaving
-        # an unreachable defensive branch.
-        assert entry.ssh_user is not None
-        # Lab SSH targets sit on internal-only networks with no
-        # published host port (issue #293), so they are addressed by
-        # container IP — the host reaches them over the bridge. The
-        # endpoint connects to the container-side target port directly,
-        # not a remapped host port.
-        host = select_ssh_host(container.networks)
-        if host is None:
-            continue
-        command = f"ssh -i {_SSH_KEY_PATH} {entry.ssh_user}@{host}"
-        endpoints.append(
-            SSHEndpoint(
-                name=entry.display_name,
-                host=host,
-                port=entry.target_port,
-                user=entry.ssh_user,
-                key_path=_SSH_KEY_PATH,
-                command=command,
-            )
-        )
+        endpoint = _build_ssh_endpoint(entry, container)
+        if endpoint is not None:
+            endpoints.append(endpoint)
     return endpoints
+
+
+# Short terminal target names (registry container name minus the
+# ``aptl-`` prefix). The WebSocket relay validates an incoming container
+# against this set before touching runtime inventory, so a new terminal
+# target is a single registry edit — not a second hardcoded map
+# (ADR-040).
+_TERMINAL_CONTAINER_PREFIX = "aptl-"
+TERMINAL_CONTAINER_NAMES: frozenset[str] = frozenset(
+    entry.container_name.removeprefix(_TERMINAL_CONTAINER_PREFIX)
+    for entry in ENDPOINT_REGISTRY
+    if entry.kind == "ssh"
+)
+
+
+def terminal_ssh_endpoints(
+    containers: list[ContainerSnapshot],
+) -> dict[str, SSHEndpoint]:
+    """Map terminal short-name → reachable ``SSHEndpoint`` (ADR-040).
+
+    The small registry projection the operator terminal relay consumes to
+    derive host/user/port from runtime inventory instead of a hardcoded
+    ``localhost`` map. Only running containers with a host-reachable IP
+    appear, so a profile-gated target (e.g. ``workstation``) is present
+    exactly when its container is up.
+    """
+    by_name = _container_index(containers)
+    result: dict[str, SSHEndpoint] = {}
+    for entry in ENDPOINT_REGISTRY:
+        if entry.kind != "ssh":
+            continue
+        container = by_name.get(entry.container_name)
+        if container is None or not _running(container):
+            continue
+        endpoint = _build_ssh_endpoint(entry, container)
+        if endpoint is not None:
+            short = entry.container_name.removeprefix(_TERMINAL_CONTAINER_PREFIX)
+            result[short] = endpoint
+    return result

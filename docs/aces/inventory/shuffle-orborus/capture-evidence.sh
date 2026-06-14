@@ -70,11 +70,11 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker top "$CONTAINER" > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.shuffle-orborus.txt"
+docker logs "$CONTAINER" --tail 500 > "$OUT/docker-logs.shuffle-orborus.txt" 2>&1
 
 record_limit "Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof."
 record_limit "shuffle-orborus has no named Docker volume; its only mount is the host /var/run/docker.sock bind. No docker-volume.*.json is emitted for this asset."
-record_limit "shuffle-orborus joins aptl-security with a DHCP address (the compose service declares no static ipv4_address) and publishes NO host ports; its current network identity is recorded in docker-inspect.container.json and docker-network.aptl-security.json."
+record_limit "shuffle-orborus joins aptl-security with the static address 172.20.0.7 (pinned via the compose service's ipv4_address) and publishes NO host ports; its network identity is recorded in docker-inspect.container.json and docker-network.aptl-security.json. The address was previously DHCP-assigned, which let it drift between capture runs and made this bundle internally inconsistent; it is now pinned for reproducible capture."
 
 # --- HOST-CONTROL SURFACE: docker.sock bind --------------------------------
 # Make the privileged surface a first-class, dedicated evidence fact.

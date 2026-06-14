@@ -67,18 +67,29 @@ def _sanitize(value: str) -> str:
     return value.replace("\r", "").replace("\n", "")
 
 
+class _TerminalReject(Exception):
+    """Internal signal that a pre-dial gate has closed the WebSocket.
+
+    Each validation gate performs its own accept/send/close I/O and then
+    raises this so the resolver funnels through a single success return
+    (keeping the cyclomatic return count low) while the caller simply
+    stops.
+    """
+
+
 async def _resolve_terminal_target(
     websocket: WebSocket,
     container: str,
     project_dir: Path,
-) -> tuple[SSHEndpoint, Path] | None:
+) -> tuple[SSHEndpoint, Path]:
     """Run the pre-dial validation gates for a terminal connection.
 
     Performs the origin, container-allowlist, lab-running, endpoint, and
     host-key-pin checks. Returns the resolved endpoint and known_hosts
-    path on success, or ``None`` after closing the WebSocket if any gate
-    rejects the connection. ``container`` is the original path param (used
-    for the allowlist check); callers must sanitize it before logging.
+    path on success, or raises :class:`_TerminalReject` after closing the
+    WebSocket if any gate rejects the connection. ``container`` is the
+    original path param (used for the allowlist check); callers must
+    sanitize it before logging.
     """
     safe_container = _sanitize(container)
 
@@ -90,7 +101,7 @@ async def _resolve_terminal_target(
     if not origin or origin not in ALLOWED_ORIGINS:
         await websocket.close(code=1008, reason="Origin not allowed")
         log.warning("Rejected WebSocket from disallowed origin: %s", origin)
-        return None
+        raise _TerminalReject
 
     # Validate container name against the canonical registry projection
     # (ADR-039) — a cheap reject before touching runtime inventory.
@@ -98,7 +109,7 @@ async def _resolve_terminal_target(
         await websocket.accept()
         await websocket.close(code=1008, reason="Unknown container")
         log.warning("Rejected terminal connection for unknown container")
-        return None
+        raise _TerminalReject
 
     # Check lab is running
     status = await asyncio.to_thread(lab_status, project_dir=project_dir)
@@ -109,7 +120,7 @@ async def _resolve_terminal_target(
         )
         await websocket.close(code=1008, reason="Lab not running")
         log.warning("Rejected terminal connection: lab not running")
-        return None
+        raise _TerminalReject
 
     await websocket.accept()
 
@@ -127,7 +138,7 @@ async def _resolve_terminal_target(
         )
         await websocket.close(code=1008, reason="Container not available")
         log.warning("Terminal target not available in runtime inventory")
-        return None
+        raise _TerminalReject
 
     # SSH trust gate (ADR-039): verify the server host key against the
     # lab-start-pinned known_hosts file. A missing pin fails closed
@@ -142,7 +153,7 @@ async def _resolve_terminal_target(
         )
         await websocket.close(code=1008, reason="Host keys not pinned")
         log.warning("Terminal refused: no pinned known_hosts at %s", kh_path)
-        return None
+        raise _TerminalReject
 
     log.info("Terminal WebSocket accepted for %s", safe_container)
     return endpoint, kh_path
@@ -161,12 +172,12 @@ async def terminal_ws(
     """
     safe_container = _sanitize(container)
 
-    resolved = await _resolve_terminal_target(
-        websocket, container, project_dir
-    )
-    if resolved is None:
+    try:
+        endpoint, kh_path = await _resolve_terminal_target(
+            websocket, container, project_dir
+        )
+    except _TerminalReject:
         return
-    endpoint, kh_path = resolved
 
     key_path = _get_key_path()
 

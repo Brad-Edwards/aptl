@@ -278,6 +278,7 @@ def _get_wazuh_rules_snapshot(
     manager = "aptl-wazuh-manager"
 
     def _count(query: str) -> int | None:
+        """Run a count *query* on the manager; return the int or None."""
         out = _backend_exec(backend, manager, ["bash", "-c", query])
         return int(out) if out.isdigit() else None
 

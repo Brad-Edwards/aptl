@@ -322,11 +322,7 @@
       "Ports": {
         "9000/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "9000"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "9000"
           }
         ]

@@ -5,7 +5,7 @@ nodes:
     description: 'TechVault Shuffle SOAR frontend (compose service shuffle-frontend, container aptl-shuffle-frontend, image
       ghcr.io/shuffle/shuffle-frontend:latest). nginx 1.29.3 serving the pre-built React SPA and reverse-proxying /api/v1|v2
       to shuffle-backend:5001. Inventoried at experiment grade under docs/aces/inventory/shuffle-frontend/ (SCN-010 issue
-      #354). On security-net 172.20.0.21; HTTP/80 published to the host as 3001:80 and HTTPS/443 as 3443:443. The nginx TLS
+      #354). On security-net 172.20.0.21; HTTP/80 published to the host as 127.0.0.1:3001:80 (loopback-only) and HTTPS/443 as 127.0.0.1:3443:443 (loopback-only). The nginx TLS
       private key is a captured scenario fixture; it reverse-proxies to the backend (relationships.shuffle-frontend-proxies-backend).'
     source:
       name: ghcr.io/shuffle/shuffle-frontend
@@ -443,11 +443,11 @@ nodes:
     - port: 443
       protocol: tcp
       name: shuffle-frontend-web
-      description: nginx HTTPS (React UI + /api proxy); published to the host as 3443.
+      description: nginx HTTPS (React UI + /api proxy); published to the host as 127.0.0.1:3443 (loopback-only).
     - port: 80
       protocol: tcp
       name: shuffle-frontend-web-http
-      description: nginx HTTP on TCP/80; published to the host as 3001->80.
+      description: nginx HTTP on TCP/80; published to the host as 127.0.0.1:3001->80 (loopback-only).
     asset_value: null
     runtime:
       mounts:
@@ -3712,16 +3712,16 @@ nodes:
         published_ports:
         - container_port: 443
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 3443
           description: ''
         - container_port: 80
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 3001
           description: ''
-        description: security-net 172.20.0.21; nginx HTTP/80 published to the host as 3001:80 and HTTPS/443 as 3443:443 (the
-          pre-#405 3001:3001 mapping pointed at a container port with no listener and was corrected).
+        description: security-net 172.20.0.21; nginx HTTP/80 published to the host as 127.0.0.1:3001:80 (loopback-only) and HTTPS/443
+          as 127.0.0.1:3443:443 (loopback-only) (the pre-#405 3001:3001 mapping pointed at a container port with no listener and was corrected).
       service_listeners:
       - service_listener_id: nginx-http-80
         service: shuffle-frontend-web-http
@@ -3741,7 +3741,7 @@ nodes:
         - docs/aces/inventory/shuffle-frontend/evidence/osquery-listening-ports.json
         - docs/aces/inventory/shuffle-frontend/evidence/frontend-state.txt
         description: nginx HTTP listener on TCP/80 (serves the React UI and reverse-proxies /api/v1|v2 to shuffle-backend);
-          published to the host as 3001.
+          published to the host as 127.0.0.1:3001 (loopback-only).
       - service_listener_id: nginx-https-443
         service: shuffle-frontend-web
         address: 0.0.0.0
@@ -3759,7 +3759,7 @@ nodes:
         evidence_refs:
         - docs/aces/inventory/shuffle-frontend/evidence/osquery-listening-ports.json
         - docs/aces/inventory/shuffle-frontend/evidence/frontend-state.txt
-        description: nginx HTTPS listener on TCP/443 (lab-CA-signed cert); published to the host as 3443.
+        description: nginx HTTPS listener on TCP/443 (lab-CA-signed cert); published to the host as 127.0.0.1:3443 (loopback-only).
       - service_listener_id: docker-embedded-dns-tcp
         service: ''
         address: 127.0.0.11
@@ -3808,7 +3808,7 @@ nodes:
         framework: nginx 1.29.3 + pre-built static React (SPA)
         description: 'Shuffle SOAR frontend: nginx serves the pre-built React single-page app from /usr/share/nginx/html and
           reverse-proxies /api/v1|v2 to the shuffle-backend on TCP/5001. HTTP/80 and HTTPS/443 (lab-CA cert); published to
-          the host as 3001:80 and 3443:443.'
+          the host as 127.0.0.1:3001:80 and 127.0.0.1:3443:443 (loopback-only).'
         routes:
         - route_id: spa-root
           path: /

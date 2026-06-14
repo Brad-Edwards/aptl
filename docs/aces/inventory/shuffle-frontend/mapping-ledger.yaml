@@ -26,7 +26,7 @@ notes:
   ghcr.io/shuffle/shuffle-frontend:latest image). Every catalogued observable maps to a current ACES surface. No known ACES
   expressivity gap remains for the catalogued shuffle-frontend steady-state facts.'
 - The frontend is nginx serving the pre-built React SPA and reverse-proxying /api/v1|v2 to shuffle-backend:5001 (relationships.shuffle-frontend-proxies-backend).
-  HTTP/80 is published to the host as 3001:80 and HTTPS/443 as 3443:443 (the pre-#405 3001:3001 mapping published a container port with no listener and was corrected).
+  HTTP/80 is published to the host as 127.0.0.1:3001:80 (loopback-only) and HTTPS/443 as 127.0.0.1:3443:443 (loopback-only) (the pre-#405 3001:3001 mapping published a container port with no listener and was corrected).
 - The nginx TLS private key (/etc/nginx/privkey.pem) is generated scenario fixture content and is captured verbatim in
   filesystem-sensitive-paths.txt and by checksum in filesystem-checksums.txt. The server certificate and lab CA are public.
 - Upstream nginx-image shell variable references in the history-derived build instruction strings were normalized from ${VAR}
@@ -157,9 +157,9 @@ facts:
 - id: shuffle-frontend.compose.service-contract
   category: compose
   summary: Compose declares aptl-shuffle-frontend, image shuffle-frontend:latest, BACKEND_HOSTNAME=shuffle-backend, the three
-    ro cert binds (server.pem, server.key, lab-ca.pem), depends_on shuffle-backend, security-net 172.20.0.21, and the 3001:80
-    + 3443:443 published ports (the pre-#405 3001:3001 mapping published a container port with no listener and was corrected
-    to 3001:80).
+    ro cert binds (server.pem, server.key, lab-ca.pem), depends_on shuffle-backend, security-net 172.20.0.21, and the 127.0.0.1:3001:80
+    + 127.0.0.1:3443:443 loopback-only published ports (the pre-#405 3001:3001 mapping published a container port with no listener
+    and was corrected to 3001:80; now loopback-bound).
   evidence:
   - path: evidence/compose-service.shuffle-frontend.json
   - path: evidence/docker-compose-version.json
@@ -196,8 +196,8 @@ facts:
     rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
 - id: shuffle-frontend.network.identity
   category: network
-  summary: The frontend is on security-net at 172.20.0.21 and publishes nginx HTTP/80 to the host as 3001:80 and HTTPS/443
-    as 3443:443.
+  summary: The frontend is on security-net at 172.20.0.21 and publishes nginx HTTP/80 to the host as 127.0.0.1:3001:80 (loopback-only)
+    and HTTPS/443 as 127.0.0.1:3443:443 (loopback-only).
   evidence:
   - path: evidence/docker-network.aptl-security.json
   - path: evidence/docker-inspect.container.json
@@ -213,7 +213,7 @@ facts:
     rationale: Current ACES SDL node network fields carry the realized endpoint and published-port facts directly.
 - id: shuffle-frontend.runtime.service-listeners
   category: runtime
-  summary: nginx listens on TCP/80 (HTTP, published to the host as 3001) and TCP/443 (HTTPS, lab-CA cert, published as 3443);
+  summary: nginx listens on TCP/80 (HTTP, published to the host as 127.0.0.1:3001, loopback-only) and TCP/443 (HTTPS, lab-CA cert, published as 127.0.0.1:3443, loopback-only);
     the only other sockets are the two backend-generated Docker embedded-DNS loopback listeners on 127.0.0.11, encoded as
     loopback_only runtime listeners.
   evidence:

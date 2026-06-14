@@ -10,8 +10,8 @@ established granularity bar (issue #330 depth).
 13) that serves the pre-built React single-page app and reverse-proxies
 `/api/v1|v2` to `shuffle-backend:5001`. It is inventoried as the participant
 application node `nodes.techvault.shuffle-frontend`. On security-net
-172.20.0.21; nginx HTTP/80 is published to the host as `3001:80` and HTTPS/443
-as `3443:443` (the pre-#405 `3001:3001` mapping published a container port with
+172.20.0.21; nginx HTTP/80 is published to the host as `127.0.0.1:3001:80` (loopback-only) and HTTPS/443
+as `127.0.0.1:3443:443` (loopback-only) (the pre-#405 `3001:3001` mapping published a container port with
 no listener and was corrected). **No known ACES expressivity gap remains** for the catalogued
 steady-state facts.
 
@@ -40,7 +40,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
 | Application | nginx 1.29.3 + pre-built static React SPA (no node runtime) |
 | Reverse proxy | `/api/v1\|v2` → `http://shuffle-backend:5001` |
-| Reachable participant ports | nginx HTTP `80` (host `3001:80`) + HTTPS `443` (host `3443:443`) |
+| Reachable participant ports | nginx HTTP `80` (host `127.0.0.1:3001:80`, loopback-only) + HTTPS `443` (host `127.0.0.1:3443:443`, loopback-only) |
 | Network identity | `security-net` 172.20.0.21 (only network) |
 | Package inventory | 150 dpkg packages |
 | Trivy vulnerability findings | 392 image-layer findings: 7 critical, 64 high, 138 medium, 182 low, 1 unknown |

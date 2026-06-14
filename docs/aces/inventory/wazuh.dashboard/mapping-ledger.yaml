@@ -114,7 +114,7 @@ facts:
 - id: wazuh-dashboard.compose.service
   category: runtime-configuration
   summary: Compose realizes the service with upstream image, healthcheck, secret-bearing environment, bind-mounted TLS/config
-    files, two named volumes, one security-net attachment, and host TCP 443 publication to container TCP 5601.
+    files, two named volumes, one security-net attachment, and 127.0.0.1:443:5601 (loopback-only) publication.
   evidence:
   - path: evidence/compose-service.wazuh.dashboard.json
   - path: evidence/source-checksums.txt
@@ -145,7 +145,7 @@ facts:
       not a substitute for SDL encoding.
 - id: wazuh-dashboard.network.identity
   category: network
-  summary: The service is attached to security-net at 172.20.0.11 and Docker publishes host TCP 443 to container TCP 5601.
+  summary: The service is attached to security-net at 172.20.0.11 and Docker publishes 127.0.0.1:443:5601 (loopback-only).
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/docker-network.aptl-security.json

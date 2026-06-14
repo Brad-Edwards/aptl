@@ -22,7 +22,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 | Runtime command | `/entrypoint.sh` → `opensearchwrapper` (PID 1 is the OpenSearch JDK java process, UID 1000) |
 | Reachable participant ports | TCP 9200 (HTTPS REST API), TCP 9300 (OpenSearch transport, cluster-internal only) |
 | Network identity | `security-net` 172.20.0.12 |
-| Host-published ports | 9200/tcp on 0.0.0.0 and :: |
+| Host-published ports | 9200/tcp on 127.0.0.1 (loopback-only) |
 | OpenSearch version | 2.19.1 (Wazuh-indexer 4.12.0/rc1, build hash `dae2bfc93896178873b43cdf4781f183c72b238f`) |
 | Cluster | single-node `opensearch` cluster, uuid `u-vGl1n0Q7e-SKz1tWvb-w`, status green |
 | Indices | 41 indices, 102 primary shards, 1,053,842 documents, ~1.39 GB store (per-index uuid/doc-count/store-size + per-family mapping schema encoded via ACES #468/#469 — see ACES Mapping Result) |

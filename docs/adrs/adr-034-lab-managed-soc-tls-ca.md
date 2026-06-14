@@ -167,6 +167,32 @@ active.
   container for outbound trust. This defers Cortex server-side TLS
   without disabling TLS verification for any host-facing SOC API.
 
+## Host Exposure Amendment
+
+Host-published SOC management surfaces are operator control-plane surfaces, not
+deliberately vulnerable victim targets. When a SOC service is published only so
+the operator can use the lab locally, its Compose mapping must bind to
+`127.0.0.1` by default. This applies especially to services that also hold
+host-equivalent orchestration authority, such as Cortex or Shuffle components
+with `/var/run/docker.sock`, but the same default should cover TheHive, Wazuh,
+MISP, Shuffle frontend, and future SOC management UIs unless a separate
+requirement explicitly declares remote operator access.
+
+The host bind address is the exposure-policy seam. A future documented
+multi-operator or remote-lab mode may parameterize that value at the deployment
+boundary, but it must not scatter `0.0.0.0` literals across Compose, scripts,
+tests, and docs. Host-side scripts and MCP clients should continue to use
+`localhost` URLs and the existing CA / auth helpers; loopback binding does not
+change the in-container Docker-network URLs that SOC services use to talk to
+each other.
+
+Loopback binding is a network guardrail, not a substitute for authentication,
+TLS verification, generated-secret handling, or least-privilege Docker
+orchestration. Replacing raw Docker socket mounts with a scoped socket proxy is
+the follow-up hardening seam for SOC tools that need to launch analyzers,
+responders, or workers; it should be designed as a shared Docker API boundary,
+not as per-service ad hoc volume tweaks.
+
 ## Non-Goals
 
 - Do not redesign the Docker Compose deployment model or introduce a second
@@ -179,6 +205,11 @@ active.
   state into `aptl.json`, MCP JSON config, README snippets, or run artifacts.
 - Do not make collector persistence, OTel tracing, or export packaging the
   first place where secrets are sanitized.
+- Do not make remote LAN exposure of SOC management ports the default lab
+  posture. Remote access needs an explicit deployment-mode decision.
+- Do not replace raw Docker socket mounts as part of a loopback-only exposure
+  fix unless the issue explicitly covers the socket proxy design and validation
+  surface.
 
 ## Anti-Patterns
 
@@ -192,6 +223,12 @@ active.
   unredacted exception text.
 - Treating Wazuh inter-component TLS allowances as permission to weaken SOC
   stack consumers.
+- Treating `9001:9001`, `3443:443`, or similar bare Compose mappings as
+  harmless because a UI has login or TLS. Bare host mappings publish on all
+  interfaces unless Compose is given a loopback host IP.
+- Changing host-side scripts to use container IPs or security-network addresses
+  to compensate for loopback publishes. That bypasses the intended operator
+  boundary and makes local versus in-container routes harder to reason about.
 
 ## References
 

@@ -522,42 +522,26 @@
       "Ports": {
         "1514/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "1514"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "1514"
           }
         ],
         "1515/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "1515"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "1515"
           }
         ],
         "1516/tcp": null,
         "514/udp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "514"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "514"
           }
         ],
         "55000/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "55000"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "55000"
           }
         ]

@@ -6,7 +6,7 @@ fdf54d65f1e004c52c734558cd93a92f0f9f8c10fb6c6b4403d86fae96f599b0  docs/aces/inve
 44f3ef17b42afec3edf07e584987dc8c8f9421969d225852c6fa9483ec12f3a7  docs/aces/inventory/misp/evidence/docker-compose-version.json
 6bbfe2fb03fb8e41963792b131a4240fe09bf3dd8a30126ebf62056446f20968  docs/aces/inventory/misp/evidence/docker-history.image.jsonl
 249966b07da36cc78be0bcbda3cf082e5411e13aab4b78c0804db23ab7434e78  docs/aces/inventory/misp/evidence/docker-history.image.txt
-233f776cd074af9171e485a21d7140527b9a775a22e6109f087486589b4baab9  docs/aces/inventory/misp/evidence/docker-inspect.container.json
+71090693d995e79876f9374e4fdb40b1847e75f50e0354304a67454a688fd8bf  docs/aces/inventory/misp/evidence/docker-inspect.container.json
 902b4644df47adf553b15cb841e6c0de3bbb2d2b379e4c59de43f216532c2b02  docs/aces/inventory/misp/evidence/docker-inspect.image.json
 560b10734a49e33f54539944dbec3eb095df5f87f1853ea94839d45c7cf73fcd  docs/aces/inventory/misp/evidence/docker-logs.misp.txt
 40aedbb9a9ca01e0dff69672cfbe50b67c0569c2115d57a8d9e9cc570c80a34e  docs/aces/inventory/misp/evidence/docker-network.aptl-security.json

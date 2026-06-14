@@ -162,7 +162,7 @@ facts:
         - nodes.techvault.misp.runtime.health
   - id: misp.network.identity-publication
     category: network
-    summary: MISP is attached to security-net at 172.20.0.16 with Docker aliases/DNS names and host-published HTTPS on 8443.
+    summary: MISP is attached to security-net at 172.20.0.16 with Docker aliases/DNS names and host-published HTTPS on 127.0.0.1:8443 (loopback-only).
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/docker-network.aptl-security.json

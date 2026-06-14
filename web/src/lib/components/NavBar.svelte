@@ -16,6 +16,12 @@
 				>
 					Lab Home
 				</a>
+				<a
+					href="/console"
+					class="text-sm text-aptl-text-muted transition-colors hover:text-aptl-text"
+				>
+					Console
+				</a>
 			</div>
 		</div>
 		<div class="flex items-center gap-4">

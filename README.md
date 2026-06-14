@@ -113,6 +113,20 @@ cd web && npm install && npm run dev   # frontend (separate terminal)
 
 Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The API container needs the host Docker socket; do not expose to untrusted networks.
 
+### Interactive Console
+
+The web UI includes a **[Console](docs/components/console.md)** at `/console` for
+exploring APTL interactively: drive separate red and blue AI chat sessions, set
+exactly which MCP servers each session can reach, and share findings across
+sessions via named scratchpads. It runs in a no-key *demo mode* (slash commands
+execute the session's tools for real) and upgrades to a live Claude agent when
+you install the console extra and set a key:
+
+```bash
+pip install -e ".[console]"
+export ANTHROPIC_API_KEY=sk-...
+```
+
 ## Documentation
 
 **Getting started:** [Installation](docs/getting-started/installation.md) · [Prerequisites](docs/getting-started/prerequisites.md) · [Quick Start Guide](docs/getting-started/quick-start.md)

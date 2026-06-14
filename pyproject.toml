@@ -35,6 +35,13 @@ web = [
     "sse-starlette>=2.0.0",
     "asyncssh>=2.17.0",
 ]
+console = [
+    # Live agent + MCP access for the interactive console. The console runs
+    # in an offline "demo" mode without these; install to enable a real
+    # Claude agent that drives the lab's MCP servers.
+    "anthropic>=0.40.0",
+    "mcp>=1.2.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.12.0",

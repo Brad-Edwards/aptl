@@ -81,6 +81,7 @@ nav:
     - Victim Containers: components/victim-containers.md
     - Kali Red Team: components/kali-redteam.md
     - MCP Integration: components/mcp-integration.md
+    - Interactive Console: components/console.md
   - Usage:
     - Exercises: usage/exercises.md
     - AI Red Teaming: usage/ai-red-teaming.md

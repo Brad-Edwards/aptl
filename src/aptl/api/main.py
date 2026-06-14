@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from aptl.api.deps import ALLOWED_ORIGINS
-from aptl.api.routers import config, kill, lab, terminal
+from aptl.api.routers import config, console, kill, lab, terminal
 from aptl.utils.logging import get_logger, setup_logging
 
 log = get_logger("api")
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(lab.router, prefix="/api")
     app.include_router(config.router, prefix="/api")
+    app.include_router(console.router, prefix="/api")
     app.include_router(terminal.router, prefix="/api")
     app.include_router(kill.router, prefix="/api")
 

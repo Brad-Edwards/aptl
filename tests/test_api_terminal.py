@@ -260,6 +260,76 @@ class TestTerminalWebSocket:
             assert msg["type"] == "error"
             assert msg["message"] == "SSH connection failed"
 
+    def test_valid_token_but_cross_origin_rejected(self, api_client):
+        """Valid subprotocol token + disallowed origin hits the origin check (lines 92-94).
+
+        Because the token check passes first and the origin is rejected, the handler
+        calls close() before accept(), which Starlette surfaces as WebSocketDisconnect.
+        """
+        from fastapi import WebSocketDisconnect
+
+        with pytest.raises(WebSocketDisconnect):
+            with api_client.websocket_connect(
+                "/api/terminal/ws/victim",
+                subprotocols=_VALID_WS_SUBPROTOCOLS,
+                headers={"origin": "http://evil.com"},
+            ) as ws:
+                ws.receive_json()
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_malformed_json_message_is_ignored(self, mock_status, mock_asyncssh, api_client):
+        """Malformed JSON from the WebSocket is swallowed at the JSONDecodeError handler."""
+        mock_status.return_value = _make_lab_status(running=True)
+
+        process = _make_mock_process()
+        conn = _make_mock_conn(process)
+        mock_asyncssh.connect = AsyncMock(return_value=conn)
+        mock_asyncssh.Error = Exception
+
+        # stdout exits immediately; ws-to-ssh relay receives the malformed message
+        process.stdout.read = AsyncMock(return_value="")
+
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
+        ) as ws:
+            ws.send_text("not-valid-json")
+
+        # No exception: JSONDecodeError is caught at lines 73-74 and ignored
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_ws_disconnect_during_ssh_read_exits_cleanly(
+        self, mock_status, mock_asyncssh, api_client
+    ):
+        """WebSocketDisconnect raised mid-SSH-read is swallowed at lines 51-52."""
+        from fastapi import WebSocketDisconnect
+
+        mock_status.return_value = _make_lab_status(running=True)
+
+        process = _make_mock_process()
+        conn = _make_mock_conn(process)
+        mock_asyncssh.connect = AsyncMock(return_value=conn)
+        mock_asyncssh.Error = Exception
+
+        # First read returns data; second read simulates disconnection during relay
+        process.stdout.read = AsyncMock(
+            side_effect=["ssh output", WebSocketDisconnect()]
+        )
+
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers=_VALID_ORIGIN,
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "stdout"
+            assert msg["data"] == "ssh output"
+
+        conn.close.assert_called_once()
+
     @patch("aptl.api.routers.terminal.lab_status")
     def test_valid_containers_accepted(self, mock_status, api_client):
         """All valid container names are accepted (not rejected with 1008)."""

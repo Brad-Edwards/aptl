@@ -124,12 +124,49 @@ class TestWebAuthSettings:
         with pytest.raises((ValueError, RuntimeError)):
             d.WebAuthSettings.from_env()
 
+    def test_direct_empty_token_raises(self):
+        """Direct instantiation with empty api_token hits the pydantic field_validator."""
+        from aptl.api.deps import WebAuthSettings
+
+        with pytest.raises(ValueError, match="must not be empty"):
+            WebAuthSettings(api_token="")
+
     def test_valid_token_loads(self, monkeypatch):
         monkeypatch.setenv("APTL_API_TOKEN", _TEST_TOKEN)
         from aptl.api import deps as d
 
         settings = d.WebAuthSettings.from_env()
         assert settings.api_token == _TEST_TOKEN
+
+    def test_load_web_auth_without_token_returns_none(self, monkeypatch):
+        """load_web_auth() with no env var logs CRITICAL and returns None."""
+        import aptl.api.deps as _deps
+
+        monkeypatch.setattr(_deps, "_WEB_AUTH", None)
+        monkeypatch.delenv("APTL_API_TOKEN", raising=False)
+        result = _deps.load_web_auth()
+        assert result is None
+        assert _deps._WEB_AUTH is None
+
+    def test_get_web_auth_returns_settings_when_configured(self, monkeypatch):
+        """get_web_auth() returns the singleton when _WEB_AUTH is set."""
+        import aptl.api.deps as _deps
+        from aptl.api.deps import WebAuthSettings
+
+        settings = WebAuthSettings(api_token=_TEST_TOKEN)
+        monkeypatch.setattr(_deps, "_WEB_AUTH", settings)
+        result = _deps.get_web_auth()
+        assert result is settings
+
+    def test_verify_token_raises_when_not_configured(self, monkeypatch):
+        """verify_token raises HTTP 401 immediately when _WEB_AUTH is None."""
+        import aptl.api.deps as _deps
+        from fastapi import HTTPException
+
+        monkeypatch.setattr(_deps, "_WEB_AUTH", None)
+        with pytest.raises(HTTPException) as exc_info:
+            _deps.verify_token(authorization=None)
+        assert exc_info.value.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -209,3 +246,10 @@ class TestVerifyWsToken:
 
         settings = WebAuthSettings.from_env()
         assert verify_ws_token("", settings) is False
+
+    def test_empty_candidate_after_prefix_returns_false(self, auth_env):
+        """aptl-token. with no token after the dot is rejected (empty candidate)."""
+        from aptl.api.deps import WebAuthSettings, verify_ws_token
+
+        settings = WebAuthSettings.from_env()
+        assert verify_ws_token("aptl-token.", settings) is False

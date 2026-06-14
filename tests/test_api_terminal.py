@@ -218,14 +218,17 @@ class TestTerminalWebSocket:
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-        process.stdout.read = AsyncMock(return_value="")
+        process.stdout.read = AsyncMock(side_effect=["__ready__", ""])
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers=_VALID_ORIGIN,
         ) as ws:
-            pass
+            # Receive one relayed message to deterministically synchronize:
+            # by the time it arrives the handler has dialed asyncssh.connect
+            # (avoids a close-before-connect race under slow CI timing).
+            ws.receive_json()
 
         mock_asyncssh.connect.assert_awaited_once()
         kwargs = mock_asyncssh.connect.call_args.kwargs
@@ -275,13 +278,16 @@ class TestTerminalWebSocket:
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-        process.stdout.read = AsyncMock(return_value="")
+        process.stdout.read = AsyncMock(side_effect=["__ready__", ""])
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers=_VALID_ORIGIN,
         ) as ws:
+            # Sync on the first relayed message so both relay tasks are live
+            # before sending stdin (avoids a close-before-connect race).
+            ws.receive_json()
             ws.send_text(json.dumps({"type": "stdin", "data": "ls\n"}))
 
         # ws context exit closes the WebSocket, which unblocks the relay
@@ -329,13 +335,15 @@ class TestTerminalWebSocket:
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-        process.stdout.read = AsyncMock(return_value="")
+        process.stdout.read = AsyncMock(side_effect=["__ready__", ""])
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers=_VALID_ORIGIN,
         ) as ws:
+            # Sync on the first relayed message before sending resize.
+            ws.receive_json()
             ws.send_text(json.dumps({"type": "resize", "cols": 120, "rows": 40}))
 
         process.change_terminal_size.assert_called_with(120, 40)
@@ -355,14 +363,16 @@ class TestTerminalWebSocket:
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-        process.stdout.read = AsyncMock(return_value="")
+        process.stdout.read = AsyncMock(side_effect=["__ready__", ""])
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers=_VALID_ORIGIN,
         ) as ws:
-            pass  # disconnect on exit
+            # Sync on the first relayed message so the SSH connection has been
+            # established before the client disconnects (then cleanup runs).
+            ws.receive_json()
 
         conn.close.assert_called_once()
 
@@ -404,13 +414,15 @@ class TestTerminalWebSocket:
         conn = _make_mock_conn(process)
         mock_asyncssh.connect = AsyncMock(return_value=conn)
         mock_asyncssh.Error = Exception
-        process.stdout.read = AsyncMock(return_value="")
+        process.stdout.read = AsyncMock(side_effect=["__ready__", ""])
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
             headers=_VALID_ORIGIN,
         ) as ws:
+            # Sync on the first relayed message before sending malformed input.
+            ws.receive_json()
             ws.send_text("not-valid-json")
 
         # No exception: JSONDecodeError is caught and ignored.

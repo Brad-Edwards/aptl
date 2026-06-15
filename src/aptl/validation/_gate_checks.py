@@ -232,7 +232,8 @@ def _load_required_surface_coverage(
         except (OSError, yaml.YAMLError) as exc:
             error = redact(f"parity inventory unreadable: {exc}")
         else:
-            loaded = (inventory or {}).get("required_surface_coverage")
+            top = inventory if isinstance(inventory, Mapping) else {}
+            loaded = top.get("required_surface_coverage")
             if isinstance(loaded, Mapping):
                 coverage = loaded
             else:

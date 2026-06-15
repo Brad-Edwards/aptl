@@ -278,21 +278,13 @@
       "Ports": {
         "443/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "3443"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "3443"
           }
         ],
         "80/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "3001"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "3001"
           }
         ]

@@ -159,7 +159,7 @@ facts:
       rationale: ACES #428 adds typed security-monitoring listeners bound to same-node services.
   - id: wazuh-manager.host-published-ports
     category: network
-    summary: Docker publishes host ports 1514/tcp, 1515/tcp, 514/udp, and 55000/tcp for the manager.
+    summary: Docker publishes host ports 1514/tcp, 1515/tcp, 514/udp, and 55000/tcp on 127.0.0.1 (loopback-only) for the manager.
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/compose-service.wazuh.manager.json

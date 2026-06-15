@@ -4,13 +4,14 @@ requires-python = ">=3.11"
 
 [[package]]
 name = "aces-sdl"
-version = "0.2.0"
-source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev#ac5279a11e994e06524a8e5935e81e233cd29fe6" }
+version = "0.3.0"
+source = { git = "https://github.com/Brad-Edwards/aces.git?subdirectory=implementations%2Fpython&rev=dev#27c2fb0c0b13d237f2d058b2afef62883bb4dedf" }
 dependencies = [
     { name = "asyncssh" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "mcp" },
+    { name = "packaging" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },

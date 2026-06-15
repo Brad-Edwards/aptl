@@ -33,7 +33,7 @@ notes:
   (/etc/thehive/keystore.p12), HTTPS_KEYSTORE_PASSWORD env_file value, and TH_CORTEX_KEYS API key are scenario target content
   and are captured verbatim where they appear in Docker/runtime evidence.
 - HTTPS is terminated in-container on 9000 using the lab-CA-signed keystore.p12; the authored application.conf overlay (config/thehive/application.conf)
-  enables it. Published to the host as 9000:9000.
+  enables it. Published to the host as 127.0.0.1:9000:9000 (loopback-only).
 correspondence_checks:
 - id: thehive-evidence-bundle-integrity
   status: implemented
@@ -163,7 +163,7 @@ facts:
   category: compose
   summary: Compose declares aptl-thehive, image strangebee/thehive:5.4, the --secret/--cql-hostnames/--index-backend lucene/--es-hostnames
     command, JVM_OPTS + HTTPS_KEYSTORE_PASSWORD env, two data volumes + three binds (keystore.p12, application.conf, lab-ca.pem),
-    1g memory, depends_on cassandra+es, security-net 172.20.0.18, and the 9000:9000 published port.
+    1g memory, depends_on cassandra+es, security-net 172.20.0.18, and the 127.0.0.1:9000:9000 published port (loopback-only).
   evidence:
   - path: evidence/compose-service.thehive.json
   - path: evidence/docker-compose-version.json
@@ -199,7 +199,7 @@ facts:
     rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
 - id: thehive.network.identity
   category: network
-  summary: The app is on security-net at 172.20.0.18 and publishes HTTPS to the host as 9000:9000; the published port is the
+  summary: The app is on security-net at 172.20.0.18 and publishes HTTPS to the host as 127.0.0.1:9000:9000 (loopback-only); the published port is the
     only host-reachable surface.
   evidence:
   - path: evidence/docker-network.aptl-security.json

@@ -494,7 +494,7 @@ def test_techvault_sdl_encodes_wazuh_dashboard_runtime_surfaces(node, runtime):
         {
             "container_port": 5601,
             "protocol": "tcp",
-            "host_ip": "0.0.0.0",
+            "host_ip": "127.0.0.1",
             "host_port": 443,
             "description": "Docker host-published port observed from inspect.",
         }

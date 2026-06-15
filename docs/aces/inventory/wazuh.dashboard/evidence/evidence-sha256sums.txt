@@ -7,7 +7,7 @@
 44f3ef17b42afec3edf07e584987dc8c8f9421969d225852c6fa9483ec12f3a7  docs/aces/inventory/wazuh.dashboard/evidence/docker-compose-version.json
 d83bd7706485fab876c54baca65b02561ca9bdea495770cebb9ad9c2f479694e  docs/aces/inventory/wazuh.dashboard/evidence/docker-history.image.jsonl
 32eba9071017315d62ca16d3519397a210eaec6666564eaaaac1cafb460672ad  docs/aces/inventory/wazuh.dashboard/evidence/docker-history.image.txt
-df09a9dd5dd2ac11474d7f9c1a3e65220da748851997167dbde5072c52c843be  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.container.json
+9c42c178e31a645f236c7cfee8c6915a21f9ff0162cbdc356223c22dbd8ee437  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.container.json
 bceb02db9e9e0d80421fab6d6f03bed33aa6dc9f2d5fe0bbe397d4cab4735aae  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.image.json
 40aedbb9a9ca01e0dff69672cfbe50b67c0569c2115d57a8d9e9cc570c80a34e  docs/aces/inventory/wazuh.dashboard/evidence/docker-network.aptl-security.json
 9d64be70ca994e1a269d40dd30f0f55afd69cc0e3e3acae50611b679ad443e00  docs/aces/inventory/wazuh.dashboard/evidence/docker-top.txt

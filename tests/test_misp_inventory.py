@@ -99,16 +99,15 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
+# Only real operator-secret shapes are forbidden in committed evidence.
+# The MISP admin API key, MySQL fixture password, and the `data[_Token][key]`
+# CSRF token are DISCLOSED scenario realization facts -- the provisioning inputs
+# that reproduce this asset -- preserved verbatim in the evidence and encoded as
+# secret_fixture values in the SDL (ACES #471). They are NOT leaks, so they are
+# asserted *present* by test_misp_sdl_captures_fixture_secrets_and_health_output
+# rather than forbidden here. A committed private key has no such justification.
 RAW_SECRET_PATTERNS = (
-    r"misp_db_password",
-    r"misp_root_password",
-    r"redispassword",
     r"BEGIN .*PRIVATE KEY",
-    r"data\[_Token\]\[key\]",
-    r"ADMIN_PASSWORD=admin",
-    r"admin@admin\.test\s+admin\b",
-    r"JHxB",
-    r"V9Xw",
 )
 
 
@@ -319,6 +318,16 @@ def test_misp_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
+def test_misp_evidence_does_not_commit_raw_operator_secrets():
+    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+    offenders = [
+        path.name
+        for path in EVIDENCE_DIR.iterdir()
+        if path.is_file() and forbidden.search(_evidence_text(path))
+    ]
+    assert not offenders, f"Raw operator-secret material leaked into evidence: {offenders}"
+
+
 def test_misp_sdl_captures_fixture_secrets_and_health_output(scenario):
     node = scenario.nodes[MISP_NODE_ID]
     runtime = node.runtime
@@ -438,7 +447,7 @@ def test_techvault_sdl_encodes_misp_inventory_surfaces(scenario):
     assert env["MYSQL_PASSWORD"].value == "misp_db_password"
 
     published = {(port.host_ip, port.host_port, port.container_port) for port in runtime.network.published_ports}
-    assert published == {("0.0.0.0", 8443, 443), ("::", 8443, 443)}
+    assert published == {("127.0.0.1", 8443, 443)}
 
     listeners = {listener.service_listener_id: listener for listener in runtime.service_listeners}
     assert listeners["https-443-ipv4"].scope == "wildcard"

@@ -2,14 +2,11 @@
 cmdline: ./orborus
 PID   PPID  USER     COMMAND
     1     0 root     ./orborus
-   49     1 root     [timeout]
-   62     1 root     [timeout]
-   75     1 root     [timeout]
-   88     1 root     [timeout]
-  311     1 root     [timeout]
- 1696     0 root     sh -lc echo "cmdline: $(tr "\0" " " < /proc/1/cmdline)"; ps -eo pid,ppid,user,args 2>/dev/null | sed -n "1,20p"
- 1703  1696 root     ps -eo pid,ppid,user,args
- 1704  1696 root     sed -n 1,20p
+ 1435     1 root     [timeout]
+ 2855     1 root     [timeout]
+ 4238     0 root     sh -lc echo "cmdline: $(tr "\0" " " < /proc/1/cmdline)"; ps -eo pid,ppid,user,args 2>/dev/null | sed -n "1,20p"
+ 4245  4238 root     ps -eo pid,ppid,user,args
+ 4246  4238 root     sed -n 1,20p
 --docker-sock-mount--
 [
   {

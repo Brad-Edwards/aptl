@@ -54,8 +54,18 @@ from aptl.core.services import (
     test_ssh_connection,
     wait_for_service,
 )
-from aptl.core.endpoints import select_ssh_host
-from aptl.core.snapshot import capture_snapshot, container_networks
+from aptl.core.endpoints import (
+    build_ssh_endpoints,
+    select_ssh_host,
+    terminal_ssh_endpoints,
+)
+from aptl.core.host_keys import pin_terminal_host_keys
+from aptl.core.snapshot import (
+    SSHEndpoint,
+    capture_snapshot,
+    container_networks,
+    list_container_snapshots,
+)
 from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
@@ -289,6 +299,23 @@ def lab_status(
         backend = _get_backend(resolved_dir)
 
     return backend.status()
+
+
+def lab_terminal_ssh_endpoints(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"] = None,
+) -> dict[str, SSHEndpoint]:
+    """Resolve the running lab's terminal SSH endpoints (ADR-040).
+
+    Projects ``ENDPOINT_REGISTRY`` over live container inventory so the
+    WebSocket relay derives each target's host/user/port from the
+    canonical boundary (container IP over the bridge, issue #293) instead
+    of a hardcoded ``localhost`` map. Keyed by terminal short-name
+    (``victim`` / ``kali`` / ``reverse`` / ``workstation``).
+    """
+    if backend is None:
+        backend = _get_backend(project_dir)
+    return terminal_ssh_endpoints(list_container_snapshots(backend))
 
 
 def _check_bind_mounts(
@@ -1067,6 +1094,38 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
+    """Pin lab SSH host keys for the operator terminal relay (ADR-040).
+
+    Captures each reachable SSH endpoint's server host key (trust-on-
+    first-use is permitted only here, during provisioning on the trusted
+    host) and writes the ``.aptl/known_hosts`` file the WebSocket relay
+    later verifies against. Non-fatal: an endpoint that cannot be pinned
+    (not running, not yet reachable) simply makes the relay fail closed
+    for that container until the next lab start, so a pinning hiccup must
+    not abort an otherwise-healthy lab.
+    """
+    log.info("Step 11b: Pinning terminal SSH host keys...")
+    if ctx.backend is None or ctx.ssh_key_path is None:
+        log.debug("Skipping host-key pinning: backend or ssh key unavailable")
+        return None
+    try:
+        endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
+        result = pin_terminal_host_keys(
+            ctx.project_dir, endpoints, ctx.ssh_key_path
+        )
+    # Observability only: pinning failures are never fatal to lab start.
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Terminal SSH host-key pinning failed: %s", exc)
+        return None
+    if result.failed:
+        log.warning(
+            "Terminal SSH host keys not pinned for: %s",
+            ", ".join(result.failed),
+        )
+    return None
+
+
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
     log.info("Step 12: Building MCP servers...")
@@ -1307,6 +1366,7 @@ _LAB_START_STEPS = (
     _step_wait_for_services,
     _step_test_ssh,
     _step_capture_snapshot,
+    _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,
     _step_sync_mcp_config,

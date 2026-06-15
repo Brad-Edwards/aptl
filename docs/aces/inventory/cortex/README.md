@@ -2,7 +2,7 @@
 
 This directory is the SCN-010 / issue #357 inventory bundle for the TechVault `cortex` container. It applies the ACES asset inventory methodology to the realized `aptl-cortex` service after a clean lab reset/start and after TheHive/Cortex integration was repaired.
 
-`cortex` is the lab's **SOC analyzer engine**: upstream `thehiveproject/cortex:3.1.8` (Cortex 3.1.8-1, Play 2.8.19 on Debian 11), serving HTTP on 9001 (published `9001:9001`, security-net `172.20.0.22`). Cortex stores organization/user metadata in the shared `thehive-es` Elasticsearch service using the `cortex_6` index. The TheHive consumer authenticates with a seeded service account (`aptl-svc@cortex.local`, roles `read,analyze,orgadmin`) whose fixture key/password are retained as scenario evidence.
+`cortex` is the lab's **SOC analyzer engine**: upstream `thehiveproject/cortex:3.1.8` (Cortex 3.1.8-1, Play 2.8.19 on Debian 11), serving HTTP on 9001 (published `127.0.0.1:9001:9001` loopback-only, security-net `172.20.0.22`). Cortex stores organization/user metadata in the shared `thehive-es` Elasticsearch service using the `cortex_6` index. The TheHive consumer authenticates with a seeded service account (`aptl-svc@cortex.local`, roles `read,analyze,orgadmin`) whose fixture key/password are retained as scenario evidence.
 
 HTTPS is intentionally deferred for Cortex 3.1.8 under ADR-034 because the bundled Play SSL provider fails at runtime. The repaired integration uses HTTP on the internal Docker network plus Cortex key auth (`auth.provider = ["local", "key"]`). The Elasticsearch index is pre-created by `cortex-index-init` so `relations`, `status`, and `key` are `keyword` fields; otherwise Cortex key-auth term queries miss dynamically-created `text` fields.
 
@@ -20,7 +20,7 @@ HTTPS is intentionally deferred for Cortex 3.1.8 under ADR-034 because the bundl
 | Runtime OS | Debian GNU/Linux 11 (bullseye) |
 | Application | Cortex 3.1.8-1 / Play 2.8.19 / Elastic4Play 1.13.6 |
 | Backend | `thehive-es` Elasticsearch over HTTP/9200, index `cortex_6` |
-| Reachable participant ports | HTTP `9001` (published to host `9001:9001`; not reachable from Kali because security-net is isolated) |
+| Reachable participant ports | HTTP `9001` (published to host `127.0.0.1:9001:9001`, loopback-only; not reachable from Kali because security-net is isolated) |
 | Network identity | `security-net` 172.20.0.22 |
 | Memory limit | 512 MiB |
 | Package inventory | 213 dpkg packages |

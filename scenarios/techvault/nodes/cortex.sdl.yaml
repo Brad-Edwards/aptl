@@ -235,7 +235,7 @@ nodes:
     - port: 9001
       protocol: tcp
       name: cortex-http
-      description: Cortex HTTP REST API; published to the host as 9001:9001 and consumed by TheHive over security-net.
+      description: Cortex HTTP REST API; published to the host as 127.0.0.1:9001:9001 (loopback-only) and consumed by TheHive over security-net.
     - port: 35019
       protocol: tcp
       name: docker-embedded-dns-tcp
@@ -3912,10 +3912,10 @@ nodes:
         published_ports:
         - container_port: 9001
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 9001
-          description: Host-published Cortex HTTP API port.
-        description: security-net 172.20.0.22; Cortex HTTP is published to host as 9001:9001 and reachable from TheHive on
+          description: Host-published Cortex HTTP API port (loopback-only).
+        description: security-net 172.20.0.22; Cortex HTTP is published to host as 127.0.0.1:9001:9001 (loopback-only) and reachable from TheHive on
           the internal Docker network.
       service_listeners:
       - service_listener_id: cortex-http-9001

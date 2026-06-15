@@ -13250,14 +13250,9 @@ nodes:
         published_ports:
           - container_port: 9200
             protocol: tcp
-            host_ip: 0.0.0.0
+            host_ip: 127.0.0.1
             host_port: 9200
-            description: Compose host publication 9200:9200.
-          - container_port: 9200
-            protocol: tcp
-            host_ip: '::'
-            host_port: 9200
-            description: Compose host publication 9200:9200.
+            description: Compose host publication 127.0.0.1:9200:9200 (loopback-only).
       service_listeners:
         - service_listener_id: opensearch-rest-9200
           service: wazuh-indexer-rest
@@ -13277,7 +13272,7 @@ nodes:
             - docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt
             - docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-api-probe.json
           description: OpenSearch REST API on TCP/9200 (mutual-TLS HTTPS); reached by Filebeat from wazuh.manager and by the
-            Wazuh dashboard. Host-published 9200:9200.
+            Wazuh dashboard. Host-published 127.0.0.1:9200:9200 (loopback-only).
         - service_listener_id: opensearch-transport-9300
           service: wazuh-indexer-transport
           address: 0.0.0.0

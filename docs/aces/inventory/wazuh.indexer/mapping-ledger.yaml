@@ -171,7 +171,7 @@ facts:
       rationale: ACES service_listeners encode the bound HTTP and transport listeners; runtime.datastore_services records the typed OpenSearch transport publish address alongside.
   - id: wazuh-indexer.host-published-ports
     category: network
-    summary: "Docker publishes host port 9200/tcp on 0.0.0.0 and :: for the indexer REST API; transport (9300) is not host-published."
+    summary: "Docker publishes host port 9200/tcp on 127.0.0.1 (loopback-only) for the indexer REST API; transport (9300) is not host-published."
     evidence:
       - path: evidence/docker-inspect.container.json
       - path: evidence/compose-service.wazuh.indexer.json

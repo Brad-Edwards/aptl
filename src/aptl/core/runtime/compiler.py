@@ -130,7 +130,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class _RuntimeTemplates:
+class _RuntimeTemplates(object):
     """Compiled template maps grouped by SDL template kind."""
 
     feature: dict[str, RuntimeTemplate]
@@ -165,7 +165,7 @@ def _build_templates(scenario: Scenario) -> _RuntimeTemplates:
 
 
 @dataclass(frozen=True)
-class _StaticSpecs:
+class _StaticSpecs(object):
     """Serialized specs for scenario entities that compile without binding."""
 
     entities: dict[str, dict[str, object]]

@@ -106,7 +106,6 @@ def _validate_os_allowed_values(
         return None, None
 
     validated_values: list[str] = []
-    result: tuple[tuple[str, ...] | None, Diagnostic | None] = (None, None)
     for raw_value in allowed_values:
         value, diagnostic, defer = _parse_os_allowed_value(
             raw_value, variable_name, address
@@ -279,7 +278,6 @@ def _validate_count_allowed_values(
         return None, None
 
     validated_values: list[int] = []
-    result: tuple[int | None, Diagnostic | None] = (None, None)
     for raw_value in allowed_values:
         value, diagnostic, defer = _parse_count_allowed_value(
             raw_value, variable_name, address

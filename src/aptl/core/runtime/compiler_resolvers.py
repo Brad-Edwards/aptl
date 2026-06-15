@@ -166,7 +166,7 @@ def _resolve_named_refs(
 
 
 @dataclass(frozen=True)
-class NodeRefContext:
+class NodeRefContext(object):
     """Diagnostic context and type requirements for resolving a node reference."""
 
     owner_address: str

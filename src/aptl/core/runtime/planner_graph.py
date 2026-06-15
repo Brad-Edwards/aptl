@@ -122,7 +122,7 @@ def _strongconnect(
         state.cycles.append(tuple(component))
 
 
-class _TarjanState:
+class _TarjanState(object):
     """Mutable bookkeeping shared across Tarjan SCC recursion calls."""
 
     def __init__(self) -> None:

@@ -159,6 +159,12 @@ class _ObjectiveMixin(_RefIndexMixin):
         self, name: str, objective: Objective, actor_entities: set[str]
     ) -> None:
         """Validate an objective's agent/entity refs and declared actions."""
+        self._verify_objective_agent_ref(name, objective)
+        self._verify_objective_entity_ref(name, objective, actor_entities)
+        self._verify_objective_actions(name, objective)
+
+    def _verify_objective_agent_ref(self, name: str, objective: Objective) -> None:
+        """Error when an objective references an agent that is not defined."""
         if (
             objective.agent
             and not self._is_unresolved_var(objective.agent)
@@ -169,6 +175,10 @@ class _ObjectiveMixin(_RefIndexMixin):
                 f"'{objective.agent}'"
             )
 
+    def _verify_objective_entity_ref(
+        self, name: str, objective: Objective, actor_entities: set[str]
+    ) -> None:
+        """Error when an objective references an entity that is not defined."""
         if (
             objective.entity
             and not self._is_unresolved_var(objective.entity)
@@ -179,20 +189,23 @@ class _ObjectiveMixin(_RefIndexMixin):
                 f"'{objective.entity}'"
             )
 
+    def _verify_objective_actions(self, name: str, objective: Objective) -> None:
+        """Error on objective actions the referenced agent does not declare."""
         if (
-            objective.agent
-            and not self._is_unresolved_var(objective.agent)
-            and objective.agent in self._s.agents
+            not objective.agent
+            or self._is_unresolved_var(objective.agent)
+            or objective.agent not in self._s.agents
         ):
-            allowed_actions = set(self._s.agents[objective.agent].actions)
-            for action in objective.actions:
-                if self._is_unresolved_var(action):
-                    continue
-                if action not in allowed_actions:
-                    self._err(
-                        f"Objective '{name}' action '{action}' is not "
-                        f"declared by agent '{objective.agent}'"
-                    )
+            return
+        allowed_actions = set(self._s.agents[objective.agent].actions)
+        for action in objective.actions:
+            if self._is_unresolved_var(action):
+                continue
+            if action not in allowed_actions:
+                self._err(
+                    f"Objective '{name}' action '{action}' is not "
+                    f"declared by agent '{objective.agent}'"
+                )
 
     def _verify_objective_success(self, name: str, objective: Objective) -> None:
         """Validate objective targets and success-criteria references."""

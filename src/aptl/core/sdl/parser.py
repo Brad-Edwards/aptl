@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Hashable
 from pathlib import Path
-from typing import TypeAlias
 
 import yaml
 from pydantic import ValidationError
@@ -23,14 +22,22 @@ from aptl.core.sdl.validator import SemanticValidator
 
 # A value as produced by ``yaml.safe_load``: scalars, lists and mappings
 # nested to arbitrary depth. Mapping keys may be non-string scalars, so the
-# alias is recursive on both keys and values.
-YAMLValue: TypeAlias = (
-    "None | bool | int | float | str "
-    "| list[YAMLValue] | dict[Hashable, YAMLValue]"
+# alias is recursive on both keys and values. The nested string references are
+# unevaluated forward refs, so the recursion is runtime-safe; this is a plain
+# alias assignment (not a PEP 695 ``type`` statement) to keep `requires-python
+# >= 3.11` support.
+YAMLValue = (
+    None
+    | bool
+    | int
+    | float
+    | str
+    | list["YAMLValue"]
+    | dict[Hashable, "YAMLValue"]
 )
 
 # A normalized SDL mapping: top-level YAML document after key normalization.
-YAMLMapping: TypeAlias = "dict[Hashable, YAMLValue]"
+YAMLMapping = dict[Hashable, "YAMLValue"]
 
 
 # Top-level sections that are HashMaps of user-defined identifiers.

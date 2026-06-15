@@ -37,128 +37,40 @@ def _planned_resource(address: str, domain: RuntimeDomain, resource_type: str, r
     )
 
 
+# Ordered table of (model attribute, runtime domain, resource type) describing
+# every resource collection that contributes to a planned resource set.
+_RESOURCE_COLLECTIONS: tuple[tuple[str, RuntimeDomain, str], ...] = (
+    ("networks", RuntimeDomain.PROVISIONING, "network"),
+    ("node_deployments", RuntimeDomain.PROVISIONING, "node"),
+    ("feature_bindings", RuntimeDomain.PROVISIONING, "feature-binding"),
+    ("content_placements", RuntimeDomain.PROVISIONING, "content-placement"),
+    ("account_placements", RuntimeDomain.PROVISIONING, "account-placement"),
+    ("inject_bindings", RuntimeDomain.ORCHESTRATION, "inject-binding"),
+    ("injects", RuntimeDomain.ORCHESTRATION, "inject"),
+    ("events", RuntimeDomain.ORCHESTRATION, "event"),
+    ("scripts", RuntimeDomain.ORCHESTRATION, "script"),
+    ("stories", RuntimeDomain.ORCHESTRATION, "story"),
+    ("workflows", RuntimeDomain.ORCHESTRATION, "workflow"),
+    ("condition_bindings", RuntimeDomain.EVALUATION, "condition-binding"),
+    ("metrics", RuntimeDomain.EVALUATION, "metric"),
+    ("evaluations", RuntimeDomain.EVALUATION, "evaluation"),
+    ("tlos", RuntimeDomain.EVALUATION, "tlo"),
+    ("goals", RuntimeDomain.EVALUATION, "goal"),
+    ("objectives", RuntimeDomain.EVALUATION, "objective"),
+)
+
+
 def _collect_resources(model: RuntimeModel) -> dict[str, PlannedResource]:
     resources: dict[str, PlannedResource] = {}
 
-    for address, resource in model.networks.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.PROVISIONING,
-            "network",
-            resource,
-        )
-    for address, resource in model.node_deployments.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.PROVISIONING,
-            "node",
-            resource,
-        )
-    for address, resource in model.feature_bindings.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.PROVISIONING,
-            "feature-binding",
-            resource,
-        )
-    for address, resource in model.content_placements.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.PROVISIONING,
-            "content-placement",
-            resource,
-        )
-    for address, resource in model.account_placements.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.PROVISIONING,
-            "account-placement",
-            resource,
-        )
-    for address, resource in model.inject_bindings.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "inject-binding",
-            resource,
-        )
-    for address, resource in model.injects.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "inject",
-            resource,
-        )
-    for address, resource in model.events.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "event",
-            resource,
-        )
-    for address, resource in model.scripts.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "script",
-            resource,
-        )
-    for address, resource in model.stories.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "story",
-            resource,
-        )
-    for address, resource in model.workflows.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.ORCHESTRATION,
-            "workflow",
-            resource,
-        )
-    for address, resource in model.condition_bindings.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "condition-binding",
-            resource,
-        )
-    for address, resource in model.metrics.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "metric",
-            resource,
-        )
-    for address, resource in model.evaluations.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "evaluation",
-            resource,
-        )
-    for address, resource in model.tlos.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "tlo",
-            resource,
-        )
-    for address, resource in model.goals.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "goal",
-            resource,
-        )
-    for address, resource in model.objectives.items():
-        resources[address] = _planned_resource(
-            address,
-            RuntimeDomain.EVALUATION,
-            "objective",
-            resource,
-        )
+    for model_attr, domain, resource_type in _RESOURCE_COLLECTIONS:
+        for address, resource in getattr(model, model_attr).items():
+            resources[address] = _planned_resource(
+                address,
+                domain,
+                resource_type,
+                resource,
+            )
 
     return resources
 
@@ -560,6 +472,178 @@ def _account_features(account_spec: dict[str, object]) -> set[str]:
     return features
 
 
+def _validate_account_features(
+    model: RuntimeModel,
+    provisioner,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if model.account_placements and not provisioner.supports_accounts:
+        diagnostics.append(
+            Diagnostic(
+                code="provisioner.accounts-unsupported",
+                domain="provisioning",
+                address="provision.accounts",
+                message="Provisioner does not support accounts.",
+            )
+        )
+    elif provisioner.supports_accounts:
+        for account in model.account_placements.values():
+            for feature in sorted(_account_features(account.spec)):
+                if feature not in provisioner.supported_account_features:
+                    diagnostics.append(
+                        Diagnostic(
+                            code="provisioner.unsupported-account-feature",
+                            domain="provisioning",
+                            address=account.address,
+                            message=f"Provisioner does not support account feature '{feature}'.",
+                        )
+                    )
+    return diagnostics
+
+
+def _validate_orchestration(
+    model: RuntimeModel,
+    manifest: BackendManifest,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    orchestration_sections = {
+        "injects": bool(model.injects or model.inject_bindings),
+        "events": bool(model.events),
+        "scripts": bool(model.scripts),
+        "stories": bool(model.stories),
+        "workflows": bool(model.workflows),
+    }
+    if not any(orchestration_sections.values()):
+        return diagnostics
+    if manifest.orchestrator is None:
+        diagnostics.append(
+            Diagnostic(
+                code="orchestrator.missing",
+                domain="orchestration",
+                address="orchestration",
+                message="Scenario requires orchestration support, but no orchestrator is configured.",
+            )
+        )
+        return diagnostics
+
+    for section, used in orchestration_sections.items():
+        if used and section not in manifest.orchestrator.supported_sections:
+            diagnostics.append(
+                Diagnostic(
+                    code="orchestrator.unsupported-section",
+                    domain="orchestration",
+                    address=f"orchestration.{section}",
+                    message=f"Orchestrator does not support '{section}'.",
+                )
+            )
+    if model.workflows and not manifest.orchestrator.supports_workflows:
+        diagnostics.append(
+            Diagnostic(
+                code="orchestrator.workflows-unsupported",
+                domain="orchestration",
+                address="orchestration.workflows",
+                message="Orchestrator does not support workflows.",
+            )
+        )
+    orchestration_uses_condition_refs = any(
+        event.condition_addresses for event in model.events.values()
+    ) or any(
+        addresses
+        for workflow in model.workflows.values()
+        for addresses in workflow.step_condition_addresses.values()
+    )
+    if (
+        orchestration_uses_condition_refs
+        and not manifest.orchestrator.supports_condition_refs
+    ):
+        diagnostics.append(
+            Diagnostic(
+                code="orchestrator.condition-refs-unsupported",
+                domain="orchestration",
+                address="orchestration.condition-refs",
+                message=(
+                    "Orchestrator does not support condition-gated events "
+                    "or workflow predicates."
+                ),
+            )
+        )
+    if model.inject_bindings and not manifest.orchestrator.supports_inject_bindings:
+        diagnostics.append(
+            Diagnostic(
+                code="orchestrator.inject-bindings-unsupported",
+                domain="orchestration",
+                address="orchestration.injects",
+                message="Orchestrator does not support node-bound injects.",
+            )
+        )
+    return diagnostics
+
+
+def _validate_evaluation(
+    model: RuntimeModel,
+    manifest: BackendManifest,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    evaluation_sections = {
+        "conditions": bool(model.condition_bindings),
+        "metrics": bool(model.metrics),
+        "evaluations": bool(model.evaluations),
+        "tlos": bool(model.tlos),
+        "goals": bool(model.goals),
+        "objectives": bool(model.objectives),
+    }
+    if not any(evaluation_sections.values()):
+        return diagnostics
+    if not manifest.has_evaluator:
+        diagnostics.append(
+            Diagnostic(
+                code="evaluator.missing",
+                domain="evaluation",
+                address="evaluation",
+                message="Scenario requires evaluation support, but no evaluator is configured.",
+            )
+        )
+        return diagnostics
+
+    supported_sections = manifest.evaluator_supported_sections
+    for section, used in evaluation_sections.items():
+        if used and section not in supported_sections:
+            diagnostics.append(
+                Diagnostic(
+                    code="evaluator.unsupported-section",
+                    domain="evaluation",
+                    address=f"evaluation.{section}",
+                    message=f"Evaluator does not support '{section}'.",
+                )
+            )
+    scoring_in_use = bool(
+        model.condition_bindings
+        or model.metrics
+        or model.evaluations
+        or model.tlos
+        or model.goals
+    )
+    if scoring_in_use and not manifest.supports_scoring:
+        diagnostics.append(
+            Diagnostic(
+                code="evaluator.scoring-unsupported",
+                domain="evaluation",
+                address="evaluation.scoring",
+                message="Evaluator does not support scoring resources.",
+            )
+        )
+    if model.objectives and not manifest.supports_objectives:
+        diagnostics.append(
+            Diagnostic(
+                code="evaluator.objectives-unsupported",
+                domain="evaluation",
+                address="evaluation.objectives",
+                message="Evaluator does not support objectives.",
+            )
+        )
+    return diagnostics
+
+
 def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     provisioner = manifest.provisioner
@@ -642,152 +726,9 @@ def _validate_manifest(model: RuntimeModel, manifest: BackendManifest) -> list[D
                 )
             )
 
-    if model.account_placements and not provisioner.supports_accounts:
-        diagnostics.append(
-            Diagnostic(
-                code="provisioner.accounts-unsupported",
-                domain="provisioning",
-                address="provision.accounts",
-                message="Provisioner does not support accounts.",
-            )
-        )
-    elif provisioner.supports_accounts:
-        for account in model.account_placements.values():
-            for feature in sorted(_account_features(account.spec)):
-                if feature not in provisioner.supported_account_features:
-                    diagnostics.append(
-                        Diagnostic(
-                            code="provisioner.unsupported-account-feature",
-                            domain="provisioning",
-                            address=account.address,
-                            message=f"Provisioner does not support account feature '{feature}'.",
-                        )
-                    )
-
-    orchestration_sections = {
-        "injects": bool(model.injects or model.inject_bindings),
-        "events": bool(model.events),
-        "scripts": bool(model.scripts),
-        "stories": bool(model.stories),
-        "workflows": bool(model.workflows),
-    }
-    if any(orchestration_sections.values()):
-        if manifest.orchestrator is None:
-            diagnostics.append(
-                Diagnostic(
-                    code="orchestrator.missing",
-                    domain="orchestration",
-                    address="orchestration",
-                    message="Scenario requires orchestration support, but no orchestrator is configured.",
-                )
-            )
-        else:
-            for section, used in orchestration_sections.items():
-                if used and section not in manifest.orchestrator.supported_sections:
-                    diagnostics.append(
-                        Diagnostic(
-                            code="orchestrator.unsupported-section",
-                            domain="orchestration",
-                            address=f"orchestration.{section}",
-                            message=f"Orchestrator does not support '{section}'.",
-                        )
-                    )
-            if model.workflows and not manifest.orchestrator.supports_workflows:
-                diagnostics.append(
-                    Diagnostic(
-                        code="orchestrator.workflows-unsupported",
-                        domain="orchestration",
-                        address="orchestration.workflows",
-                        message="Orchestrator does not support workflows.",
-                    )
-                )
-            orchestration_uses_condition_refs = any(
-                event.condition_addresses for event in model.events.values()
-            ) or any(
-                addresses
-                for workflow in model.workflows.values()
-                for addresses in workflow.step_condition_addresses.values()
-            )
-            if (
-                orchestration_uses_condition_refs
-                and not manifest.orchestrator.supports_condition_refs
-            ):
-                diagnostics.append(
-                    Diagnostic(
-                        code="orchestrator.condition-refs-unsupported",
-                        domain="orchestration",
-                        address="orchestration.condition-refs",
-                        message=(
-                            "Orchestrator does not support condition-gated events "
-                            "or workflow predicates."
-                        ),
-                    )
-                )
-            if model.inject_bindings and not manifest.orchestrator.supports_inject_bindings:
-                diagnostics.append(
-                    Diagnostic(
-                        code="orchestrator.inject-bindings-unsupported",
-                        domain="orchestration",
-                        address="orchestration.injects",
-                        message="Orchestrator does not support node-bound injects.",
-                    )
-                )
-
-    evaluation_sections = {
-        "conditions": bool(model.condition_bindings),
-        "metrics": bool(model.metrics),
-        "evaluations": bool(model.evaluations),
-        "tlos": bool(model.tlos),
-        "goals": bool(model.goals),
-        "objectives": bool(model.objectives),
-    }
-    if any(evaluation_sections.values()):
-        if not manifest.has_evaluator:
-            diagnostics.append(
-                Diagnostic(
-                    code="evaluator.missing",
-                    domain="evaluation",
-                    address="evaluation",
-                    message="Scenario requires evaluation support, but no evaluator is configured.",
-                )
-            )
-        else:
-            supported_sections = manifest.evaluator_supported_sections
-            for section, used in evaluation_sections.items():
-                if used and section not in supported_sections:
-                    diagnostics.append(
-                        Diagnostic(
-                            code="evaluator.unsupported-section",
-                            domain="evaluation",
-                            address=f"evaluation.{section}",
-                            message=f"Evaluator does not support '{section}'.",
-                        )
-                    )
-            scoring_in_use = bool(
-                model.condition_bindings
-                or model.metrics
-                or model.evaluations
-                or model.tlos
-                or model.goals
-            )
-            if scoring_in_use and not manifest.supports_scoring:
-                diagnostics.append(
-                    Diagnostic(
-                        code="evaluator.scoring-unsupported",
-                        domain="evaluation",
-                        address="evaluation.scoring",
-                        message="Evaluator does not support scoring resources.",
-                    )
-                )
-            if model.objectives and not manifest.supports_objectives:
-                diagnostics.append(
-                    Diagnostic(
-                        code="evaluator.objectives-unsupported",
-                        domain="evaluation",
-                        address="evaluation.objectives",
-                        message="Evaluator does not support objectives.",
-                    )
-                )
+    diagnostics.extend(_validate_account_features(model, provisioner))
+    diagnostics.extend(_validate_orchestration(model, manifest))
+    diagnostics.extend(_validate_evaluation(model, manifest))
 
     return diagnostics
 

@@ -379,59 +379,12 @@ def _resolve_workflow_step_refs(
     return _dedupe(valid_refs), _dedupe(workflow_addresses), diagnostics
 
 
-def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
-    """Compile an SDL scenario into bound runtime objects."""
-
-    diagnostics: list[Diagnostic] = []
-
-    feature_templates = {
-        name: RuntimeTemplate(
-            address=_template_address("feature", name),
-            name=name,
-            spec=_dump(template),
-        )
-        for name, template in scenario.features.items()
-    }
-    condition_templates = {
-        name: RuntimeTemplate(
-            address=_template_address("condition", name),
-            name=name,
-            spec=_dump(template),
-        )
-        for name, template in scenario.conditions.items()
-    }
-    inject_templates = {
-        name: RuntimeTemplate(
-            address=_template_address("inject", name),
-            name=name,
-            spec=_dump(template),
-        )
-        for name, template in scenario.injects.items()
-    }
-    vulnerability_templates = {
-        name: RuntimeTemplate(
-            address=_template_address("vulnerability", name),
-            name=name,
-            spec=_dump(template),
-        )
-        for name, template in scenario.vulnerabilities.items()
-    }
-    entity_specs = {
-        name: _dump(entity)
-        for name, entity in flatten_entities(scenario.entities).items()
-    }
-    agent_specs = {name: _dump(agent) for name, agent in scenario.agents.items()}
-    relationship_specs = {
-        name: _dump(relationship)
-        for name, relationship in scenario.relationships.items()
-    }
-    variable_specs = {
-        name: _dump(variable)
-        for name, variable in scenario.variables.items()
-    }
-
+def _build_node_deployments(
+    scenario: Scenario,
+) -> tuple[dict[str, NetworkRuntime], dict[str, NodeRuntime], list[Diagnostic]]:
     networks: dict[str, NetworkRuntime] = {}
     node_deployments: dict[str, NodeRuntime] = {}
+    diagnostics: list[Diagnostic] = []
 
     for node_name, node in scenario.nodes.items():
         node_spec = _dump(node)
@@ -494,7 +447,15 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 refresh_dependencies=_dedupe(refresh_deps),
             )
 
+    return networks, node_deployments, diagnostics
+
+
+def _build_feature_bindings(
+    scenario: Scenario,
+    feature_templates: dict[str, RuntimeTemplate],
+) -> tuple[dict[str, FeatureBinding], list[Diagnostic]]:
     feature_bindings: dict[str, FeatureBinding] = {}
+    diagnostics: list[Diagnostic] = []
     for node_name, node in scenario.nodes.items():
         if node.type != NodeType.VM:
             continue
@@ -538,8 +499,15 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                     "template": template.spec,
                 },
             )
+    return feature_bindings, diagnostics
 
+
+def _build_condition_bindings(
+    scenario: Scenario,
+    condition_templates: dict[str, RuntimeTemplate],
+) -> tuple[dict[str, ConditionBinding], list[Diagnostic]]:
     condition_bindings: dict[str, ConditionBinding] = {}
+    diagnostics: list[Diagnostic] = []
     for node_name, node in scenario.nodes.items():
         if node.type != NodeType.VM:
             continue
@@ -577,17 +545,15 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                     "template": template.spec,
                 },
             )
+    return condition_bindings, diagnostics
 
-    injects = {
-        _inject_address(name): InjectRuntime(
-            address=_inject_address(name),
-            name=name,
-            spec=template.spec,
-        )
-        for name, template in inject_templates.items()
-    }
 
+def _build_inject_bindings(
+    scenario: Scenario,
+    inject_templates: dict[str, RuntimeTemplate],
+) -> tuple[dict[str, InjectBinding], list[Diagnostic]]:
     inject_bindings: dict[str, InjectBinding] = {}
+    diagnostics: list[Diagnostic] = []
     for node_name, node in scenario.nodes.items():
         if node.type != NodeType.VM:
             continue
@@ -627,8 +593,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                     "inject_address": inject_address,
                 },
             )
+    return inject_bindings, diagnostics
 
+
+def _build_content_placements(
+    scenario: Scenario,
+) -> tuple[dict[str, ContentPlacement], list[Diagnostic]]:
     content_placements: dict[str, ContentPlacement] = {}
+    diagnostics: list[Diagnostic] = []
     for name, content in scenario.content.items():
         address = _content_address(name)
         target_address, target_diagnostics = _resolve_node_ref(
@@ -653,8 +625,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=(target_address,),
             spec=_dump(content),
         )
+    return content_placements, diagnostics
 
+
+def _build_account_placements(
+    scenario: Scenario,
+) -> tuple[dict[str, AccountPlacement], list[Diagnostic]]:
     account_placements: dict[str, AccountPlacement] = {}
+    diagnostics: list[Diagnostic] = []
     for name, account in scenario.accounts.items():
         address = _account_address(name)
         target_address, target_diagnostics = _resolve_node_ref(
@@ -679,8 +657,17 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=(target_address,),
             spec=_dump(account),
         )
+    return account_placements, diagnostics
 
-    events = {}
+
+def _build_events(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+    injects: dict[str, InjectRuntime],
+    inject_bindings: dict[str, InjectBinding],
+) -> tuple[dict[str, EventRuntime], list[Diagnostic]]:
+    events: dict[str, EventRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, event in scenario.events.items():
         event_address = _event_address(name)
         condition_names = list(event.conditions)
@@ -730,8 +717,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=refresh_dependencies,
             spec=_dump(event),
         )
+    return events, diagnostics
 
-    scripts = {}
+
+def _build_scripts(
+    scenario: Scenario,
+) -> tuple[dict[str, ScriptRuntime], list[Diagnostic]]:
+    scripts: dict[str, ScriptRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, script in scenario.scripts.items():
         script_address = _script_address(name)
         event_addresses, script_diagnostics = _resolve_named_refs(
@@ -752,8 +745,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=event_addresses,
             spec=_dump(script),
         )
+    return scripts, diagnostics
 
-    stories = {}
+
+def _build_stories(
+    scenario: Scenario,
+) -> tuple[dict[str, StoryRuntime], list[Diagnostic]]:
+    stories: dict[str, StoryRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, story in scenario.stories.items():
         story_address = _story_address(name)
         script_addresses, story_diagnostics = _resolve_named_refs(
@@ -774,8 +773,15 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=script_addresses,
             spec=_dump(story),
         )
+    return stories, diagnostics
 
-    metrics = {}
+
+def _build_metrics(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+) -> tuple[dict[str, MetricRuntime], list[Diagnostic]]:
+    metrics: dict[str, MetricRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, metric in scenario.metrics.items():
         metric_spec = _dump(metric)
         metric_address = _metric_address(name)
@@ -801,8 +807,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=condition_addresses,
             spec=metric_spec,
         )
+    return metrics, diagnostics
 
-    evaluations = {}
+
+def _build_evaluations(
+    scenario: Scenario,
+) -> tuple[dict[str, EvaluationRuntime], list[Diagnostic]]:
+    evaluations: dict[str, EvaluationRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, evaluation in scenario.evaluations.items():
         evaluation_address = _evaluation_address(name)
         metric_addresses, evaluation_diagnostics = _resolve_named_refs(
@@ -823,8 +835,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=metric_addresses,
             spec=_dump(evaluation),
         )
+    return evaluations, diagnostics
 
-    tlos = {}
+
+def _build_tlos(
+    scenario: Scenario,
+) -> tuple[dict[str, TLORuntime], list[Diagnostic]]:
+    tlos: dict[str, TLORuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, tlo in scenario.tlos.items():
         tlo_address = _tlo_address(name)
         evaluation_addresses, tlo_diagnostics = _resolve_named_refs(
@@ -846,8 +864,14 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=evaluation_addresses,
             spec=_dump(tlo),
         )
+    return tlos, diagnostics
 
-    goals = {}
+
+def _build_goals(
+    scenario: Scenario,
+) -> tuple[dict[str, GoalRuntime], list[Diagnostic]]:
+    goals: dict[str, GoalRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, goal in scenario.goals.items():
         goal_address = _goal_address(name)
         tlo_addresses, goal_diagnostics = _resolve_named_refs(
@@ -868,66 +892,107 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=tlo_addresses,
             spec=_dump(goal),
         )
+    return goals, diagnostics
 
-    objectives = {}
+
+def _resolve_objective_window(
+    scenario: Scenario,
+    objective,
+    objective_address: str,
+) -> tuple[
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    tuple[str, ...],
+    list[Diagnostic],
+]:
+    window_story_addresses: tuple[str, ...] = ()
+    window_script_addresses: tuple[str, ...] = ()
+    window_event_addresses: tuple[str, ...] = ()
+    window_workflow_addresses: tuple[str, ...] = ()
+    window_step_refs: tuple[str, ...] = ()
+    window_step_workflow_addresses: tuple[str, ...] = ()
+    diagnostics: list[Diagnostic] = []
+    if objective.window is not None:
+        window_story_addresses, story_diagnostics = _resolve_named_refs(
+            ref_names=list(objective.window.stories),
+            available_names=set(scenario.stories),
+            address_builder=_story_address,
+            owner_address=objective_address,
+            domain="evaluation",
+            code_prefix="evaluation.story-ref",
+            resource_label="story",
+        )
+        window_script_addresses, script_diagnostics = _resolve_named_refs(
+            ref_names=list(objective.window.scripts),
+            available_names=set(scenario.scripts),
+            address_builder=_script_address,
+            owner_address=objective_address,
+            domain="evaluation",
+            code_prefix="evaluation.script-ref",
+            resource_label="script",
+        )
+        window_event_addresses, event_diagnostics = _resolve_named_refs(
+            ref_names=list(objective.window.events),
+            available_names=set(scenario.events),
+            address_builder=_event_address,
+            owner_address=objective_address,
+            domain="evaluation",
+            code_prefix="evaluation.event-ref",
+            resource_label="event",
+        )
+        window_workflow_addresses, workflow_diagnostics = _resolve_named_refs(
+            ref_names=list(objective.window.workflows),
+            available_names=set(scenario.workflows),
+            address_builder=_workflow_address,
+            owner_address=objective_address,
+            domain="evaluation",
+            code_prefix="evaluation.workflow-ref",
+            resource_label="workflow",
+        )
+        window_step_refs, window_step_workflow_addresses, step_diagnostics = (
+            _resolve_workflow_step_refs(
+                scenario,
+                step_refs=list(objective.window.steps),
+                owner_address=objective_address,
+                domain="evaluation",
+                code_prefix="evaluation.workflow-step-ref",
+            )
+        )
+        diagnostics.extend(story_diagnostics)
+        diagnostics.extend(script_diagnostics)
+        diagnostics.extend(event_diagnostics)
+        diagnostics.extend(workflow_diagnostics)
+        diagnostics.extend(step_diagnostics)
+
+    return (
+        window_story_addresses,
+        window_script_addresses,
+        window_event_addresses,
+        window_workflow_addresses,
+        window_step_refs,
+        window_step_workflow_addresses,
+        diagnostics,
+    )
+
+
+def _build_objectives(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+) -> tuple[dict[str, ObjectiveRuntime], list[Diagnostic]]:
+    objectives: dict[str, ObjectiveRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, objective in scenario.objectives.items():
         objective_address = _objective_address(name)
-        success_addresses: list[str] = []
-        condition_addresses, objective_diagnostics = _resolve_binding_refs(
+        success_addresses, success_diagnostics = _resolve_objective_success_refs(
+            scenario,
             condition_bindings,
-            ref_names=list(objective.success.conditions),
-            owner_address=objective_address,
-            domain="evaluation",
-            code_prefix="evaluation.condition-ref",
-            binding_attr="condition_name",
-            binding_label="condition",
+            objective,
+            objective_address,
         )
-        diagnostics.extend(objective_diagnostics)
-        success_addresses.extend(condition_addresses)
-        metric_addresses, metric_diagnostics = _resolve_named_refs(
-            ref_names=list(objective.success.metrics),
-            available_names=set(scenario.metrics),
-            address_builder=_metric_address,
-            owner_address=objective_address,
-            domain="evaluation",
-            code_prefix="evaluation.metric-ref",
-            resource_label="metric",
-        )
-        evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
-            ref_names=list(objective.success.evaluations),
-            available_names=set(scenario.evaluations),
-            address_builder=_evaluation_address,
-            owner_address=objective_address,
-            domain="evaluation",
-            code_prefix="evaluation.evaluation-ref",
-            resource_label="evaluation",
-        )
-        tlo_addresses, tlo_diagnostics = _resolve_named_refs(
-            ref_names=list(objective.success.tlos),
-            available_names=set(scenario.tlos),
-            address_builder=_tlo_address,
-            owner_address=objective_address,
-            domain="evaluation",
-            code_prefix="evaluation.tlo-ref",
-            resource_label="TLO",
-        )
-        goal_addresses, goal_diagnostics = _resolve_named_refs(
-            ref_names=list(objective.success.goals),
-            available_names=set(scenario.goals),
-            address_builder=_goal_address,
-            owner_address=objective_address,
-            domain="evaluation",
-            code_prefix="evaluation.goal-ref",
-            resource_label="goal",
-        )
-        diagnostics.extend(metric_diagnostics)
-        diagnostics.extend(evaluation_diagnostics)
-        diagnostics.extend(tlo_diagnostics)
-        diagnostics.extend(goal_diagnostics)
-        success_addresses.extend(metric_addresses)
-        success_addresses.extend(evaluation_addresses)
-        success_addresses.extend(tlo_addresses)
-        success_addresses.extend(goal_addresses)
+        diagnostics.extend(success_diagnostics)
         objective_dependencies, objective_dependency_diagnostics = _resolve_named_refs(
             ref_names=list(objective.depends_on),
             available_names=set(scenario.objectives),
@@ -939,63 +1004,16 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
         )
         diagnostics.extend(objective_dependency_diagnostics)
 
-        window_story_addresses: tuple[str, ...] = ()
-        window_script_addresses: tuple[str, ...] = ()
-        window_event_addresses: tuple[str, ...] = ()
-        window_workflow_addresses: tuple[str, ...] = ()
-        window_step_refs: tuple[str, ...] = ()
-        window_step_workflow_addresses: tuple[str, ...] = ()
-        if objective.window is not None:
-            window_story_addresses, story_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.stories),
-                available_names=set(scenario.stories),
-                address_builder=_story_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.story-ref",
-                resource_label="story",
-            )
-            window_script_addresses, script_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.scripts),
-                available_names=set(scenario.scripts),
-                address_builder=_script_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.script-ref",
-                resource_label="script",
-            )
-            window_event_addresses, event_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.events),
-                available_names=set(scenario.events),
-                address_builder=_event_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.event-ref",
-                resource_label="event",
-            )
-            window_workflow_addresses, workflow_diagnostics = _resolve_named_refs(
-                ref_names=list(objective.window.workflows),
-                available_names=set(scenario.workflows),
-                address_builder=_workflow_address,
-                owner_address=objective_address,
-                domain="evaluation",
-                code_prefix="evaluation.workflow-ref",
-                resource_label="workflow",
-            )
-            window_step_refs, window_step_workflow_addresses, step_diagnostics = (
-                _resolve_workflow_step_refs(
-                    scenario,
-                    step_refs=list(objective.window.steps),
-                    owner_address=objective_address,
-                    domain="evaluation",
-                    code_prefix="evaluation.workflow-step-ref",
-                )
-            )
-            diagnostics.extend(story_diagnostics)
-            diagnostics.extend(script_diagnostics)
-            diagnostics.extend(event_diagnostics)
-            diagnostics.extend(workflow_diagnostics)
-            diagnostics.extend(step_diagnostics)
+        (
+            window_story_addresses,
+            window_script_addresses,
+            window_event_addresses,
+            window_workflow_addresses,
+            window_step_refs,
+            window_step_workflow_addresses,
+            window_diagnostics,
+        ) = _resolve_objective_window(scenario, objective, objective_address)
+        diagnostics.extend(window_diagnostics)
 
         actor_type = "agent" if objective.agent else "entity"
         actor_name = objective.agent or objective.entity
@@ -1028,8 +1046,174 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             refresh_dependencies=refresh_dependencies,
             spec=_dump(objective),
         )
+    return objectives, diagnostics
 
-    workflows = {}
+
+def _resolve_objective_success_refs(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+    objective,
+    objective_address: str,
+) -> tuple[list[str], list[Diagnostic]]:
+    success_addresses: list[str] = []
+    diagnostics: list[Diagnostic] = []
+    condition_addresses, objective_diagnostics = _resolve_binding_refs(
+        condition_bindings,
+        ref_names=list(objective.success.conditions),
+        owner_address=objective_address,
+        domain="evaluation",
+        code_prefix="evaluation.condition-ref",
+        binding_attr="condition_name",
+        binding_label="condition",
+    )
+    diagnostics.extend(objective_diagnostics)
+    success_addresses.extend(condition_addresses)
+    metric_addresses, metric_diagnostics = _resolve_named_refs(
+        ref_names=list(objective.success.metrics),
+        available_names=set(scenario.metrics),
+        address_builder=_metric_address,
+        owner_address=objective_address,
+        domain="evaluation",
+        code_prefix="evaluation.metric-ref",
+        resource_label="metric",
+    )
+    evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
+        ref_names=list(objective.success.evaluations),
+        available_names=set(scenario.evaluations),
+        address_builder=_evaluation_address,
+        owner_address=objective_address,
+        domain="evaluation",
+        code_prefix="evaluation.evaluation-ref",
+        resource_label="evaluation",
+    )
+    tlo_addresses, tlo_diagnostics = _resolve_named_refs(
+        ref_names=list(objective.success.tlos),
+        available_names=set(scenario.tlos),
+        address_builder=_tlo_address,
+        owner_address=objective_address,
+        domain="evaluation",
+        code_prefix="evaluation.tlo-ref",
+        resource_label="TLO",
+    )
+    goal_addresses, goal_diagnostics = _resolve_named_refs(
+        ref_names=list(objective.success.goals),
+        available_names=set(scenario.goals),
+        address_builder=_goal_address,
+        owner_address=objective_address,
+        domain="evaluation",
+        code_prefix="evaluation.goal-ref",
+        resource_label="goal",
+    )
+    diagnostics.extend(metric_diagnostics)
+    diagnostics.extend(evaluation_diagnostics)
+    diagnostics.extend(tlo_diagnostics)
+    diagnostics.extend(goal_diagnostics)
+    success_addresses.extend(metric_addresses)
+    success_addresses.extend(evaluation_addresses)
+    success_addresses.extend(tlo_addresses)
+    success_addresses.extend(goal_addresses)
+    return success_addresses, diagnostics
+
+
+def _resolve_workflow_step_predicate(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+    step,
+    predicate_address: str,
+) -> tuple[tuple[str, ...], list[str], list[str], list[Diagnostic]]:
+    diagnostics: list[Diagnostic] = []
+    condition_addresses, workflow_diagnostics = _resolve_binding_refs(
+        condition_bindings,
+        ref_names=list(step.when.conditions),
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.condition-ref",
+        binding_attr="condition_name",
+        binding_label="condition",
+    )
+    diagnostics.extend(workflow_diagnostics)
+
+    predicate_addresses: list[str] = list(condition_addresses)
+    metric_addresses, metric_diagnostics = _resolve_named_refs(
+        ref_names=list(step.when.metrics),
+        available_names=set(scenario.metrics),
+        address_builder=_metric_address,
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.metric-ref",
+        resource_label="metric",
+    )
+    evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
+        ref_names=list(step.when.evaluations),
+        available_names=set(scenario.evaluations),
+        address_builder=_evaluation_address,
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.evaluation-ref",
+        resource_label="evaluation",
+    )
+    tlo_addresses, tlo_diagnostics = _resolve_named_refs(
+        ref_names=list(step.when.tlos),
+        available_names=set(scenario.tlos),
+        address_builder=_tlo_address,
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.tlo-ref",
+        resource_label="TLO",
+    )
+    goal_addresses, goal_diagnostics = _resolve_named_refs(
+        ref_names=list(step.when.goals),
+        available_names=set(scenario.goals),
+        address_builder=_goal_address,
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.goal-ref",
+        resource_label="goal",
+    )
+    predicate_objectives, objective_diagnostics = _resolve_named_refs(
+        ref_names=list(step.when.objectives),
+        available_names=set(scenario.objectives),
+        address_builder=_objective_address,
+        owner_address=predicate_address,
+        domain="orchestration",
+        code_prefix="orchestration.objective-ref",
+        resource_label="objective",
+    )
+    diagnostics.extend(metric_diagnostics)
+    diagnostics.extend(evaluation_diagnostics)
+    diagnostics.extend(tlo_diagnostics)
+    diagnostics.extend(goal_diagnostics)
+    diagnostics.extend(objective_diagnostics)
+    predicate_addresses.extend(metric_addresses)
+    predicate_addresses.extend(evaluation_addresses)
+    predicate_addresses.extend(tlo_addresses)
+    predicate_addresses.extend(goal_addresses)
+    predicate_addresses.extend(predicate_objectives)
+    return condition_addresses, predicate_addresses, list(predicate_objectives), diagnostics
+
+
+def _build_workflow_step_edges(step) -> tuple[str, ...]:
+    edges: list[str] = []
+    if step.next:
+        edges.append(step.next)
+    if step.then_step:
+        edges.append(step.then_step)
+    if step.else_step:
+        edges.append(step.else_step)
+    if step.body:
+        edges.append(step.body)
+    if step.on_error:
+        edges.append(step.on_error)
+    edges.extend(step.branches)
+    return _dedupe(edges)
+
+
+def _build_workflows(
+    scenario: Scenario,
+    condition_bindings: dict[str, ConditionBinding],
+) -> tuple[dict[str, WorkflowRuntime], list[Diagnostic]]:
+    workflows: dict[str, WorkflowRuntime] = {}
+    diagnostics: list[Diagnostic] = []
     for name, workflow in scenario.workflows.items():
         workflow_address = _workflow_address(name)
         step_graph: dict[str, tuple[str, ...]] = {}
@@ -1038,19 +1222,7 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
         step_predicate_addresses: dict[str, tuple[str, ...]] = {}
 
         for step_name, step in workflow.steps.items():
-            edges: list[str] = []
-            if step.next:
-                edges.append(step.next)
-            if step.then_step:
-                edges.append(step.then_step)
-            if step.else_step:
-                edges.append(step.else_step)
-            if step.body:
-                edges.append(step.body)
-            if step.on_error:
-                edges.append(step.on_error)
-            edges.extend(step.branches)
-            step_graph[step_name] = _dedupe(edges)
+            step_graph[step_name] = _build_workflow_step_edges(step)
 
             if step.objective:
                 objective_addresses, objective_diagnostics = _resolve_named_refs(
@@ -1069,74 +1241,19 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
                 continue
 
             predicate_address = _address(workflow_address, "step", step_name)
-            condition_addresses, workflow_diagnostics = _resolve_binding_refs(
+            (
+                condition_addresses,
+                predicate_addresses,
+                predicate_objectives,
+                predicate_diagnostics,
+            ) = _resolve_workflow_step_predicate(
+                scenario,
                 condition_bindings,
-                ref_names=list(step.when.conditions),
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.condition-ref",
-                binding_attr="condition_name",
-                binding_label="condition",
+                step,
+                predicate_address,
             )
-            diagnostics.extend(workflow_diagnostics)
-
-            predicate_addresses: list[str] = list(condition_addresses)
-            metric_addresses, metric_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.metrics),
-                available_names=set(scenario.metrics),
-                address_builder=_metric_address,
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.metric-ref",
-                resource_label="metric",
-            )
-            evaluation_addresses, evaluation_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.evaluations),
-                available_names=set(scenario.evaluations),
-                address_builder=_evaluation_address,
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.evaluation-ref",
-                resource_label="evaluation",
-            )
-            tlo_addresses, tlo_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.tlos),
-                available_names=set(scenario.tlos),
-                address_builder=_tlo_address,
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.tlo-ref",
-                resource_label="TLO",
-            )
-            goal_addresses, goal_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.goals),
-                available_names=set(scenario.goals),
-                address_builder=_goal_address,
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.goal-ref",
-                resource_label="goal",
-            )
-            predicate_objectives, objective_diagnostics = _resolve_named_refs(
-                ref_names=list(step.when.objectives),
-                available_names=set(scenario.objectives),
-                address_builder=_objective_address,
-                owner_address=predicate_address,
-                domain="orchestration",
-                code_prefix="orchestration.objective-ref",
-                resource_label="objective",
-            )
-            diagnostics.extend(metric_diagnostics)
-            diagnostics.extend(evaluation_diagnostics)
-            diagnostics.extend(tlo_diagnostics)
-            diagnostics.extend(goal_diagnostics)
-            diagnostics.extend(objective_diagnostics)
-            predicate_addresses.extend(metric_addresses)
-            predicate_addresses.extend(evaluation_addresses)
-            predicate_addresses.extend(tlo_addresses)
-            predicate_addresses.extend(goal_addresses)
+            diagnostics.extend(predicate_diagnostics)
             referenced_objectives.extend(predicate_objectives)
-            predicate_addresses.extend(predicate_objectives)
 
             step_condition_addresses[step_name] = condition_addresses
             step_predicate_addresses[step_name] = _dedupe(predicate_addresses)
@@ -1161,6 +1278,127 @@ def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
             step_graph=step_graph,
             spec=_dump(workflow),
         )
+    return workflows, diagnostics
+
+
+def compile_runtime_model(scenario: Scenario) -> RuntimeModel:
+    """Compile an SDL scenario into bound runtime objects."""
+
+    diagnostics: list[Diagnostic] = []
+
+    feature_templates = {
+        name: RuntimeTemplate(
+            address=_template_address("feature", name),
+            name=name,
+            spec=_dump(template),
+        )
+        for name, template in scenario.features.items()
+    }
+    condition_templates = {
+        name: RuntimeTemplate(
+            address=_template_address("condition", name),
+            name=name,
+            spec=_dump(template),
+        )
+        for name, template in scenario.conditions.items()
+    }
+    inject_templates = {
+        name: RuntimeTemplate(
+            address=_template_address("inject", name),
+            name=name,
+            spec=_dump(template),
+        )
+        for name, template in scenario.injects.items()
+    }
+    vulnerability_templates = {
+        name: RuntimeTemplate(
+            address=_template_address("vulnerability", name),
+            name=name,
+            spec=_dump(template),
+        )
+        for name, template in scenario.vulnerabilities.items()
+    }
+    entity_specs = {
+        name: _dump(entity)
+        for name, entity in flatten_entities(scenario.entities).items()
+    }
+    agent_specs = {name: _dump(agent) for name, agent in scenario.agents.items()}
+    relationship_specs = {
+        name: _dump(relationship)
+        for name, relationship in scenario.relationships.items()
+    }
+    variable_specs = {
+        name: _dump(variable)
+        for name, variable in scenario.variables.items()
+    }
+
+    networks, node_deployments, node_diagnostics = _build_node_deployments(scenario)
+    diagnostics.extend(node_diagnostics)
+
+    feature_bindings, feature_binding_diagnostics = _build_feature_bindings(
+        scenario,
+        feature_templates,
+    )
+    diagnostics.extend(feature_binding_diagnostics)
+
+    condition_bindings, condition_binding_diagnostics = _build_condition_bindings(
+        scenario,
+        condition_templates,
+    )
+    diagnostics.extend(condition_binding_diagnostics)
+
+    injects = {
+        _inject_address(name): InjectRuntime(
+            address=_inject_address(name),
+            name=name,
+            spec=template.spec,
+        )
+        for name, template in inject_templates.items()
+    }
+
+    inject_bindings, inject_binding_diagnostics = _build_inject_bindings(
+        scenario,
+        inject_templates,
+    )
+    diagnostics.extend(inject_binding_diagnostics)
+
+    content_placements, content_diagnostics = _build_content_placements(scenario)
+    diagnostics.extend(content_diagnostics)
+
+    account_placements, account_diagnostics = _build_account_placements(scenario)
+    diagnostics.extend(account_diagnostics)
+
+    events, event_diagnostics = _build_events(
+        scenario,
+        condition_bindings,
+        injects,
+        inject_bindings,
+    )
+    diagnostics.extend(event_diagnostics)
+
+    scripts, script_diagnostics = _build_scripts(scenario)
+    diagnostics.extend(script_diagnostics)
+
+    stories, story_diagnostics = _build_stories(scenario)
+    diagnostics.extend(story_diagnostics)
+
+    metrics, metric_diagnostics = _build_metrics(scenario, condition_bindings)
+    diagnostics.extend(metric_diagnostics)
+
+    evaluations, evaluation_diagnostics = _build_evaluations(scenario)
+    diagnostics.extend(evaluation_diagnostics)
+
+    tlos, tlo_diagnostics = _build_tlos(scenario)
+    diagnostics.extend(tlo_diagnostics)
+
+    goals, goal_diagnostics = _build_goals(scenario)
+    diagnostics.extend(goal_diagnostics)
+
+    objectives, objective_diagnostics = _build_objectives(scenario, condition_bindings)
+    diagnostics.extend(objective_diagnostics)
+
+    workflows, workflow_diagnostics = _build_workflows(scenario, condition_bindings)
+    diagnostics.extend(workflow_diagnostics)
 
     return RuntimeModel(
         scenario_name=scenario.name,

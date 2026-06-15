@@ -323,6 +323,107 @@ class SemanticValidator:
                         f"Node '{name}' references undefined vulnerability '{vuln_name}'"
                     )
 
+    def _verify_infra_count(self, name: str, infra) -> None:
+        # Switch nodes cannot have count > 1
+        if name in self._s.nodes:
+            if (
+                self._s.nodes[name].type == NodeType.SWITCH
+                and isinstance(infra.count, int)
+                and infra.count > 1
+            ):
+                self._err(
+                    f"Switch node '{name}' cannot have count > 1"
+                )
+            if (
+                self._s.nodes[name].type == NodeType.VM
+                and self._s.nodes[name].conditions
+                and isinstance(infra.count, int)
+                and infra.count > 1
+            ):
+                self._err(
+                    f"Node '{name}' has conditions and cannot have count > 1"
+                )
+
+    def _verify_infra_property_ip(
+        self, name: str, infra, link_name: str, ip_str
+    ) -> None:
+        if self._is_unresolved_var(link_name):
+            return
+        if link_name not in infra.links:
+            self._err(
+                f"Infrastructure '{name}' property references "
+                f"unlinked node '{link_name}'"
+            )
+        if not self._is_switch_node(link_name):
+            self._err(
+                f"Infrastructure '{name}' property link "
+                f"'{link_name}' must reference a switch/network entry"
+            )
+            return
+        # Check IP is within the linked node's CIDR
+        linked_infra = self._s.infrastructure.get(link_name)
+        if linked_infra is None:
+            return
+        if not isinstance(linked_infra.properties, SimpleProperties):
+            self._err(
+                f"Infrastructure '{name}' property link "
+                f"'{link_name}' must reference a network with CIDR "
+                "properties"
+            )
+            return
+        if self._is_unresolved_var(ip_str):
+            return
+        if self._is_unresolved_var(linked_infra.properties.cidr):
+            return
+        try:
+            net = ip_network(
+                linked_infra.properties.cidr, strict=False
+            )
+        except ValueError:
+            self._err(
+                f"Infrastructure '{link_name}' has invalid CIDR "
+                f"{linked_infra.properties.cidr}"
+            )
+            return
+        try:
+            addr = ip_address(ip_str)
+        except ValueError:
+            self._err(
+                f"Infrastructure '{name}' has invalid IP "
+                f"assignment '{ip_str}' for link '{link_name}'"
+            )
+            return
+        if addr not in net:
+            self._err(
+                f"Infrastructure '{name}' IP {ip_str} "
+                f"not within '{link_name}' CIDR "
+                f"{linked_infra.properties.cidr}"
+            )
+
+    def _verify_infra_properties(self, name: str, infra) -> None:
+        # Validate complex properties IP within linked CIDR
+        if isinstance(infra.properties, list):
+            for prop_entry in infra.properties:
+                for link_name, ip_str in prop_entry.items():
+                    self._verify_infra_property_ip(name, infra, link_name, ip_str)
+
+    def _verify_infra_acls(self, name: str, infra) -> None:
+        # Validate ACL network references
+        for acl in infra.acls:
+            for ref in (acl.from_net, acl.to_net):
+                if self._is_unresolved_var(ref):
+                    continue
+                if ref and ref not in self._s.infrastructure:
+                    self._err(
+                        f"Infrastructure '{name}' ACL references "
+                        f"undefined network '{ref}'"
+                    )
+                elif ref and not self._is_switch_node(ref):
+                    self._err(
+                        f"Infrastructure '{name}' ACL reference '{ref}' "
+                        "must point to a switch/network entry"
+                    )
+
     def _verify_infrastructure(self) -> None:
         for name, infra in self._s.infrastructure.items():
             if name not in self._s.nodes:
@@ -351,98 +452,9 @@ class SemanticValidator:
                         f"Infrastructure '{name}' depends on undefined '{dep}'"
                     )
 
-            # Switch nodes cannot have count > 1
-            if name in self._s.nodes:
-                if (
-                    self._s.nodes[name].type == NodeType.SWITCH
-                    and isinstance(infra.count, int)
-                    and infra.count > 1
-                ):
-                    self._err(
-                        f"Switch node '{name}' cannot have count > 1"
-                    )
-                if (
-                    self._s.nodes[name].type == NodeType.VM
-                    and self._s.nodes[name].conditions
-                    and isinstance(infra.count, int)
-                    and infra.count > 1
-                ):
-                    self._err(
-                        f"Node '{name}' has conditions and cannot have count > 1"
-                    )
-
-            # Validate complex properties IP within linked CIDR
-            if isinstance(infra.properties, list):
-                for prop_entry in infra.properties:
-                    for link_name, ip_str in prop_entry.items():
-                        if self._is_unresolved_var(link_name):
-                            continue
-                        if link_name not in infra.links:
-                            self._err(
-                                f"Infrastructure '{name}' property references "
-                                f"unlinked node '{link_name}'"
-                            )
-                        if not self._is_switch_node(link_name):
-                            self._err(
-                                f"Infrastructure '{name}' property link "
-                                f"'{link_name}' must reference a switch/network entry"
-                            )
-                            continue
-                        # Check IP is within the linked node's CIDR
-                        linked_infra = self._s.infrastructure.get(link_name)
-                        if linked_infra is None:
-                            continue
-                        if not isinstance(linked_infra.properties, SimpleProperties):
-                            self._err(
-                                f"Infrastructure '{name}' property link "
-                                f"'{link_name}' must reference a network with CIDR "
-                                "properties"
-                            )
-                            continue
-                        if self._is_unresolved_var(ip_str):
-                            continue
-                        if self._is_unresolved_var(linked_infra.properties.cidr):
-                            continue
-                        try:
-                            net = ip_network(
-                                linked_infra.properties.cidr, strict=False
-                            )
-                        except ValueError:
-                            self._err(
-                                f"Infrastructure '{link_name}' has invalid CIDR "
-                                f"{linked_infra.properties.cidr}"
-                            )
-                            continue
-                        try:
-                            addr = ip_address(ip_str)
-                        except ValueError:
-                            self._err(
-                                f"Infrastructure '{name}' has invalid IP "
-                                f"assignment '{ip_str}' for link '{link_name}'"
-                            )
-                            continue
-                        if addr not in net:
-                            self._err(
-                                f"Infrastructure '{name}' IP {ip_str} "
-                                f"not within '{link_name}' CIDR "
-                                f"{linked_infra.properties.cidr}"
-                            )
-
-            # Validate ACL network references
-            for acl in infra.acls:
-                for ref in (acl.from_net, acl.to_net):
-                    if self._is_unresolved_var(ref):
-                        continue
-                    if ref and ref not in self._s.infrastructure:
-                        self._err(
-                            f"Infrastructure '{name}' ACL references "
-                            f"undefined network '{ref}'"
-                        )
-                    elif ref and not self._is_switch_node(ref):
-                        self._err(
-                            f"Infrastructure '{name}' ACL reference '{ref}' "
-                            "must point to a switch/network entry"
-                        )
+            self._verify_infra_count(name, infra)
+            self._verify_infra_properties(name, infra)
+            self._verify_infra_acls(name, infra)
 
     def _verify_content(self) -> None:
         for name, item in self._s.content.items():
@@ -497,6 +509,52 @@ class SemanticValidator:
                     ref_label="target",
                 )
 
+    def _verify_agent_initial_knowledge(
+        self, name: str, agent, service_names: set[str]
+    ) -> None:
+        for host in agent.initial_knowledge.hosts:
+            if self._is_unresolved_var(host):
+                continue
+            if host not in self._s.nodes:
+                self._err(
+                    f"Agent '{name}' initial_knowledge host '{host}' "
+                    f"not in nodes section"
+                )
+            elif not self._is_vm_node(host):
+                self._err(
+                    f"Agent '{name}' initial_knowledge host '{host}' "
+                    "must reference a VM node"
+                )
+        for subnet in agent.initial_knowledge.subnets:
+            if self._is_unresolved_var(subnet):
+                continue
+            if subnet not in self._s.infrastructure:
+                self._err(
+                    f"Agent '{name}' initial_knowledge subnet '{subnet}' "
+                    f"not in infrastructure section"
+                )
+            elif not self._is_switch_node(subnet):
+                self._err(
+                    f"Agent '{name}' initial_knowledge subnet "
+                    f"'{subnet}' must reference a switch/network entry"
+                )
+        for service_name in agent.initial_knowledge.services:
+            if self._is_unresolved_var(service_name):
+                continue
+            if service_name not in service_names:
+                self._err(
+                    f"Agent '{name}' initial_knowledge service "
+                    f"'{service_name}' not in node service names"
+                )
+        for acct_name in agent.initial_knowledge.accounts:
+            if self._is_unresolved_var(acct_name):
+                continue
+            if acct_name not in self._s.accounts:
+                self._err(
+                    f"Agent '{name}' initial_knowledge account "
+                    f"'{acct_name}' not in accounts section"
+                )
+
     def _verify_agents(self) -> None:
         flat_entity_names = self._all_entity_names()
         service_names = {
@@ -537,223 +595,209 @@ class SemanticValidator:
                         "reference a switch/network entry"
                     )
             if agent.initial_knowledge:
-                for host in agent.initial_knowledge.hosts:
-                    if self._is_unresolved_var(host):
-                        continue
-                    if host not in self._s.nodes:
-                        self._err(
-                            f"Agent '{name}' initial_knowledge host '{host}' "
-                            f"not in nodes section"
-                        )
-                    elif not self._is_vm_node(host):
-                        self._err(
-                            f"Agent '{name}' initial_knowledge host '{host}' "
-                            "must reference a VM node"
-                        )
-                for subnet in agent.initial_knowledge.subnets:
-                    if self._is_unresolved_var(subnet):
-                        continue
-                    if subnet not in self._s.infrastructure:
-                        self._err(
-                            f"Agent '{name}' initial_knowledge subnet '{subnet}' "
-                            f"not in infrastructure section"
-                        )
-                    elif not self._is_switch_node(subnet):
-                        self._err(
-                            f"Agent '{name}' initial_knowledge subnet "
-                            f"'{subnet}' must reference a switch/network entry"
-                        )
-                for service_name in agent.initial_knowledge.services:
-                    if self._is_unresolved_var(service_name):
-                        continue
-                    if service_name not in service_names:
-                        self._err(
-                            f"Agent '{name}' initial_knowledge service "
-                            f"'{service_name}' not in node service names"
-                        )
-                for acct_name in agent.initial_knowledge.accounts:
-                    if self._is_unresolved_var(acct_name):
-                        continue
-                    if acct_name not in self._s.accounts:
-                        self._err(
-                            f"Agent '{name}' initial_knowledge account "
-                            f"'{acct_name}' not in accounts section"
-                        )
+                self._verify_agent_initial_knowledge(name, agent, service_names)
+
+    def _verify_objective_actor(self, name: str, objective, actor_entities: set[str]) -> None:
+        if (
+            objective.agent
+            and not self._is_unresolved_var(objective.agent)
+            and objective.agent not in self._s.agents
+        ):
+            self._err(
+                f"Objective '{name}' references undefined agent "
+                f"'{objective.agent}'"
+            )
+
+        if (
+            objective.entity
+            and not self._is_unresolved_var(objective.entity)
+            and objective.entity not in actor_entities
+        ):
+            self._err(
+                f"Objective '{name}' references undefined entity "
+                f"'{objective.entity}'"
+            )
+
+        if (
+            objective.agent
+            and not self._is_unresolved_var(objective.agent)
+            and objective.agent in self._s.agents
+        ):
+            allowed_actions = set(self._s.agents[objective.agent].actions)
+            for action in objective.actions:
+                if self._is_unresolved_var(action):
+                    continue
+                if action not in allowed_actions:
+                    self._err(
+                        f"Objective '{name}' action '{action}' is not "
+                        f"declared by agent '{objective.agent}'"
+                    )
+
+    def _verify_objective_success(self, name: str, objective) -> None:
+        for target in objective.targets:
+            if self._is_unresolved_var(target):
+                continue
+            self._validate_named_ref(
+                target,
+                owner_label=f"Objective '{name}'",
+                ref_label="target",
+                targetable=True,
+            )
+
+        success_sections = (
+            ("condition", objective.success.conditions, self._s.conditions),
+            ("metric", objective.success.metrics, self._s.metrics),
+            ("evaluation", objective.success.evaluations, self._s.evaluations),
+            ("TLO", objective.success.tlos, self._s.tlos),
+            ("goal", objective.success.goals, self._s.goals),
+        )
+        for label, refs, section in success_sections:
+            for ref in refs:
+                if self._is_unresolved_var(ref):
+                    continue
+                if ref not in section:
+                    self._err(
+                        f"Objective '{name}' references undefined {label} "
+                        f"'{ref}' in success criteria"
+                    )
+
+    def _verify_objective_window_scripts(
+        self, name: str, window
+    ) -> tuple[set[str], set[str]]:
+        referenced_story_scripts: set[str] = set()
+        referenced_scripts: set[str] = set()
+
+        for story_name in window.stories:
+            if self._is_unresolved_var(story_name):
+                continue
+            story = self._s.stories.get(story_name)
+            if story is None:
+                self._err(
+                    f"Objective '{name}' references undefined story "
+                    f"'{story_name}' in window"
+                )
+                continue
+            referenced_story_scripts.update(story.scripts)
+
+        for script_name in window.scripts:
+            if self._is_unresolved_var(script_name):
+                continue
+            script = self._s.scripts.get(script_name)
+            if script is None:
+                self._err(
+                    f"Objective '{name}' references undefined script "
+                    f"'{script_name}' in window"
+                )
+                continue
+            referenced_scripts.add(script_name)
+            if (
+                referenced_story_scripts
+                and script_name not in referenced_story_scripts
+            ):
+                self._err(
+                    f"Objective '{name}' window script '{script_name}' "
+                    "is not included by the referenced stories"
+                )
+
+        return referenced_scripts, referenced_story_scripts
+
+    def _verify_objective_window_events(
+        self, name: str, window, candidate_scripts: set[str]
+    ) -> None:
+        candidate_events: set[str] = set()
+        for script_name in candidate_scripts:
+            script = self._s.scripts.get(script_name)
+            if script is not None:
+                candidate_events.update(script.events.keys())
+
+        for event_name in window.events:
+            if self._is_unresolved_var(event_name):
+                continue
+            if event_name not in self._s.events:
+                self._err(
+                    f"Objective '{name}' references undefined event "
+                    f"'{event_name}' in window"
+                )
+                continue
+            if candidate_events and event_name not in candidate_events:
+                self._err(
+                    f"Objective '{name}' window event '{event_name}' "
+                    "is not included by the referenced scripts"
+                )
+
+    def _verify_objective_window_steps(
+        self, name: str, window, referenced_workflows: set[str]
+    ) -> None:
+        if window.steps and not window.workflows:
+            self._err(
+                f"Objective '{name}' window steps require at least one "
+                "referenced workflow"
+            )
+
+        for step_ref in window.steps:
+            if self._is_unresolved_var(step_ref):
+                continue
+            if "." not in step_ref:
+                self._err(
+                    f"Objective '{name}' window step '{step_ref}' must "
+                    "use '<workflow>.<step>' syntax"
+                )
+                continue
+
+            workflow_name, step_name = step_ref.split(".", 1)
+            workflow = self._s.workflows.get(workflow_name)
+            if workflow is None:
+                self._err(
+                    f"Objective '{name}' window step '{step_ref}' "
+                    f"references undefined workflow '{workflow_name}'"
+                )
+                continue
+            if (
+                referenced_workflows
+                and workflow_name not in referenced_workflows
+            ):
+                self._err(
+                    f"Objective '{name}' window step '{step_ref}' "
+                    "is not part of the referenced workflows"
+                )
+            if step_name not in workflow.steps:
+                self._err(
+                    f"Objective '{name}' window step '{step_ref}' "
+                    f"references undefined step '{step_name}'"
+                )
+
+    def _verify_objective_window(self, name: str, window) -> None:
+        referenced_scripts, referenced_story_scripts = (
+            self._verify_objective_window_scripts(name, window)
+        )
+
+        candidate_scripts = referenced_scripts or referenced_story_scripts
+        self._verify_objective_window_events(name, window, candidate_scripts)
+
+        referenced_workflows: set[str] = set()
+        for workflow_name in window.workflows:
+            if self._is_unresolved_var(workflow_name):
+                continue
+            workflow = self._s.workflows.get(workflow_name)
+            if workflow is None:
+                self._err(
+                    f"Objective '{name}' references undefined workflow "
+                    f"'{workflow_name}' in window"
+                )
+                continue
+            referenced_workflows.add(workflow_name)
+
+        self._verify_objective_window_steps(name, window, referenced_workflows)
 
     def _verify_objectives(self) -> None:
         actor_entities = self._all_entity_names()
 
         for name, objective in self._s.objectives.items():
-            if (
-                objective.agent
-                and not self._is_unresolved_var(objective.agent)
-                and objective.agent not in self._s.agents
-            ):
-                self._err(
-                    f"Objective '{name}' references undefined agent "
-                    f"'{objective.agent}'"
-                )
-
-            if (
-                objective.entity
-                and not self._is_unresolved_var(objective.entity)
-                and objective.entity not in actor_entities
-            ):
-                self._err(
-                    f"Objective '{name}' references undefined entity "
-                    f"'{objective.entity}'"
-                )
-
-            if (
-                objective.agent
-                and not self._is_unresolved_var(objective.agent)
-                and objective.agent in self._s.agents
-            ):
-                allowed_actions = set(self._s.agents[objective.agent].actions)
-                for action in objective.actions:
-                    if self._is_unresolved_var(action):
-                        continue
-                    if action not in allowed_actions:
-                        self._err(
-                            f"Objective '{name}' action '{action}' is not "
-                            f"declared by agent '{objective.agent}'"
-                        )
-
-            for target in objective.targets:
-                if self._is_unresolved_var(target):
-                    continue
-                self._validate_named_ref(
-                    target,
-                    owner_label=f"Objective '{name}'",
-                    ref_label="target",
-                    targetable=True,
-                )
-
-            success_sections = (
-                ("condition", objective.success.conditions, self._s.conditions),
-                ("metric", objective.success.metrics, self._s.metrics),
-                ("evaluation", objective.success.evaluations, self._s.evaluations),
-                ("TLO", objective.success.tlos, self._s.tlos),
-                ("goal", objective.success.goals, self._s.goals),
-            )
-            for label, refs, section in success_sections:
-                for ref in refs:
-                    if self._is_unresolved_var(ref):
-                        continue
-                    if ref not in section:
-                        self._err(
-                            f"Objective '{name}' references undefined {label} "
-                            f"'{ref}' in success criteria"
-                        )
+            self._verify_objective_actor(name, objective, actor_entities)
+            self._verify_objective_success(name, objective)
 
             if objective.window:
-                referenced_story_scripts: set[str] = set()
-                referenced_scripts: set[str] = set()
-                referenced_workflows: set[str] = set()
-
-                for story_name in objective.window.stories:
-                    if self._is_unresolved_var(story_name):
-                        continue
-                    story = self._s.stories.get(story_name)
-                    if story is None:
-                        self._err(
-                            f"Objective '{name}' references undefined story "
-                            f"'{story_name}' in window"
-                        )
-                        continue
-                    referenced_story_scripts.update(story.scripts)
-
-                for script_name in objective.window.scripts:
-                    if self._is_unresolved_var(script_name):
-                        continue
-                    script = self._s.scripts.get(script_name)
-                    if script is None:
-                        self._err(
-                            f"Objective '{name}' references undefined script "
-                            f"'{script_name}' in window"
-                        )
-                        continue
-                    referenced_scripts.add(script_name)
-                    if (
-                        referenced_story_scripts
-                        and script_name not in referenced_story_scripts
-                    ):
-                        self._err(
-                            f"Objective '{name}' window script '{script_name}' "
-                            "is not included by the referenced stories"
-                        )
-
-                candidate_scripts = referenced_scripts or referenced_story_scripts
-                candidate_events: set[str] = set()
-                for script_name in candidate_scripts:
-                    script = self._s.scripts.get(script_name)
-                    if script is not None:
-                        candidate_events.update(script.events.keys())
-
-                for event_name in objective.window.events:
-                    if self._is_unresolved_var(event_name):
-                        continue
-                    if event_name not in self._s.events:
-                        self._err(
-                            f"Objective '{name}' references undefined event "
-                            f"'{event_name}' in window"
-                        )
-                        continue
-                    if candidate_events and event_name not in candidate_events:
-                        self._err(
-                            f"Objective '{name}' window event '{event_name}' "
-                            "is not included by the referenced scripts"
-                        )
-
-                for workflow_name in objective.window.workflows:
-                    if self._is_unresolved_var(workflow_name):
-                        continue
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
-                        self._err(
-                            f"Objective '{name}' references undefined workflow "
-                            f"'{workflow_name}' in window"
-                        )
-                        continue
-                    referenced_workflows.add(workflow_name)
-
-                if objective.window.steps and not objective.window.workflows:
-                    self._err(
-                        f"Objective '{name}' window steps require at least one "
-                        "referenced workflow"
-                    )
-
-                for step_ref in objective.window.steps:
-                    if self._is_unresolved_var(step_ref):
-                        continue
-                    if "." not in step_ref:
-                        self._err(
-                            f"Objective '{name}' window step '{step_ref}' must "
-                            "use '<workflow>.<step>' syntax"
-                        )
-                        continue
-
-                    workflow_name, step_name = step_ref.split(".", 1)
-                    workflow = self._s.workflows.get(workflow_name)
-                    if workflow is None:
-                        self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined workflow '{workflow_name}'"
-                        )
-                        continue
-                    if (
-                        referenced_workflows
-                        and workflow_name not in referenced_workflows
-                    ):
-                        self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            "is not part of the referenced workflows"
-                        )
-                    if step_name not in workflow.steps:
-                        self._err(
-                            f"Objective '{name}' window step '{step_ref}' "
-                            f"references undefined step '{step_name}'"
-                        )
+                self._verify_objective_window(name, objective.window)
 
             for dep_name in objective.depends_on:
                 if self._is_unresolved_var(dep_name):
@@ -809,6 +853,196 @@ class SemanticValidator:
                     f"'{outcome_ref}' in predicate"
                 )
 
+    def _verify_workflow_objective_step(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        edges: list[str] = []
+        if (
+            not self._is_unresolved_var(step.objective)
+            and step.objective not in self._s.objectives
+        ):
+            self._err(
+                f"Workflow '{workflow_name}' step '{step_name}' "
+                f"references undefined objective '{step.objective}'"
+            )
+        if step.next:
+            if (
+                not self._is_unresolved_var(step.next)
+                and step.next not in workflow.steps
+            ):
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"next step '{step.next}' is not defined"
+                )
+            elif not self._is_unresolved_var(step.next):
+                edges.append(step.next)
+        return edges
+
+    def _verify_workflow_if_step(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        edges: list[str] = []
+        self._validate_workflow_predicate(
+            workflow_name, step_name, step.when, workflow.steps,
+        )
+
+        for branch_label, branch_ref in (
+            ("then", step.then_step),
+            ("else", step.else_step),
+        ):
+            if self._is_unresolved_var(branch_ref):
+                continue
+            if branch_ref not in workflow.steps:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"{branch_label} step '{branch_ref}' is not "
+                    "defined"
+                )
+                continue
+            edges.append(branch_ref)
+        return edges
+
+    def _verify_workflow_parallel_step(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        edges: list[str] = []
+        for branch_ref in step.branches:
+            if self._is_unresolved_var(branch_ref):
+                continue
+            if branch_ref not in workflow.steps:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"branch '{branch_ref}' is not defined"
+                )
+                continue
+            edges.append(branch_ref)
+
+        if step.next:
+            if (
+                not self._is_unresolved_var(step.next)
+                and step.next not in workflow.steps
+            ):
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"join step '{step.next}' is not defined"
+                )
+            elif not self._is_unresolved_var(step.next):
+                edges.append(step.next)
+        return edges
+
+    def _verify_workflow_while_step(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        edges: list[str] = []
+        self._validate_workflow_predicate(
+            workflow_name, step_name, step.when, workflow.steps,
+        )
+
+        if not self._is_unresolved_var(step.body):
+            if step.body not in workflow.steps:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"body step '{step.body}' is not defined"
+                )
+            else:
+                edges.append(step.body)
+
+        if step.next:
+            if (
+                not self._is_unresolved_var(step.next)
+                and step.next not in workflow.steps
+            ):
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"next step '{step.next}' is not defined"
+                )
+            elif not self._is_unresolved_var(step.next):
+                edges.append(step.next)
+        return edges
+
+    def _verify_workflow_on_error(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        edges: list[str] = []
+        # Validate on_error for applicable step types
+        if step.on_error:
+            if self._is_unresolved_var(step.on_error):
+                pass
+            elif step.on_error == step_name:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"on-error cannot reference itself"
+                )
+            elif step.on_error not in workflow.steps:
+                self._err(
+                    f"Workflow '{workflow_name}' step '{step_name}' "
+                    f"on-error step '{step.on_error}' is not defined"
+                )
+            else:
+                edges.append(step.on_error)
+        return edges
+
+    def _verify_workflow_step(
+        self, workflow_name: str, step_name: str, step, workflow
+    ) -> list[str]:
+        if "." in step_name:
+            self._err(
+                f"Workflow '{workflow_name}' step '{step_name}' cannot "
+                "contain '.' because objective windows use "
+                "'<workflow>.<step>' syntax"
+            )
+
+        edges: list[str] = []
+
+        if step.type == WorkflowStepType.OBJECTIVE:
+            edges = self._verify_workflow_objective_step(
+                workflow_name, step_name, step, workflow
+            )
+        elif step.type == WorkflowStepType.IF:
+            edges = self._verify_workflow_if_step(
+                workflow_name, step_name, step, workflow
+            )
+        elif step.type == WorkflowStepType.PARALLEL:
+            edges = self._verify_workflow_parallel_step(
+                workflow_name, step_name, step, workflow
+            )
+        elif step.type == WorkflowStepType.WHILE:
+            edges = self._verify_workflow_while_step(
+                workflow_name, step_name, step, workflow
+            )
+
+        edges.extend(
+            self._verify_workflow_on_error(
+                workflow_name, step_name, step, workflow
+            )
+        )
+        return edges
+
+    def _verify_workflow_reachability(
+        self, workflow_name: str, workflow, graph: dict[str, list[str]]
+    ) -> None:
+        if (
+            self._is_unresolved_var(workflow.start)
+            or workflow.start not in workflow.steps
+        ):
+            return
+
+        reachable: set[str] = set()
+        stack = [workflow.start]
+        while stack:
+            current = stack.pop()
+            if current in reachable:
+                continue
+            reachable.add(current)
+            stack.extend(graph.get(current, []))
+
+        unreachable = sorted(set(workflow.steps) - reachable)
+        if unreachable:
+            self._err(
+                f"Workflow '{workflow_name}' contains unreachable steps: "
+                + ", ".join(unreachable)
+            )
+
     def _verify_workflows(self) -> None:
         for workflow_name, workflow in self._s.workflows.items():
             if "." in workflow_name:
@@ -831,151 +1065,16 @@ class SemanticValidator:
             }
 
             for step_name, step in workflow.steps.items():
-                if "." in step_name:
-                    self._err(
-                        f"Workflow '{workflow_name}' step '{step_name}' cannot "
-                        "contain '.' because objective windows use "
-                        "'<workflow>.<step>' syntax"
-                    )
-
-                edges: list[str] = []
-
-                if step.type == WorkflowStepType.OBJECTIVE:
-                    if (
-                        not self._is_unresolved_var(step.objective)
-                        and step.objective not in self._s.objectives
-                    ):
-                        self._err(
-                            f"Workflow '{workflow_name}' step '{step_name}' "
-                            f"references undefined objective '{step.objective}'"
-                        )
-                    if step.next:
-                        if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
-                        ):
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"next step '{step.next}' is not defined"
-                            )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
-
-                elif step.type == WorkflowStepType.IF:
-                    self._validate_workflow_predicate(
-                        workflow_name, step_name, step.when, workflow.steps,
-                    )
-
-                    for branch_label, branch_ref in (
-                        ("then", step.then_step),
-                        ("else", step.else_step),
-                    ):
-                        if self._is_unresolved_var(branch_ref):
-                            continue
-                        if branch_ref not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"{branch_label} step '{branch_ref}' is not "
-                                "defined"
-                            )
-                            continue
-                        edges.append(branch_ref)
-
-                elif step.type == WorkflowStepType.PARALLEL:
-                    for branch_ref in step.branches:
-                        if self._is_unresolved_var(branch_ref):
-                            continue
-                        if branch_ref not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"branch '{branch_ref}' is not defined"
-                            )
-                            continue
-                        edges.append(branch_ref)
-
-                    if step.next:
-                        if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
-                        ):
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"join step '{step.next}' is not defined"
-                            )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
-
-                elif step.type == WorkflowStepType.WHILE:
-                    self._validate_workflow_predicate(
-                        workflow_name, step_name, step.when, workflow.steps,
-                    )
-
-                    if not self._is_unresolved_var(step.body):
-                        if step.body not in workflow.steps:
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"body step '{step.body}' is not defined"
-                            )
-                        else:
-                            edges.append(step.body)
-
-                    if step.next:
-                        if (
-                            not self._is_unresolved_var(step.next)
-                            and step.next not in workflow.steps
-                        ):
-                            self._err(
-                                f"Workflow '{workflow_name}' step '{step_name}' "
-                                f"next step '{step.next}' is not defined"
-                            )
-                        elif not self._is_unresolved_var(step.next):
-                            edges.append(step.next)
-
-                # Validate on_error for applicable step types
-                if step.on_error:
-                    if self._is_unresolved_var(step.on_error):
-                        pass
-                    elif step.on_error == step_name:
-                        self._err(
-                            f"Workflow '{workflow_name}' step '{step_name}' "
-                            f"on-error cannot reference itself"
-                        )
-                    elif step.on_error not in workflow.steps:
-                        self._err(
-                            f"Workflow '{workflow_name}' step '{step_name}' "
-                            f"on-error step '{step.on_error}' is not defined"
-                        )
-                    else:
-                        edges.append(step.on_error)
-
-                graph[step_name] = edges
+                graph[step_name] = self._verify_workflow_step(
+                    workflow_name, step_name, step, workflow
+                )
 
             if graph and _topological_sort(graph) is None:
                 self._err(
                     f"Workflow '{workflow_name}' graph contains a cycle"
                 )
 
-            if (
-                self._is_unresolved_var(workflow.start)
-                or workflow.start not in workflow.steps
-            ):
-                continue
-
-            reachable: set[str] = set()
-            stack = [workflow.start]
-            while stack:
-                current = stack.pop()
-                if current in reachable:
-                    continue
-                reachable.add(current)
-                stack.extend(graph.get(current, []))
-
-            unreachable = sorted(set(workflow.steps) - reachable)
-            if unreachable:
-                self._err(
-                    f"Workflow '{workflow_name}' contains unreachable steps: "
-                    + ", ".join(unreachable)
-                )
+            self._verify_workflow_reachability(workflow_name, workflow, graph)
 
     def _verify_variables(self) -> None:
         defined = set(self._s.variables.keys())

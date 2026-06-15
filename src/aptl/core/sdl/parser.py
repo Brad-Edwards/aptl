@@ -161,52 +161,78 @@ def _expand_min_score(value: Any) -> Any:
     return value
 
 
-def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
-    """Apply all shorthand expansions to normalized data."""
-    # Sections where "source" is a plain string reference, NOT a Source package.
-    _SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents"})
+# Sections where "source" is a plain string reference, NOT a Source package.
+_SOURCE_SKIP_SECTIONS = frozenset({"relationships", "agents"})
 
-    def expand_sources_scoped(
-        obj: Any,
-        *,
-        is_hashmap: bool = False,
-        skip: bool = False,
-    ) -> Any:
-        if isinstance(obj, dict):
-            result = {}
-            for k, v in obj.items():
-                if is_hashmap:
-                    result[k] = expand_sources_scoped(
-                        v,
-                        is_hashmap=False,
-                        skip=skip,
-                    )
-                    continue
 
-                child_skip = skip or k in _SOURCE_SKIP_SECTIONS
-                child_is_hashmap = _child_is_hashmap_field(k, v)
-
-                if k == "source" and not skip:
-                    result[k] = _expand_source(v)
-                else:
-                    result[k] = expand_sources_scoped(
-                        v,
-                        is_hashmap=child_is_hashmap,
-                        skip=child_skip,
-                    )
-            return result
-        if isinstance(obj, list):
-            return [
-                expand_sources_scoped(
-                    item,
-                    is_hashmap=is_hashmap,
+def _expand_sources_scoped(
+    obj: Any,
+    *,
+    is_hashmap: bool = False,
+    skip: bool = False,
+) -> Any:
+    """Recursively expand ``source`` shorthand outside of skipped sections."""
+    if isinstance(obj, dict):
+        result = {}
+        for k, v in obj.items():
+            if is_hashmap:
+                result[k] = _expand_sources_scoped(
+                    v,
+                    is_hashmap=False,
                     skip=skip,
                 )
-                for item in obj
-            ]
-        return obj
+                continue
 
-    data = expand_sources_scoped(data)
+            child_skip = skip or k in _SOURCE_SKIP_SECTIONS
+            child_is_hashmap = _child_is_hashmap_field(k, v)
+
+            if k == "source" and not skip:
+                result[k] = _expand_source(v)
+            else:
+                result[k] = _expand_sources_scoped(
+                    v,
+                    is_hashmap=child_is_hashmap,
+                    skip=child_skip,
+                )
+        return result
+    if isinstance(obj, list):
+        return [
+            _expand_sources_scoped(
+                item,
+                is_hashmap=is_hashmap,
+                skip=skip,
+            )
+            for item in obj
+        ]
+    return obj
+
+
+def _expand_node_shorthands(nodes: dict[str, Any]) -> None:
+    """Expand roles and feature/condition/inject list shorthands within nodes."""
+    for node_data in nodes.values():
+        if isinstance(node_data, dict):
+            if "roles" in node_data:
+                node_data["roles"] = _expand_roles(node_data["roles"])
+            # G6: features/conditions/injects as list -> dict with empty role
+            for field in ("features", "conditions", "injects"):
+                if field in node_data and isinstance(node_data[field], list):
+                    node_data[field] = {
+                        name: "" for name in node_data[field]
+                    }
+
+
+def _expand_evaluation_shorthands(evaluations: dict[str, Any]) -> None:
+    """Expand min_score shorthand in evaluations."""
+    for eval_data in evaluations.values():
+        if isinstance(eval_data, dict) and "min_score" in eval_data:
+            eval_data["min_score"] = _expand_min_score(
+                eval_data["min_score"]
+            )
+
+
+def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply all shorthand expansions to normalized data."""
+    data = _expand_sources_scoped(data)
 
     # Expand infrastructure shorthand
     if "infrastructure" in data and isinstance(data["infrastructure"], dict):
@@ -214,24 +240,11 @@ def _expand_shorthands(data: dict[str, Any]) -> dict[str, Any]:
 
     # Expand roles and feature/condition/inject list shorthands within nodes
     if "nodes" in data and isinstance(data["nodes"], dict):
-        for node_data in data["nodes"].values():
-            if isinstance(node_data, dict):
-                if "roles" in node_data:
-                    node_data["roles"] = _expand_roles(node_data["roles"])
-                # G6: features/conditions/injects as list -> dict with empty role
-                for field in ("features", "conditions", "injects"):
-                    if field in node_data and isinstance(node_data[field], list):
-                        node_data[field] = {
-                            name: "" for name in node_data[field]
-                        }
+        _expand_node_shorthands(data["nodes"])
 
     # Expand min_score in evaluations
     if "evaluations" in data and isinstance(data["evaluations"], dict):
-        for eval_data in data["evaluations"].values():
-            if isinstance(eval_data, dict) and "min_score" in eval_data:
-                eval_data["min_score"] = _expand_min_score(
-                    eval_data["min_score"]
-                )
+        _expand_evaluation_shorthands(data["evaluations"])
 
     return data
 

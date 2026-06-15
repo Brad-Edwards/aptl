@@ -77,20 +77,5 @@ module.exports = (async () => {
       linterOptions: { noInlineConfig: true },
       rules: complexity,
     },
-    // --- Legacy complexity backlog (see ADR-010 § TypeScript complexity
-    // backlog). Whole-file exemptions for modules that carry over-threshold
-    // functions today. Carved out per FILE (not per-function `// eslint-disable`)
-    // so a one-line edit to an offender does not drag its pre-existing debt into
-    // SonarCloud's new-code analysis, the same reasoning as the Python
-    // `[tool.ruff.lint.per-file-ignores]` list. Remove a path as soon as it
-    // passes without the exemption; do not add new code to these files.
-    {
-      files: [
-        'mcp/aptl-mcp-common/src/captures.ts', //          harvestSession     CC 18
-        'mcp/aptl-mcp-common/src/tools/api-handlers.ts', // predefined_query   CC 18
-        'web/src/lib/workbench.ts', //                     buildBlockSequence CC 18
-      ],
-      rules: { complexity: 'off' },
-    },
   ];
 })();

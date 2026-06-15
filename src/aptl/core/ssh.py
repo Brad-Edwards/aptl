@@ -175,8 +175,10 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
             error=f"Pivot public key not found at {public_key}",
         )
 
+    # Lock the private half to owner-only. The public half keeps ssh-keygen's
+    # default world-readable mode (it is a public key, bound read-only into the
+    # targets), so it is left as generated rather than re-chmod'd here.
     os.chmod(private_key, 0o600)
-    os.chmod(public_key, 0o644)
 
     return SSHKeyResult(
         success=True,

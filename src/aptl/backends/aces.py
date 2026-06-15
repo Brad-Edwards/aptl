@@ -122,16 +122,18 @@ def start_aces_scenario(
             error=redact(f"ACES runtime handoff failed: {exc}"),
         )
 
-    if result.success:
-        return LabResult(
+    return (
+        LabResult(
             success=True,
             message=(
                 f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'"
             ),
         )
-    return LabResult(
-        success=False,
-        error=render_aces_diagnostics(result.diagnostics),
+        if result.success
+        else LabResult(
+            success=False,
+            error=render_aces_diagnostics(result.diagnostics),
+        )
     )
 
 

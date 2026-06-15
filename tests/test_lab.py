@@ -755,6 +755,17 @@ class TestOrchestrateLabStart:
                 key_path=Path.home() / ".ssh" / "aptl_lab_key",
             ),
         )
+        # SEC #417: the kali pivot key is generated at startup via ssh-keygen,
+        # which is not present in the CI Python-tests container; mock it like
+        # ensure_ssh_keys so the orchestration tests do not shell out.
+        mocks["pivot"] = mocker.patch(
+            "aptl.core.lab.ensure_pivot_key",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=Path("config") / "lab-ssh" / "kali_pivot_key",
+            ),
+        )
 
         # Mock sysreqs
         from aptl.core.sysreqs import SysReqResult

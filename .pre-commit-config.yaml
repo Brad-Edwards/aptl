@@ -88,11 +88,28 @@ repos:
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it
         # before committing). Fall back to PATH for contributors using a
-        # different venv layout that they've already activated.
+        # different venv layout that they've already activated. Scenario SDL,
+        # the import lockfile, and the parity inventory are included so an edit
+        # to those runs the fast ACES validation-gate logic tests (the slow
+        # full-scenario gate is the manual `aces-scenario-gate` hook below).
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration"; else exec pytest tests/ -q -k "not integration"; fi'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml)$
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|docs/aces/parity-inventory\.yaml)$
+
+      - id: aces-scenario-gate
+        name: ACES scenario validation gate (manual; slow — TechVault parse + verify-imports)
+        # SCN-010E / #322. The full-scenario gate parses TechVault's large SDL
+        # tree and runs `aces sdl verify-imports` (~minutes each), so it is a
+        # manual-stage hook, not part of the per-commit path. Run it before
+        # pushing a scenario/manifest/parity change:
+        #   pre-commit run aces-scenario-gate --hook-stage manual
+        # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
+        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
+        language: system
+        pass_filenames: false
+        stages: [manual]
+        files: ^(scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py|docs/aces/parity-inventory\.yaml)$
 
       - id: vitest-mcp-common
         name: MCP TypeScript tests (aptl-mcp-common vitest)

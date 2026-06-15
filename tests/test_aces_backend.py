@@ -101,6 +101,50 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
     assert target.manifest.name == "aptl"
 
 
+def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
+    from aces_backend_protocols.capabilities import BackendManifest
+    from aces_backend_protocols.manifest import backend_manifest_payload
+
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    manifest = create_aptl_manifest()
+
+    assert isinstance(manifest, BackendManifest)
+    payload = backend_manifest_payload(manifest)
+    assert payload["schema_version"] == "backend-manifest/v2"
+    required = {
+        "backend-manifest-v2",
+        "operation-receipt-v1",
+        "operation-status-v1",
+        "runtime-snapshot-v1",
+    }
+    assert required <= set(payload["supported_contract_versions"])
+    # provisioning-only: no orchestration / evaluation / participant surfaces.
+    assert manifest.has_orchestrator is False
+    assert manifest.has_evaluator is False
+    assert manifest.has_participant_runtime is False
+
+
+def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
+    from aces_conformance.conformance import run_target_conformance
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    backend = MagicMock()
+    config = AptlConfig(lab={"name": "test"})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+    )
+
+    report = run_target_conformance(target, profile="provisioning-only")
+
+    assert report.passed is True, [d.code for d in report.diagnostics]
+    assert report.unsupported_contract_gaps == ()
+    assert report.unsupported_capability_gaps == ()
+
+
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     mocker,
     tmp_path,
@@ -403,7 +447,8 @@ def test_provisioner_rejects_unsupported_resource_type(tmp_path):
 
 
 def test_aces_backend_does_not_import_legacy_sdl_parser():
-    source = Path("src/aptl/backends/aces.py").read_text()
+    aces_module = Path(__file__).resolve().parents[1] / "src/aptl/backends/aces.py"
+    source = aces_module.read_text()
 
     assert "aptl.core.sdl" not in source
     assert "ScenarioDefinition" not in source

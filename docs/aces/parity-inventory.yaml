@@ -40,6 +40,62 @@ surfaces:
   - test_and_validation
 
 # ---------------------------------------------------------------------------
+# Required observable-surface coverage (SCN-010E / #322).
+#
+# The static validation gate (src/aptl/validation/techvault_gate.py) reads this
+# mapping and confirms every required observable surface is either:
+#   status: represented  — proven by real compiled/realized evidence from the
+#                          TechVault scenario (the gate asserts the evidence;
+#                          this file does not become a second source of truth);
+#   status: deferred     — explicitly out of provisioning-only scope, citing a
+#                          blocking tracking issue. Phase B cutover disallows
+#                          deferrals (full representation required).
+# A surface that is neither — or a `represented` claim with no compiled
+# evidence — fails the gate.
+required_surface_coverage:
+  nodes:
+    status: represented
+    notes: ACES nodes realized into Docker Compose node deployments.
+  services:
+    status: represented
+    notes: Per-node service exposure realized from node runtime specs.
+  vulnerabilities:
+    status: represented
+    notes: ACES vulnerabilities section encodes the planted vulnerability surface.
+  features:
+    status: represented
+    notes: ACES features section encodes adversary/observation feature bindings.
+  kali_apparatus:
+    status: represented
+    notes: Red-team Kali apparatus realized via the `kali` compose profile.
+  defensive_stack:
+    status: represented
+    notes: Wazuh/Suricata/MISP/Shuffle/TheHive defensive stack realized via the `soc`/`wazuh` profiles.
+  health:
+    status: represented
+    notes: Node runtime `health` state encoded in the ACES node specs.
+  injects:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Adversary inject sequencing belongs to the orchestration-evaluation profile; out of provisioning-only scope.
+  workflows:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Scenario-flow workflows belong to the orchestration-evaluation profile; out of provisioning-only scope.
+  objectives:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Objective evaluation requires the evaluator (orchestration-evaluation) profile (#312).
+  scoring:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Scoring outputs require the evaluator (orchestration-evaluation) profile (#312).
+  run_archive:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Run-archive/scoring run evidence is an evaluator-profile runtime output (#312).
+
+# ---------------------------------------------------------------------------
 # Rows.
 #
 # Per-row fields (all required):

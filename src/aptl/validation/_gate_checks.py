@@ -53,7 +53,7 @@ _SUBPROCESS_TIMEOUT_S = 120
 _IMPORT_LOCK_TIMEOUT_S = 600
 
 
-class _NoStartBackend:
+class _NoStartBackend(object):
     """Deployment backend stub that refuses to start the lab.
 
     The static gate compiles, plans, and interprets a scenario but must never
@@ -61,13 +61,19 @@ class _NoStartBackend:
     ``start``; this stub makes an accidental lab launch a loud error instead.
     """
 
-    def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
+    @staticmethod
+    def start(profiles: list[str], *, build: bool = True) -> LabResult:
+        """Refuse to start the lab from a static validation gate."""
         raise RuntimeError("static validation gate must not start the lab")
 
-    def stop(self, *args: object, **kwargs: object) -> LabResult:
+    @staticmethod
+    def stop(*args: object, **kwargs: object) -> LabResult:
+        """Refuse to stop the lab from a static validation gate."""
         raise RuntimeError("static validation gate must not stop the lab")
 
-    def status(self) -> LabStatus:
+    @staticmethod
+    def status() -> LabStatus:
+        """Refuse to query lab status from a static validation gate."""
         raise RuntimeError("static validation gate does not query lab status")
 
 
@@ -347,9 +353,7 @@ def _surface_evidence(
 def _contains_key(obj: object, key: str) -> bool:
     """Recursively test whether ``key`` appears as a mapping key in ``obj``."""
     if isinstance(obj, Mapping):
-        if key in obj:
-            return True
-        return any(_contains_key(value, key) for value in obj.values())
+        return key in obj or any(_contains_key(value, key) for value in obj.values())
     if isinstance(obj, (list, tuple)):
         return any(_contains_key(item, key) for item in obj)
     return False
@@ -373,7 +377,9 @@ def _run_aces(
     executable = shutil.which("aces")
     if executable is None:
         return None
-    return subprocess.run(  # noqa: S603 — fixed argv, paths/profile only, no shell
+    # Fixed argv (resolved executable, subcommand, paths/profile), no shell;
+    # S603 is a false positive for this trusted, non-interpolated invocation.
+    return subprocess.run(  # noqa: S603
         [executable, *args],
         capture_output=True,
         text=True,

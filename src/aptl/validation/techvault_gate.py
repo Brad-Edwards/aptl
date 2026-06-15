@@ -57,7 +57,7 @@ REQUIRED_SURFACES: tuple[str, ...] = (
 
 
 @dataclass(frozen=True)
-class GateCheck:
+class GateCheck(object):
     """One named gate check and its outcome."""
 
     name: str
@@ -66,7 +66,7 @@ class GateCheck:
 
 
 @dataclass(frozen=True)
-class GateReport:
+class GateReport(object):
     """The composed outcome of every gate check for a scenario."""
 
     scenario: str
@@ -99,7 +99,7 @@ class GateReport:
 
 
 @dataclass(frozen=True)
-class GateOptions:
+class GateOptions(object):
     """Tunable inputs for the static validation gate.
 
     ``fixtures_root`` / ``profiles_root`` override the ACES corpus roots

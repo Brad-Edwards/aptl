@@ -24,12 +24,15 @@ from aces_contracts.planning import (
 
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
+from aptl.validation._gate_checks import (
+    check_backend_conformance,
+    check_import_lock,
+    check_parity_manifest,
+)
 from aptl.validation.techvault_gate import (
     PHASE_B,
     REQUIRED_SURFACES,
-    _check_backend_conformance,
-    _check_import_lock,
-    _check_parity_manifest,
+    GateOptions,
     validate_scenario,
 )
 
@@ -44,7 +47,10 @@ def techvault_report():
     # and the integration-marked test below.
     config = AptlConfig(lab={"name": "techvault"})
     return validate_scenario(
-        SCENARIO, project_dir=PROJECT_ROOT, config=config, check_imports=False
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        config=config,
+        options=GateOptions(check_imports=False),
     )
 
 
@@ -80,7 +86,7 @@ def test_import_lock_verifies_committed_lockfile():
     # Slow (~4.5 min): re-hashes TechVault's full module tree. Runs under
     # `pytest -m integration` and the dedicated CI / pre-push gate, not the
     # fast inner-loop suite.
-    check = _check_import_lock(SCENARIO)
+    check = check_import_lock(SCENARIO)
     assert check.passed, check.diagnostics
 
 
@@ -96,7 +102,7 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
     from aces_conformance.conformance import run_target_conformance
 
     from aptl.backends.aces import create_aptl_runtime_target
-    from aptl.validation.techvault_gate import _NoStartBackend
+    from aptl.validation._gate_checks import _NoStartBackend
 
     config = AptlConfig(lab={"name": "techvault"})
     target = create_aptl_runtime_target(
@@ -111,9 +117,9 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
 @pytest.mark.integration
 def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     # Spawns the `aces conformance backend` CLI subprocess via
-    # _check_backend_conformance, so it is integration-marked.
+    # check_backend_conformance, so it is integration-marked.
     config = AptlConfig(lab={"name": "techvault"})
-    check = _check_backend_conformance(
+    check = check_backend_conformance(
         project_dir=PROJECT_ROOT,
         config=config,
         profile="provisioning-only",
@@ -179,9 +185,8 @@ def _write_inventory(tmp_path, coverage):
 
 
 def _parity(tmp_path, coverage, *, doc=None, realization=None, phase="phase_a"):
-    return _check_parity_manifest(
+    return check_parity_manifest(
         scenario=_FakeScenario(doc or _represented_doc()),
-        runtime_model=None,
         realization_details=realization or _represented_realization(),
         project_dir=tmp_path,
         parity_inventory_path=_write_inventory(tmp_path, coverage),

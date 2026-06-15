@@ -321,11 +321,7 @@
         "443/tcp": null,
         "5601/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "443"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "443"
           }
         ]

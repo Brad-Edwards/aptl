@@ -1620,7 +1620,7 @@ nodes:
         published_ports:
         - container_port: 5601
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 443
           description: Docker host-published port observed from inspect.
         description: ''
@@ -1639,7 +1639,7 @@ nodes:
         published_port_refs:
         - container_port: 5601
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 443
         readiness:
           probe: curl -ks -i https://localhost:5601/api/status

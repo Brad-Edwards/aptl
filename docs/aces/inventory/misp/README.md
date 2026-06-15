@@ -16,7 +16,7 @@ as current-running steady-state evidence, not as clean-lab rebuild proof.
 - MISP image identity, history, rootfs layers, local realization inputs, and
   absent supply-chain attestation evidence.
 - Runtime container policy, healthcheck, mounts, endpoint `172.20.0.16` on
-  `security-net`, host publication `8443:443`, environment, capabilities,
+  `security-net`, host publication `127.0.0.1:8443:443` (loopback-only), environment, capabilities,
   process tree, local users/groups, package inventory, SBOM scanner evidence,
   and Trivy findings.
 - `runtime.service_listeners` for HTTP/HTTPS, loopback MISP ZMQ, loopback

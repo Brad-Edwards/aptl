@@ -3,7 +3,7 @@ nodes:
   thehive:
     type: vm
     description: 'TechVault TheHive SOC case-management application (compose service thehive, container aptl-thehive, image
-      strangebee/thehive:5.4). TheHive 5.4.11 (Play/Scala) serving HTTPS on 9000 (published 9000:9000), backed by Cassandra
+      strangebee/thehive:5.4). TheHive 5.4.11 (Play/Scala) serving HTTPS on 9000 (published 127.0.0.1:9000:9000, loopback-only), backed by Cassandra
       (primary data, relationships.thehive-connects-cassandra) and a LOCAL Lucene search index (index.search.backend=lucene,
       the thehive_index volume) — NOT the deployed thehive-es, which it does not use. Inventoried at experiment grade under
       docs/aces/inventory/thehive/ (SCN-010 issue #350). The Play application secret is a committed scenario fixture (the
@@ -271,7 +271,7 @@ nodes:
     - port: 9000
       protocol: tcp
       name: thehive-https
-      description: TheHive HTTPS web/REST API; published to the host as 9000:9000.
+      description: TheHive HTTPS web/REST API; published to the host as 127.0.0.1:9000:9000 (loopback-only).
     asset_value: null
     runtime:
       mounts:
@@ -10322,10 +10322,10 @@ nodes:
         published_ports:
         - container_port: 9000
           protocol: tcp
-          host_ip: 0.0.0.0
+          host_ip: 127.0.0.1
           host_port: 9000
           description: ''
-        description: security-net 172.20.0.18; HTTPS published to the host as 9000:9000.
+        description: security-net 172.20.0.18; HTTPS published to the host as 127.0.0.1:9000:9000 (loopback-only).
       service_listeners:
       - service_listener_id: thehive-https-9000
         service: thehive-https
@@ -10344,7 +10344,7 @@ nodes:
         evidence_refs:
         - docs/aces/inventory/thehive/evidence/osquery-listening-ports.json
         - docs/aces/inventory/thehive/evidence/thehive-state.txt
-        description: TheHive HTTPS listener on TCP/9000 (Play https.port; http disabled). Published to the host as 9000:9000.
+        description: TheHive HTTPS listener on TCP/9000 (Play https.port; http disabled). Published to the host as 127.0.0.1:9000:9000 (loopback-only).
       identity_authorities: []
       file_services: []
       mail_services: []

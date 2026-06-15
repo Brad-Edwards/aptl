@@ -7,7 +7,7 @@ the realized `aptl-thehive` container at the established granularity bar (issue
 
 `thehive` is the lab's **SOC case-management application**: upstream
 `strangebee/thehive:5.4` (TheHive 5.4.11, Play/Scala on Amazon Corretto 11),
-serving HTTPS on 9000 (published `9000:9000`). It is inventoried as the
+serving HTTPS on 9000 (published `127.0.0.1:9000:9000`, loopback-only). It is inventoried as the
 participant application node `nodes.techvault.thehive`. Its realized backends
 are **Cassandra** (primary case/alert data, CQL/9042 —
 `relationships.thehive-connects-cassandra`) and a **local Lucene** search index
@@ -46,7 +46,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Runtime OS | Debian GNU/Linux 12 (bookworm) |
 | Application | TheHive 5.4.11 (Play 3.0.x / Scalligraph 5.4.11-1) on Amazon Corretto 11 |
 | Backends | Cassandra (data, CQL/9042) + **local Lucene** index (`/opt/thp/thehive/index`); thehive-es is deployed but unused |
-| Reachable participant ports | HTTPS `9000` (published to host `9000:9000`) |
+| Reachable participant ports | HTTPS `9000` (published to host `127.0.0.1:9000:9000`, loopback-only) |
 | Network identity | `security-net` 172.20.0.18 (only network) |
 | Memory limit | 1 GiB |
 | Package inventory | 126 dpkg packages |

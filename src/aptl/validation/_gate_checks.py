@@ -117,7 +117,7 @@ def check_compile(scenario: Scenario) -> GateCheck:
     """Compile the scenario runtime model (exercises semantic validation)."""
     try:
         compile_scenario_runtime_model(scenario)
-    except Exception as exc:  # noqa: BLE001 — ACES raises a family of compile errors
+    except Exception as exc:  # broad-except: ACES raises a family of compile errors
         return GateCheck(
             "compile",
             False,
@@ -142,7 +142,7 @@ def check_backend_conformance(
         report = run_target_conformance(
             target, profile=profile, root=fixtures_root, profiles_root=profiles_root
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # broad-except: ACES surfaces diverse errors
         return GateCheck(
             "backend_conformance", False, (redact(f"run_target_conformance raised: {exc}"),)
         )
@@ -166,7 +166,7 @@ def check_provisioning_realization(
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning, project_dir=project_dir, config=config
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # broad-except: ACES surfaces diverse errors
         return None, GateCheck(
             "provisioning_realization",
             False,
@@ -379,7 +379,7 @@ def _run_aces(
         return None
     # Fixed argv (resolved executable, subcommand, paths/profile), no shell;
     # S603 is a false positive for this trusted, non-interpolated invocation.
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(
         [executable, *args],
         capture_output=True,
         text=True,

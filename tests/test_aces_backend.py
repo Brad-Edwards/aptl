@@ -97,6 +97,16 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
     assert target.manifest.name == "aptl"
 
 
+class _FakeExecutionPlan:
+    """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
+
+    def __init__(self, provisioning, *, is_valid=True, diagnostics=None):
+        self.provisioning = provisioning
+        self.base_snapshot = RuntimeSnapshot()
+        self.is_valid = is_valid
+        self.diagnostics = diagnostics or []
+
+
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     mocker,
     tmp_path,
@@ -121,12 +131,9 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
 
         def plan(self, parsed_scenario):
             calls["planned_scenario"] = parsed_scenario
-            return "execution-plan"
-
-        def apply(self, execution_plan):
-            calls["execution_plan"] = execution_plan
-            plan = _plan_for_nodes("techvault.wazuh-manager", "techvault.kali")
-            return self.target.provisioner.apply(plan, RuntimeSnapshot())
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.wazuh-manager", "techvault.kali")
+            )
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
@@ -140,11 +147,92 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
 
     assert result.success is True
     parser.assert_called_once_with(tmp_path / "scenarios" / "techvault.sdl.yaml")
-    assert calls == {
-        "planned_scenario": scenario,
-        "execution_plan": "execution-plan",
-    }
+    assert calls == {"planned_scenario": scenario}
     backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
+
+
+def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_path):
+    """A scenario carrying evaluation content (e.g. the `conditions` healthcheck
+    section) must still provision. APTL is a provisioning-only ACES backend, so
+    the planner's `evaluator.missing` error and the resulting invalid plan must
+    not block lab standup."""
+    from aces_contracts.diagnostics import Diagnostic, Severity
+
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+
+    evaluator_missing = Diagnostic(
+        code="evaluator.missing",
+        domain="evaluation",
+        address="evaluation",
+        message="Scenario requires evaluation support, but no evaluator is configured.",
+        severity=Severity.ERROR,
+    )
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"),
+                is_valid=False,
+                diagnostics=[evaluator_missing],
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is True
+    backend.start.assert_called_once_with(["victim", "otel"])
+
+
+def test_start_aces_scenario_fails_closed_on_non_evaluator_plan_error(mocker, tmp_path):
+    """A planner error that is NOT the expected evaluation-domain
+    `evaluator.missing` (e.g. a provisioning ordering cycle) must fail closed:
+    the provisioning-only handoff must refuse to start Compose on an otherwise
+    invalid execution plan rather than bypass the gate for every plan."""
+    from aces_contracts.diagnostics import Diagnostic, Severity
+
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+
+    provisioning_error = Diagnostic(
+        code="provisioning.ordering.cycle",
+        domain="provisioning",
+        address="provision.node.techvault.victim",
+        message="Provisioning ordering cycle detected.",
+        severity=Severity.ERROR,
+    )
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"),
+                is_valid=False,
+                diagnostics=[provisioning_error],
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is False
+    assert result.error
+    backend.start.assert_not_called()
 
 
 def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):

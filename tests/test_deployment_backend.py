@@ -179,6 +179,10 @@ class TestDockerComposeBackend:
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "docker"
         assert cmd[1] == "compose"
+        # Project name pinned so start/stop act on the same project as
+        # status/orphan-cleanup regardless of the worktree directory name.
+        assert cmd[2] == "-p"
+        assert cmd[3] == "test"
         assert "--profile" in cmd
         assert "wazuh" in cmd
         assert "kali" in cmd
@@ -219,6 +223,8 @@ class TestDockerComposeBackend:
 
         assert result.success is True
         cmd = mock_run.call_args[0][0]
+        assert cmd[2] == "-p"
+        assert cmd[3] == "test"
         assert "down" in cmd
         assert "-v" not in cmd
 

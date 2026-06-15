@@ -118,7 +118,14 @@ class DockerComposeBackend:
         Returns:
             Command as a list of strings suitable for subprocess.run().
         """
-        cmd = ["docker", "compose"]
+        # Pin the compose project name. Without `-p`, docker compose derives the
+        # project from the working-directory basename, which diverges from
+        # `self._project_name` in any worktree not literally named after the
+        # project (e.g. a `aptl3` git worktree). That divergence makes `start`
+        # / `stop` (this builder) act on a different project than `status` and
+        # the orphan-cleanup filters, so a lab started here cannot be stopped or
+        # inspected and its networks collide with the real project's subnets.
+        cmd = ["docker", "compose", "-p", self._project_name]
 
         for profile in profiles:
             cmd.extend(["--profile", profile])

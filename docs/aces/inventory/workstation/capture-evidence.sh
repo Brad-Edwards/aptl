@@ -36,7 +36,7 @@ mkdir -p "$OUT"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof."
-record_limit "Credential fixture contents, generated flags, private-key material, /keys/aptl_lab_key, and Wazuh agent key material are captured verbatim where present in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt."
+record_limit "Credential fixture contents, generated flags, scenario private-key material (host SSH keys and the planted /home/dev-user/.ssh/id_rsa), and Wazuh agent key material are captured verbatim where present in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt. Per the SEC #417 key split, the target /keys holds only public key material — aptl_lab_key.pub (operator/control-plane pubkey) and kali_pivot_key.pub (scenario pivot pubkey); no private key is mounted into the target."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
@@ -78,7 +78,7 @@ sha256sum \
   "$ROOT/containers/base/scripts/ossec.conf.template" \
   "$ROOT/containers/base/falco_custom.yaml" \
   "$ROOT/keys/aptl_lab_key.pub" \
-  "$ROOT/keys/authorized_keys" \
+  "$ROOT/config/lab-ssh/kali_pivot_key.pub" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
 
 docker exec "$CONTAINER" bash -lc '
@@ -253,9 +253,8 @@ docker exec "$CONTAINER" sh -c '
     /home/dev-user/.ssh/id_rsa.pub \
     /home/dev-user/.ssh/known_hosts \
     /root/root.txt \
-    /keys/aptl_lab_key \
     /keys/aptl_lab_key.pub \
-    /keys/authorized_keys \
+    /keys/kali_pivot_key.pub \
     /etc/ssh/ssh_host_dsa_key \
     /etc/ssh/ssh_host_dsa_key.pub \
     /etc/ssh/ssh_host_ecdsa_key \
@@ -271,6 +270,13 @@ docker exec "$CONTAINER" sh -c '
       printf "\n"
   done
 ' > "$OUT/filesystem-sensitive-paths.txt"
+
+# Drop the trailing blank separator emitted after the last captured file so the
+# committed evidence ends with a single newline; otherwise the pre-commit
+# end-of-file-fixer rewrites it and stales evidence-sha256sums.txt.
+printf '%s\n' "$(cat "$OUT/filesystem-sensitive-paths.txt")" \
+  > "$OUT/filesystem-sensitive-paths.txt.tmp"
+mv "$OUT/filesystem-sensitive-paths.txt.tmp" "$OUT/filesystem-sensitive-paths.txt"
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" --version \
   > "$OUT/trivy-version.txt"

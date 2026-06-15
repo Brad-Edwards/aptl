@@ -5,7 +5,7 @@ nodes:
     description: 'TechVault developer workstation container (SCN-010 issue #334 steady-state ACES inventory).'
     source:
       name: aptl-workstation
-      version: aptl-workstation@sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd
+      version: aptl-workstation@sha256:d5c817895ad61d42df871b71456d5209f08b9bc1bc62ddb1c14b4eb7685baf98
       build:
         base_image: rockylinux:9
         base_image_digest: ''
@@ -570,10 +570,10 @@ nodes:
           checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
           checksum_algorithm: sha256
           description: ''
-        - identifier: keys-authorized-keys
-          source_path: keys/authorized_keys
-          destination_path: /keys/authorized_keys
-          checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        - identifier: keys-kali-pivot-key-pub
+          source_path: config/lab-ssh/kali_pivot_key.pub
+          destination_path: /keys/kali_pivot_key.pub
+          checksum: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
           checksum_algorithm: sha256
           description: ''
         attestation:
@@ -781,8 +781,8 @@ nodes:
         stability: transient
         backend_generated: true
         description: ''
-      - target: /keys
-        source: ./keys
+      - target: /keys/aptl_lab_key.pub
+        source: ./keys/aptl_lab_key.pub
         source_sensitivity: unknown
         source_kind: bind
         filesystem_type: ext4
@@ -794,7 +794,21 @@ nodes:
         propagation: rprivate
         stability: stable
         backend_generated: false
-        description: ''
+        description: 'Control-plane public key bound read-only into the target (SEC #417).'
+      - target: /keys/kali_pivot_key.pub
+        source: ./config/lab-ssh/kali_pivot_key.pub
+        source_sensitivity: unknown
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: true
+        options:
+        - ro
+        - relatime
+        options_sensitivity: unknown
+        propagation: rprivate
+        stability: stable
+        backend_generated: false
+        description: 'Public half of the kali pivot key bound read-only into the target (SEC #417).'
       - target: /home
         source: 4e24e6ea836958417b1881d7f18939e5abfd3bc5e83d0e746347e32deb1efe09
         source_sensitivity: unknown
@@ -1172,8 +1186,8 @@ nodes:
         gid: 1001
         mode: '0600'
         size: 1831
-        content_digest: 735d28ff3978f410ba71f203d54a680fe150498df81f3499f751d68510ec2b4e
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: containers/workstation/setup-workstation.sh
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: generated
@@ -1227,22 +1241,6 @@ nodes:
         stability: generated
         sensitivity: secret_fixture
         description: Secret fixture captured verbatim in filesystem-sensitive-paths.txt and checksummed.
-      - path: /keys/aptl_lab_key
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '0600'
-        size: 411
-        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
-        digest_algorithm: sha256
-        source_path: ''
-        provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
-        stability: volume_backed
-        sensitivity: secret_fixture
-        description: Workstation lab SSH private key; checksum verified from the live container.
       - path: /home/labadmin/.ssh/authorized_keys
         entry_type: file
         presence: present
@@ -1252,8 +1250,8 @@ nodes:
         gid: 1000
         mode: '0600'
         size: 96
-        content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: generated
@@ -1284,8 +1282,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -1300,8 +1298,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -1316,8 +1314,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -1332,8 +1330,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -1436,8 +1434,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 214
-        content_digest: 922b84b4bc09b52f2d8ab2754117352b330735e583c61659c90684daa0e9b22e
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: generated
@@ -1484,8 +1482,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 2610
-        content_digest: 677b86c0da818b0009cf210fc5c8481b9c5be4a1a3b97c1b97273e741100361f
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1548,8 +1546,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 411
-        content_digest: f1ec04802c508ed9a9b490cf2fe4cda8c59e766bbba76fa7e0e8b33a07f6c2d1
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1580,8 +1578,8 @@ nodes:
         gid: 0
         mode: '0600'
         size: 513
-        content_digest: 97db1a87a841905b952f892648e273763df4d6e21f65e9d0a7fc49550c7bdc95
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt
         stability: stable
@@ -1820,8 +1818,8 @@ nodes:
         gid: 1001
         mode: '0644'
         size: 214
-        content_digest: a4c98fb077685a5bd3c98a84f4a7f5e57b3058b950a77c54aec9431442600c8c
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: generated
@@ -1852,8 +1850,8 @@ nodes:
         gid: 1001
         mode: '0644'
         size: 402
-        content_digest: 408187e04330f84671f3b6348a4bc85deb4163292df9d165b79b96e0353fbd40
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: containers/workstation/setup-workstation.sh
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: generated
@@ -1930,7 +1928,7 @@ nodes:
         owner_group: labadmin
         uid: 1000
         gid: 1000
-        mode: '0644'
+        mode: '0664'
         size: 96
         content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
         digest_algorithm: sha256
@@ -1939,7 +1937,7 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: Public lab key captured verbatim in filesystem-sensitive-paths.txt and checksummed.
-      - path: /keys/authorized_keys
+      - path: /keys/kali_pivot_key.pub
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -1947,14 +1945,14 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '0644'
-        size: 96
-        content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        size: 97
+        content_digest: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
         digest_algorithm: sha256
-        source_path: keys/authorized_keys
+        source_path: config/lab-ssh/kali_pivot_key.pub
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: volume_backed
         sensitivity: plain
-        description: Public lab key captured verbatim in filesystem-sensitive-paths.txt and checksummed.
+        description: 'Public half of the kali pivot key authorizing the kali node to SSH into this target; scenario content checksummed from the live container (SEC #417).'
       - path: /etc/dnf/vars/rltype
         entry_type: file
         presence: present
@@ -2028,8 +2026,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 102
-        content_digest: 36d043439e4d4f8872c506bd6d68aa54e13b2419536a539e192c38f007966795
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: stable
@@ -2140,8 +2138,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 140169
-        content_digest: 8799ba87e202f461dc55fee7e64281119ca00e7695344b764d51dee511428030
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -2268,8 +2266,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 182
-        content_digest: 896984a8680a131fbb656256cc1ac96858bbe35bd729de5fbc5bdd280d0aba1f
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: stable
@@ -2396,8 +2394,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 29265
-        content_digest: fb02e169a62e9e82c0fed6776645dafb699babf54139d1c8175fef5f8ca05c76
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -2588,8 +2586,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 574
-        content_digest: 5e2f7e0febf18b6225960a510f1117c09b7f34616649d633d4c3f4cd571c9bdd
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: stable
@@ -2636,8 +2634,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 59557
-        content_digest: 03df7d2f1ea4eb7b68729a272dd5c64598aa8110a9251eaec41a59a851032c81
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -2732,8 +2730,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 69484
-        content_digest: 6904714aba24c2591d9a1bc431fb1ae25829b7dda176bf35aeaed8b005fa65dc
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -2812,8 +2810,8 @@ nodes:
         gid: 0
         mode: '0644'
         size: 840
-        content_digest: 571c7de5766b2fb9d273b950e56758d9f0d0e04fa7cf6768d08987126c3d37cf
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -2844,8 +2842,8 @@ nodes:
         gid: 22
         mode: '0660'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -3132,8 +3130,8 @@ nodes:
         gid: 998
         mode: '0660'
         size: 5355
-        content_digest: 8fbaa3aa6150463d92cee7cc5b378dae294d15ecd288322bbc5c43a8c2c4c041
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: stable
@@ -3212,8 +3210,8 @@ nodes:
         gid: 22
         mode: '0664'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -3228,8 +3226,8 @@ nodes:
         gid: 22
         mode: '0664'
         size: 292584
-        content_digest: ec4ceb066f040ae824260ce967a552af1b52d014a5ead25bb0edf74013b27919
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
         stability: log
@@ -3292,7 +3290,7 @@ nodes:
         gid: 0
         mode: '0755'
         size: 5792
-        content_digest: b940a9ead91dfe6beb4945fa85b042c28e6999422ef7017a707259da8034e437
+        content_digest: a21f1cff6743b79672c2c17e80c7e33ab8296f78cad5288951d86f392b746728
         digest_algorithm: sha256
         source_path: containers/base/scripts/entrypoint-base.sh
         provenance: docs/aces/inventory/workstation/evidence/filesystem-tree.txt; docs/aces/inventory/workstation/evidence/filesystem-checksums.txt
@@ -3558,10 +3556,10 @@ nodes:
       - path: /keys
         entry_type: directory
         presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
         mode: '0755'
         size: 4096
         content_digest: ''
@@ -4914,25 +4912,23 @@ nodes:
         domainname: ''
         endpoints:
         - network: techvault.internal-net
-          network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
-          network_id_stability: stable
-          endpoint_id: e07344281cbc69620cdb2202e198ae4d72a16845e8b834495febcabeaeffa7a3
+          network_id: ''
+          network_id_stability: ephemeral
+          endpoint_id: ''
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.40
           ip_prefix_length: 24
           gateway: 172.20.2.1
-          mac_address: 22:dc:46:cf:d7:1c
+          mac_address: ''
           aliases:
           - aptl-workstation
           - workstation
           dns_names:
           - aptl-workstation
           - workstation
-          - 264d754571f7
           - ws01.techvault.local
-          generated_dns_names:
-          - 264d754571f7
+          generated_dns_names: []
           backend:
             driver: bridge
             ipam_driver: default

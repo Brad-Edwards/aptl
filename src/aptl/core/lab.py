@@ -56,7 +56,7 @@ from aptl.core.services import (
 )
 from aptl.core.endpoints import select_ssh_host
 from aptl.core.snapshot import capture_snapshot, container_networks
-from aptl.core.ssh import ensure_ssh_keys
+from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -563,6 +563,17 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     ctx.ssh_key_path = ssh_result.key_path or (
         Path.home() / ".ssh" / "aptl_lab_key"
     )
+
+    # SEC #417: the kali pivot key is scenario content (kali -> targets),
+    # separate from the control-plane key above. Generated into a gitignored
+    # dir and bind-mounted (private -> kali, public -> targets).
+    pivot_result = ensure_pivot_key(pivot_dir=ctx.project_dir / "config" / "lab-ssh")
+    if not pivot_result.success:
+        log.error("Pivot key generation failed: %s", pivot_result.error)
+        return LabResult(
+            success=False,
+            error=f"Pivot key generation failed: {pivot_result.error}",
+        )
     return None
 
 

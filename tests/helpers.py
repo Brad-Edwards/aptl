@@ -392,12 +392,17 @@ def run_cmd(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
 
 def docker_exec(
     container: str, cmd: str | list[str], timeout: int = 60,
+    user: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run a command inside a Docker container."""
+    """Run a command inside a Docker container, optionally as ``user``."""
+    base = ["docker", "exec"]
+    if user is not None:
+        base += ["--user", user]
+    base.append(container)
     if isinstance(cmd, str):
-        parts = ["docker", "exec", container, "bash", "-c", cmd]
+        parts = base + ["bash", "-c", cmd]
     else:
-        parts = ["docker", "exec", container] + cmd
+        parts = base + cmd
     return run_cmd(parts, timeout=timeout)
 
 

@@ -1,5 +1,5 @@
 - This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof.
-- Credential fixture contents, generated flags, private-key material, /keys/aptl_lab_key, and Wazuh agent key material are captured verbatim where present in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.
+- Credential fixture contents, generated flags, scenario private-key material (host SSH keys and the planted /home/dev-user/.ssh/id_rsa), and Wazuh agent key material are captured verbatim where present in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt. Per the SEC #417 key split, the target /keys holds only public key material — aptl_lab_key.pub (operator/control-plane pubkey) and kali_pivot_key.pub (scenario pivot pubkey); no private key is mounted into the target.
 - Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; component identity remains and filesystem provenance is captured separately.
 - Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
 - osquery apt_sources was not applicable for the Rocky Linux workstation target.

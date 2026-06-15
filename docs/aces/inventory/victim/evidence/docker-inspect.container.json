@@ -1,7 +1,7 @@
 [
   {
-    "Id": "7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691",
-    "Created": "2026-06-11T16:00:20.010123573Z",
+    "Id": "bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263",
+    "Created": "2026-06-15T05:40:10.281574075Z",
     "Path": "/usr/local/bin/entrypoint.sh",
     "Args": [
       "/usr/sbin/init"
@@ -13,53 +13,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 812698,
+      "Pid": 3274791,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-06-11T16:00:59.748331157Z",
+      "StartedAt": "2026-06-15T05:40:30.30115519Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-06-12T12:42:15.85496186+02:00",
-            "End": "2026-06-12T12:42:15.910355647+02:00",
+            "Start": "2026-06-15T07:41:35.934306146+02:00",
+            "End": "2026-06-15T07:41:36.044212763+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=56,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=56,fd=4))\n"
           },
           {
-            "Start": "2026-06-12T12:42:30.911744751+02:00",
-            "End": "2026-06-12T12:42:30.971435552+02:00",
+            "Start": "2026-06-15T07:41:51.045585775+02:00",
+            "End": "2026-06-15T07:41:51.16729016+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=56,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=56,fd=4))\n"
           },
           {
-            "Start": "2026-06-12T12:42:45.972288071+02:00",
-            "End": "2026-06-12T12:42:46.021192052+02:00",
+            "Start": "2026-06-15T07:42:06.168816309+02:00",
+            "End": "2026-06-15T07:42:06.269844782+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=56,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=56,fd=4))\n"
           },
           {
-            "Start": "2026-06-12T12:43:01.022068752+02:00",
-            "End": "2026-06-12T12:43:01.083333694+02:00",
+            "Start": "2026-06-15T07:42:21.270392695+02:00",
+            "End": "2026-06-15T07:42:21.355122781+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=56,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=56,fd=4))\n"
           },
           {
-            "Start": "2026-06-12T12:43:16.083806495+02:00",
-            "End": "2026-06-12T12:43:16.137870939+02:00",
+            "Start": "2026-06-15T07:42:36.356031465+02:00",
+            "End": "2026-06-15T07:42:36.450771784+02:00",
             "ExitCode": 0,
-            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=55,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=55,fd=4))\n"
+            "Output": "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:((\"sshd\",pid=56,fd=3))\nLISTEN 0      128             [::]:22            [::]:*    users:((\"sshd\",pid=56,fd=4))\n"
           }
         ]
       }
     },
-    "Image": "sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f",
-    "ResolvConfPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/hostname",
-    "HostsPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/hosts",
-    "LogPath": "/var/lib/docker/containers/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691/7ed4af3e0aa0abacd8b6bfa5c035b90cddb0335ae56d1e2a899adbc645152691-json.log",
+    "Image": "sha256:2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240",
+    "ResolvConfPath": "/var/lib/docker/containers/bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263/hostname",
+    "HostsPath": "/var/lib/docker/containers/bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263/hosts",
+    "LogPath": "/var/lib/docker/containers/bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263/bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263-json.log",
     "Name": "/aptl-victim",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -70,9 +70,10 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
-        "aptl_victim_logs:/var/log:rw",
         "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-        "/home/atomik/src/aptl/keys:/keys:ro"
+        "/home/atomik/src/aptl3/keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro",
+        "/home/atomik/src/aptl3/config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro",
+        "aptl_victim_logs:/var/log:rw"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -153,6 +154,13 @@
       "CpuPercent": 0,
       "IOMaximumIOps": 0,
       "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "volume",
+          "Source": "410208bd9e49bcf351faa80a8ed780a932302afca333440de0751618124ff067",
+          "Target": "/home"
+        }
+      ],
       "MaskedPaths": [
         "/proc/acpi",
         "/proc/asound",
@@ -184,14 +192,28 @@
     },
     "Mounts": [
       {
-        "Type": "volume",
-        "Name": "f1a0e708d96316ca80e6970ef2986dfd2f56427ecab224ee0c5b5cbc984e2a85",
-        "Source": "/var/lib/docker/volumes/f1a0e708d96316ca80e6970ef2986dfd2f56427ecab224ee0c5b5cbc984e2a85/_data",
-        "Destination": "/home",
-        "Driver": "local",
-        "Mode": "",
+        "Type": "bind",
+        "Source": "/sys/fs/cgroup",
+        "Destination": "/sys/fs/cgroup",
+        "Mode": "rw",
         "RW": true,
-        "Propagation": ""
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl3/keys/aptl_lab_key.pub",
+        "Destination": "/keys/aptl_lab_key.pub",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl3/config/lab-ssh/kali_pivot_key.pub",
+        "Destination": "/keys/kali_pivot_key.pub",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
       },
       {
         "Type": "volume",
@@ -204,20 +226,14 @@
         "Propagation": ""
       },
       {
-        "Type": "bind",
-        "Source": "/sys/fs/cgroup",
-        "Destination": "/sys/fs/cgroup",
-        "Mode": "rw",
+        "Type": "volume",
+        "Name": "410208bd9e49bcf351faa80a8ed780a932302afca333440de0751618124ff067",
+        "Source": "/var/lib/docker/volumes/410208bd9e49bcf351faa80a8ed780a932302afca333440de0751618124ff067/_data",
+        "Destination": "/home",
+        "Driver": "local",
+        "Mode": "z",
         "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/keys",
-        "Destination": "/keys",
-        "Mode": "ro",
-        "RW": false,
-        "Propagation": "rprivate"
+        "Propagation": ""
       }
     ],
     "Config": {
@@ -235,8 +251,8 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "SIEM_IP=172.20.2.30",
         "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub",
+        "SIEM_IP=172.20.2.30",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "INSTALL_WAZUH=true",
         "INSTALL_FALCO=true",
@@ -265,21 +281,22 @@
         "/usr/local/bin/entrypoint.sh"
       ],
       "Labels": {
-        "com.docker.compose.config-hash": "5e64ef51a3879de413c8c18fc1cde943afe9be04ee3fa04dac9827dcf5174bcb",
+        "com.docker.compose.config-hash": "3b4cf0d7e812b4f0782a5cfd6c8219206f9dc7ae9d52f6b03db914d56f4b798a",
         "com.docker.compose.container-number": "1",
-        "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
-        "com.docker.compose.image": "sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f",
+        "com.docker.compose.depends_on": "",
+        "com.docker.compose.image": "sha256:2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
-        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
-        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl3/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl3",
+        "com.docker.compose.replace": "aptl-victim",
         "com.docker.compose.service": "victim",
         "com.docker.compose.version": "5.1.3"
       }
     },
     "NetworkSettings": {
-      "SandboxID": "a06965997b83d1426de1868b974447e4091c1391f90fd48de76808f2db3d0008",
-      "SandboxKey": "/var/run/docker/netns/a06965997b83",
+      "SandboxID": "103f85c5c199db051fd5bf69d8c1c3b243ddf8076e31402398f3d00eeac43d01",
+      "SandboxKey": "/var/run/docker/netns/103f85c5c199",
       "Ports": {
         "22/tcp": null,
         "514/tcp": null
@@ -296,11 +313,11 @@
           ],
           "DriverOpts": null,
           "GwPriority": 0,
-          "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "13eaa548e14a12ca2d6673206329bc165d545c2868f2cc13c8c42d502c78da34",
+          "NetworkID": "4a2f51b40665745d93baa7af79f0581ee67bf599bec31feaff9752cb86d9141b",
+          "EndpointID": "fb84beb2695096d78b3d3db97599a37a79b0301664a81f0d2e8befc200eb81ea",
           "Gateway": "",
           "IPAddress": "172.20.2.20",
-          "MacAddress": "d6:9c:ac:f8:6a:c7",
+          "MacAddress": "06:95:ab:30:56:eb",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -308,7 +325,7 @@
           "DNSNames": [
             "aptl-victim",
             "victim",
-            "7ed4af3e0aa0",
+            "bf3c1a0082ae",
             "app.techvault.local"
           ]
         }
@@ -316,7 +333,7 @@
     },
     "ImageManifestDescriptor": {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
-      "digest": "sha256:f5b23dbe165f2346c05f124588cb4a3759cba9edff7d8b4e7af6aff92758e5da",
+      "digest": "sha256:fa9802ad9032cdc75d6c662c7e96f0ef3d9c4d940d3c3d07fb4c53f9f7de4d51",
       "size": 5393,
       "platform": {
         "architecture": "amd64",

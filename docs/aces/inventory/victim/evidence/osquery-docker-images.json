@@ -1,21 +1,15 @@
 {
   "table": "docker_images",
-  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%victim%\";",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-victim%\";",
   "tool": "osqueryi version 4.9.0",
   "vantage": "containerized osquery host-side Docker socket view",
   "status": "captured",
   "rows": [
     {
-      "created": "1778392971",
-      "id": "3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f",
-      "size_bytes": "882269299",
+      "created": "1781501715",
+      "id": "2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240",
+      "size_bytes": "881659127",
       "tags": "aptl-victim:latest"
-    },
-    {
-      "created": "1779354149",
-      "id": "28e882727af24cf496a937f4d01fda05d041490436bb8dafc7500a2afceb2335",
-      "size_bytes": "882387685",
-      "tags": "aptl2-victim:latest"
     }
   ]
 }

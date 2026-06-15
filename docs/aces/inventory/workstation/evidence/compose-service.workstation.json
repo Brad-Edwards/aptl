@@ -3,53 +3,79 @@
     "enterprise"
   ],
   "build": {
-    "context": "./containers",
+    "context": "/home/atomik/src/aptl3/containers",
     "dockerfile": "workstation/Dockerfile"
   },
-  "container_name": "aptl-workstation",
-  "hostname": "ws01.techvault.local",
-  "restart": "unless-stopped",
-  "networks": {
-    "aptl-internal": {
-      "ipv4_address": "172.20.2.40"
-    }
-  },
-  "environment": [
-    "SIEM_IP=172.20.2.30",
-    "LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub"
-  ],
   "cap_add": [
     "SYS_NICE",
     "SYS_ADMIN",
     "SYS_RESOURCE"
   ],
   "cgroup": "host",
-  "volumes": [
-    "/sys/fs/cgroup:/sys/fs/cgroup:rw",
-    "./keys:/keys:ro",
-    "workstation_logs:/var/log"
-  ],
-  "tmpfs": [
-    "/run",
-    "/tmp"
-  ],
-  "security_opt": [
-    "seccomp:unconfined"
-  ],
-  "mem_limit": "256m",
+  "command": null,
+  "container_name": "aptl-workstation",
+  "depends_on": {
+    "wazuh.manager": {
+      "condition": "service_healthy",
+      "required": true
+    }
+  },
+  "entrypoint": null,
+  "environment": {
+    "LABADMIN_SSH_KEY_FILE": "/keys/aptl_lab_key.pub",
+    "SIEM_IP": "172.20.2.30"
+  },
+  "hostname": "ws01.techvault.local",
   "healthcheck": {
     "test": [
       "CMD-SHELL",
       "ss -tlnp | grep ':22' || exit 1"
     ],
-    "interval": "15s",
     "timeout": "5s",
+    "interval": "15s",
     "retries": 5,
     "start_period": "30s"
   },
-  "depends_on": {
-    "wazuh.manager": {
-      "condition": "service_healthy"
+  "mem_limit": "268435456",
+  "networks": {
+    "aptl-internal": {
+      "ipv4_address": "172.20.2.40"
     }
-  }
+  },
+  "restart": "unless-stopped",
+  "security_opt": [
+    "seccomp:unconfined"
+  ],
+  "tmpfs": [
+    "/run",
+    "/tmp"
+  ],
+  "volumes": [
+    {
+      "type": "bind",
+      "source": "/sys/fs/cgroup",
+      "target": "/sys/fs/cgroup",
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl3/keys/aptl_lab_key.pub",
+      "target": "/keys/aptl_lab_key.pub",
+      "read_only": true,
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl3/config/lab-ssh/kali_pivot_key.pub",
+      "target": "/keys/kali_pivot_key.pub",
+      "read_only": true,
+      "bind": {}
+    },
+    {
+      "type": "volume",
+      "source": "workstation_logs",
+      "target": "/var/log",
+      "volume": {}
+    }
+  ]
 }

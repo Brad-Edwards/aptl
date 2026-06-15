@@ -12,7 +12,7 @@ wazuh-execd is running...
 <ossec_config>
   <client>
     <enrollment>
-      <agent_name>reverse-reverse-host-1781067531</agent_name>
+      <agent_name>reverse-reverse-host-1781502034</agent_name>
     </enrollment>
     <server>
       <address>172.20.0.10</address>
@@ -104,23 +104,23 @@ wazuh-execd is running...
 status='connected'
 
 # Last time a keepalive was sent
-last_keepalive='2026-06-12 10:24:31'
+last_keepalive='2026-06-15 05:48:10'
 
 # Last time a control message was received
-last_ack='2026-06-12 10:24:31'
+last_ack='2026-06-15 05:48:10'
 
 # Number of generated events
-msg_count='46722'
+msg_count='9009'
 
 # Number of messages (events + control messages) sent to the manager
-msg_sent='65836'
+msg_sent='9053'
 
 # Number of events currently buffered
 # Empty if anti-flooding mechanism is disabled
 msg_buffer='0'
 --client-keys-presence--
-client.keys present: 1 line(s), 105 bytes
-007 reverse-reverse-host-1781067531 any 544ed89c27b97d4f48c5a2d4789c5053badad324f17788d905695691d994d75b
+client.keys present: 1 line(s), 86 bytes
+011 reverse-host any 84174903e1dd30d4e03a11b2205e375bde2b83561dc433161454848ca752219a
 --rsyslog-forwarding--
 #  Default rules for rsyslog.
 #

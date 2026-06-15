@@ -117,161 +117,157 @@ x11-common.service                     masked          enabled
 --service-status--
 ● reverse-tools-install.service - Install Reverse Engineering Tools Lab Services on First Boot
      Loaded: loaded (/etc/systemd/system/reverse-tools-install.service; enabled; vendor preset: enabled)
-     Active: active (exited) since Wed 2026-06-10 05:02:27 UTC; 9h ago
+     Active: active (exited) since Mon 2026-06-15 05:45:17 UTC; 2min 56s ago
     Process: 41 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=0/SUCCESS)
    Main PID: 41 (code=exited, status=0/SUCCESS)
-        CPU: 6min 58.815s
+        CPU: 7min 37.121s
 
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - strings - Extract strings from binaries
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - yara - Pattern matching engine
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - FLOSS - Advanced string analysis
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - CAPA - Capability analysis
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - hexdump - Hex viewer
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - upx - Packer/unpacker
-Jun 10 05:02:27 reverse-host install-all.sh[3553]:   - osslsigncode - Code signing verification
-Jun 10 05:02:27 reverse-host install-all.sh[3553]: Workspace: /home/labadmin/reverse-workspace
-Jun 10 05:02:27 reverse-host install-all.sh[3553]: Quick start: 'analyze <binary_file>'
-Jun 10 05:02:27 reverse-host systemd[1]: Finished Install Reverse Engineering Tools Lab Services on First Boot.
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - strings - Extract strings from binaries
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - yara - Pattern matching engine
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - FLOSS - Advanced string analysis
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - CAPA - Capability analysis
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - hexdump - Hex viewer
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - upx - Packer/unpacker
+Jun 15 05:45:17 reverse-host install-all.sh[3861]:   - osslsigncode - Code signing verification
+Jun 15 05:45:17 reverse-host install-all.sh[3861]: Workspace: /home/labadmin/reverse-workspace
+Jun 15 05:45:17 reverse-host install-all.sh[3861]: Quick start: 'analyze <binary_file>'
+Jun 15 05:45:17 reverse-host systemd[1]: Finished Install Reverse Engineering Tools Lab Services on First Boot.
 
 ● rsyslog.service - System Logging Service
      Loaded: loaded (/lib/systemd/system/rsyslog.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 7min ago
 TriggeredBy: ● syslog.socket
        Docs: man:rsyslogd(8)
              man:rsyslog.conf(5)
              https://www.rsyslog.com/doc/
    Main PID: 34 (rsyslogd)
       Tasks: 4 (limit: 23154)
-     Memory: 4.3M
-        CPU: 2.323s
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/rsyslog.service
+     Memory: 1.6M
+        CPU: 605ms
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/rsyslog.service
              └─34 /usr/sbin/rsyslogd -n -iNONE
 
-Jun 10 04:58:48 reverse-host systemd[1]: Starting System Logging Service...
-Jun 10 04:58:48 reverse-host rsyslogd[34]: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2112.0]
-Jun 10 04:58:48 reverse-host rsyslogd[34]: rsyslogd's groupid changed to 106
-Jun 10 04:58:48 reverse-host systemd[1]: Started System Logging Service.
-Jun 10 04:58:48 reverse-host rsyslogd[34]: rsyslogd's userid changed to 105
-Jun 10 04:58:48 reverse-host rsyslogd[34]: [origin software="rsyslogd" swVersion="8.2112.0" x-pid="34" x-info="https://www.rsyslog.com"] start
+Jun 15 05:40:30 reverse-host systemd[1]: Starting System Logging Service...
+Jun 15 05:40:30 reverse-host rsyslogd[34]: imuxsock: Acquired UNIX socket '/run/systemd/journal/syslog' (fd 3) from systemd.  [v8.2112.0]
+Jun 15 05:40:30 reverse-host rsyslogd[34]: rsyslogd's groupid changed to 106
+Jun 15 05:40:30 reverse-host systemd[1]: Started System Logging Service.
+Jun 15 05:40:30 reverse-host rsyslogd[34]: rsyslogd's userid changed to 105
+Jun 15 05:40:30 reverse-host rsyslogd[34]: [origin software="rsyslogd" swVersion="8.2112.0" x-pid="34" x-info="https://www.rsyslog.com"] start
 
 ● ssh.service - OpenBSD Secure Shell server
      Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 7min ago
        Docs: man:sshd(8)
              man:sshd_config(5)
    Main PID: 40 (sshd)
       Tasks: 1 (limit: 23154)
      Memory: 1.7M
-        CPU: 18ms
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/ssh.service
+        CPU: 25ms
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/ssh.service
              └─40 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
 
-Jun 10 04:58:48 reverse-host systemd[1]: Starting OpenBSD Secure Shell server...
-Jun 10 04:58:48 reverse-host sshd[40]: Server listening on 0.0.0.0 port 22.
-Jun 10 04:58:48 reverse-host sshd[40]: Server listening on :: port 22.
-Jun 10 04:58:48 reverse-host systemd[1]: Started OpenBSD Secure Shell server.
+Jun 15 05:40:30 reverse-host systemd[1]: Starting OpenBSD Secure Shell server...
+Jun 15 05:40:30 reverse-host sshd[40]: Server listening on 0.0.0.0 port 22.
+Jun 15 05:40:30 reverse-host sshd[40]: Server listening on :: port 22.
+Jun 15 05:40:30 reverse-host systemd[1]: Started OpenBSD Secure Shell server.
 
 ● systemd-journald.service - Journal Service
      Loaded: loaded (/lib/systemd/system/systemd-journald.service; static)
-     Active: active (running) since Wed 2026-06-10 04:58:48 UTC; 9h ago
-TriggeredBy: ● systemd-journald-dev-log.socket
-             ○ systemd-journald-audit.socket
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 7min ago
+TriggeredBy: ○ systemd-journald-audit.socket
              ● systemd-journald.socket
+             ● systemd-journald-dev-log.socket
        Docs: man:systemd-journald.service(8)
              man:journald.conf(5)
    Main PID: 33 (systemd-journal)
      Status: "Processing requests..."
       Tasks: 1 (limit: 23154)
-     Memory: 26.1M
-        CPU: 4.905s
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service
+     Memory: 9.8M
+        CPU: 960ms
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service
              └─33 /lib/systemd/systemd-journald
 
-Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 04:59:14 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 05:00:38 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 05:00:44 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/systemd-journald.service failed: Invalid argument
-Jun 10 05:01:20 reverse-host systemd-journald[33]: Forwarding to syslog missed 1 messages.
-Jun 10 05:01:50 reverse-host systemd-journald[33]: Forwarding to syslog missed 15 messages.
+Jun 15 05:41:04 reverse-host systemd-journald[33]: Forwarding to syslog missed 1 messages.
+Jun 15 05:41:04 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 15 05:41:34 reverse-host systemd-journald[33]: Forwarding to syslog missed 27 messages.
+Jun 15 05:42:46 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 15 05:42:54 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 15 05:42:54 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 15 05:42:55 reverse-host systemd[1]: systemd-journald.service: Attaching egress BPF program to cgroup /sys/fs/cgroup/system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/systemd-journald.service failed: Invalid argument
+Jun 15 05:43:48 reverse-host systemd-journald[33]: Forwarding to syslog missed 14 messages.
+Jun 15 05:44:18 reverse-host systemd-journald[33]: Forwarding to syslog missed 8 messages.
+Jun 15 05:44:48 reverse-host systemd-journald[33]: Forwarding to syslog missed 7 messages.
 
 ● systemd-user-sessions.service - Permit User Sessions
      Loaded: loaded (/lib/systemd/system/systemd-user-sessions.service; enabled; vendor preset: enabled)
-     Active: active (exited) since Wed 2026-06-10 04:58:48 UTC; 9h ago
+     Active: active (exited) since Mon 2026-06-15 05:40:30 UTC; 7min ago
        Docs: man:systemd-user-sessions.service(8)
    Main PID: 36 (code=exited, status=0/SUCCESS)
-        CPU: 3ms
+        CPU: 4ms
 
-Jun 10 04:58:48 reverse-host systemd[1]: Starting Permit User Sessions...
-Jun 10 04:58:48 reverse-host systemd[1]: Finished Permit User Sessions.
+Jun 15 05:40:30 reverse-host systemd[1]: Starting Permit User Sessions...
+Jun 15 05:40:30 reverse-host systemd[1]: Finished Permit User Sessions.
 
 ● wazuh-agent.service - Wazuh agent
      Loaded: loaded (/lib/systemd/system/wazuh-agent.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:25 UTC; 9h ago
+     Active: active (running) since Mon 2026-06-15 05:41:16 UTC; 6min ago
       Tasks: 43 (limit: 23154)
-     Memory: 26.0M
-        CPU: 30.123s
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/wazuh-agent.service
-             ├─4640 /var/ossec/bin/wazuh-execd
-             ├─4687 /var/ossec/bin/wazuh-agentd
-             ├─4752 /var/ossec/bin/wazuh-syscheckd
-             ├─4982 /var/ossec/bin/wazuh-logcollector
-             └─5088 /var/ossec/bin/wazuh-modulesd
+     Memory: 22.6M
+        CPU: 14.147s
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/wazuh-agent.service
+             ├─4275 /var/ossec/bin/wazuh-execd
+             ├─4287 /var/ossec/bin/wazuh-agentd
+             ├─4309 /var/ossec/bin/wazuh-syscheckd
+             ├─4323 /var/ossec/bin/wazuh-logcollector
+             └─4503 /var/ossec/bin/wazuh-modulesd
 
-Jun 10 04:59:18 reverse-host systemd[1]: Starting Wazuh agent...
-Jun 10 04:59:18 reverse-host env[3427]: Starting Wazuh v4.12.0...
-Jun 10 04:59:19 reverse-host env[3427]: Started wazuh-execd...
-Jun 10 04:59:20 reverse-host env[3427]: Started wazuh-agentd...
-Jun 10 04:59:20 reverse-host env[3477]: 2026/06/10 04:59:20 wazuh-syscheckd: WARNING: The check_unixaudit option is deprecated in favor of the SCA module.
-Jun 10 04:59:21 reverse-host env[3427]: Started wazuh-syscheckd...
-Jun 10 04:59:22 reverse-host env[3427]: Started wazuh-logcollector...
-Jun 10 04:59:23 reverse-host env[3427]: Started wazuh-modulesd...
-Jun 10 04:59:25 reverse-host env[3427]: Completed.
-Jun 10 04:59:25 reverse-host systemd[1]: Started Wazuh agent.
+Jun 15 05:41:10 reverse-host systemd[1]: Starting Wazuh agent...
+Jun 15 05:41:10 reverse-host env[3482]: Starting Wazuh v4.12.0...
+Jun 15 05:41:11 reverse-host env[3482]: Started wazuh-execd...
+Jun 15 05:41:12 reverse-host env[3482]: Started wazuh-agentd...
+Jun 15 05:41:12 reverse-host env[3535]: 2026/06/15 05:41:12 wazuh-syscheckd: WARNING: The check_unixaudit option is deprecated in favor of the SCA module.
+Jun 15 05:41:13 reverse-host env[3482]: Started wazuh-syscheckd...
+Jun 15 05:41:13 reverse-host env[3482]: Started wazuh-logcollector...
+Jun 15 05:41:14 reverse-host env[3482]: Started wazuh-modulesd...
+Jun 15 05:41:16 reverse-host env[3482]: Completed.
+Jun 15 05:41:16 reverse-host systemd[1]: Started Wazuh agent.
 
 ● falco-modern-bpf.service - Falco: Container Native Runtime Security with modern ebpf
      Loaded: loaded (/lib/systemd/system/falco-modern-bpf.service; enabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
+     Active: active (running) since Mon 2026-06-15 05:41:04 UTC; 7min ago
        Docs: https://falco.org/docs/
-   Main PID: 3243 (falco)
-      Tasks: 31 (limit: 23154)
-     Memory: 127.1M
-        CPU: 20min 57.964s
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falco-modern-bpf.service
-             └─3243 /usr/bin/falco -o engine.kind=modern_ebpf
+   Main PID: 3228 (falco)
+      Tasks: 32 (limit: 23154)
+     Memory: 121.1M
+        CPU: 1min 13.500s
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/falco-modern-bpf.service
+             └─3228 /usr/bin/falco -o engine.kind=modern_ebpf
 
-Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 14:31:58 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165279': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:04 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4165824': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:09 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166075': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:14 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166328': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '4166662': can't get table entry: get_entry found no element at given key
-Jun 10 14:32:19 reverse-host falco[3243]: [libs]: container: cannot attach container_id to new process event for the thread id '1': can't get table entry: get_entry found no element at given key
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libpman: failure while attaching TOCTOU mitigation program for 'creat' system call. Detection will continue to work, but TOCTOU mitigation may not properly work (errno: 2 | message: No such file or directory)
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: failed to determine tracepoint 'syscalls/sys_enter_open' perf event ID: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: prog 'open_e': failed to create tracepoint 'syscalls/sys_enter_open' perf event: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libpman: failure while attaching TOCTOU mitigation program for 'open' system call. Detection will continue to work, but TOCTOU mitigation may not properly work (errno: 2 | message: No such file or directory)
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: failed to determine tracepoint 'syscalls/sys_enter_openat2' perf event ID: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: prog 'openat2_e': failed to create tracepoint 'syscalls/sys_enter_openat2' perf event: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libpman: failure while attaching TOCTOU mitigation program for 'openat2' system call. Detection will continue to work, but TOCTOU mitigation may not properly work (errno: 2 | message: No such file or director
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: failed to determine tracepoint 'syscalls/sys_enter_openat' perf event ID: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libbpf: prog 'openat_e': failed to create tracepoint 'syscalls/sys_enter_openat' perf event: No such file or directory
+Jun 15 05:41:05 reverse-host falco[3228]: [libs]: libpman: failure while attaching TOCTOU mitigation program for 'openat' system call. Detection will continue to work, but TOCTOU mitigation may not properly work (errno: 2 | message: No such file or directory
 
 ● falcoctl-artifact-follow.service - Falcoctl Artifact Follow: automatic artifacts update service
      Loaded: loaded (/lib/systemd/system/falcoctl-artifact-follow.service; disabled; vendor preset: enabled)
-     Active: active (running) since Wed 2026-06-10 04:59:14 UTC; 9h ago
+     Active: active (running) since Mon 2026-06-15 05:41:04 UTC; 7min ago
        Docs: https://falco.org/docs/
-   Main PID: 3244 (falcoctl)
-      Tasks: 21 (limit: 23154)
-     Memory: 20.4M
-        CPU: 2.345s
-     CGroup: /system.slice/docker-f479361d5d174e5d09f6d3dd004ed7b49350a8ed05b0a480bc92d0e6e127c163.scope/system.slice/falcoctl-artifact-follow.service
-             └─3244 /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
+   Main PID: 3229 (falcoctl)
+      Tasks: 13 (limit: 23154)
+     Memory: 16.4M
+        CPU: 118ms
+     CGroup: /system.slice/docker-444305b37e671af013d8f2e64cca4909dd3dd2d084ce41348974586e7fcfd227.scope/system.slice/falcoctl-artifact-follow.service
+             └─3229 /usr/bin/falcoctl artifact follow --allowed-types=rulesfile
 
-Jun 10 04:59:14 reverse-host falcoctl[3244]:                       └ artifact: ghcr.io/falcosecurity/rules/falco-rules:5
-Jun 10 09:13:59 reverse-host falcoctl[3244]: 2026-06-10 09:13:59 INFO  Found new artifact version
-Jun 10 09:13:59 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
-Jun 10 09:13:59 reverse-host falcoctl[3244]:                       └ tag: 5
-Jun 10 09:14:04 reverse-host falcoctl[3244]: 2026-06-10 09:14:04 INFO  Artifact correctly installed
-Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ followerName: ghcr.io/falcosecurity/rules/falco-rules:5
-Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ artifactName: ghcr.io/falcosecurity/rules/falco-rules:5
-Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ type: rulesfile
-Jun 10 09:14:04 reverse-host falcoctl[3244]:                       ├ digest: sha256:36d143c0ae2d5569da0274ea6bef188bac02b95abe51e44cfff16f38d3d6b9e0
-Jun 10 09:14:04 reverse-host falcoctl[3244]:                       └ directory: /etc/falco
+Jun 15 05:41:04 reverse-host systemd[1]: Started Falcoctl Artifact Follow: automatic artifacts update service.
+Jun 15 05:41:04 reverse-host falcoctl[3229]: 2026-06-15 05:41:04 INFO  Creating follower
+Jun 15 05:41:04 reverse-host falcoctl[3229]:                       ├ artifact: falco-rules:5
+Jun 15 05:41:04 reverse-host falcoctl[3229]:                       └ check every: 168h0m0s
+Jun 15 05:41:04 reverse-host falcoctl[3229]: 2026-06-15 05:41:04 INFO  Starting follower
+Jun 15 05:41:04 reverse-host falcoctl[3229]:                       └ artifact: ghcr.io/falcosecurity/rules/falco-rules:5

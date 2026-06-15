@@ -53,7 +53,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof."
 record_limit "The reverse profile container was started for this inventory after fixing three pre-existing service-definition bugs on the same branch (missing cgroup: host, missing /run/lock tmpfs for Ubuntu systemd under AppArmor docker-default, and a 512m memory limit that OOM-killed the first-boot radare2 source build, raised to 2g). The first OOM-killed boot registered Wazuh agent id 008 (reverse-host, now Disconnected) before the container was recreated; the active registration is agent id 009 with a runtime-generated collision-suffixed name. Both rows are visible in observer-discovery.wazuh-manager.txt; the stale 008 row is local lab-state debris, not part of the asset spec."
-record_limit "Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz."
+record_limit "Scenario target secret files under /etc/ssh (host keys) and /var/ossec/etc/client.keys are captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz. Per the SEC #417 key split, the target /keys holds only public key material — aptl_lab_key.pub (operator/control-plane pubkey) and kali_pivot_key.pub (scenario pivot pubkey); no private key is mounted into the target."
 record_limit "The reverse-engineering Python tools are pipx-installed for labadmin from the Mandiant/FLARE PyPI distributions flare-floss==3.1.1 and flare-capa==9.4.0 (the correct names; the bare 'floss'/'capa' PyPI names are unrelated projects). This was corrected in SCN-010 #338: the initial capture found the bare 'floss' package (an unrelated spectrum-based fault-localization tool, analyzed as non-malicious) installed by an unpinned setup-reverse-tools.sh; the script was fixed to install the pinned flare- distributions and the box re-captured."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -105,7 +105,7 @@ sha256sum \
   "$ROOT/containers/base/scripts/ossec.conf.template" \
   "$ROOT/containers/base/falco_custom.yaml" \
   "$ROOT/keys/aptl_lab_key.pub" \
-  "$ROOT/keys/authorized_keys" \
+  "$ROOT/config/lab-ssh/kali_pivot_key.pub" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
 
 docker exec "$CONTAINER" bash -c "dpkg-query -W -f='\${binary:Package}\t\${Version}\t\${Architecture}\n' | sort" \
@@ -352,9 +352,8 @@ docker exec "$CONTAINER" bash -c '
 
 docker exec "$CONTAINER" sh -c '
   for f in \
-    /keys/aptl_lab_key \
     /keys/aptl_lab_key.pub \
-    /keys/authorized_keys \
+    /keys/kali_pivot_key.pub \
     /etc/ssh/ssh_host_dsa_key \
     /etc/ssh/ssh_host_dsa_key.pub \
     /etc/ssh/ssh_host_ecdsa_key \

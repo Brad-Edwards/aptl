@@ -117,7 +117,8 @@ def check_compile(scenario: Scenario) -> GateCheck:
     """Compile the scenario runtime model (exercises semantic validation)."""
     try:
         compile_scenario_runtime_model(scenario)
-    except Exception as exc:  # broad-except: ACES raises a family of compile errors
+    # broad-except: ACES raises a family of compile errors
+    except Exception as exc:
         return GateCheck(
             "compile",
             False,
@@ -142,7 +143,8 @@ def check_backend_conformance(
         report = run_target_conformance(
             target, profile=profile, root=fixtures_root, profiles_root=profiles_root
         )
-    except Exception as exc:  # broad-except: ACES surfaces diverse errors
+    # broad-except: ACES surfaces diverse errors
+    except Exception as exc:
         return GateCheck(
             "backend_conformance", False, (redact(f"run_target_conformance raised: {exc}"),)
         )
@@ -166,7 +168,8 @@ def check_provisioning_realization(
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning, project_dir=project_dir, config=config
         )
-    except Exception as exc:  # broad-except: ACES surfaces diverse errors
+    # broad-except: ACES surfaces diverse errors
+    except Exception as exc:
         return None, GateCheck(
             "provisioning_realization",
             False,

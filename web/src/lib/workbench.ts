@@ -119,35 +119,34 @@ function buildScoringNarrative(scoring: ScenarioDefinition['scoring']): Narrativ
  * Pure function -- no side effects, fully testable without DOM.
  */
 export function buildBlockSequence(scenario: ScenarioDefinition): WorkbenchBlock[] {
-	const blocks: WorkbenchBlock[] = [];
-
-	// 1. Title narrative
-	blocks.push(buildTitleNarrative(scenario));
-
-	// 2. Container status
 	const containers = scenario.containers.required;
-	if (containers.length > 0) {
-		blocks.push({ type: 'container-status', key: 'container-status', containers });
-	}
-
-	// 3. Attack chain summary
-	if (scenario.attack_chain) {
-		blocks.push({
-			type: 'narrative',
-			key: 'narrative-attack-chain',
-			content: `## Attack Chain\n\n${scenario.attack_chain}`
-		});
-	}
-
-	// 4. Steps
-	blocks.push(...buildStepBlocks(scenario.steps));
-
-	// 5-7. Objectives
-	blocks.push(...buildObjectiveBlocks(scenario.objectives));
-
-	// 8. Scoring summary
+	const containerStatus: WorkbenchBlock[] =
+		containers.length > 0
+			? [{ type: 'container-status', key: 'container-status', containers }]
+			: [];
+	const attackChain: WorkbenchBlock[] = scenario.attack_chain
+		? [
+				{
+					type: 'narrative',
+					key: 'narrative-attack-chain',
+					content: `## Attack Chain\n\n${scenario.attack_chain}`
+				}
+			]
+		: [];
 	const scoring = buildScoringNarrative(scenario.scoring);
-	if (scoring) blocks.push(scoring);
 
-	return blocks;
+	return [
+		// 1. Title narrative
+		buildTitleNarrative(scenario),
+		// 2. Container status
+		...containerStatus,
+		// 3. Attack chain summary
+		...attackChain,
+		// 4. Steps
+		...buildStepBlocks(scenario.steps),
+		// 5-7. Objectives
+		...buildObjectiveBlocks(scenario.objectives),
+		// 8. Scoring summary
+		...(scoring ? [scoring] : [])
+	];
 }

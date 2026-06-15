@@ -76,6 +76,31 @@ jobs:
           path: coverage.xml
           retention-days: 7
 
+  aces-scenario-gate:
+    name: ACES scenario validation gate (advisory, Phase A)
+    runs-on: ubuntu-latest
+    # SCN-010E / #322. The full-scenario static validation gate parses
+    # TechVault's large SDL tree and runs `aces sdl verify-imports` (minutes
+    # each), so it is integration-marked and runs here rather than in the fast
+    # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
+    # failures on the PR without blocking merge; the Phase B cutover PR removes
+    # `continue-on-error` to make the gate blocking. The gate needs only the
+    # installed aces-sdl wheel (which bundles the contract corpus) and the
+    # `aces` CLI — no separate corpus checkout.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+      - name: ACES static validation gate (TechVault, provisioning-only)
+        run: python -m pytest tests/test_techvault_static_gate.py -q -m integration
+
   mcp-tests:
     name: MCP TypeScript tests + coverage
     runs-on: ubuntu-latest

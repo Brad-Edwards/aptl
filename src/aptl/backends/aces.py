@@ -63,7 +63,7 @@ def create_aptl_runtime_target(
     )
     return RuntimeTarget(
         name=APTL_ACES_TARGET_NAME,
-        manifest=create_aptl_manifest(),  # type: ignore[arg-type]
+        manifest=create_aptl_manifest(),
         provisioner=provisioner,  # type: ignore[arg-type]
     )
 

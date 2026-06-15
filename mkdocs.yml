@@ -104,6 +104,8 @@ nav:
   - ACES:
     - Parity Inventory: aces/parity-inventory.md
     - TechVault SDL Authoring Preflight: aces/techvault-sdl-authoring-preflight.md
+    - TechVault Static Validation Preflight: aces/techvault-static-validation-preflight.md
+    - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
     - TechVault SDL Classification Audit: aces/techvault-sdl-classification-audit.md
     - Asset Inventory:
       - Methodology: aces/inventory/asset-inventory-methodology.md

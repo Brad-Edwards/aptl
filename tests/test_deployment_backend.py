@@ -17,7 +17,7 @@ from aptl.core.deployment import (
     SSHComposeBackend,
     get_backend,
 )
-from aptl.core.deployment.docker_compose import _select_shell
+from aptl.core.deployment._compose_queries import _select_shell
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
 

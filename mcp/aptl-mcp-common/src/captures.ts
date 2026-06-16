@@ -104,6 +104,123 @@ async function chmodTreeBestEffort(root: string, fileMode: number, dirMode: numb
   }
 }
 
+interface ResolvedHarvestParams {
+  env: NodeJS.ProcessEnv;
+  stateDir: string;
+  containerCapturesRoot: string;
+  tid: string;
+}
+
+/**
+ * Resolve the effective env, state dir, container captures root, and run id
+ * for a harvest. Run id resolution: explicit `opts.runId` wins (passed by
+ * persistent-session callers that captured the active trace at session open
+ * time), otherwise re-read the current trace context, falling back to
+ * `_unbound` so harvests outside a scenario context still land somewhere
+ * predictable.
+ */
+function resolveHarvestParams(opts: HarvestOptions): ResolvedHarvestParams {
+  const env = opts.env ?? process.env;
+  return {
+    env,
+    stateDir: opts.stateDir ?? env.APTL_STATE_DIR ?? '.aptl',
+    containerCapturesRoot: opts.containerCapturesRoot ?? DEFAULT_CONTAINER_CAPTURES_ROOT,
+    tid: opts.runId ?? loadActiveTraceId(env) ?? '_unbound',
+  };
+}
+
+/**
+ * Copy one session's per-session capture subtree out of the container.
+ * Returns `false` (and logs) when docker cp failed for a reason worth
+ * surfacing, including a missing source subtree; `true` on success or a clean
+ * no-op.
+ */
+async function copyPerSessionCaptures(
+  containerName: string,
+  src: string,
+  destDir: string,
+  env: NodeJS.ProcessEnv,
+  sessionId: string,
+): Promise<boolean> {
+  const cpResult = await execDockerCp(['cp', `${containerName}:${src}`, destDir], env);
+  if (cpResult.code === 0) return true;
+  if (
+    /No such file or directory/i.test(cpResult.stderr) ||
+    /Could not find the file/i.test(cpResult.stderr)
+  ) {
+    // Surface the missing-source case loudly. ADR-033 + codex
+    // cycle 2 finding-9: with the kali user owning the capture
+    // subtree, an attacker who deletes their own session dir
+    // before close can wipe the Kali-side captures. Silent
+    // success would convert that tampering into invisible data
+    // loss. We log + return false so the operator sees a real
+    // anomaly. The MCP-side PTY tee and tool-call JSONL remain
+    // as the independent (and tamper-resistant) record.
+    console.error(
+      `[captures] per-session subtree missing for ${sessionId}; expected at ${src}. ` +
+        'MCP-side captures remain in `.aptl/runs/<run>/mcp-side/`.',
+    );
+  } else {
+    console.error(
+      `[captures] docker cp failed (rc=${cpResult.code}):`,
+      cpResult.stderr.trim(),
+    );
+  }
+  return false;
+}
+
+/**
+ * Pull container-wide capture roots (auditd log + process accounting pacct)
+ * into `<destDir>/_global/`. These are scenario-wide and useful even when the
+ * per-session subtree is missing — they may explain WHY it is gone.
+ * Best-effort: logs but never fails the harvest.
+ */
+async function harvestGlobalCaptures(
+  containerName: string,
+  containerCapturesRoot: string,
+  destDir: string,
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
+  const globalDest = join(destDir, '_global');
+  try {
+    await mkdir(globalDest, { recursive: true, mode: 0o700 });
+  } catch (err) {
+    console.error('[captures] mkdir _global failed:', err);
+  }
+  for (const globalSub of ['_audit', '_proc-acct']) {
+    const globalSrc = `${containerCapturesRoot}/${globalSub}/.`;
+    const gRes = await execDockerCp(
+      [
+        'cp',
+        `${containerName}:${globalSrc}`,
+        join(globalDest, globalSub.replace(/^_/, '')),
+      ],
+      env,
+    );
+    if (gRes.code !== 0 && !/No such file or directory/i.test(gRes.stderr)) {
+      console.error(
+        `[captures] global ${globalSub} harvest failed (rc=${gRes.code}):`,
+        gRes.stderr.trim(),
+      );
+    }
+  }
+}
+
+/**
+ * Verify destDir actually has content and chmod everything to 0600. Returns
+ * `perSessionOk` on success, or false when the destination is missing.
+ */
+async function finalizeHarvest(destDir: string, perSessionOk: boolean): Promise<boolean> {
+  try {
+    const st = await stat(destDir);
+    if (!st.isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  await chmodTreeBestEffort(destDir, 0o600, 0o700);
+  return perSessionOk;
+}
+
 /**
  * Harvest one session's captures out of the Kali container into
  * the host-side per-run directory.
@@ -113,16 +230,8 @@ async function chmodTreeBestEffort(root: string, fileMode: number, dirMode: numb
  * worth surfacing. Never throws.
  */
 export async function harvestSession(opts: HarvestOptions, sessionId: string): Promise<boolean> {
-  const env = opts.env ?? process.env;
-  const stateDir = opts.stateDir ?? env.APTL_STATE_DIR ?? '.aptl';
-  const containerCapturesRoot = opts.containerCapturesRoot ?? DEFAULT_CONTAINER_CAPTURES_ROOT;
+  const { env, stateDir, containerCapturesRoot, tid } = resolveHarvestParams(opts);
 
-  // Resolve the run id: explicit `opts.runId` wins (passed by
-  // persistent-session callers that captured the active trace at
-  // session open time), otherwise re-read the current trace
-  // context, falling back to `_unbound` so harvests outside a
-  // scenario context still land somewhere predictable.
-  const tid = opts.runId ?? loadActiveTraceId(env) ?? '_unbound';
   let destDir: string;
   try {
     destDir = kaliSideSessionDir(stateDir, tid, sessionId);
@@ -143,76 +252,18 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
   // copies the source directory itself into dest, producing
   // dest/<session_id>/... which would nest one level too deep.
   const src = `${containerCapturesRoot}/${tid}/${sessionId}/.`;
-  const cpResult = await execDockerCp(
-    ['cp', `${opts.containerName}:${src}`, destDir],
-    env,
-  );
   // Track whether the per-session subtree was actually copied — even
-  // on a "not found" no-op, we still want to attempt the global
-  // captures harvest below (codex cycle 2 finding-6).
-  let perSessionOk = true;
-  if (cpResult.code !== 0) {
-    if (
-      /No such file or directory/i.test(cpResult.stderr) ||
-      /Could not find the file/i.test(cpResult.stderr)
-    ) {
-      // Surface the missing-source case loudly. ADR-033 + codex
-      // cycle 2 finding-9: with the kali user owning the capture
-      // subtree, an attacker who deletes their own session dir
-      // before close can wipe the Kali-side captures. Silent
-      // success would convert that tampering into invisible data
-      // loss. We log + return false so the operator sees a real
-      // anomaly. The MCP-side PTY tee and tool-call JSONL remain
-      // as the independent (and tamper-resistant) record.
-      console.error(
-        `[captures] per-session subtree missing for ${sessionId}; expected at ${src}. ` +
-          'MCP-side captures remain in `.aptl/runs/<run>/mcp-side/`.',
-      );
-      perSessionOk = false;
-    } else {
-      console.error(
-        `[captures] docker cp failed (rc=${cpResult.code}):`,
-        cpResult.stderr.trim(),
-      );
-      perSessionOk = false;
-    }
-  }
+  // on a "not found" no-op, we still attempt the global captures
+  // harvest below (codex cycle 2 finding-6).
+  const perSessionOk = await copyPerSessionCaptures(
+    opts.containerName,
+    src,
+    destDir,
+    env,
+    sessionId,
+  );
 
-  // Always attempt to pull container-wide capture roots (auditd log
-  // + process accounting pacct) into `<dest>/_global/`. These are
-  // scenario-wide and useful even when the per-session subtree is
-  // missing — they may explain WHY the per-session subtree is gone.
-  const globalDest = join(destDir, '_global');
-  try {
-    await mkdir(globalDest, { recursive: true, mode: 0o700 });
-  } catch (err) {
-    console.error('[captures] mkdir _global failed:', err);
-  }
-  for (const globalSub of ['_audit', '_proc-acct']) {
-    const globalSrc = `${containerCapturesRoot}/${globalSub}/.`;
-    const gRes = await execDockerCp(
-      [
-        'cp',
-        `${opts.containerName}:${globalSrc}`,
-        join(globalDest, globalSub.replace(/^_/, '')),
-      ],
-      env,
-    );
-    if (gRes.code !== 0 && !/No such file or directory/i.test(gRes.stderr)) {
-      console.error(
-        `[captures] global ${globalSub} harvest failed (rc=${gRes.code}):`,
-        gRes.stderr.trim(),
-      );
-    }
-  }
+  await harvestGlobalCaptures(opts.containerName, containerCapturesRoot, destDir, env);
 
-  // Verify destDir actually has content and chmod everything to 0600.
-  try {
-    const st = await stat(destDir);
-    if (!st.isDirectory()) return false;
-  } catch {
-    return false;
-  }
-  await chmodTreeBestEffort(destDir, 0o600, 0o700);
-  return perSessionOk;
+  return finalizeHarvest(destDir, perSessionOk);
 }

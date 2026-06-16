@@ -77,21 +77,84 @@ a fine proxy for "this method does too much"). This is the only `ruff` rule
 turned on; it is a complexity guard, not a style linter; widen the rule set
 deliberately if/when the team wants more from `ruff`.
 
-### Complexity backlog (per-file-ignored until refactored)
+### TypeScript complexity extension guardrails
 
-Four large modules carry over-threshold functions today. `C901` is suppressed
-for those **whole files** via `[tool.ruff.lint.per-file-ignores]` in
-`pyproject.toml`—not carved out per-`def` with `# noqa: C901`, because that
-would *modify* the files and SonarCloud's PR analysis then re-surfaces their
-pre-existing complexity debt as "new code" (a one-token edit to a flagged
-`def` line drags the whole file's issue set into the PR and the
-new-maintainability-rating gate). New code should not go into these files;
-everything else under `src/` is gated. Remove a file from the per-file-ignore
-list as soon as `ruff check src/<file>` passes for it without the exemption.
+Issue #286 extends the same hard gate to the TypeScript surfaces. Treat that
+as the same cross-cutting quality policy as `ruff-complexity`, not as a
+package-local lint cleanup. The TypeScript gate must stay narrow: per-function
+complexity only, threshold 15, no formatting/import/style/recommended-rule
+overhaul bundled with it.
 
-The specific functions to fix (CC = ruff's McCabe cyclomatic complexity):
+The canonical enforcement point is the required `Pre-commit hooks` check in
+`.github/workflows/checks.yml`, matching the Python gate. If implementation
+chooses a separate required CI job instead, keep the pre-commit hook for local
+parity. In either form, the gate must run before slower vitest hooks and must
+not be skipped by the existing CI `SKIP` list.
 
-| Function | File | CC |
+Scope is `mcp/*/src/**/*.ts` and `web/src/**/*.{ts,svelte}`. Generated output,
+tests, `node_modules`, package `build/` directories, and `web/.svelte-kit/`
+remain out of scope. `web/src` contains Svelte components, so a TS-only glob
+would miss functions in `<script lang="ts">` blocks and does not satisfy the
+contract.
+
+Keep one source of truth for the threshold, target globs, and legacy
+exemptions. Reuse the existing flat ESLint/TypeScript-parser pattern if ESLint
+is selected, but do not copy the full `mcp-red` / `mcp-reverse` style lint
+rules into every package. Biome is acceptable only if it covers the same
+`mcp` and Svelte inputs and can express explicit legacy exemptions. Existing
+offenders should be carved out with the narrowest tool-supported exemption and
+listed in this ADR's backlog with measured scores; new code should not be
+added to exempted files.
+
+### TypeScript complexity gate (realized)
+
+Issue #286 ships the gate as ESLint's core `complexity` rule at `["error", {
+max: 15 }]`, the same cyclomatic metric as `ruff` `C901`. The single source of
+truth is the root `eslint.config.js`: it holds the threshold, the target globs
+(`mcp/*/src/**/*.ts` and `web/src/**/*.{ts,svelte}`), and the out-of-scope
+`ignores` (`build/`, `dist/`, `node_modules/`, `web/.svelte-kit/`, tests). It
+currently carries no per-file exemptions (see the cleared backlog below). Only
+the `complexity` rule is enabled (the
+config loads the TypeScript and Svelte parsers but none of their rule plugins),
+so it is a complexity guard, not a style linter, and it does not cascade into
+the per-package `mcp-red` / `mcp-reverse` configs. Svelte components are
+first-class: functions inside `<script lang="ts">` are parsed by
+`svelte-eslint-parser` and gated like any `.ts` function.
+
+Enforcement is the `ts-complexity` hook in `.pre-commit-config.yaml`, a
+`language: node` hook with pinned `additional_dependencies`, self-contained
+like `ruff-complexity`'s pinned `ruff`. It runs immediately after
+`ruff-complexity`, before the slower vitest hooks, and is **not** in the CI
+`SKIP` list, so it gates in the required `Pre-commit hooks` job and locally from
+the same config (no separate CI job and no branch-protection change). The config
+is CommonJS so `require()` resolves the pinned parsers through the `NODE_PATH`
+that pre-commit's node environment exports; `noInlineConfig` keeps the gate
+central and tamper-resistant (a function cannot be exempted with an inline `//
+eslint-disable`), and the hook passes `--quiet` so the resulting "directive has
+no effect" meta-warnings stay out of the output without hiding a real error.
+
+### TypeScript complexity backlog (cleared)
+
+Empty. Issue #286 added the gate and, in the same change, split the three
+functions that were initially over threshold into helpers, so `eslint.config.js`
+carries no `complexity: 'off'` exemptions and every function under the scoped
+globs is gated at 15. The historical offenders (all CC 18) were `harvestSession`
+(`mcp/aptl-mcp-common/src/captures.ts`), `predefined_query`
+(`mcp/aptl-mcp-common/src/tools/api-handlers.ts`), and `buildBlockSequence`
+(`web/src/lib/workbench.ts`). If a future change must temporarily exempt a file,
+add a whole-file `complexity: 'off'` override (never a per-function inline
+`// eslint-disable`, which edits the function and drags its pre-existing
+complexity into SonarCloud's new-code analysis) and record the offender here
+with its measured score.
+
+### Python complexity backlog (cleared)
+
+Empty. Issue #286 split all eight functions that were over threshold into
+helpers, so `pyproject.toml` carries no `[tool.ruff.lint.per-file-ignores]`
+entries and every function under `src/` is gated at max-complexity 15. The
+historical offenders (CC = ruff's McCabe cyclomatic complexity) were:
+
+| Function | File | CC (before) |
 | --- | --- | --- |
 | `compile_runtime_model` | `src/aptl/core/runtime/compiler.py` | 45 |
 | `_verify_objectives` | `src/aptl/core/sdl/validator.py` | 43 |
@@ -101,6 +164,10 @@ The specific functions to fix (CC = ruff's McCabe cyclomatic complexity):
 | `_verify_agents` | `src/aptl/core/sdl/validator.py` | 25 |
 | `_collect_resources` | `src/aptl/core/runtime/planner.py` | 18 |
 | `_expand_shorthands` | `src/aptl/core/sdl/parser.py` | 17 |
+
+If a future change must temporarily exempt a file, re-add the per-file-ignore
+table (whole-file, never a per-`def` `# noqa: C901`) and record the offender
+here with its measured score.
 
 (SonarCloud's *cognitive*-complexity rule flags a wider, partly different set—
 many more functions in `validator.py` plus deeply nested ones in `snapshot.py`

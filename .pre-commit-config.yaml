@@ -73,6 +73,36 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|pyproject\.toml)$
 
+      - id: ts-complexity
+        name: TypeScript complexity gate (ESLint complexity)
+        # Hard, repo-wide gate on per-function cyclomatic complexity for the
+        # TypeScript surfaces — the sibling of `ruff-complexity` above, and the
+        # same cyclomatic metric. Config (threshold, target globs, legacy
+        # exemptions) lives in the root `eslint.config.js`; ONLY the core
+        # `complexity` rule is enabled there, so this is a complexity guard, not
+        # a style linter. `language: node` with pinned `additional_dependencies`
+        # so the hook is self-contained — it installs its own toolchain into
+        # pre-commit's isolated node env and does NOT need any package's
+        # node_modules (the CI "Pre-commit hooks" job only `pip install
+        # pre-commit`s, no Node project deps). `--quiet` drops ESLint's
+        # `noInlineConfig` meta-warnings — the gate's only rule is an error, so
+        # nothing real is hidden. `pass_filenames: false`: always lints the full
+        # configured globs (mcp/*/src + web/src), not just the changed files.
+        # Runs before the slower vitest hooks so a god-method fails fast
+        # (fail_fast: true). This hook is deliberately NOT in the CI `SKIP` list
+        # (.github/workflows/checks.yml), so it gates in the required
+        # "Pre-commit hooks" job exactly as it does locally.
+        entry: eslint
+        args: [--config, eslint.config.js, --quiet, mcp, web/src]
+        language: node
+        additional_dependencies:
+          - "eslint@9.34.0"
+          - "@typescript-eslint/parser@8.41.0"
+          - "svelte-eslint-parser@1.8.0"
+          - "svelte@5.54.0"
+        pass_filenames: false
+        files: ^(mcp/[^/]+/src/.*\.ts|web/src/.*\.(ts|svelte)|eslint\.config\.js)$
+
       - id: vale-prose-lint
         name: Vale prose lint (ADR-038)
         # Lints staged markdown against Google style + AptlProject house

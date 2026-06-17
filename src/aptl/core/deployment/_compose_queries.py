@@ -90,13 +90,15 @@ def _decode_compose_ps(stdout: str) -> list[dict[str, Any]]:
         return []
     try:
         if stripped.startswith("["):
-            return json.loads(stripped)
-        return [
-            json.loads(line) for line in stripped.splitlines() if line.strip()
-        ]
+            parsed = json.loads(stripped)
+        else:
+            parsed = [
+                json.loads(line) for line in stripped.splitlines() if line.strip()
+            ]
     except json.JSONDecodeError:
         log.warning("could not parse compose ps output")
         return []
+    return parsed
 
 
 class ComposeQueryMixin(object):

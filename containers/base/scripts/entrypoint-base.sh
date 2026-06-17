@@ -42,6 +42,16 @@ setup_labadmin_ssh() {
         key_added=true
     fi
 
+    # SEC #417: additionally authorize the kali pivot public key (scenario
+    # content) so the red box can SSH in as labadmin. This is a SEPARATE key
+    # from the control-plane key above; the pivot PRIVATE key lives only on
+    # kali, never on a target.
+    if [ -f "/keys/kali_pivot_key.pub" ]; then
+        echo "Authorizing kali pivot key at /keys/kali_pivot_key.pub"
+        cat /keys/kali_pivot_key.pub >> /home/labadmin/.ssh/authorized_keys
+        key_added=true
+    fi
+
     if [ "$key_added" = true ]; then
         # Set correct permissions
         chmod 600 /home/labadmin/.ssh/authorized_keys

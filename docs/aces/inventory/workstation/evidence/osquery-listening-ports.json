@@ -7,14 +7,6 @@
   "rows": [
     {
       "address": "",
-      "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/run/systemd/notify",
       "pid": "-1",
       "port": "0",
@@ -150,20 +142,12 @@
       "socket": "0"
     },
     {
-      "address": "0.0.0.0",
-      "path": "",
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
       "pid": "-1",
-      "port": "22",
-      "protocol": "6",
-      "socket": "170278552"
-    },
-    {
-      "address": "::",
-      "path": "",
-      "pid": "-1",
-      "port": "22",
-      "protocol": "6",
-      "socket": "170278554"
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
     },
     {
       "address": "0.0.0.0",
@@ -171,7 +155,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170278552"
+      "socket": "741301085"
     },
     {
       "address": "::",
@@ -179,39 +163,55 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170278554"
+      "socket": "741301087"
     },
     {
-      "address": "127.0.0.11",
+      "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
-      "port": "34321",
-      "protocol": "17",
-      "socket": "170277284"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "34321",
-      "protocol": "17",
-      "socket": "170277284"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "36733",
+      "port": "22",
       "protocol": "6",
-      "socket": "170277285"
+      "socket": "741301085"
+    },
+    {
+      "address": "::",
+      "path": "",
+      "pid": "-1",
+      "port": "22",
+      "protocol": "6",
+      "socket": "741301087"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "36733",
+      "port": "44517",
       "protocol": "6",
-      "socket": "170277285"
+      "socket": "741291008"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "44517",
+      "protocol": "6",
+      "socket": "741291008"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "60730",
+      "protocol": "17",
+      "socket": "741291007"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "60730",
+      "protocol": "17",
+      "socket": "741291007"
     }
   ]
 }

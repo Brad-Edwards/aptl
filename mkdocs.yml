@@ -110,6 +110,7 @@ nav:
     - Asset Inventory:
       - Methodology: aces/inventory/asset-inventory-methodology.md
       - Methodology Assurance Report: aces/inventory/methodology-assurance-report.md
+      - TechVault Inventory Volatility: aces/inventory/techvault-inventory-volatility.md
       - Preflights:
         - AD: aces/inventory/ad-preflight.md
         - Kali: aces/inventory/kali-preflight.md

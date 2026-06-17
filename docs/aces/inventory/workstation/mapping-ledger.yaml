@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-workstation@sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd
+  image_digest: aptl-workstation@sha256:d5c817895ad61d42df871b71456d5209f08b9bc1bc62ddb1c14b4eb7685baf98
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -76,9 +76,11 @@ notes:
     `aptl lab stop -v && aptl lab start`; this is a non-destructive frozen
     observation of the realized workstation container.
   - >
-    Credential fixture contents, generated flags, private-key material, and
-    /keys/aptl_lab_key are retained verbatim where present in
-    filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.
+    Credential fixture contents, generated flags, and SSH host private-key
+    material are retained verbatim where present in filesystem-sensitive-paths.txt
+    and checksummed in filesystem-checksums.txt. Per SEC #417 no operator private
+    key is mounted into the target; /keys holds only public material (the
+    control-plane pubkey and the kali pivot pubkey).
   - >
     Brad-Edwards/aces#418 added the typed service-manager unit runtime surface
     consumed by this bundle. No known ACES expressivity blocker or
@@ -195,10 +197,10 @@ facts:
   - id: workstation.runtime.mount-table
     category: runtime-configuration
     summary: >
-      The observed runtime mount table includes 30 mount targets, including the
+      The observed runtime mount table includes 31 mount targets, including the
       overlay root, proc/sys/tmpfs pseudo-filesystems, /run and /tmp tmpfs
-      mounts, /sys/fs/cgroup bind mount, /keys bind mount, /var/log named
-      volume, and anonymous /home volume.
+      mounts, /sys/fs/cgroup bind mount, two /keys public-key file binds,
+      /var/log named volume, and anonymous /home volume.
     evidence:
       - path: evidence/runtime-baseline.txt
       - path: evidence/docker-inspect.container.json

@@ -407,6 +407,9 @@ archive/
 
 keys/*
 
+# SEC #417: kali pivot keypair (scenario content), generated at lab standup.
+config/lab-ssh/
+
 config/wazuh_indexer_ssl_certs/*
 
 .cursor/mcp.json

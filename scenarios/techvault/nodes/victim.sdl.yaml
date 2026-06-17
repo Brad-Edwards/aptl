@@ -5,7 +5,7 @@ nodes:
     description: 'TechVault generic victim container (SCN-010 issue #337 steady-state ACES inventory).'
     source:
       name: aptl-victim
-      version: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
+      version: aptl-victim@sha256:2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240
       build:
         base_image: rockylinux:9
         base_image_digest: ''
@@ -532,10 +532,10 @@ nodes:
           checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
           checksum_algorithm: sha256
           description: ''
-        - identifier: keys-authorized-keys
-          source_path: keys/authorized_keys
-          destination_path: /keys/authorized_keys
-          checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        - identifier: keys-kali-pivot-key-pub
+          source_path: config/lab-ssh/kali_pivot_key.pub
+          destination_path: /keys/kali_pivot_key.pub
+          checksum: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
           checksum_algorithm: sha256
           description: ''
         attestation:
@@ -732,8 +732,8 @@ nodes:
         stability: transient
         backend_generated: false
         description: ''
-      - target: /keys
-        source: ./keys
+      - target: /keys/aptl_lab_key.pub
+        source: ./keys/aptl_lab_key.pub
         source_sensitivity: unknown
         source_kind: bind
         filesystem_type: ext4
@@ -745,7 +745,21 @@ nodes:
         propagation: rprivate
         stability: stable
         backend_generated: false
-        description: ''
+        description: 'Control-plane public key bound read-only into the target (SEC #417).'
+      - target: /keys/kali_pivot_key.pub
+        source: ./config/lab-ssh/kali_pivot_key.pub
+        source_sensitivity: unknown
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: true
+        options:
+        - ro
+        - relatime
+        options_sensitivity: unknown
+        propagation: rprivate
+        stability: stable
+        backend_generated: false
+        description: 'Public half of the kali pivot key bound read-only into the target (SEC #417).'
       - target: /home
         source: b618dcbafb023c994143804867b7097205f369c43cf87ea21869a3e290237428
         source_sensitivity: unknown
@@ -1082,22 +1096,6 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /keys/aptl_lab_key
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '600'
-        size: 411
-        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
-        digest_algorithm: sha256
-        source_path: ''
-        provenance: filesystem-tree.txt
-        stability: stable
-        sensitivity: secret_fixture
-        description: Victim lab SSH private key; checksum verified from the live container.
       - path: /home/labadmin/.ssh/authorized_keys
         entry_type: file
         presence: present
@@ -1107,8 +1105,8 @@ nodes:
         gid: 1000
         mode: '600'
         size: 96
-        content_digest: 8b6ec3cd0e45892aaba98895ae1fa83a029007a698235a9d6f05970b8779e1b8
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: volume_backed
@@ -1139,8 +1137,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -1155,8 +1153,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -1171,8 +1169,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -1235,8 +1233,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 1393
-        content_digest: 4f9361f8900354bf82b509b41affa6b2c2222a43758a58540715c6432c6c23f3
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1251,8 +1249,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 204
-        content_digest: 387375cc4a145704f997dd98a9e665b8d660ab55d28f5b5550656525dd8e2f65
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt + filesystem-sensitive-paths.txt
         stability: generated
@@ -1315,8 +1313,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 2610
-        content_digest: 238579880aa2dc76fc5108cb1d06b2aeaf9ebb9740fd550e853f9729ba93dbfc
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1379,8 +1377,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 411
-        content_digest: f32e267c4bdfe6f96a0fc15bd08a2850870c0946cd753d55ea5b608f7de66f42
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1411,8 +1409,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 513
-        content_digest: d3acb338f09a8da080b92110b32119f37a6d62ba786824bede283d022cd440eb
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt
         stability: stable
@@ -1459,8 +1457,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 672
-        content_digest: 22c26070aa8c86e20d90d7833c6edbd9cf9b0eb6656dafd523e7b7ea57cca9ab
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -1491,8 +1489,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 7585
-        content_digest: eecfb9925ddcbf15f7f09ea12ca1075ec1d4166032a561188da32f196d7bf71f
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -1667,8 +1665,8 @@ nodes:
         gid: 1000
         mode: '644'
         size: 204
-        content_digest: b2f0803d9ed72e71d6649e9c8e3c7fa38a9e3a63998303f4718a50c23648c42b
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt + filesystem-sensitive-paths.txt
         stability: generated
@@ -1697,7 +1695,7 @@ nodes:
         owner_group: labadmin
         uid: 1000
         gid: 1000
-        mode: '644'
+        mode: '664'
         size: 96
         content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
         digest_algorithm: sha256
@@ -1706,7 +1704,7 @@ nodes:
         stability: stable
         sensitivity: plain
         description: Public lab key captured in filesystem-sensitive-paths.txt and checksummed.
-      - path: /keys/authorized_keys
+      - path: /keys/kali_pivot_key.pub
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -1714,14 +1712,14 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '644'
-        size: 96
-        content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        size: 97
+        content_digest: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
         digest_algorithm: sha256
-        source_path: keys/authorized_keys
+        source_path: config/lab-ssh/kali_pivot_key.pub
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
         sensitivity: plain
-        description: Public lab authorized_keys entry captured in filesystem-sensitive-paths.txt and checksummed.
+        description: 'Public half of the kali pivot key authorizing the kali node to SSH into this target; scenario content checksummed from the live container (SEC #417).'
       - path: /etc/dnf/vars/rltype
         entry_type: file
         presence: present
@@ -1795,8 +1793,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 102
-        content_digest: 16fc75343fadd5ad64a01d15780c7e368468f9402535c1d809440d1cbfc5c63c
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
@@ -1843,8 +1841,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 109291
-        content_digest: b0ca5c910e6318acfb3717619bf0e3b15bf694bce7a410732321ad7272d58634
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2035,8 +2033,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 182
-        content_digest: fbcbe5e20fa5a5ec1ce68e9944814bcd4d6cc3f728d6f7e6e70e62f7efc22500
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
@@ -2051,8 +2049,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 19201
-        content_digest: 4f838fba0f7a22aec8c88a1ab74707b1f80b312f9eaf5c214d612f92d5e28b2a
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2147,8 +2145,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 23246
-        content_digest: 8ec185852d1bf31eecdec88eb1537028a36b5439e3f168298980e6b169b5c3d5
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2323,8 +2321,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 42885
-        content_digest: 934ca315d7fba22ea4d6bcae787b46a023e45871dcfeed6f9ac7f933b86f1aeb
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2371,8 +2369,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 574
-        content_digest: 69ba9a4694ab7783ff0ec96656c7c17ddeec0f64556ccde9dcccc7386d780a11
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
@@ -2435,8 +2433,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 610
-        content_digest: 1ada97267757d2dfd02bf5956bda88aa2d29293facea7f63733f1feb2aeac3bd
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
@@ -2451,7 +2449,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 63292
-        content_digest: f355cf51a7b9ce0c0f8e6e488a195ec4d3c3ba5e3893d81fa7506282cf8695a6
+        content_digest: 1c15d5d543635b76e31cca39d7df8bf4caf50a428613c314d92986a23bfcb617
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2483,7 +2481,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 66103
-        content_digest: 7441f0715c20b824399213624bd39703f3abab9fb3f37546508b8bf4c88a285d
+        content_digest: 55a172a24335569bc053b53a5a485be9be2fd7b44890b38de92fc8e475bcc86f
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -2563,8 +2561,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 840
-        content_digest: 7f2b0f3ebcb35a66311c0b68095288efb81a434f5ebcd6ffe88bb097aed7065a
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2595,8 +2593,8 @@ nodes:
         gid: 22
         mode: '660'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2691,8 +2689,8 @@ nodes:
         gid: 998
         mode: '660'
         size: 2161
-        content_digest: 1497f17a401d04c3e18411315626f7a8903b5eb579cd423dee5b163e045c2567
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: stable
@@ -2979,8 +2977,8 @@ nodes:
         gid: 22
         mode: '664'
         size: 0
-        content_digest: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -2995,8 +2993,8 @@ nodes:
         gid: 22
         mode: '664'
         size: 292292
-        content_digest: d1024fa7ebf79a2dd6d553fef19bf1d1234616885979e533b345b7c54968079b
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt + filesystem-checksums.txt
         stability: log
@@ -3043,7 +3041,7 @@ nodes:
         gid: 0
         mode: '755'
         size: 5792
-        content_digest: b940a9ead91dfe6beb4945fa85b042c28e6999422ef7017a707259da8034e437
+        content_digest: a21f1cff6743b79672c2c17e80c7e33ab8296f78cad5288951d86f392b746728
         digest_algorithm: sha256
         source_path: containers/base/scripts/entrypoint-base.sh
         provenance: filesystem-tree.txt + filesystem-checksums.txt
@@ -3197,10 +3195,10 @@ nodes:
       - path: /keys
         entry_type: directory
         presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
         mode: '755'
         size: 4096
         content_digest: ''
@@ -4544,25 +4542,23 @@ nodes:
         domainname: ''
         endpoints:
         - network: techvault.internal-net
-          network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
-          network_id_stability: stable
-          endpoint_id: 13eaa548e14a12ca2d6673206329bc165d545c2868f2cc13c8c42d502c78da34
+          network_id: ''
+          network_id_stability: ephemeral
+          endpoint_id: ''
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.20
           ip_prefix_length: 24
           gateway: 172.20.2.1
-          mac_address: d6:9c:ac:f8:6a:c7
+          mac_address: ''
           aliases:
           - aptl-victim
           - victim
           dns_names:
           - aptl-victim
           - victim
-          - 7ed4af3e0aa0
           - app.techvault.local
-          generated_dns_names:
-          - 7ed4af3e0aa0
+          generated_dns_names: []
           backend:
             driver: bridge
             ipam_driver: default
@@ -4880,22 +4876,6 @@ nodes:
         exec_start: null
         service: ''
         description: ''
-      - unit_id: falco-bpf
-        manager_kind: systemd
-        unit_name: falco-bpf.service
-        unit_type: service
-        load_state: loaded
-        active_state: inactive
-        sub_state: dead
-        enabled_state: disabled
-        result: unknown
-        exit_code: null
-        status_text: ''
-        main_pid: null
-        unit_file_path: ''
-        exec_start: null
-        service: ''
-        description: Falco unit is present but inactive/dead and disabled.
       - unit_id: falco-custom
         manager_kind: systemd
         unit_name: falco-custom.service

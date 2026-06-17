@@ -10,7 +10,7 @@ nodes:
       the realized wazuh edge is relationships.reverse-forwards-wazuh.'
     source:
       name: aptl-reverse
-      version: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+      version: aptl-reverse@sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13
       build:
         base_image: ubuntu:22.04
         base_image_digest: ''
@@ -432,10 +432,10 @@ nodes:
           checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
           checksum_algorithm: sha256
           description: ''
-        - identifier: keys-authorized_keys
-          source_path: keys/authorized_keys
+        - identifier: keys-kali_pivot_key_pub
+          source_path: config/lab-ssh/kali_pivot_key.pub
           destination_path: ''
-          checksum: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+          checksum: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
           checksum_algorithm: sha256
           description: ''
         attestation:
@@ -641,8 +641,8 @@ nodes:
         stability: runtime_created
         backend_generated: true
         description: ''
-      - target: /keys
-        source: ./keys
+      - target: /keys/aptl_lab_key.pub
+        source: ./keys/aptl_lab_key.pub
         source_sensitivity: unknown
         source_kind: bind
         filesystem_type: ext4
@@ -654,7 +654,21 @@ nodes:
         propagation: unknown
         stability: stable
         backend_generated: false
-        description: ''
+        description: 'Control-plane public key bound read-only into the target (SEC #417).'
+      - target: /keys/kali_pivot_key.pub
+        source: ./config/lab-ssh/kali_pivot_key.pub
+        source_sensitivity: unknown
+        source_kind: bind
+        filesystem_type: ext4
+        read_only: true
+        options:
+        - ro
+        - relatime
+        options_sensitivity: unknown
+        propagation: unknown
+        stability: stable
+        backend_generated: false
+        description: 'Public half of the kali pivot key bound read-only into the target (SEC #417).'
       - target: /home
         source: 6faf824f45d80831ff1a1bd3c8e344d7df8ce0ac733c706b12987ae44cb28614
         source_sensitivity: unknown
@@ -1025,22 +1039,6 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /keys/aptl_lab_key
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '600'
-        size: 411
-        content_digest: 3893e71546baef9cd178076c06acfcf98cdbe1478923abda856f1d58765f8c51
-        digest_algorithm: sha256
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: secret_fixture
-        description: Reverse-proxy lab SSH private key; checksum verified from the live container.
       - path: /home/labadmin/.ssh/authorized_keys
         entry_type: file
         presence: present
@@ -1057,86 +1055,6 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /root/.sigstore/root/tuf.db/LOCK
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf.db/LOG
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 1007
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/signing_config.v0.2.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 1034
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/signing_config_rekor_v2.v0.2.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 1230
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf.db/000002.log
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 12921
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/ssh/ssh_host_dsa_key
         entry_type: file
         presence: present
@@ -1146,125 +1064,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 1393
-        content_digest: e0df77185dc9f3e71b4d5c535000330c18407e0dec0f3a142548dadf8ab0f616
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
         sensitivity: secret_fixture
         description: Reverse-proxy SSH host DSA private key; checksum verified from the live container.
-      - path: /root/.sigstore/root/tuf.db/CURRENT
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 16
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf.db/CURRENT.bak
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 16
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/artifact.pub
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 177
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/ctfe.pub
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 177
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/ctfe_2022.pub
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 178
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/rekor.pub
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 178
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/signing_config.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 219
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/ssh/ssh_host_rsa_key
         entry_type: file
         presence: present
@@ -1274,8 +1080,8 @@ nodes:
         gid: 0
         mode: '600'
         size: 2610
-        content_digest: 79d2ac9b0bca27b2288ea425de82dddad27414af106df4d89fc9e07c98489015
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -1297,22 +1103,6 @@ nodes:
         stability: log
         sensitivity: plain
         description: ''
-      - path: /root/.sigstore/root/tuf.db/MANIFEST-000003
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 41
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/ssh/ssh_host_ed25519_key
         entry_type: file
         presence: present
@@ -1322,29 +1112,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 411
-        content_digest: ea0027840a71cc0fdac946aa3e3678ae0b4b7121774fb5b48fe7c12c52e3a3f5
-        digest_algorithm: sha256
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: secret_fixture
-        description: Reverse-proxy SSH host Ed25519 private key; checksum verified from the live container.
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 50
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: plain
-        description: ''
+        sensitivity: secret_fixture
+        description: Reverse-proxy SSH host Ed25519 private key; checksum verified from the live container.
       - path: /etc/ssh/ssh_host_ecdsa_key
         entry_type: file
         presence: present
@@ -1354,93 +1128,13 @@ nodes:
         gid: 0
         mode: '600'
         size: 513
-        content_digest: 1a339553b863d7aa3e3d953023f0d4c47da25df48ec0377f7da5a58c275dff4e
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
         sensitivity: secret_fixture
         description: Reverse-proxy SSH host ECDSA private key; checksum verified from the live container.
-      - path: /root/.sigstore/root/targets/trusted_root.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 6787
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 6787
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/fulcio_v1.crt.pem
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 740
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/fulcio.crt.pem
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 744
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets/fulcio_intermediate_v1.crt.pem
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '600'
-        size: 789
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /var/ossec/etc/shared/cis_win2012r2_memberL1_rcl.txt
         entry_type: file
         presence: present
@@ -2088,7 +1782,7 @@ nodes:
         owner_group: labadmin
         uid: 1000
         gid: 1000
-        mode: '644'
+        mode: '664'
         size: 96
         content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
         digest_algorithm: sha256
@@ -2097,7 +1791,7 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /keys/authorized_keys
+      - path: /keys/kali_pivot_key.pub
         entry_type: file
         presence: present
         owner_user: labadmin
@@ -2105,14 +1799,14 @@ nodes:
         uid: 1000
         gid: 1000
         mode: '644'
-        size: 96
-        content_digest: ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+        size: 97
+        content_digest: c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
         sensitivity: plain
-        description: ''
+        description: 'Public half of the kali pivot key authorizing the kali node to SSH into this target; scenario content (SEC #417).'
       - path: /opt/lab/.falco_installed
         entry_type: file
         presence: present
@@ -2170,8 +1864,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 102
-        content_digest: a0fbaa8fdebd25694ee8e461857f3afc0eeec0ba71fe51811879e35b17aecf5b
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -2305,22 +1999,6 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/snapshot.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '644'
-        size: 1760
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/apt/apt.conf.d/70debconf
         entry_type: file
         presence: present
@@ -2346,8 +2024,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 182
-        content_digest: 0e623b496ffda8ae62402908ff4123d136b69b3ca42d35c387a188e0ddfe4e0c
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -2641,38 +2319,6 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/timestamp.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '644'
-        size: 449
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '644'
-        size: 4942
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/ssh/moduli
         entry_type: file
         presence: present
@@ -2721,22 +2367,6 @@ nodes:
         stability: log
         sensitivity: plain
         description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/root.json
-        entry_type: file
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '644'
-        size: 5630
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
       - path: /etc/ssh/ssh_host_rsa_key.pub
         entry_type: file
         presence: present
@@ -2746,8 +2376,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 574
-        content_digest: 758f3b29da802f8626c4fb34f8ff5ba5ab26763f4d3d90b8123e43635aa93ed3
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -2762,8 +2392,8 @@ nodes:
         gid: 0
         mode: '644'
         size: 610
-        content_digest: 0d48be13603681d437ed33b6d5d5b5ea6c6596a42ee6c51e8ea66bd414d21a51
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: stable
@@ -2810,7 +2440,7 @@ nodes:
         gid: 0
         mode: '644'
         size: 63914
-        content_digest: e991fbe11a012497560255e137004694b51ef3f488dff30e3f01a331155aa5a2
+        content_digest: 55a172a24335569bc053b53a5a485be9be2fd7b44890b38de92fc8e475bcc86f
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
@@ -3002,8 +2632,8 @@ nodes:
         gid: 108
         mode: '660'
         size: 2155
-        content_digest: a99f5995d8dc00c3cc9ba99d0d808947c4757fe8dd6759c4128bad8501cf209c
-        digest_algorithm: sha256
+        content_digest: ''
+        digest_algorithm: ''
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
         stability: generated
@@ -3025,38 +2655,6 @@ nodes:
         stability: volume_backed
         sensitivity: plain
         description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.31.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 2965
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.12.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 2976
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
       - path: /home/labadmin/.local/pipx/venvs/flare-capa/pipx_metadata.json
         entry_type: file
         presence: present
@@ -3066,150 +2664,6 @@ nodes:
         gid: 1000
         mode: '664'
         size: 3134
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.02.25.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 3712
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.25.48.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 385
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.28.54.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 385
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_05.29.32.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 385
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.24.12.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 386
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.46.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 386
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.29.43.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 386
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.32.23.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 386
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: volume_backed
-        sensitivity: plain
-        description: ''
-      - path: /home/labadmin/.local/pipx/logs/cmd_2026-06-10_14.28.11.log
-        entry_type: file
-        presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
-        mode: '664'
-        size: 657
         content_digest: ''
         digest_algorithm: ''
         source_path: ''
@@ -3322,7 +2776,7 @@ nodes:
         gid: 0
         mode: '755'
         size: 2088
-        content_digest: ae654a25e0eac19efd2840ea91808eea32f5a7b4c220c3cd1621266ddb06a591
+        content_digest: 595f65ea91fd4b32b3fd31eced9fab41065251328e34eabba4d79e4a17212b4b
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
@@ -3370,7 +2824,7 @@ nodes:
         gid: 0
         mode: '755'
         size: 5792
-        content_digest: b940a9ead91dfe6beb4945fa85b042c28e6999422ef7017a707259da8034e437
+        content_digest: a21f1cff6743b79672c2c17e80c7e33ab8296f78cad5288951d86f392b746728
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
@@ -3450,7 +2904,7 @@ nodes:
         gid: 0
         mode: '775'
         size: 1111
-        content_digest: 40bb452bc7b6bfb60a39c62c04132a9d076c5df736c809492e519cfb7d25ef28
+        content_digest: 324e83781017fefa9aeb354a252edc8c4721257873eea4958074cf0921d49c88
         digest_algorithm: sha256
         source_path: ''
         provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
@@ -3490,102 +2944,6 @@ nodes:
         sensitivity: plain
         description: ''
       - path: /root
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/targets
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets
-        entry_type: directory
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: 0
-        gid: 0
-        mode: '700'
-        size: 4096
-        content_digest: ''
-        digest_algorithm: ''
-        source_path: ''
-        provenance: filesystem-tree.txt.gz + filesystem-checksums.txt.xz
-        stability: stable
-        sensitivity: plain
-        description: ''
-      - path: /root/.sigstore/root/tuf.db
         entry_type: directory
         presence: present
         owner_user: root
@@ -3652,10 +3010,10 @@ nodes:
       - path: /keys
         entry_type: directory
         presence: present
-        owner_user: labadmin
-        owner_group: labadmin
-        uid: 1000
-        gid: 1000
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
         mode: '755'
         size: 4096
         content_digest: ''
@@ -6169,25 +5527,23 @@ nodes:
         domainname: ''
         endpoints:
         - network: techvault.security-net
-          network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
-          network_id_stability: stable
-          endpoint_id: abf0bf6e87ae53d037ab63dff07b4c582777561b2949d71499b5c5bd3e966760
+          network_id: ''
+          network_id_stability: ephemeral
+          endpoint_id: ''
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.27
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: ae:f5:7b:2a:8b:76
+          mac_address: ''
           aliases:
           - aptl-reverse
           - reverse
           dns_names:
           - aptl-reverse
           - reverse
-          - f479361d5d17
           - reverse-host
-          generated_dns_names:
-          - f479361d5d17
+          generated_dns_names: []
           backend:
             driver: bridge
             ipam_driver: default

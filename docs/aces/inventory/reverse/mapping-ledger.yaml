@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192
+  image_digest: aptl-reverse@sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -35,8 +35,9 @@ notes:
 - The Wazuh agent registration name is runtime-generated (reverse-$(hostname)-$(date +%s)); the manager-side agents[] enumeration
   is intentionally not extended for this node (non-deterministic name). The forwarding is encoded as node forwarding_agents
   + the reverse-forwards-wazuh relationship.
-- Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are captured verbatim in
-  filesystem-sensitive-paths.txt and included in filesystem-checksums.txt.xz.
+- 'Scenario target secret files under /etc/ssh and /var/ossec/etc/client.keys are captured verbatim in
+  filesystem-sensitive-paths.txt and included in filesystem-checksums.txt.xz. Per SEC #417 no operator private
+  key is mounted into the target; /keys holds only public material (the control-plane pubkey and the kali pivot pubkey).'
 correspondence_checks:
 - id: reverse-evidence-bundle-integrity
   status: implemented
@@ -206,7 +207,7 @@ facts:
 - id: reverse.compose.service-contract
   category: compose
   summary: Compose declares aptl-reverse, profile reverse, image aptl-reverse:local, cgroup:host, 2g memory, SYS_ADMIN/SYS_NICE/SYS_RESOURCE
-    cap_add, seccomp:unconfined, the /sys/fs/cgroup + ./keys binds, reverse_logs volume, tmpfs /run /run/lock /tmp, security-net
+    cap_add, seccomp:unconfined, the /sys/fs/cgroup bind + two /keys public-key file binds, reverse_logs volume, tmpfs /run /run/lock /tmp, security-net
     172.20.0.27, and the 2027->22 published port.
   evidence:
   - path: evidence/compose-service.reverse.json
@@ -277,7 +278,7 @@ facts:
     rationale: Current ACES SDL node services + ssh_servers + health fields carry the SSH surface directly.
 - id: reverse.runtime.mount-table
   category: runtime
-  summary: 'The full mount table is encoded: overlay rootfs, the /sys/fs/cgroup + ./keys binds, the reverse_logs volume at
+  summary: 'The full mount table is encoded: overlay rootfs, the /sys/fs/cgroup bind + two /keys public-key file binds, the reverse_logs volume at
     /var/log, tmpfs /run /run/lock /tmp /dev, and the proc/sys masked overlays.'
   evidence:
   - path: evidence/docker-inspect.container.json
@@ -340,9 +341,10 @@ facts:
     fields:
     - nodes.techvault.reverse.runtime.filesystem_inventory
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
-    caveat: The manifest excludes the radare2 source/build tree, pipx venv lib payloads, and ~/.cache (toolchain payload evidenced
-      by the package/SBOM surfaces). Scenario target secret files under /keys, /etc/ssh, and /var/ossec/etc/client.keys are
-      captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz.
+    caveat: 'The manifest excludes the radare2 source/build tree, pipx venv lib payloads, and ~/.cache (toolchain payload evidenced
+      by the package/SBOM surfaces). Scenario target secret files under /etc/ssh and /var/ossec/etc/client.keys are
+      captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz; per SEC #417
+      /keys holds only public material (the control-plane pubkey and the kali pivot pubkey).'
 - id: reverse.runtime.local-identity
   category: identity
   summary: Local passwd/group inventory records 27 users and 48 groups; labadmin is in the sudo group with a NOPASSWD grant.

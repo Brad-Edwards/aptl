@@ -39,6 +39,19 @@ if [ -f "/host-ssh-keys/authorized_keys" ]; then
     echo "SSH keys configured for kali user"
 fi
 
+# SEC #417: the dedicated pivot private key is bind-mounted 0600 and owned by the
+# host UID, so the unprivileged `kali` login user cannot read it directly. Copy
+# it into the kali user's home with kali ownership and 0600 so kali-to-target
+# SSH works for the real operator path (not just root).
+if [ -f "/host-ssh-keys/kali_pivot_key" ]; then
+    mkdir -p /home/kali/.ssh
+    cp /host-ssh-keys/kali_pivot_key /home/kali/.ssh/kali_pivot_key
+    chown -R kali:kali /home/kali/.ssh
+    chmod 700 /home/kali/.ssh
+    chmod 600 /home/kali/.ssh/kali_pivot_key
+    echo "Kali pivot key configured for kali user"
+fi
+
 # OBS-003: prepare the captures volume mount. /var/log/aptl/captures
 # is a docker NAMED VOLUME (see docker-compose.yml). We chown only
 # the captures root + its container-wide audit/proc-acct subdirs so

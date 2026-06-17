@@ -58,10 +58,10 @@ USER=root
 _=/usr/bin/env
 --listeners--
 Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-udp   UNCONN 0      0         127.0.0.11:35355      0.0.0.0:*
-tcp   LISTEN 0      4096      127.0.0.11:36871      0.0.0.0:*
-tcp   LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:(("sshd",pid=55,fd=7))
-tcp   LISTEN 0      128             [::]:22            [::]:*    users:(("sshd",pid=55,fd=8))
+udp   UNCONN 0      0         127.0.0.11:60730      0.0.0.0:*
+tcp   LISTEN 0      128          0.0.0.0:22         0.0.0.0:*    users:(("sshd",pid=56,fd=7))
+tcp   LISTEN 0      4096      127.0.0.11:44517      0.0.0.0:*
+tcp   LISTEN 0      128             [::]:22            [::]:*    users:(("sshd",pid=56,fd=8))
 --sshd-effective-config--
 authorizedkeysfile .ssh/authorized_keys
 passwordauthentication yes
@@ -77,8 +77,8 @@ usepam yes
        valid_lft forever preferred_lft forever
     inet6 ::1/128 scope host proto kernel_lo
        valid_lft forever preferred_lft forever
-2: eth0@if7120: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
-    link/ether 22:dc:46:cf:d7:1c brd ff:ff:ff:ff:ff:ff link-netnsid 0
+2: eth0@if10582: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether d2:e8:eb:f8:fe:15 brd ff:ff:ff:ff:ff:ff link-netnsid 0
     inet 172.20.2.40/24 brd 172.20.2.255 scope global eth0
        valid_lft forever preferred_lft forever
 --routes--
@@ -113,7 +113,7 @@ ff02::2	ip6-allrouters
 --hostname--
 ws01.techvault.local
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107910/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106974/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106973/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106972/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106971/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106970/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106969/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106968/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106967/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106966/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106965/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106964/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106963/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106962/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106961/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106960/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106959/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106958/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106957/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106956/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106955/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106954/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106953/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106952/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106951/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106950/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106949/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106948/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106947/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106946/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/370/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107920/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107920/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145368/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145213/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145212/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145211/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145210/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145209/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145207/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145205/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145204/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145203/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145202/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145201/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145200/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145199/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145194/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145193/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145191/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145189/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145188/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145187/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/119925/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106954/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106953/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106952/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106951/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106950/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106949/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106948/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106947/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106946/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/370/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145371/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145371/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -122,9 +122,10 @@ mqueue on /dev/mqueue type mqueue (rw,nosuid,nodev,noexec,relatime)
 shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
 tmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,mode=755,inode64)
 tmpfs on /tmp type tmpfs (rw,nosuid,nodev,noexec,relatime,inode64)
-/dev/md2 on /keys type ext4 (ro,relatime)
 /dev/md2 on /home type ext4 (rw,relatime)
 /dev/md2 on /var/log type ext4 (rw,relatime)
+/dev/md2 on /keys/aptl_lab_key.pub type ext4 (ro,relatime)
+/dev/md2 on /keys/kali_pivot_key.pub type ext4 (ro,relatime)
 /dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
 /dev/md2 on /etc/hostname type ext4 (rw,relatime)
 /dev/md2 on /etc/hosts type ext4 (rw,relatime)
@@ -213,18 +214,17 @@ labadmin ALL=(ALL) NOPASSWD:ALL
 ● rsyslog.service                loaded failed failed  System Logging Service
   sshd.service                   loaded active running OpenSSH server daemon
   systemd-journald.service       loaded active running Journal Service
-● systemd-tmpfiles-clean.service loaded failed failed  Cleanup of Temporary Directories
 ● systemd-tmpfiles-setup.service loaded failed failed  Create Volatile Files and Directories
   systemd-user-sessions.service  loaded active exited  Permit User Sessions
 
 LOAD   = Reflects whether the unit definition was properly loaded.
 ACTIVE = The high-level unit activation state, i.e. generalization of SUB.
 SUB    = The low-level unit activation state, values depend on unit type.
-7 loaded units listed.
+6 loaded units listed.
 --process-tree--
     PID    PPID USER     COMMAND
       1       0 root     /usr/sbin/init
-     53       1 root     /usr/lib/systemd/systemd-journald
-     55       1 root     sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
-  36966       0 root     bash -lc    set +e   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   if command -v capsh >/dev/null 2>&1; then     capsh --decode="$(awk "/^CapEff:/ {print \$2}" /proc/1/status)" || true   fi   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --sshd-effective-config--   sshd -T 2>/dev/null | sort | sed -n "/^acceptenv /p;/^allowusers /p;/^authorizedkeysfile /p;/^passwordauthentication /p;/^permitrootlogin /p;/^permittty /p;/^port /p;/^pubkeyauthentication /p;/^usepam /p"   echo --network-addresses--   ip addr show   echo --routes--   ip route show table all   echo --dns--   cat /etc/resolv.conf   echo --hosts--   cat /etc/hosts   echo --hostname--   cat /etc/hostname   echo --mounts--   mount | sed -n "1,220p"   echo --users--   getent passwd | sed -n "1,220p"   echo --groups--   getent group | sed -n "1,220p"   echo --sudo-rules--   find /etc/sudoers.d -maxdepth 1 -type f -print -exec sed -n "1,80p" {} \;   echo --systemd-services--   systemctl --no-pager --type=service --state=running,exited,failed || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
-  37118   36966 root     ps -eo pid,ppid,user,args
+     54       1 root     /usr/lib/systemd/systemd-journald
+     56       1 root     sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
+    516       0 root     bash -lc    set +e   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   if command -v capsh >/dev/null 2>&1; then     capsh --decode="$(awk "/^CapEff:/ {print \$2}" /proc/1/status)" || true   fi   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --sshd-effective-config--   sshd -T 2>/dev/null | sort | sed -n "/^acceptenv /p;/^allowusers /p;/^authorizedkeysfile /p;/^passwordauthentication /p;/^permitrootlogin /p;/^permittty /p;/^port /p;/^pubkeyauthentication /p;/^usepam /p"   echo --network-addresses--   ip addr show   echo --routes--   ip route show table all   echo --dns--   cat /etc/resolv.conf   echo --hosts--   cat /etc/hosts   echo --hostname--   cat /etc/hostname   echo --mounts--   mount | sed -n "1,220p"   echo --users--   getent passwd | sed -n "1,220p"   echo --groups--   getent group | sed -n "1,220p"   echo --sudo-rules--   find /etc/sudoers.d -maxdepth 1 -type f -print -exec sed -n "1,80p" {} \;   echo --systemd-services--   systemctl --no-pager --type=service --state=running,exited,failed || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
+    667     516 root     ps -eo pid,ppid,user,args

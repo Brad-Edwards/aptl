@@ -71,9 +71,9 @@ local lab state, not as clean-lab rebuild proof.
 - Wazuh and Falco packages/configuration are present. Their realized unit
   states are encoded through `nodes.techvault.victim.runtime.service_manager_units`.
 - The committed SDL encodes 173 runtime filesystem entries,
-  173 victim content entries, 19 host-local accounts,
+  172 victim content entries, 19 host-local accounts,
   38 host-local groups, 1 NOPASSWD sudo rule,
-  74 systemd service-manager unit records, 190 RPM
+  73 systemd service-manager unit records, 190 RPM
   packages, and 61 Trivy package findings.
 - Trivy 0.70.0 reported 61 vulnerability findings at scan time:
   2 critical, 40 high,

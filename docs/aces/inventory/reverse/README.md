@@ -42,7 +42,7 @@ observation of that local steady state, **not as clean-lab rebuild proof**.
 | Family | target |
 | Source class | `custom-build` |
 | Image | `aptl-reverse:latest` (custom build from `containers/reverse/Dockerfile`) |
-| Local image config ID | `aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192` |
+| Local image config ID | `aptl-reverse@sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13` |
 | Base image | `ubuntu:22.04` (shared APTL base layer) |
 | Runtime OS | Ubuntu 22.04.5 LTS |
 | Init | systemd (PID 1), `cgroup: host` |

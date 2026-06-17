@@ -3,7 +3,7 @@
     "reverse"
   ],
   "build": {
-    "context": "/home/atomik/src/aptl/containers",
+    "context": "/home/atomik/src/aptl3/containers",
     "dockerfile": "reverse/Dockerfile"
   },
   "cap_add": [
@@ -69,8 +69,15 @@
     },
     {
       "type": "bind",
-      "source": "/home/atomik/src/aptl/keys",
-      "target": "/keys",
+      "source": "/home/atomik/src/aptl3/keys/aptl_lab_key.pub",
+      "target": "/keys/aptl_lab_key.pub",
+      "read_only": true,
+      "bind": {}
+    },
+    {
+      "type": "bind",
+      "source": "/home/atomik/src/aptl3/config/lab-ssh/kali_pivot_key.pub",
+      "target": "/keys/kali_pivot_key.pub",
       "read_only": true,
       "bind": {}
     },

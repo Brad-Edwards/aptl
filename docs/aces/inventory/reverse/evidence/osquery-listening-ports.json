@@ -15,38 +15,6 @@
     },
     {
       "address": "",
-      "path": "/run/systemd/notify",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/private",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/userdb/io.systemd.DynamicUser",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/io.system.ManagedOOM",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/run/systemd/journal/stdout",
       "pid": "-1",
       "port": "0",
@@ -55,55 +23,7 @@
     },
     {
       "address": "",
-      "path": "/run/systemd/journal/syslog",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/dev-log",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/socket",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/io.systemd.journal",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/alerts/execq",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -112,102 +32,6 @@
     {
       "address": "",
       "path": "/run/dbus/system_bus_socket",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/dbus/system_bus_socket",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/syscheck",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/queue",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/logcollector",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/upgrade",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/wmodules",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/control",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/dbus/system_bus_socket",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/stdout",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -247,7 +71,199 @@
     },
     {
       "address": "",
+      "path": "/run/systemd/journal/syslog",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/dev-log",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
       "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/io.systemd.journal",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/dbus/system_bus_socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/alerts/execq",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/queue",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/syscheck",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/logcollector",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/wmodules",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/dbus/system_bus_socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/dbus/system_bus_socket",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/notify",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/private",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/userdb/io.systemd.DynamicUser",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/io.system.ManagedOOM",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -287,7 +303,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/com",
+      "path": "/run/systemd/journal/io.systemd.journal",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -295,7 +311,7 @@
     },
     {
       "address": "",
-      "path": "/run/systemd/journal/io.systemd.journal",
+      "path": "/run/dbus/system_bus_socket",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -311,39 +327,7 @@
     },
     {
       "address": "",
-      "path": "/run/dbus/system_bus_socket",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/systemd/journal/stdout",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "/run/dbus/system_bus_socket",
+      "path": "queue/sockets/queue",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -359,14 +343,6 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/queue",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "queue/sockets/logcollector",
       "pid": "-1",
       "port": "0",
@@ -375,7 +351,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/upgrade",
+      "path": "queue/sockets/wmodules",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -383,7 +359,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/wmodules",
+      "path": "queue/sockets/upgrade",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -406,12 +382,36 @@
       "socket": "0"
     },
     {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/run/systemd/journal/stdout",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
       "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "599333408"
+      "socket": "741296781"
     },
     {
       "address": "::",
@@ -419,7 +419,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "599333410"
+      "socket": "741296783"
     },
     {
       "address": "0.0.0.0",
@@ -427,7 +427,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "599333408"
+      "socket": "741296781"
     },
     {
       "address": "::",
@@ -435,7 +435,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "599333410"
+      "socket": "741296783"
     },
     {
       "address": "0.0.0.0",
@@ -443,7 +443,7 @@
       "pid": "-1",
       "port": "8765",
       "protocol": "6",
-      "socket": "599351951"
+      "socket": "741334346"
     },
     {
       "address": "0.0.0.0",
@@ -451,55 +451,55 @@
       "pid": "-1",
       "port": "8765",
       "protocol": "6",
-      "socket": "599351951"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "37597",
-      "protocol": "17",
-      "socket": "599324266"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "37597",
-      "protocol": "17",
-      "socket": "599324266"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "39099",
-      "protocol": "6",
-      "socket": "599324267"
-    },
-    {
-      "address": "127.0.0.11",
-      "path": "",
-      "pid": "-1",
-      "port": "39099",
-      "protocol": "6",
-      "socket": "599324267"
+      "socket": "741334346"
     },
     {
       "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
-      "port": "41945",
+      "port": "41958",
       "protocol": "17",
-      "socket": "599328553"
+      "socket": "741307537"
     },
     {
       "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
-      "port": "41945",
+      "port": "41958",
       "protocol": "17",
-      "socket": "599328553"
+      "socket": "741307537"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "43297",
+      "protocol": "6",
+      "socket": "741304545"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "43297",
+      "protocol": "6",
+      "socket": "741304545"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "54492",
+      "protocol": "17",
+      "socket": "741304544"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "54492",
+      "protocol": "17",
+      "socket": "741304544"
     }
   ]
 }

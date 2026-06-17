@@ -71,9 +71,9 @@ local lab state, not as clean-lab rebuild proof.
 - Wazuh and Falco packages/configuration are present. Their realized unit
   states are encoded through the ACES service-manager unit surface added by
   Brad-Edwards/aces#418.
-- The committed SDL encodes 193 runtime filesystem entries, 184 workstation
+- The committed SDL encodes 192 runtime filesystem entries, 185 workstation
   content entries, 20 host-local accounts, 39 host-local groups, 2 NOPASSWD
-  sudo rules, 74 systemd service-manager unit records, 261 RPM packages, and
+  sudo rules, 73 systemd service-manager unit records, 261 RPM packages, and
   42 Trivy package findings.
 - Trivy 0.70.0 reported 42 vulnerability findings at scan time: 2 critical,
   22 high, 17 medium, and 1 low.

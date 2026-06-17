@@ -1052,7 +1052,11 @@ services:
     cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - victim_logs:/var/log
     tmpfs:
       - /run
@@ -1100,7 +1104,11 @@ services:
     cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - workstation_logs:/var/log
     tmpfs:
       - /run
@@ -1183,7 +1191,12 @@ services:
       - "ws01.techvault.local:172.20.2.22"
       - "ns1.techvault.local:172.20.2.27"
     volumes:
-      - ./keys:/host-ssh-keys:ro
+      # SEC #417: kali receives the control-plane PUBLIC key (so operator/MCP
+      # can reach it) and the kali pivot PRIVATE key (to pivot into targets).
+      # It never receives the control-plane private key — the pollution this
+      # split removes.
+      - ./keys/authorized_keys:/host-ssh-keys/authorized_keys:ro
+      - ./config/lab-ssh/kali_pivot_key:/host-ssh-keys/kali_pivot_key:ro
       - kali_operations:/home/kali/operations
       # OBS-003 / ADR-033: per-session captures land in a docker
       # NAMED VOLUME (not a host bind mount). The named volume is
@@ -1256,7 +1269,11 @@ services:
       - SYS_RESOURCE    # For setting limits and OOM score
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - reverse_logs:/var/log
     tmpfs:
       - /run

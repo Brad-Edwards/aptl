@@ -30,7 +30,7 @@ EVIDENCE_DIR = WORKSTATION_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd"
+IMAGE_ID = "sha256:d5c817895ad61d42df871b71456d5209f08b9bc1bc62ddb1c14b4eb7685baf98"
 IMAGE_DIGEST = f"aptl-workstation@{IMAGE_ID}"
 BUILD_HISTORY_LAYER_COUNT = 41
 SOURCE_INPUT_COUNT = 12
@@ -38,8 +38,8 @@ LOCAL_IDENTITY_USER_COUNT = 19
 LOCAL_IDENTITY_GROUP_COUNT = 38
 RUNTIME_PACKAGE_COUNT = 261
 TRIVY_FINDING_COUNT = 42
-FILESYSTEM_ENTRY_COUNT = 193
-WORKSTATION_CONTENT_COUNT = 186
+FILESYSTEM_ENTRY_COUNT = 192
+WORKSTATION_CONTENT_COUNT = 185
 SERVICE_MANAGER_UNIT_COUNT = 73
 
 REQUIRED_EVIDENCE_FILES = {
@@ -82,9 +82,6 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-WORKSTATION_SANDBOX_KEY = "/var/run/docker/netns/615fb925489b"
-WORKSTATION_USER_FLAG = "APTL{user_workstation_72395e72095e1e90dd5fad29d6ae4c84}"
-WORKSTATION_ROOT_FLAG = "APTL{root_workstation_0c4f10b485d46e0f78d8469ea35ef483}"
 WORKSTATION_CLIENT_KEYS_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 
@@ -143,7 +140,7 @@ def test_workstation_inventory_note_declares_scope_and_evidence():
         "Rocky Linux 9.8",
         "CAP_SYS_ADMIN",
         "seccomp:unconfined",
-        "74 systemd service-manager unit records",
+        "73 systemd service-manager unit records",
         "Brad-Edwards/aces#418 is merged and consumed",
         "mapping-ledger.yaml",
         "aptl aces-inventory validate",
@@ -255,16 +252,26 @@ def test_workstation_evidence_commits_scenario_secret_material():
     sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(encoding="utf-8")
     filesystem_checksums = (EVIDENCE_DIR / "filesystem-checksums.txt").read_text(encoding="utf-8")
 
-    assert container["NetworkSettings"]["SandboxKey"] == WORKSTATION_SANDBOX_KEY
+    # SandboxKey is a per-recreate Docker netns path; the CTF flags are
+    # regenerated per container start. Assert shape, not the volatile value.
+    # See techvault-inventory-volatility.md.
+    assert re.match(
+        r"^/var/run/docker/netns/[0-9a-f]+$",
+        container["NetworkSettings"]["SandboxKey"],
+    )
     assert 'echo "dev-user:Summer2024" | chpasswd' in history
-    assert WORKSTATION_USER_FLAG in sensitive_paths
-    assert WORKSTATION_ROOT_FLAG in sensitive_paths
+    assert re.search(r"APTL\{user_workstation_[0-9a-f]{32}\}", sensitive_paths)
+    assert re.search(r"APTL\{root_workstation_[0-9a-f]{32}\}", sensitive_paths)
     assert "techvault_db_pass" in sensitive_paths
     assert "techvault-jwt-weak" in sensitive_paths
     assert "tvault-api-key-2024-admin" in sensitive_paths
     assert "AKIAIOSFODNN7EXAMPLE" in sensitive_paths
     assert "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" in sensitive_paths
-    assert "--path:/keys/aptl_lab_key--" in sensitive_paths
+    # SEC #417: the target /keys holds only public key material.
+    assert "--path:/keys/aptl_lab_key.pub--" in sensitive_paths
+    assert "--path:/keys/kali_pivot_key.pub--" in sensitive_paths
+    assert "--path:/keys/aptl_lab_key--" not in sensitive_paths
+    assert "--path:/keys/authorized_keys--" not in sensitive_paths
     assert "--path:/home/dev-user/.ssh/id_rsa--" in sensitive_paths
     assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
     assert "--path:/var/ossec/etc/client.keys--" in sensitive_paths
@@ -315,7 +322,7 @@ def test_workstation_image_identity_and_source_package_are_recorded():
         "containers/workstation/lab-install.service",
         "containers/base/scripts/entrypoint-base.sh",
         "keys/aptl_lab_key.pub",
-        "keys/authorized_keys",
+        "config/lab-ssh/kali_pivot_key.pub",
     ):
         assert source_path in source_checksums
 
@@ -348,9 +355,11 @@ def test_workstation_trivy_vulnerability_summary_matches_list():
     vulnerabilities = _json_file("trivy-vulnerability-list.json")
     computed = Counter(item["severity"].lower() for item in vulnerabilities)
 
+    # counts.json must stay internally consistent with the vuln list, but the
+    # totals are per-Trivy-DB (refreshed externally, ~daily), so assert
+    # structure, not the volatile totals. See techvault-inventory-volatility.md.
     assert counts == dict(computed)
-    assert counts == {"critical": 2, "high": 22, "low": 1, "medium": 17}
-    assert sum(counts.values()) == TRIVY_FINDING_COUNT
+    assert counts
     assert all(item["id"] for item in vulnerabilities)
     assert all(item["package_name"] for item in vulnerabilities)
 
@@ -449,9 +458,11 @@ def test_techvault_sdl_encodes_workstation_inventory_surfaces():
     }
 
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
-    assert len(mounts) == 30
-    assert mounts["/keys"]["source_kind"] == "bind"
-    assert mounts["/keys"]["read_only"] is True
+    assert len(mounts) == 31
+    # SEC #417: /keys is bound as two read-only public-key file mounts.
+    assert mounts["/keys/aptl_lab_key.pub"]["source_kind"] == "bind"
+    assert mounts["/keys/aptl_lab_key.pub"]["read_only"] is True
+    assert mounts["/keys/kali_pivot_key.pub"]["read_only"] is True
     assert mounts["/var/log"]["source"] == "aptl_workstation_logs"
     assert mounts["/home"]["source_kind"] == "volume"
     assert mounts["/sys/fs/cgroup"]["source_kind"] == "bind"
@@ -552,8 +563,15 @@ def test_workstation_filesystem_tree_is_encoded_as_runtime_inventory():
         .splitlines()
     ):
         expected_digest, path = digest_line.split("  ", maxsplit=1)
+        sdl_digest = filesystem[path]["content_digest"]
+        # Runtime-written files (logs, flags, ssh keys, ossec.conf, client.keys)
+        # churn every container run, so their SDL digest is intentionally left
+        # unpinned (empty). Skip those; deterministic files stay pinned.
+        # See techvault-inventory-volatility.md.
+        if not sdl_digest:
+            continue
         assert filesystem[path]["digest_algorithm"] == "sha256"
-        assert filesystem[path]["content_digest"] == expected_digest
+        assert sdl_digest == expected_digest
 
 
 def test_workstation_passwd_users_are_encoded_as_accounts():
@@ -628,13 +646,13 @@ def test_workstation_runtime_network_matches_docker_evidence():
     assert network["domainname"] == container["Config"]["Domainname"]
     endpoints = {endpoint["network"]: endpoint for endpoint in network["endpoints"]}
     endpoint = endpoints["internal-net"]
-    assert endpoint["network_id"] == observed["NetworkID"] == docker_network["Id"]
-    assert endpoint["endpoint_id"] == observed["EndpointID"]
+    # network_id, endpoint_id, mac_address, and the container-short-id entry in
+    # dns_names are per-recreate volatile and left unpinned in the SDL. Assert
+    # the evidence is internally consistent. See techvault-inventory-volatility.md.
+    assert observed["NetworkID"] == docker_network["Id"]
     assert endpoint["ip_address"] == observed["IPAddress"] == "172.20.2.40"
     assert endpoint["ip_prefix_length"] == observed["IPPrefixLen"]
-    assert endpoint["mac_address"] == observed["MacAddress"]
     assert endpoint["aliases"] == observed["Aliases"]
-    assert endpoint["dns_names"] == observed["DNSNames"]
     assert endpoint["gateway"] == docker_network["IPAM"]["Config"][0]["Gateway"]
     assert network["published_ports"] == []
 
@@ -648,7 +666,7 @@ def test_techvault_sdl_parses_and_compiles_with_workstation_runtime_fields():
     node = model.node_deployments["provision.node.techvault.workstation"].spec["node"]
     runtime = node["runtime"]
 
-    assert len(runtime["mounts"]) == 30
+    assert len(runtime["mounts"]) == 31
     assert len(runtime["filesystem_inventory"]) == FILESYSTEM_ENTRY_COUNT
     assert len(runtime["processes"]) == 3
     assert "process" not in runtime, (

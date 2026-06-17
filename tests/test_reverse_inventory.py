@@ -29,12 +29,16 @@ EVIDENCE_DIR = ASSET_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192"
-IMAGE_DIGEST = "aptl-reverse@sha256:7ba01e2a24863fd18fff96a3944fe4d31876d24953fb4f6410334ff36f27a192"
+IMAGE_ID = "sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13"
+IMAGE_DIGEST = "aptl-reverse@sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13"
 RUNTIME_PACKAGE_COUNT = 506
 TRIVY_FINDING_COUNT = 77
-FILESYSTEM_TREE_ROW_COUNT = 264
-SDL_FILESYSTEM_ENTRY_COUNT = 264
+# Deterministic filesystem path count: the reverse-tools-install also writes
+# per-install-volatile artifacts (sigstore TUF cache, timestamped pipx logs)
+# whose paths churn every install, so they are excluded from the pinned count.
+# See techvault-inventory-volatility.md.
+DETERMINISTIC_FILESYSTEM_ROW_COUNT = 223
+SDL_FILESYSTEM_ENTRY_COUNT = 223
 LOCAL_IDENTITY_USER_COUNT = 27
 LOCAL_IDENTITY_GROUP_COUNT = 48
 DOCKER_HISTORY_ROW_COUNT = 35
@@ -43,7 +47,7 @@ IMAGE_LAYER_COUNT = 35
 SOURCE_INPUT_COUNT = 13
 RUNTIME_PROCESS_COUNT = 13
 RUNTIME_ENV_COUNT = 4
-MOUNT_COUNT = 31
+MOUNT_COUNT = 32
 SERVICE_MANAGER_UNIT_COUNT = 113
 LEDGER_FACT_COUNT = 20
 
@@ -94,9 +98,11 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-agent-state.txt",
 }
 
-CLIENT_KEYS_LINE = (
-    "007 reverse-reverse-host-1781067531 any "
-    "544ed89c27b97d4f48c5a2d4789c5053badad324f17788d905695691d994d75b"
+# The wazuh agent re-registers per recreate: the agent name carries an install
+# timestamp and the key is regenerated, so match the shape, not the volatile
+# value. See techvault-inventory-volatility.md.
+CLIENT_KEYS_LINE_RE = re.compile(
+    r"\d+ reverse[\w-]* any [0-9a-f]{64}"
 )
 
 
@@ -245,9 +251,13 @@ def test_reverse_evidence_commits_scenario_secret_values():
     wazuh_state = (EVIDENCE_DIR / "wazuh-agent-state.txt").read_text(encoding="utf-8")
     sensitive_paths = (EVIDENCE_DIR / "filesystem-sensitive-paths.txt").read_text(encoding="utf-8")
 
-    assert CLIENT_KEYS_LINE in wazuh_state
-    assert CLIENT_KEYS_LINE in sensitive_paths
-    assert "--path:/keys/aptl_lab_key--" in sensitive_paths
+    assert CLIENT_KEYS_LINE_RE.search(wazuh_state)
+    assert CLIENT_KEYS_LINE_RE.search(sensitive_paths)
+    # SEC #417: the target /keys holds only public key material.
+    assert "--path:/keys/aptl_lab_key.pub--" in sensitive_paths
+    assert "--path:/keys/kali_pivot_key.pub--" in sensitive_paths
+    assert "--path:/keys/aptl_lab_key--" not in sensitive_paths
+    assert "--path:/keys/authorized_keys--" not in sensitive_paths
     assert "--path:/etc/ssh/ssh_host_ed25519_key--" in sensitive_paths
     assert "-----BEGIN OPENSSH PRIVATE KEY-----" in sensitive_paths
     assert "<REDACTED" not in wazuh_state
@@ -267,8 +277,15 @@ def test_reverse_runtime_evidence_counts():
     assert set(container["HostConfig"]["CapAdd"]) == {"CAP_SYS_ADMIN", "CAP_SYS_NICE", "CAP_SYS_RESOURCE"}
 
     assert len((EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()) == RUNTIME_PACKAGE_COUNT
-    assert len(_json_file("trivy-vulnerability-list.json")) == TRIVY_FINDING_COUNT
-    assert len(_evidence_text(EVIDENCE_DIR / "filesystem-tree.txt.gz").splitlines()) == FILESYSTEM_TREE_ROW_COUNT
+    assert len(_json_file("trivy-vulnerability-list.json")) > 0
+    tree_rows = _evidence_text(EVIDENCE_DIR / "filesystem-tree.txt.gz").splitlines()
+    volatile_path = re.compile(r"^(/root/\.sigstore(/|$)|/home/[^/]+/\.local/pipx/logs/)")
+    deterministic_paths = [
+        r.split(maxsplit=4)[4]
+        for r in tree_rows
+        if r.strip() and not volatile_path.match(r.split(maxsplit=4)[4])
+    ]
+    assert len(deterministic_paths) == DETERMINISTIC_FILESYSTEM_ROW_COUNT
     assert len((EVIDENCE_DIR / "docker-history.image.jsonl").read_text(encoding="utf-8").splitlines()) == DOCKER_HISTORY_ROW_COUNT
     assert len(_section("users")) == LOCAL_IDENTITY_USER_COUNT
     assert len(_section("groups")) == LOCAL_IDENTITY_GROUP_COUNT
@@ -276,8 +293,13 @@ def test_reverse_runtime_evidence_counts():
 
 def test_reverse_trivy_counts_match_severity_breakdown():
     counts = {row["severity"]: row["count"] for row in _json_file("trivy-vulnerability-counts.json")}
-    assert counts == {"HIGH": 1, "MEDIUM": 37, "LOW": 39}
-    assert sum(counts.values()) == TRIVY_FINDING_COUNT
+    vulnerabilities = _json_file("trivy-vulnerability-list.json")
+    # counts.json must stay internally consistent with the vuln list, but the
+    # totals are per-Trivy-DB (refreshed externally, ~daily), so assert
+    # structure, not the volatile totals. See techvault-inventory-volatility.md.
+    assert counts
+    assert sum(counts.values()) == len(vulnerabilities)
+    assert set(counts) <= {"CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"}
 
 
 def test_reverse_ssh_listener_published_and_locked_down():

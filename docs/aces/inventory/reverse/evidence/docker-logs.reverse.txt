@@ -3,6 +3,7 @@ Container hostname: reverse-host
 Container IP: 172.20.0.27
 Setting up labadmin SSH access...
 Found SSH key file at /keys/aptl_lab_key.pub
+Authorizing kali pivot key at /keys/kali_pivot_key.pub
 Labadmin SSH key configured successfully
 Configuring rsyslog to forward to Wazuh at 172.20.0.10...
 Rsyslog forwarding configured to Wazuh at 172.20.0.10:514

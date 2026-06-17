@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f
+  image_digest: aptl-victim@sha256:2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -63,8 +63,9 @@ correspondence_checks:
 notes:
 - The capture used the already-running local lab and did not run `aptl lab stop -v && aptl lab start`; this is a non-destructive
   frozen observation of the realized victim container.
-- Generated flags, private-key material, and /keys/aptl_lab_key are captured verbatim where present in filesystem-sensitive-paths.txt
-  and checksummed in filesystem-checksums.txt.
+- 'Generated flags and SSH host private-key material are captured verbatim where present in filesystem-sensitive-paths.txt
+  and checksummed in filesystem-checksums.txt. Per SEC #417 no operator private key is mounted into the target; /keys holds
+  only public material (the control-plane pubkey and the kali pivot pubkey).'
 - No known ACES expressivity blocker or needs_gap_triage disposition remains in this ledger.
 facts:
 - id: victim.image.identity
@@ -158,8 +159,9 @@ facts:
       policy.
 - id: victim.runtime.mount-table
   category: runtime-configuration
-  summary: The observed runtime mount table includes 30 mount targets, including overlay root, proc/sys/tmpfs pseudo-filesystems,
-    /run and /tmp tmpfs mounts, /sys/fs/cgroup bind mount, /keys bind mount, /var/log named volume, and anonymous /home volume.
+  summary: The observed runtime mount table includes 31 mount targets, including overlay root, proc/sys/tmpfs pseudo-filesystems,
+    /run and /tmp tmpfs mounts, /sys/fs/cgroup bind mount, two /keys public-key file binds, /var/log named volume, and anonymous
+    /home volume.
   evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/docker-inspect.container.json

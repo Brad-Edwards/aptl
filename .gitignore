@@ -416,6 +416,10 @@ config/wazuh_indexer_ssl_certs/*
 # Purple-loop archive directories (per-run state moved aside before fresh runs)
 .aptl_archive_*
 
+# Local run archive (default run_storage.local_path = ./runs); per-run
+# experiment evidence, including live-gate manifests. Never committed.
+/runs/
+
 # Playwright MCP session cache
 .playwright-mcp/
 

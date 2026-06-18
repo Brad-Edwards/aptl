@@ -503,8 +503,7 @@ nodes:
       techvault.techvault-webapp-service: webapp-root
       techvault.webapp-rsyslog-forwarding: webapp-root
       techvault.webapp-wazuh-agent: webapp-root
-    conditions:
-      techvault.webapp-http-ready: webapp-root
+    conditions: {}
     injects: {}
     vulnerabilities:
     - techvault.webapp-sqli-login

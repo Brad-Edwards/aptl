@@ -127,6 +127,11 @@ _NO_PLACEHOLDER_VARS = (
     "MISP_API_KEY",
     "THEHIVE_SECRET",
     "SHUFFLE_API_KEY",
+    # ADR-039 web control-plane bearer token. docker-compose.yml hard-requires
+    # it (`${APTL_API_TOKEN:?...}`), so a fresh `.env` must carry a real value;
+    # a placeholder fails closed here rather than booting an auth'd surface with
+    # a guessable token.
+    "APTL_API_TOKEN",
 )
 
 

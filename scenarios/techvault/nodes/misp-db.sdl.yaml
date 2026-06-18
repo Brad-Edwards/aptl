@@ -233,8 +233,7 @@ nodes:
     os_version: Ubuntu 22.04.5 LTS (Jammy Jellyfish)
     features:
       techvault.techvault-misp-db-service: misp-db-mysql
-    conditions:
-      techvault.misp-db-ready: misp-db-mysql
+    conditions: {}
     injects: {}
     vulnerabilities: []
     roles:

@@ -303,7 +303,7 @@ rows:
     legacy_source: scenarios/techvault.sdl.yaml
     legacy_field: nodes.techvault.wazuh-manager + infrastructure.wazuh-manager + runtime
     category: aces_sdl
-    aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions / conditions fields
+    aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions fields
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434"
     blocking_followup: n/a
@@ -784,7 +784,7 @@ rows:
     legacy_source: "docker-compose.yml (service: db)"
     legacy_field: db
     category: aces_sdl
-    aces_target: ACES nodes.techvault.db + nodes.techvault.db.runtime.database_services + infrastructure.db + conditions.db-postgres-ready + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
+    aces_target: ACES nodes.techvault.db + nodes.techvault.db.runtime.database_services + infrastructure.db + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/db/ + scenarios/techvault.sdl.yaml + tests/test_db_inventory.py
     blocking_followup: n/a
@@ -795,7 +795,7 @@ rows:
     legacy_source: "docker-compose.yml (service: webapp)"
     legacy_field: webapp
     category: aces_sdl
-    aces_target: ACES nodes.techvault.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
+    aces_target: ACES nodes.techvault.webapp + infrastructure.webapp + relationships.webapp-connects-db
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
     blocking_followup: n/a

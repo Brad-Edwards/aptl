@@ -147,8 +147,6 @@ imports:
   namespace: techvault
 - source: local:techvault/sections/features.sdl.yaml
   namespace: techvault
-- source: local:techvault/sections/conditions.sdl.yaml
-  namespace: techvault
 - source: local:techvault/sections/vulnerabilities.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/content.sdl.yaml

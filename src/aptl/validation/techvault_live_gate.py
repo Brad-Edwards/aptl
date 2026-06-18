@@ -35,7 +35,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aptl.validation.techvault_gate import DEFAULT_SCENARIO
 
@@ -181,7 +181,7 @@ def validate_live_deployment(
     project_dir: Path,
     config: "AptlConfig",
     options: LiveGateOptions | None = None,
-    run_store: "RunStorageBackend | None" = None,
+    run_store: RunStorageBackend | None = None,
 ) -> LiveGateReport:
     """Run the full live validation gate for ``scenario_path``.
 
@@ -205,20 +205,60 @@ def validate_live_deployment(
         scenario_path, project_dir=project_dir, config=config, options=opts
     )
     results.append(static_check)
-    if scenario is None or not static_check.passed:
-        return _report(scenario_path, run_id, opts, results)
+    static_passed = scenario is not None and static_check.passed
 
     # 2a. Input/boot-path agreement — the public start path is hardwired to the
     #     default scenario + provisioning-only profile, so a scenario/profile
     #     the boot path will not honor must fail loud BEFORE any destructive
     #     boot, not silently validate one model while booting another.
-    inputs_check = checks.check_boot_inputs_match_public_path(
-        scenario_path, project_dir=project_dir, options=opts
-    )
-    results.append(inputs_check)
-    if not inputs_check.passed:
-        return _report(scenario_path, run_id, opts, results)
+    inputs_passed = False
+    if static_passed:
+        inputs_check = checks.check_boot_inputs_match_public_path(
+            scenario_path, project_dir=project_dir, options=opts
+        )
+        results.append(inputs_check)
+        inputs_passed = inputs_check.passed
 
+    # 2b–7. ACES-driven boot through run-archive manifest. Each early failure
+    #       short-circuits the *remaining* checks but always falls through to the
+    #       single return below, so the report is composed in one place.
+    if inputs_passed:
+        _run_live_checks(
+            checks,
+            scenario,
+            scenario_path,
+            project_dir=project_dir,
+            config=config,
+            opts=opts,
+            run_store=run_store,
+            run_id=run_id,
+            state=state,
+            results=results,
+        )
+
+    return _report(scenario_path, run_id, opts, results)
+
+
+def _run_live_checks(
+    checks: Any,
+    scenario: Any,
+    scenario_path: Path,
+    *,
+    project_dir: Path,
+    config: "AptlConfig",
+    opts: LiveGateOptions,
+    run_store: RunStorageBackend | None,
+    run_id: str,
+    state: LiveGateState,
+    results: list[LiveGateCheck],
+) -> None:
+    """Run the boot-and-beyond checks, appending each outcome to ``results``.
+
+    The lab boot is destructive, so this only runs after the static and
+    input/boot-path-agreement guards have passed. A failed boot short-circuits
+    the readiness/reachability/telemetry/variation checks (which cannot be
+    trusted on a partial boot) but still records the provenance manifest.
+    """
     # 2b. ACES-driven boot — clean up, boot via orchestrate_lab_start, and tie
     #    the realization matrix to ACES resource addresses (anti-preset).
     boot_check = checks.check_aces_driven_boot(
@@ -243,15 +283,11 @@ def validate_live_deployment(
                 prior_checks=tuple(results),
             )
         )
-        return _report(scenario_path, run_id, opts, results)
+        return
 
     # 3. Defensive-stack readiness — every ACES-realized node live + healthy,
     #    plus the SOC readiness probes the issue enumerates.
-    results.append(
-        checks.check_defensive_stack_readiness(
-            project_dir=project_dir, config=config, state=state
-        )
-    )
+    results.append(checks.check_defensive_stack_readiness(state=state))
 
     # 4. Kali reachability — DMZ/internal hosts reachable via declared
     #    DNS/host mappings and network attachments from the realization.
@@ -294,8 +330,6 @@ def validate_live_deployment(
             prior_checks=tuple(results),
         )
     )
-
-    return _report(scenario_path, run_id, opts, results)
 
 
 def _report(

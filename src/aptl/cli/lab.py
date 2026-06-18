@@ -13,7 +13,7 @@ from aptl.core.lab import (
     orchestrate_lab_start,
     stop_lab,
 )
-from aptl.core.lab_types import StartupOutcome
+from aptl.core.lab_types import LabStatus, StartupDiagnostic, StartupOutcome
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.lab")
@@ -64,7 +64,7 @@ def _render_start_result(result: LabResult) -> None:
     # together, then capability, telemetry, cosmetic. Iteration order
     # below follows the severity hierarchy from worst to least-worst.
     impacts_in_order = ["readiness", "capability", "telemetry", "cosmetic"]
-    grouped: dict[str, list] = {}
+    grouped: dict[str, list[StartupDiagnostic]] = {}
     for diag in result.diagnostics:
         grouped.setdefault(diag.impact.value, []).append(diag)
     for impact in impacts_in_order:
@@ -149,6 +149,10 @@ def stop(
 
 
 def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
+    """Capture and emit a redacted range snapshot as JSON.
+
+    Writes to ``output_file`` (mode 0600) when given, otherwise prints it.
+    """
     from aptl.cli._common import resolve_config_for_cli
     from aptl.core.deployment import get_backend
     from aptl.core.snapshot import capture_snapshot
@@ -172,7 +176,8 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
         typer.echo(data)
 
 
-def _emit_status_text(current) -> None:
+def _emit_status_text(current: LabStatus) -> None:
+    """Print a human-readable summary of the current lab status."""
     if not current.running:
         typer.echo("Lab is not running.")
         if current.error:

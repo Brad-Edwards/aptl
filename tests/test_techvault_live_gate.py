@@ -18,6 +18,7 @@ from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
+from aptl.validation import _live_gate_probes as lgp
 from aptl.validation.techvault_live_gate import (
     CATEGORY_ACES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
@@ -120,19 +121,22 @@ def _wire_boot(monkeypatch, *, outcome=StartupOutcome.READY, realization=None, s
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"})
         ]
     }
-    monkeypatch.setattr(lgc, "get_backend", lambda config, project_dir: _Backend())
-    monkeypatch.setattr(lgc, "create_aptl_runtime_target", lambda **k: object())
-    monkeypatch.setattr(lgc, "RuntimeManager", _Manager)
-    monkeypatch.setattr(lgc, "interpret_provisioning_plan", lambda **k: realization)
+    # The realization + boot probes moved to `_live_gate_probes` (lgp); their
+    # leaf deps are looked up there. `select_backend_profiles` is still called
+    # directly in `check_aces_driven_boot` (lgc), so it stays patched on lgc.
+    monkeypatch.setattr(lgp, "get_backend", lambda config, project_dir: _Backend())
+    monkeypatch.setattr(lgp, "create_aptl_runtime_target", lambda **k: object())
+    monkeypatch.setattr(lgp, "RuntimeManager", _Manager)
+    monkeypatch.setattr(lgp, "interpret_provisioning_plan", lambda **k: realization)
     monkeypatch.setattr(
         lgc, "select_backend_profiles", lambda config, profiles: ["dmz", "soc"]
     )
-    monkeypatch.setattr(lgc, "stop_lab", lambda **k: LabResult(success=True))
+    monkeypatch.setattr(lgp, "stop_lab", lambda **k: LabResult(success=True))
     monkeypatch.setattr(
-        lgc, "orchestrate_lab_start", lambda p: LabResult(success=True, outcome=outcome)
+        lgp, "orchestrate_lab_start", lambda p: LabResult(success=True, outcome=outcome)
     )
     monkeypatch.setattr(
-        lgc, "capture_snapshot", lambda config_dir, backend: _Snapshot(snapshot)
+        lgp, "capture_snapshot", lambda config_dir, backend: _Snapshot(snapshot)
     )
 
 
@@ -190,7 +194,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     def boot(scenario, *, project_dir, config, options, state):
         return LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
-    def readiness(*, project_dir, config, state):
+    def readiness(*, state):
         return LiveGateCheck("defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, True)
 
     def reachability(*, project_dir, config, state):
@@ -355,9 +359,9 @@ def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
 def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
     stops, boots = [], []
     _wire_boot(monkeypatch)
-    monkeypatch.setattr(lgc, "stop_lab", lambda **k: stops.append(1) or LabResult(success=True))
+    monkeypatch.setattr(lgp, "stop_lab", lambda **k: stops.append(1) or LabResult(success=True))
     monkeypatch.setattr(
-        lgc,
+        lgp,
         "orchestrate_lab_start",
         lambda p: boots.append(1) or LabResult(success=True, outcome=StartupOutcome.READY),
     )
@@ -452,17 +456,13 @@ def test_readiness_passes_when_all_nodes_healthy():
         [_node("webapp", ["dmz"]), _node("wazuh-manager", ["soc"])],
         [_container("aptl-webapp"), _container("aptl-wazuh-manager")],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert check.passed
 
 
 def test_readiness_fails_on_missing_node_container():
     state = _readiness_state([_node("webapp", ["dmz"])], [_container("aptl-other")])
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
     assert any("no live container" in d for d in check.diagnostics)
 
@@ -472,9 +472,7 @@ def test_readiness_fails_on_unhealthy_node_container():
         [_node("webapp", ["dmz"])],
         [_container("aptl-webapp", status="Up 1m (unhealthy)", health="unhealthy")],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
     assert any("unhealthy" in d for d in check.diagnostics)
 
@@ -484,9 +482,7 @@ def test_readiness_fails_on_stopped_node_container():
         [_node("webapp", ["dmz"])],
         [_container("aptl-webapp", status="Exited (1) 5s ago", health="")],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
     assert any("not running" in d for d in check.diagnostics)
 
@@ -499,9 +495,7 @@ def test_readiness_tolerates_unhealthy_non_node_infra():
             _container("aptl-otel-collector", status="Up 1m (unhealthy)", health="unhealthy"),
         ],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert check.passed
 
 
@@ -513,9 +507,7 @@ def test_readiness_skips_nodes_in_unselected_profiles():
         [_container("aptl-webapp")],
         selected=["enterprise", "soc"],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert check.passed
 
 
@@ -525,18 +517,14 @@ def test_readiness_requires_selected_node_even_when_filtering():
         [_container("aptl-other")],
         selected=["enterprise"],
     )
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
     assert any("no live container" in d for d in check.diagnostics)
 
 
 def test_readiness_fails_on_empty_snapshot():
     state = _readiness_state([_node("webapp", ["dmz"])], [])
-    check = lgc.check_defensive_stack_readiness(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
+    check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
 
 
@@ -622,11 +610,11 @@ def _telemetry_state():
 
 def test_telemetry_passes_when_traffic_evidence_collected(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgc.time, "sleep", lambda s: None)
+    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
     monkeypatch.setattr(
-        lgc, "collect_suricata_eve", lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}]
+        lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}]
     )
-    monkeypatch.setattr(lgc, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
@@ -644,11 +632,11 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
     # Suricata emits `stats` regardless of traffic; the check must not pass on
     # them alone (otherwise it would pass on any quiet lab).
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgc.time, "sleep", lambda s: None)
+    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
     monkeypatch.setattr(
-        lgc, "collect_suricata_eve", lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}]
+        lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}]
     )
-    monkeypatch.setattr(lgc, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
@@ -663,9 +651,9 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
 
 def test_telemetry_fails_when_no_evidence(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgc.time, "sleep", lambda s: None)
-    monkeypatch.setattr(lgc, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(lgc, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,

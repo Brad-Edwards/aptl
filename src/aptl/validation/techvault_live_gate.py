@@ -35,11 +35,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 from aptl.validation.techvault_gate import DEFAULT_SCENARIO
 
 if TYPE_CHECKING:
+    from aces_sdl.scenario import Scenario
+
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
 
@@ -175,6 +178,23 @@ class LiveGateState(object):
     diagnostics_seen: int = 0
 
 
+@dataclass(frozen=True)
+class _RunContext(object):
+    """Immutable run-scoped inputs threaded through the post-boot checks.
+
+    Bundles what every post-boot check needs (scenario path, project dir,
+    config, options, run store, run id) so the check runner stays within a
+    sane parameter count and the orchestrator threads a single value.
+    """
+
+    scenario_path: Path
+    project_dir: Path
+    config: AptlConfig
+    options: LiveGateOptions
+    run_store: RunStorageBackend | None
+    run_id: str
+
+
 def validate_live_deployment(
     scenario_path: Path | None = None,
     *,
@@ -223,32 +243,23 @@ def validate_live_deployment(
     #       short-circuits the *remaining* checks but always falls through to the
     #       single return below, so the report is composed in one place.
     if inputs_passed:
-        _run_live_checks(
-            checks,
-            scenario,
-            scenario_path,
+        ctx = _RunContext(
+            scenario_path=scenario_path,
             project_dir=project_dir,
             config=config,
-            opts=opts,
+            options=opts,
             run_store=run_store,
             run_id=run_id,
-            state=state,
-            results=results,
         )
+        _run_live_checks(checks, scenario, ctx, state, results)
 
     return _report(scenario_path, run_id, opts, results)
 
 
 def _run_live_checks(
-    checks: Any,
-    scenario: Any,
-    scenario_path: Path,
-    *,
-    project_dir: Path,
-    config: "AptlConfig",
-    opts: LiveGateOptions,
-    run_store: RunStorageBackend | None,
-    run_id: str,
+    checks: ModuleType,
+    scenario: "Scenario",
+    ctx: "_RunContext",
     state: LiveGateState,
     results: list[LiveGateCheck],
 ) -> None:
@@ -263,26 +274,16 @@ def _run_live_checks(
     #    the realization matrix to ACES resource addresses (anti-preset).
     boot_check = checks.check_aces_driven_boot(
         scenario,
-        project_dir=project_dir,
-        config=config,
-        options=opts,
+        project_dir=ctx.project_dir,
+        config=ctx.config,
+        options=ctx.options,
         state=state,
     )
     results.append(boot_check)
     if not boot_check.passed:
         # The lab may be partially up; readiness/reachability cannot be trusted
         # on a failed boot. Still record what provenance we have (step 6).
-        results.append(
-            checks.check_run_archive_manifest(
-                scenario_path,
-                project_dir=project_dir,
-                config=config,
-                run_store=run_store,
-                run_id=run_id,
-                state=state,
-                prior_checks=tuple(results),
-            )
-        )
+        results.append(_archive_manifest(checks, ctx, state, results))
         return
 
     # 3. Defensive-stack readiness — every ACES-realized node live + healthy,
@@ -293,7 +294,7 @@ def _run_live_checks(
     #    DNS/host mappings and network attachments from the realization.
     results.append(
         checks.check_kali_reachability(
-            project_dir=project_dir, config=config, state=state
+            project_dir=ctx.project_dir, config=ctx.config, state=state
         )
     )
 
@@ -301,7 +302,10 @@ def _run_live_checks(
     #    defensive stack and is reflected in the run archive.
     results.append(
         checks.check_telemetry_evidence_path(
-            project_dir=project_dir, config=config, options=opts, state=state
+            project_dir=ctx.project_dir,
+            config=ctx.config,
+            options=ctx.options,
+            state=state,
         )
     )
 
@@ -312,23 +316,31 @@ def _run_live_checks(
     #    with the returned report.
     results.append(
         checks.check_scenario_variation(
-            project_dir=project_dir, config=config, state=state
+            project_dir=ctx.project_dir, config=ctx.config, state=state
         )
     )
 
     # 7. Run-archive manifest — scenario identity + ACES provenance +
     #    validation evidence (all prior checks) + snapshot, written through the
     #    redacting boundary as the final step.
-    results.append(
-        checks.check_run_archive_manifest(
-            scenario_path,
-            project_dir=project_dir,
-            config=config,
-            run_store=run_store,
-            run_id=run_id,
-            state=state,
-            prior_checks=tuple(results),
-        )
+    results.append(_archive_manifest(checks, ctx, state, results))
+
+
+def _archive_manifest(
+    checks: ModuleType,
+    ctx: "_RunContext",
+    state: LiveGateState,
+    prior: list[LiveGateCheck],
+) -> LiveGateCheck:
+    """Write the run-archive manifest capturing the prior check outcomes."""
+    return checks.check_run_archive_manifest(
+        ctx.scenario_path,
+        project_dir=ctx.project_dir,
+        config=ctx.config,
+        run_store=ctx.run_store,
+        run_id=ctx.run_id,
+        state=state,
+        prior_checks=tuple(prior),
     )
 
 

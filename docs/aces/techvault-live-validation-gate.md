@@ -20,8 +20,8 @@ hardwired to the default scenario (`scenarios/techvault.sdl.yaml`) and the
 `provisioning-only` capability profile; it does not yet accept a caller-supplied
 scenario or profile. So the gate verifies up front that the scenario and profile
 it was asked to validate are the ones the public start path will actually boot,
-and fails loud before any destructive boot if they diverge — it never validates
-one model while booting another. When the public start path learns to honor a
+and fails loud before any destructive boot if they diverge, so it never
+validates one model while booting another. When the public start path learns to honor a
 caller-supplied scenario/profile, this guard relaxes to thread them through
 instead of rejecting them.
 

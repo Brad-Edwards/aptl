@@ -13,6 +13,24 @@ import yaml
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _fast_soc_ca_keys(monkeypatch):
+    """Shrink SOC-CA RSA key sizes for the whole test run.
+
+    ``ensure_soc_certs`` mints a fresh CA plus four service certs on every
+    call and is exercised dozens of times across the suite (and again
+    whenever lab-startup code paths run). At the production 4096-bit CA size
+    that prime search dominates wall time and can stall on a loaded host,
+    which previously read as a hang. The CA-chain logic the tests assert is
+    key-size independent, so generate small keys here; production sizes
+    remain the defaults in ``aptl.core._soc_ca_builders``.
+    """
+    from aptl.core import _soc_ca_builders
+
+    monkeypatch.setattr(_soc_ca_builders, "_CA_KEY_SIZE", 1024)
+    monkeypatch.setattr(_soc_ca_builders, "_SVC_KEY_SIZE", 1024)
+
+
 @pytest.fixture
 def tmp_config_dir(tmp_path: Path) -> Path:
     """Provide a temporary directory for config files."""

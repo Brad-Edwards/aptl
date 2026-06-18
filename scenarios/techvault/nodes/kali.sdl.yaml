@@ -594,7 +594,7 @@ nodes:
         stability: generated
         backend_generated: true
         description: Docker-init binary bind-mounted from host into container.
-      - target: /host-ssh-keys
+      - target: /host-ssh-keys/authorized_keys
         source: /dev/md2
         source_sensitivity: unknown
         source_kind: other
@@ -607,7 +607,21 @@ nodes:
         propagation: unknown
         stability: generated
         backend_generated: true
-        description: Host bind mount for SSH public keys used to authorise the kali user.
+        description: 'Host bind of the labadmin authorized_keys file used to authorise SSH into the kali user (SEC #417).'
+      - target: /host-ssh-keys/kali_pivot_key
+        source: /dev/md2
+        source_sensitivity: unknown
+        source_kind: other
+        filesystem_type: ext4
+        read_only: true
+        options:
+        - ro
+        - relatime
+        options_sensitivity: unknown
+        propagation: unknown
+        stability: generated
+        backend_generated: true
+        description: 'Host bind of the dedicated kali pivot private key the kali node uses to SSH into scenario targets; replaces the prior whole-./keys mount (SEC #417).'
       - target: /etc/resolv.conf
         source: /dev/md2
         source_sensitivity: unknown

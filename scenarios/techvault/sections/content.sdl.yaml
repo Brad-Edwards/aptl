@@ -2607,18 +2607,6 @@ content:
     items: []
     sensitive: true
     tags: []
-  workstation-file-keys-aptl-lab-key:
-    type: file
-    description: operator_private_key retained as in-range scenario content with runtime metadata provenance.
-    target: techvault.workstation
-    path: /keys/aptl_lab_key
-    destination: ''
-    text: null
-    source: null
-    format: ''
-    items: []
-    sensitive: true
-    tags: []
   workstation-file-home-labadmin-ssh-authorized-keys:
     type: file
     description: Workstation runtime file observed at /home/labadmin/.ssh/authorized_keys.
@@ -3261,16 +3249,16 @@ content:
     items: []
     sensitive: false
     tags: []
-  workstation-file-keys-authorized-keys:
+  workstation-file-keys-kali-pivot-key-pub:
     type: file
-    description: public_lab_key retained as in-range scenario content with checksum provenance.
+    description: kali_pivot_public_key retained as in-range scenario content with checksum provenance.
     target: techvault.workstation
-    path: /keys/authorized_keys
+    path: /keys/kali_pivot_key.pub
     destination: ''
     text: null
     source:
-      name: keys/authorized_keys
-      version: sha256:ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+      name: config/lab-ssh/kali_pivot_key.pub
+      version: sha256:c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
       build: null
     format: ''
     items: []
@@ -5192,18 +5180,6 @@ content:
     items: []
     sensitive: false
     tags: []
-  victim-file-keys-aptl-lab-key:
-    type: file
-    description: ''
-    target: techvault.victim
-    path: /keys/aptl_lab_key
-    destination: ''
-    text: null
-    source: null
-    format: ''
-    items: []
-    sensitive: true
-    tags: []
   victim-file-home-labadmin-ssh-authorized-keys:
     type: file
     description: ''
@@ -5756,16 +5732,16 @@ content:
     items: []
     sensitive: false
     tags: []
-  victim-file-keys-authorized-keys:
+  victim-file-keys-kali-pivot-key-pub:
     type: file
     description: ''
     target: techvault.victim
-    path: /keys/authorized_keys
+    path: /keys/kali_pivot_key.pub
     destination: ''
     text: null
     source:
-      name: runtime-observed:/keys/authorized_keys
-      version: sha256:ccf2f4c711604abdb7efb7b152cffddffac5478e780e9ef78e4340d0888d4a46
+      name: runtime-observed:/keys/kali_pivot_key.pub
+      version: sha256:c731a89de817dfbf6b58f072899124d766a053c7da0b417107583b39bc6a4d90
       build: null
     format: ''
     items: []

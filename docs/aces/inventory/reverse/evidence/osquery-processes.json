@@ -11,7 +11,7 @@
       "name": "systemd",
       "path": "",
       "pid": "1",
-      "start_time": "1781067527",
+      "start_time": "1781502029",
       "uid": "0"
     },
     {
@@ -20,7 +20,7 @@
       "name": "systemd-journal",
       "path": "",
       "pid": "33",
-      "start_time": "1781067527",
+      "start_time": "1781502029",
       "uid": "0"
     },
     {
@@ -29,7 +29,7 @@
       "name": "rsyslogd",
       "path": "",
       "pid": "34",
-      "start_time": "1781067527",
+      "start_time": "1781502029",
       "uid": "105"
     },
     {
@@ -38,7 +38,7 @@
       "name": "sshd",
       "path": "",
       "pid": "40",
-      "start_time": "1781067527",
+      "start_time": "1781502029",
       "uid": "0"
     },
     {
@@ -46,8 +46,8 @@
       "gid": "104",
       "name": "dbus-daemon",
       "path": "",
-      "pid": "764",
-      "start_time": "1781067536",
+      "pid": "752",
+      "start_time": "1781502043",
       "uid": "103"
     },
     {
@@ -55,8 +55,8 @@
       "gid": "0",
       "name": "systemd-logind",
       "path": "",
-      "pid": "765",
-      "start_time": "1781067536",
+      "pid": "753",
+      "start_time": "1781502043",
       "uid": "0"
     },
     {
@@ -64,8 +64,8 @@
       "gid": "0",
       "name": "falco",
       "path": "",
-      "pid": "3243",
-      "start_time": "1781067553",
+      "pid": "3228",
+      "start_time": "1781502062",
       "uid": "0"
     },
     {
@@ -73,8 +73,8 @@
       "gid": "0",
       "name": "falcoctl",
       "path": "",
-      "pid": "3244",
-      "start_time": "1781067553",
+      "pid": "3229",
+      "start_time": "1781502062",
       "uid": "0"
     },
     {
@@ -82,8 +82,8 @@
       "gid": "108",
       "name": "wazuh-execd",
       "path": "",
-      "pid": "4640",
-      "start_time": "1781067583",
+      "pid": "4275",
+      "start_time": "1781502078",
       "uid": "0"
     },
     {
@@ -91,8 +91,8 @@
       "gid": "108",
       "name": "wazuh-agentd",
       "path": "",
-      "pid": "4687",
-      "start_time": "1781067584",
+      "pid": "4287",
+      "start_time": "1781502079",
       "uid": "107"
     },
     {
@@ -100,8 +100,8 @@
       "gid": "108",
       "name": "wazuh-syscheckd",
       "path": "",
-      "pid": "4752",
-      "start_time": "1781067585",
+      "pid": "4309",
+      "start_time": "1781502080",
       "uid": "0"
     },
     {
@@ -109,8 +109,8 @@
       "gid": "108",
       "name": "wazuh-logcollec",
       "path": "",
-      "pid": "4982",
-      "start_time": "1781067586",
+      "pid": "4323",
+      "start_time": "1781502080",
       "uid": "0"
     },
     {
@@ -118,8 +118,8 @@
       "gid": "108",
       "name": "wazuh-modulesd",
       "path": "",
-      "pid": "5088",
-      "start_time": "1781067587",
+      "pid": "4503",
+      "start_time": "1781502081",
       "uid": "0"
     }
   ]

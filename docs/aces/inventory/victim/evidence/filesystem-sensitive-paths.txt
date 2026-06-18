@@ -1,29 +1,20 @@
 --path:/home/labadmin/user.txt--
 ===== APTL CTF Flag =====
-Flag:  APTL{user_victim_6ad54b556e9c31ca37897f092c363be3}
-Token: aptl:v1:victim:user:6ad54b556e9c31ca37897f092c363be3:24c5a9e5d0e6bbbe207191524d00a501
+Flag:  APTL{user_victim_03d27620e8c0b1d49571a29950d8df63}
+Token: aptl:v1:victim:user:03d27620e8c0b1d49571a29950d8df63:84c03cb9e4d1fa928dd7e68ad760da94
 ==========================
 
 --path:/root/root.txt--
 ===== APTL CTF Flag =====
-Flag:  APTL{root_victim_3bf660025cc08791a2b11372aaeda6de}
-Token: aptl:v1:victim:root:3bf660025cc08791a2b11372aaeda6de:d87576c246f3bcaf495064223168ace9
+Flag:  APTL{root_victim_e35e713feb3d0c1b8aa3184daecf1a1a}
+Token: aptl:v1:victim:root:e35e713feb3d0c1b8aa3184daecf1a1a:03ac943d28422e9ca7d47f2eb2bcd85d
 ==========================
-
---path:/keys/aptl_lab_key--
------BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACDUmJV1i4zNbLsT4t60vnXPEeD7b7byygLTSDv8J45k5QAAAJhfuonCX7qJ
-wgAAAAtzc2gtZWQyNTUxOQAAACDUmJV1i4zNbLsT4t60vnXPEeD7b7byygLTSDv8J45k5Q
-AAAECNwZUj+EhGkIMF3pw5uzXhuMjawa0i4YMc5dcwA3yvdtSYlXWLjM1suxPi3rS+dc8R
-4PtvtvLKAtNIO/wnjmTlAAAADmFwdGwtbG9jYWwtbGFiAQIDBAUGBw==
------END OPENSSH PRIVATE KEY-----
 
 --path:/keys/aptl_lab_key.pub--
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINSYlXWLjM1suxPi3rS+dc8R4PtvtvLKAtNIO/wnjmTl aptl-local-lab
 
---path:/keys/authorized_keys--
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINSYlXWLjM1suxPi3rS+dc8R4PtvtvLKAtNIO/wnjmTl aptl-local-lab
+--path:/keys/kali_pivot_key.pub--
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+/iU2VyAth4Xhh1xZVgnb5434rR4HJNeLiOnxioAY5 aptl-kali-pivot
 
 --path:/etc/ssh/ssh_host_dsa_key--
 -----BEGIN OPENSSH PRIVATE KEY-----

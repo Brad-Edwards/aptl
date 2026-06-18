@@ -33,6 +33,13 @@ Existing guardrails already cover part of the boundary:
   bodies out of process argv by writing temporary `0600` files for curl.
 - ADR-028 keeps rendered service config under ignored state, out of checked-in
   `config/`, and out of snapshots/archives except as redacted data or hashes.
+- ACES inventory evidence under `docs/aces/inventory/**/evidence/` is committed
+  handoff data, not a private credential store. Some bundles intentionally
+  preserve participant-visible target fixtures, but an operator lab-access key
+  bind-mounted into a target (the pre-SEC-#417 whole-`./keys` mount) is a
+  control-plane/operator secret even when observed from inside that target. The
+  durable fix is to keep such keys out of scenario containers entirely rather
+  than to scrub them after capture.
 
 The remaining risk is concept confusion: a value can be an intentional target
 credential in one context and still become a control-plane secret if it is
@@ -64,6 +71,7 @@ cannot express the required shape and is extended first.
 | `src/aptl/core/snapshot.py` / `RangeSnapshot.to_dict()` / `aptl lab status --json` / `--output` | Container names, ports, service endpoints, designed lab service credentials | Service credentials if endpoint DTOs include them; key path references are safe, private key bytes are not | Redaction is already at the DTO boundary through `redact(asdict(self))`; keep new snapshot fields behind `to_dict()`. |
 | MCP `traceToolCall()` / OTel spans | Tool args, command lines, target evidence returned by tools | API tokens, cookies, auth headers, private keys, command-line passwords/hashes | Redaction is already at the common telemetry wrapper; individual MCP handlers must not bypass it. |
 | `src/aptl/core/runstore.py` `write_json`, `write_jsonl`, `append_jsonl`, `copy_file` | Flags, alerts, logs, traces, scenario artifacts, target evidence | Any caller-provided JSON/JSONL/file content, including collector responses and copied files | Treat as the Python persistence serialization boundary for run archives. New run-artifact writes that can contain control-plane secrets must pass redacted objects or use a redacting write path before bytes hit disk. |
+| `docs/aces/inventory/**/capture-evidence.sh` / committed `evidence/*` | Scenario fixture secrets, generated flags, target host keys, Wazuh agent keys, package/runtime inventories | Operator lab access keys mounted from `./keys`, private host SSH keys, bearer/API tokens, generated non-scenario config, unrelated prior-run data | Treat the capture writer as the evidence serialization boundary. Path-sensitive capture must classify each sensitive path before writing: scenario-owned target fixtures may be committed when the ledger/README says so; operator-control-plane private bytes must be redacted or excluded, while preserving non-secret proof such as path, mode/owner, public key, and capture limit. |
 | `src/aptl/core/collectors.py` | Wazuh alerts, Suricata EVE, TheHive/MISP/Shuffle records, container logs, OTel spans | SOC API tokens in responses/errors, auth headers, cookies, service logs containing generated config or env, tool spans from Tempo | Collection should stay fault-tolerant and transport-safe, but persistence of collector output must use the shared redaction policy. Collector logs must report counts/status, not payload secrets. |
 | `src/aptl/core/exporter.py` / local tar.gz / S3 export | All persisted run artifacts | Whatever reached the run directory | Exporter is a packaging boundary, not the canonical redactor. It must not be the first place secrets are sanitized; tests should prove runstore inputs are already safe. |
 | `src/aptl/cli/runs.py` | Run IDs, scenario names, artifact paths, counts | Manifest fields if future code adds tokens, absolute paths can expose local layout but not secret values | CLI should display metadata only. Any future `--json` or content-viewing output must reuse redacted runstore/DTO shapes. |
@@ -79,6 +87,18 @@ cannot express the required shape and is extended first.
   `src/aptl/utils/redaction.py`; MCP/TypeScript artifacts use
   `mcp/aptl-mcp-common/src/redaction.ts`. The helpers must stay shape-aligned,
   especially for command-line credential forms.
+- **ACES evidence capture:** the strongest control for an operator/control-plane
+  key is to exclude it at the Compose mount layer so it never reaches a target
+  container or a capture. SEC #417 applies this directly: the targets mount only
+  public keys plus a dedicated scenario pivot key, and the operator control-plane
+  key is never bind-mounted into a scenario container. Where an operator secret
+  can still reach a capture, committed inventory evidence must classify sensitive
+  filesystem paths before bytes reach `evidence/`; do not apply a whole-file PEM
+  scrub that erases intentional fixture evidence, and do not bypass the boundary
+  because a pre-commit private-key hook excludes reviewed evidence files.
+  Exclusion and redaction decisions must be pinned by the per-asset inventory
+  tests and reflected in the bundle README, ledger, capture limits, and evidence
+  checksums.
 - **Command-line exposure:** use `curl_safe` for SOC API calls so bearer/API
   tokens and request bodies avoid process argv. Avoid new subprocess calls that
   put tokens, passwords, NTLM hashes, cookies, or private key material in argv.
@@ -108,9 +128,22 @@ operator secrets, add explicit artifact metadata or a small caller-supplied
 classification option at the redaction boundary. Do not infer safety from the
 source container name alone.
 
+For path-based inventory captures, the first seam is the Compose mount surface:
+an operator/control-plane key should not be bind-mounted into a scenario
+container, so it never reaches a capture. SEC #417 split the operator
+control-plane key from the kali pivot key for exactly this reason. Where a
+secret can still appear, the fallback seam is a small, reusable sensitive-path
+classification list/function parameterized by asset id and path, able to add the
+next operator-mounted private key path without editing every capture script,
+while preserving asset-specific allowlisted target fixtures such as planted
+deploy keys, host keys, and flags.
+
 ## Non-Goals
 
 - Do not remove intentional vulnerable target credentials from the lab.
+- Do not remove intentional target fixture evidence, host-key evidence, or
+  participant-visible weak credentials from ACES inventory bundles merely
+  because they are secret-shaped.
 - Do not make run artifacts complete forensic vaults for plaintext secrets.
 - Do not redact every target username, host, port, file path, rule ID, or
   non-secret diagnostic field.
@@ -122,6 +155,10 @@ source container name alone.
 ## Anti-Patterns
 
 - Adding a new `sanitize_*` helper beside `redact()` for one artifact path.
+- Weakening the global `redact()` helper with ACES-specific fixture allowlists;
+  path-sensitive fixture classification belongs at the ACES evidence writer.
+- Exempting committed evidence paths from private-key scanning without a
+  compensating test that fails on operator/control-plane private key bytes.
 - Redacting inside one CLI command while leaving the same DTO unsafe elsewhere.
 - Letting `exporter.py` mutate archive contents to hide leaks that were already
   written to the run directory.

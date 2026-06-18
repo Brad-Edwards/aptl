@@ -1,12 +1,13 @@
 --agent-list--
 Wazuh agent_control. List of available agents:
    ID: 000, Name: wazuh.manager (server), IP: 127.0.0.1, Active/Local
-   ID: 007, Name: reverse-reverse-host-1781067531, IP: any, Active
+   ID: 005, Name: reverse-reverse-host-1781484404, IP: any, Active
+   ID: 011, Name: reverse-host, IP: any, Active
 --agent-detail--
 
 Wazuh agent_control. Agent information:
-   Agent ID:   007
-   Agent Name: reverse-reverse-host-1781067531
+   Agent ID:   005
+   Agent Name: reverse-reverse-host-1781484404
    IP address: any
    Status:     Active
 
@@ -14,7 +15,7 @@ Wazuh agent_control. Agent information:
    Client version:      Wazuh v4.12.0
    Configuration hash:  ab73af41699f13fdd81903b5f23d8d00
    Shared file hash:    cb5dc59d195320bb20b6039a519a8c0e
-   Last keep alive:     1781260201
+   Last keep alive:     1781502016
 
-   Syscheck last started at:  Fri Jun 12 05:00:06 2026
-   Syscheck last ended at:    Fri Jun 12 05:00:07 2026
+   Syscheck last started at:  Mon Jun 15 00:47:55 2026
+   Syscheck last ended at:    Mon Jun 15 00:47:56 2026

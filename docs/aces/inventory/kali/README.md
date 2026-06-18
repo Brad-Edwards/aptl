@@ -140,9 +140,12 @@ aptl aces-inventory gaps docs/aces/inventory/kali
   not registry-published and were not independently verified.
 - Vulnerability results are time-sensitive to the Grype and Trivy databases
   and advisory feeds.
-- The `kali_captures` and `kali_operations` named volumes and the
-  `/host-ssh-keys` operator bind mount are recorded by mount metadata only;
+- The `kali_captures` and `kali_operations` named volumes and the two
+  `/host-ssh-keys` file binds (the dedicated kali pivot private key and the
+  labadmin `authorized_keys`, per SEC #417) are recorded by mount metadata only;
   their contents are out of scope for this committed bundle per ADR-033 and
-  ADR-029.
+  ADR-029. The node SDL mount table reflects the SEC #417 key split; the
+  committed `docker-inspect` evidence predates that re-capture and still shows
+  the prior whole-`./keys` directory mount.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications.

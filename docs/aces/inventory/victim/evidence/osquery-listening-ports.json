@@ -155,7 +155,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170283649"
+      "socket": "741289535"
     },
     {
       "address": "::",
@@ -163,7 +163,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170283651"
+      "socket": "741289537"
     },
     {
       "address": "0.0.0.0",
@@ -171,7 +171,7 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170283649"
+      "socket": "741289535"
     },
     {
       "address": "::",
@@ -179,55 +179,55 @@
       "pid": "-1",
       "port": "22",
       "protocol": "6",
-      "socket": "170283651"
+      "socket": "741289537"
     },
     {
       "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
-      "port": "33904",
+      "port": "32805",
       "protocol": "17",
-      "socket": "170286181"
+      "socket": "741291932"
     },
     {
       "address": "0.0.0.0",
       "path": "",
       "pid": "-1",
-      "port": "33904",
+      "port": "32805",
       "protocol": "17",
-      "socket": "170286181"
+      "socket": "741291932"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "40139",
+      "port": "37551",
       "protocol": "6",
-      "socket": "170273691"
+      "socket": "741291889"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "40139",
+      "port": "37551",
       "protocol": "6",
-      "socket": "170273691"
+      "socket": "741291889"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "51381",
+      "port": "39200",
       "protocol": "17",
-      "socket": "170273690"
+      "socket": "741291888"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "51381",
+      "port": "39200",
       "protocol": "17",
-      "socket": "170273690"
+      "socket": "741291888"
     }
   ]
 }

@@ -255,3 +255,89 @@ class TestEnsureSSHKeys:
         cmd = mock_run.call_args[0][0]
         comment_idx = cmd.index("-C")
         assert cmd[comment_idx + 1] == "aptl-local-lab"
+
+
+class TestEnsurePivotKey:
+    """Tests for the kali pivot key (scenario content) — SEC #417."""
+
+    def test_generates_pivot_key_when_missing(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+
+        key_path = pivot_dir / "kali_pivot_key"
+        pub_path = pivot_dir / "kali_pivot_key.pub"
+
+        def fake_keygen(cmd, **kwargs):
+            key_path.write_text("generated-pivot-private")
+            pub_path.write_text("generated-pivot-public")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_run = mocker.patch(
+            "aptl.core.ssh.subprocess.run", side_effect=fake_keygen
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is True
+        assert result.generated is True
+        assert result.key_path == key_path
+        cmd = mock_run.call_args[0][0]
+        assert "ed25519" in cmd
+        comment_idx = cmd.index("-C")
+        assert cmd[comment_idx + 1] == "aptl-kali-pivot"
+
+    def test_existing_pivot_key_is_reused(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        pivot_dir.mkdir(parents=True)
+        (pivot_dir / "kali_pivot_key").write_text("existing-pivot-private")
+        (pivot_dir / "kali_pivot_key.pub").write_text("existing-pivot-public")
+
+        mock_run = mocker.patch("aptl.core.ssh.subprocess.run")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is True
+        assert result.generated is False
+        mock_run.assert_not_called()
+
+    def test_pivot_keygen_failure_returns_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+
+        mocker.patch(
+            "aptl.core.ssh.subprocess.run",
+            return_value=MagicMock(
+                returncode=1, stdout="", stderr="ssh-keygen: disk full"
+            ),
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "disk full" in result.error
+
+    def test_pivot_key_is_separate_from_control_plane_key(self, tmp_path, mocker):
+        """The pivot key must never be the control-plane key name."""
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+
+        def fake_keygen(cmd, **kwargs):
+            (pivot_dir / "kali_pivot_key").write_text("priv")
+            (pivot_dir / "kali_pivot_key.pub").write_text("pub")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.ssh.subprocess.run", side_effect=fake_keygen)
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.key_path.name == "kali_pivot_key"
+        assert not (pivot_dir / "aptl_lab_key").exists()

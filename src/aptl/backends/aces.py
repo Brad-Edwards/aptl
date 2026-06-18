@@ -88,23 +88,52 @@ def start_aces_scenario(
         )
         manager = RuntimeManager(target)
         execution_plan = manager.plan(scenario)
-        result = manager.apply(execution_plan)
+        # APTL is a provisioning-only ACES backend: its manifest declares no
+        # evaluator or orchestrator (see aces_manifest.AptlBackendManifest). A
+        # scenario may still carry evaluation content — notably the `conditions`
+        # section, whose entries are Docker Compose healthchecks realized during
+        # provisioning, not by an ACES evaluator. The runtime planner flags such
+        # content with the evaluation-domain `evaluator.missing` ERROR and marks
+        # the whole plan invalid, so RuntimeManager.apply would refuse before any
+        # provisioning runs. Allowlist only that one expected diagnostic; stay
+        # fail-closed for every other planner error (e.g. provisioning ordering
+        # cycles or unsupported provisioning capabilities), which surface on the
+        # ExecutionPlan diagnostics rather than necessarily in the
+        # ProvisioningPlan that the provisioner re-validates. Then apply only the
+        # provisioning phase through APTL's provisioner.
+        blocking = [
+            diag
+            for diag in execution_plan.diagnostics
+            if diag.is_error
+            and not (diag.domain == "evaluation" and diag.code == "evaluator.missing")
+        ]
+        if blocking:
+            return LabResult(
+                success=False,
+                error=render_aces_diagnostics(blocking),
+            )
+        result = target.provisioner.apply(
+            execution_plan.provisioning,
+            execution_plan.base_snapshot,
+        )
     except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
         return LabResult(
             success=False,
             error=redact(f"ACES runtime handoff failed: {exc}"),
         )
 
-    if result.success:
-        return LabResult(
+    return (
+        LabResult(
             success=True,
             message=(
                 f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'"
             ),
         )
-    return LabResult(
-        success=False,
-        error=render_aces_diagnostics(result.diagnostics),
+        if result.success
+        else LabResult(
+            success=False,
+            error=render_aces_diagnostics(result.diagnostics),
+        )
     )
 
 

@@ -37,7 +37,7 @@ dpkg	1.21.1ubuntu2.6	amd64
 dpkg-dev	1.21.1ubuntu2.6	all
 e2fsprogs	1.46.5-2ubuntu1.2	amd64
 fakeroot	1.28-1ubuntu1	amd64
-falco	0.44.0	amd64
+falco	0.44.1	amd64
 file	1:5.41-3ubuntu0.1	amd64
 findutils	4.8.0-1ubuntu3	amd64
 fontconfig	2.13.1-4.2ubuntu5	amd64

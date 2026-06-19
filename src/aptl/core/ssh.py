@@ -20,7 +20,7 @@ _PIVOT_KEY_NAME = "kali_pivot_key"
 
 
 @dataclass
-class SSHKeyResult:
+class SSHKeyResult(object):
     """Result of SSH key generation."""
 
     success: bool

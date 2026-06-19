@@ -645,7 +645,7 @@ def _run_credential_sync(
     try:
         fn(*args)
     except PathContainmentError as exc:
-        log.error("%s containment violation: %s", label, exc)
+        log.exception("%s containment violation", label)
         return LabResult(success=False, error=f"{label}: {exc}")
     except Exception as exc:
         log.exception("Failed to render %s", label.lower())

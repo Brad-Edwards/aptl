@@ -13,7 +13,7 @@ from aptl.core.lab import (
     orchestrate_lab_start,
     stop_lab,
 )
-from aptl.core.lab_types import StartupOutcome
+from aptl.core.lab_types import LabStatus, StartupDiagnostic, StartupOutcome
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.lab")
@@ -64,7 +64,7 @@ def _render_start_result(result: LabResult) -> None:
     # together, then capability, telemetry, cosmetic. Iteration order
     # below follows the severity hierarchy from worst to least-worst.
     impacts_in_order = ["readiness", "capability", "telemetry", "cosmetic"]
-    grouped: dict[str, list] = {}
+    grouped: dict[str, list[StartupDiagnostic]] = {}
     for diag in result.diagnostics:
         grouped.setdefault(diag.impact.value, []).append(diag)
     for impact in impacts_in_order:
@@ -149,6 +149,10 @@ def stop(
 
 
 def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
+    """Capture and emit a redacted range snapshot as JSON.
+
+    Writes to ``output_file`` (mode 0600) when given, otherwise prints it.
+    """
     from aptl.cli._common import resolve_config_for_cli
     from aptl.core.deployment import get_backend
     from aptl.core.snapshot import capture_snapshot
@@ -172,7 +176,8 @@ def _emit_snapshot_json(project_dir: Path, output_file: Optional[Path]) -> None:
         typer.echo(data)
 
 
-def _emit_status_text(current) -> None:
+def _emit_status_text(current: LabStatus) -> None:
+    """Print a human-readable summary of the current lab status."""
     if not current.running:
         typer.echo("Lab is not running.")
         if current.error:
@@ -219,3 +224,81 @@ def status(
         return
 
     _emit_status_text(lab_status(project_dir=project_dir))
+
+
+_LIVE_GATE_WARNING = (
+    "\n  WARNING: the live validation gate runs `aptl lab stop -v` and then\n"
+    "  re-boots the lab through the ACES start path. This DESTROYS all lab\n"
+    "  data (Wazuh/MISP/TheHive/Shuffle volumes). Pass --skip-clean-boot to\n"
+    "  validate the already-running lab without destroying it.\n"
+)
+
+
+@app.command("validate-live")
+def validate_live(
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    scenario: Optional[Path] = typer.Option(
+        None,
+        "--scenario",
+        help="ACES SDL scenario (default: scenarios/techvault.sdl.yaml).",
+    ),
+    profile: str = typer.Option(
+        "provisioning-only",
+        "--profile",
+        help="ACES backend capability profile to validate against.",
+    ),
+    run_id: Optional[str] = typer.Option(
+        None,
+        "--run-id",
+        help="Run id for the live-gate archive (default: generated).",
+    ),
+    skip_clean_boot: bool = typer.Option(
+        False,
+        "--skip-clean-boot",
+        help="Validate the running lab without the destructive stop -v + reboot.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip the data-destruction confirmation prompt.",
+    ),
+) -> None:
+    """Run the live ACES validation gate (boots the lab end-to-end; DESTRUCTIVE).
+
+    Proves a fresh TechVault lab is realized from the interpreted ACES model
+    through the public start path and captures operational + provenance evidence
+    in the run archive. Intended for maintainers / a documented CI runner — not
+    fast CI: it needs Docker, the SOC stack's resources, and minutes of startup.
+    """
+    from aptl.cli._common import resolve_config_for_cli, resolve_run_store
+    from aptl.validation.techvault_live_gate import (
+        LiveGateOptions,
+        validate_live_deployment,
+    )
+
+    config, project_root = resolve_config_for_cli(project_dir)
+    if not skip_clean_boot and not yes:
+        typer.echo(_LIVE_GATE_WARNING)
+        if not typer.confirm("  Continue?", default=False):
+            typer.echo("Aborted.")
+            raise typer.Exit(code=0)
+
+    log.info("Running live validation gate from %s", project_root)
+    report = validate_live_deployment(
+        scenario,
+        project_dir=project_root,
+        config=config,
+        options=LiveGateOptions(
+            profile=profile, run_id=run_id, skip_clean_boot=skip_clean_boot
+        ),
+        run_store=resolve_run_store(project_root, config),
+    )
+    typer.echo(report.render())
+    if not report.passed:
+        raise typer.Exit(code=1)

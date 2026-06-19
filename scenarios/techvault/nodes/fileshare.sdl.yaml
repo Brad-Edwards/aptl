@@ -315,8 +315,7 @@ nodes:
       techvault.techvault-fileshare-service: fileshare-root
       techvault.fileshare-rsyslog-forwarding: fileshare-root
       techvault.fileshare-wazuh-agent: fileshare-root
-    conditions:
-      techvault.fileshare-smb-ready: fileshare-root
+    conditions: {}
     injects: {}
     vulnerabilities:
     - techvault.fileshare-guest-writable-shares

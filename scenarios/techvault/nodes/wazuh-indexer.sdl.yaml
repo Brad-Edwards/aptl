@@ -313,8 +313,7 @@ nodes:
     os: linux
     os_version: Amazon Linux 2023.8.20250818
     features: {}
-    conditions:
-      techvault.wazuh-indexer-ready: wazuh-indexer-root
+    conditions: {}
     injects: {}
     vulnerabilities: []
     roles:

@@ -1,47 +1,35 @@
 #!/bin/bash
-# OBS-003 / ADR-033 per-session shell wrapper invoked by sshd's
-# ForceCommand. Captures the full PTY (every keystroke + every byte of
-# output, with timing) via script(1), starts a per-session tcpdump,
-# then runs the agent's command (or an interactive bash). All
-# captures land under
-#   /var/log/aptl/captures/<run_id>/<session_id>/
-# inside the container. The MCP server harvests them out via
-# `docker cp` on session close (see captures.ts) into the host's
-# `.aptl/runs/<run_id>/kali-side/<session_id>/`. The container holds
-# captures in a docker named volume (not a host bind mount), so the
-# kali user cannot read or tamper with prior runs' MCP-side records
-# (codex pre-push cycle 1 finding-10).
+# OBS-003 / ADR-033 / ADR-041 per-session shell wrapper invoked by sshd's
+# ForceCommand.  Delegates all capture file writes to the aptl-kali-capture
+# sidecar daemon via `aptl-capture-client` so the kali user (passwordless
+# sudo) cannot delete or modify capture evidence.
 #
-# Hardening notes addressed in this revision:
-#   - cycle 1 finding-7: do NOT `exec` script — run it as a child so
-#     the EXIT trap still fires and kills tcpdump.
-#   - cycle 1 finding-11: enforce 0700 dirs / 0600 files via umask.
-#   - cycle 1 finding-13: reject IDs containing `.` `..` or any
-#     character outside [A-Za-z0-9_-]; fall back to a generated safe
-#     ID rather than absorbing the value.
+# Capture lifecycle (single owning connection — codex pre-push F1/F3):
+#   1. aptl-capture-client ping
+#      → best-effort reachability probe; decides wrapped vs unwrapped.
+#   2. aptl-capture-client stream RUN_ID SESSION_ID (one connection)
+#      → sends session_start, forwards script(1)'s --log-io transcript as
+#        pty_chunk frames, then session_end on EOF. The sidecar binds the
+#        session to this connection and finalizes it (typescript chmod 0600,
+#        tcpdump stop) on session_end OR connection close.
 #
-# Best-effort: if setup fails (missing script/tcpdump, capture dir
-# can't be created), log a warning and exec the requested shell
-# unwrapped rather than break SSH login.
+# The Kali container does NOT mount the captures volume (ADR-041) and does NOT
+# share the sidecar's PID namespace: all writes happen in the sidecar, so a
+# sudo-capable agent cannot read, delete, or alter any session's evidence.
+# This wrapper never touches a capture file directly.
+#
+# If the sidecar is unreachable (client exits non-zero), a warning is
+# logged to stderr and the session runs unwrapped rather than failing
+# the SSH login (ADR-041 §Security Layers: best-effort).
+#
+# ID validation:
+#   Canonical rule: `^[A-Za-z0-9_][A-Za-z0-9._-]*$` AND no `..`.
+#   Must match src/aptl/core/runstore.py _ID_RE and
+#   mcp/aptl-mcp-common/src/runs.ts ID_RE.
 
 set -u
 umask 077
 
-# ID validation MUST match the canonical contract used by the
-# Python `src/aptl/core/runstore.py` `_ID_RE` and the TypeScript
-# `mcp/aptl-mcp-common/src/runs.ts` `ID_RE` (codex pre-push cycle 2
-# finding-4 + finding-10): any divergence causes the wrapper to
-# silently re-route an MCP-allowed id (e.g. `_unbound`, `foo.bar`)
-# into `anon-...`, and the MCP-side `harvestSession()` then looks
-# under the originally-requested path, finds nothing, and reports
-# success — silently losing all Kali-side captures for that session
-# (also turns into a tampering primitive if an agent picks
-# `evade.harvest` as their session id).
-#
-# Canonical rule: `^[A-Za-z0-9_][A-Za-z0-9._-]*$` AND must not
-# contain `..`. Leading `_` permitted so the `_unbound` sentinel
-# round-trips; `.` permitted so version-shaped ids like `sess-1.0`
-# round-trip; `..` rejected as the only real path-traversal vector.
 valid_id() {
   case "$1" in
     *..* | */* | "" ) return 1 ;;
@@ -62,8 +50,6 @@ safe_id() {
 SESSION_ID="$(safe_id "${APTL_SESSION_ID:-}")"
 RUN_ID="$(safe_id "${APTL_RUN_ID:-_unbound}")"
 
-SESS_DIR="/var/log/aptl/captures/${RUN_ID}/${SESSION_ID}"
-
 run_unwrapped() {
   if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
     exec /bin/bash -c "$SSH_ORIGINAL_COMMAND"
@@ -71,43 +57,19 @@ run_unwrapped() {
   exec /bin/bash --login
 }
 
-if ! mkdir -p "$SESS_DIR/pty" "$SESS_DIR/pcap" 2>/dev/null; then
-  echo "[aptl-wrap-shell] capture dir setup failed; running unwrapped" >&2
+# Reachability probe: decide wrapped vs unwrapped WITHOUT committing to
+# capture. If the sidecar is unavailable, run the shell unwrapped rather than
+# break SSH login (ADR-041 best-effort).
+if ! aptl-capture-client ping 2>/dev/null; then
+  echo "[aptl-wrap-shell] capture sidecar unavailable; running unwrapped" >&2
   run_unwrapped
 fi
-# Tighten perms on the per-session subtree (umask covered new
-# directories, but be explicit so a re-run after a chmod doesn't
-# leave a wider parent).
-chmod 0700 "$SESS_DIR" "$SESS_DIR/pty" "$SESS_DIR/pcap" 2>/dev/null || true
 
-PTY_TS="$SESS_DIR/pty/typescript"
-PTY_TIMING="$SESS_DIR/pty/timing"
-PCAP="$SESS_DIR/pcap/session.pcap"
-
-TCPDUMP_PID=""
-if command -v tcpdump >/dev/null 2>&1; then
-  # -C 100M, -W 10 → rolling 1GB max per session so an agent cannot
-  # fill the host disk with one long-running session. tcpdump runs
-  # with cap_net_raw+cap_net_admin via file capabilities applied in
-  # the Dockerfile (codex cycle 1 finding-6), so no sudo / no root.
-  # `not port 22` filters out SSH noise so the pcap is small enough
-  # to be tractable per session.
-  tcpdump -i any -w "$PCAP" -C 100 -W 10 -U \
-    not port 22 \
-    >/dev/null 2>&1 &
-  TCPDUMP_PID=$!
-fi
-
+# Clean up the spool FIFO on every exit path.
+SPOOL=""
 cleanup() {
-  if [ -n "$TCPDUMP_PID" ]; then
-    kill "$TCPDUMP_PID" 2>/dev/null || true
-    wait "$TCPDUMP_PID" 2>/dev/null || true
-  fi
-  # Repair file modes one more time at exit — script writes the
-  # typescript / timing files with the wrapper's umask, but a
-  # bare-metal `chmod` here closes any residual race window.
-  chmod 0600 "$PTY_TS" "$PTY_TIMING" 2>/dev/null || true
-  find "$SESS_DIR/pcap" -type f -name '*.pcap*' -exec chmod 0600 {} + 2>/dev/null || true
+  [ -n "$SPOOL" ] && rm -f "$SPOOL" 2>/dev/null
+  return 0
 }
 trap cleanup EXIT TERM INT
 
@@ -116,25 +78,45 @@ if ! command -v script >/dev/null 2>&1; then
   run_unwrapped
 fi
 
-# `script -q` suppresses the "Script started" banner; `-f` flushes
-# after each write so a killed session preserves the tail; `--timing`
-# writes a side file so playback is possible later. `--return` makes
-# script(1) propagate the wrapped command's exit status — without it
-# script returns its own status (0 on clean disconnect) and a failing
-# command like `false` would close the SSH channel with rc=0,
-# breaking `kali_run_command` result semantics and OCSF outcome
-# derivation (codex cycle 2 finding-1). `--log-io` writes a single
-# combined input+output transcript (replaces `--command`'s
-# output-only capture) so non-echoed input (passwords, `read -s`)
-# is recorded too (codex cycle 2 finding-5).
+# Route script(1)'s --log-io transcript to the sidecar through a private FIFO.
+# `script`'s own stdout/stdin stay wired to the SSH channel so the agent sees
+# output and `kali_run_command` returns the real result — only the transcript
+# is forwarded. (Piping script's stdout into the client instead would send all
+# output to the sidecar and return an EMPTY result to the caller.)
 #
-# Run script as a CHILD (not `exec`) so the wrapper survives to fire
-# the EXIT trap and kill tcpdump (codex cycle 1 finding-7). Forward
-# script's exit status via $? so SSH sees the right return code.
-SCRIPT_ARGS=( -q -f --return --log-io "$PTY_TS" --log-timing "$PTY_TIMING" )
+# One `stream` client owns the whole session on a SINGLE connection
+# (session_start -> pty_chunks -> session_end), so finalization cannot race a
+# separate "end" call and a killed wrapper still gets EOF-driven finalization
+# in the sidecar (codex pre-push F1/F3). We `wait` for the client so every
+# pty_chunk is flushed before the wrapper exits (no tail loss). The FIFO only
+# carries this session's own bytes in transit; the written evidence lives in
+# the sidecar, out of this container's mount namespace.
+#
+# `script -q` suppresses the banner; `-f` flushes each write; `--return`
+# propagates the wrapped command's exit status (correct result semantics + OCSF
+# outcome); `--log-io` records combined input+output (non-echoed input such as
+# `read -s` passwords included).
+SPOOL="$(mktemp -u "${TMPDIR:-/tmp}/aptl-cap-XXXXXX")"
+if ! mkfifo -m 0600 "$SPOOL" 2>/dev/null; then
+  echo "[aptl-wrap-shell] could not create capture spool; running unwrapped" >&2
+  run_unwrapped
+fi
+
+# Start the reader (stream client) first so script's open-for-write rendezvous
+# on the FIFO succeeds; it forwards FIFO bytes to the sidecar until EOF.
+aptl-capture-client stream "$RUN_ID" "$SESSION_ID" < "$SPOOL" &
+CLIENT_PID=$!
+
+SCRIPT_ARGS=( -q -f --return --log-io "$SPOOL" )
 if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
   script "${SCRIPT_ARGS[@]}" --command "$SSH_ORIGINAL_COMMAND"
 else
   script "${SCRIPT_ARGS[@]}" --command "/bin/bash --login"
 fi
-exit $?
+RC=$?
+
+# script closed the FIFO write end on exit → the client sees EOF, flushes the
+# tail, sends session_end, and exits. Wait so finalization completes before we
+# return the command's exit status to sshd.
+wait "$CLIENT_PID" 2>/dev/null
+exit "$RC"

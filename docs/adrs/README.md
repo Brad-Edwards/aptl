@@ -62,3 +62,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [038](adr-038-docs-style-lint-and-published-site.md) | Documentation Style Lint and Published Docs Site | accepted | 2026-06-11 |
 | [039](adr-039-web-control-plane-authentication.md) | Web Control Plane Authentication and Loopback Exposure | accepted | 2026-06-14 |
 | [040](adr-040-terminal-ssh-host-key-verification.md) | Terminal SSH Host-Key Verification Boundary | accepted | 2026-06-13 |
+| [041](adr-041-kali-capture-sidecar-ownership-boundary.md) | Kali Capture Sidecar Ownership Boundary | accepted | 2026-06-20 |

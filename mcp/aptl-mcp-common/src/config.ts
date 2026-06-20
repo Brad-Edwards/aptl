@@ -28,6 +28,14 @@ export interface LabConfig {
       ssh_port: number;
       enabled: boolean;
       shell?: 'bash' | 'sh' | 'powershell' | 'cmd';
+      /**
+       * ADR-041 / issue #305: container to harvest per-session captures from,
+       * when it differs from the workload container. The Kali capture sidecar
+       * (`aptl-kali-capture`) owns the captures volume; the workload container
+       * does not mount it, so harvest must target the sidecar. Defaults to
+       * `container_name` when unset (workload also owns its captures).
+       */
+      capture_container_name?: string;
     };
   };
   api?: {

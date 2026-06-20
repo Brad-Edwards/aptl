@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generateToolHandlers } from '../src/tools/handlers.js';
+import { generateToolHandlers, resolveCaptureContainer } from '../src/tools/handlers.js';
 
 // Partial mock: keep SSHError as a real Error subclass so
 // `assertSessionIdContract` in handlers.ts throws an object whose `.message`
@@ -169,7 +169,15 @@ describe('assertSessionIdContract — canonical session_id at MCP ingress', () =
       { session_id: '', command: 'whoami' },
       ctx,
     );
-    expect(result.content[0].text.toLowerCase()).toContain('session_id');
+    // Assert on the assertSessionIdContract message specifically, NOT just the
+    // presence of "session_id" — the JSON envelope always carries a
+    // `"session_id"` key, so a mere `toContain('session_id')` would also pass
+    // if the contract were removed and a downstream TypeError were caught
+    // instead (test-quality review cycle 1). The "must be a non-empty string"
+    // phrasing only appears in the SSHError the contract throws.
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('must be a non-empty string');
   });
 
   it.each([
@@ -193,6 +201,41 @@ describe('assertSessionIdContract — canonical session_id at MCP ingress', () =
       ctx,
     );
     expect(result.content[0].text.toLowerCase()).toContain("'..'");
+  });
+});
+
+describe('resolveCaptureContainer (ADR-041 harvest target)', () => {
+  const base = {
+    server: { configKey: 'kali', targetName: 'Kali' },
+    lab: { name: 'aptl-local', network_subnet: '172.20.0.0/16' },
+  };
+
+  it('harvests from capture_container_name when set (sidecar)', () => {
+    const labConfig = {
+      ...base,
+      containers: {
+        kali: {
+          container_name: 'aptl-kali',
+          capture_container_name: 'aptl-kali-capture',
+        },
+      },
+    } as any;
+    // ADR-041: captures live in the sidecar, not the workload container, so a
+    // sudo-capable agent cannot read or tamper with them.
+    expect(resolveCaptureContainer(labConfig)).toBe('aptl-kali-capture');
+  });
+
+  it('falls back to container_name when capture_container_name is unset', () => {
+    const labConfig = {
+      ...base,
+      containers: { kali: { container_name: 'aptl-kali' } },
+    } as any;
+    expect(resolveCaptureContainer(labConfig)).toBe('aptl-kali');
+  });
+
+  it('returns undefined for an API-only target (no containers)', () => {
+    const labConfig = { ...base, server: { configKey: '' } } as any;
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
   });
 });
 

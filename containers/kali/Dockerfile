@@ -16,23 +16,22 @@ RUN apt-get update && \
         kali-tools-top10 \
         openssh-server \
         iputils-ping \
-        # OBS-003 behavioural capture (ADR-033):
-        #   auditd        — syscall / process / file events
-        #   acct          — process accounting (accton + pacct)
-        #   tcpdump       — per-session pcap
-        #   bsdmainutils  — provides script(1) for full PTY recording
-        #   libcap2-bin   — provides capsh (drops CAP_AUDIT_CONTROL
-        #                   before spawning sshd so the kali user
-        #                   can't disable audit via sudo)
-        #   acl           — provides setfacl (entrypoint grants kali
-        #                   user write access to the captures volume
-        #                   root without widening for everyone)
+        # OBS-003 behavioural capture tooling (ADR-033 / ADR-041):
+        #   auditd        — auditctl binary needed to check rule state
+        #   acct          — accton/lastcomm binaries for red-team use
+        #   tcpdump       — available for manual red-team packet capture
+        #   bsdmainutils  — provides script(1) for PTY recording pipe
+        #   libcap2-bin   — capsh: drops CAP_AUDIT_CONTROL before sshd
+        #   python3       — aptl-capture-client is a Python 3 script
+        # NOTE: acl (setfacl) removed — kali_captures is no longer mounted
+        # in this container at all (ADR-041); the sidecar owns the volume,
+        # so there is nothing here for setfacl to grant.
         auditd \
         acct \
         tcpdump \
         bsdmainutils \
         libcap2-bin \
-        acl && \
+        python3 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # AD/Enterprise attack tools for TechVault scenario
@@ -104,6 +103,9 @@ COPY --chown=kali:kali scripts/ /home/kali/
 # pattern for dumpcap above.
 RUN install -m 0755 /home/kali/aptl-wrap-shell.sh /usr/local/bin/aptl-wrap-shell.sh && \
     rm -f /home/kali/aptl-wrap-shell.sh && \
+    # ADR-041: install the capture client that delegates writes to the sidecar.
+    install -m 0755 /home/kali/aptl-capture-client /usr/local/bin/aptl-capture-client && \
+    rm -f /home/kali/aptl-capture-client && \
     setcap cap_net_raw,cap_net_admin+eip /usr/bin/tcpdump
 COPY audit/aptl.rules /etc/audit/rules.d/aptl.rules
 RUN chmod 0640 /etc/audit/rules.d/aptl.rules && \

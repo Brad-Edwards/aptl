@@ -24,20 +24,26 @@ function assertSessionIdContract(value: unknown): asserts value is string {
 }
 
 /**
- * OBS-003 / ADR-033: resolve the docker container name that backs
- * the SSH target for this MCP server, so the close_session /
- * close_all_sessions handlers can harvest per-session captures out
- * of the `kali_captures` (or analogous) named volume into
- * `.aptl/runs/<run_id>/kali-side/<session_id>/` on the host.
+ * OBS-003 / ADR-033 / ADR-041: resolve the docker container the
+ * close_session / close_all_sessions handlers harvest per-session captures
+ * from, into `.aptl/runs/<run_id>/kali-side/<session_id>/` on the host.
  *
- * Returns `undefined` when the lab is configured for an API-only
- * target (no container) or when the configKey is missing — those
- * MCP servers don't ship captures and harvest is a no-op.
+ * Per ADR-041 the capture sink may be owned by a dedicated sidecar that the
+ * workload container does not mount (so a sudo-capable agent cannot read or
+ * tamper with evidence). When `capture_container_name` is set, harvest targets
+ * it (e.g. `aptl-kali-capture`); otherwise it falls back to the workload's own
+ * `container_name`.
+ *
+ * Returns `undefined` when the lab is configured for an API-only target (no
+ * container) or when the configKey is missing — those MCP servers don't ship
+ * captures and harvest is a no-op.
  */
-function resolveCaptureContainer(labConfig: LabConfig): string | undefined {
+export function resolveCaptureContainer(labConfig: LabConfig): string | undefined {
   const key = labConfig.server.configKey;
   if (!key || !labConfig.containers) return undefined;
-  return labConfig.containers[key]?.container_name;
+  const container = labConfig.containers[key];
+  if (!container) return undefined;
+  return container.capture_container_name ?? container.container_name;
 }
 
 /**

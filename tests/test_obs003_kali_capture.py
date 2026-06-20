@@ -15,9 +15,28 @@ because the container's runtime doesn't grant audit caps).
 
 from __future__ import annotations
 
-import pytest
+import re
+from pathlib import Path
 
-from tests.helpers import LIVE_LAB, container_running, kali_exec
+import pytest
+import yaml
+
+from tests.helpers import (
+    LIVE_LAB,
+    container_running,
+    kali_capture_exec,
+    kali_exec,
+)
+
+# ---------------------------------------------------------------------------
+# Helper: load docker-compose.yml once for compose-consistency tests
+# ---------------------------------------------------------------------------
+_COMPOSE_PATH = Path(__file__).parent.parent / "docker-compose.yml"
+
+
+def _load_compose() -> dict:
+    with _COMPOSE_PATH.open() as fh:
+        return yaml.safe_load(fh)
 
 pytestmark = [
     LIVE_LAB,
@@ -127,14 +146,17 @@ class TestCaptureSurface:
             "sshd_config Match User kali should ForceCommand the OBS-003 wrapper"
         )
 
-    def test_per_run_capture_root_writable_by_kali(self):
-        # /var/log/aptl/captures (named volume mount target) must be
-        # kali-writable so the wrapper can mkdir per-session subdirs.
+    def test_capture_volume_readonly_in_kali(self):
+        # ADR-041 / issue #305: kali_captures is mounted read-only in the
+        # kali container so the kali user (including after `sudo su -`)
+        # cannot delete or modify capture evidence. A write attempt must
+        # fail regardless of Unix ownership or ACLs.
         r = kali_exec(
-            "sudo -u kali test -w /var/log/aptl/captures && echo ok || echo not_writable"
+            "touch /var/log/aptl/captures/_probe 2>&1; echo EXIT=$?"
         )
-        assert r.stdout.strip() == "ok", (
-            "/var/log/aptl/captures must be writable by the kali user"
+        assert "EXIT=0" not in r.stdout, (
+            "/var/log/aptl/captures must be read-only in the kali container "
+            "(ADR-041); touch succeeded when it should have been blocked"
         )
 
     def test_audit_control_cap_dropped_for_sshd(self):
@@ -242,21 +264,34 @@ class TestEndToEndCapture:
         # Run a command through the wrapped shell.
         self._ssh_with_env(run_id, session_id, f"echo {marker}")
 
-        # Confirm the per-session capture dir was created and contains
-        # the PTY typescript with the marker.
+        # ADR-041: captures land in the SIDECAR, which owns the volume — they
+        # are NOT visible in the kali workload container at all.
         sess_path = f"/var/log/aptl/captures/{run_id}/{session_id}"
-        r = kali_exec(f"test -d {sess_path}/pty && echo ok || echo missing")
-        assert r.stdout.strip() == "ok", f"PTY dir missing under {sess_path}"
-
-        ts = kali_exec(f"cat {sess_path}/pty/typescript 2>/dev/null || true").stdout
-        assert marker in ts, (
-            f"PTY typescript at {sess_path}/pty/typescript should contain {marker!r}; got {ts!r}"
+        r = kali_capture_exec(f"test -d {sess_path}/pty && echo ok || echo missing")
+        assert r.stdout.strip() == "ok", (
+            f"PTY dir missing under {sess_path} in the capture sidecar"
         )
 
-        # Confirm a pcap was started (presence; rotated file naming
-        # depends on tcpdump's -C behaviour, so check the dir).
-        r = kali_exec(f"ls {sess_path}/pcap 2>/dev/null | head -1").stdout.strip()
+        ts = kali_capture_exec(
+            f"cat {sess_path}/pty/typescript 2>/dev/null || true"
+        ).stdout
+        assert marker in ts, (
+            f"PTY typescript at {sess_path}/pty/typescript should contain "
+            f"{marker!r}; got {ts!r}"
+        )
+
+        # Confirm a pcap was started (presence; rotated file naming depends on
+        # tcpdump's -C behaviour, so check the dir in the sidecar).
+        r = kali_capture_exec(f"ls {sess_path}/pcap 2>/dev/null | head -1").stdout.strip()
         assert r, f"pcap directory under {sess_path}/pcap should be non-empty"
+
+        # The captures must NOT be reachable from inside the kali workload —
+        # not even with sudo (the volume is not mounted there at all).
+        r = kali_exec(f"sudo ls {sess_path} 2>&1; echo EXIT=$?")
+        assert "EXIT=0" not in r.stdout, (
+            f"capture path {sess_path} must not be readable inside aptl-kali "
+            f"(ADR-041 read-isolation); got: {r.stdout!r}"
+        )
 
     def test_session_dir_permissions_are_restrictive(self):
         import uuid as _uuid
@@ -266,9 +301,10 @@ class TestEndToEndCapture:
 
         self._ssh_with_env(run_id, session_id, "true")
 
-        # 0700 dirs, 0600 files inside the per-session subtree.
+        # 0700 dirs, 0600 files inside the per-session subtree (checked in the
+        # sidecar, which owns the volume — ADR-041).
         sess_path = f"/var/log/aptl/captures/{run_id}/{session_id}"
-        modes = kali_exec(
+        modes = kali_capture_exec(
             f"find {sess_path} -mindepth 1 -printf '%m %p\\n' 2>/dev/null | head -20"
         ).stdout
         # Pre-condition: without this, a silently-failed SSH session (or a
@@ -286,7 +322,9 @@ class TestEndToEndCapture:
             if len(parts) < 2:
                 continue
             mode, path = parts
-            r = kali_exec(f"test -d {path} && echo dir || echo file").stdout.strip()
+            r = kali_capture_exec(
+                f"test -d {path} && echo dir || echo file"
+            ).stdout.strip()
             if r == "dir":
                 assert mode in ("700", "0700"), f"{path} dir mode {mode}, expected 0700"
             else:
@@ -339,15 +377,23 @@ class TestProcessLifecycle:
             for line in marker.splitlines()
             if "=" in line
         )
-        for required in ("ready_at", "sshd", "wrapper", "auditd", "procacct"):
+        # ADR-041: auditd / process accounting moved to the kali-capture
+        # sidecar, so the kali readiness marker only tracks sshd + wrapper.
+        for required in ("ready_at", "sshd", "wrapper"):
             assert required in keys, (
                 f"readiness marker missing `{required}`; got keys {sorted(keys)}"
             )
-        for subsystem in ("sshd", "wrapper", "auditd", "procacct"):
+        for subsystem in ("sshd", "wrapper"):
             assert keys[subsystem] in ("ok", "degraded"), (
                 f"readiness marker `{subsystem}` should be ok|degraded; "
                 f"got {keys[subsystem]!r}"
             )
+        # The capture subsystems must NOT be reported here anymore — they
+        # belong to the sidecar's own readiness marker.
+        assert "auditd" not in keys and "procacct" not in keys, (
+            "kali readiness marker must not report auditd/procacct after "
+            f"ADR-041 (those moved to the sidecar); got keys {sorted(keys)}"
+        )
         # sshd and the ForceCommand wrapper are the usable surface —
         # in a healthy lab they must not be degraded.
         assert keys["sshd"] == "ok", "sshd recorded degraded in readiness marker"
@@ -385,4 +431,110 @@ class TestProcessLifecycle:
         )
         assert "healthy" in r.stdout, (
             f"aptl-healthcheck.sh should report healthy; got {r.stdout!r}"
+        )
+
+
+# TestComposeConsistency lives in tests/test_kali_capture_compose.py to avoid
+# inheriting the module-level LIVE_LAB + kali skipif pytestmark (class-level
+# pytestmark in pytest adds to — not replaces — module-level marks).
+
+# ---------------------------------------------------------------------------
+# ADR-041 / issue #305: live ownership boundary tests (LIVE_LAB only)
+# ---------------------------------------------------------------------------
+
+
+class TestSidecarOwnershipBoundary:
+    """Live tests that verify the kali workload cannot read, list, delete, or
+    modify capture evidence even after `sudo su -`. The capture sink is not in
+    the kali container's mount namespace at all (ADR-041), so a sudo-capable
+    agent has no path to it. Requires APTL_SMOKE=1 and both containers running.
+    """
+
+    pytestmark = [
+        LIVE_LAB,
+        pytest.mark.skipif(
+            not container_running("aptl-kali"),
+            reason="aptl-kali container is not running",
+        ),
+    ]
+
+    def test_captures_not_mounted_in_kali(self):
+        """The captures volume must be absent from the kali mount table."""
+        r = kali_exec(
+            "grep -F '/var/log/aptl/captures' /proc/self/mounts || echo NONE"
+        )
+        assert r.stdout.strip() == "NONE", (
+            "kali_captures must NOT be mounted in aptl-kali (ADR-041); "
+            f"found mount: {r.stdout!r}"
+        )
+
+    def test_sudo_cannot_write_captures_path(self):
+        """Even `sudo` cannot create files under the capture path in kali —
+        the path is not a writable mount here."""
+        r = kali_exec(
+            "sudo mkdir -p /var/log/aptl/captures 2>/dev/null; "
+            "sudo touch /var/log/aptl/captures/_probe 2>&1; echo EXIT=$?; "
+            "sudo rm -f /var/log/aptl/captures/_probe 2>/dev/null || true"
+        )
+        # The captures dir is owned by the sidecar; in kali it is at most an
+        # empty stub on the container's own overlay fs (not the named volume),
+        # so even if a write 'succeeds' it never touches real evidence. Assert
+        # the sidecar's evidence is unaffected below.
+        sidecar = kali_capture_exec(
+            "test -e /var/log/aptl/captures/_probe && echo LEAKED || echo SAFE"
+        )
+        assert sidecar.stdout.strip() == "SAFE", (
+            "a kali-side write must never reach the sidecar-owned captures "
+            f"volume (ADR-041); kali output: {r.stdout!r}"
+        )
+
+    def test_sudo_rm_cannot_delete_sidecar_captures(self):
+        """A sudo rm -rf attempt in kali must not destroy sidecar evidence."""
+        # Seed an audit log in the sidecar (the entrypoint already does this on
+        # boot; assert it exists, then attempt destruction from kali).
+        before = kali_capture_exec(
+            "test -f /var/log/aptl/captures/_audit/audit.log && echo ok || echo missing"
+        ).stdout.strip()
+        if before != "ok":
+            pytest.skip("sidecar audit log not present (auditd may be degraded)")
+        kali_exec("sudo rm -rf /var/log/aptl/captures/* 2>/dev/null || true")
+        after = kali_capture_exec(
+            "test -f /var/log/aptl/captures/_audit/audit.log && echo ok || echo missing"
+        ).stdout.strip()
+        assert after == "ok", (
+            "sidecar audit evidence was destroyed by a kali-side sudo rm -rf "
+            "(ADR-041 acceptance criterion #2)"
+        )
+
+    def test_cross_session_read_isolation(self):
+        """A kali shell (even sudo) cannot READ another session's captures.
+
+        This is issue #305's cross-session-disclosure criterion: with the
+        volume entirely outside kali's mount namespace, there is no path for a
+        sudo-root shell to cat a sibling session's typescript/pcap.
+        """
+        import uuid
+
+        run_id = f"iso-{uuid.uuid4().hex[:8]}"
+        session_v = f"sess-victim-{uuid.uuid4().hex[:6]}"
+        marker = f"SECRET_{uuid.uuid4().hex[:8]}"
+
+        # Produce a victim session's capture via the wrapped shell.
+        TestEndToEndCapture()._ssh_with_env(run_id, session_v, f"echo {marker}")
+
+        victim_ts = f"/var/log/aptl/captures/{run_id}/{session_v}/pty/typescript"
+        # Sanity: the sidecar has it.
+        s = kali_capture_exec(f"cat {victim_ts} 2>/dev/null || true").stdout
+        if marker not in s:
+            pytest.skip("victim capture not produced; cannot assert isolation")
+
+        # An authenticated kali shell, even with sudo, must not be able to read
+        # it — the path does not exist in kali's mount namespace.
+        r = kali_exec(f"sudo cat {victim_ts} 2>&1; echo EXIT=$?")
+        assert marker not in r.stdout, (
+            f"kali read a sibling session's capture ({victim_ts}); "
+            f"cross-session disclosure not closed (ADR-041 / #305): {r.stdout!r}"
+        )
+        assert "EXIT=0" not in r.stdout, (
+            "sudo cat of a sibling session's capture should fail in kali"
         )

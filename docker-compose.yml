@@ -1198,35 +1198,21 @@ services:
       - ./keys/authorized_keys:/host-ssh-keys/authorized_keys:ro
       - ./config/lab-ssh/kali_pivot_key:/host-ssh-keys/kali_pivot_key:ro
       - kali_operations:/home/kali/operations
-      # OBS-003 / ADR-033: per-session captures land in a docker
-      # NAMED VOLUME (not a host bind mount). The named volume is
-      # not visible on the host filesystem to other containers or
-      # to the kali workload's snooping, and an attacker who escalates
-      # to container root cannot read or tamper with prior runs'
-      # MCP-side records (codex pre-push cycle 1 finding-10). The
-      # MCP-red server harvests captures out via `docker cp` on
-      # session close into `.aptl/runs/<run_id>/kali-side/<session_id>/`
-      # on the host with 0600 perms — see `captures.ts` in
-      # aptl-mcp-common.
-      - kali_captures:/var/log/aptl/captures
+      # ADR-041 / issue #305: the kali_captures volume is NOT mounted in this
+      # container at all — not even read-only. A read-only mount would still
+      # let a `sudo`-capable agent READ sibling sessions' evidence (ro blocks
+      # writes, not reads); the only way to deny read/list/modify to a
+      # sudo-root shell is to keep the capture sink out of this container's
+      # mount namespace entirely. All capture writes and the harvest source
+      # live in the aptl-kali-capture sidecar; this workload reaches the
+      # sidecar only over the abstract Unix socket (shared netns).
     cap_add:
-      - NET_RAW       # tcpdump / packet capture
-      - NET_ADMIN     # network manipulation tools
-      # OBS-003: AUDIT_CONTROL and AUDIT_WRITE are granted to the
-      # container so entrypoint.sh (running as root, before sshd is
-      # exposed) can load the APTL audit ruleset. The entrypoint
-      # then drops CAP_AUDIT_CONTROL from the sshd-spawning process
-      # via `capsh --drop=cap_audit_control` so the kali user
-      # (passwordless sudo) cannot run `auditctl -D` to disable
-      # the audit trail mid-scenario (codex cycle 1 finding-12).
-      - AUDIT_CONTROL
-      - AUDIT_WRITE
-      # OBS-003 / codex cycle 3 finding-1: SYS_PACCT is required for
-      # `accton` to enable kernel process accounting. Docker's default
-      # cap set excludes it, so without this the entrypoint's
-      # `accton /var/log/aptl/captures/_proc-acct/pacct` silently
-      # fails and the advertised pacct capture is empty.
-      - SYS_PACCT
+      - NET_RAW       # tcpdump / packet capture (red-team tooling)
+      - NET_ADMIN     # network manipulation tools (red-team tooling)
+      # ADR-041: AUDIT_CONTROL, AUDIT_WRITE, and SYS_PACCT have moved
+      # to the kali-capture sidecar.  The Kali workload no longer needs
+      # them — capture-only capabilities must not be on the workload
+      # service.
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
     # ADR-033 §2 / issue #293: the healthcheck verifies the usable
@@ -1244,6 +1230,62 @@ services:
       resources:
         limits:
           memory: 1g
+
+  # ---------------------------------------------------------------------------
+  # ADR-041 / issue #305: Kali Capture Sidecar
+  #
+  # The SOLE owner of the kali_captures volume (read-write). The Kali workload
+  # does not mount the volume at all, so a sudo-capable agent cannot read,
+  # list, delete, or modify any session's evidence. The sidecar receives PTY
+  # bytes over an abstract Unix socket, runs the per-session tcpdump, and hosts
+  # auditd + process accounting. The MCP-red server harvests captures via
+  # `docker cp aptl-kali-capture:...` (see capture_container_name in
+  # mcp/mcp-red/docker-lab-config.json).
+  #
+  # Shares ONLY the Kali network namespace, so tcpdump observes Kali's traffic
+  # and the abstract Unix socket is mutually reachable. It must NOT share the
+  # PID namespace: with a shared PID namespace a sudo-root Kali shell can see
+  # the sidecar's PIDs and traverse `/proc/<sidecar-pid>/root/var/log/aptl/
+  # captures` into the sidecar's mount namespace, reading or deleting the
+  # evidence the sidecar owns — defeating the whole boundary (codex pre-push
+  # cycle 1 finding F2). auditd and process accounting are kernel-wide and do
+  # not need PID sharing to observe Kali's processes. NOTE: `network_mode:
+  # service:kali` forbids hostname/ports/networks/extra_hosts on this service —
+  # Docker rejects the combination at `up` time. Do not re-add a `hostname:`.
+  # ---------------------------------------------------------------------------
+  kali-capture:
+    profiles: ["kali"]
+    build:
+      context: ./containers/kali-capture
+      dockerfile: Dockerfile
+    container_name: aptl-kali-capture
+    restart: unless-stopped
+    # ADR-033 §2 pattern: run under Docker's bundled init so the per-session
+    # tcpdump / auditd / accton children are reaped rather than zombified.
+    init: true
+    # Share ONLY Kali's network namespace (abstract socket + tcpdump). PID
+    # namespace is deliberately NOT shared (codex F2 — /proc traversal).
+    network_mode: "service:kali"
+    depends_on:
+      - kali
+    volumes:
+      # Read-write owner of the captures volume (ADR-041 security boundary).
+      - kali_captures:/var/log/aptl/captures
+      # Bind-mount the canonical APTL audit ruleset from the kali image's
+      # build context so rule text is never duplicated (ADR-041 §Maintainability).
+      - ./containers/kali/audit/aptl.rules:/etc/audit/rules.d/aptl.rules:ro
+    cap_add:
+      # ADR-041: capture-only capabilities live here, never on the kali workload.
+      - AUDIT_CONTROL  # auditctl — load rules, start/stop auditd
+      - AUDIT_WRITE    # write audit events
+      - SYS_PACCT      # accton — enable process accounting
+      - NET_RAW        # tcpdump on the shared (Kali) network namespace
+    # No host ports: the only new control surface is the abstract Unix socket
+    # which is local to the shared PID/network namespace (ADR-041 §Security).
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   # Reverse Engineering Container
   reverse:

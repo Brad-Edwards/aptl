@@ -204,6 +204,57 @@ describe('assertSessionIdContract — canonical session_id at MCP ingress', () =
   });
 });
 
+describe('handler error paths return a failure envelope', () => {
+  // Every session/command handler wraps its body in try/catch and returns
+  // `{ success: false, error: <message | UNKNOWN_ERROR> }`. Drive each handler
+  // through its catch with an sshManager that throws on any call, so the
+  // failure-envelope line is exercised (and the UNKNOWN_ERROR fallback line is
+  // not dead code). Args use a VALID session id so the handler passes ingress
+  // validation and reaches the throwing dependency.
+  const handlers = generateToolHandlers({
+    toolPrefix: 'test',
+    targetName: 'Test',
+    configKey: 'test-container',
+  });
+  const throwingCtx = {
+    sshManager: new Proxy(
+      {},
+      { get: () => () => { throw new Error('boom'); } },
+    ) as any,
+    labConfig: {
+      server: { configKey: 'test-container', targetName: 'Test' },
+      lab: { name: 'test-lab', network_subnet: '172.20.0.0/16' },
+      containers: {
+        'test-container': {
+          container_name: 'aptl-test',
+          container_ip: '172.20.0.50',
+          ssh_key: '/tmp/nonexistent-key',
+          ssh_user: 'testuser',
+          ssh_port: 2022,
+          enabled: true,
+        },
+      },
+    } as any,
+  };
+
+  it.each([
+    ['run_command', 'test_run_command', { command: 'whoami' }],
+    ['interactive_session', 'test_interactive_session', { session_id: 'sess-1' }],
+    ['background_session', 'test_background_session', { session_id: 'sess-1' }],
+    ['session_command', 'test_session_command', { session_id: 'sess-1', command: 'whoami' }],
+    ['list_sessions', 'test_list_sessions', {}],
+    ['close_session', 'test_close_session', { session_id: 'sess-1' }],
+    ['get_session_output', 'test_get_session_output', { session_id: 'sess-1' }],
+    ['close_all_sessions', 'test_close_all_sessions', {}],
+  ])('%s returns a failure envelope when its dependency throws', async (_label, handlerName, args) => {
+    const result = await handlers[handlerName](args as any, throwingCtx);
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(typeof body.error).toBe('string');
+    expect(body.error.length).toBeGreaterThan(0);
+  });
+});
+
 describe('resolveCaptureContainer (ADR-041 harvest target)', () => {
   const base = {
     server: { configKey: 'kali', targetName: 'Kali' },

@@ -5,6 +5,10 @@ import { LabConfig, getTargetCredentials } from '../config.js';
 import { ShellType } from '../shells.js';
 import { harvestSession } from '../captures.js';
 
+/** Fallback message when a caught value is not an Error (SonarCloud S1192 —
+ * the literal otherwise repeats in every handler's catch block). */
+const UNKNOWN_ERROR = 'Unknown error';
+
 /**
  * Reject session ids whose JSON-schema pattern admits them but which
  * still contain the `..` path-traversal token (the schema regex
@@ -238,7 +242,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               command,
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -296,7 +300,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -355,7 +359,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -399,7 +403,7 @@ const baseHandlers: Record<string, ToolHandler> = {
               success: false,
               session_id,
               command,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -440,7 +444,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -499,7 +503,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -541,7 +545,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],
@@ -601,7 +605,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
             }, null, 2),
           },
         ],

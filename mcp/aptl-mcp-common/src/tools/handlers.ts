@@ -9,6 +9,13 @@ import { harvestSession } from '../captures.js';
  * the literal otherwise repeats in every handler's catch block). */
 const UNKNOWN_ERROR = 'Unknown error';
 
+/** Normalize a caught value to a message string for the failure envelope.
+ * Centralizes the `instanceof Error` narrowing so it is defined and covered
+ * once instead of duplicated across every handler's catch block. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : UNKNOWN_ERROR;
+}
+
 /**
  * Reject session ids whose JSON-schema pattern admits them but which
  * still contain the `..` path-traversal token (the schema regex
@@ -242,7 +249,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               command,
               success: false,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -300,7 +307,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -359,7 +366,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -403,7 +410,7 @@ const baseHandlers: Record<string, ToolHandler> = {
               success: false,
               session_id,
               command,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -444,7 +451,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -503,7 +510,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -545,7 +552,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -605,7 +612,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : UNKNOWN_ERROR,
+              error: errorMessage(error),
             }, null, 2),
           },
         ],

@@ -1,5 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generateToolHandlers, resolveCaptureContainer } from '../src/tools/handlers.js';
+import { generateToolHandlers, resolveCaptureContainer, errorMessage } from '../src/tools/handlers.js';
+
+describe('errorMessage', () => {
+  it('returns the message of an Error', () => {
+    expect(errorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('falls back to "Unknown error" for a non-Error value', () => {
+    // Covers the false branch of the instanceof narrowing — the catch blocks
+    // only ever throw Errors, so this is the only place the fallback runs.
+    expect(errorMessage('a thrown string')).toBe('Unknown error');
+    expect(errorMessage(undefined)).toBe('Unknown error');
+  });
+});
 
 // Partial mock: keep SSHError as a real Error subclass so
 // `assertSessionIdContract` in handlers.ts throws an object whose `.message`
@@ -286,6 +299,16 @@ describe('resolveCaptureContainer (ADR-041 harvest target)', () => {
 
   it('returns undefined for an API-only target (no containers)', () => {
     const labConfig = { ...base, server: { configKey: '' } } as any;
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
+  });
+
+  it('returns undefined when configKey is set but containers is absent', () => {
+    const labConfig = { ...base } as any; // no `containers` key
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
+  });
+
+  it('returns undefined when the configKey container is missing', () => {
+    const labConfig = { ...base, containers: { other: { container_name: 'x' } } } as any;
     expect(resolveCaptureContainer(labConfig)).toBeUndefined();
   });
 });

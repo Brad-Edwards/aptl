@@ -93,13 +93,18 @@ Specifically:
 
 ## Backend Profile Choice
 
-APTL targets `provisioning-only` initially because that profile requires
+APTL targeted `provisioning-only` initially because that profile requires
 only `backend-manifest-v2`, `operation-receipt-v1`, `operation-status-v1`,
 and `runtime-snapshot-v1`—all reachable by wrapping the existing lab
-provisioning code. Moving to `orchestration-capable` adds
-`workflow-result-envelope-v1` and `workflow-history-event-stream-v1`,
-which maps onto APTL's existing scenario runtime engine (RTE-001) but is
-large enough to scope separately under issue #311.
+provisioning code. Issue #311 has since promoted APTL to
+`orchestration-capable`: the manifest declares a real
+`capabilities.orchestrator` and the `workflow-result-envelope-v1` /
+`workflow-history-event-stream-v1` contracts, the runtime target publishes a
+concrete ACES `Orchestrator` (`aptl.backends.aces_orchestrator`) that exposes
+RTE-001's workflow drive surface through those portable contracts, scenario
+start routes through the ACES control plane, and the static/live gates,
+pre-push hook, CI job, and `aptl lab validate-live` default to the
+`orchestration-capable` profile.
 `orchestration-evaluation` further adds the evaluator envelopes and
 corresponds to SCN-007 (Objective-Based Scoring with Hints), tracked
 under issue #312. The `full-remote-control-plane` profile is out of

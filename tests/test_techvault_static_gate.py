@@ -128,7 +128,7 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
         project_dir=PROJECT_ROOT, config=config, backend=_NoStartBackend()
     )
     report = run_target_conformance(
-        target, profile="provisioning-only", root=tmp_path, profiles_root=tmp_path
+        target, profile="orchestration-capable", root=tmp_path, profiles_root=tmp_path
     )
     assert not report.passed
 
@@ -141,7 +141,7 @@ def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     check = check_backend_conformance(
         project_dir=PROJECT_ROOT,
         config=config,
-        profile="provisioning-only",
+        profile="orchestration-capable",
         profiles_root=tmp_path,  # empty corpus root -> profile artifact not found
         fixtures_root=tmp_path,
     )

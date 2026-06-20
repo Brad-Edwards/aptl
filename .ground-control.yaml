@@ -9,5 +9,12 @@ workflow:
 sonarcloud:
   project_key: Brad-Edwards_aptl
   organization: brad-edwards
+routing:
+  # Per-step model routing (ADR-036). When enabled, each /implement step is
+  # dispatched on the model its tier hint maps to (low->haiku, medium->sonnet,
+  # high->opus) instead of always running on the parent session model.
+  enabled: true
+  default_provider: claude
+  default_fallback: parent
 rules:
   plan_rules: .gc/plan-rules.md

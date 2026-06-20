@@ -4,23 +4,32 @@ APTL publishes its runtime-target capability declaration as the canonical ACES
 ``backend-manifest-v2`` surface (``aces_backend_protocols.capabilities``), not an
 APTL-local approximation. The manifest is what the ACES planner's
 realization-support gate and ``aces conformance backend --profile
-provisioning-only`` validate against, so it must declare APTL's real
-provisioning capability against the published controlled vocabularies and
-contract authority — anything less is rejected by the conformance corpus.
+orchestration-capable`` validate against, so it must declare APTL's real
+provisioning and orchestration capability against the published controlled
+vocabularies and contract authority — anything less is rejected by the
+conformance corpus.
 
-APTL is a provisioning-only backend: it realizes ACES provisioning plans into
-Docker Compose profiles and declares no orchestrator, evaluator, or participant
-runtime. Profile promotion is tracked by #311 / #312.
+APTL is an orchestration-capable backend: it realizes ACES provisioning plans
+into Docker Compose profiles and exposes its scenario runtime engine (RTE-001)
+workflow drive surface through the portable ``workflow-result-envelope-v1`` and
+``workflow-history-event-stream-v1`` contracts (see
+``aptl.backends.aces_orchestrator.AptlOrchestrator``). It declares no evaluator
+or participant runtime; that promotion is tracked by #312.
 """
 
 from __future__ import annotations
 
-from aces_backend_protocols.capabilities import BackendManifest, ProvisionerCapabilities
+from aces_backend_protocols.capabilities import (
+    BackendManifest,
+    OrchestratorCapabilities,
+    ProvisionerCapabilities,
+)
 from aces_contracts.apparatus import (
     ConceptBinding,
     RealizationSupportDeclaration,
     RealizationSupportMode,
 )
+from aces_contracts.vocabulary import WorkflowFeature, WorkflowStatePredicateFeature
 
 APTL_ACES_TARGET_NAME = "aptl"
 APTL_ACES_TARGET_VERSION = "0.1.0"
@@ -28,10 +37,12 @@ APTL_ACES_TARGET_VERSION = "0.1.0"
 # The reference ACES processor whose provisioning-plan output APTL realizes.
 _COMPATIBLE_PROCESSORS = frozenset({"aces-reference-processor"})
 
-# Provisioning-only contract surface. The provisioning-only backend profile
-# (contracts/profiles/backend/provisioning-only.json) requires backend-manifest-v2,
-# operation-receipt-v1, operation-status-v1, and runtime-snapshot-v1; APTL also
-# declares provisioning-plan-v1 because it consumes ACES provisioning plans.
+# Orchestration-capable contract surface. The orchestration-capable backend
+# profile (contracts/profiles/backend/orchestration-capable.json) requires
+# backend-manifest-v2, operation-receipt-v1, operation-status-v1,
+# runtime-snapshot-v1, workflow-result-envelope-v1, and
+# workflow-history-event-stream-v1; APTL also declares provisioning-plan-v1
+# because it consumes ACES provisioning plans.
 _SUPPORTED_CONTRACT_VERSIONS = frozenset(
     {
         "backend-manifest-v2",
@@ -39,7 +50,33 @@ _SUPPORTED_CONTRACT_VERSIONS = frozenset(
         "operation-receipt-v1",
         "operation-status-v1",
         "runtime-snapshot-v1",
+        "workflow-result-envelope-v1",
+        "workflow-history-event-stream-v1",
     }
+)
+
+# Orchestrator capability declaration. APTL's RTE-001 runtime engine drives
+# workflows with objective, branching (`if` -> decision), parallel
+# (-> parallel-barrier), and `on-error` (-> failure-transitions) control flow,
+# with step-outcome predicates (-> outcome-matching). Those are the workflow
+# control features APTL can faithfully realize and report through the portable
+# workflow result/history contracts, so the manifest declares exactly that set
+# — not the switch/retry/call/cancellation/timeouts/compensation features APTL
+# does not drive (scenarios using those get an explicit planner diagnostic).
+_ORCHESTRATOR = OrchestratorCapabilities(
+    name="aptl-rte-orchestrator",
+    supported_sections=frozenset({"workflows"}),
+    supports_workflows=True,
+    supported_workflow_features=frozenset(
+        {
+            WorkflowFeature.DECISION,
+            WorkflowFeature.PARALLEL_BARRIER,
+            WorkflowFeature.FAILURE_TRANSITIONS,
+        }
+    ),
+    supported_workflow_state_predicates=frozenset(
+        {WorkflowStatePredicateFeature.OUTCOME_MATCHING}
+    ),
 )
 
 # Provisioner capability declaration, using only published controlled-vocabulary
@@ -91,7 +128,7 @@ _CONCEPT_BINDINGS = (
 
 
 def create_aptl_manifest() -> BackendManifest:
-    """Return APTL's provisioning-only canonical ACES ``backend-manifest-v2``."""
+    """Return APTL's orchestration-capable canonical ACES ``backend-manifest-v2``."""
     return BackendManifest(
         name=APTL_ACES_TARGET_NAME,
         version=APTL_ACES_TARGET_VERSION,
@@ -100,4 +137,5 @@ def create_aptl_manifest() -> BackendManifest:
         realization_support=_REALIZATION_SUPPORT,
         concept_bindings=_CONCEPT_BINDINGS,
         provisioner=_PROVISIONER,
+        orchestrator=_ORCHESTRATOR,
     )

@@ -80,8 +80,15 @@ required_surface_coverage:
     notes: Adversary inject sequencing belongs to the orchestration-evaluation profile; out of provisioning-only scope.
   workflows:
     status: deferred
-    blocking_followup: "#312"
-    notes: Scenario-flow workflows belong to the orchestration-evaluation profile; out of provisioning-only scope.
+    blocking_followup: "#321"
+    notes: >-
+      The workflow result/history backend contract surface
+      (workflow-result-envelope-v1 / workflow-history-event-stream-v1) is the
+      orchestration-capable profile, delivered by #311 and proven by `aces
+      conformance backend --profile orchestration-capable` against APTL's
+      published manifest (src/aptl/backends/aces_orchestrator.py). TechVault
+      authors no workflow scenario content yet; that authoring is the cutover
+      scope tracked by #321.
   objectives:
     status: deferred
     blocking_followup: "#312"
@@ -93,7 +100,12 @@ required_surface_coverage:
   run_archive:
     status: deferred
     blocking_followup: "#312"
-    notes: Run-archive/scoring run evidence is an evaluator-profile runtime output (#312).
+    notes: >-
+      Workflow run history is expressible through the orchestration-capable
+      contracts delivered by #311, but TechVault authors no workflows so it
+      emits no workflow runs; scoring/evaluator run-archive evidence is an
+      evaluator-profile (orchestration-evaluation) runtime output tracked by
+      #312.
 
 # ---------------------------------------------------------------------------
 # Rows.

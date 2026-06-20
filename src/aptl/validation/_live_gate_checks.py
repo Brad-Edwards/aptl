@@ -139,7 +139,7 @@ def check_boot_inputs_match_public_path(
     The gate computes the expected realization from ``scenario_path`` and
     ``options.profile``, but the public boot path it exercises
     (``orchestrate_lab_start`` → ``start_aces_scenario``) is hardwired to
-    ``DEFAULT_ACES_SCENARIO`` and the ``provisioning-only`` capability profile;
+    ``DEFAULT_ACES_SCENARIO`` and the ``orchestration-capable`` capability profile;
     it ignores any caller-supplied scenario/profile. Booting one model while
     validating another would silently produce false pass/fail results, so a
     mismatch is a hard ``backend_instantiation`` failure raised *before* any

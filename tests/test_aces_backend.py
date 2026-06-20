@@ -5,6 +5,8 @@ from unittest.mock import MagicMock
 
 from aces_contracts.planning import (
     ChangeAction,
+    EvaluationPlan,
+    OrchestrationPlan,
     PlannedResource,
     ProvisioningPlan,
     ProvisionOp,
@@ -104,8 +106,18 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 
-    def __init__(self, provisioning, *, is_valid=True, diagnostics=None):
+    def __init__(
+        self,
+        provisioning,
+        *,
+        is_valid=True,
+        diagnostics=None,
+        orchestration=None,
+        evaluation=None,
+    ):
         self.provisioning = provisioning
+        self.orchestration = orchestration or OrchestrationPlan()
+        self.evaluation = evaluation or EvaluationPlan()
         self.base_snapshot = RuntimeSnapshot()
         self.is_valid = is_valid
         self.diagnostics = diagnostics or []
@@ -127,10 +139,13 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         "operation-receipt-v1",
         "operation-status-v1",
         "runtime-snapshot-v1",
+        "workflow-result-envelope-v1",
+        "workflow-history-event-stream-v1",
     }
     assert required <= set(payload["supported_contract_versions"])
-    # provisioning-only: no orchestration / evaluation / participant surfaces.
-    assert manifest.has_orchestrator is False
+    # orchestration-capable: orchestrator declared; evaluator / participant
+    # runtime remain out of scope (#312).
+    assert manifest.has_orchestrator is True
     assert manifest.has_evaluator is False
     assert manifest.has_participant_runtime is False
 
@@ -153,6 +168,34 @@ def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
+
+
+def test_aptl_target_passes_orchestration_capable_conformance(tmp_path):
+    from aces_conformance.conformance import run_target_conformance
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    backend = MagicMock()
+    config = AptlConfig(lab={"name": "test"})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+    )
+
+    report = run_target_conformance(target, profile="orchestration-capable")
+
+    assert report.passed is True, [d.code for d in report.diagnostics]
+    assert report.unsupported_contract_gaps == ()
+    assert report.unsupported_capability_gaps == ()
+    # The live probe submits a workflow scenario through the control plane and
+    # validates the resulting orchestration snapshot; assert APTL's orchestrator
+    # produced a contract-clean run-archive surface.
+    assert all(case.passed for case in report.cases), [
+        (case.name, [d.message for d in case.diagnostics])
+        for case in report.cases
+        if not case.passed
+    ]
 
 
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
@@ -199,9 +242,148 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
 
 
+def _workflow_orchestration_plan():
+    """Compile a minimal workflow scenario into its ACES orchestration plan."""
+    from textwrap import dedent
+
+    from aces_processor.compiler import compile_runtime_model
+    from aces_processor.planner import plan as aces_plan
+    from aces_sdl.parser import parse_sdl
+
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: wf
+            nodes:
+              vm:
+                type: vm
+                os: linux
+                resources: {ram: 1 gib, cpu: 1}
+                conditions: {health: ops}
+                roles: {ops: operator}
+            conditions:
+              health: {command: /bin/true, interval: 15}
+            entities:
+              blue: {role: blue}
+            objectives:
+              validate:
+                entity: blue
+                success: {conditions: [health]}
+            workflows:
+              response:
+                start: run
+                steps:
+                  run: {type: objective, objective: validate, on-success: finish}
+                  finish: {type: end}
+            """
+        )
+    )
+    return aces_plan(compile_runtime_model(scenario), create_aptl_manifest()).orchestration
+
+
+def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker, tmp_path):
+    """A scenario carrying workflows routes through the control plane's
+    orchestration submission (not just provisioning), and the lab still starts."""
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+    orchestration = _workflow_orchestration_plan()
+    assert orchestration.actionable_operations  # guard: the plan really carries workflows
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"), orchestration=orchestration
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is True
+    backend.start.assert_called_once_with(["victim", "otel"])
+
+
+def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_path):
+    """A deployment-backend failure surfaces as a failed control-plane phase."""
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(_plan_for_nodes("techvault.victim"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=False, error="backend boom")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is False
+    assert result.error
+
+
+def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
+    """An orchestration-phase failure (provisioning already applied) surfaces as
+    a failed lab start, not a silent success."""
+    from aces_contracts.planning import ChangeAction, OrchestrationOp, OrchestrationPlan
+
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+    # A workflow op with no compiled result_contract makes AptlOrchestrator.start
+    # fail closed, which the control plane reports as a failed operation.
+    bad_orchestration = OrchestrationPlan(
+        resources={},
+        operations=[
+            OrchestrationOp(
+                action=ChangeAction.CREATE,
+                address="orchestration.workflow.bad",
+                resource_type="workflow",
+                payload={"name": "bad"},
+            )
+        ],
+    )
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"), orchestration=bad_orchestration
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is False
+    assert result.error
+
+
 def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_path):
     """A scenario carrying evaluation content (e.g. the `conditions` healthcheck
-    section) must still provision. APTL is a provisioning-only ACES backend, so
+    section) must still provision. APTL declares no ACES evaluator yet (#312), so
     the planner's `evaluator.missing` error and the resulting invalid plan must
     not block lab standup."""
     from aces_contracts.diagnostics import Diagnostic, Severity
@@ -244,8 +426,8 @@ def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_p
 def test_start_aces_scenario_fails_closed_on_non_evaluator_plan_error(mocker, tmp_path):
     """A planner error that is NOT the expected evaluation-domain
     `evaluator.missing` (e.g. a provisioning ordering cycle) must fail closed:
-    the provisioning-only handoff must refuse to start Compose on an otherwise
-    invalid execution plan rather than bypass the gate for every plan."""
+    the ACES handoff must refuse to start Compose on an otherwise invalid
+    execution plan rather than bypass the gate for every plan."""
     from aces_contracts.diagnostics import Diagnostic, Severity
 
     from aptl.backends import aces

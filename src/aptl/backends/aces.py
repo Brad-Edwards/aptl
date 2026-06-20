@@ -9,13 +9,15 @@ start.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
-from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
+from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
 from aces_sdl import SDLError, parse_sdl_file
@@ -28,6 +30,7 @@ from aptl.backends.aces_diagnostics import (
     snapshot_after_apply,
 )
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
+from aptl.backends.aces_orchestrator import AptlOrchestrator
 from aptl.backends.aces_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -41,6 +44,8 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from aces_processor.models import ExecutionPlan
+
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("aces-backend")
@@ -65,6 +70,7 @@ def create_aptl_runtime_target(
         name=APTL_ACES_TARGET_NAME,
         manifest=create_aptl_manifest(),
         provisioner=provisioner,  # type: ignore[arg-type]
+        orchestrator=AptlOrchestrator(),  # type: ignore[arg-type]
     )
 
 
@@ -86,55 +92,86 @@ def start_aces_scenario(
             config=config,
             backend=backend,
         )
-        manager = RuntimeManager(target)
-        execution_plan = manager.plan(scenario)
-        # APTL is a provisioning-only ACES backend: its manifest declares no
-        # evaluator or orchestrator (see aces_manifest.AptlBackendManifest). A
-        # scenario may still carry evaluation content — notably the `conditions`
-        # section, whose entries are Docker Compose healthchecks realized during
-        # provisioning, not by an ACES evaluator. The runtime planner flags such
-        # content with the evaluation-domain `evaluator.missing` ERROR and marks
-        # the whole plan invalid, so RuntimeManager.apply would refuse before any
-        # provisioning runs. Allowlist only that one expected diagnostic; stay
-        # fail-closed for every other planner error (e.g. provisioning ordering
-        # cycles or unsupported provisioning capabilities), which surface on the
-        # ExecutionPlan diagnostics rather than necessarily in the
-        # ProvisioningPlan that the provisioner re-validates. Then apply only the
-        # provisioning phase through APTL's provisioner.
-        blocking = [
-            diag
-            for diag in execution_plan.diagnostics
-            if diag.is_error
-            and not (diag.domain == "evaluation" and diag.code == "evaluator.missing")
-        ]
-        if blocking:
-            return LabResult(
-                success=False,
-                error=render_aces_diagnostics(blocking),
-            )
-        result = target.provisioner.apply(
-            execution_plan.provisioning,
-            execution_plan.base_snapshot,
-        )
+        execution_plan = RuntimeManager(target).plan(scenario)
+        return _run_execution_plan(target, execution_plan)
     except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
         return LabResult(
             success=False,
             error=redact(f"ACES runtime handoff failed: {exc}"),
         )
 
-    return (
-        LabResult(
-            success=True,
-            message=(
-                f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'"
-            ),
-        )
-        if result.success
-        else LabResult(
-            success=False,
-            error=render_aces_diagnostics(result.diagnostics),
-        )
+
+def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") -> LabResult:
+    """Apply a planned ACES scenario through the runtime control plane.
+
+    APTL declares no ACES evaluator yet (tracked by #312). A scenario may still
+    carry evaluation content — notably the ``conditions`` section, whose entries
+    are Docker Compose healthchecks realized during provisioning, not by an ACES
+    evaluator. The planner flags such content with the evaluation-domain
+    ``evaluator.missing`` ERROR; tolerate exactly that one expected diagnostic
+    and stay fail-closed for every other planner error (provisioning ordering
+    cycles, unsupported capabilities, orchestration errors, ...). Now that APTL
+    is orchestration-capable, scenario start no longer bypasses the orchestration
+    path: provisioning is applied, then — when the scenario carries workflows —
+    orchestration is started so APTL's orchestrator records workflow
+    result/history through the portable ACES contracts.
+    """
+    blocking = [
+        diag
+        for diag in execution_plan.diagnostics
+        if diag.is_error
+        and not (diag.domain == "evaluation" and diag.code == "evaluator.missing")
+    ]
+    if blocking:
+        return LabResult(success=False, error=render_aces_diagnostics(blocking))
+    control_plane = RuntimeControlPlane(target, initial_snapshot=execution_plan.base_snapshot)
+    failure = _apply_provisioning_and_orchestration(control_plane, execution_plan)
+    if failure is not None:
+        return failure
+    return LabResult(
+        success=True,
+        message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
     )
+
+
+def _apply_provisioning_and_orchestration(
+    control_plane: RuntimeControlPlane,
+    execution_plan: "ExecutionPlan",
+) -> LabResult | None:
+    """Submit provisioning, then orchestration when the plan carries workflows.
+
+    Returns a failed ``LabResult`` for the first phase that fails, else ``None``.
+    Evaluation stays unsubmitted until #312 adds the evaluator.
+    """
+    provisioning_failure = _apply_phase(
+        control_plane,
+        lambda: control_plane.submit_provisioning(execution_plan.provisioning),
+    )
+    if provisioning_failure is not None:
+        return provisioning_failure
+    if execution_plan.orchestration.actionable_operations:
+        return _apply_phase(
+            control_plane,
+            lambda: control_plane.submit_orchestration(execution_plan.orchestration),
+        )
+    return None
+
+
+def _apply_phase(
+    control_plane: RuntimeControlPlane,
+    submit: Callable[[], object],
+) -> LabResult | None:
+    """Submit one control-plane phase; return a failed ``LabResult`` or ``None``.
+
+    Returns ``None`` when the submitted operation succeeded, otherwise a redacted
+    failure ``LabResult`` built from the operation's (or receipt's) diagnostics.
+    """
+    receipt = submit()
+    status = control_plane.get_operation(receipt.operation_id)
+    if status is not None and status.state == OperationState.SUCCEEDED:
+        return None
+    diagnostics = list(status.diagnostics) if status is not None else list(receipt.diagnostics)
+    return LabResult(success=False, error=render_aces_diagnostics(diagnostics))
 
 
 @dataclass

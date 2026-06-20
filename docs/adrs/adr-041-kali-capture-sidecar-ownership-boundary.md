@@ -214,6 +214,13 @@ concept.
 
 ## PTY transcript authenticity (residual)
 
+> **Superseded by [ADR-042: Sidecar-Owned PTY Master for Kali Transcript
+> Authenticity](adr-042-sidecar-owned-pty-master.md) (2026-06-20).** ADR-042
+> moves PTY-master ownership into the sidecar so the Kali-side typescript is
+> tamper-resistant against the workload's own session. The residual recorded
+> below documents why issue #305 shipped without that property; ADR-042 is the
+> design that closes it.
+
 This boundary makes capture evidence **undeletable and unreadable** by the
 Kali workload, and makes the genuinely Kali-side witnesses (per-session
 **pcap**, **auditd**, and **process accounting**) **tamper-resistant**,

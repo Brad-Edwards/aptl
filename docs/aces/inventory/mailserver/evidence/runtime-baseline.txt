@@ -195,7 +195,6 @@ docker:x:5000:
    1279    1273 root     dovecot/log
    1280    1273 root     dovecot/config
    1282       7 root     /bin/bash /usr/local/bin/update-check.sh
-   1311    1282 root     sleep 1d
    1312       7 opendkim /usr/sbin/opendkim -f
    1313    1312 opendkim /usr/sbin/opendkim -f
    1322       7 opendma+ /usr/sbin/opendmarc -f -p inet:8893@localhost -P /var/run/opendmarc/opendmarc.pid
@@ -203,14 +202,16 @@ docker:x:5000:
    1338    1334 root     /bin/sh /usr/lib/postfix/sbin/postfix-script start-fg
    1369       7 amavis   /usr/sbin/amavisd (master)
    1421    1338 root     /usr/lib/postfix/sbin/master -s
-   1422    1421 postfix  pickup -l -t fifo -u -o content_filter= -o receive_override_options=no_header_body_checks
    1423    1421 postfix  qmgr -l -t unix -u
    1424       7 root     /bin/bash /usr/local/bin/check-for-changes.sh
    1470    1369 amavis   /usr/sbin/amavisd (virgin child)
    1471    1369 amavis   /usr/sbin/amavisd (virgin child)
-   3827    1424 root     sleep 2
-   4071       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release 2>/dev/null || true   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,180p"   echo --users--   getent passwd | sed -n "1,240p" || true   echo --groups--   getent group | sed -n "1,240p" || true   echo --process-tree--   ps -eo pid,ppid,user,args || true   echo --mail-versions--   (postconf mail_version || true) 2>&1   (dovecot --version || true) 2>&1   (amavis -V || true) 2>&1   (rspamadm --version || true) 2>&1
-   4094    4071 root     ps -eo pid,ppid,user,args
+1940723    1282 root     sleep 1d
+1960335    1421 postfix  pickup -l -t fifo -u -o content_filter= -o receive_override_options=no_header_body_checks
+1965379    1273 dovecot  dovecot/auth
+1965612    1424 root     sleep 2
+1965613       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release 2>/dev/null || true   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,180p"   echo --users--   getent passwd | sed -n "1,240p" || true   echo --groups--   getent group | sed -n "1,240p" || true   echo --process-tree--   ps -eo pid,ppid,user,args || true   echo --mail-versions--   (postconf mail_version || true) 2>&1   (dovecot --version || true) 2>&1   (amavis -V || true) 2>&1   (rspamadm --version || true) 2>&1
+1965636 1965613 root     ps -eo pid,ppid,user,args
 --mail-versions--
 mail_version = 3.7.11
 2.3.19.1 (9b53102964)

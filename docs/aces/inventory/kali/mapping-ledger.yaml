@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9
+  image_digest: aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -103,10 +103,13 @@ notes:
     evidence under nodes.techvault.kali.runtime.package_vulnerabilities, not top-level
     vulnerabilities entries.
   - >
-    The kali_captures and kali_operations named volumes and the
-    /host-ssh-keys operator bind mount are recorded by mount metadata only;
+    The kali_captures and kali_operations named volumes and the two
+    /host-ssh-keys file binds (the dedicated kali pivot private key and the
+    labadmin authorized_keys, per SEC #417) are recorded by mount metadata only;
     their contents are out of scope for this committed bundle per ADR-033 and
-    ADR-029. The kali filesystem inventory catalogues the APTL-authored/custom
+    ADR-029. The node SDL mount table reflects the SEC #417 key split; the
+    committed docker-inspect evidence predates that re-capture and still shows
+    the prior whole-./keys directory mount. The kali filesystem inventory catalogues the APTL-authored/custom
     and scenario-relevant runtime paths; a full Kali tool root filesystem
     enumeration is deferred capture scope, not an ACES expressivity limit.
 facts:
@@ -114,7 +117,7 @@ facts:
     category: provenance
     summary: >
       The asset uses first-party local image aptl-kali:latest, captured as
-      aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9.
+      aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462.
     evidence:
       - path: evidence/docker-inspect.image.json
       - path: evidence/docker-inspect.container.json

@@ -1,0 +1,496 @@
+schema_version: 1
+asset:
+  id: reverse
+  scenario: TechVault
+  aptl_issue: 338
+  aces_methodology_issue: 353
+  source_class: custom-build
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: aptl-reverse@sha256:37f8911050ec6224e435665152d07fd51ce2fb82d476c6d1798dbe4fa1af2f13
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.err
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - aptl-reverse:latest is a locally built image with no registry manifest, so docker buildx imagetools inspect failed (see
+      docker-buildx-imagetools.image.err) and no registry-visible OCI/in-toto/SLSA attestation could be captured. Image identity
+      is the local config ID in docker-inspect.image.json plus the build recipe in source-checksums.txt.
+notes:
+- Capture used the already-running aptl project (reverse profile up) per operator direction and did not run aptl lab stop
+  -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #338 inventories the reverse-engineering workbench as the participant node nodes.techvault.reverse (target
+  family, full Ubuntu 22.04 systemd archetype following the victim/workstation precedents). Every catalogued observable maps
+  to a current ACES surface. No known ACES expressivity gap remains for the catalogued reverse steady-state facts.'
+- The reverse profile container required three pre-existing service-definition fixes on the same branch before it would boot
+  to steady state (cgroup:host, /run/lock tmpfs for Ubuntu systemd under AppArmor docker-default, and a 2g memory limit; the
+  original 512m OOM-killed the first-boot radare2 source build). These are committed as separate fix commits.
+- The RE toolchain (radare2 from source, YARA, UPX, osslsigncode, OpenJDK 17, pipx flare-floss + flare-capa) and the Wazuh/Falco agents are installed
+  on FIRST BOOT into the container's writable layer, so the image-layer scanners (Trivy/Syft) do not see them; runtime package/component
+  state is captured by os-packages.txt, language-manifests.txt, and reverse-tools-state.txt.
+- The Wazuh agent registration name is runtime-generated (reverse-$(hostname)-$(date +%s)); the manager-side agents[] enumeration
+  is intentionally not extended for this node (non-deterministic name). The forwarding is encoded as node forwarding_agents
+  + the reverse-forwards-wazuh relationship.
+- 'Scenario target secret files under /etc/ssh and /var/ossec/etc/client.keys are captured verbatim in
+  filesystem-sensitive-paths.txt and included in filesystem-checksums.txt.xz. Per SEC #417 no operator private
+  key is mounted into the target; /keys holds only public material (the control-plane pubkey and the kali pivot pubkey).'
+correspondence_checks:
+- id: reverse-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/reverse/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest itself; tests/test_reverse_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - reverse.capture.toolchain-baseline
+- id: reverse-node-source-correspondence
+  status: implemented
+  source: nodes.techvault.reverse.source
+  method: tests/test_reverse_inventory.py asserts the ACES source name/version + build provenance against the realized local
+    image digest, docker history, and source checksums.
+  realized_evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/source-checksums.txt
+  ledger_fact_ids:
+  - reverse.image.identity-provenance
+  - reverse.image.build-recipe
+- id: reverse-runtime-correspondence
+  status: implemented
+  source: nodes.techvault.reverse.runtime
+  method: tests/test_reverse_inventory.py parses the ACES SDL and asserts package, CVE, filesystem, identity, process, environment,
+    capability, network, ssh, and service-manager counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/systemd-units.txt
+  ledger_fact_ids:
+  - reverse.runtime.container-host-config
+  - reverse.runtime.package-inventory
+  - reverse.runtime.vulnerability-scan
+  - reverse.runtime.local-identity
+  - reverse.runtime.service-manager-state
+  - reverse.ssh.service
+- id: reverse-forwarding-relationship-correspondence
+  status: implemented
+  source: scenarios/techvault.sdl.yaml relationships.reverse-forwards-wazuh + forwarding_agents
+  method: README and tests assert the realized wazuh-agent + rsyslog forwarding (manager agent_control shows the agent Active)
+    and the kali no-route segmentation.
+  realized_evidence:
+  - path: evidence/observer-discovery.wazuh-manager.txt
+  - path: evidence/wazuh-agent-state.txt
+  - path: evidence/participant-discovery.kali.txt
+  ledger_fact_ids:
+  - reverse.relationship.forwards-wazuh
+  - reverse.network.identity
+- id: reverse-first-boot-and-capture-caveats
+  status: implemented
+  source: docs/aces/inventory/reverse/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, the writable-layer first-boot install boundary, the corrected
+    FLARE tool install (flare-floss/flare-capa), key capture boundary, the scoped filesystem manifest, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/filesystem-sensitive-paths.txt
+  - path: evidence/reverse-tools-state.txt
+  - path: evidence/osquery-programs.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/docker-logs.reverse.txt
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-volume.reverse_logs.json
+  - path: evidence/docker-volume.reverse-home.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/apt-repositories.txt
+  - path: evidence/language-manifests.txt
+  ledger_fact_ids:
+  - reverse.capture.toolchain-baseline
+  - reverse.runtime.filesystem-inventory
+  - reverse.provisioning.first-boot
+  - reverse.access-policy
+  - reverse.runtime.osquery-baseline
+facts:
+- id: reverse.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/reverse/capture-evidence.sh
+    - docs/aces/inventory/reverse/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime/profile fields carry this catalogued reverse fact directly.
+    caveat: Scanner and runtime observations are time-sensitive evidence from the current-running lab, not immutable clean-reset
+      proof.
+- id: reverse.image.identity-provenance
+  category: image
+  summary: The reverse box resolves to the local image config ID aptl-reverse@sha256:7ba01e2a... on Ubuntu 22.04; no registry
+    digest exists for the local build.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.err
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.source.name
+    - nodes.techvault.reverse.source.version
+    - nodes.techvault.reverse.os_version
+    rationale: Current ACES SDL node source fields carry the local-build image identity directly.
+- id: reverse.image.build-recipe
+  category: image
+  summary: The Dockerfile instructions, docker-history layers, default config, and absent attestation are encoded as local-build
+    provenance; the build-context COPY inputs are checksummed.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.source.build.instructions
+    - nodes.techvault.reverse.source.build.layers
+    - nodes.techvault.reverse.source.build.config
+    - nodes.techvault.reverse.source.build.source_inputs
+    - nodes.techvault.reverse.source.build.attestation
+    rationale: Current ACES SDL node build fields carry this catalogued fact directly.
+- id: reverse.provisioning.first-boot
+  category: provisioning
+  summary: The reverse-tools-install systemd oneshot runs on first boot, compiling radare2 from source and pipx-installing
+    flare-floss + flare-capa; the toolchain + Wazuh/Falco agents live in the writable layer, NOT the image, so image scanners do not see them.
+  evidence:
+  - path: evidence/reverse-tools-state.txt
+  - path: evidence/docker-logs.reverse.txt
+  - path: evidence/language-manifests.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.software_components
+    - nodes.techvault.reverse.runtime.service_manager_units
+    rationale: The first-boot-installed toolchain is encoded as runtime software_components + the service-manager unit; the
+      install provenance is the source-checksummed scripts.
+    caveat: The image-layer scanners (Trivy/Syft) see only committed layers; the writable-layer toolchain (radare2 build,
+      wazuh-agent, falco, pipx venvs) is captured by os-packages.txt + language-manifests.txt + reverse-tools-state.txt instead.
+      The FLARE Python tools are the correct pinned distributions flare-floss==3.1.1 and flare-capa==9.4.0 (encoded as
+      software_components), corrected in SCN-010 (#338) after the initial capture found the unrelated bare 'floss' package
+      (an academic fault-localization tool, analyzed as non-malicious; a pure wheel, no install-time code).
+- id: reverse.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-reverse, profile reverse, image aptl-reverse:local, cgroup:host, 2g memory, SYS_ADMIN/SYS_NICE/SYS_RESOURCE
+    cap_add, seccomp:unconfined, the /sys/fs/cgroup bind + two /keys public-key file binds, reverse_logs volume, tmpfs /run /run/lock /tmp, security-net
+    172.20.0.27, and the 2027->22 published port.
+  evidence:
+  - path: evidence/compose-service.reverse.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.environment
+    - nodes.techvault.reverse.runtime.operational_policy
+    - nodes.techvault.reverse.runtime.container
+    - nodes.techvault.reverse.runtime.mounts
+    - nodes.techvault.reverse.runtime.network.published_ports
+    rationale: Current ACES SDL node runtime fields carry the compose contract directly.
+- id: reverse.runtime.container-host-config
+  category: runtime
+  summary: Docker runtime policy captures restart unless-stopped, 2 GiB memory, cgroup:host namespace, the SYS_ADMIN/SYS_NICE/SYS_RESOURCE
+    capability add over the default mask, masked/read-only paths, seccomp:unconfined, and runc runtime.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.container
+    - nodes.techvault.reverse.runtime.linux_capabilities
+    - nodes.techvault.reverse.runtime.operational_policy
+    rationale: Current ACES SDL node runtime container/capabilities/operational_policy fields carry this catalogued fact directly.
+- id: reverse.network.identity
+  category: network
+  summary: The reverse box is attached to security-net only at 172.20.0.27 with Docker aliases/DNS names/MAC, and publishes
+    SSH to the host as 2027->22; kali (other subnets) cannot route to the security-net address.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.network.endpoints
+    - nodes.techvault.reverse.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and published-port facts directly.
+- id: reverse.ssh.service
+  category: service-surface
+  summary: OpenSSH listens on TCP/22 (published 2027), the healthcheck is healthy, and sshd -T shows pubkey auth on, password
+    auth off, root login disabled.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/osquery-listening-ports.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.services
+    - nodes.techvault.reverse.runtime.ssh_servers
+    - nodes.techvault.reverse.runtime.health
+    rationale: Current ACES SDL node services + ssh_servers + health fields carry the SSH surface directly.
+- id: reverse.runtime.mount-table
+  category: runtime
+  summary: 'The full mount table is encoded: overlay rootfs, the /sys/fs/cgroup bind + two /keys public-key file binds, the reverse_logs volume at
+    /var/log, tmpfs /run /run/lock /tmp /dev, and the proc/sys masked overlays.'
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/docker-volume.reverse_logs.json
+  - path: evidence/docker-volume.reverse-home.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the classified mount table directly.
+- id: reverse.runtime.process-set
+  category: runtime
+  summary: The steady-state process set is systemd PID 1 plus journald, rsyslogd, sshd, dbus, logind, falco/falcoctl, and
+    the five wazuh daemons.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured process set directly.
+- id: reverse.runtime.environment-policy
+  category: runtime
+  summary: 'Runtime environment is four variables: SIEM_IP and LABADMIN_SSH_KEY_FILE (compose) plus PATH and DEBIAN_FRONTEND
+    (image); no secret-bearing values.'
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+- id: reverse.runtime.filesystem-inventory
+  category: filesystem
+  summary: The bootstrap scripts, systemd units, ssh/sudo/rsyslog/falco/wazuh config, apt trust, the labadmin home skeleton,
+    the /opt/lab first-boot marker, and the RE toolchain entry points are encoded with checksums for stable config files.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/filesystem-sensitive-paths.txt
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: 'The manifest excludes the radare2 source/build tree, pipx venv lib payloads, and ~/.cache (toolchain payload evidenced
+      by the package/SBOM surfaces). Scenario target secret files under /etc/ssh and /var/ossec/etc/client.keys are
+      captured verbatim in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt.xz; per SEC #417
+      /keys holds only public material (the control-plane pubkey and the kali pivot pubkey).'
+- id: reverse.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 27 users and 48 groups; labadmin is in the sudo group with a NOPASSWD grant.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - accounts
+    fields:
+    - nodes.techvault.reverse.runtime.local_identity
+    rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
+- id: reverse.access-policy
+  category: access
+  summary: labadmin holds a passwordless sudo grant (labadmin ALL=(ALL) NOPASSWD:ALL); SSH is pubkey-only; the local accounts
+    are mirrored into the accounts registry.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/filesystem-tree.txt.gz
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    - accounts
+    - vulnerabilities
+    fields:
+    - nodes.techvault.reverse.runtime.local_identity.sudo_rules
+    - nodes.techvault.reverse.vulnerabilities
+    - accounts.reverse-local-*
+    rationale: The NOPASSWD sudo grant is encoded as a node vulnerability + sudo rule; the local accounts populate the accounts
+      registry.
+- id: reverse.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 506 installed OS packages; apt sources/keyrings are recorded.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/apt-repositories.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+    caveat: The dpkg inventory is the running-container state (includes first-boot installs); the image-layer SBOMs are a
+      subset. apt_sources via osquery is the host-side vantage; the target apt config is in apt-repositories.txt.
+- id: reverse.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 77 image-layer vulnerability findings (1 high, 37 medium, 39 low); the writable-layer toolchain is out of
+    image-scan scope.
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Trivy scans only the committed image layers; first-boot writable-layer installs are not covered. Scanner output
+      is time-sensitive.
+- id: reverse.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.packages
+    - nodes.techvault.reverse.runtime.software_components
+    rationale: Current ACES SDL node fields use dpkg + scanner-derived summaries; full CycloneDX docs are retained as evidence.
+    caveat: SBOMs are retained as evidence; SDL package fields do not embed the full CycloneDX documents, and the SBOMs reflect
+      image layers only.
+- id: reverse.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.processes
+    - nodes.techvault.reverse.runtime.service_listeners
+    - nodes.techvault.reverse.runtime.network
+    rationale: Current ACES SDL node fields carry the osquery-derived runtime baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image and are recorded
+      as capture limits.
+- id: reverse.runtime.service-manager-state
+  category: runtime
+  summary: The systemd unit-file enumeration (113 units) is encoded, with the reverse-tools-install oneshot and the wazuh/falco/rsyslog/ssh
+    units captured.
+  evidence:
+  - path: evidence/systemd-units.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.reverse.runtime.service_manager_units
+    rationale: Current ACES SDL node runtime.service_manager_units carries the systemd unit-file enumeration directly.
+- id: reverse.relationship.forwards-wazuh
+  category: relationship
+  summary: The reverse box runs an in-process Wazuh agent (registered Active) and rsyslog, both forwarding to the wazuh-manager;
+    encoded as two node forwarding_agents and the reverse-forwards-wazuh edge.
+  evidence:
+  - path: evidence/wazuh-agent-state.txt
+  - path: evidence/observer-discovery.wazuh-manager.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: relationships
+    checked_surfaces:
+    - relationships
+    - nodes
+    fields:
+    - relationships.reverse-forwards-wazuh
+    - nodes.techvault.reverse.runtime.forwarding_agents
+    rationale: The realized forwarding is encoded as node-level forwarding_agents resolved by the reverse-forwards-wazuh typed
+      edge.
+    caveat: The Wazuh agent registration NAME is runtime-generated (reverse-$(hostname)-$(date +%s), id 009 Active in this
+      capture); a stale reverse-host (id 008, Disconnected) row from the OOM-killed first boot also exists. Both are lab-state
+      debris, so the wazuh-manager agents[] enumeration is intentionally not extended for this node and the literal name is
+      not encoded as a stable value.

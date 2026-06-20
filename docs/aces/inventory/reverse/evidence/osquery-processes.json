@@ -1,0 +1,126 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-reverse PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/sbin/init",
+      "gid": "0",
+      "name": "systemd",
+      "path": "",
+      "pid": "1",
+      "start_time": "1781502029",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/lib/systemd/systemd-journald",
+      "gid": "0",
+      "name": "systemd-journal",
+      "path": "",
+      "pid": "33",
+      "start_time": "1781502029",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/sbin/rsyslogd -n -iNONE",
+      "gid": "106",
+      "name": "rsyslogd",
+      "path": "",
+      "pid": "34",
+      "start_time": "1781502029",
+      "uid": "105"
+    },
+    {
+      "cmdline": "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups",
+      "gid": "0",
+      "name": "sshd",
+      "path": "",
+      "pid": "40",
+      "start_time": "1781502029",
+      "uid": "0"
+    },
+    {
+      "cmdline": "@dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only",
+      "gid": "104",
+      "name": "dbus-daemon",
+      "path": "",
+      "pid": "752",
+      "start_time": "1781502043",
+      "uid": "103"
+    },
+    {
+      "cmdline": "/lib/systemd/systemd-logind",
+      "gid": "0",
+      "name": "systemd-logind",
+      "path": "",
+      "pid": "753",
+      "start_time": "1781502043",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/bin/falco -o engine.kind=modern_ebpf",
+      "gid": "0",
+      "name": "falco",
+      "path": "",
+      "pid": "3228",
+      "start_time": "1781502062",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/usr/bin/falcoctl artifact follow --allowed-types=rulesfile",
+      "gid": "0",
+      "name": "falcoctl",
+      "path": "",
+      "pid": "3229",
+      "start_time": "1781502062",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "108",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "4275",
+      "start_time": "1781502078",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-agentd",
+      "gid": "108",
+      "name": "wazuh-agentd",
+      "path": "",
+      "pid": "4287",
+      "start_time": "1781502079",
+      "uid": "107"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-syscheckd",
+      "gid": "108",
+      "name": "wazuh-syscheckd",
+      "path": "",
+      "pid": "4309",
+      "start_time": "1781502080",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-logcollector",
+      "gid": "108",
+      "name": "wazuh-logcollec",
+      "path": "",
+      "pid": "4323",
+      "start_time": "1781502080",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-modulesd",
+      "gid": "108",
+      "name": "wazuh-modulesd",
+      "path": "",
+      "pid": "4503",
+      "start_time": "1781502081",
+      "uid": "0"
+    }
+  ]
+}

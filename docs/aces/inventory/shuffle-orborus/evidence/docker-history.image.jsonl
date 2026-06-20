@@ -1,0 +1,6 @@
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:06+01:00","CreatedBy":"CMD [\"./orborus\"]","CreatedSince":"4 months ago","ID":"sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:06+01:00","CreatedBy":"ENV ENVIRONMENT_NAME=Shuffle BASE_URL=http://shuffle-backend:5001 DOCKER_API_VERSION=1.40 SHUFFLE_OPENSEARCH_URL=https://opensearch:9200","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:25:06+01:00","CreatedBy":"COPY /app/ / # buildkit","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"103MB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2026-02-12T16:21:52+01:00","CreatedBy":"RUN /bin/sh -c apk add --no-cache bash tzdata # buildkit","CreatedSince":"4 months ago","ID":"\u003cmissing\u003e","Size":"3.88MB"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2025-07-15T13:01:16+02:00","CreatedBy":"CMD [\"/bin/sh\"]","CreatedSince":"11 months ago","ID":"\u003cmissing\u003e","Size":"0B"}
+{"Comment":"buildkit.dockerfile.v0","CreatedAt":"2025-07-15T13:01:16+02:00","CreatedBy":"ADD alpine-minirootfs-3.22.1-x86_64.tar.gz / # buildkit","CreatedSince":"11 months ago","ID":"\u003cmissing\u003e","Size":"8.98MB"}

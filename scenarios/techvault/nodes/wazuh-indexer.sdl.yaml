@@ -281,10 +281,10 @@ nodes:
           - identifier: config-wazuh_indexer_ssl_certs-wazuh-indexer-key-pem
             source_path: config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem
             destination_path: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
-            checksum: ''
-            checksum_algorithm: ''
-            description: Generated indexer server private key bound into the Wazuh indexer runtime; raw bytes are operator-secret
-              material and intentionally omitted from evidence.
+            checksum: b9003fbf3ac6030da81bb19abeef031d35881010d2d8145cfc57c4978044f7a3
+            checksum_algorithm: sha256
+            description: Generated indexer server private key bound into the Wazuh indexer runtime; checksum verified from
+              /usr/share/wazuh-indexer/certs/wazuh.indexer.key in the live container.
           - identifier: config-wazuh_indexer_ssl_certs-admin-pem
             source_path: config/wazuh_indexer_ssl_certs/admin.pem
             destination_path: /usr/share/wazuh-indexer/certs/admin.pem
@@ -294,10 +294,10 @@ nodes:
           - identifier: config-wazuh_indexer_ssl_certs-admin-key-pem
             source_path: config/wazuh_indexer_ssl_certs/admin-key.pem
             destination_path: /usr/share/wazuh-indexer/certs/admin-key.pem
-            checksum: ''
-            checksum_algorithm: ''
-            description: Generated security-plugin admin private key bound into the Wazuh indexer runtime; raw bytes are operator-secret
-              material and intentionally omitted from evidence.
+            checksum: abfe717cb6dcf0377ce662c7ad6dc171a2f0e9b5c64abf96fee56f9254ce9511
+            checksum_algorithm: sha256
+            description: Generated security-plugin admin private key bound into the Wazuh indexer runtime; checksum verified
+              from /usr/share/wazuh-indexer/certs/admin-key.pem in the live container.
         attestation:
           status: absent
           verification: not_applicable
@@ -313,8 +313,7 @@ nodes:
     os: linux
     os_version: Amazon Linux 2023.8.20250818
     features: {}
-    conditions:
-      techvault.wazuh-indexer-ready: wazuh-indexer-root
+    conditions: {}
     injects: {}
     vulnerabilities: []
     roles:
@@ -13229,34 +13228,30 @@ nodes:
           - network: techvault.security-net
             network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
             network_id_stability: ephemeral
-            endpoint_id: 1eb3bb0e2a5be86233852f0b592b0a1819c4b6fbaf7406e91e8c87d29fcf178e
+            endpoint_id: 330f0f7e150e07d60cd93ecb95cf0f12162dfcba8a6ff748395a4d251834110d
             endpoint_id_stability: ephemeral
             backend_generated: true
             ip_address: 172.20.0.12
             ip_prefix_length: 24
             gateway: 172.20.0.1
-            mac_address: ae:4b:7d:21:1f:d2
+            mac_address: fe:81:69:5e:59:72
             aliases:
               - aptl-wazuh-indexer
               - wazuh.indexer
             dns_names:
               - aptl-wazuh-indexer
               - wazuh.indexer
+              - b40f4f901839
             generated_dns_names:
-              - 50c9dab972af
+              - b40f4f901839
             backend: null
             description: Docker Compose aptl-security network endpoint observed by docker inspect.
         published_ports:
           - container_port: 9200
             protocol: tcp
-            host_ip: 0.0.0.0
+            host_ip: 127.0.0.1
             host_port: 9200
-            description: Compose host publication 9200:9200.
-          - container_port: 9200
-            protocol: tcp
-            host_ip: '::'
-            host_port: 9200
-            description: Compose host publication 9200:9200.
+            description: Compose host publication 127.0.0.1:9200:9200 (loopback-only).
       service_listeners:
         - service_listener_id: opensearch-rest-9200
           service: wazuh-indexer-rest
@@ -13276,7 +13271,7 @@ nodes:
             - docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt
             - docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-api-probe.json
           description: OpenSearch REST API on TCP/9200 (mutual-TLS HTTPS); reached by Filebeat from wazuh.manager and by the
-            Wazuh dashboard. Host-published 9200:9200.
+            Wazuh dashboard. Host-published 127.0.0.1:9200:9200 (loopback-only).
         - service_listener_id: opensearch-transport-9300
           service: wazuh-indexer-transport
           address: 0.0.0.0
@@ -13772,13 +13767,19 @@ nodes:
           name: TechVault Wazuh Indexer
           cluster:
             cluster_id: techvault-wazuh-indexer-cluster
+            uuid: u-vGl1n0Q7e-SKz1tWvb-w
             name: opensearch
             health: green
             discovery_mode: single-node
             partitioner: opensearch_default
             native_protocol_version: 2.19.1
-            description: Single-node OpenSearch cluster. Cluster uuid, node count, and aggregate shard/doc/store totals blocked
-              on Brad-Edwards/aces#468; observed in docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt.
+            node_count: 1
+            shard_total: 102
+            shard_primaries: 102
+            doc_count: 1053842
+            store_size_bytes: 1391460626
+            description: Single-node OpenSearch cluster; cluster identity (uuid) and aggregate node/shard/doc/store totals observed
+              via _cluster/stats in evidence/wazuh-indexer-state.txt.
           nodes:
             - node_id: 5N5vnFZERhu2OYBxv5Lo8Q
               name: wazuh.indexer
@@ -13788,412 +13789,860 @@ nodes:
                 - ingest
                 - other
               is_coordinator: true
-              address: 172.20.0.12:9300
-              description: 'Single OpenSearch member of the TechVault Wazuh indexer cluster. OpenSearch roles outside the
-                ACES vocabulary mapped to ''other'': remote_cluster_client. Engine version / build hash / per-plugin versions
-                / JVM heap / publish-address split are observed in docs/aces/inventory/wazuh.indexer/evidence/wazuh-indexer-state.txt
-                and blocked on Brad-Edwards/aces#470 (no typed node-provenance fields).'
+              engine_version: 2.19.1
+              build_hash: dae2bfc93896178873b43cdf4781f183c72b238f
+              build_type: rpm
+              heap_init_bytes: 1073741824
+              heap_max_bytes: 1073741824
+              memory_locked: false
+              endpoints:
+                - endpoint_id: wazuh-indexer-http
+                  role: client
+                  protocol: https
+                  address: 172.20.0.12
+                  port: 9200
+                  description: OpenSearch REST/HTTP publish address (_nodes http.publish_address).
+                - endpoint_id: wazuh-indexer-transport
+                  role: peer
+                  protocol: tls
+                  address: 172.20.0.12
+                  port: 9300
+                  description: OpenSearch inter-node transport publish address (_nodes transport.publish_address).
+              plugins:
+                - plugin_id: opensearch-alerting
+                  name: opensearch-alerting
+                  version: 2.19.1.0
+                - plugin_id: opensearch-anomaly-detection
+                  name: opensearch-anomaly-detection
+                  version: 2.19.1.0
+                - plugin_id: opensearch-asynchronous-search
+                  name: opensearch-asynchronous-search
+                  version: 2.19.1.0
+                - plugin_id: opensearch-cross-cluster-replication
+                  name: opensearch-cross-cluster-replication
+                  version: 2.19.1.0
+                - plugin_id: opensearch-geospatial
+                  name: opensearch-geospatial
+                  version: 2.19.1.0
+                - plugin_id: opensearch-index-management
+                  name: opensearch-index-management
+                  version: 2.19.1.0
+                - plugin_id: opensearch-job-scheduler
+                  name: opensearch-job-scheduler
+                  version: 2.19.1.0
+                - plugin_id: opensearch-knn
+                  name: opensearch-knn
+                  version: 2.19.1.0
+                - plugin_id: opensearch-ml
+                  name: opensearch-ml
+                  version: 2.19.1.0
+                - plugin_id: opensearch-neural-search
+                  name: opensearch-neural-search
+                  version: 2.19.1.0
+                - plugin_id: opensearch-notifications
+                  name: opensearch-notifications
+                  version: 2.19.1.0
+                - plugin_id: opensearch-notifications-core
+                  name: opensearch-notifications-core
+                  version: 2.19.1.0
+                - plugin_id: opensearch-observability
+                  name: opensearch-observability
+                  version: 2.19.1.0
+                - plugin_id: opensearch-performance-analyzer
+                  name: opensearch-performance-analyzer
+                  version: 2.19.1.0
+                - plugin_id: opensearch-reports-scheduler
+                  name: opensearch-reports-scheduler
+                  version: 2.19.1.0
+                - plugin_id: opensearch-security
+                  name: opensearch-security
+                  version: 2.19.1.0
+                - plugin_id: opensearch-security-analytics
+                  name: opensearch-security-analytics
+                  version: 2.19.1.0
+                - plugin_id: opensearch-sql
+                  name: opensearch-sql
+                  version: 2.19.1.0
+              description: 'Single OpenSearch member of the TechVault Wazuh indexer cluster. OpenSearch roles outside the ACES vocabulary
+                mapped to ''other'': remote_cluster_client. Engine provenance, JVM heap posture, per-plugin versions, and the http/transport
+                publish split observed via _nodes/_local and _cat/plugins.'
           partitions:
             - partition_id: -kibana_1
               kind: index
               name: .kibana_1
+              uuid: EC_4iu_SRhGvgE1F4itc5Q
               shard_count: 1
               replica_count: 0
+              doc_count: 0
+              doc_count_deleted: 0
+              store_size_bytes: 208
+              creation_timestamp: '2026-05-23T06:19:26.806Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: -opendistro_security
               kind: index
               name: .opendistro_security
+              uuid: __o30MqzS42FjwicBr6g9w
               shard_count: 1
               replica_count: 0
+              doc_count: 10
+              doc_count_deleted: 0
+              store_size_bytes: 80896
+              creation_timestamp: '2026-05-23T06:18:55.684Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: -opensearch-observability
               kind: index
               name: .opensearch-observability
+              uuid: pU8SYLDESSeeZ06nIVJxug
               shard_count: 1
               replica_count: 0
+              doc_count: 0
+              doc_count_deleted: 0
+              store_size_bytes: 208
+              creation_timestamp: '2026-05-23T06:18:54.639Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: -plugins-ml-config
               kind: index
               name: .plugins-ml-config
+              uuid: 31QbTXSUTw2U_neEErngNA
               shard_count: 1
               replica_count: 0
+              doc_count: 1
+              doc_count_deleted: 0
+              store_size_bytes: 4096
+              creation_timestamp: '2026-05-23T06:19:14.512Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-23
               kind: index
               name: wazuh-alerts-4.x-2026.05.23
+              uuid: YSYUSnR7Tp-r1AUlWjxsUw
               shard_count: 3
               replica_count: 0
+              doc_count: 4535
+              doc_count_deleted: 0
+              store_size_bytes: 2202010
+              creation_timestamp: '2026-05-23T06:19:23.113Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-24
               kind: index
               name: wazuh-alerts-4.x-2026.05.24
+              uuid: 4cWoaAslQJyknAUME_cFIQ
               shard_count: 3
               replica_count: 0
+              doc_count: 5916
+              doc_count_deleted: 0
+              store_size_bytes: 2306867
+              creation_timestamp: '2026-05-24T00:09:22.443Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-25
               kind: index
               name: wazuh-alerts-4.x-2026.05.25
+              uuid: Q6q0BPldQbSCpIse7MBWLg
               shard_count: 3
               replica_count: 0
+              doc_count: 5936
+              doc_count_deleted: 0
+              store_size_bytes: 2202010
+              creation_timestamp: '2026-05-25T00:09:42.950Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-26
               kind: index
               name: wazuh-alerts-4.x-2026.05.26
+              uuid: cxrifan_RzKEkXwVvSUc8w
               shard_count: 3
               replica_count: 0
+              doc_count: 5866
+              doc_count_deleted: 0
+              store_size_bytes: 2306867
+              creation_timestamp: '2026-05-26T00:09:55.304Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-27
               kind: index
               name: wazuh-alerts-4.x-2026.05.27
+              uuid: Nv9ZEvzXRBa53WeZW__uEA
               shard_count: 3
               replica_count: 0
+              doc_count: 5854
+              doc_count_deleted: 0
+              store_size_bytes: 2202010
+              creation_timestamp: '2026-05-27T00:00:08.900Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-28
               kind: index
               name: wazuh-alerts-4.x-2026.05.28
+              uuid: SDOLdMGwT52IStajlLmnvA
               shard_count: 3
               replica_count: 0
+              doc_count: 5905
+              doc_count_deleted: 0
+              store_size_bytes: 2306867
+              creation_timestamp: '2026-05-28T00:00:23.157Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-29
               kind: index
               name: wazuh-alerts-4.x-2026.05.29
+              uuid: 84x7RJzRSW2AkMGBTqU3sw
               shard_count: 3
               replica_count: 0
+              doc_count: 5928
+              doc_count_deleted: 0
+              store_size_bytes: 2306867
+              creation_timestamp: '2026-05-29T00:00:44.590Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-30
               kind: index
               name: wazuh-alerts-4.x-2026.05.30
+              uuid: 85aB4EltSK6RRI-FOY2Uhg
               shard_count: 3
               replica_count: 0
+              doc_count: 5861
+              doc_count_deleted: 0
+              store_size_bytes: 1992294
+              creation_timestamp: '2026-05-30T00:00:55.085Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-05-31
               kind: index
               name: wazuh-alerts-4.x-2026.05.31
+              uuid: rF4CcRT2RSu9FPAd4619Tg
               shard_count: 3
               replica_count: 0
+              doc_count: 5887
+              doc_count_deleted: 0
+              store_size_bytes: 2202010
+              creation_timestamp: '2026-05-31T00:01:12.911Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-01
               kind: index
               name: wazuh-alerts-4.x-2026.06.01
+              uuid: Rut6_oHjSJ2wbkDzz3PGJA
               shard_count: 3
               replica_count: 0
+              doc_count: 5853
+              doc_count_deleted: 0
+              store_size_bytes: 2097152
+              creation_timestamp: '2026-06-01T00:01:33.375Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-02
               kind: index
               name: wazuh-alerts-4.x-2026.06.02
+              uuid: IgMtywQ_TqSNuxQnzOVK0g
               shard_count: 3
               replica_count: 0
+              doc_count: 5845
+              doc_count_deleted: 0
+              store_size_bytes: 2097152
+              creation_timestamp: '2026-06-02T00:01:45.801Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-03
               kind: index
               name: wazuh-alerts-4.x-2026.06.03
+              uuid: iKeB9X4qQM6LAk81FCTuMA
               shard_count: 3
               replica_count: 0
+              doc_count: 5858
+              doc_count_deleted: 0
+              store_size_bytes: 2202010
+              creation_timestamp: '2026-06-03T00:01:57.347Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-04
               kind: index
               name: wazuh-alerts-4.x-2026.06.04
+              uuid: HOr15VrvQ8-Tah_GbM7uqg
               shard_count: 3
               replica_count: 0
+              doc_count: 5844
+              doc_count_deleted: 0
+              store_size_bytes: 1992294
+              creation_timestamp: '2026-06-04T00:02:17.948Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-05
               kind: index
               name: wazuh-alerts-4.x-2026.06.05
+              uuid: Q_Z8vrqpROy3unfcUXxlMw
               shard_count: 3
               replica_count: 0
+              doc_count: 5865
+              doc_count_deleted: 0
+              store_size_bytes: 2097152
+              creation_timestamp: '2026-06-05T00:02:29.600Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-alerts-4-x-2026-06-06
               kind: index
               name: wazuh-alerts-4.x-2026.06.06
+              uuid: sKm3DX1dSHyIMvEZsnMm7Q
               shard_count: 3
               replica_count: 0
+              doc_count: 938
+              doc_count_deleted: 0
+              store_size_bytes: 663859
+              creation_timestamp: '2026-06-06T00:02:52.076Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-23
               kind: index
               name: wazuh-archives-4.x-2026.05.23
+              uuid: di3r6LvvR7eQbv1lpmgpJA
               shard_count: 3
               replica_count: 0
+              doc_count: 50946
+              doc_count_deleted: 0
+              store_size_bytes: 72142029
+              creation_timestamp: '2026-05-23T06:19:21.940Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-24
               kind: index
               name: wazuh-archives-4.x-2026.05.24
+              uuid: 4g5uomPoSeeG_84zL2wq_Q
               shard_count: 3
               replica_count: 0
+              doc_count: 68616
+              doc_count_deleted: 0
+              store_size_bytes: 96993280
+              creation_timestamp: '2026-05-24T00:00:03.573Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-25
               kind: index
               name: wazuh-archives-4.x-2026.05.25
+              uuid: kBkGQmPwTdSPVwgH9E0FGg
               shard_count: 3
               replica_count: 0
+              doc_count: 68832
+              doc_count_deleted: 0
+              store_size_bytes: 96888422
+              creation_timestamp: '2026-05-25T00:00:02.298Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-26
               kind: index
               name: wazuh-archives-4.x-2026.05.26
+              uuid: llyudOQxSjmdhLR9MMOHXA
               shard_count: 3
               replica_count: 0
+              doc_count: 68937
+              doc_count_deleted: 0
+              store_size_bytes: 96573850
+              creation_timestamp: '2026-05-26T00:00:06.631Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-27
               kind: index
               name: wazuh-archives-4.x-2026.05.27
+              uuid: 29_RK7fOQkKy1OeOWChh-w
               shard_count: 3
               replica_count: 0
+              doc_count: 68408
+              doc_count_deleted: 0
+              store_size_bytes: 96049562
+              creation_timestamp: '2026-05-27T00:00:07.718Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-28
               kind: index
               name: wazuh-archives-4.x-2026.05.28
+              uuid: s0fv6XlzTEuJNcP4RikTQg
               shard_count: 3
               replica_count: 0
+              doc_count: 68993
+              doc_count_deleted: 0
+              store_size_bytes: 96888422
+              creation_timestamp: '2026-05-28T00:00:05.253Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-29
               kind: index
               name: wazuh-archives-4.x-2026.05.29
+              uuid: tmU2NL6HQpS8O_F3lOevJA
               shard_count: 3
               replica_count: 0
+              doc_count: 68703
+              doc_count_deleted: 0
+              store_size_bytes: 96783565
+              creation_timestamp: '2026-05-29T00:00:05.080Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-30
               kind: index
               name: wazuh-archives-4.x-2026.05.30
+              uuid: BoJqRQ_STr2cKHqTKiz1ig
               shard_count: 3
               replica_count: 0
+              doc_count: 68880
+              doc_count_deleted: 0
+              store_size_bytes: 97832141
+              creation_timestamp: '2026-05-30T00:00:05.342Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-05-31
               kind: index
               name: wazuh-archives-4.x-2026.05.31
+              uuid: DZSYlg6kTxGWWwcLCoQ3HQ
               shard_count: 3
               replica_count: 0
+              doc_count: 68615
+              doc_count_deleted: 0
+              store_size_bytes: 95630131
+              creation_timestamp: '2026-05-31T00:00:04.274Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-01
               kind: index
               name: wazuh-archives-4.x-2026.06.01
+              uuid: EnfroEm0SWG7AL2VwocQcQ
               shard_count: 3
               replica_count: 0
+              doc_count: 68354
+              doc_count_deleted: 0
+              store_size_bytes: 97727283
+              creation_timestamp: '2026-06-01T00:00:01.847Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-02
               kind: index
               name: wazuh-archives-4.x-2026.06.02
+              uuid: 7suuqLuRSfmBRuPl5mCPBQ
               shard_count: 3
               replica_count: 0
+              doc_count: 68305
+              doc_count_deleted: 0
+              store_size_bytes: 95839846
+              creation_timestamp: '2026-06-02T00:00:03.726Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-03
               kind: index
               name: wazuh-archives-4.x-2026.06.03
+              uuid: RjLohu1mQJ-lUW6C--buuQ
               shard_count: 3
               replica_count: 0
+              doc_count: 68386
+              doc_count_deleted: 0
+              store_size_bytes: 98880717
+              creation_timestamp: '2026-06-03T00:00:07.540Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-04
               kind: index
               name: wazuh-archives-4.x-2026.06.04
+              uuid: ASI9um4JSiS_Tejkm__7jw
               shard_count: 3
               replica_count: 0
+              doc_count: 68316
+              doc_count_deleted: 0
+              store_size_bytes: 97202995
+              creation_timestamp: '2026-06-04T00:00:13.923Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-05
               kind: index
               name: wazuh-archives-4.x-2026.06.05
+              uuid: Y1S6FI35RXabEJUbxksUAg
               shard_count: 3
               replica_count: 0
+              doc_count: 68920
+              doc_count_deleted: 0
+              store_size_bytes: 96259277
+              creation_timestamp: '2026-06-05T00:00:02.536Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-archives-4-x-2026-06-06
               kind: index
               name: wazuh-archives-4.x-2026.06.06
+              uuid: RaFQxuBuQfOok4aoLewJBg
               shard_count: 3
               replica_count: 0
+              doc_count: 10956
+              doc_count_deleted: 0
+              store_size_bytes: 18140365
+              creation_timestamp: '2026-06-06T00:00:05.498Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-monitoring-2026-21w
               kind: index
               name: wazuh-monitoring-2026.21w
+              uuid: Y2BXYIFYTbiRxwXtFBg-rg
               shard_count: 1
               replica_count: 0
+              doc_count: 1168
+              doc_count_deleted: 0
+              store_size_bytes: 825754
+              creation_timestamp: '2026-05-23T06:19:28.720Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-monitoring-2026-22w
               kind: index
               name: wazuh-monitoring-2026.22w
+              uuid: 6BYEAIs_QeuZJFqN5dvoAg
               shard_count: 1
               replica_count: 0
+              doc_count: 4704
+              doc_count_deleted: 0
+              store_size_bytes: 1363149
+              creation_timestamp: '2026-05-25T00:00:01.170Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-monitoring-2026-23w
               kind: index
               name: wazuh-monitoring-2026.23w
+              uuid: YkRkznUAQX2aAA24fTQ5mQ
               shard_count: 1
               replica_count: 0
+              doc_count: 3465
+              doc_count_deleted: 0
+              store_size_bytes: 1468006
+              creation_timestamp: '2026-06-01T00:00:00.517Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-states-vulnerabilities-wazuh-manager
               kind: index
               name: wazuh-states-vulnerabilities-wazuh.manager
+              uuid: OSRyQnz1RF-E0R-f8hHnPg
               shard_count: 1
               replica_count: 0
+              doc_count: 0
+              doc_count_deleted: 0
+              store_size_bytes: 208
+              creation_timestamp: '2026-05-23T06:19:18.580Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-statistics-2026-21w
               kind: index
               name: wazuh-statistics-2026.21w
+              uuid: 9rLKEO2_Sw2-ImbyClK3jA
               shard_count: 1
               replica_count: 0
+              doc_count: 995
+              doc_count_deleted: 0
+              store_size_bytes: 706867
+              creation_timestamp: '2026-05-23T06:20:00.548Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-statistics-2026-22w
               kind: index
               name: wazuh-statistics-2026.22w
+              uuid: Rf7ev6YvRlGvmcwBPY7aaA
               shard_count: 1
               replica_count: 0
+              doc_count: 4026
+              doc_count_deleted: 0
+              store_size_bytes: 1468006
+              creation_timestamp: '2026-05-25T00:00:01.031Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
             - partition_id: wazuh-statistics-2026-23w
               kind: index
               name: wazuh-statistics-2026.23w
+              uuid: 4mUg72JATim5mYghmQtAuw
               shard_count: 1
               replica_count: 0
+              doc_count: 2960
+              doc_count_deleted: 0
+              store_size_bytes: 2621440
+              creation_timestamp: '2026-06-01T00:00:00.361Z'
+              open_closed_status: open
               health: green
-              description: OpenSearch index partition; cardinality/size/identity (uuid, doc count, store size, creation date,
-                open/closed status) blocked on Brad-Edwards/aces#468, structured field mapping blocked on Brad-Edwards/aces#469;
-                both observed in evidence.
+              description: OpenSearch index partition; per-index cardinality/size/identity from _cat/indices (store_size_bytes derived
+                from the human-rounded _cat size).
+          mappings:
+            - mapping_id: mapping-kibana-1
+              name: .kibana_1
+              top_level_field_count: 28
+              leaf_field_count: 132
+              schema_digest: sha256:9fc02cd7cc7b3a37a685f8e6a61749130be1c0ac5a5ddb824b4e7579354a10f1
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              dynamic_policy: strict
+              field_type_census:
+                boolean: 5
+                date: 9
+                integer: 20
+                keyword: 21
+                long: 6
+                object: 50
+                text: 65
+              dynamic_template_count: 0
+              description: Structured field mapping for the .kibana_1 index group (1 index/indices, 1 distinct schema digest(s) across
+                members; geometry and field-type census from the representative .kibana_1).
+            - mapping_id: mapping-opendistro-security
+              name: .opendistro_security
+              top_level_field_count: 10
+              leaf_field_count: 10
+              schema_digest: sha256:6305dcadfd446ae17438672fa7f4aaa37683d148fc31dbd800e1b7accad23df0
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              field_type_census:
+                keyword: 10
+                text: 10
+              dynamic_template_count: 0
+              description: Structured field mapping for the .opendistro_security index group (1 index/indices, 1 distinct schema digest(s)
+                across members; geometry and field-type census from the representative .opendistro_security).
+            - mapping_id: mapping-opensearch-observability
+              name: .opensearch-observability
+              top_level_field_count: 11
+              leaf_field_count: 11
+              schema_digest: sha256:7670e53e3cf743bb8376dd4dfdd57e04444890825e5b543bcdf91b8a205dea74
+              evidence_refs:
+                - evidence/wazuh-indexer-index-mappings-census.json
+              dynamic_policy: 'false'
+              description: Structured field mapping for the .opensearch-observability index group (1 index/indices, 1 distinct schema
+                digest(s) across members; geometry and field-type census from the representative .opensearch-observability).
+            - mapping_id: mapping-plugins-ml-config
+              name: .plugins-ml-config
+              top_level_field_count: 6
+              leaf_field_count: 6
+              schema_digest: sha256:7862e83ff2faeee75a3750f54cde2f8ddcd50f937774ecc7162ad05f43ada37e
+              evidence_refs:
+                - evidence/wazuh-indexer-index-mappings-census.json
+              description: Structured field mapping for the .plugins-ml-config index group (1 index/indices, 1 distinct schema digest(s)
+                across members; geometry and field-type census from the representative .plugins-ml-config).
+            - mapping_id: mapping-wazuh-alerts-4-x
+              name: wazuh-alerts-4.x-*
+              top_level_field_count: 25
+              leaf_field_count: 670
+              schema_digest: sha256:130c3a42ef1c56e9192533f1cccb4889770838801100c49671d3637dfcd4f09e
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              field_type_census:
+                boolean: 1
+                date: 30
+                double: 5
+                geo_point: 2
+                integer: 4
+                ip: 8
+                keyword: 547
+                long: 58
+                object: 101
+                text: 15
+              dynamic_template_count: 1
+              date_detection: false
+              description: Structured field mapping for the wazuh-alerts-4.x-* index group (15 index/indices, 2 distinct schema digest(s)
+                across members; geometry and field-type census from the representative wazuh-alerts-4.x-2026.05.23).
+            - mapping_id: mapping-wazuh-archives-4-x
+              name: wazuh-archives-4.x-*
+              top_level_field_count: 25
+              leaf_field_count: 947
+              schema_digest: sha256:a05cd0f83be2f809b600f692c52a253d59aa05cd8fad5498b0dbc761b93d0ac8
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              field_type_census:
+                boolean: 1
+                date: 30
+                double: 5
+                geo_point: 2
+                integer: 4
+                ip: 8
+                keyword: 824
+                long: 58
+                object: 143
+                text: 15
+              dynamic_template_count: 1
+              date_detection: false
+              description: Structured field mapping for the wazuh-archives-4.x-* index group (15 index/indices, 3 distinct schema
+                digest(s) across members; geometry and field-type census from the representative wazuh-archives-4.x-2026.05.23).
+            - mapping_id: mapping-wazuh-monitoring
+              name: wazuh-monitoring-*
+              top_level_field_count: 20
+              leaf_field_count: 27
+              schema_digest: sha256:342c4b01d51d75ef017e33800aa4d14d059ca061488dc932b0e5d544e2b7f796
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              field_type_census:
+                date: 4
+                keyword: 22
+                long: 1
+                object: 2
+                text: 16
+              dynamic_template_count: 0
+              description: Structured field mapping for the wazuh-monitoring-* index group (3 index/indices, 2 distinct schema digest(s)
+                across members; geometry and field-type census from the representative wazuh-monitoring-2026.21w).
+            - mapping_id: mapping-wazuh-states-vulnerabilities-wazuh-manager
+              name: wazuh-states-vulnerabilities-wazuh.manager
+              top_level_field_count: 5
+              leaf_field_count: 47
+              schema_digest: sha256:d587876a152590882a62698d10f916818db43b6e99be2164a3ec3af5c8d9943e
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              dynamic_policy: strict
+              field_type_census:
+                boolean: 1
+                date: 3
+                float: 3
+                keyword: 39
+                long: 1
+                object: 11
+              dynamic_template_count: 0
+              date_detection: false
+              description: Structured field mapping for the wazuh-states-vulnerabilities-wazuh.manager index group (1 index/indices,
+                1 distinct schema digest(s) across members; geometry and field-type census from the representative wazuh-states-vulnerabilities-wazuh.manager).
+            - mapping_id: mapping-wazuh-statistics
+              name: wazuh-statistics-*
+              top_level_field_count: 8
+              leaf_field_count: 68
+              schema_digest: sha256:2b679216aac4c25efdd661f3bb98a9681e41066acc4338fe3d8fd1823bdfc146
+              evidence_refs:
+                - evidence/wazuh-indexer-family-mappings.json.gz
+                - evidence/wazuh-indexer-index-mappings-census.json
+              field_type_census:
+                date: 1
+                keyword: 6
+                long: 61
+                object: 2
+                text: 3
+              dynamic_template_count: 1
+              description: Structured field mapping for the wazuh-statistics-* index group (3 index/indices, 1 distinct schema digest(s)
+                across members; geometry and field-type census from the representative wazuh-statistics-2026.21w).
           templates:
-            - wazuh
-            - wazuh-agent
-            - wazuh-states-vulnerabilities-wazuh.manager_template
-            - wazuh-statistics
-          engine_plugins:
-            - opensearch-alerting
-            - opensearch-anomaly-detection
-            - opensearch-asynchronous-search
-            - opensearch-cross-cluster-replication
-            - opensearch-geospatial
-            - opensearch-index-management
-            - opensearch-job-scheduler
-            - opensearch-knn
-            - opensearch-ml
-            - opensearch-neural-search
-            - opensearch-notifications
-            - opensearch-notifications-core
-            - opensearch-observability
-            - opensearch-performance-analyzer
-            - opensearch-reports-scheduler
-            - opensearch-security
-            - opensearch-security-analytics
-            - opensearch-sql
+            - template_id: wazuh
+              name: wazuh
+              index_patterns:
+                - wazuh-alerts-4.x-*
+                - wazuh-archives-4.x-*
+              evidence_refs:
+                - evidence/wazuh-indexer-templates.json.gz
+              settings_summary:
+                number_of_shards: '3'
+                number_of_replicas: '0'
+                refresh_interval: 5s
+              template_digest: sha256:8019cfb7ef5f3118992d0804352aae414b6f8f924d6d5bef94aeb4c1e13597a1
+              description: Index template wazuh seeding wazuh-alerts-4.x-*, wazuh-archives-4.x-*.
+            - template_id: wazuh-agent
+              name: wazuh-agent
+              index_patterns:
+                - wazuh-monitoring-*
+              evidence_refs:
+                - evidence/wazuh-indexer-templates.json.gz
+              settings_summary:
+                refresh_interval: 5s
+              template_digest: sha256:48cb682b14bc855c1ca36d513294f98f1f0f89dbae788b6bf37fa5f6860cb7d1
+              description: Index template wazuh-agent seeding wazuh-monitoring-*.
+            - template_id: wazuh-states-vulnerabilities-wazuh-manager_template
+              name: wazuh-states-vulnerabilities-wazuh.manager_template
+              index_patterns:
+                - wazuh-states-vulnerabilities-*
+              evidence_refs:
+                - evidence/wazuh-indexer-templates.json.gz
+              description: Index template wazuh-states-vulnerabilities-wazuh.manager_template seeding wazuh-states-vulnerabilities-*.
+            - template_id: wazuh-statistics
+              name: wazuh-statistics
+              index_patterns:
+                - wazuh-statistics-*
+              evidence_refs:
+                - evidence/wazuh-indexer-templates.json.gz
+              settings_summary:
+                refresh_interval: 5s
+              template_digest: sha256:4367638ad1385ce5acb7a887afc3f009ddf59ccd6bae18ddad200f8725e32189
+              description: Index template wazuh-statistics seeding wazuh-statistics-*.
           transport_security:
             transport_security_id: techvault-wazuh-indexer-mtls
             mode: mutual_tls
             client_verification: true
             node_verification: false
-            description: OpenSearch Security mutual-TLS using bind-mounted PEM material under /usr/share/wazuh-indexer/certs/;
-              transport hostname verification disabled per Wazuh-indexer default. Admin DN allowlist 'CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US'
+            description: OpenSearch Security mutual-TLS using bind-mounted PEM material under /usr/share/wazuh-indexer/certs/; transport
+              hostname verification disabled per Wazuh-indexer default. Admin DN allowlist 'CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US'
               encoded under the OpenSearch Security identity authority.
           settings:
             - setting_id: discovery-type
@@ -14245,12 +14694,11 @@ nodes:
               provenance: operator_override
               classification: plain
               description: Only persistent cluster setting observed via _cluster/settings.
-          description: 'Wazuh indexer (OpenSearch 2.19.1 fork) datastore service for the steady-state TechVault lab; persistence
-            mounted at /var/lib/wazuh-indexer via the wazuh-indexer-data named volume. Encoded: cluster identity (typed fields),
-            node membership/roles, per-index partition geometry (shard/replica/health), transport mutual-TLS, settings, plugin
-            + template NAMES. Blocked on ACES gaps: per-index/cluster cardinality+size+identity (Brad-Edwards/aces#468), structured
-            index mapping + template bodies (Brad-Edwards/aces#469), node engine provenance + per-plugin versions (Brad-Edwards/aces#470).
-            Blocked dimensions live in the evidence bundle and the mapping ledger, not in this prose.'
+          description: Wazuh indexer (OpenSearch 2.19.1 fork) datastore service for the steady-state TechVault lab; persistence mounted
+            at /var/lib/wazuh-indexer via the wazuh-indexer-data named volume. Encodes cluster identity + aggregate cardinality, node
+            membership/roles + engine provenance + per-plugin versions + endpoint topology, per-index partition geometry + cardinality,
+            per-family structured mappings + template bodies, transport mutual-TLS, and settings. All observed in evidence/wazuh-indexer-state.txt
+            and the mapping/template/census evidence.
       packages:
         - manager: generic
           name: openjdk

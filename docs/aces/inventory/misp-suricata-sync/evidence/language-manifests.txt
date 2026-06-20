@@ -1,0 +1,259 @@
+--python-version--
+Python 3.11.15
+--pip-version--
+pip 24.0 from /usr/local/lib/python3.11/site-packages/pip (python 3.11)
+--console-script--
+/usr/local/bin/aptl-misp-suricata-sync
+#!/usr/local/bin/python3.11
+# -*- coding: utf-8 -*-
+--pip-distributions--
+[
+  {
+    "name": "aces-sdl",
+    "version": "0.2.0"
+  },
+  {
+    "name": "annotated-doc",
+    "version": "0.0.4"
+  },
+  {
+    "name": "annotated-types",
+    "version": "0.7.0"
+  },
+  {
+    "name": "anyio",
+    "version": "4.13.0"
+  },
+  {
+    "name": "aptl",
+    "version": "0.1.0"
+  },
+  {
+    "name": "asttokens",
+    "version": "2.4.1"
+  },
+  {
+    "name": "asyncssh",
+    "version": "2.23.0"
+  },
+  {
+    "name": "attrs",
+    "version": "26.1.0"
+  },
+  {
+    "name": "certifi",
+    "version": "2026.5.20"
+  },
+  {
+    "name": "cffi",
+    "version": "2.0.0"
+  },
+  {
+    "name": "charset-normalizer",
+    "version": "3.4.7"
+  },
+  {
+    "name": "click",
+    "version": "8.4.1"
+  },
+  {
+    "name": "cryptography",
+    "version": "48.0.0"
+  },
+  {
+    "name": "fastapi",
+    "version": "0.136.1"
+  },
+  {
+    "name": "googleapis-common-protos",
+    "version": "1.75.0"
+  },
+  {
+    "name": "h11",
+    "version": "0.16.0"
+  },
+  {
+    "name": "httpcore",
+    "version": "1.0.9"
+  },
+  {
+    "name": "httptools",
+    "version": "0.7.1"
+  },
+  {
+    "name": "httpx",
+    "version": "0.28.1"
+  },
+  {
+    "name": "httpx-sse",
+    "version": "0.4.3"
+  },
+  {
+    "name": "icontract",
+    "version": "2.7.3"
+  },
+  {
+    "name": "idna",
+    "version": "3.16"
+  },
+  {
+    "name": "jsonschema",
+    "version": "4.26.0"
+  },
+  {
+    "name": "jsonschema-specifications",
+    "version": "2025.9.1"
+  },
+  {
+    "name": "markdown-it-py",
+    "version": "4.2.0"
+  },
+  {
+    "name": "mcp",
+    "version": "1.27.1"
+  },
+  {
+    "name": "mdurl",
+    "version": "0.1.2"
+  },
+  {
+    "name": "opentelemetry-api",
+    "version": "1.42.1"
+  },
+  {
+    "name": "opentelemetry-exporter-otlp-proto-common",
+    "version": "1.42.1"
+  },
+  {
+    "name": "opentelemetry-exporter-otlp-proto-http",
+    "version": "1.42.1"
+  },
+  {
+    "name": "opentelemetry-proto",
+    "version": "1.42.1"
+  },
+  {
+    "name": "opentelemetry-sdk",
+    "version": "1.42.1"
+  },
+  {
+    "name": "opentelemetry-semantic-conventions",
+    "version": "0.63b1"
+  },
+  {
+    "name": "pip",
+    "version": "24.0"
+  },
+  {
+    "name": "protobuf",
+    "version": "6.33.6"
+  },
+  {
+    "name": "pycparser",
+    "version": "3.0"
+  },
+  {
+    "name": "pydantic",
+    "version": "2.13.4"
+  },
+  {
+    "name": "pydantic_core",
+    "version": "2.46.4"
+  },
+  {
+    "name": "pydantic-settings",
+    "version": "2.14.1"
+  },
+  {
+    "name": "Pygments",
+    "version": "2.20.0"
+  },
+  {
+    "name": "PyJWT",
+    "version": "2.13.0"
+  },
+  {
+    "name": "python-dotenv",
+    "version": "1.2.2"
+  },
+  {
+    "name": "python-multipart",
+    "version": "0.0.29"
+  },
+  {
+    "name": "PyYAML",
+    "version": "6.0.3"
+  },
+  {
+    "name": "referencing",
+    "version": "0.37.0"
+  },
+  {
+    "name": "requests",
+    "version": "2.34.2"
+  },
+  {
+    "name": "rich",
+    "version": "15.0.0"
+  },
+  {
+    "name": "rpds-py",
+    "version": "0.30.0"
+  },
+  {
+    "name": "setuptools",
+    "version": "79.0.1"
+  },
+  {
+    "name": "shellingham",
+    "version": "1.5.4"
+  },
+  {
+    "name": "six",
+    "version": "1.17.0"
+  },
+  {
+    "name": "sse-starlette",
+    "version": "3.4.4"
+  },
+  {
+    "name": "starlette",
+    "version": "1.0.1"
+  },
+  {
+    "name": "typer",
+    "version": "0.25.1"
+  },
+  {
+    "name": "typing_extensions",
+    "version": "4.15.0"
+  },
+  {
+    "name": "typing-inspection",
+    "version": "0.4.2"
+  },
+  {
+    "name": "urllib3",
+    "version": "2.7.0"
+  },
+  {
+    "name": "uvicorn",
+    "version": "0.47.0"
+  },
+  {
+    "name": "uvloop",
+    "version": "0.22.1"
+  },
+  {
+    "name": "watchfiles",
+    "version": "1.2.0"
+  },
+  {
+    "name": "websockets",
+    "version": "16.0"
+  },
+  {
+    "name": "wheel",
+    "version": "0.45.1"
+  }
+]

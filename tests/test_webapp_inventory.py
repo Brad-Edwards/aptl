@@ -30,7 +30,7 @@ EVIDENCE_DIR = WEBAPP_DIR / "evidence"
 TECHVAULT_SDL_PATH = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 PARITY_PATH = PROJECT_ROOT / "docs" / "aces" / "parity-inventory.yaml"
 
-IMAGE_ID = "sha256:4a179c1043213c1cfed182c8e472dbe97b07a58f512067ec0c0ea3642425704a"
+IMAGE_ID = "sha256:261633f0d60aa96b6921fc561a31e76a7601ea7f52e4f435efac79686882e299"
 IMAGE_DIGEST = f"aptl-webapp@{IMAGE_ID}"
 BUILD_HISTORY_LAYER_COUNT = 31
 SOURCE_INPUT_COUNT = 18
@@ -95,13 +95,7 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-SECRET_ENV_NAMES = (
-    "APTL_FLAG_KEY",
-    "DB_PASSWORD",
-    "JWT_SECRET",
-    "SECRET_KEY",
-)
-RUNTIME_SECRET_ENV_NAMES = ("DB_PASSWORD",)
+RUNTIME_SECRET_ENV = {"DB_PASSWORD": "techvault_db_pass"}
 
 
 def _json_file(name: str):
@@ -275,22 +269,18 @@ def test_webapp_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_webapp_evidence_does_not_contain_raw_secret_assignments():
-    raw_secret_assignment = re.compile(
-        rf"^({'|'.join(re.escape(name) for name in SECRET_ENV_NAMES)})=(?!<REDACTED-).+",
-        re.MULTILINE,
-    )
-    offenders = {}
-    for path in EVIDENCE_DIR.iterdir():
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        leaked = sorted(
-            {match.group(1) for match in raw_secret_assignment.finditer(text)}
-        )
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret assignments leaked into evidence: {offenders}"
+def test_webapp_evidence_captures_scenario_fixture_secret_assignments():
+    runtime = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    compose = _json_file("compose-service.webapp.json")
+    container = _json_file("docker-inspect.container.json")[0]
+    inspect_env = dict(item.split("=", 1) for item in container["Config"]["Env"])
+
+    assert "DB_PASSWORD=techvault_db_pass" in runtime
+    assert compose["environment"]["DB_PASSWORD"] == "techvault_db_pass"
+    assert inspect_env["DB_PASSWORD"] == "techvault_db_pass"
+    assert "<REDACTED" not in runtime
+    assert "<REDACTED" not in json.dumps(compose)
+    assert "<REDACTED" not in json.dumps(container)
 
 
 def test_webapp_container_runtime_state_and_redaction_boundary():
@@ -315,8 +305,8 @@ def test_webapp_container_runtime_state_and_redaction_boundary():
         container["NetworkSettings"]["Networks"]["aptl_aptl-internal"]["IPAddress"]
         == "172.20.2.25"
     )
-    for name in RUNTIME_SECRET_ENV_NAMES:
-        assert re.search(rf"^{name}=<REDACTED-[A-Z0-9-]+>$", joined_env, re.MULTILINE)
+    for name, value in RUNTIME_SECRET_ENV.items():
+        assert re.search(rf"^{name}={re.escape(value)}$", joined_env, re.MULTILINE)
 
 
 def test_webapp_image_identity_and_source_package_are_recorded():

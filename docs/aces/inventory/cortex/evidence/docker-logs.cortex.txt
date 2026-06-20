@@ -1,0 +1,500 @@
+	MaxMind_GeoIP 4.0
+	FileInfo 8.0
+	DuoBypassUserAccount 1.0
+	ClusterHawk 1.0
+	PaloAltoNGFW_block_external_user 1.0.0
+	SentinelOne_Hash_Blacklister 1.0
+	CheckPoint_Lock 1.0
+	MSDefender-PushIOC-Block 2.1
+	FireEyeiSight 1.0
+	Malwares_GetReport 1.0
+	AWSLambda_InvokeFunction 1.0
+	JAMFProtect_addHashtoPreventList 1.0
+	Mnemonic_pDNS_Public 3.0
+	UrlDNA_New_Scan 0.1.0
+	SEKOIAIntelligenceCenter_Observables 1.0
+	THOR_Thunderstorm_ScanSample 0.3.1
+	Verifalia 1.0
+	Watcher_Remove 1.1
+	MSEntraID_GetSignIns 1.0
+	RiskIQ_Articles 1.0
+	DomainTools_Risk 2.0
+	GTI_ScanURL 1.0
+	QrDecode 1.0
+	EchoTrail 1.0
+	PassiveTotal_Osint 2.0
+	CIRCLPassiveDNS 2.0
+	CyberChef_FromHex 1.0
+	PaloAltoNGFW_block_port_for_external_communication 2.0.0
+	HarfangLab_SearchDriverByFileName 1.0
+	PassiveTotal_Passive_Dns 2.1
+	Shodan_Host 1.0
+	SendGrid 1.0
+	HarfangLab_SearchDriverByHash 1.0
+	DomainTools_WhoisLookupUnparsed 2.0
+	Hashdd_Detail 2.0
+	Slack_SyncChannel 1.0
+	RiskIQ_Resolutions 1.0
+	Netcraft_TakedownPhishingURL 1.0
+	PassiveTotal_Host_Pairs 2.0
+	Hunterio_DomainSearch 1.0
+	LupovisProwl_GetIPReputation 1.1
+	CyberChef_FromCharCode 1.0
+	MISPWarningLists 2.0
+	Gmail_BlockDomain 1.0
+	EclecticIQ_Indicator_API 1.0
+	DomainTools_ReverseIPWhois 2.0
+	TorProject 1.0
+	CrowdstrikeFalcon_Sandbox_Win7 1.0
+	RecordedFuture 2.0
+	DomainMailSPFDMARC 1.2
+	HarfangLab-GetStartupFiles 1.0
+	CIRCLVulnerabilityLookup 1.0
+	Redmine_Issue 1.0
+	CIRCLPassiveSSL 2.0
+	Inoitsu 1.0
+	Splunk_Search_User_Agent 3.0
+	RiskIQ_HostpairParents 1.0
+	VirusTotal_Scan 3.1
+	HarfangLab-SearchHash 1.0
+	ChainAbuse 1.1
+	MSDefender-AutoInvestigation 1.0
+	MSEntraID_disableUser 1.0
+	GTI_ScanPrivateFile 1.0
+	EmergingThreats_DomainInfo 1.0
+	DevTools_Echo_Analyzer 1.0
+	DNSDB_DomainName 2.0
+	MSDefenderOffice365_SafeLinksDecoder.json 1.0
+	PhishTank_CheckURL 2.1
+	DNS-RPZ 1.0
+	MailIncidentStatus 1.0
+	PaloAltoNGFW_block_internal_domain 2.0.0
+	StamusNetworks_HostID 1.0
+	IPinfo_Hosted_Domains 1.0
+	AWX_StartJob 1.0
+	RiskIQ_Subdomains 1.0
+	EmlParser 2.1
+	OktaUserLookup 1.0
+	SpamhausDBL 1.0
+	SophosIntelix_GetReport 0.3
+	PassiveTotal_Trackers 2.0
+	ThreatResponse 1.0
+	CiscoUmbrella_Report 1.0
+	MSEntraID_enableUser 1.0
+	MSEntraID_revokeSignInSessions 1.1
+	VirusTotal_GetReport 3.1
+	CrowdstrikeFalcon_Sandbox_Win7_64 1.0
+	Gmail_BlockSender 1.0
+	JA4_FoxIO 1.0
+	Maltiverse_Report 1.0
+	HarfangLab-GetPersistence 1.0
+	SophosIntelix_Submit_Dynamic 0.1
+	GTI_ScanPrivateURL 1.0
+	HarfangLab-SearchDestinationIP 1.0
+	ONYPHE_ASM 1.1
+	MSDefenderOffice365_unblock 1.0
+	BackscatterIO_GetObservations 1.0
+	OTXQuery 2.0
+	Investigate_Sample 1.0
+	PaloAltoNGFW_unblock_port_for_internal_communication 1.0.0
+	MetaDefenderCloud_Reputation 1.0
+	Autofocus_SearchIOC 1.0
+	Test 1.0
+	Capa 1.0
+	Splunk_Search_Mail_Email 3.0
+	MSDefenderOffice365_disallow 1.0
+	CheckPhish 1.0
+	Patrowl_GetReport 1.0
+	Watcher_Check 1.0
+	NSRL 1.0
+	MSDefender-PushIOC-Audit 1.0
+	AMPforEndpoints_MoveGUID 1.0
+	RT4-CreateTicket 1.0
+	PhishingInitiative_Scan 1.0
+	ZscalerZIA_RemoveFromURLCategoryWildcard 1.0
+	Mailer 1.0
+	RiskIQ_Summary 1.0
+	C1fApp 1.0
+	MSDefenderOffice365_block 1.0
+	Zscaler 1.3
+	IP-API 1.1
+	OpenCTI_SearchObservables 2.0
+	Nessus 2.0
+	OVH_Domain_Order 1.0
+	KnowBe4 1.0
+	Binalyze_AIR_Acquisition 1.0
+	SecurityTrails_Passive_DNS 1.0
+	Cylance 1.0
+	SentinelOne_DeepVisibility_DNSQuery 1.0
+	AnyRun_Sandbox_URL_Android 1.0
+	HarfangLab-GetSessions 1.0
+	Virusshare 2.0
+	Cloudflare_IP_Blocker 1.0
+	CrowdStrikeFalcon_suppressDetections 1.0
+	PaloAltoCortexXDR_block_list 1.0
+	HarfangLab-GetScheduledTasks 1.0
+	DomainTools_ReverseIP 2.0
+	Yeti 1.0
+	StaxxSearch 1.0
+	OVH_Domain_Check 1.0
+	PaloAltoNGFW_unblock_external_domain 1.0.0
+	SinkDB 1.1
+	CiscoUmbrella_Blacklister 1.1
+	PaloAltoNGFW_unblock_external_IP_address 1.0.0
+	MalwareBazaar 1.0
+	DomainToolsIris_AddRiskyDNSTag 1.0
+	Robtex_Forward_PDNS_Query 1.0
+	CheckPhish_Submit 1.0
+	RiskIQ_Services 1.0
+	HarfangLab-GetDrivers 1.0
+	HarfangLab-GetWMI 1.0
+	ONYPHE_OnDemandScan 1.0
+	CrowdStrikeFalcon_RemoveIOC 1.0
+	CheckPointHEC_SearchByURL 1.0
+	MSDefender-PushIOC-Alert 2.0
+	MSEntraID_GetUserInfo 1.0
+	WOT_Lookup 2.0
+	JoeSandbox_File_Analysis_Inet 3.0
+	Proofpoint_Lookup 1.0
+	CrowdstrikeFalcon_Sandbox_Linux 1.0
+	ZscalerZIA_AddToCloudFirewallRule 1.0
+	RiskIQ_Whois 1.0
+	Yara 3.0
+	Ldap_Query 3.0
+	CheckPointHEC_SearchBySenderIP 1.0
+	JoeSandbox_File_Analysis_Noinet 3.0
+	HarfangLab-GetPrefetches 1.0
+	Elasticsearch_Analysis 1.0
+	ONYPHE_Search 1.1
+	Splunk_Search_Hash 3.0
+	Autofocus_GetSampleAnalysis 1.0
+	HarfangLab-KillProcess 1.0
+	OrionMalware 1.0
+	DuoUnlockUserAccount 1.0
+	PaloAltoNGFW_unblock_internal_user 1.0.0
+	ONYPHE_Summary_API 1.2
+	Axur 1.0
+	EmergingThreats_IPInfo 1.0
+	Shodan_ReverseDNS 1.0
+	Shodan_Host_History 1.0
+	HarfangLab-GetServices 1.0
+	Watcher_Update 1.1
+	AIL_OnionLookup 1.0
+	Wazuh 1.0
+	PassiveTotal_Whois_Details 2.0
+	MSDefender-RestrictAppExecution 1.0
+	Urlscan.io_Search 0.1.1
+	CrowdstrikeFalcon_getDeviceDetails 1.0
+	Jupyter_Run_Notebook_Responder 1.0
+	CIRCLHashlookup 1.1
+	ValidateObservable 1.0
+	CrowdStrikeFalcon_hideHost 1.0
+	PaloAltoNGFW_block_external_IP_address 2.0.0
+	DomainTools_WhoisLookup 2.0
+	PaloAltoNGFW_block_internal_IP_address 2.0.0
+	HarfangLab-GetArtifactRamdump 1.0
+	GRR 0.1
+	Censys 2.0
+	Cyberprotect_ThreatScore 3.0
+	PaloAltoNGFW_block_external_domain 2.0.0
+	MSEntraID_GetDirectoryAuditLogs 1.0
+	ZEROFOX_Close_alert 1.0
+	Minemeld 1.0
+	PassiveTotal_Malware 2.0
+	DomainTools_ReverseNameServer 2.0
+	CrowdstrikeFalcon_Sandbox_Win10 1.0
+	IntezerCommunity 1.0
+	PaloAltoCortexXDR_cancel_scan 1.0
+	DNSDB_IPHistory 2.0
+	PaloAltoNGFW_unblock_internal_domain 1.0.0
+	HarfangLab-IsolateHost 1.0
+	GoogleSafebrowsing 2.0
+	PassiveTotal_Enrichment 2.0
+	TestAnalyzer 1.0
+	PayloadSecurity_File_Analysis 1.0
+	AnyRun_Sandbox_URL_Linux 1.0
+	CrowdstrikeFalcon_Sandbox_Win11 1.0
+	ZscalerZIA_AddToURLCategory 1.0
+	Msg_Parser 3.0
+	DNSdumpster_report 1.0
+	PaloAltoWildFire 1.0
+	CrowdstrikeFalcon_getDeviceAlerts 1.0
+	PaloAltoCortexXDR_allow_list 1.0
+	PassiveTotal_Unique_Resolutions 2.0
+	ZscalerZIA_RemoveFromCloudFirewallRule 1.0
+	Velociraptor 0.2
+	AnyRun_Sandbox_File_Android 1.0
+	Splunk_Search_User 3.0
+	GreyNoise 3.2
+	RiskIQ_PushArtifactToProject 1.0
+	CuckooSandbox_Url_Analysis 1.2
+	BackscatterIO_Enrichment 1.0
+	CrowdStrikeFalcon_Sync 1.0
+	DomainTools_ReverseWhois 2.0
+	ZscalerZIA_URLLookup 1.0
+	CheckPointHEC_SearchEmail 1.0
+	SophosIntelix_Submit_Static 0.1
+	ONYPHE_Ctiscan 1.0
+	ZEROFOX_Takedown_request 1.0
+	CyberCrime-Tracker 1.0
+	Gmail_DeleteMessage 1.0
+	GTI_GetIOCReport 1.0
+	EmailRep 1.0
+	KasperskyThreatIntelligencePortal 1.0
+	URLhaus 2.0
+	MISP 2.1
+	TeamCymruMHR 1.0
+	DShield_lookup 1.0
+	EmergingThreats_MalwareInfo 1.0
+	StopForumSpam 1.0
+	ZscalerZIA_AddToATPDenylistWildcard 1.0
+	DomainTools_HostingHistory 2.0
+	Gatewatcher_CTI 2.0
+	CheckPointHEC_SearchBySender 1.0
+	EclecticIQ_SearchObservable 2.0
+	GTI_ScanFile 1.0
+	CyberChef_FromBase64 1.0
+	MSEntraID_ForcePasswordResetWithMFA 1.0
+	VirusTotal_Rescan 3.1
+	ZscalerZIA_AddToATPDenylist 1.0
+	Telegram 1.0
+	Abuse_Finder 3.0
+	MSEntraID_GetManagedDevicesInfo 1.0
+	Investigate_Categorization 1.0
+	HarfangLab-GetArtifactMFT 1.0
+	DevTools_Echo_Responder 1.0
+	HarfangLab-SearchSourceIP 1.0
+	HarfangLab-GetPipes 1.0
+	SecurityTrails_Whois 1.0
+	DomainTools_WhoisHistory 2.0
+	VirusTotal_DownloadSample 3.1
+	MetaDefenderCloud_Scan 1.0
+	PassiveTotal_Ssl_Certificate_History 2.0
+	AnyRun_Sandbox_File_Windows 1.0
+	HarfangLab-GetArtifactUSN 1.0
+	CrowdstrikeFalcon_Sandbox_Android 1.0
+	HarfangLab-GetArtifactPrefetch 1.0
+	Splunk_Search_Other 3.0
+	Malpedia 1.0
+	OpenCTI_v6_SearchObservables 2.0
+	MetaDefenderCore_Scan 1.0
+	ZscalerZIA_RemoveFromATPDenylistWildcard 1.0
+	CrowdStrikeFalcon_unhideHost 1.0
+	Splunk_Search_Registry 3.0
+	RiskIQ_Malware 1.0
+	Crt_sh_Transparency_Logs 1.0
+	PaloAltoCortexXDR_scan 1.0
+	IPinfo_Details 1.0
+	CERTatPassiveDNS 2.0
+	Urlscan.io_Scan 0.1.0
+	OpenCTI_v6_SearchExactObservable 2.0
+	RiskIQ_Components 1.0
+	HarfangLab-GetNetworkShares 1.0
+	DomainToolsIris_CheckMaliciousTags 1.0
+	MSDefender-UnRestrictAppExecution 1.0
+	PayloadSecurity_Url_Analysis 1.0
+	HarfangLab-GetArtifactLogs 1.0
+	MSDefender-FullVirusscan 1.0
+	Shodan_DNSResolve 1.0
+	MSDefender-PushIOC-BlockAndRemediate 1.0
+	Splunk_Search_Mail_Subject 3.0
+	VMRay 4.1
+	GoogleDNS_resolve 1.0.0
+	CheckPointHEC_SearchByDomain 1.0
+	Watcher_Add 1.1
+	DomainToolsIris_Pivot 1.0
+	MetaDefenderCloud_GetReport 1.0
+	OpenCTI_SearchExactObservable 2.0
+	Shodan_InfoDomain 1.0
+	CuckooSandbox_File_Analysis_Inet 1.2
+	PaloAltoCortexXDR_initiate_forensics 1.0
+	HarfangLab-GetArtifactHives 1.0
+	DNS_Lookingglass 1.0
+	Jupyter_Run_Notebook_Analyzer 1.0
+	GoogleVisionAPI_WebDetection 1.0.0
+	ZscalerZIA_RemoveFromATPSecurityExceptions 1.0
+	Valhalla_GetRuleMatches 0.3.1
+	UrlDNA_Search 0.1.0
+	Triage 2.0
+	RiskIQ_Trackers 1.0
+	Vulners_CVE 1.0
+	Splunk_Search_IP 3.0
+	TorBlutmagie 1.0
+	SpamAssassin 1.0
+	AnyRun_Sandbox_URL_Windows 1.0
+	Splunk_Search_Domain_FQDN 3.0
+	MSDefender-IsolateMachine 1.0
+	RiskIQ_Reputation 1.0
+	ZscalerZIA_RemoveFromATPDenylist 1.0
+	FireHOLBlocklists 2.0
+	Vulners_IOC 1.0
+	SentinelOne_DNSReverseLookup 1.0
+	RiskIQ_Artifacts 1.0
+	ThreatGrid 1.0
+	HarfangLab-GetBinary 1.0
+	HarfangLab-UnisolateHost 1.0
+	Robtex_Reverse_PDNS_Query 1.0
+	Gmail_UnblockDomain 1.0
+	CrowdStrikeFalcon_AddIOC 1.0
+	PassiveTotal_Ssl_Certificate_Details 2.0
+	CrowdstrikeFalcon_GetDeviceVulnerabilities 1.0
+	AnyRun_TI_Lookup 1.0
+	PaloAltoNGFW_block_internal_user 1.0.0
+	AMPforEndpoints_IsolationStart 1.0
+	ZscalerZIA_RemoveFromURLCategory 1.0
+	Hashdd_Status 2.0
+	CrowdstrikeFalcon_ThreatIntel 1.0
+	PaloAltoNGFW_unblock_port_for_external_communication 1.0.0
+	PaloAltoCortexXDR_unisolate 1.0
+	HarfangLab-GetArtifactFilesystem 1.0
+	PaloAltoNGFW_unblock_internal_IP_address 1.0.0
+	DNSDB_NameHistory 2.0
+	PhishingInitiative_Lookup 2.0
+	AMPforEndpoints_IsolationStop 1.0
+	AbuseIPDB_Report 1.0
+	CrowdStrikeFalcon_HostContainment 1.0
+	ONYPHE_Vulnscan 1.1
+	SoltraEdge 1.0
+	Pulsedive_GetIndicator 1.0
+	QRadar_Auto_Closing_Offense 1.0
+	IBMXForce_Lookup 1.0
+	Gmail_UnblockSender 1.0
+	Splunk_Search_URL_URI_Path 3.0
+	RiskIQ_HostpairChildren 1.0
+	IVRE 1.0
+	JoeSandbox_Url_Analysis 2.0
+	HarfangLab-DumpProcess 1.0
+	Watcher_Transfer 1.1
+	CISMCAP 1.0
+	Binalyze_AIR_Isolation 1.0
+	Malwares_Scan 1.0
+	Robtex_IP_Query 1.0
+	MSDefender-PushIOC-Warn 1.0
+	PaloAltoNGFW_unblock_external_user 1.0.0
+	SentinelOne_DNSQuery 2.0
+	HybridAnalysis_GetReport 1.0
+	DuoLockUserAccount 1.0
+	isMalicious_GetReport 1.0
+	AMPforEndpoints_SCDRemove 1.0
+	MSDefenderOffice365_allow 1.0
+	ClamAV_FileInfo 1.1
+	CrowdStrikeFalcon_LiftContainmentHost 1.0
+	PaloAltoNGFW_block_port_for_internal_communication 2.0.0
+	HarfangLab-GetRunKeys 1.0
+	ForcepointWebsensePing 1.0
+	Shodan_Search 2.0
+	Lookyloo_Screenshot 1.0
+	MSDefender-PushIOC-Allowed 1.0
+	AnyRun_Sandbox_File_Linux 1.0
+	Slack_CreateChannel 1.0
+	PassiveTotal_Components 2.0
+	AbuseIPDB 2.0
+	MetaDefenderCore_GetReport 1.0
+	Crowdsec_Analyzer 1.1
+	MalwareClustering_Search 1.0
+	Mnemonic_pDNS_Closed 3.0
+	C25CortexAnalyzer_Investigate 1.0
+	MSEntraID_ForcePasswordReset 1.0
+	Splunk_Search_File_Filename 3.0
+	HarfangLab-GetProcesses 1.0
+	UnshortenLink 1.2
+	CrowdstrikeFalcon_Sandbox_MacOS 1.0
+	HarfangLab-GetArtifactEvtx 1.0
+	n8n 1.0
+
+[[37minfo[0m] o.t.c.s.DockerJobRunnerSrv - Docker is available:
+Info{architecture=x86_64, clusterStore=null, cgroupDriver=systemd, containers=49, containersRunning=36, containersStopped=13, containersPaused=0, cpuCfsPeriod=true, cpuCfsQuota=true, debug=false, dockerRootDir=/var/lib/docker, storageDriver=overlayfs, driverStatus=[[driver-type, io.containerd.snapshotter.v1]], executionDriver=null, experimentalBuild=false, httpProxy=, httpsProxy=, id=703a4773-4896-48e8-ad05-1a7cc9f019e4, ipv4Forwarding=true, images=3918, indexServerAddress=https://index.docker.io/v1/, initPath=null, initSha1=null, kernelMemory=null, kernelVersion=6.8.0-117-generic, labels=[], memTotal=134968524800, memoryLimit=true, cpus=16, eventsListener=0, fileDescriptors=372, goroutines=552, name=red-dragon, noProxy=, oomKillDisable=false, operatingSystem=Ubuntu 24.04.4 LTS, osType=linux, plugins=Plugins{volumes=[local], networks=[bridge, host, ipvlan, macvlan, null, overlay]}, registryConfig=RegistryConfig{indexConfigs={docker.io=IndexConfig{name=docker.io, mirrors=[], secure=true, official=true}}, insecureRegistryCidrs=[::1/128, 127.0.0.0/8]}, serverVersion=29.5.0, swapLimit=true, swarm=SwarmInfo{cluster=null, controlAvailable=false, error=, localNodeState=inactive, nodeAddr=, nodeId=, nodes=null, managers=null, remoteManagers=null}, systemStatus=[], systemTime=Thu Jun 11 16:00:46 UTC 2026}
+[[33mwarn[0m] o.t.c.s.JobRunnerSrv - The package cortexutils for python hasn't been found
+[[33mwarn[0m] o.t.c.s.JobRunnerSrv - The package cortexutils for python2 hasn't been found
+[[33mwarn[0m] o.t.c.s.JobRunnerSrv - The package cortexutils for python3 hasn't been found
+[[37minfo[0m] c.s.e.h.JavaClient$ - Creating HTTP client on http://thehive-es:9200
+[[37minfo[0m] play.api.Play - Application started (Prod) (no global state)
+[[37minfo[0m] p.c.s.AkkaHttpServer - Enabling HTTP/2 on Akka HTTP server...
+[[37minfo[0m] p.c.s.AkkaHttpServer - Listening for HTTP on /0:0:0:0:0:0:0:0:9001
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 27ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 2ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[31merror[0m] o.e.s.a.MultiAuthSrv - Authentication failure
+org.elastic4play.AuthenticationError: Authentication using API key is not supported
+	at org.elastic4play.services.AuthSrv.authenticate(UserSrv.scala:48)
+	at org.elastic4play.services.AuthSrv.authenticate$(UserSrv.scala:47)
+	at org.thp.cortex.services.LocalAuthSrv.authenticate(LocalAuthSrv.scala:15)
+	at org.elastic4play.services.auth.MultiAuthSrv.$anonfun$authenticate$3(MultiAuthSrv.scala:58)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:43)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:41)
+	at scala.concurrent.Future.$anonfun$recoverWith$1(Future.scala:417)
+	at scala.concurrent.impl.Promise.$anonfun$transformWith$1(Promise.scala:41)
+	at scala.concurrent.impl.CallbackRunnable.run(Promise.scala:64)
+	at akka.dispatch.BatchingExecutor$AbstractBatch.processBatch(BatchingExecutor.scala:63)
+[[33mwarn[0m] o.t.c.s.ErrorHandler - GET /api/alert returned 404
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/alert took 76ms and returned 404 56 bytes
+[[31merror[0m] o.e.s.a.MultiAuthSrv - Authentication failure
+org.elastic4play.AuthenticationError: Authentication using API key is not supported
+	at org.elastic4play.services.AuthSrv.authenticate(UserSrv.scala:48)
+	at org.elastic4play.services.AuthSrv.authenticate$(UserSrv.scala:47)
+	at org.thp.cortex.services.LocalAuthSrv.authenticate(LocalAuthSrv.scala:15)
+	at org.elastic4play.services.auth.MultiAuthSrv.$anonfun$authenticate$3(MultiAuthSrv.scala:58)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:43)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:41)
+	at scala.concurrent.Future.$anonfun$recoverWith$1(Future.scala:417)
+	at scala.concurrent.impl.Promise.$anonfun$transformWith$1(Promise.scala:41)
+	at scala.concurrent.impl.CallbackRunnable.run(Promise.scala:64)
+	at akka.dispatch.BatchingExecutor$AbstractBatch.processBatch(BatchingExecutor.scala:63)
+[[33mwarn[0m] o.t.c.s.ErrorHandler - GET /api/user/current returned 404
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 55ms and returned 404 56 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/status took 1ms and returned 200 278 bytes
+[[31merror[0m] o.e.s.a.MultiAuthSrv - Authentication failure
+org.elastic4play.AuthenticationError: Authentication using API key is not supported
+	at org.elastic4play.services.AuthSrv.authenticate(UserSrv.scala:48)
+	at org.elastic4play.services.AuthSrv.authenticate$(UserSrv.scala:47)
+	at org.thp.cortex.services.LocalAuthSrv.authenticate(LocalAuthSrv.scala:15)
+	at org.elastic4play.services.auth.MultiAuthSrv.$anonfun$authenticate$3(MultiAuthSrv.scala:58)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:43)
+	at org.elastic4play.services.auth.MultiAuthSrv$$anonfun$$nestedInanonfun$forAllAuthProvider$1$1.applyOrElse(MultiAuthSrv.scala:41)
+	at scala.concurrent.Future.$anonfun$recoverWith$1(Future.scala:417)
+	at scala.concurrent.impl.Promise.$anonfun$transformWith$1(Promise.scala:41)
+	at scala.concurrent.impl.CallbackRunnable.run(Promise.scala:64)
+	at akka.dispatch.BatchingExecutor$AbstractBatch.processBatch(BatchingExecutor.scala:63)
+[[33mwarn[0m] o.t.c.s.ErrorHandler - GET /api/user/current returned 404
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 30ms and returned 404 56 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 POST /api/organization took 1148ms and returned 201 224 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 POST /api/user took 2015ms and returned 201 343 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 30ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 14ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 19ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/status took 3ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 13ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 12ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.1 GET /api/user/current took 12ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 11ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 0ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 8ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 10ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 0ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 0ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 12ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 0ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 0ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 172.20.0.18 GET /api/user/current took 10ms and returned 200 404 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 1ms and returned 200 278 bytes
+[[37minfo[0m] o.t.c.s.AccessLogFilter - 0:0:0:0:0:0:0:1 GET /api/status took 0ms and returned 200 278 bytes

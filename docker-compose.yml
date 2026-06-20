@@ -18,10 +18,14 @@ services:
         soft: 655360
         hard: 655360
     ports:
-      - "1514:1514"
-      - "1515:1515"
-      - "514:514/udp"
-      - "55000:55000"
+      # SEC / ADR-034 Host Exposure Amendment (issue #416): SOC management
+      # surfaces bind 127.0.0.1 so they are not reachable from other hosts on
+      # the operator's LAN. Container-side ports and the security-net addresses
+      # are unchanged; in-cluster agents reach the manager over the Docker net.
+      - "127.0.0.1:1514:1514"
+      - "127.0.0.1:1515:1515"
+      - "127.0.0.1:514:514/udp"
+      - "127.0.0.1:55000:55000"
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
       - INDEXER_USERNAME=${INDEXER_USERNAME}
@@ -93,7 +97,8 @@ services:
     hostname: wazuh.indexer
     restart: always
     ports:
-      - "9200:9200"
+      # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
+      - "127.0.0.1:9200:9200"
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
@@ -134,7 +139,8 @@ services:
     hostname: wazuh.dashboard
     restart: always
     ports:
-      - 443:5601
+      # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
+      - "127.0.0.1:443:5601"
     environment:
       - INDEXER_USERNAME=${INDEXER_USERNAME}
       - INDEXER_PASSWORD=${INDEXER_PASSWORD}
@@ -221,7 +227,8 @@ services:
     hostname: misp
     restart: unless-stopped
     ports:
-      - "8443:443"
+      # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
+      - "127.0.0.1:8443:443"
     environment:
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
@@ -359,7 +366,8 @@ services:
     hostname: thehive
     restart: unless-stopped
     ports:
-      - "9000:9000"
+      # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
+      - "127.0.0.1:9000:9000"
     environment:
       - JVM_OPTS=-Xms512m -Xmx512m
     # SEC-006 / ADR-034: keystore password loaded from the env_file
@@ -368,6 +376,7 @@ services:
     # `${?HTTPS_KEYSTORE_PASSWORD}` in the mounted application.conf.
     env_file:
       - ./config/soc_certs/thehive/keystore.p12.password
+      - ./config/cortex/thehive-cortex.env
     volumes:
       - thehive_data:/opt/thp/thehive/data
       - thehive_index:/opt/thp/thehive/index
@@ -384,7 +393,12 @@ services:
       - lucene
       - --es-hostnames
       - "thehive-es"
-      - --no-config-cortex
+      - --cortex-proto
+      - http
+      - --cortex-hostnames
+      - cortex
+      - --cortex-port
+      - "9001"
     healthcheck:
       # `-k` is acceptable for the in-container healthcheck per ADR-034
       # (no shared trust anchor inside the container); external clients
@@ -402,6 +416,8 @@ services:
       thehive-cassandra:
         condition: service_healthy
       thehive-es:
+        condition: service_healthy
+      cortex:
         condition: service_healthy
     networks:
       aptl-security:
@@ -455,6 +471,20 @@ services:
     networks:
       aptl-security:
 
+  cortex-index-init:
+    profiles: ["soc"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
+    container_name: aptl-cortex-index-init
+    restart: "no"
+    entrypoint: ["/bin/sh", "/usr/local/bin/cortex-index-init.sh"]
+    volumes:
+      - ./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro
+    depends_on:
+      thehive-es:
+        condition: service_healthy
+    networks:
+      aptl-security:
+
   # Shuffle SOAR
   shuffle-backend:
     profiles: ["soc"]
@@ -500,9 +530,13 @@ services:
     ports:
       # SEC-006 / ADR-034: host port 3443 → container 443 (HTTPS). The
       # in-container nginx config overlay terminates TLS using the
-      # lab-CA-signed cert.
-      - "3443:443"
-      - "3001:3001"
+      # lab-CA-signed cert. ADR-034 Host Exposure Amendment (issue #416):
+      # loopback-only.
+      - "127.0.0.1:3443:443"
+      # Host port 3001 → container 80 (HTTP). The in-container nginx
+      # listens on 80/443 only; the previous 3001:3001 mapping pointed at
+      # a port nothing listens on (issue #405). Loopback-only (issue #416).
+      - "127.0.0.1:3001:80"
     environment:
       - BACKEND_HOSTNAME=shuffle-backend
     volumes:
@@ -565,6 +599,11 @@ services:
       - shuffle-backend
     networks:
       aptl-security:
+        # Pinned so the orborus asset has a stable, reproducible address
+        # for the ACES inventory capture. It was previously DHCP-assigned,
+        # which let its address drift between capture runs (.6 vs .7) and
+        # made the inventory evidence bundle internally inconsistent.
+        ipv4_address: 172.20.0.7
 
   shuffle-opensearch:
     profiles: ["soc"]
@@ -598,13 +637,16 @@ services:
     hostname: cortex
     restart: unless-stopped
     ports:
-      - "9001:9001"
+      # ADR-034 Host Exposure Amendment (issue #416): Cortex holds the host
+      # docker.sock; loopback-binding removes the LAN-reachable management
+      # surface. (Socket-proxy hardening is a separate follow-up.)
+      - "127.0.0.1:9001:9001"
     environment:
       - job_directory=/opt/cortex/jobs
     volumes:
       - cortex_data:/opt/cortex/jobs
       - /var/run/docker.sock:/var/run/docker.sock
-      # SEC-006 / ADR-034: ES wiring (`search.host`) + lab-CA mount for
+      # SEC-006 / ADR-034: ES wiring (`search.uri`) + lab-CA mount for
       # outbound trust. The HTTPS keystore is generated under
       # config/soc_certs/cortex/ for future activation; see the
       # application.conf comment for the deferral rationale.
@@ -623,6 +665,8 @@ services:
     depends_on:
       thehive-es:
         condition: service_healthy
+      cortex-index-init:
+        condition: service_completed_successfully
     networks:
       aptl-security:
         ipv4_address: 172.20.0.22
@@ -1008,7 +1052,11 @@ services:
     cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - victim_logs:/var/log
     tmpfs:
       - /run
@@ -1056,7 +1104,11 @@ services:
     cgroup: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - workstation_logs:/var/log
     tmpfs:
       - /run
@@ -1139,7 +1191,12 @@ services:
       - "ws01.techvault.local:172.20.2.22"
       - "ns1.techvault.local:172.20.2.27"
     volumes:
-      - ./keys:/host-ssh-keys:ro
+      # SEC #417: kali receives the control-plane PUBLIC key (so operator/MCP
+      # can reach it) and the kali pivot PRIVATE key (to pivot into targets).
+      # It never receives the control-plane private key — the pollution this
+      # split removes.
+      - ./keys/authorized_keys:/host-ssh-keys/authorized_keys:ro
+      - ./config/lab-ssh/kali_pivot_key:/host-ssh-keys/kali_pivot_key:ro
       - kali_operations:/home/kali/operations
       # OBS-003 / ADR-033: per-session captures land in a docker
       # NAMED VOLUME (not a host bind mount). The named volume is
@@ -1197,6 +1254,7 @@ services:
     container_name: aptl-reverse
     hostname: reverse-host
     restart: unless-stopped
+    cgroup: host
     networks:
       aptl-security:
         ipv4_address: 172.20.0.27
@@ -1211,10 +1269,15 @@ services:
       - SYS_RESOURCE    # For setting limits and OOM score
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
-      - ./keys:/keys:ro
+      # SEC #417: targets receive only PUBLIC keys, never a private key. The
+      # control-plane pubkey authorizes operator/MCP host access; the kali
+      # pivot pubkey authorizes kali's in-scenario pivot into this target.
+      - ./keys/aptl_lab_key.pub:/keys/aptl_lab_key.pub:ro
+      - ./config/lab-ssh/kali_pivot_key.pub:/keys/kali_pivot_key.pub:ro
       - reverse_logs:/var/log
     tmpfs:
       - /run
+      - /run/lock # Ubuntu systemd mounts a nested /run/lock tmpfs itself; AppArmor docker-default denies that mount, so pre-create it
       - /tmp
     security_opt:
       - seccomp:unconfined
@@ -1227,7 +1290,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          memory: 2g # first-boot tools install compiles radare2 from source (parallel make); 512m OOM-killed the build
 
   # ==========================================================================
   # WEB UI (web profile)
@@ -1241,9 +1304,12 @@ services:
       dockerfile: web/Dockerfile.api
     restart: unless-stopped
     ports:
-      - "8400:8400"
+      # Loopback-only: only the operator's machine can reach this port (ADR-039).
+      - "127.0.0.1:8400:8400"
     environment:
       - APTL_PROJECT_DIR=/project
+      # Required: generate with python3 -c 'import secrets; print(secrets.token_hex(32))'
+      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
@@ -1263,9 +1329,16 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Loopback-only: only the operator's machine can reach the UI (ADR-039).
+      - "127.0.0.1:3000:3000"
     environment:
       - ORIGIN=http://localhost:3000
+      # Same token as aptl-web-api — SvelteKit server injects it as Bearer header.
+      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
+      # Internal Docker hostname the SvelteKit server uses to reach the API.
+      - APTL_API_URL=http://aptl-web-api:8400
+      # Hostname:port the browser uses for direct WebSocket connections.
+      - APTL_API_HOST=localhost:8400
     depends_on:
       - aptl-web-api
     networks:

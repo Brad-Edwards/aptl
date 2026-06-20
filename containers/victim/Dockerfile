@@ -67,14 +67,18 @@ RUN mkdir -p /home/labadmin/.ssh && \
 
 RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 
-# Copy shared base scripts and configs
+# Copy shared base scripts and configs. Modes are pinned explicitly (chmod 755
+# for scripts, COPY --chmod=644 for configs) instead of relying on `chmod +x`
+# or the build context's file modes: COPY preserves source mode bits, so a
+# builder umask of 0002 would otherwise bake group-writable files and churn the
+# ACES inventory's captured modes between environments (SEC #417).
 COPY base/scripts/entrypoint-base.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/entrypoint-base.sh
+RUN chmod 755 /opt/purple-team/scripts/entrypoint-base.sh
 
-COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
+COPY --chmod=644 base/scripts/ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
-COPY base/falco_custom.yaml /etc/falco/config.d/
+COPY --chmod=644 base/falco_custom.yaml /etc/falco/config.d/
 
 # Pre-install Wazuh agent and Falco at build time so containers on internal
 # Docker networks (SAF-002: internal: true) do not need internet at runtime.
@@ -87,27 +91,30 @@ RUN rpm --import https://packages.wazuh.com/key/GPG-KEY-WAZUH && \
     killall wazuh-execd wazuh-agentd wazuh-syscheckd wazuh-logcollector wazuh-modulesd 2>/dev/null || true && \
     rm -f /var/ossec/var/run/*.pid
 
+# falco is version-pinned (SEC #417): an unpinned `falco` pulls a newer build on
+# every rebuild, churning the captured falco config digest in the ACES inventory.
+# Pin so the image and its inventory are reproducible; bump deliberately.
 RUN rpm --import https://falco.org/repo/falcosecurity-packages.asc && \
     printf '[falco]\nname=Falco repository\nbaseurl=https://download.falco.org/packages/rpm\ngpgcheck=1\ngpgkey=https://falco.org/repo/falcosecurity-packages.asc\nenabled=1\n' \
     > /etc/yum.repos.d/falco.repo && \
-    dnf install -y falco && \
+    dnf install -y falco-0.44.1-1 && \
     dnf clean all
 
 # ---- Victim-specific layer ----
 
 COPY victim/entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 COPY victim/install-wazuh.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-wazuh.sh
+RUN chmod 755 /opt/purple-team/scripts/install-wazuh.sh
 
 COPY victim/install-falco.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-falco.sh
+RUN chmod 755 /opt/purple-team/scripts/install-falco.sh
 
 COPY victim/install-all.sh /opt/purple-team/scripts/
-RUN chmod +x /opt/purple-team/scripts/install-all.sh
+RUN chmod 755 /opt/purple-team/scripts/install-all.sh
 
-COPY victim/lab-install.service /etc/systemd/system/
+COPY --chmod=644 victim/lab-install.service /etc/systemd/system/
 RUN systemctl enable lab-install.service
 
 EXPOSE 22 514

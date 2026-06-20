@@ -1,0 +1,8 @@
+- compose-service.thehive-cassandra.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project.
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof.
+- thehive_cassandra_data volume contents (/var/lib/cassandra: commitlog, data, hints, saved_caches) are runtime database state and out of manifest scope; only top-level directory rows are recorded in filesystem-tree.txt.gz. Schema-level database state is captured in cassandra-state.txt instead.
+- source-checksums.txt covers only docker-compose.yml; the thehive-cassandra service has no repo-authored bind files (configuration is upstream-image defaults plus compose environment).
+- The LocalStrategy keyspaces (system, system_schema) and virtual keyspaces (system_virtual_schema, system_views) carry no replication_factor and are Cassandra engine-internal catalogs; they are recorded in cassandra-keyspaces.txt evidence but are not encoded as wide_column keyspace partitions (the profile models replicated keyspaces). The participant-relevant thehive keyspace and the replicated SimpleStrategy system keyspaces are encoded as partitions.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.
+- osquery apt_sources reflects the host-side scanner vantage; the target rootfs Debian apt state is captured directly in os-packages.txt.

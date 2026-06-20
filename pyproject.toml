@@ -43,6 +43,10 @@ dev = [
     "hypothesis>=6.0.0",
     "ruff>=0.15.0",
 ]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
@@ -68,19 +72,11 @@ select = ["C901"]
 # threshold (15); ratchet down over time as the backlog shrinks.
 max-complexity = 15
 
-[tool.ruff.lint.per-file-ignores]
-# Known-large modules with a backlog of over-threshold functions — see
-# ADR-010 § Complexity backlog for the specific functions and their
-# scores. C901 is suppressed for these *whole files* until they're
-# broken up (rather than carving out each `def` with `# noqa`, which
-# would touch the files and make SonarCloud's PR analysis re-surface
-# their pre-existing complexity debt as "new"). New code should not go
-# into these files; everything else under `src/` is gated. Delete a file
-# from this list as soon as `ruff check src/<file>` passes without it.
-"src/aptl/core/runtime/compiler.py" = ["C901"]
-"src/aptl/core/runtime/planner.py" = ["C901"]
-"src/aptl/core/sdl/parser.py" = ["C901"]
-"src/aptl/core/sdl/validator.py" = ["C901"]
+# [tool.ruff.lint.per-file-ignores] intentionally absent: the complexity
+# backlog is empty. Every function under `src/` is now gated at
+# max-complexity 15 with no carve-outs (issue #286). If a future change must
+# temporarily exempt a file, add the table back and record the offender in
+# ADR-010's backlog with its measured score.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

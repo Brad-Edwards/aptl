@@ -97,9 +97,15 @@ class TestDetectionPipeline:
     def test_kali_can_ssh_to_victim(self):
         result = docker_exec(
             "aptl-kali",
-            "ssh -i /host-ssh-keys/aptl_lab_key "
+            # SEC #417: kali pivots with the dedicated scenario pivot key, not
+            # the operator/MCP control-plane key (which kali no longer holds).
+            # Run as the unprivileged `kali` login user against the entrypoint's
+            # kali-owned copy of the key, which is the real operator path (the
+            # 0600 host bind is not readable by the kali user).
+            "ssh -i /home/kali/.ssh/kali_pivot_key "
             "-o StrictHostKeyChecking=no -o BatchMode=yes "
             "labadmin@172.20.2.20 echo OK",
+            user="kali",
             timeout=30,
         )
         assert result.returncode == 0, (

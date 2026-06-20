@@ -11,7 +11,7 @@
       "name": "supervisord",
       "path": "",
       "pid": "1",
-      "start_time": "1779517113",
+      "start_time": "1781193621",
       "uid": "0"
     },
     {
@@ -20,7 +20,7 @@
       "name": "named",
       "path": "",
       "pid": "7",
-      "start_time": "1779517116",
+      "start_time": "1781193623",
       "uid": "102"
     },
     {
@@ -28,26 +28,8 @@
       "gid": "104",
       "name": "wazuh-execd",
       "path": "",
-      "pid": "387",
-      "start_time": "1779517169",
-      "uid": "0"
-    },
-    {
-      "cmdline": "/bin/bash /opt/aptl/wazuh/wazuh-agent.sh",
-      "gid": "0",
-      "name": "wazuh-agent.sh",
-      "path": "",
-      "pid": "391",
-      "start_time": "1779517170",
-      "uid": "0"
-    },
-    {
-      "cmdline": "/var/ossec/bin/wazuh-execd",
-      "gid": "104",
-      "name": "wazuh-execd",
-      "path": "",
-      "pid": "884",
-      "start_time": "1779517229",
+      "pid": "384",
+      "start_time": "1781193674",
       "uid": "0"
     },
     {
@@ -55,8 +37,35 @@
       "gid": "104",
       "name": "wazuh-agentd",
       "path": "",
-      "pid": "895",
-      "start_time": "1779517230",
+      "pid": "392",
+      "start_time": "1781193674",
+      "uid": "103"
+    },
+    {
+      "cmdline": "/bin/bash /opt/aptl/wazuh/wazuh-agent.sh",
+      "gid": "0",
+      "name": "wazuh-agent.sh",
+      "path": "",
+      "pid": "399",
+      "start_time": "1781193675",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-execd",
+      "gid": "104",
+      "name": "wazuh-execd",
+      "path": "",
+      "pid": "891",
+      "start_time": "1781193734",
+      "uid": "0"
+    },
+    {
+      "cmdline": "/var/ossec/bin/wazuh-agentd",
+      "gid": "104",
+      "name": "wazuh-agentd",
+      "path": "",
+      "pid": "899",
+      "start_time": "1781193734",
       "uid": "103"
     },
     {
@@ -64,8 +73,8 @@
       "gid": "104",
       "name": "wazuh-syscheckd",
       "path": "",
-      "pid": "910",
-      "start_time": "1779517231",
+      "pid": "912",
+      "start_time": "1781193735",
       "uid": "0"
     },
     {
@@ -73,8 +82,8 @@
       "gid": "104",
       "name": "wazuh-logcollec",
       "path": "",
-      "pid": "922",
-      "start_time": "1779517232",
+      "pid": "925",
+      "start_time": "1781193736",
       "uid": "0"
     },
     {
@@ -82,8 +91,8 @@
       "gid": "0",
       "name": "wazuh-modulesd",
       "path": "",
-      "pid": "936",
-      "start_time": "1779517232",
+      "pid": "942",
+      "start_time": "1781193737",
       "uid": "0"
     },
     {
@@ -91,8 +100,8 @@
       "gid": "0",
       "name": "tail",
       "path": "",
-      "pid": "954",
-      "start_time": "1779517235",
+      "pid": "960",
+      "start_time": "1781193740",
       "uid": "0"
     },
     {
@@ -100,8 +109,8 @@
       "gid": "0",
       "name": "sleep",
       "path": "",
-      "pid": "339687",
-      "start_time": "1779941364",
+      "pid": "62240",
+      "start_time": "1781270447",
       "uid": "0"
     }
   ]

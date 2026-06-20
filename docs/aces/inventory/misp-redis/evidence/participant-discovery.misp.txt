@@ -1,6 +1,6 @@
 --dns--
-172.20.0.3      misp-redis
-172.20.0.3      aptl-misp-redis
+172.20.0.2      misp-redis
+172.20.0.2      aptl-misp-redis
 --redis-host-env--
 REDIS_HOST=misp-redis
 --tcp6379--

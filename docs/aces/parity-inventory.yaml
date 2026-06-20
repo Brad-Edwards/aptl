@@ -40,6 +40,62 @@ surfaces:
   - test_and_validation
 
 # ---------------------------------------------------------------------------
+# Required observable-surface coverage (SCN-010E / #322).
+#
+# The static validation gate (src/aptl/validation/techvault_gate.py) reads this
+# mapping and confirms every required observable surface is either:
+#   status: represented  — proven by real compiled/realized evidence from the
+#                          TechVault scenario (the gate asserts the evidence;
+#                          this file does not become a second source of truth);
+#   status: deferred     — explicitly out of provisioning-only scope, citing a
+#                          blocking tracking issue. Phase B cutover disallows
+#                          deferrals (full representation required).
+# A surface that is neither — or a `represented` claim with no compiled
+# evidence — fails the gate.
+required_surface_coverage:
+  nodes:
+    status: represented
+    notes: ACES nodes realized into Docker Compose node deployments.
+  services:
+    status: represented
+    notes: Per-node service exposure realized from node runtime specs.
+  vulnerabilities:
+    status: represented
+    notes: ACES vulnerabilities section encodes the planted vulnerability surface.
+  features:
+    status: represented
+    notes: ACES features section encodes adversary/observation feature bindings.
+  kali_apparatus:
+    status: represented
+    notes: Red-team Kali apparatus realized via the `kali` compose profile.
+  defensive_stack:
+    status: represented
+    notes: Wazuh/Suricata/MISP/Shuffle/TheHive defensive stack realized via the `soc`/`wazuh` profiles.
+  health:
+    status: represented
+    notes: Node runtime `health` state encoded in the ACES node specs.
+  injects:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Adversary inject sequencing belongs to the orchestration-evaluation profile; out of provisioning-only scope.
+  workflows:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Scenario-flow workflows belong to the orchestration-evaluation profile; out of provisioning-only scope.
+  objectives:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Objective evaluation requires the evaluator (orchestration-evaluation) profile (#312).
+  scoring:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Scoring outputs require the evaluator (orchestration-evaluation) profile (#312).
+  run_archive:
+    status: deferred
+    blocking_followup: "#312"
+    notes: Run-archive/scoring run evidence is an evaluator-profile runtime output (#312).
+
+# ---------------------------------------------------------------------------
 # Rows.
 #
 # Per-row fields (all required):
@@ -66,6 +122,17 @@ rows:
   # scenarios: ad-domain-compromise, detect-brute-force,
   # lateral-movement-data-theft, prime-enterprise, recon-nmap-scan,
   # webapp-compromise.
+
+  - id: scen.techvault.composition-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: TechVault composition connective tissue + cross-asset relationships
+    category: aces_sdl
+    aces_target: ACES infrastructure / relationships / forwarding_agents / accounts / content / nodes.runtime.* composition surfaces
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/_composition/ + tests/test_techvault_composition_inventory.py + scenarios/techvault.sdl.yaml"
+    blocking_followup: n/a
+    notes: "SCN-010 issue #329 composition inventory; SDL encodes network topology, dependency/relationship graph, DNS, trust/account/content placement, observation chains, and defensive integration chains with No known remaining ACES expressivity blocker. The bundle cites per-asset inventories and records snapshot-only/non-destructive capture limits."
 
   - id: scen.techvault.webapp-inventory
     surface: scenarios_yaml
@@ -121,6 +188,28 @@ rows:
     blocking_followup: n/a
     notes: SCN-010 issue #343 wazuh-sidecar-db log-forwarder inventory pass. Promotes the off-node Wazuh sidecar from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-db. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf, and is resolved by the db-logs-forwarded-wazuh and wazuh-sidecar-db-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-db steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
+  - id: scen.techvault.wazuh-sidecar-suricata-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.wazuh-sidecar-suricata + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.wazuh-sidecar-suricata (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + forwarding_agents.aptl-suricata-wazuh-agent + relationships + accounts
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/wazuh-sidecar-suricata/ + tests/test_wazuh_sidecar_suricata_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/ + Brad-Edwards/aces#460 consumed"
+    blocking_followup: n/a
+    notes: SCN-010 issue #344 wazuh-sidecar-suricata log-forwarder inventory pass, following the #343 wazuh-sidecar-db precedent (same aptl-wazuh-sidecar:local image). Promotes the off-node Wazuh sidecar for the suricata node from a docker-compose-only forwarding_agents stub to the fully inventoried participant node nodes.techvault.wazuh-sidecar-suricata. The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, processes, environment, default-capability set (no CAP_NET_ADMIN), security-net endpoint, no-network-listener posture, and wazuh-agent software component; the cross-node forwarding behaviour stays in the scenario-level forwarding_agents registry (Brad-Edwards/aces#460), enriched from the captured ossec.conf (EVE JSON localfile, queue 5000/eps 500/aes/reconnect 60s), and is resolved by the suricata-logs-forwarded-wazuh and wazuh-sidecar-suricata-forwards-wazuh-manager relationship edges. No known remaining ACES expressivity blocker for the catalogued wazuh-sidecar-suricata steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.misp-suricata-sync-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.misp-suricata-sync + relationships + accounts
+    category: aces_sdl
+    aces_target: nodes.techvault.misp-suricata-sync (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, linux_capabilities, network, software_components) + relationships.misp-suricata-sync-queries-misp-api + relationships.misp-suricata-sync-updates-suricata-rules
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/misp-suricata-sync/ + tests/test_misp_suricata_sync_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #349 misp-suricata-sync integration-service inventory pass. Replaces the docker-compose-derived node stub with the fully inventoried participant node nodes.techvault.misp-suricata-sync. The SDL encodes the catalogued local-build image identity/recipe (python:3.11-slim base, pip-installed aptl 0.1.0), dpkg packages, Trivy CVEs, the scoped filesystem manifest (build copy, installed package, console script, lab CA input, rules handoff, command socket), local identity, the single-process sync loop, the fifteen-variable environment (MISP_API_KEY carried as the secret_fixture value already disclosed on nodes.techvault.misp ADMIN_KEY), default-capability set, security-net endpoint, and no-network-listener posture. The realized integration is typed as the misp-suricata-sync-queries-misp-api edge (https, lab CA, api_key auth) and the new misp-suricata-sync-updates-suricata-rules edge (shared rules bind + unix-command socket reload, alert-only per ADR-019). No known remaining ACES expressivity blocker for the catalogued misp-suricata-sync steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
   - id: scen.techvault.workstation-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml
@@ -142,6 +231,17 @@ rows:
     validation_evidence: "docs/aces/inventory/victim/ + tests/test_victim_inventory.py + scenarios/techvault.sdl.yaml"
     blocking_followup: n/a
     notes: SCN-010 issue #337 victim inventory pass. The SDL encodes the catalogued generic victim image, build, runtime, filesystem, identity, package/CVE, SSH, sudo-policy weakness, Wazuh relationship, and systemd service-manager unit-state facts. No known remaining ACES expressivity blocker for the catalogued victim steady-state inventory.
+
+  - id: scen.techvault.reverse-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.reverse + features + vulnerabilities + accounts + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.reverse (source/build, runtime mounts, processes, environment, linux_capabilities, container, health, local_identity, network, ssh_servers, forwarding_agents, service_manager_units, packages, package_vulnerabilities, filesystem_inventory, software_components) + features.reverse-* + vulnerabilities.reverse-nopasswd-sudo + accounts.reverse-local-* + relationships.reverse-forwards-wazuh
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/reverse/ + tests/test_reverse_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #338 reverse-engineering workbench inventory pass (target family, full Ubuntu 22.04 systemd archetype following the victim/workstation precedents). The SDL encodes the catalogued local-build image identity/recipe, dpkg packages, Trivy CVEs, mount table, filesystem manifest, local identity (27 users / 48 groups), process set, environment, SYS_ADMIN/SYS_NICE/SYS_RESOURCE capability add, security-net endpoint with the 2027->22 published SSH port, sshd policy, the in-process Wazuh agent + rsyslog forwarders, the systemd unit-file enumeration, the NOPASSWD-sudo weakness, and the first-boot-installed RE toolchain as runtime software_components. Both forwarders are node-level forwarding_agents resolved by the reverse-forwards-wazuh edge; the manager-side agents[] enumeration is intentionally not extended because the agent registration name is runtime-generated. Required three pre-existing reverse-profile boot fixes (cgroup:host, /run/lock tmpfs, 2g memory) committed separately. No known remaining ACES expressivity blocker for the catalogued reverse steady-state inventory. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: scen.techvault.fileshare-inventory
     surface: scenarios_yaml
@@ -203,7 +303,7 @@ rows:
     legacy_source: scenarios/techvault.sdl.yaml
     legacy_field: nodes.techvault.wazuh-manager + infrastructure.wazuh-manager + runtime
     category: aces_sdl
-    aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions / conditions fields
+    aces_target: ACES nodes / infrastructure / runtime / runtime.security_monitoring_managers / runtime.security_monitoring_managers.detection_definitions fields
     runtime_owner: n/a
     validation_evidence: "docs/aces/inventory/wazuh.manager/ + scenarios/techvault.sdl.yaml + tests/test_wazuh_manager_inventory.py + tests/test_techvault_classification_audit.py + Brad-Edwards/aces#428 + Brad-Edwards/aces#434"
     blocking_followup: n/a
@@ -684,7 +784,7 @@ rows:
     legacy_source: "docker-compose.yml (service: db)"
     legacy_field: db
     category: aces_sdl
-    aces_target: ACES nodes.techvault.db + nodes.techvault.db.runtime.database_services + infrastructure.db + conditions.db-postgres-ready + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
+    aces_target: ACES nodes.techvault.db + nodes.techvault.db.runtime.database_services + infrastructure.db + relationships.webapp-connects-db.database_access + relationships.db-logs-forwarded-wazuh
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/db/ + scenarios/techvault.sdl.yaml + tests/test_db_inventory.py
     blocking_followup: n/a
@@ -695,7 +795,7 @@ rows:
     legacy_source: "docker-compose.yml (service: webapp)"
     legacy_field: webapp
     category: aces_sdl
-    aces_target: ACES nodes.techvault.webapp + infrastructure.webapp + conditions.webapp-http-ready + relationships.webapp-connects-db
+    aces_target: ACES nodes.techvault.webapp + infrastructure.webapp + relationships.webapp-connects-db
     runtime_owner: n/a
     validation_evidence: docs/aces/inventory/webapp/ + scenarios/techvault.sdl.yaml + tests/test_webapp_inventory.py
     blocking_followup: n/a
@@ -821,6 +921,82 @@ rows:
     validation_evidence: docs/aces/inventory/dns/ + scenarios/techvault.sdl.yaml + tests/test_dns_inventory.py + Brad-Edwards/aces#426/#427 consumed
     blocking_followup: n/a
     notes: SCN-010 issue #336 inventory pass encodes the BIND DNS steady-state image, runtime, resolver policy, authoritative forward/reverse zones, typed RRsets, filesystem, local identity, package/CVE summary, Wazuh/logging relationship, and Docker realization facts with no known remaining ACES expressivity blocker. Localhost AXFR was observed; broader transfer ACL proof remains a correspondence caveat.
+
+  - id: scen.techvault.thehive-es-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.thehive-es
+    category: aces_sdl
+    aces_target: nodes.techvault.thehive-es (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, datastore_services)
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/thehive-es/ + tests/test_thehive_es_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #352 thehive-es datastore inventory pass (datastore family, upstream Elastic registry image elasticsearch:7.17.28). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, process set, environment, security-net endpoint (no host-published ports), the 9200 REST + 9300 transport listeners, and the Elasticsearch search_index datastore_service (engine elasticsearch 7.17.28, single-node docker-cluster, the .geoip_databases index partition, the captured index mapping, security-disabled transport, discovery/security/heap settings). Deployed but NOT TheHive's active index backend - the realized TheHive config uses local Lucene (index.search.backend=lucene), so thehive-es holds no TheHive indices and there is no thehive->es data connection (no relationship encoded). Near-gap resolved without distortion - the search_index profile requires a mapping manifest but the only steady-state index is the ES-system-reserved .geoip_databases whose _mapping/_field_caps APIs refuse access; the real field schema was captured via the operator _cluster/state/metadata vantage rather than fabricated or by distorting the data_model. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.thehive-cassandra-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.thehive-cassandra + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.thehive-cassandra (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, datastore_services) + relationships.thehive-connects-cassandra
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/thehive-cassandra/ + tests/test_thehive_cassandra_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #351 thehive-cassandra datastore inventory pass (datastore family, upstream cassandra:4.1 image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, process set, environment, security-net endpoint (no host-published ports), the 9042 CQL + 7000 inter-node + 7199 JMX listeners, and the Cassandra wide_column datastore_service (engine cassandra 4.1.11, single-node Murmur3Partitioner cluster 'thehive', 16 vnode tokens, the four replicated keyspaces thehive/system_auth/system_distributed/system_traces as keyspace partitions with replication factors, native-transport security, cluster settings). Scoping decision without distortion - the wide_column profile requires a replication_factor per keyspace partition; the LocalStrategy (system, system_schema) and virtual (system_virtual_schema, system_views) keyspaces have no replication factor and are recorded in cassandra-keyspaces.txt evidence rather than fabricated as partitions; the participant-relevant thehive keyspace is fully encoded. The cassandra:4.1 floating tag has moved past the pinned RepoDigest. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.thehive-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.thehive + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.thehive (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, container, network, service_listeners, applications, software_components) + relationships.thehive-connects-cassandra
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/thehive/ + tests/test_thehive_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #350 thehive application inventory pass (application family, upstream strangebee/thehive:5.4 image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, the JVM process, environment, container command, security-net endpoint with the 9000:9000 published HTTPS port, the 9000 HTTPS listener, the TheHive 5.4.11 web/REST application surface (Play/Scalligraph, /api/status route), and the realized thehive-connects-cassandra CQL edge. TheHive's realized backends are Cassandra (data) + LOCAL Lucene (search index, index.search.backend=lucene); the deployed thehive-es is NOT used by TheHive (the --es-hostnames arg is inert), so no thehive->es relationship is encoded. The Play application secret (--secret) is a committed scenario fixture kept verbatim on the container command; the generated HTTPS keystore + password are operator secrets, withheld. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.cortex-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.cortex + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.cortex (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, applications, app_authorizations, software_components) + relationships.cortex-connects-thehive-es + relationships.thehive-connects-cortex
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/cortex/ + tests/test_cortex_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #357 Cortex analyzer-engine inventory pass. The SDL encodes the catalogued upstream thehiveproject/cortex:3.1.8 image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, entrypoint/su/JVM process chain, environment, Docker default-capability set, security-net endpoint with the 9001:9001 published HTTP port, the 9001 Cortex API listener, the Cortex status/current-user API surface, the seeded APTL organization and aptl-svc@cortex.local service account (raw API key/password redacted), and the realized Cortex-to-thehive-es and TheHive-to-Cortex relationship facts. Cortex HTTPS is deferred by ADR-034; key auth is enabled and the cortex_6 index is pre-created with keyword key-auth fields. No known remaining ACES expressivity blocker for the catalogued Cortex steady-state inventory. The capture followed a clean lab reset/start; COMPOSE_BAKE=false was only a local Docker Compose workaround.
+
+  - id: scen.techvault.shuffle-opensearch-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.shuffle-opensearch + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.shuffle-opensearch (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, mounts, software_components, identity_authorities, datastore_services) + relationships.shuffle-backend-connects-opensearch
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-opensearch/ + tests/test_shuffle_opensearch_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #356 shuffle-opensearch datastore inventory pass (datastore family, upstream opensearchproject/opensearch:2.14.0 image), promoting the prior node stub to a fully inventoried participant node. The SDL encodes the catalogued registry image identity/recipe, rpm packages, Trivy CVEs, filesystem manifest, local identity, the entrypoint + OpenSearch JVM + performance-analyzer processes, environment, security-net endpoint (no host-published ports), the 9200 REST + 9300 transport + 9600 perf-analyzer listeners plus the backend-generated Docker embedded-DNS loopback sockets, the shuffle_opensearch_data volume mount (all index state; the pre-#405 bundle encoded an empty mount table after a silent mount(1) probe failure), the 445 embedded Maven/JAR software components, the Security-plugin internal user database as the identity authority opensearch-security-internal-users (7 users incl. reserved admin), the evidence-decoded PID 1 capability masks (CapEff=0x0 -- the non-root JVM holds an EMPTY effective set), and the OpenSearch search_index datastore_service (engine opensearch 2.14.0, single-node docker-cluster, all 24 index partitions, all 24 captured index mappings, security-enabled transport, discovery/security/heap settings). The Security plugin is enabled; OPENSEARCH_INITIAL_ADMIN_PASSWORD is a committed scenario fixture kept verbatim. shuffle-backend is the sole consumer (relationships.shuffle-backend-connects-opensearch). No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+
+  - id: scen.techvault.shuffle-frontend-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.shuffle-frontend + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.shuffle-frontend (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, applications, software_components) + relationships.shuffle-frontend-proxies-backend
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-frontend/ + tests/test_shuffle_frontend_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #354 shuffle-frontend application inventory pass (application family, upstream ghcr.io/shuffle/shuffle-frontend:latest image). The SDL encodes the catalogued registry image identity/recipe, dpkg packages, Trivy CVEs, filesystem manifest, local identity, the nginx master + representative worker process set, environment, security-net endpoint with the 3001:80 + 3443:443 published ports (the pre-#405 3001:3001 mapping published a container port with no listener and was corrected), the 80 HTTP + 443 HTTPS listeners plus the backend-generated Docker embedded-DNS loopback sockets, the evidence-decoded PID 1 capability set (/proc/1/status CapEff, Docker default), the Shuffle web UI application surface (nginx 1.29.3 + static React SPA, SPA-root + /api-proxy routes), and the realized shuffle-frontend-proxies-backend edge (nginx /api/v1|v2 reverse-proxy to shuffle-backend:5001). The nginx TLS private key is an operator secret (metadata only); upstream nginx-image shell var refs in the history-derived instructions are normalized from ${VAR} to $VAR to avoid ACES placeholder collision. No known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
+  - id: scen.techvault.shuffle-orborus-inventory
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault.sdl.yaml
+    legacy_field: nodes.techvault.shuffle-orborus + relationships
+    category: aces_sdl
+    aces_target: nodes.techvault.shuffle-orborus (source/build, runtime packages, package_vulnerabilities, filesystem_inventory, local_identity, processes, environment, network, service_listeners, mounts, local_control_interfaces, software_components) + relationships.orborus-polls-backend
+    runtime_owner: n/a
+    validation_evidence: "docs/aces/inventory/shuffle-orborus/ + tests/test_shuffle_orborus_inventory.py + scenarios/techvault.sdl.yaml + scenarios/techvault/"
+    blocking_followup: n/a
+    notes: SCN-010 issue #355 shuffle-orborus worker-orchestrator inventory pass (orchestration family, upstream ghcr.io/shuffle/shuffle-orborus:latest image, Alpine 3.22). The SDL encodes the catalogued registry image identity/recipe (realized amd64 platform digest; :latest multi-arch index noted), 21 apk packages, 126 Trivy CVEs, the curated filesystem manifest (/orborus binary, /orborus.go source, /etc/os-release; full rootfs manifest retained as evidence), the evidence-decoded PID 1 capability set (/proc/1/status CapEff, Docker default), local identity, the orborus Go-binary PID 1 + representative transient timeout process, environment (12 compose + image-default PATH/SHUFFLE_OPENSEARCH_URL, no secrets), security-net DHCP endpoint with no host-published ports, the backend-generated Docker embedded-DNS loopback listeners (no inbound application listener), 139 embedded Go software components, the writable host /var/run/docker.sock control surface (runtime.mounts bind + local_control_interfaces.shuffle-orborus-docker-socket, host-root-equivalent), and the realized orborus-polls-backend edge (outbound poll to shuffle-backend:5001, ESTABLISHED). The docker.sock host-control surface is expressed by the existing local_control_interfaces surface (shuffle-backend precedent); no new ACES surface was needed and no known remaining ACES expressivity blocker. The capture is a non-destructive current-running observation, not clean-lab rebuild proof.
 
   - id: compose.profile.reverse
     surface: docker_compose_topology
@@ -1756,13 +1932,13 @@ rows:
   - id: defconf.cortex
     surface: defensive_stack_configs
     legacy_source: config/cortex/
-    legacy_field: application.conf
+    legacy_field: application.conf + thehive-cortex.env + bootstrap scripts
     category: aptl_backend_responsibility
     aces_target: n/a (defensive-stack realization)
     runtime_owner: config/cortex + docker-compose `soc` profile
-    validation_evidence: lab health (Cortex reachable from TheHive)
+    validation_evidence: docs/aces/inventory/cortex/ + tests/test_cortex_integration_config.py + tests/test_cortex_inventory.py
     blocking_followup: "#322"
-    notes: Cortex analyzer service config.
+    notes: Cortex analyzer service config, including search.uri, key/local auth, TheHive fixture-key env wiring, and the cortex_6 keyword index bootstrap. Scenario-observable realized facts are now encoded under scen.techvault.cortex-inventory; generated defensive config ownership remains APTL backend responsibility.
 
   - id: defconf.otel
     surface: defensive_stack_configs

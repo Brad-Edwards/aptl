@@ -1,0 +1,8 @@
+- compose-service.cortex.json is the authored docker-compose.yml service block (yq-extracted). The container uses HTTP only on the aptl-security network; TheHive consumes it with the fixture API key provisioned by scripts/cortex-apikey.sh.
+- Capture followed a clean aptl lab stop -v && COMPOSE_BAKE=false aptl lab start immediately before inventory; COMPOSE_BAKE=false is a local Docker Compose workaround because Buildx Bake hung in this environment, not a scenario setting.
+- Cortex HTTPS is intentionally deferred by ADR-034 because the Cortex 3.1.8 bundled Play SSL provider fails at runtime. The participant-visible service is HTTP on the security network, with TheHive using the fixture API key over the internal network.
+- The Cortex API key and bootstrap password are fixture credentials; raw key/password values are retained as in-range scenario evidence.
+- The cortex_data volume backs /opt/cortex/jobs. At the steady-state snapshot no analyzer jobs were present; the filesystem manifest records the top-level jobs directory and volume metadata, not future job artifacts.
+- source-checksums.txt covers docker-compose.yml, the Cortex application overlay, the fixture TheHive-Cortex env file, the Cortex API-key/index bootstrap scripts, and the generated lab CA certificate. Raw fixture key material is not copied into evidence.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem-tree.txt.gz and filesystem-checksums.txt.xz provide separate filesystem provenance.
+- osquery installed_applications/programs/apt_sources/docker_containers/docker_images were attempted but are not meaningful from the digest-pinned namespace-sharing scanner; Docker inspect, dpkg-query, and runtime-baseline carry those facts.

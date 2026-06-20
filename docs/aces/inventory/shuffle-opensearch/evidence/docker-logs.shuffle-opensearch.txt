@@ -1,0 +1,500 @@
+[2026-06-11T16:02:26,572][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[users/x6OdvBRAR_GKkb5dyiOs4g]
+[2026-06-11T16:02:26,593][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [users/x6OdvBRAR_GKkb5dyiOs4g] update_mapping [_doc]
+[2026-06-11T16:02:26,789][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[users/x6OdvBRAR_GKkb5dyiOs4g]
+[2026-06-11T16:02:26,881][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[app_revisions/WrBvpPfGT2CZhfBQ_o4CSw]
+[2026-06-11T16:02:26,882][INFO ][o.o.c.m.MetadataCreateIndexService] [3931f92d40bb] [app_revisions] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2026-06-11T16:02:26,883][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:26,967][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[app_revisions/WrBvpPfGT2CZhfBQ_o4CSw]
+[2026-06-11T16:02:27,282][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:27,360][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[app_revisions/WrBvpPfGT2CZhfBQ_o4CSw]
+[2026-06-11T16:02:27,368][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [app_revisions/WrBvpPfGT2CZhfBQ_o4CSw] create_mapping
+[2026-06-11T16:02:37,528][INFO ][o.o.i.i.ManagedIndexCoordinator] [3931f92d40bb] Cancel background move metadata process.
+[2026-06-11T16:02:37,528][INFO ][o.o.i.i.ManagedIndexCoordinator] [3931f92d40bb] Performing move cluster state metadata.
+[2026-06-11T16:02:37,529][INFO ][o.o.i.i.MetadataService  ] [3931f92d40bb] Move metadata has finished.
+[2026-06-11T16:02:41,222][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw]
+[2026-06-11T16:02:41,224][INFO ][o.o.c.m.MetadataCreateIndexService] [3931f92d40bb] [workflowqueue-shuffle] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2026-06-11T16:02:41,225][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:41,378][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw]
+[2026-06-11T16:02:41,856][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:41,860][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw]
+[2026-06-11T16:02:41,862][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw] create_mapping
+[2026-06-11T16:02:42,094][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw]
+[2026-06-11T16:02:42,096][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowqueue-shuffle/gBaxWKc5RLKNGRANBw0jlw] update_mapping [_doc]
+[2026-06-11T16:02:42,251][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T16:02:42,258][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T16:02:42,461][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T16:02:47,560][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T16:02:47,568][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T16:02:47,775][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[platform_health/So6PyH0JRu2Ml2vMrQiwUQ]
+[2026-06-11T16:02:47,777][INFO ][o.o.c.m.MetadataCreateIndexService] [3931f92d40bb] [platform_health] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2026-06-11T16:02:47,777][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:47,917][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[platform_health/So6PyH0JRu2Ml2vMrQiwUQ]
+[2026-06-11T16:02:48,507][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:02:48,515][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[platform_health/So6PyH0JRu2Ml2vMrQiwUQ]
+[2026-06-11T16:02:48,518][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [platform_health/So6PyH0JRu2Ml2vMrQiwUQ] create_mapping
+[2026-06-11T16:03:08,972][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflow_revisions-000001/05r4aBx4Q2qXeLe5yRJ6kA]
+[2026-06-11T16:03:08,979][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflow_revisions-000001/05r4aBx4Q2qXeLe5yRJ6kA] update_mapping [_doc]
+[2026-06-11T16:03:09,268][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[hooks/KQbueKn3RQyA_jPSMvjEag]
+[2026-06-11T16:03:09,270][INFO ][o.o.c.m.MetadataCreateIndexService] [3931f92d40bb] [hooks] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2026-06-11T16:03:09,271][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:03:09,605][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[hooks/KQbueKn3RQyA_jPSMvjEag]
+[2026-06-11T16:03:10,342][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-11T16:03:10,347][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[hooks/KQbueKn3RQyA_jPSMvjEag]
+[2026-06-11T16:03:10,350][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [hooks/KQbueKn3RQyA_jPSMvjEag] create_mapping
+[2026-06-11T16:05:36,968][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:05:37,532][INFO ][o.o.i.i.PluginVersionSweepCoordinator] [3931f92d40bb] Canceling sweep ism plugin version job
+[2026-06-11T16:10:36,969][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:15:36,969][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:15:37,539][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:15:37,541][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:20:36,970][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:25:36,970][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:30:36,970][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:30:37,542][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:30:37,542][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:35:36,970][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:40:36,971][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:45:36,971][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:45:37,542][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:45:37,543][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T16:46:42,537][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T16:46:42,544][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T16:50:36,971][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T16:55:36,972][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:00:36,972][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:00:37,504][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T17:00:37,508][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T17:00:37,510][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T17:00:37,543][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:00:37,543][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:02:24,698][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflow_revisions-000001/05r4aBx4Q2qXeLe5yRJ6kA]
+[2026-06-11T17:02:24,708][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflow_revisions-000001/05r4aBx4Q2qXeLe5yRJ6kA] update_mapping [_doc]
+[2026-06-11T17:02:24,885][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T17:02:24,890][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T17:02:24,995][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T17:02:37,213][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[files/YbiqwZAXSROb3-XwiSTN0A]
+[2026-06-11T17:02:37,218][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [files/YbiqwZAXSROb3-XwiSTN0A] update_mapping [_doc]
+[2026-06-11T17:02:40,598][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T17:02:40,606][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T17:03:26,341][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg]
+[2026-06-11T17:03:26,353][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [workflowexecution-000001/WfmyeRnuRgC5z7fK7SZTmg] update_mapping [_doc]
+[2026-06-11T17:05:36,972][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:10:36,973][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:15:36,973][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:15:37,544][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:15:37,544][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:20:36,973][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:25:36,974][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:30:36,974][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:30:37,545][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:30:37,545][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:35:36,975][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:40:36,975][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:45:36,975][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:45:37,546][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:45:37,546][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T17:50:36,976][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T17:55:36,976][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:00:36,977][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:00:37,504][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T18:00:37,505][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T18:00:37,505][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T18:00:37,547][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:00:37,547][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:05:36,978][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:10:36,978][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:15:36,978][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:15:37,547][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:15:37,547][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:20:36,979][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:25:36,979][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:30:36,979][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:30:37,548][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:30:37,548][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:35:36,980][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:40:36,980][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:45:36,980][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:45:37,548][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:45:37,549][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T18:50:36,980][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T18:55:36,981][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:00:36,981][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:00:37,505][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T19:00:37,505][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T19:00:37,505][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T19:00:37,549][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:00:37,549][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:05:36,981][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:10:36,982][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:15:36,982][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:15:37,549][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:15:37,550][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:20:36,983][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:25:36,983][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:30:36,983][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:30:37,550][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:30:37,550][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:35:36,984][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:40:36,984][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:45:36,984][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:45:37,551][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:45:37,551][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T19:50:36,985][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T19:55:36,985][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:00:36,985][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:00:37,505][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T20:00:37,505][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T20:00:37,505][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T20:00:37,552][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:00:37,552][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:05:36,986][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:10:36,986][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:15:36,986][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:15:37,552][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:15:37,553][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:20:36,987][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:25:36,987][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:30:36,987][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:30:37,553][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:30:37,553][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:35:36,988][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:40:36,988][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:45:36,988][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:45:37,553][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:45:37,554][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T20:50:36,988][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T20:55:36,989][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:00:36,989][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:00:37,505][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T21:00:37,505][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T21:00:37,506][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T21:00:37,554][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:00:37,554][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:05:36,989][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:10:36,990][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:15:36,990][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:15:37,554][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:15:37,555][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:20:36,990][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:25:36,991][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:30:36,991][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:30:37,555][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:30:37,555][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:35:36,991][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:40:36,992][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:45:36,992][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:45:37,555][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:45:37,556][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T21:50:36,992][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T21:55:36,993][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:00:36,993][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:00:37,505][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T22:00:37,506][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T22:00:37,506][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T22:00:37,556][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:00:37,556][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:05:36,993][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:10:36,994][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:15:36,994][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:15:37,556][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:15:37,557][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:20:36,994][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:25:36,994][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:30:36,995][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:30:37,557][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:30:37,557][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:35:36,995][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:40:36,995][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:45:36,996][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:45:37,557][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:45:37,558][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T22:50:36,996][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T22:55:36,996][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:00:36,996][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:00:37,506][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-11T23:00:37,506][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-11T23:00:37,506][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-11T23:00:37,558][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:00:37,558][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:05:36,997][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:10:36,997][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:15:36,997][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:15:37,558][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:15:37,559][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:20:36,998][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:25:36,998][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:30:36,998][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:30:37,559][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:30:37,559][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:35:36,999][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:40:36,999][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:45:36,999][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:45:37,559][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:45:37,559][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-11T23:50:37,000][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-11T23:55:37,000][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:00:37,000][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:00:37,506][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T00:00:37,506][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T00:00:37,507][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T00:00:37,527][INFO ][o.o.i.i.IndexStateManagementHistory] [3931f92d40bb] No Old History Indices to delete
+[2026-06-12T00:00:37,560][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:00:37,560][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:05:37,000][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:10:37,001][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:15:37,001][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:15:37,560][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:15:37,561][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:20:37,001][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:25:37,001][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:30:37,002][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:30:37,561][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:30:37,561][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:35:37,002][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:40:37,002][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:45:37,002][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:45:37,561][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:45:37,562][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T00:50:37,003][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T00:55:37,003][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:00:37,003][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:00:37,506][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T01:00:37,506][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T01:00:37,506][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T01:00:37,562][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:00:37,562][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:05:37,003][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:10:37,004][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:15:37,004][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:15:37,562][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:15:37,563][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:20:37,004][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:25:37,004][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:30:37,004][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:30:37,563][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:30:37,563][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:35:37,005][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:40:37,005][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:45:37,005][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:45:37,563][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:45:37,564][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T01:50:37,005][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T01:55:37,006][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:00:37,006][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:00:37,506][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T02:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T02:00:37,507][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T02:00:37,564][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:00:37,564][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:05:37,006][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:10:37,006][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:15:37,007][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:15:37,564][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:15:37,565][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:20:37,007][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:25:37,007][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:30:37,007][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:30:37,565][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:30:37,565][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:35:37,008][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:40:37,008][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:45:37,008][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:45:37,565][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:45:37,566][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T02:50:37,009][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T02:55:37,009][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:00:37,009][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:00:37,506][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T03:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T03:00:37,507][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T03:00:37,566][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:00:37,566][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:05:37,009][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:10:37,010][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:15:37,010][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:15:37,566][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:15:37,567][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:20:37,010][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:25:37,010][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:30:37,010][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:30:37,567][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:30:37,567][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:35:37,011][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:40:37,011][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:45:37,011][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:45:37,567][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:45:37,568][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T03:50:37,012][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T03:55:37,012][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:00:37,012][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:00:37,507][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T04:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T04:00:37,507][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T04:00:37,509][ERROR][o.o.a.a.AlertIndices     ] [3931f92d40bb] info deleteOldIndices
+[2026-06-12T04:00:37,509][ERROR][o.o.a.a.AlertIndices     ] [3931f92d40bb] info deleteOldIndices
+[2026-06-12T04:00:37,523][INFO ][o.o.a.a.AlertIndices     ] [3931f92d40bb] No Old Finding Indices to delete
+[2026-06-12T04:00:37,523][INFO ][o.o.a.a.AlertIndices     ] [3931f92d40bb] No Old History Indices to delete
+[2026-06-12T04:00:37,542][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] info deleteOldIndices
+[2026-06-12T04:00:37,542][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] No Old Correlation Indices to delete
+[2026-06-12T04:00:37,568][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:00:37,568][INFO ][o.o.s.l.LogTypeService   ] [3931f92d40bb] Indexing [23] customLogTypes
+[2026-06-12T04:00:37,568][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:00:37,569][INFO ][o.o.s.l.LogTypeService   ] [3931f92d40bb] Indexing [23] customLogTypes
+[2026-06-12T04:00:37,612][INFO ][o.o.s.l.LogTypeService   ] [3931f92d40bb] Loaded [23] customLogType docs successfully!
+[2026-06-12T04:00:37,613][INFO ][o.o.s.l.LogTypeService   ] [3931f92d40bb] Loaded [23] customLogType docs successfully!
+[2026-06-12T04:00:37,632][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] info deleteOldIndices
+[2026-06-12T04:00:37,633][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] No Old Alert Indices to delete
+[2026-06-12T04:00:37,637][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] info deleteOldIndices
+[2026-06-12T04:00:37,637][INFO ][o.o.s.i.DetectorIndexManagementService] [3931f92d40bb] No Old Finding Indices to delete
+[2026-06-12T04:05:37,012][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:10:37,013][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:15:37,013][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:15:37,568][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:15:37,569][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:20:37,013][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:25:37,013][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:30:37,014][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:30:37,569][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:30:37,569][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:35:37,014][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:40:37,014][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:45:37,014][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:45:37,569][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:45:37,570][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T04:50:37,015][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T04:55:37,015][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:00:37,015][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:00:37,507][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T05:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T05:00:37,507][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T05:00:37,570][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:00:37,570][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:05:37,015][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:10:37,016][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:15:37,016][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:15:37,570][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:15:37,571][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:20:37,016][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:25:37,016][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:30:37,017][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:30:37,571][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:30:37,571][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:35:37,017][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:40:37,017][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:45:37,017][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:45:37,571][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:45:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T05:50:37,017][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T05:55:37,018][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:00:37,018][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:00:37,507][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T06:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T06:00:37,508][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T06:00:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:00:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:05:37,018][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:10:37,019][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:15:37,019][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:15:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:15:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:20:37,019][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:25:37,019][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:30:37,019][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:30:37,572][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:30:37,573][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:35:37,020][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:40:37,020][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:45:37,020][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:45:37,573][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:45:37,573][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T06:50:37,020][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:55:37,021][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T06:57:17,354][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[users/x6OdvBRAR_GKkb5dyiOs4g]
+[2026-06-12T06:57:17,388][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [users/x6OdvBRAR_GKkb5dyiOs4g] update_mapping [_doc]
+[2026-06-12T06:57:17,503][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[security-auditlog-2026.06.12/XbVurU-bQLS2vTrFihwB9w]
+[2026-06-12T06:57:17,506][INFO ][o.o.c.m.MetadataCreateIndexService] [3931f92d40bb] [security-auditlog-2026.06.12] creating index, cause [auto(bulk api)], templates [], shards [1]/[1]
+[2026-06-12T06:57:17,507][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-12T06:57:17,619][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[security-auditlog-2026.06.12/XbVurU-bQLS2vTrFihwB9w]
+[2026-06-12T06:57:17,896][WARN ][o.o.c.r.a.AllocationService] [3931f92d40bb] Falling back to single shard assignment since batch mode disable or multiple custom allocators set
+[2026-06-12T06:57:17,903][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[security-auditlog-2026.06.12/XbVurU-bQLS2vTrFihwB9w]
+[2026-06-12T06:57:17,905][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [security-auditlog-2026.06.12/XbVurU-bQLS2vTrFihwB9w] create_mapping
+[2026-06-12T07:00:37,021][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:00:37,507][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T07:00:37,507][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T07:00:37,508][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T07:00:37,573][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:00:37,574][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:02:24,574][INFO ][o.o.p.PluginsService     ] [3931f92d40bb] PluginService:onIndexModule index:[organizations/2V5MwX_NRg6ex59PkHjOUg]
+[2026-06-12T07:02:24,584][INFO ][o.o.c.m.MetadataMappingService] [3931f92d40bb] [organizations/2V5MwX_NRg6ex59PkHjOUg] update_mapping [_doc]
+[2026-06-12T07:05:37,021][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:10:37,021][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:15:37,022][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:15:37,574][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:15:37,574][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:20:37,022][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:25:37,022][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:30:37,022][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:30:37,574][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:30:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:35:37,023][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:40:37,023][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:45:37,023][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:45:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:45:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T07:50:37,023][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T07:55:37,024][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:00:37,024][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:00:37,508][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T08:00:37,508][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T08:00:37,508][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T08:00:37,528][INFO ][o.o.i.i.IndexStateManagementHistory] [3931f92d40bb] No Old History Indices to delete
+[2026-06-12T08:00:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:00:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:05:37,024][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:10:37,025][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:15:37,025][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:15:37,575][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:15:37,576][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:20:37,025][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:25:37,025][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:30:37,026][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:30:37,576][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:30:37,576][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:35:37,026][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:40:37,026][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:45:37,026][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:45:37,576][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:45:37,577][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T08:50:37,027][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T08:55:37,027][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:00:37,027][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:00:37,508][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T09:00:37,508][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T09:00:37,508][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T09:00:37,577][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:00:37,577][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:05:37,027][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:10:37,028][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:15:37,028][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:15:37,577][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:15:37,577][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:20:37,028][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:25:37,029][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:30:37,030][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:30:37,578][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:30:37,578][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:35:37,030][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:40:37,030][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:45:37,030][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:45:37,578][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:45:37,578][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T09:50:37,031][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T09:55:37,031][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T10:00:37,031][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T10:00:37,508][INFO ][o.o.a.t.CronTransportAction] [3931f92d40bb] Start running AD hourly cron.
+[2026-06-12T10:00:37,508][INFO ][o.o.a.t.ADTaskManager    ] [3931f92d40bb] Start to maintain running historical tasks
+[2026-06-12T10:00:37,508][INFO ][o.o.a.c.HourlyCron       ] [3931f92d40bb] Hourly maintenance succeeds
+[2026-06-12T10:00:37,578][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Starting housekeeping task for auto refresh streaming jobs.
+[2026-06-12T10:00:37,579][INFO ][o.o.s.s.c.FlintStreamingJobHouseKeeperTask] [3931f92d40bb] Finished housekeeping task for auto refresh streaming jobs.
+[2026-06-12T10:05:37,031][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep
+[2026-06-12T10:10:37,032][INFO ][o.o.j.s.JobSweeper       ] [3931f92d40bb] Running full sweep

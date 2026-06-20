@@ -1,129 +1,88 @@
 [wazuh-agent:aptl-db-agent] starting; manager=wazuh.manager, paths=/logs/pg_log/postgresql.log, format=syslog
 [wazuh-agent:aptl-db-agent] waiting for wazuh.manager:1515 (auth)...
 [wazuh-agent:aptl-db-agent] registering as 'aptl-db-agent' with wazuh.manager...
-2026/05/23 06:19:18 agent-auth: INFO: Started (pid: 18).
-2026/05/23 06:19:18 agent-auth: INFO: Requesting a key from server: wazuh.manager
-2026/05/23 06:19:18 agent-auth: INFO: No authentication password provided
-2026/05/23 06:19:18 agent-auth: INFO: Using agent name as: aptl-db-agent
-2026/05/23 06:19:18 agent-auth: INFO: Waiting for server reply
-2026/05/23 06:19:18 agent-auth: INFO: Valid key received
+2026/06/11 16:01:00 agent-auth: INFO: Started (pid: 19).
+2026/06/11 16:01:00 agent-auth: INFO: Requesting a key from server: wazuh.manager
+2026/06/11 16:01:00 agent-auth: INFO: No authentication password provided
+2026/06/11 16:01:00 agent-auth: INFO: Using agent name as: aptl-db-agent
+2026/06/11 16:01:00 agent-auth: INFO: Waiting for server reply
+2026/06/11 16:01:00 agent-auth: INFO: Valid key received
 [wazuh-agent:aptl-db-agent] starting wazuh-agent...
 Starting Wazuh v4.12.0...
 Started wazuh-execd...
 Started wazuh-agentd...
-2026/05/23 06:19:21 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
-2026/05/23 06:19:21 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
-2026/05/23 06:19:21 rootcheck: INFO: Rootcheck disabled.
 Started wazuh-syscheckd...
 Started wazuh-logcollector...
 Started wazuh-modulesd...
 Completed.
-[wazuh-agent:aptl-db-agent] ready; agentd pid=54; surfacing /var/ossec/logs/ossec.log
-2026/05/23 06:19:20 wazuh-agentd: INFO: Using AES as encryption method.
-2026/05/23 06:19:20 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:21 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
-2026/05/23 06:19:21 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
-2026/05/23 06:19:21 rootcheck: INFO: Rootcheck disabled.
-2026/05/23 06:19:21 wazuh-logcollector: INFO: (1950): Analyzing file: '/logs/pg_log/postgresql.log'.
-2026/05/23 06:19:21 wazuh-modulesd: INFO: Started (pid: 83).
-2026/05/23 06:19:21 wazuh-modulesd:agent-upgrade: INFO: (8153): Module Agent Upgrade started.
-2026/05/23 06:19:21 wazuh-modulesd:control: INFO: Starting control thread.
-2026/05/23 06:19:21 wazuh-logcollector: INFO: Started (pid: 75).
-2026/05/23 06:19:30 wazuh-agentd: INFO: Closing connection to server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:30 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:30 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:30 wazuh-agentd: INFO: Agent is restarting due to shared configuration changes.
-2026/05/23 06:19:31 wazuh-modulesd: INFO: Shutting down Wazuh modules.
-2026/05/23 06:19:31 wazuh-logcollector: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
-2026/05/23 06:19:31 wazuh-syscheckd: INFO: (1756): Shutdown received. Releasing resources.
-2026/05/23 06:19:31 wazuh-syscheckd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
-2026/05/23 06:19:31 wazuh-agentd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
-2026/05/23 06:19:31 wazuh-execd: INFO: (1314): Shutdown received. Deleting responses.
-2026/05/23 06:19:31 wazuh-execd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
-2026/05/23 06:19:32 wazuh-execd: INFO: Started (pid: 203).
-2026/05/23 06:19:32 wazuh-agentd: INFO: (1410): Reading authentication keys file.
-2026/05/23 06:19:32 wazuh-agentd: INFO: Using notify time: 10 and max time to reconnect: 60
-2026/05/23 06:19:32 wazuh-agentd: INFO: Version detected -> Linux |wazuh-sidecar-db |6.8.0-117-generic |#117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 |x86_64 [Debian GNU/Linux|debian: 12 (bookworm)] - Wazuh v4.12.0
-2026/05/23 06:19:32 wazuh-agentd: INFO: Started (pid: 211).
-2026/05/23 06:19:32 wazuh-agentd: INFO: Using AES as encryption method.
-2026/05/23 06:19:32 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:32 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:33 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
-2026/05/23 06:19:33 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
-2026/05/23 06:19:33 rootcheck: INFO: Rootcheck disabled.
-[wazuh-agent:aptl-db-agent] wazuh-agentd (pid 54) exited; this script will exit so the supervisor restarts it
+[wazuh-agent:aptl-db-agent] ready; agentd pid=55; surfacing /var/ossec/logs/ossec.log
+2026/06/11 16:01:01 wazuh-agentd: INFO: Using AES as encryption method.
+2026/06/11 16:01:01 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:02 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
+2026/06/11 16:01:02 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
+2026/06/11 16:01:02 rootcheck: INFO: Rootcheck disabled.
+2026/06/11 16:01:03 wazuh-logcollector: INFO: (1950): Analyzing file: '/logs/pg_log/postgresql.log'.
+2026/06/11 16:01:03 wazuh-logcollector: INFO: Started (pid: 81).
+2026/06/11 16:01:04 wazuh-modulesd: INFO: Started (pid: 98).
+2026/06/11 16:01:04 wazuh-modulesd:agent-upgrade: INFO: (8153): Module Agent Upgrade started.
+2026/06/11 16:01:04 wazuh-modulesd:control: INFO: Starting control thread.
+2026/06/11 16:01:11 wazuh-agentd: INFO: Closing connection to server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:11 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:11 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:11 wazuh-agentd: INFO: Agent is restarting due to shared configuration changes.
+2026/06/11 16:01:13 wazuh-modulesd: INFO: Shutting down Wazuh modules.
+2026/06/11 16:01:13 wazuh-logcollector: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
+2026/06/11 16:01:13 wazuh-syscheckd: INFO: (1756): Shutdown received. Releasing resources.
+2026/06/11 16:01:13 wazuh-syscheckd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
+2026/06/11 16:01:13 wazuh-agentd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
+2026/06/11 16:01:13 wazuh-execd: INFO: (1314): Shutdown received. Deleting responses.
+2026/06/11 16:01:13 wazuh-execd: INFO: (1225): SIGNAL [(15)-(Terminated)] Received. Exit Cleaning...
+2026/06/11 16:01:14 wazuh-execd: INFO: Started (pid: 210).
+2026/06/11 16:01:15 wazuh-agentd: INFO: (1410): Reading authentication keys file.
+2026/06/11 16:01:15 wazuh-agentd: INFO: Using notify time: 10 and max time to reconnect: 60
+2026/06/11 16:01:15 wazuh-agentd: INFO: Version detected -> Linux |wazuh-sidecar-db |6.8.0-117-generic |#117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 |x86_64 [Debian GNU/Linux|debian: 12 (bookworm)] - Wazuh v4.12.0
+2026/06/11 16:01:15 wazuh-agentd: INFO: Started (pid: 221).
+2026/06/11 16:01:15 wazuh-agentd: INFO: Using AES as encryption method.
+2026/06/11 16:01:15 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:15 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:16 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
+2026/06/11 16:01:16 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
+2026/06/11 16:01:16 rootcheck: INFO: Rootcheck disabled.
+2026/06/11 16:01:16 wazuh-logcollector: INFO: (1950): Analyzing file: '/logs/pg_log/postgresql.log'.
+2026/06/11 16:01:16 wazuh-logcollector: INFO: Started (pid: 245).
+2026/06/11 16:01:17 wazuh-modulesd: INFO: Started (pid: 262).
+2026/06/11 16:01:17 wazuh-modulesd:agent-upgrade: INFO: (8153): Module Agent Upgrade started.
+2026/06/11 16:01:17 wazuh-modulesd:control: INFO: Starting control thread.
+[wazuh-agent:aptl-db-agent] wazuh-agentd (pid 55) exited; this script will exit so the supervisor restarts it
 [wazuh-agent:aptl-db-agent] starting; manager=wazuh.manager, paths=/logs/pg_log/postgresql.log, format=syslog
 [wazuh-agent:aptl-db-agent] waiting for wazuh.manager:1515 (auth)...
 [wazuh-agent:aptl-db-agent] registering as 'aptl-db-agent' with wazuh.manager...
-2026/05/23 06:19:34 agent-auth: INFO: Started (pid: 19).
-2026/05/23 06:19:34 agent-auth: INFO: Requesting a key from server: wazuh.manager
-2026/05/23 06:19:34 agent-auth: INFO: No authentication password provided
-2026/05/23 06:19:34 agent-auth: INFO: Using agent name as: aptl-db-agent
-2026/05/23 06:19:34 agent-auth: INFO: Waiting for server reply
-2026/05/23 06:19:34 agent-auth: ERROR: Duplicate agent name: aptl-db-agent (from manager)
-2026/05/23 06:19:34 agent-auth: ERROR: Unable to add agent (from manager)
+2026/06/11 16:01:18 agent-auth: INFO: Started (pid: 19).
+2026/06/11 16:01:18 agent-auth: INFO: Requesting a key from server: wazuh.manager
+2026/06/11 16:01:18 agent-auth: INFO: No authentication password provided
+2026/06/11 16:01:18 agent-auth: INFO: Using agent name as: aptl-db-agent
+2026/06/11 16:01:18 agent-auth: INFO: Waiting for server reply
+2026/06/11 16:01:18 agent-auth: ERROR: Duplicate agent name: aptl-db-agent (from manager)
+2026/06/11 16:01:18 agent-auth: ERROR: Unable to add agent (from manager)
 [wazuh-agent:aptl-db-agent] agent-auth duplicate-name error (attempt 1); existing client.keys retains identity
 [wazuh-agent:aptl-db-agent] starting wazuh-agent...
 Starting Wazuh v4.12.0...
 Started wazuh-execd...
 Started wazuh-agentd...
-2026/05/23 06:19:37 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
-2026/05/23 06:19:37 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
-2026/05/23 06:19:37 rootcheck: INFO: Rootcheck disabled.
 Started wazuh-syscheckd...
 Started wazuh-logcollector...
 Started wazuh-modulesd...
 Completed.
 [wazuh-agent:aptl-db-agent] ready; agentd pid=60; surfacing /var/ossec/logs/ossec.log
-2026/05/23 06:19:36 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:36 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
-2026/05/23 06:19:37 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
-2026/05/23 06:19:37 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
-2026/05/23 06:19:37 rootcheck: INFO: Rootcheck disabled.
-2026/05/23 06:19:37 wazuh-logcollector: INFO: (1950): Analyzing file: '/logs/pg_log/postgresql.log'.
-2026/05/23 06:19:37 wazuh-logcollector: INFO: Started (pid: 84).
-2026/05/23 06:19:37 wazuh-modulesd: INFO: Started (pid: 98).
-2026/05/23 06:19:37 wazuh-modulesd:agent-upgrade: INFO: (8153): Module Agent Upgrade started.
-2026/05/23 06:19:37 wazuh-modulesd:control: INFO: Starting control thread.
-2026/05/24 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/24 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/25 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/25 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/26 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/26 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/27 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/27 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/28 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/28 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/29 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/29 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/30 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/30 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/05/31 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/05/31 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/01 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/01 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/02 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/02 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/03 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/03 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/04 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/04 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/05 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/05 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
-2026/06/06 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
-tail: '/var/ossec/logs/ossec.log' has been replaced;  following new file
-2026/06/06 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.
+2026/06/11 16:01:20 wazuh-agentd: INFO: Trying to connect to server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:20 wazuh-agentd: INFO: (4102): Connected to the server ([wazuh.manager]:1514/tcp).
+2026/06/11 16:01:21 wazuh-syscheckd: INFO: (6678): No directory provided for syscheck to monitor.
+2026/06/11 16:01:21 wazuh-syscheckd: INFO: (6001): File integrity monitoring disabled.
+2026/06/11 16:01:21 rootcheck: INFO: Rootcheck disabled.
+2026/06/11 16:01:22 wazuh-logcollector: INFO: (1950): Analyzing file: '/logs/pg_log/postgresql.log'.
+2026/06/11 16:01:22 wazuh-logcollector: INFO: Started (pid: 87).
+2026/06/11 16:01:23 wazuh-modulesd: INFO: Started (pid: 104).
+2026/06/11 16:01:23 wazuh-modulesd:agent-upgrade: INFO: (8153): Module Agent Upgrade started.
+2026/06/11 16:01:23 wazuh-modulesd:control: INFO: Starting control thread.
+2026/06/12 00:00:10 wazuh-agentd: INFO: Running daily rotation of log files.
+2026/06/12 00:00:10 wazuh-agentd: INFO: Starting new log after rotation.

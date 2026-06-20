@@ -24,10 +24,10 @@ or the ACES asset-inventory methodology.
   resource limit, no local Dockerfile, and no named volume are realization
   facts to capture and map; they are not a reason to skip SDL expression.
 - The Compose command declares Redis password enforcement. The existence of
-  password auth is an in-scope service fact, but the raw fixture value must not
-  be duplicated into committed evidence, logs, test literals, issue comments,
-  or generic serialized artifacts. Preserve the fact through redacted or
-  classified fields and cite the checked-in Compose source as provenance.
+  password auth and the fixture value are in-scope service facts because they
+  are authored TechVault scenario content. Preserve the value verbatim in the
+  capture surfaces that expose it and cite the checked-in Compose source as
+  provenance.
 - Missing ACES expressivity is an upstream ACES blocker. Do not use APTL backend
   consumption gaps, free-text comments, `metadata`, or `x-aptl-*` fields to
   leave catalogued Redis facts evidence-only.
@@ -60,9 +60,8 @@ or the ACES asset-inventory methodology.
   runtime consumers. Inventory capture may collect Docker evidence, but runtime
   APTL code must not add raw Docker subprocess calls around these boundaries.
 - Shared safety helpers and policy:
-  ADR-029, ADR-028, ADR-037, `aptl.utils.redaction.redact`, and
-  `aptl.utils.curl_safe` where token-bearing or password-bearing commands
-  would otherwise put secrets in process argv.
+  ADR-029, ADR-028, ADR-037, and `aptl.utils.curl_safe` for command forms that
+  would otherwise introduce extra non-scenario credentials into process argv.
 
 ## Security And Validation Layers
 
@@ -76,12 +75,11 @@ or the ACES asset-inventory methodology.
 - **Evidence references and checksums:** every committed evidence file must be
   referenced by the ledger and covered by `evidence/evidence-sha256sums.txt`.
   Checksum drift is an artifact change, not a formatting cleanup.
-- **Secret classification:** ADR-029 is canonical. `redispassword` is a
-  designed lab fixture already present in Compose, but generic evidence and
-  serialization boundaries cannot distinguish it safely from operator secrets.
-  Redact the raw value in Docker inspect output, process listings, logs,
-  runtime baselines, scanner output, README prose, ledgers, and tests unless an
-  explicit ACES field is carrying a redacted/classified credential fact.
+- **Secret classification:** `redispassword` is a designed lab fixture already
+  present in Compose. It is TechVault scenario content and must be retained
+  verbatim in Docker inspect output, process listings, logs, runtime baselines,
+  scanner output, README prose, ledgers, and tests when those surfaces expose
+  it.
 - **OS/process exposure:** `redis-server --requirepass ...` is visible through
   process argv and Docker command metadata. Redis probes must not introduce
   extra raw-password argv forms such as `redis-cli -a <value>` into captured
@@ -95,9 +93,10 @@ or the ACES asset-inventory methodology.
   exposure, startup behavior, or Redis auth in this issue. Future runtime code
   must still use `DeploymentBackend` rather than raw Docker calls.
 - **Error envelopes and observability:** new helper diagnostics, tests, or CLI
-  calls must stay narrow and redacted. Raw Docker, scanner, ACES, Redis, or
-  Compose exception payloads should not be copied verbatim into CLI/API output,
-  logs, run archives, evidence notes, or issue comments.
+  calls must stay narrow and must not introduce unrelated non-scenario
+  credentials. Scenario target evidence remains verbatim; raw Docker, scanner,
+  ACES, Redis, or Compose exception payloads outside the capture bundle should
+  not be copied into CLI/API output, logs, run archives, or issue comments.
 
 ## Extensibility Seam
 

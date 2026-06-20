@@ -146,7 +146,7 @@ def test_wazuh_manager_sdl_matches_compose_visible_surfaces():
     assert filesystem["/var/ossec/etc/rules/webapp_rules.xml"]["source_path"] == (
         "config/wazuh_cluster/webapp_rules.xml"
     )
-    assert filesystem["/wazuh-config-mount/etc/ossec.conf"]["sensitivity"] == "operator_secret"
+    assert filesystem["/wazuh-config-mount/etc/ossec.conf"]["sensitivity"] == "plain"
 
     env = {item["name"]: item for item in runtime["environment"]}
     for name in ("INDEXER_PASSWORD", "API_PASSWORD"):

@@ -6,9 +6,9 @@
   "status": "captured",
   "rows": [
     {
-      "created": "1778392971",
-      "id": "6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310",
-      "size_bytes": "882269299",
+      "created": "1781501715",
+      "id": "2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240",
+      "size_bytes": "881659127",
       "tags": "aptl-victim:latest"
     }
   ]

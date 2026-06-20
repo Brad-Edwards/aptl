@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%cortex%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1695295746",
+      "id": "ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b",
+      "size_bytes": "1318231403",
+      "tags": "thehiveproject/cortex:3.1.8"
+    }
+  ]
+}

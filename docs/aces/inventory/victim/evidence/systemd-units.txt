@@ -14,7 +14,6 @@ dnf-makecache.service                  static          -
 dnf-system-upgrade-cleanup.service     static          -
 dnf-system-upgrade.service             disabled        disabled
 emergency.service                      static          -
-falco-bpf.service                      disabled        disabled
 falco-custom.service                   disabled        disabled
 falco-kmod-inject.service              static          -
 falco-kmod.service                     disabled        disabled
@@ -74,125 +73,110 @@ user-runtime-dir@.service              static          -
 user@.service                          static          -
 wazuh-agent.service                    disabled        disabled
 
-74 unit files listed.
+73 unit files listed.
 --service-status--
 × lab-install.service - Install Purple Team Lab Services on First Boot
      Loaded: loaded (/etc/systemd/system/lab-install.service; enabled; preset: disabled)
-     Active: failed (Result: exit-code) since Sat 2026-05-23 06:19:19 UTC; 4 days ago
-    Process: 60 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=1/FAILURE)
-   Main PID: 60 (code=exited, status=1/FAILURE)
-        CPU: 50ms
+     Active: failed (Result: exit-code) since Mon 2026-06-15 05:40:31 UTC; 2min 9s ago
+    Process: 61 ExecStart=/opt/purple-team/scripts/install-all.sh (code=exited, status=1/FAILURE)
+   Main PID: 61 (code=exited, status=1/FAILURE)
+        CPU: 53ms
 
-May 23 06:19:19 app.techvault.local install-all.sh[63]: Cleaning up any orphaned wazuh processes...
-May 23 06:19:19 app.techvault.local install-all.sh[63]: No wazuh processes to kill
-May 23 06:19:19 app.techvault.local install-all.sh[63]: Cleaning PID files...
-May 23 06:19:19 app.techvault.local install-all.sh[63]: Enabling and starting Wazuh agent service...
-May 23 06:19:19 app.techvault.local systemctl[73]: Synchronizing state of wazuh-agent.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
-May 23 06:19:19 app.techvault.local systemctl[73]: Executing: /usr/lib/systemd/systemd-sysv-install enable wazuh-agent
-May 23 06:19:19 app.techvault.local (sysv-ins[74]: Failed to execute /usr/lib/systemd/systemd-sysv-install: No such file or directory
-May 23 06:19:19 app.techvault.local systemd[1]: lab-install.service: Main process exited, code=exited, status=1/FAILURE
-May 23 06:19:19 app.techvault.local systemd[1]: lab-install.service: Failed with result 'exit-code'.
-May 23 06:19:19 app.techvault.local systemd[1]: Failed to start Install Purple Team Lab Services on First Boot.
+Jun 15 05:40:31 app.techvault.local install-all.sh[64]: Cleaning up any orphaned wazuh processes...
+Jun 15 05:40:31 app.techvault.local install-all.sh[64]: No wazuh processes to kill
+Jun 15 05:40:31 app.techvault.local install-all.sh[64]: Cleaning PID files...
+Jun 15 05:40:31 app.techvault.local install-all.sh[64]: Enabling and starting Wazuh agent service...
+Jun 15 05:40:31 app.techvault.local systemctl[74]: Synchronizing state of wazuh-agent.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Jun 15 05:40:31 app.techvault.local systemctl[74]: Executing: /usr/lib/systemd/systemd-sysv-install enable wazuh-agent
+Jun 15 05:40:31 app.techvault.local (sysv-ins[75]: Failed to execute /usr/lib/systemd/systemd-sysv-install: No such file or directory
+Jun 15 05:40:31 app.techvault.local systemd[1]: lab-install.service: Main process exited, code=exited, status=1/FAILURE
+Jun 15 05:40:31 app.techvault.local systemd[1]: lab-install.service: Failed with result 'exit-code'.
+Jun 15 05:40:31 app.techvault.local systemd[1]: Failed to start Install Purple Team Lab Services on First Boot.
 
 ● rsyslog.service - System Logging Service
      Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)
     Drop-In: /etc/systemd/system/rsyslog.service.d
              └─docker-override.conf
-     Active: active (running) since Sat 2026-05-23 06:19:18 UTC; 4 days ago
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 2min 9s ago
        Docs: man:rsyslogd(8)
              https://www.rsyslog.com/doc/
-   Main PID: 54 (rsyslogd)
+   Main PID: 55 (rsyslogd)
       Tasks: 3 (limit: 123488)
-     Memory: 1.4M (peak: 2.1M)
-        CPU: 13.246s
-     CGroup: /system.slice/docker-a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba.scope/system.slice/rsyslog.service
-             └─54 /usr/sbin/rsyslogd -n
+     Memory: 1.1M (peak: 1.4M)
+        CPU: 15ms
+     CGroup: /system.slice/docker-bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263.scope/system.slice/rsyslog.service
+             └─55 /usr/sbin/rsyslogd -n
 
-May 23 06:19:18 app.techvault.local systemd[1]: Starting System Logging Service...
-May 23 06:19:18 app.techvault.local rsyslogd[54]: [origin software="rsyslogd" swVersion="8.2506.0-2.el9" x-pid="54" x-info="https://www.rsyslog.com"] start
-May 23 06:19:18 app.techvault.local rsyslogd[54]: imjournal: No statefile exists, /var/lib/rsyslog/imjournal.state will be created (ignore if this is first run): No such file or directory [v8.2506.0-2.el9 try https://www.rsyslog.com/e/2040 ]
-May 23 06:19:18 app.techvault.local systemd[1]: Started System Logging Service.
-May 23 06:19:19 app.techvault.local rsyslogd[54]: imjournal: journal files changed, reloading...  [v8.2506.0-2.el9 try https://www.rsyslog.com/e/0 ]
+Jun 15 05:40:30 app.techvault.local systemd[1]: Starting System Logging Service...
+Jun 15 05:40:30 app.techvault.local rsyslogd[55]: [origin software="rsyslogd" swVersion="8.2506.0-2.el9" x-pid="55" x-info="https://www.rsyslog.com"] start
+Jun 15 05:40:30 app.techvault.local systemd[1]: Started System Logging Service.
+Jun 15 05:40:30 app.techvault.local rsyslogd[55]: imjournal: No statefile exists, /var/lib/rsyslog/imjournal.state will be created (ignore if this is first run): No such file or directory [v8.2506.0-2.el9 try https://www.rsyslog.com/e/2040 ]
+Jun 15 05:40:30 app.techvault.local rsyslogd[55]: imjournal: journal files changed, reloading...  [v8.2506.0-2.el9 try https://www.rsyslog.com/e/0 ]
 
 ● sshd.service - OpenSSH server daemon
      Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; preset: enabled)
-     Active: active (running) since Sat 2026-05-23 06:19:18 UTC; 4 days ago
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 2min 9s ago
        Docs: man:sshd(8)
              man:sshd_config(5)
-   Main PID: 55 (sshd)
+   Main PID: 56 (sshd)
       Tasks: 1 (limit: 123488)
-     Memory: 5.1M (peak: 10.2M)
-        CPU: 101ms
-     CGroup: /system.slice/docker-a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba.scope/system.slice/sshd.service
-             └─55 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+     Memory: 1.7M (peak: 2.0M)
+        CPU: 14ms
+     CGroup: /system.slice/docker-bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263.scope/system.slice/sshd.service
+             └─56 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
 
-May 23 06:19:18 app.techvault.local systemd[1]: Starting OpenSSH server daemon...
-May 23 06:19:18 app.techvault.local sshd[55]: Server listening on 0.0.0.0 port 22.
-May 23 06:19:18 app.techvault.local sshd[55]: Server listening on :: port 22.
-May 23 06:19:18 app.techvault.local systemd[1]: Started OpenSSH server daemon.
-May 23 06:19:43 app.techvault.local sshd[91]: Accepted publickey for labadmin from 172.20.2.1 port 41398 ssh2: ED25519 SHA256:WxcnaYcs4HctIoM2iD2uBaNKcMVcfsePRPxX6o4R+eg
-May 23 06:19:43 app.techvault.local sshd[91]: pam_unix(sshd:session): session opened for user labadmin(uid=1000) by labadmin(uid=0)
-May 23 06:19:43 app.techvault.local sshd[94]: Received disconnect from 172.20.2.1 port 41398:11: disconnected by user
-May 23 06:19:43 app.techvault.local sshd[94]: Disconnected from user labadmin 172.20.2.1 port 41398
-May 23 06:19:43 app.techvault.local sshd[91]: pam_unix(sshd:session): session closed for user labadmin
+Jun 15 05:40:30 app.techvault.local systemd[1]: Starting OpenSSH server daemon...
+Jun 15 05:40:30 app.techvault.local sshd[56]: Server listening on 0.0.0.0 port 22.
+Jun 15 05:40:30 app.techvault.local sshd[56]: Server listening on :: port 22.
+Jun 15 05:40:30 app.techvault.local systemd[1]: Started OpenSSH server daemon.
 
 ● systemd-journald.service - Journal Service
      Loaded: loaded (/usr/lib/systemd/system/systemd-journald.service; static)
-     Active: active (running) since Sat 2026-05-23 06:19:18 UTC; 4 days ago
-TriggeredBy: ● systemd-journald-dev-log.socket
-             ● systemd-journald.socket
+     Active: active (running) since Mon 2026-06-15 05:40:30 UTC; 2min 9s ago
+TriggeredBy: ● systemd-journald.socket
+             ● systemd-journald-dev-log.socket
        Docs: man:systemd-journald.service(8)
              man:journald.conf(5)
-   Main PID: 53 (systemd-journal)
+   Main PID: 54 (systemd-journal)
      Status: "Processing requests..."
       Tasks: 1 (limit: 123488)
-     Memory: 6.6M (peak: 10.0M)
-        CPU: 605ms
-     CGroup: /system.slice/docker-a9701bcb6a262e1e16fcb5250c31fbdccacdc56c2f5c495f992ac4f01ec4daba.scope/system.slice/systemd-journald.service
-             └─53 /usr/lib/systemd/systemd-journald
+     Memory: 9.4M (peak: 10.2M)
+        CPU: 29ms
+     CGroup: /system.slice/docker-bf3c1a0082ae52d9924a5b59f7362765ffced3c88502ad05e42bec5c7b362263.scope/system.slice/systemd-journald.service
+             └─54 /usr/lib/systemd/systemd-journald
 
-May 23 06:19:18 app.techvault.local systemd-journald[53]: Journal started
-May 23 06:19:18 app.techvault.local systemd-journald[53]: Runtime Journal (/run/log/journal/cdc4eca107d74720a4892d6d9c728f4c) is 8.0M, max 4.0G, 3.9G free.
+Jun 15 05:40:30 app.techvault.local systemd-journald[54]: Journal started
+Jun 15 05:40:30 app.techvault.local systemd-journald[54]: Runtime Journal (/run/log/journal/cdc4eca107d74720a4892d6d9c728f4c) is 8.0M, max 4.0G, 3.9G free.
 Notice: journal has been rotated since unit was started, output may be incomplete.
 
-× systemd-tmpfiles-clean.service - Cleanup of Temporary Directories
+○ systemd-tmpfiles-clean.service - Cleanup of Temporary Directories
      Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-clean.service; static)
-     Active: failed (Result: exit-code) since Wed 2026-05-27 06:38:49 UTC; 23h ago
+     Active: inactive (dead)
 TriggeredBy: ● systemd-tmpfiles-clean.timer
        Docs: man:tmpfiles.d(5)
              man:systemd-tmpfiles(8)
-    Process: 184310 ExecStart=systemd-tmpfiles --clean (code=exited, status=243/CREDENTIALS)
-   Main PID: 184310 (code=exited, status=243/CREDENTIALS)
-        CPU: 2ms
-
-May 27 06:38:49 app.techvault.local systemd[1]: Starting Cleanup of Temporary Directories...
-May 27 06:38:49 app.techvault.local systemd[184310]: systemd-tmpfiles-clean.service: Failed to set up credentials: Protocol error
-May 27 06:38:49 app.techvault.local systemd[184310]: systemd-tmpfiles-clean.service: Failed at step CREDENTIALS spawning systemd-tmpfiles: Protocol error
-May 27 06:38:49 app.techvault.local systemd[1]: systemd-tmpfiles-clean.service: Main process exited, code=exited, status=243/CREDENTIALS
-May 27 06:38:49 app.techvault.local systemd[1]: systemd-tmpfiles-clean.service: Failed with result 'exit-code'.
-May 27 06:38:49 app.techvault.local systemd[1]: Failed to start Cleanup of Temporary Directories.
 
 × systemd-tmpfiles-setup.service - Create Volatile Files and Directories
      Loaded: loaded (/usr/lib/systemd/system/systemd-tmpfiles-setup.service; static)
-     Active: failed (Result: exit-code) since Sat 2026-05-23 06:19:18 UTC; 4 days ago
+     Active: failed (Result: exit-code) since Mon 2026-06-15 05:40:30 UTC; 2min 9s ago
        Docs: man:tmpfiles.d(5)
              man:systemd-tmpfiles(8)
-    Process: 51 ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=243/CREDENTIALS)
-   Main PID: 51 (code=exited, status=243/CREDENTIALS)
+    Process: 52 ExecStart=systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev (code=exited, status=243/CREDENTIALS)
+   Main PID: 52 (code=exited, status=243/CREDENTIALS)
         CPU: 2ms
 
 Notice: journal has been rotated since unit was started, output may be incomplete.
 
 ● systemd-user-sessions.service - Permit User Sessions
      Loaded: loaded (/usr/lib/systemd/system/systemd-user-sessions.service; enabled; preset: disabled)
-     Active: active (exited) since Sat 2026-05-23 06:19:18 UTC; 4 days ago
+     Active: active (exited) since Mon 2026-06-15 05:40:30 UTC; 2min 9s ago
        Docs: man:systemd-user-sessions.service(8)
-    Process: 56 ExecStart=/usr/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)
-   Main PID: 56 (code=exited, status=0/SUCCESS)
-        CPU: 5ms
+    Process: 57 ExecStart=/usr/lib/systemd/systemd-user-sessions start (code=exited, status=0/SUCCESS)
+   Main PID: 57 (code=exited, status=0/SUCCESS)
+        CPU: 7ms
 
-May 23 06:19:18 app.techvault.local systemd[1]: Starting Permit User Sessions...
-May 23 06:19:18 app.techvault.local systemd[1]: Finished Permit User Sessions.
+Jun 15 05:40:30 app.techvault.local systemd[1]: Starting Permit User Sessions...
+Jun 15 05:40:30 app.techvault.local systemd[1]: Finished Permit User Sessions.
 
 ○ wazuh-agent.service - Wazuh agent
      Loaded: loaded (/usr/lib/systemd/system/wazuh-agent.service; disabled; preset: disabled)
@@ -200,11 +184,6 @@ May 23 06:19:18 app.techvault.local systemd[1]: Finished Permit User Sessions.
 
 ○ falco-modern-bpf.service - Falco: Container Native Runtime Security with modern ebpf
      Loaded: loaded (/usr/lib/systemd/system/falco-modern-bpf.service; disabled; preset: disabled)
-     Active: inactive (dead)
-       Docs: https://falco.org/docs/
-
-○ falco-bpf.service - Falco: Container Native Runtime Security with ebpf
-     Loaded: loaded (/usr/lib/systemd/system/falco-bpf.service; disabled; preset: disabled)
      Active: inactive (dead)
        Docs: https://falco.org/docs/
 

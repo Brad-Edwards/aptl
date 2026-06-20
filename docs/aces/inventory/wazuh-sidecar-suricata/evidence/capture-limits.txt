@@ -1,0 +1,10 @@
+- compose-service.wazuh-sidecar-suricata.json is the authored docker-compose.yml service block (yq-extracted); a profile-filtered docker compose config could not be used because soc-profile services depend_on wazuh.manager and profile filtering invalidates the project. The block carries only plain environment, so authored and resolved compose values coincide.
+- Docker Buildx imagetools inspection failed for aptl-wazuh-sidecar:local because it is a locally built tag with no registry manifest; see docker-buildx-imagetools.image.err. Image identity is the local config ID in docker-inspect.image.json plus the build recipe in source-checksums.txt.
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not a clean-reset rebuild proof.
+- /logs is the shared aptl_suricata_logs volume (the suricata container's log directory) bind-mounted read-only. Only /logs/eve.json — the monitored log source — is recorded as path metadata here; the full log directory content (eve.json, suricata.log, stats.log, fast.log) is the suricata asset's content and is inventoried under docs/aces/inventory/suricata/, not duplicated or checksummed in this bundle.
+- /var/ossec/etc/client.keys is an in-range Wazuh agent registration fixture. Its full content is emitted in wazuh-agent-state.txt and its checksum is retained in the SDL.
+- /var/ossec/.ssh is the wazuh agentless SSH material directory; recorded as metadata only, content excluded from checksums.
+- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt.gz and filesystem-checksums.txt.xz.
+- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
+- osquery programs table unavailable in the digest-pinned Linux scanner image.
+- osquery apt_sources reflects the host-side scanner vantage; the target rootfs wazuh apt source is captured directly in filesystem-tree.txt.gz and runtime-baseline.txt.

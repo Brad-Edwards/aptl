@@ -93,12 +93,17 @@ REQUIRED_EVIDENCE_FILES = {
     "trivy-vulnerability-list.json",
 }
 
-# Raw secret values that must never be committed to the bundle.
-RAW_SECRET_PATTERNS = (
-    r"31a211c4-ea5c-4a49-b022-5e2434e758a7",
-    r"ShuffleAdmin2024!",
-    r"StrongPassword123!",
-    r"BEGIN .*PRIVATE KEY",
+SCENARIO_SECRET_VALUES = (
+    "31a211c4-ea5c-4a49-b022-5e2434e758a7",
+    "ShuffleAdmin2024!",
+    "StrongPassword123!",
+)
+
+PLACEHOLDER_PATTERNS = (
+    r"<REDACTED",
+    r"<OMITTED",
+    r"withheld",
+    r"absent from committed evidence",
 )
 
 
@@ -282,20 +287,26 @@ def test_shuffle_mapping_ledger_references_every_evidence_file():
     assert not missing, f"Ledger does not reference every evidence file: {sorted(missing)}"
 
 
-def test_shuffle_evidence_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
+def test_shuffle_evidence_commits_scenario_secret_values():
+    evidence_text = "\n".join(_evidence_text(path) for path in EVIDENCE_DIR.iterdir())
+    missing = [value for value in SCENARIO_SECRET_VALUES if value not in evidence_text]
+    assert not missing, f"Scenario secret values missing from evidence: {missing}"
+
+
+def test_shuffle_evidence_does_not_commit_placeholder_secret_values():
+    forbidden = re.compile("|".join(PLACEHOLDER_PATTERNS), re.IGNORECASE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Placeholder secret markers remain in evidence: {offenders}"
 
 
-def test_shuffle_sdl_does_not_commit_raw_secret_values():
-    forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
-    text = TECHVAULT_SDL_PATH.read_text(encoding="utf-8")
-    assert not forbidden.search(text), "Raw secret material leaked into the composed SDL"
+def test_shuffle_sdl_commits_scenario_secret_values(node):
+    text = yaml.safe_dump(node, sort_keys=True)
+    missing = [value for value in SCENARIO_SECRET_VALUES if value not in text]
+    assert not missing, f"Scenario secret values missing from the expanded SDL: {missing}"
 
 
 def test_shuffle_runtime_evidence_counts_and_caveats():

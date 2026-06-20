@@ -773,63 +773,66 @@ nodes:
         - network: techvault.dmz-net
           network_id: 3b7c4e642d7ebef4866bf953ff0b04bd39affb9639881b4938cdcb8a9dc09c16
           network_id_stability: stable
-          endpoint_id: f71a0b2a10b9b524038cdd82cc550fdc32e3580199762516ef35f4a63ac7ec35
+          endpoint_id: 2c545048b27352e81ea9fc511304aea64a2aeb491f426d6d6c5515259daa7cbd
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.1.50
           ip_prefix_length: 24
           gateway: ''
-          mac_address: 82:aa:07:a7:db:d9
+          mac_address: 06:e7:f1:a8:62:c0
           aliases:
           - aptl-suricata
           - suricata
           dns_names:
           - aptl-suricata
           - suricata
-          - 23dec623baa3
-          generated_dns_names: []
+          - 4281739e19e1
+          generated_dns_names:
+          - 4281739e19e1
           backend:
             driver: bridge
           description: Docker endpoint for aptl-suricata on aptl_aptl-dmz.
         - network: techvault.internal-net
           network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 693b4226ec8213d28b2000a89cb63996c4574afcb220f3d5ed82ad818e501065
+          endpoint_id: d2aff68b4860db2afd51cacd35b115df3239ec0c0d0d1a70c38c9850dc437edd
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.50
           ip_prefix_length: 24
           gateway: ''
-          mac_address: 8a:d4:10:7e:60:b4
+          mac_address: d6:3e:0a:c1:26:32
           aliases:
           - aptl-suricata
           - suricata
           dns_names:
           - aptl-suricata
           - suricata
-          - 23dec623baa3
-          generated_dns_names: []
+          - 4281739e19e1
+          generated_dns_names:
+          - 4281739e19e1
           backend:
             driver: bridge
           description: Docker endpoint for aptl-suricata on aptl_aptl-internal.
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: f531b4053fbcb648b918f085d69e46dafd1ff77ac87da71976a05a8369f06598
+          endpoint_id: 7679ac32e7963f5fba9208df0850b4597f4c5a3ae5c639031c6215957b28cce1
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.50
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: fe:d7:53:72:ef:4f
+          mac_address: be:3d:8a:44:e1:54
           aliases:
           - aptl-suricata
           - suricata
           dns_names:
           - aptl-suricata
           - suricata
-          - 23dec623baa3
-          generated_dns_names: []
+          - 4281739e19e1
+          generated_dns_names:
+          - 4281739e19e1
           backend:
             driver: bridge
           description: Docker endpoint for aptl-suricata on aptl_aptl-security.

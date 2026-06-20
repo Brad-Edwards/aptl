@@ -1,0 +1,58 @@
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 2,
+      "relation": "eq"
+    },
+    "max_score": 1.0,
+    "hits": [
+      {
+        "_index": "cortex_6",
+        "_type": "_doc",
+        "_id": "APTL",
+        "_score": 1.0,
+        "_routing": "APTL",
+        "_source": {
+          "status": "Active",
+          "description": "APTL Purple Team Lab",
+          "createdAt": 1781193782339,
+          "createdBy": "init",
+          "relations": "organization"
+        }
+      },
+      {
+        "_index": "cortex_6",
+        "_type": "_doc",
+        "_id": "aptl-svc@cortex.local",
+        "_score": 1.0,
+        "_routing": "aptl-svc@cortex.local",
+        "_source": {
+          "name": "APTL Cortex Service Account",
+          "createdAt": 1781193783518,
+          "createdBy": "init",
+          "key": "aptlcortexlabapikey2026purple",
+          "roles": [
+            "read",
+            "analyze",
+            "orgadmin"
+          ],
+          "status": "Ok",
+          "preferences": "{}",
+          "organization": "APTL",
+          "relations": "user",
+          "password": "䚺퐓戡翝蓂㦲횧씽蕶叿,cfb766587935fd7a8e5bf5d2e5d4d689d4d6f282c6857fdb3aa238801e430c23",
+          "updatedBy": "init",
+          "updatedAt": 1781193784454
+        }
+      }
+    ]
+  }
+}

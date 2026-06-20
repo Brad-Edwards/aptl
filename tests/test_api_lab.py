@@ -12,11 +12,12 @@ pytest.importorskip("fastapi", reason="Web dependencies not installed")
 @pytest.fixture
 def api_client(tmp_path):
     """Create a FastAPI test client with DI override for project_dir."""
-    from aptl.api.deps import get_project_dir
+    from aptl.api.deps import get_project_dir, verify_token
     from aptl.api.main import app
     from starlette.testclient import TestClient
 
     app.dependency_overrides[get_project_dir] = lambda: tmp_path
+    app.dependency_overrides[verify_token] = lambda: None
     try:
         with TestClient(app) as client:
             yield client
@@ -293,10 +294,9 @@ class TestLabStop:
 class TestProjectDirValidation:
     def test_nonexistent_project_dir_returns_503(self):
         """When APTL_PROJECT_DIR points to nonexistent dir, API returns 503."""
-        from aptl.api.deps import get_project_dir
+        from aptl.api.deps import get_project_dir, verify_token
         from aptl.api.main import app
         from starlette.testclient import TestClient
-        from pathlib import Path
 
         app.dependency_overrides[get_project_dir] = lambda: (_ for _ in ()).throw(
             __import__("fastapi").HTTPException(
@@ -304,6 +304,7 @@ class TestProjectDirValidation:
                 detail="Project directory does not exist: /nonexistent",
             )
         )
+        app.dependency_overrides[verify_token] = lambda: None
         try:
             client = TestClient(app, raise_server_exceptions=False)
             response = client.get("/api/lab/status")

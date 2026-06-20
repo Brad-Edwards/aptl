@@ -6,7 +6,6 @@ import hashlib
 import json
 import lzma
 import re
-import subprocess
 
 import pytest
 import yaml
@@ -48,6 +47,15 @@ LOCAL_IDENTITY_USER_COUNT = 14
 LOCAL_IDENTITY_GROUP_COUNT = 25
 SERVICE_LISTENER_COUNT = 3
 LEDGER_FACT_COUNT = 18
+WAZUH_DASHBOARD_SANDBOX_KEY = "/var/run/docker/netns/953bfcdd9594"
+WAZUH_DASHBOARD_ENDPOINT = {
+    "network": "techvault.security-net",
+    "network_id": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+    "endpoint_id": "2a053aebe4fcc2685a7ad7c4c168c68bc0d0fe4ce4061c6e4b9a3f124754daca",
+    "ip_address": "172.20.0.11",
+    "mac_address": "ce:73:a1:0e:dc:52",
+    "generated_dns_name": "2463810da701",
+}
 FILESYSTEM_TREE_PARTS = (
     "filesystem-tree.txt.gz.part-000",
     "filesystem-tree.txt.gz.part-001",
@@ -102,6 +110,14 @@ SCENARIO_FIXTURE_ENV_NAMES = (
     "INDEXER_PASSWORD",
     "DASHBOARD_PASSWORD",
     "API_PASSWORD",
+)
+SUPPRESSION_PLACEHOLDERS = (
+    "<REDACTED",
+    "<OMITTED",
+    "operator_secret",
+    "value withheld",
+    "HTTP-AUTHORIZATION-HEADER-OMITTED",
+    "HTTP-COOKIE-VALUE-OMITTED",
 )
 
 
@@ -168,24 +184,12 @@ def _scenario_fixture_env_values() -> dict[str, str]:
     compose_env = _json_file("compose-service.wazuh.dashboard.json")["environment"]
     values = {name: compose_env.get(name, "") for name in SCENARIO_FIXTURE_ENV_NAMES}
     missing = set(SCENARIO_FIXTURE_ENV_NAMES) - set(compose_env)
-    assert not missing, f"Missing fixture environment values in evidence: {sorted(missing)}"
+    assert not missing, (
+        f"Missing fixture environment values in evidence: {sorted(missing)}"
+    )
     empty = [name for name, value in values.items() if not value]
     assert not empty, f"Empty fixture environment values in evidence: {empty}"
     return values
-
-
-def _sanitize_http_with_capture_script(text: str) -> str:
-    script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
-    match = re.search(r"sanitize_http_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
-    assert match, "capture script must define sanitize_http_stream"
-    result = subprocess.run(
-        ["bash", "-c", f"{match.group(0)}\nsanitize_http_stream"],
-        input=text,
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    return result.stdout
 
 
 def test_wazuh_dashboard_inventory_note_declares_scope_and_evidence():
@@ -213,7 +217,6 @@ def test_wazuh_dashboard_capture_script_pins_toolchain_and_fixture_policy():
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
         "anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6",
         "osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd",
-        "sanitize_http_stream",
         "wazuh-dashboard-state.txt",
         "wazuh-dashboard-probe.json",
         "dashboard-config-files.txt",
@@ -227,37 +230,36 @@ def test_wazuh_dashboard_capture_script_pins_toolchain_and_fixture_policy():
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
     assert "redact_stream" not in text
     assert "REDACTED-SECRET" not in text
+    assert "sanitize_http_stream" not in text
+    assert "HTTP-COOKIE-VALUE-OMITTED" not in text
+    assert "HTTP-AUTHORIZATION-HEADER-OMITTED" not in text
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_wazuh_dashboard_capture_http_sanitizer_preserves_fixture_lines():
-    fixture_value = "dash-4279-credential-1836"
-    public_value = "public-observation-2026"
-    sanitized = _sanitize_http_with_capture_script(
-        "\n".join(
-            [
-                f"INDEXER_PASSWORD={fixture_value}",
-                f"dashboard_password: {fixture_value}",
-                f"api_key = {fixture_value}",
-                f"server.ssl.key: {fixture_value}",
-                f"<password>{fixture_value}</password>",
-                f"<api_key>{fixture_value}</api_key>",
-                f"Authorization: Bearer {fixture_value}",
-                f"set-cookie: session={fixture_value}; HttpOnly",
-                f"regular_field: {public_value}",
-            ]
-        )
-    )
+def test_wazuh_dashboard_capture_probe_preserves_http_headers():
+    probe = _json_file("wazuh-dashboard-probe.json")["output"]
 
-    assert f"INDEXER_PASSWORD={fixture_value}" in sanitized
-    assert f"dashboard_password: {fixture_value}" in sanitized
-    assert f"api_key = {fixture_value}" in sanitized
-    assert f"server.ssl.key: {fixture_value}" in sanitized
-    assert f"<password>{fixture_value}</password>" in sanitized
-    assert f"<api_key>{fixture_value}</api_key>" in sanitized
-    assert public_value in sanitized
-    assert "Authorization: <HTTP-AUTHORIZATION-HEADER-OMITTED>" in sanitized
-    assert "set-cookie: <HTTP-COOKIE-VALUE-OMITTED>; HttpOnly" in sanitized
+    assert "HTTP/1.1 401 Unauthorized" in probe
+    assert "HTTP/1.1 302 Found" in probe
+    assert (
+        "set-cookie: security_authentication=; Max-Age=0; Expires=Thu, "
+        "01 Jan 1970 00:00:00 GMT; HttpOnly; Path=/"
+    ) in probe
+    assert "HTTP-COOKIE-VALUE-OMITTED" not in probe
+    assert "HTTP-AUTHORIZATION-HEADER-OMITTED" not in probe
+
+
+def test_wazuh_dashboard_evidence_has_no_suppression_placeholders():
+    offenders = {}
+    for path in EVIDENCE_DIR.iterdir():
+        if not path.is_file():
+            continue
+        text = _evidence_text(path)
+        found = [marker for marker in SUPPRESSION_PLACEHOLDERS if marker in text]
+        if found:
+            offenders[path.name] = found
+
+    assert not offenders, f"Evidence contains suppression placeholders: {offenders}"
 
 
 def test_wazuh_dashboard_mapping_ledger_validates_without_gap_triage():
@@ -305,7 +307,9 @@ def test_wazuh_dashboard_evidence_bundle_files_are_present_and_non_empty():
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and path.stat().st_size > 500 * 1024
     }
-    assert not large_files, f"Evidence files exceed the pre-commit size gate: {large_files}"
+    assert not large_files, (
+        f"Evidence files exceed the pre-commit size gate: {large_files}"
+    )
 
 
 def test_wazuh_dashboard_evidence_sha256_manifest_matches_files():
@@ -343,7 +347,9 @@ def test_wazuh_dashboard_mapping_ledger_references_every_evidence_file():
         f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
     }
     missing = evidence_files - refs
-    assert not missing, f"Ledger does not reference every evidence file: {sorted(missing)}"
+    assert not missing, (
+        f"Ledger does not reference every evidence file: {sorted(missing)}"
+    )
 
 
 def test_wazuh_dashboard_fixture_values_are_preserved_in_evidence_and_sdl(runtime):
@@ -374,9 +380,6 @@ def test_wazuh_dashboard_fixture_values_are_preserved_in_evidence_and_sdl(runtim
 
     assert fixture_env["API_PASSWORD"] in config_text
     assert "server.ssl.key:" in config_text
-    assert "dashboard-config-files.redacted.txt" not in {
-        path.name for path in EVIDENCE_DIR.iterdir()
-    }
 
 
 def test_wazuh_dashboard_source_checksums_keep_scenario_fixture_inputs():
@@ -401,14 +404,21 @@ def test_wazuh_dashboard_runtime_evidence_counts_and_caveats():
     assert container["Config"]["Hostname"] == "wazuh.dashboard"
     assert container["HostConfig"]["Memory"] == 1073741824
     assert container["HostConfig"]["RestartPolicy"]["Name"] == "always"
+    assert container["NetworkSettings"]["SandboxKey"] == WAZUH_DASHBOARD_SANDBOX_KEY
+    inspect_endpoint = container["NetworkSettings"]["Networks"]["aptl_aptl-security"]
+    assert inspect_endpoint["NetworkID"] == WAZUH_DASHBOARD_ENDPOINT["network_id"]
+    assert inspect_endpoint["EndpointID"] == WAZUH_DASHBOARD_ENDPOINT["endpoint_id"]
+    assert inspect_endpoint["IPAddress"] == WAZUH_DASHBOARD_ENDPOINT["ip_address"]
+    assert inspect_endpoint["MacAddress"] == WAZUH_DASHBOARD_ENDPOINT["mac_address"]
+    assert (
+        WAZUH_DASHBOARD_ENDPOINT["generated_dns_name"] in inspect_endpoint["DNSNames"]
+    )
 
-    os_packages = (EVIDENCE_DIR / "os-packages.txt").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    os_packages = (
+        (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    )
     fs_rows = _chunked_evidence_text("filesystem-tree.txt.gz").splitlines()
-    checksum_rows = _chunked_evidence_text(
-        "filesystem-checksums.txt.xz"
-    ).splitlines()
+    checksum_rows = _chunked_evidence_text("filesystem-checksums.txt.xz").splitlines()
     assert len(os_packages) == 108
     assert len(fs_rows) == FILESYSTEM_ENTRY_COUNT
     assert len(checksum_rows) == FILESYSTEM_CHECKSUM_COUNT
@@ -473,12 +483,18 @@ def test_techvault_sdl_encodes_wazuh_dashboard_runtime_surfaces(node, runtime):
 
     endpoint = runtime["network"]["endpoints"][0]
     assert endpoint["network"] == "security-net"
-    assert endpoint["ip_address"] == "172.20.0.11"
+    assert endpoint["network_id"] == WAZUH_DASHBOARD_ENDPOINT["network_id"]
+    assert endpoint["endpoint_id"] == WAZUH_DASHBOARD_ENDPOINT["endpoint_id"]
+    assert endpoint["ip_address"] == WAZUH_DASHBOARD_ENDPOINT["ip_address"]
+    assert endpoint["mac_address"] == WAZUH_DASHBOARD_ENDPOINT["mac_address"]
+    assert endpoint["generated_dns_names"] == [
+        WAZUH_DASHBOARD_ENDPOINT["generated_dns_name"]
+    ]
     assert runtime["network"]["published_ports"] == [
         {
             "container_port": 5601,
             "protocol": "tcp",
-            "host_ip": "0.0.0.0",
+            "host_ip": "127.0.0.1",
             "host_port": 443,
             "description": "Docker host-published port observed from inspect.",
         }
@@ -489,9 +505,9 @@ def test_techvault_sdl_encodes_wazuh_dashboard_runtime_surfaces(node, runtime):
     }
     assert len(listeners) == SERVICE_LISTENER_COUNT
     assert listeners["dashboard-https-5601"]["port"] == 5601
-    assert listeners["dashboard-https-5601"]["published_port_refs"][0][
-        "host_port"
-    ] == 443
+    assert (
+        listeners["dashboard-https-5601"]["published_port_refs"][0]["host_port"] == 443
+    )
 
     fixture_env = _scenario_fixture_env_values()
     environment = {item["name"]: item for item in runtime["environment"]}
@@ -528,8 +544,8 @@ def test_techvault_sdl_encodes_wazuh_dashboard_application_and_platform(runtime)
 
     bindings = {item["binding_id"]: item for item in platform["upstream_bindings"]}
     assert bindings["wazuh-dashboard-index-backend"]["role"] == "index_backend"
-    assert bindings["wazuh-dashboard-index-backend"]["target_node_ref"] == (
-        "techvault.wazuh-indexer"
+    assert (
+        bindings["wazuh-dashboard-index-backend"]["target_node_ref"] == "wazuh-indexer"
     )
     assert bindings["wazuh-dashboard-manager-api"]["role"] == "backend_api"
     assert bindings["wazuh-dashboard-manager-api"]["target_node_ref"] == "wazuh-manager"
@@ -541,9 +557,9 @@ def test_techvault_sdl_compiles_with_wazuh_dashboard_runtime_fields():
 
     scenario = parse_sdl_file(TECHVAULT_SDL_PATH)
     model = compile_runtime_model(scenario)
-    node = model.node_deployments[
-        "provision.node.techvault.wazuh-dashboard"
-    ].spec["node"]
+    node = model.node_deployments["provision.node.techvault.wazuh-dashboard"].spec[
+        "node"
+    ]
     runtime = node["runtime"]
 
     assert node["source"]["version"] == IMAGE_DIGEST

@@ -5,7 +5,7 @@ nodes:
     description: TechVault Samba Active Directory Domain Controller steady-state inventory.
     source:
       name: aptl-ad
-      version: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+      version: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
       build:
         base_image: ubuntu:22.04
         base_image_digest: ''
@@ -382,8 +382,7 @@ nodes:
       techvault.techvault-ad-domain-service: ad-root
       techvault.ad-rsyslog-forwarding: ad-root
       techvault.ad-wazuh-agent: ad-root
-    conditions:
-      techvault.ad-domain-ready: ad-root
+    conditions: {}
     injects: {}
     vulnerabilities:
     - techvault.ad-weak-password-jessica
@@ -1187,13 +1186,13 @@ nodes:
         gid: null
         mode: '0644'
         size: 196
-        content_digest: f6f1edb193e9d5385591e4fcdc838c1971de47bf93eb18251cd0b5db35773065
+        content_digest: 14b992b7ca9adf7327fbe5ba5639d2409809e48ed5c6c3910d3db8999808e71a
         digest_algorithm: sha256
         source_path: runtime-observed:/opt/flags/user.txt
         provenance: ''
         stability: runtime_created
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'User flag content captured from live aptl-ad: APTL{user_ad_d179457f6eae87d310d9e1c576c30e73}; token aptl:v1:ad:user:d179457f6eae87d310d9e1c576c30e73:6385dedbc4c22c24ac140ae602c3d12b.'
       - path: /opt/provision-users.sh
         entry_type: file
         presence: present
@@ -1235,13 +1234,13 @@ nodes:
         gid: null
         mode: '0600'
         size: 196
-        content_digest: 02215db800cf22a15d835067d44c148b71bbceeae4b3a0f414f37567eb9f51c3
+        content_digest: 298395b76788c8f199a6ebf47cdafbef1eb5007ed3ba5937c78189806518d91e
         digest_algorithm: sha256
         source_path: runtime-observed:/root/root.txt
         provenance: ''
         stability: runtime_created
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Root flag content captured from live aptl-ad: APTL{root_ad_628ef9701766208ee19b9b6c7c49c488}; token aptl:v1:ad:root:628ef9701766208ee19b9b6c7c49c488:3b64e89617df9117955e23fa154d32c7.'
       - path: /var/lib/samba
         entry_type: directory
         presence: present
@@ -1480,8 +1479,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba private runtime directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/.provisioned
         entry_type: file
         presence: present
@@ -1496,8 +1495,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/.provisioned
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Empty Samba provisioning sentinel verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/dns_update_cache
         entry_type: file
         presence: present
@@ -1512,8 +1511,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/dns_update_cache
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Empty Samba DNS update cache verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/dns_update_list
         entry_type: file
         presence: present
@@ -1528,8 +1527,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/dns_update_list
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba DNS update template verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/encrypted_secrets.key
         entry_type: file
         presence: present
@@ -1544,8 +1543,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/encrypted_secrets.key
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba encrypted secrets key; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/hklm.ldb
         entry_type: file
         presence: present
@@ -1560,8 +1559,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/hklm.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba HKLM registry database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/idmap.ldb
         entry_type: file
         presence: present
@@ -1576,8 +1575,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/idmap.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba ID mapping database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/krb5.conf
         entry_type: file
         presence: present
@@ -1592,8 +1591,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/krb5.conf
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba-generated Kerberos realm configuration verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/ldap_priv
         entry_type: directory
         presence: present
@@ -1608,8 +1607,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/ldap_priv
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba LDAP private socket directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/ldap_priv/ldapi
         entry_type: other
         presence: present
@@ -1624,8 +1623,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/ldap_priv/ldapi
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba LDAP IPC socket verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/ldapi
         entry_type: other
         presence: present
@@ -1640,8 +1639,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/ldapi
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba LDAP IPC socket verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock
         entry_type: directory
         presence: present
@@ -1656,8 +1655,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba message socket directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/136
         entry_type: other
         presence: present
@@ -1672,152 +1671,80 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/136
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/146
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/146
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/149
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/149
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/150
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/150
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/153
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/153
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/154
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/154
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/157
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/157
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/158
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/158
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/160
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/160
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/163
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/163
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/164
         entry_type: other
         presence: present
@@ -1832,8 +1759,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/164
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/167
         entry_type: other
         presence: present
@@ -1848,8 +1775,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/167
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/168
         entry_type: other
         presence: present
@@ -1864,88 +1791,48 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/168
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/171
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/171
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/172
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/172
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/175
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/175
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/176
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/176
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/179
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/179
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/181
         entry_type: other
         presence: present
@@ -1960,104 +1847,56 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/181
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/183
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/183
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/184
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/184
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/187
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/187
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/188
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/188
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/191
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/191
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/197
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/197
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/198
         entry_type: other
         presence: present
@@ -2072,8 +1911,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/198
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/199
         entry_type: other
         presence: present
@@ -2088,8 +1927,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/199
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/200
         entry_type: other
         presence: present
@@ -2104,24 +1943,16 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/200
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/201
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/201
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/204
         entry_type: other
         presence: present
@@ -2136,8 +1967,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/204
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/206
         entry_type: other
         presence: present
@@ -2152,40 +1983,24 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/206
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket verified present in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/208
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/208
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/msg.sock/210
         entry_type: other
-        presence: present
-        owner_user: root
-        owner_group: root
-        uid: null
-        gid: null
-        mode: '0777'
-        size: 0
-        content_digest: ''
-        digest_algorithm: ''
+        presence: expected_absent
         source_path: runtime-observed:/var/lib/samba/private/msg.sock/210
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Runtime Samba message socket path was absent in the live aptl-ad container.'
       - path: /var/lib/samba/private/netlogon_creds_cli.tdb
         entry_type: file
         presence: present
@@ -2200,8 +2015,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/netlogon_creds_cli.tdb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba Netlogon credential cache database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/privilege.ldb
         entry_type: file
         presence: present
@@ -2216,8 +2031,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/privilege.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba privilege database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb
         entry_type: file
         presence: present
@@ -2232,8 +2047,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba SAM database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d
         entry_type: directory
         presence: present
@@ -2248,8 +2063,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba SAM split-database directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/CN=CONFIGURATION,DC=TECHVAULT,DC=LOCAL.ldb
         entry_type: file
         presence: present
@@ -2264,8 +2079,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/CN=CONFIGURATION,DC=TECHVAULT,DC=LOCAL.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba configuration naming-context database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/CN=SCHEMA,CN=CONFIGURATION,DC=TECHVAULT,DC=LOCAL.ldb
         entry_type: file
         presence: present
@@ -2280,8 +2095,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/CN=SCHEMA,CN=CONFIGURATION,DC=TECHVAULT,DC=LOCAL.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba schema naming-context database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/DC=DOMAINDNSZONES,DC=TECHVAULT,DC=LOCAL.ldb
         entry_type: file
         presence: present
@@ -2296,8 +2111,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/DC=DOMAINDNSZONES,DC=TECHVAULT,DC=LOCAL.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba DomainDnsZones naming-context database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/DC=FORESTDNSZONES,DC=TECHVAULT,DC=LOCAL.ldb
         entry_type: file
         presence: present
@@ -2312,8 +2127,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/DC=FORESTDNSZONES,DC=TECHVAULT,DC=LOCAL.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba ForestDnsZones naming-context database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/DC=TECHVAULT,DC=LOCAL.ldb
         entry_type: file
         presence: present
@@ -2328,8 +2143,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/DC=TECHVAULT,DC=LOCAL.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba TECHVAULT domain naming-context database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/sam.ldb.d/metadata.tdb
         entry_type: file
         presence: present
@@ -2344,8 +2159,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/sam.ldb.d/metadata.tdb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba SAM metadata database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/schannel_store.tdb
         entry_type: file
         presence: present
@@ -2360,8 +2175,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/schannel_store.tdb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba secure-channel store database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/secrets.keytab
         entry_type: file
         presence: present
@@ -2376,8 +2191,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/secrets.keytab
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba secrets keytab; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/secrets.ldb
         entry_type: file
         presence: present
@@ -2392,8 +2207,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/secrets.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba secrets database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/secrets.tdb
         entry_type: file
         presence: present
@@ -2408,8 +2223,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/secrets.tdb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba secrets TDB; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/share.ldb
         entry_type: file
         presence: present
@@ -2424,8 +2239,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/share.ldb
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba share database; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/smbd.tmp
         entry_type: directory
         presence: present
@@ -2440,8 +2255,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/smbd.tmp
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba smbd temporary directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/spn_update_list
         entry_type: file
         presence: present
@@ -2456,8 +2271,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/spn_update_list
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba SPN update template verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/tls
         entry_type: directory
         presence: present
@@ -2472,8 +2287,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/tls
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba TLS material directory verified from the live aptl-ad container.'
       - path: /var/lib/samba/private/tls/ca.pem
         entry_type: file
         presence: present
@@ -2488,8 +2303,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/tls/ca.pem
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba autogenerated CA certificate captured from the live aptl-ad container.'
       - path: /var/lib/samba/private/tls/cert.pem
         entry_type: file
         presence: present
@@ -2504,8 +2319,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/tls/cert.pem
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: plain
+        description: 'Samba autogenerated host certificate captured from the live aptl-ad container.'
       - path: /var/lib/samba/private/tls/key.pem
         entry_type: file
         presence: present
@@ -2520,8 +2335,8 @@ nodes:
         source_path: runtime-observed:/var/lib/samba/private/tls/key.pem
         provenance: ''
         stability: volume_backed
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Samba domain-controller TLS private key; checksum verified from the live aptl-ad container.'
       - path: /var/lib/samba/registry.tdb
         entry_type: file
         presence: present
@@ -3037,19 +2852,19 @@ nodes:
       - path: /var/ossec/etc/client.keys
         entry_type: file
         presence: present
-        owner_user: wazuh
+        owner_user: root
         owner_group: wazuh
         uid: null
         gid: null
         mode: '0640'
-        size: 92
+        size: 87
         content_digest: 574abb4c52aafa6c2e60de1fbc0bcef383379a69ca175ffb41e48db86bbc25a9
         digest_algorithm: sha256
         source_path: runtime-observed:/var/ossec/etc/client.keys
         provenance: ''
         stability: runtime_created
-        sensitivity: redacted
-        description: ''
+        sensitivity: secret_fixture
+        description: 'Wazuh agent-registration key captured live from /var/ossec/etc/client.keys: 001 aptl-ad-agent any f82171f55aca55fa47b1bb6fcf92168f7472f39a176ed4e9d2ca89ff7b1d90c3.'
       - path: /var/ossec/etc/ossec.conf
         entry_type: file
         presence: present
@@ -4668,14 +4483,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - eec6f567-8006-441d-98ee-b2fce7359dd5
+            - 8e0211ed-6b26-48ee-892e-70826774c0df
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-500
+            - S-1-5-21-1195619382-146717913-1119826051-500
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4710,12 +4525,12 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061843.0Z
+            - 20260611160030.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
-          description: Built-in domain administrator fixture account; raw password redacted.
+          description: Built-in domain administrator fixture account; password Admin123!.
         - subject_id: guest
           kind: user
           name: Guest
@@ -4736,14 +4551,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - a1d01d21-fe90-4d38-9b45-edc946460243
+            - 2c8adb62-b085-4ecc-ad76-1402639dd6d6
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-501
+            - S-1-5-21-1195619382-146717913-1119826051-501
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4771,7 +4586,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061843.0Z
+            - 20260611160030.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4798,14 +4613,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - f66c92d9-604a-4f54-bd9c-f171b4a5dc2c
+            - 5498f0ff-ebcf-4b7d-84e2-c46a011044b6
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-502
+            - S-1-5-21-1195619382-146717913-1119826051-502
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4840,7 +4655,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061843.0Z
+            - 20260611160030.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4880,14 +4695,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - abef0463-c3a7-4fe5-9e3b-4d347e26bb64
+            - b468bc84-9474-4df6-89fb-ad909a8a4f44
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1111
+            - S-1-5-21-1195619382-146717913-1119826051-1111
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4915,7 +4730,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061851.0Z
+            - 20260611160039.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4955,14 +4770,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 27e8f79f-bf64-4af7-a5ae-65dbd69eb0e3
+            - 66bfdbcc-a972-48be-8330-35adece143a2
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1112
+            - S-1-5-21-1195619382-146717913-1119826051-1112
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -4990,7 +4805,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061852.0Z
+            - 20260611160040.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5030,14 +4845,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 8a618815-5f0d-44e4-8079-8a8d95bda984
+            - ad324ae3-d7ad-4d18-bb38-2d7711ff9c1f
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1113
+            - S-1-5-21-1195619382-146717913-1119826051-1113
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5065,7 +4880,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061853.0Z
+            - 20260611160041.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5112,14 +4927,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 170e3d4a-87dc-4155-984f-32ac4a11fe00
+            - a05c9380-0cfc-49f7-893f-3004d9ac90b7
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1114
+            - S-1-5-21-1195619382-146717913-1119826051-1114
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5147,7 +4962,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061855.0Z
+            - 20260611160043.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5194,14 +5009,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 104c815e-bc35-4728-8ab4-caea4bcca4ba
+            - 2f098bbb-ae19-4209-ad61-53341d073945
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1115
+            - S-1-5-21-1195619382-146717913-1119826051-1115
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5229,7 +5044,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061857.0Z
+            - 20260611160044.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5269,14 +5084,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - ba4f6c64-3211-461c-856c-02f46b5e0c9c
+            - 32067819-630b-4776-a094-20fc731e8b27
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1116
+            - S-1-5-21-1195619382-146717913-1119826051-1116
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5304,7 +5119,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061858.0Z
+            - 20260611160045.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5377,14 +5192,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 768bbff0-02d6-4414-b1ab-1471eb16dc26
+            - 9ca8d582-4e22-4982-b1c0-6fc5588da187
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1117
+            - S-1-5-21-1195619382-146717913-1119826051-1117
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5412,7 +5227,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061900.0Z
+            - 20260611160047.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5447,14 +5262,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 5d6d1cc6-88f5-4fbe-a0e2-47e4415905c2
+            - 8154d3ce-bebe-4983-8719-e7b8cf3f1b7b
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1118
+            - S-1-5-21-1195619382-146717913-1119826051-1118
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5482,7 +5297,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061901.0Z
+            - 20260611160048.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5516,14 +5331,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - b0cd34d2-68f0-4634-899f-c78ab88a4a27
+            - ad1f0583-e34e-444c-b926-76fb9447abe9
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1119
+            - S-1-5-21-1195619382-146717913-1119826051-1119
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5551,7 +5366,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061902.0Z
+            - 20260611160049.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5584,14 +5399,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 784687b2-a1b0-4d61-bf51-9b610344c10c
+            - 1d5a6047-ea24-40b6-9fe4-d4fe006cff13
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1120
+            - S-1-5-21-1195619382-146717913-1119826051-1120
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5619,7 +5434,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061903.0Z
+            - 20260611160050.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5659,14 +5474,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - dce827a4-3878-4b45-97aa-79c114e62aec
+            - e281e8d0-929e-4a7c-bbac-9bdca82c9e65
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1121
+            - S-1-5-21-1195619382-146717913-1119826051-1121
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5694,7 +5509,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061904.0Z
+            - 20260611160051.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5734,14 +5549,14 @@ nodes:
             description: ''
           - name: object_guid
             values:
-            - 5a878cc6-a0cb-480b-82ae-03c6ee3c4fcd
+            - 78182aaf-d6ac-441c-8400-85410120a8ab
             value_classification: plain
             origin: unknown
             provenance: unknown
             description: ''
           - name: object_sid
             values:
-            - S-1-5-21-1501474058-3815655577-2215893124-1122
+            - S-1-5-21-1195619382-146717913-1119826051-1122
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -5769,7 +5584,7 @@ nodes:
             description: ''
           - name: when_created
             values:
-            - 20260523061906.0Z
+            - 20260611160053.0Z
             value_classification: plain
             origin: unknown
             provenance: unknown
@@ -6083,23 +5898,23 @@ nodes:
         - network: techvault.internal-net
           network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 32b08283f847efb5a3f922194ab22b9bada1e00f368ed7e8c47b0db8a6252a24
+          endpoint_id: 8c7660994ec8be4206d734b5210685bc87ddd8b96efcddb2781dc08dad307a28
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.10
           ip_prefix_length: 24
           gateway: 172.20.2.1
-          mac_address: 2a:94:5f:9a:c2:45
+          mac_address: 16:e0:d4:a0:19:61
           aliases:
           - aptl-ad
           - ad
           dns_names:
           - aptl-ad
           - ad
-          - a8e5b007ae34
+          - c52389d21df0
           - dc.techvault.local
           generated_dns_names:
-          - a8e5b007ae34
+          - c52389d21df0
           backend:
             driver: bridge
             ipam_driver: default
@@ -7712,7 +7527,7 @@ nodes:
         installed_version: 2:8.39-13ubuntu0.22.04.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2017-11164
@@ -7723,7 +7538,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7734,7 +7549,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7745,7 +7560,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7756,7 +7571,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7767,7 +7582,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7778,7 +7593,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7789,7 +7604,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7800,7 +7615,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7811,7 +7626,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7822,7 +7637,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7833,7 +7648,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
@@ -7844,7 +7659,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7855,7 +7670,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7866,7 +7681,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7877,7 +7692,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7888,7 +7703,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7899,7 +7714,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7910,7 +7725,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7921,7 +7736,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7932,7 +7747,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7943,7 +7758,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7954,7 +7769,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
@@ -7965,7 +7780,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -7976,7 +7791,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -7987,7 +7802,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -7998,7 +7813,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8009,7 +7824,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8020,7 +7835,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8031,7 +7846,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8042,7 +7857,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8053,7 +7868,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8064,7 +7879,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8075,7 +7890,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
@@ -8086,7 +7901,7 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
@@ -8097,7 +7912,7 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
@@ -8108,7 +7923,7 @@ nodes:
         installed_version: 12.3.0-1ubuntu1~22.04.3
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
@@ -8119,7 +7934,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8130,7 +7945,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8141,7 +7956,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8152,7 +7967,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8163,7 +7978,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8174,7 +7989,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8185,7 +8000,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8196,7 +8011,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8207,7 +8022,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8218,7 +8033,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8229,7 +8044,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
@@ -8240,7 +8055,7 @@ nodes:
         installed_version: 10.39-3ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-41409
@@ -8251,7 +8066,7 @@ nodes:
         installed_version: 1.4.8+dfsg-3build1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2022-4899
@@ -8262,7 +8077,7 @@ nodes:
         installed_version: 1:4.8.1-2ubuntu2.2
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
@@ -8273,7 +8088,7 @@ nodes:
         installed_version: 1:4.8.1-2ubuntu2.2
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
@@ -8284,7 +8099,7 @@ nodes:
         installed_version: 2.1.0-1ubuntu1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-29483
@@ -8295,7 +8110,7 @@ nodes:
         installed_version: 1.12.20-2ubuntu4.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
@@ -8306,7 +8121,7 @@ nodes:
         installed_version: 1.12.20-2ubuntu4.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
@@ -8317,7 +8132,7 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
@@ -8328,7 +8143,7 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
@@ -8339,7 +8154,7 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
@@ -8350,7 +8165,7 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
@@ -8361,7 +8176,7 @@ nodes:
         installed_version: 6.3-2ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
@@ -8372,7 +8187,7 @@ nodes:
         installed_version: 249.11-0ubuntu3.20
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
@@ -8383,7 +8198,7 @@ nodes:
         installed_version: 249.11-0ubuntu3.20
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
@@ -8394,7 +8209,7 @@ nodes:
         installed_version: 1.9.4-3ubuntu3
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-2236
@@ -8405,7 +8220,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
@@ -8416,7 +8231,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
@@ -8427,7 +8242,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
@@ -8438,7 +8253,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
@@ -8449,7 +8264,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
@@ -8460,7 +8275,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
@@ -8471,7 +8286,7 @@ nodes:
         installed_version: 1:4.8.1-2ubuntu2.2
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
@@ -8482,7 +8297,7 @@ nodes:
         installed_version: 1:4.8.1-2ubuntu2.2
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
@@ -8493,7 +8308,7 @@ nodes:
         installed_version: 0.186-1ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-1352
@@ -8504,7 +8319,7 @@ nodes:
         installed_version: 0.186-1ubuntu0.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-1376
@@ -8515,7 +8330,7 @@ nodes:
         installed_version: 1:0.5.0-1ubuntu22.04.1
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-29481
@@ -8526,7 +8341,7 @@ nodes:
         installed_version: 70.1-2
         severity: low
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-5222
@@ -8537,7 +8352,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8548,7 +8363,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8559,7 +8374,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8570,7 +8385,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8581,7 +8396,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8592,7 +8407,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8603,7 +8418,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8614,7 +8429,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8625,7 +8440,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8636,7 +8451,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8647,7 +8462,7 @@ nodes:
         installed_version: 2:4.15.13+dfsg-0ubuntu1.10
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
@@ -8658,7 +8473,7 @@ nodes:
         installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-45582
@@ -8669,7 +8484,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
@@ -8680,7 +8495,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
@@ -8691,7 +8506,7 @@ nodes:
         installed_version: 0.8-5ubuntu5.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
@@ -8702,7 +8517,7 @@ nodes:
         installed_version: 2.4.7-1ubuntu0.7
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2025-66382
@@ -8713,7 +8528,7 @@ nodes:
         installed_version: 0.9.24-1build2
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
@@ -8724,7 +8539,7 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
@@ -8735,7 +8550,7 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
@@ -8746,7 +8561,7 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
@@ -8757,7 +8572,7 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
@@ -8768,7 +8583,7 @@ nodes:
         installed_version: 3.10.12-1~22.04.15
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
@@ -8779,7 +8594,7 @@ nodes:
         installed_version: 1:2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8790,7 +8605,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8801,7 +8616,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8812,7 +8627,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8823,7 +8638,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8834,7 +8649,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8845,7 +8660,7 @@ nodes:
         installed_version: 2.37.2-4ubuntu3.5
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
@@ -8856,7 +8671,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
@@ -8867,7 +8682,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
@@ -8878,7 +8693,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
@@ -8889,7 +8704,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3039
@@ -8900,7 +8715,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33845
@@ -8911,7 +8726,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-33846
@@ -8922,7 +8737,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
@@ -8933,7 +8748,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
@@ -8944,7 +8759,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
@@ -8955,7 +8770,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3592
@@ -8966,7 +8781,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3832
@@ -8977,7 +8792,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-3833
@@ -8988,7 +8803,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
@@ -8999,7 +8814,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
@@ -9010,7 +8825,7 @@ nodes:
         installed_version: 2.4.1op1-1ubuntu4.16
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-41079
@@ -9021,7 +8836,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42009
@@ -9032,7 +8847,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42010
@@ -9043,7 +8858,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42011
@@ -9054,7 +8869,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42012
@@ -9065,7 +8880,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42013
@@ -9076,7 +8891,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42014
@@ -9087,7 +8902,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-42015
@@ -9098,7 +8913,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
@@ -9109,7 +8924,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
@@ -9120,7 +8935,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
@@ -9131,7 +8946,7 @@ nodes:
         installed_version: 2.35-0ubuntu3.13
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
@@ -9142,7 +8957,7 @@ nodes:
         installed_version: 3.7.3-4ubuntu1.8
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 3.7.3-4ubuntu1.9
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5260
@@ -9153,7 +8968,7 @@ nodes:
         installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: ''
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
@@ -9164,7 +8979,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
@@ -9175,7 +8990,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
@@ -9186,7 +9001,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
@@ -9197,7 +9012,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5946
@@ -9208,7 +9023,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
@@ -9219,7 +9034,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
@@ -9230,7 +9045,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950
@@ -9241,7 +9056,7 @@ nodes:
         installed_version: 1:9.18.39-0ubuntu0.22.04.3
         severity: medium
         scanner: trivy
-        image_digest: aptl-ad@sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052
+        image_digest: aptl-ad@sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957
         scan_time: '2026-05-23T06:23:02Z'
         fixed_version: 1:9.18.39-0ubuntu0.22.04.4
         advisory_url: https://avd.aquasec.com/nvd/cve-2026-5950

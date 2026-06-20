@@ -41,55 +41,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-# Text redaction for raw command output. Redacts: the live Redis auth fixture
-# (dynamically, without naming it in this script), any `--requirepass`/
-# `requirepass` value, the ACL password hash, NAME=value secret env, JSON
-# "key":"value" secrets, and PEM private-key envelopes.
-# The Redis auth fixture (redis-server --requirepass redispassword) is a
-# checked-in scenario realization fact, NOT an operator secret -- it is the
-# provisioning input that reproduces this asset, so it is preserved verbatim in
-# the evidence and encoded as a secret_fixture value in the SDL (per ACES #471:
-# SDL values are realization facts unless an author explicitly withholds them).
-# redact_stream only scrubs generic operator-secret SHAPES (NAME=value secret
-# env, JSON secret fields, PEM private keys) as a safety net; none of these match
-# the Redis fixture, so it passes through unredacted.
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
-}
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie|authorization)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 docker version --format json | jq . > "$OUT/docker-version.json"
@@ -103,36 +54,14 @@ import sys, yaml, json
 with open(sys.argv[1]) as fh:
     data = yaml.safe_load(fh)
 json.dump(data["services"]["misp-redis"], sys.stdout)
-' "$ROOT/docker-compose.yml" \
-  | redact_stream \
-  | jq '
-      if (.environment | type) == "array" then
-        .environment |= map(
-          if test("^(?<name>[^=]+)=") then
-            capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-            | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i"))
-              then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-              else .
-              end
-          else
-            .
-          end
-        )
-      else . end
-    ' > "$OUT/compose-service.misp-redis.json"
+' "$ROOT/docker-compose.yml" | jq . > "$OUT/compose-service.misp-redis.json"
 record_limit "Compose service evidence was extracted from docker-compose.yml with a YAML->JSON projection because the full local compose project can include profile-dependent services outside this asset scope."
 
-docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
-  | redact_stream \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
-  | redact_stream \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -153,8 +82,8 @@ else
 fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.misp-redis.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 > "$OUT/docker-logs.misp-redis.txt"
 
 record_limit "Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof."
 record_limit "misp-redis declares no named volume; its keyspace persists only to the container COW layer at /data/dump.rdb. The Redis keyspace, per-logical-db key counts, datatype census, dump.rdb size/mtime, and rdb_changes_since_last_save are MISP-driven runtime state that drift continuously; they are captured as a point-in-time snapshot, and the SDL encodes the stable shape (key_value model, configured 16 logical DBs, persistence posture) with the observed population marked as a snapshot caveat."
@@ -276,14 +205,14 @@ docker exec "$CONTAINER" sh -lc '
   cat /etc/shells 2>/dev/null || true
   printf "%s\n" --binary-info--
   ls -l /usr/local/bin/redis-server
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 
 # --- Redis datastore state ---------------------------------------------------
 # The auth fixture is delivered over stdin and read into REDISCLI_AUTH inside the
 # container, so it never appears in host docker-client argv (the `-e VAR=value`
 # form would expose it via /proc) nor in in-container argv (no `redis-cli -a`).
-# The datatype census prints only aggregate <count> <type> rows per logical DB;
-# key names are consumed internally and never emitted. redact_stream is the backstop.
+# The datatype census prints aggregate rows per logical DB and preserves raw
+# scenario-observed Redis state.
 printf '%s\n' "$REDIS_PASS" | docker exec -i "$CONTAINER" sh -lc '
   set -eu
   IFS= read -r REDISCLI_AUTH
@@ -320,7 +249,7 @@ printf '%s\n' "$REDIS_PASS" | docker exec -i "$CONTAINER" sh -lc '
       redis-cli -n "$db" type "$k" 2>/dev/null
     done | sort | uniq -c | sort -rn
   done
-' | redact_stream > "$OUT/redis-state.txt"
+' > "$OUT/redis-state.txt"
 
 # --- Participant-vantage discovery ------------------------------------------
 if docker inspect "$MISP_CONTAINER" >/dev/null 2>&1; then
@@ -333,7 +262,7 @@ if docker inspect "$MISP_CONTAINER" >/dev/null 2>&1; then
     printf "%s\n" --tcp6379--
     timeout 5 bash -lc "cat < /dev/null > /dev/tcp/misp-redis/6379" && echo "misp-redis:6379 reachable" || echo "misp-redis:6379 unreachable"
     true
-  ' | redact_stream > "$OUT/participant-discovery.misp.txt"
+  ' > "$OUT/participant-discovery.misp.txt"
 else
   record_limit "MISP participant-vantage discovery was skipped because $MISP_CONTAINER was not present."
   printf '%s container unavailable\n' "$MISP_CONTAINER" > "$OUT/participant-discovery.misp.txt"
@@ -346,11 +275,11 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     printf "%s\n" --dns--
     getent hosts misp-redis aptl-misp-redis 2>&1
     printf "%s\n" --tcp6379-ip--
-    timeout 5 sh -c "nc -vz ${REDIS_IP:-172.20.0.3} 6379" 2>&1
+    timeout 5 sh -c "nc -vz ${REDIS_IP:-172.20.0.2} 6379" 2>&1
     printf "%s\n" --tcp6379-name--
     timeout 5 sh -c "nc -vz misp-redis 6379" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"
@@ -416,7 +345,7 @@ write_osquery_json() {
   jq -n --arg table "$table" --arg query "$query" --arg tool "$OSQUERY_TOOL" \
     --arg vantage "$vantage" --argjson rows "$rows" \
     '{table: $table, query: $query, tool: $tool, vantage: $vantage, status: "captured", rows: $rows}' \
-    | redact_stream > "$output"
+    > "$output"
 }
 
 write_unavailable_osquery_json() {
@@ -458,8 +387,6 @@ write_unavailable_osquery_json "$OUT/osquery-programs.json" programs \
   echo "- osquery programs table unavailable in the digest-pinned Linux scanner image."
 } >> "$OUT/capture-limits.txt"
 
-# The container docker-inspect Cmd redaction can leave the literal sentinel; make
-# sure no stray raw fixture survived in any text artifact.
 sed -i 's/[[:space:]]\+$//' "$OUT"/*.txt
 
 (

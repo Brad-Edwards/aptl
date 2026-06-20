@@ -223,6 +223,47 @@ features:
     destination: /etc/falco
     description: Falco package/configuration is present; observed service-manager state records Falco units disabled/inactive.
     environment: []
+  reverse-rsyslog-forwarding:
+    name: ''
+    type: configuration
+    source:
+      name: containers/base/scripts/entrypoint-base.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /etc/rsyslog.d
+    description: 'rsyslog forwarding is configured at entrypoint from SIEM_IP toward the wazuh-manager node; encoded as
+      runtime.forwarding_agents.reverse-rsyslog-forwarder.'
+    environment:
+    - SIEM_IP=172.20.0.10
+  reverse-wazuh-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/reverse/install-wazuh.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /var/ossec
+    description: 'In-process Wazuh agent installed on first boot; running and registered Active with the manager (encoded as
+      runtime.forwarding_agents.reverse-wazuh-agent, resolved by relationships.reverse-forwards-wazuh). The registration name
+      is runtime-generated (reverse-$(hostname)-$(date +%s)).'
+    environment:
+    - WAZUH_MANAGER=172.20.0.10
+  reverse-falco-agent:
+    name: ''
+    type: artifact
+    source:
+      name: containers/reverse/install-falco.sh
+      version: '*'
+      build: null
+    dependencies: []
+    vulnerabilities: []
+    destination: /etc/falco
+    description: 'Falco (modern eBPF) installed on first boot; running with a gRPC output socket on 8765 (security-net only).'
+    environment: []
   techvault-dns-service:
     name: ''
     type: service
@@ -267,9 +308,9 @@ features:
     - MYSQL_HOST=misp-db
     - MYSQL_DATABASE=misp
     - MYSQL_USER=misp
-    - MYSQL_PASSWORD=<redacted>
+    - MYSQL_PASSWORD=misp_db_password
     - REDIS_HOST=misp-redis
-    - ADMIN_KEY=<redacted>
+    - ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
   techvault-misp-db-service:
     name: ''
     type: service
@@ -284,5 +325,5 @@ features:
     environment:
     - MYSQL_DATABASE=misp
     - MYSQL_USER=misp
-    - MYSQL_PASSWORD=<redacted>
-    - MYSQL_ROOT_PASSWORD=<redacted>
+    - MYSQL_PASSWORD=misp_db_password
+    - MYSQL_ROOT_PASSWORD=misp_root_password

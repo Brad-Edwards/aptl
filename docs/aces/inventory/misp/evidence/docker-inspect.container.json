@@ -1,7 +1,7 @@
 [
   {
-    "Id": "6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe",
-    "Created": "2026-05-23T06:18:31.972449017Z",
+    "Id": "7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2",
+    "Created": "2026-06-11T16:00:19.365800332Z",
     "Path": "/entrypoint.sh",
     "Args": [],
     "State": {
@@ -11,53 +11,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2958905,
+      "Pid": 807711,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:50.192751102Z",
+      "StartedAt": "2026-06-11T16:00:38.559150225Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-29T02:14:06.497076824+02:00",
-            "End": "2026-05-29T02:14:06.566746865+02:00",
+            "Start": "2026-06-12T10:32:53.85328239+02:00",
+            "End": "2026-06-12T10:32:53.913015827+02:00",
             "ExitCode": 0,
-            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta name=\"viewport\" content=\"width=device-width\">\n    <link rel=\"shortcut icon\" href=\"https://localhost/img/favicon.png\">\n    <title>Users - MISP</title>\n    <link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-datepicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-colorpicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/font-awesome.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/chosen.min.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/main.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/print.css\" media=\"print\">\n<script src=\"https://localhost/js/jquery.js\"></script>\n<script src=\"https://localhost/js/chosen.jquery.min.js\"></script>\n</head>\n<body data-controller=\"users\" data-action=\"login\">\n    <div id=\"popover_form\" class=\"ajax_popover_form\"></div>\n    <div id=\"popover_form_large\" class=\"ajax_popover_form ajax_popover_form_large\"></div>\n    <div id=\"popover_form_x_large\" class=\"ajax_popover_form ajax_popover_form_x_large\"></div>\n    <div id=\"popover_matrix\" class=\"ajax_popover_form ajax_popover_matrix\"></div>\n    <div id=\"popover_box\" class=\"popover_box\"></div>\n    <div id=\"confirmation_box\"></div>\n    <div id=\"gray_out\"></div>\n    <div id=\"container\">\n        <div id=\"topBar\" class=\"navbar navbar-inverse debugOff\" style=\"z-index:100;\">\n  <div class=\"navbar-inner\">\n    <ul class=\"nav\">\n            </ul>\n    <ul class=\"nav pull-right\">\n            </ul>\n</div>\n  </div>\n<style>\n    ul.nav li.dropdown:hover > ul.dropdown-menu {\n        display: block;\n    }\n    .dropdown-submenu > .dropdown-menu {\n        display: none !important;\n    }\n    .dropdown-submenu:hover > .dropdown-menu {\n        display: block !important;\n    }\n</style>\n<script>\n$(document).ready(function() {\n    $('.setTheme').on('click', function(e) {\n        e.preventDefault();\n        e.stopPropagation();\n\n        var theme = String($(this).data('theme') || '');\n        var safeTheme = encodeURIComponent(theme);\n\n        $.ajax({\n            type: 'POST',\n            url: 'https://localhost/user_settings/setTheme/' + safeTheme,\n            success: function(data) {\n                location.reload();\n            },\n            error: function(xhr, status, error) {\n                alert('Failed to toggle Beta UI. Please try again.');\n            }\n        });\n    });\n});\n</script>\n\n    </div>\n    <div id=\"flashContainer\" style=\"padding-top:50px; !important;\">\n        <div id=\"main-view-container\" class=\"container-fluid\">\n                    </div>\n    </div>\n    <div>\n        <div style=\"width:100%;\">\n    <table style=\"margin-left:auto;margin-right:auto;\">\n    <tr>\n    <td style=\"text-align:right;width:250px;padding-right:50px\">\n            </td>\n    <td style=\"width:460px\">\n        <span style=\"font-size:18px;\">\n                    </span><br /><br />\n        <div>\n                    <img src=\"https://localhost/img/misp-logo-s-u.png\" style=\"display:block; margin-left: auto; margin-right: auto;\">\n                </div>\n        <form action=\"/users/login\" id=\"UserLoginForm\" method=\"post\" accept-charset=\"utf-8\"><div style=\"display:none;\"><input type=\"hidden\" name=\"_method\" value=\"POST\"/><input type=\"hidden\" name=\"data[_Token][key]\" value=\"8bb7601675a125a4502994c699260380\" id=\"Token783550665\" autocomplete=\"off\"/></div>        <legend>Login</legend>\n        <div class=\"input email required\"><label for=\"UserEmail\">Email</label><input name=\"data[User][email]\" autocomplete=\"off\" autofocus=\"autofocus\" maxlength=\"255\" type=\"email\" id=\"UserEmail\" required=\"required\"/></div><div class=\"input password required\"><label for=\"UserPassword\">Password</label><input name=\"data[User][password]\" autocomplete=\"off\" type=\"password\" id=\"UserPassword\" required=\"required\"/></div>            <div class=\"clear\">\n                        <div class=\"clear\">\n                        </div>\n            <button class=\"btn btn-..."
           },
           {
-            "Start": "2026-05-29T02:14:36.567826793+02:00",
-            "End": "2026-05-29T02:14:36.615315649+02:00",
+            "Start": "2026-06-12T10:33:23.914232438+02:00",
+            "End": "2026-06-12T10:33:23.979786206+02:00",
             "ExitCode": 0,
-            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta name=\"viewport\" content=\"width=device-width\">\n    <link rel=\"shortcut icon\" href=\"https://localhost/img/favicon.png\">\n    <title>Users - MISP</title>\n    <link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-datepicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-colorpicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/font-awesome.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/chosen.min.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/main.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/print.css\" media=\"print\">\n<script src=\"https://localhost/js/jquery.js\"></script>\n<script src=\"https://localhost/js/chosen.jquery.min.js\"></script>\n</head>\n<body data-controller=\"users\" data-action=\"login\">\n    <div id=\"popover_form\" class=\"ajax_popover_form\"></div>\n    <div id=\"popover_form_large\" class=\"ajax_popover_form ajax_popover_form_large\"></div>\n    <div id=\"popover_form_x_large\" class=\"ajax_popover_form ajax_popover_form_x_large\"></div>\n    <div id=\"popover_matrix\" class=\"ajax_popover_form ajax_popover_matrix\"></div>\n    <div id=\"popover_box\" class=\"popover_box\"></div>\n    <div id=\"confirmation_box\"></div>\n    <div id=\"gray_out\"></div>\n    <div id=\"container\">\n        <div id=\"topBar\" class=\"navbar navbar-inverse debugOff\" style=\"z-index:100;\">\n  <div class=\"navbar-inner\">\n    <ul class=\"nav\">\n            </ul>\n    <ul class=\"nav pull-right\">\n            </ul>\n</div>\n  </div>\n<style>\n    ul.nav li.dropdown:hover > ul.dropdown-menu {\n        display: block;\n    }\n    .dropdown-submenu > .dropdown-menu {\n        display: none !important;\n    }\n    .dropdown-submenu:hover > .dropdown-menu {\n        display: block !important;\n    }\n</style>\n<script>\n$(document).ready(function() {\n    $('.setTheme').on('click', function(e) {\n        e.preventDefault();\n        e.stopPropagation();\n\n        var theme = String($(this).data('theme') || '');\n        var safeTheme = encodeURIComponent(theme);\n\n        $.ajax({\n            type: 'POST',\n            url: 'https://localhost/user_settings/setTheme/' + safeTheme,\n            success: function(data) {\n                location.reload();\n            },\n            error: function(xhr, status, error) {\n                alert('Failed to toggle Beta UI. Please try again.');\n            }\n        });\n    });\n});\n</script>\n\n    </div>\n    <div id=\"flashContainer\" style=\"padding-top:50px; !important;\">\n        <div id=\"main-view-container\" class=\"container-fluid\">\n                    </div>\n    </div>\n    <div>\n        <div style=\"width:100%;\">\n    <table style=\"margin-left:auto;margin-right:auto;\">\n    <tr>\n    <td style=\"text-align:right;width:250px;padding-right:50px\">\n            </td>\n    <td style=\"width:460px\">\n        <span style=\"font-size:18px;\">\n                    </span><br /><br />\n        <div>\n                    <img src=\"https://localhost/img/misp-logo-s-u.png\" style=\"display:block; margin-left: auto; margin-right: auto;\">\n                </div>\n        <form action=\"/users/login\" id=\"UserLoginForm\" method=\"post\" accept-charset=\"utf-8\"><div style=\"display:none;\"><input type=\"hidden\" name=\"_method\" value=\"POST\"/><input type=\"hidden\" name=\"data[_Token][key]\" value=\"8c3a206d1d8a096a463fcf34f98ea095\" id=\"Token1793618277\" autocomplete=\"off\"/></div>        <legend>Login</legend>\n        <div class=\"input email required\"><label for=\"UserEmail\">Email</label><input name=\"data[User][email]\" autocomplete=\"off\" autofocus=\"autofocus\" maxlength=\"255\" type=\"email\" id=\"UserEmail\" required=\"required\"/></div><div class=\"input password required\"><label for=\"UserPassword\">Password</label><input name=\"data[User][password]\" autocomplete=\"off\" type=\"password\" id=\"UserPassword\" required=\"required\"/></div>            <div class=\"clear\">\n                        <div class=\"clear\">\n                        </div>\n            <button class=\"btn btn..."
           },
           {
-            "Start": "2026-05-29T02:15:06.616211634+02:00",
-            "End": "2026-05-29T02:15:06.681614262+02:00",
+            "Start": "2026-06-12T10:33:53.980805842+02:00",
+            "End": "2026-06-12T10:33:54.044542238+02:00",
             "ExitCode": 0,
-            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta name=\"viewport\" content=\"width=device-width\">\n    <link rel=\"shortcut icon\" href=\"https://localhost/img/favicon.png\">\n    <title>Users - MISP</title>\n    <link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-datepicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-colorpicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/font-awesome.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/chosen.min.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/main.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/print.css\" media=\"print\">\n<script src=\"https://localhost/js/jquery.js\"></script>\n<script src=\"https://localhost/js/chosen.jquery.min.js\"></script>\n</head>\n<body data-controller=\"users\" data-action=\"login\">\n    <div id=\"popover_form\" class=\"ajax_popover_form\"></div>\n    <div id=\"popover_form_large\" class=\"ajax_popover_form ajax_popover_form_large\"></div>\n    <div id=\"popover_form_x_large\" class=\"ajax_popover_form ajax_popover_form_x_large\"></div>\n    <div id=\"popover_matrix\" class=\"ajax_popover_form ajax_popover_matrix\"></div>\n    <div id=\"popover_box\" class=\"popover_box\"></div>\n    <div id=\"confirmation_box\"></div>\n    <div id=\"gray_out\"></div>\n    <div id=\"container\">\n        <div id=\"topBar\" class=\"navbar navbar-inverse debugOff\" style=\"z-index:100;\">\n  <div class=\"navbar-inner\">\n    <ul class=\"nav\">\n            </ul>\n    <ul class=\"nav pull-right\">\n            </ul>\n</div>\n  </div>\n<style>\n    ul.nav li.dropdown:hover > ul.dropdown-menu {\n        display: block;\n    }\n    .dropdown-submenu > .dropdown-menu {\n        display: none !important;\n    }\n    .dropdown-submenu:hover > .dropdown-menu {\n        display: block !important;\n    }\n</style>\n<script>\n$(document).ready(function() {\n    $('.setTheme').on('click', function(e) {\n        e.preventDefault();\n        e.stopPropagation();\n\n        var theme = String($(this).data('theme') || '');\n        var safeTheme = encodeURIComponent(theme);\n\n        $.ajax({\n            type: 'POST',\n            url: 'https://localhost/user_settings/setTheme/' + safeTheme,\n            success: function(data) {\n                location.reload();\n            },\n            error: function(xhr, status, error) {\n                alert('Failed to toggle Beta UI. Please try again.');\n            }\n        });\n    });\n});\n</script>\n\n    </div>\n    <div id=\"flashContainer\" style=\"padding-top:50px; !important;\">\n        <div id=\"main-view-container\" class=\"container-fluid\">\n                    </div>\n    </div>\n    <div>\n        <div style=\"width:100%;\">\n    <table style=\"margin-left:auto;margin-right:auto;\">\n    <tr>\n    <td style=\"text-align:right;width:250px;padding-right:50px\">\n            </td>\n    <td style=\"width:460px\">\n        <span style=\"font-size:18px;\">\n                    </span><br /><br />\n        <div>\n                    <img src=\"https://localhost/img/misp-logo-s-u.png\" style=\"display:block; margin-left: auto; margin-right: auto;\">\n                </div>\n        <form action=\"/users/login\" id=\"UserLoginForm\" method=\"post\" accept-charset=\"utf-8\"><div style=\"display:none;\"><input type=\"hidden\" name=\"_method\" value=\"POST\"/><input type=\"hidden\" name=\"data[_Token][key]\" value=\"72f7081bbd011e5c05cd44f9923b6037\" id=\"Token324762537\" autocomplete=\"off\"/></div>        <legend>Login</legend>\n        <div class=\"input email required\"><label for=\"UserEmail\">Email</label><input name=\"data[User][email]\" autocomplete=\"off\" autofocus=\"autofocus\" maxlength=\"255\" type=\"email\" id=\"UserEmail\" required=\"required\"/></div><div class=\"input password required\"><label for=\"UserPassword\">Password</label><input name=\"data[User][password]\" autocomplete=\"off\" type=\"password\" id=\"UserPassword\" required=\"required\"/></div>            <div class=\"clear\">\n                        <div class=\"clear\">\n                        </div>\n            <button class=\"btn btn-..."
           },
           {
-            "Start": "2026-05-29T02:15:36.683199142+02:00",
-            "End": "2026-05-29T02:15:36.744719354+02:00",
+            "Start": "2026-06-12T10:34:24.045829492+02:00",
+            "End": "2026-06-12T10:34:24.112808385+02:00",
             "ExitCode": 0,
-            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta name=\"viewport\" content=\"width=device-width\">\n    <link rel=\"shortcut icon\" href=\"https://localhost/img/favicon.png\">\n    <title>Users - MISP</title>\n    <link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-datepicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-colorpicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/font-awesome.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/chosen.min.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/main.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/print.css\" media=\"print\">\n<script src=\"https://localhost/js/jquery.js\"></script>\n<script src=\"https://localhost/js/chosen.jquery.min.js\"></script>\n</head>\n<body data-controller=\"users\" data-action=\"login\">\n    <div id=\"popover_form\" class=\"ajax_popover_form\"></div>\n    <div id=\"popover_form_large\" class=\"ajax_popover_form ajax_popover_form_large\"></div>\n    <div id=\"popover_form_x_large\" class=\"ajax_popover_form ajax_popover_form_x_large\"></div>\n    <div id=\"popover_matrix\" class=\"ajax_popover_form ajax_popover_matrix\"></div>\n    <div id=\"popover_box\" class=\"popover_box\"></div>\n    <div id=\"confirmation_box\"></div>\n    <div id=\"gray_out\"></div>\n    <div id=\"container\">\n        <div id=\"topBar\" class=\"navbar navbar-inverse debugOff\" style=\"z-index:100;\">\n  <div class=\"navbar-inner\">\n    <ul class=\"nav\">\n            </ul>\n    <ul class=\"nav pull-right\">\n            </ul>\n</div>\n  </div>\n<style>\n    ul.nav li.dropdown:hover > ul.dropdown-menu {\n        display: block;\n    }\n    .dropdown-submenu > .dropdown-menu {\n        display: none !important;\n    }\n    .dropdown-submenu:hover > .dropdown-menu {\n        display: block !important;\n    }\n</style>\n<script>\n$(document).ready(function() {\n    $('.setTheme').on('click', function(e) {\n        e.preventDefault();\n        e.stopPropagation();\n\n        var theme = String($(this).data('theme') || '');\n        var safeTheme = encodeURIComponent(theme);\n\n        $.ajax({\n            type: 'POST',\n            url: 'https://localhost/user_settings/setTheme/' + safeTheme,\n            success: function(data) {\n                location.reload();\n            },\n            error: function(xhr, status, error) {\n                alert('Failed to toggle Beta UI. Please try again.');\n            }\n        });\n    });\n});\n</script>\n\n    </div>\n    <div id=\"flashContainer\" style=\"padding-top:50px; !important;\">\n        <div id=\"main-view-container\" class=\"container-fluid\">\n                    </div>\n    </div>\n    <div>\n        <div style=\"width:100%;\">\n    <table style=\"margin-left:auto;margin-right:auto;\">\n    <tr>\n    <td style=\"text-align:right;width:250px;padding-right:50px\">\n            </td>\n    <td style=\"width:460px\">\n        <span style=\"font-size:18px;\">\n                    </span><br /><br />\n        <div>\n                    <img src=\"https://localhost/img/misp-logo-s-u.png\" style=\"display:block; margin-left: auto; margin-right: auto;\">\n                </div>\n        <form action=\"/users/login\" id=\"UserLoginForm\" method=\"post\" accept-charset=\"utf-8\"><div style=\"display:none;\"><input type=\"hidden\" name=\"_method\" value=\"POST\"/><input type=\"hidden\" name=\"data[_Token][key]\" value=\"1bdb1f5d3956317c191b091cefd9dd98\" id=\"Token1073151136\" autocomplete=\"off\"/></div>        <legend>Login</legend>\n        <div class=\"input email required\"><label for=\"UserEmail\">Email</label><input name=\"data[User][email]\" autocomplete=\"off\" autofocus=\"autofocus\" maxlength=\"255\" type=\"email\" id=\"UserEmail\" required=\"required\"/></div><div class=\"input password required\"><label for=\"UserPassword\">Password</label><input name=\"data[User][password]\" autocomplete=\"off\" type=\"password\" id=\"UserPassword\" required=\"required\"/></div>            <div class=\"clear\">\n                        <div class=\"clear\">\n                        </div>\n            <button class=\"btn btn..."
           },
           {
-            "Start": "2026-05-29T02:16:06.745477268+02:00",
-            "End": "2026-05-29T02:16:06.811078889+02:00",
+            "Start": "2026-06-12T10:34:54.114479334+02:00",
+            "End": "2026-06-12T10:34:54.18120709+02:00",
             "ExitCode": 0,
-            "Output": "<REDACTED-HTML-HEALTHCHECK-OUTPUT>"
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\">\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n    <meta name=\"viewport\" content=\"width=device-width\">\n    <link rel=\"shortcut icon\" href=\"https://localhost/img/favicon.png\">\n    <title>Users - MISP</title>\n    <link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-datepicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/bootstrap-colorpicker.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/font-awesome.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/chosen.min.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/main.css\">\n<link rel=\"stylesheet\" href=\"https://localhost/css/print.css\" media=\"print\">\n<script src=\"https://localhost/js/jquery.js\"></script>\n<script src=\"https://localhost/js/chosen.jquery.min.js\"></script>\n</head>\n<body data-controller=\"users\" data-action=\"login\">\n    <div id=\"popover_form\" class=\"ajax_popover_form\"></div>\n    <div id=\"popover_form_large\" class=\"ajax_popover_form ajax_popover_form_large\"></div>\n    <div id=\"popover_form_x_large\" class=\"ajax_popover_form ajax_popover_form_x_large\"></div>\n    <div id=\"popover_matrix\" class=\"ajax_popover_form ajax_popover_matrix\"></div>\n    <div id=\"popover_box\" class=\"popover_box\"></div>\n    <div id=\"confirmation_box\"></div>\n    <div id=\"gray_out\"></div>\n    <div id=\"container\">\n        <div id=\"topBar\" class=\"navbar navbar-inverse debugOff\" style=\"z-index:100;\">\n  <div class=\"navbar-inner\">\n    <ul class=\"nav\">\n            </ul>\n    <ul class=\"nav pull-right\">\n            </ul>\n</div>\n  </div>\n<style>\n    ul.nav li.dropdown:hover > ul.dropdown-menu {\n        display: block;\n    }\n    .dropdown-submenu > .dropdown-menu {\n        display: none !important;\n    }\n    .dropdown-submenu:hover > .dropdown-menu {\n        display: block !important;\n    }\n</style>\n<script>\n$(document).ready(function() {\n    $('.setTheme').on('click', function(e) {\n        e.preventDefault();\n        e.stopPropagation();\n\n        var theme = String($(this).data('theme') || '');\n        var safeTheme = encodeURIComponent(theme);\n\n        $.ajax({\n            type: 'POST',\n            url: 'https://localhost/user_settings/setTheme/' + safeTheme,\n            success: function(data) {\n                location.reload();\n            },\n            error: function(xhr, status, error) {\n                alert('Failed to toggle Beta UI. Please try again.');\n            }\n        });\n    });\n});\n</script>\n\n    </div>\n    <div id=\"flashContainer\" style=\"padding-top:50px; !important;\">\n        <div id=\"main-view-container\" class=\"container-fluid\">\n                    </div>\n    </div>\n    <div>\n        <div style=\"width:100%;\">\n    <table style=\"margin-left:auto;margin-right:auto;\">\n    <tr>\n    <td style=\"text-align:right;width:250px;padding-right:50px\">\n            </td>\n    <td style=\"width:460px\">\n        <span style=\"font-size:18px;\">\n                    </span><br /><br />\n        <div>\n                    <img src=\"https://localhost/img/misp-logo-s-u.png\" style=\"display:block; margin-left: auto; margin-right: auto;\">\n                </div>\n        <form action=\"/users/login\" id=\"UserLoginForm\" method=\"post\" accept-charset=\"utf-8\"><div style=\"display:none;\"><input type=\"hidden\" name=\"_method\" value=\"POST\"/><input type=\"hidden\" name=\"data[_Token][key]\" value=\"559e60c659c07171df2f81b6d36c9035\" id=\"Token1398200882\" autocomplete=\"off\"/></div>        <legend>Login</legend>\n        <div class=\"input email required\"><label for=\"UserEmail\">Email</label><input name=\"data[User][email]\" autocomplete=\"off\" autofocus=\"autofocus\" maxlength=\"255\" type=\"email\" id=\"UserEmail\" required=\"required\"/></div><div class=\"input password required\"><label for=\"UserPassword\">Password</label><input name=\"data[User][password]\" autocomplete=\"off\" type=\"password\" id=\"UserPassword\" required=\"required\"/></div>            <div class=\"clear\">\n                        <div class=\"clear\">\n                        </div>\n            <button class=\"btn btn..."
           }
         ]
       }
     },
     "Image": "sha256:992fd95b8d9698a18e1acdd7dbf5e8d03b32a03fd80e4bcbcff77bc7f17768cd",
-    "ResolvConfPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/hostname",
-    "HostsPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/hosts",
-    "LogPath": "/var/lib/docker/containers/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe/6397f21096e0228ce79916da87d14fc8527ee0174e27b8ac9a16936b31ffa2fe-json.log",
+    "ResolvConfPath": "/var/lib/docker/containers/7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2/hostname",
+    "HostsPath": "/var/lib/docker/containers/7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2/hosts",
+    "LogPath": "/var/lib/docker/containers/7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2/7f16fd7f180b401274599f2f5bb2150d547a621555d71625e8dad7ec39f199d2-json.log",
     "Name": "/aptl-misp",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -68,10 +68,10 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
+        "aptl_misp_data:/var/www/MISP/app/files:rw",
         "aptl_misp_config:/var/www/MISP/app/Config:rw",
         "/home/atomik/src/aptl/config/soc_certs/misp/server.pem:/etc/nginx/certs/cert.pem:ro",
-        "/home/atomik/src/aptl/config/soc_certs/misp/server.key:/etc/nginx/certs/key.pem:ro",
-        "aptl_misp_data:/var/www/MISP/app/files:rw"
+        "/home/atomik/src/aptl/config/soc_certs/misp/server.key:/etc/nginx/certs/key.pem:ro"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -180,6 +180,22 @@
     },
     "Mounts": [
       {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.pem",
+        "Destination": "/etc/nginx/certs/cert.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.key",
+        "Destination": "/etc/nginx/certs/key.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
         "Type": "volume",
         "Name": "aptl_misp_data",
         "Source": "/var/lib/docker/volumes/aptl_misp_data/_data",
@@ -198,22 +214,6 @@
         "Mode": "rw",
         "RW": true,
         "Propagation": ""
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.pem",
-        "Destination": "/etc/nginx/certs/cert.pem",
-        "Mode": "ro",
-        "RW": false,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/soc_certs/misp/server.key",
-        "Destination": "/etc/nginx/certs/key.pem",
-        "Mode": "ro",
-        "RW": false,
-        "Propagation": "rprivate"
       }
     ],
     "Config": {
@@ -230,18 +230,18 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "REDIS_HOST=misp-redis",
         "BASE_URL=https://localhost",
-        "MYSQL_DATABASE=misp",
-        "MYSQL_USER=misp",
-        "ADMIN_PASSWORD=<REDACTED-ADMIN-PASSWORD>",
-        "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
-        "ADMIN_EMAIL=admin@admin.test",
-        "ADMIN_KEY=<REDACTED-ADMIN-KEY>",
+        "ADMIN_KEY=JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
         "MYSQL_HOST=misp-db",
+        "ADMIN_PASSWORD=admin",
+        "MYSQL_USER=misp",
+        "ADMIN_EMAIL=admin@admin.test",
+        "REDIS_HOST=misp-redis",
+        "MYSQL_DATABASE=misp",
+        "MYSQL_PASSWORD=misp_db_password",
         "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG=C.UTF-8",
-        "GPG_KEY=<REDACTED-GPG-KEY>",
+        "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
         "PYTHON_VERSION=3.12.13",
         "PYTHON_SHA256=c08bc65a81971c1dd5783182826503369466c7e67374d1646519adf05207b684",
         "DEBIAN_FRONTEND=noninteractive"
@@ -277,16 +277,12 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "3ca186663c42938a17fd006e289e66991b76a2564b62aaf6280a973e268c7500",
-      "SandboxKey": "<REDACTED>",
+      "SandboxID": "d5f81cdc8155d35de73510b25a01df7c9b76be6e9327725adeba0236f03ce48f",
+      "SandboxKey": "/var/run/docker/netns/d5f81cdc8155",
       "Ports": {
         "443/tcp": [
           {
-            "HostIp": "0.0.0.0",
-            "HostPort": "8443"
-          },
-          {
-            "HostIp": "::",
+            "HostIp": "127.0.0.1",
             "HostPort": "8443"
           }
         ]
@@ -304,10 +300,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
-          "EndpointID": "f409670052bafc8156295ba9726eece73f5c59596fcc9c3bfbbccbc469ed1e6a",
+          "EndpointID": "dc1db5b964b4421cd783fb11ffb3f5cca1dd7ff1332618e1acaedc26d6382774",
           "Gateway": "172.20.0.1",
           "IPAddress": "172.20.0.16",
-          "MacAddress": "86:fa:65:cd:e7:af",
+          "MacAddress": "6a:cd:2c:fb:d8:da",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -315,7 +311,7 @@
           "DNSNames": [
             "aptl-misp",
             "misp",
-            "6397f21096e0"
+            "7f16fd7f180b"
           ]
         }
       }

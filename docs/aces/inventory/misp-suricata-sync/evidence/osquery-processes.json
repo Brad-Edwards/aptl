@@ -1,0 +1,18 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-misp-suricata-sync PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "/usr/local/bin/python3.11 /usr/local/bin/aptl-misp-suricata-sync",
+      "gid": "0",
+      "name": "aptl-misp-suric",
+      "path": "/usr/local/bin/python3.11",
+      "pid": "1",
+      "start_time": "1779517157",
+      "uid": "0"
+    }
+  ]
+}

@@ -6,34 +6,22 @@
   "status": "captured",
   "rows": [
     {
-      "created": "1779517064",
-      "id": "f2e12bfa2a1fb8771c01a54880154e4f0d90360f98bba592accf23bdda8c276e",
-      "size_bytes": "484091976",
-      "tags": "aptl-misp-suricata-sync:latest"
-    },
-    {
-      "created": "1779354104",
-      "id": "67b33459a28a2f0a508f7ba0885fea4bb1fdae683149c42c1bdae565c0188cd0",
-      "size_bytes": "307650280",
-      "tags": "aptl2-misp-suricata-sync:latest"
-    },
-    {
       "created": "1779350510",
       "id": "7df823d4a2873c06d0d3e648ba46459313657610b7d0ab9aa0fcf57113b04ca2",
       "size_bytes": "483262816",
       "tags": "aptl-local/misp-suricata-sync:330"
     },
     {
+      "created": "1781190958",
+      "id": "71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
+      "size_bytes": "487113149",
+      "tags": "aptl-misp-suricata-sync:latest"
+    },
+    {
       "created": "1777767254",
       "id": "87bf33cd61beb1c7df48e7b8f9c0ddd83f23dac43785b10efe1b87d02952d8db",
       "size_bytes": "281768267",
       "tags": "aptl-misp-suricata-sync:test"
-    },
-    {
-      "created": "1777705620",
-      "id": "c0e8db34aa3a5e497ccc7ddc1e5a8e89a2c0b537328d46d5bd70f094d48d7bdc",
-      "size_bytes": "618427135",
-      "tags": "poc-suricata-iptables:local"
     },
     {
       "created": "1777687888",
@@ -48,10 +36,22 @@
       "tags": "aptl-suricata:test"
     },
     {
+      "created": "1779354104",
+      "id": "67b33459a28a2f0a508f7ba0885fea4bb1fdae683149c42c1bdae565c0188cd0",
+      "size_bytes": "307650280",
+      "tags": "aptl2-misp-suricata-sync:latest"
+    },
+    {
       "created": "1777412185",
       "id": "66cbeff9c0dbf4b42d4344374c9df1fc0c254023c8ec53ed3feb7ffe815f2d1d",
       "size_bytes": "594422200",
       "tags": "jasonish/suricata:7.0"
+    },
+    {
+      "created": "1777705620",
+      "id": "c0e8db34aa3a5e497ccc7ddc1e5a8e89a2c0b537328d46d5bd70f094d48d7bdc",
+      "size_bytes": "618427135",
+      "tags": "poc-suricata-iptables:local"
     }
   ]
 }

@@ -23,28 +23,28 @@ The SDL is a **specification language**, not a deployment tool. It describes *wh
 ### Sections (21 total)
 
 14 OCR-derived base sections + 7 new:
-- `content` (from CyRIS) — data placed into systems
-- `accounts` (from CyRIS) — user accounts within nodes
-- `relationships` (from STIX SRO) — typed edges between elements
-- `agents` (from CybORG) — autonomous participants
-- `objectives` (from OCR scoring + CACAO workflow context) — declarative experiment semantics
-- `workflows` (from CACAO workflow patterns) — branching and parallel objective composition
-- `variables` (from CACAO) — parameterization
+- `content` (from CyRIS)—data placed into systems
+- `accounts` (from CyRIS)—user accounts within nodes
+- `relationships` (from STIX SRO)—typed edges between elements
+- `agents` (from CybORG)—autonomous participants
+- `objectives` (from OCR scoring + CACAO workflow context)—declarative experiment semantics
+- `workflows` (from CACAO workflow patterns)—branching and parallel objective composition
+- `variables` (from CACAO)—parameterization
 
 ### Identity Model
 
 Identity is not a separate section. It emerges from the combination of:
-- **Accounts** — who exists where (username, groups, SPN, password strength)
-- **Features** — what provides authentication (AD, LDAP, RADIUS services)
-- **Relationships** — how services connect (`authenticates_with`, `trusts`, `federates_with`)
+- **Accounts**: who exists where (username, groups, SPN, password strength)
+- **Features**: what provides authentication (AD, LDAP, RADIUS services)
+- **Relationships**: how services connect (`authenticates_with`, `trusts`, `federates_with`)
 
 This is simpler and more composable than a dedicated identity layer.
 
 ### Validation
 
 Two-phase validation:
-1. **Structural** (Pydantic) — types, ranges, required fields, intra-model constraints
-2. **Semantic** (SemanticValidator) — 22 named passes checking cross-references, dependency cycles, IP/CIDR consistency, typed VM/network references, OCR count constraints, workflow graph integrity, and SDL domain rules
+1. **Structural** (Pydantic)—types, ranges, required fields, intra-model constraints
+2. **Semantic** (SemanticValidator)—22 named passes checking cross-references, dependency cycles, IP/CIDR consistency, typed VM/network references, OCR count constraints, workflow graph integrity, and SDL domain rules
 
 The validator collects all errors rather than failing on the first.
 
@@ -119,7 +119,7 @@ None by design. This branch establishes an SDL-only boundary:
 
 ### Negative
 
-- 21 source files in `aptl.core.sdl/` — significant surface area
+- 21 source files in `aptl.core.sdl/`—significant surface area
 - Variables (`${var}`) are still unresolved at parse time; existence is checked, but backend substitution semantics remain future work
 - Existing APTL scenario YAMLs require migration to SDL format
 - No module composition system yet (Terraform-style imports)
@@ -130,4 +130,4 @@ None by design. This branch establishes an SDL-only boundary:
 
 - The SDL was designed and tested by one system (this project). Practitioner feedback may reveal ergonomic issues or missing concepts
 - The relationship model uses a flat `properties` dict which could become a maintenance burden as relationship types proliferate
-- Variable resolution semantics are undefined — instantiation backends will need to agree on substitution rules
+- Variable resolution semantics are undefined—instantiation backends will need to agree on substitution rules

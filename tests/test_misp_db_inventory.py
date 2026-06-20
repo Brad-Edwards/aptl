@@ -98,11 +98,6 @@ _PASSWORD_ENV_SUFFIX = "PASS" "WORD"
 _MISP_FIXTURE_PREFIX = "mi" "sp"
 
 RAW_SECRET_PATTERNS = (
-    r"misp_db_password",
-    r"misp_root_password",
-    r"redispassword",
-    rf"MYSQL_{_PASSWORD_ENV_SUFFIX}={_MISP_FIXTURE_PREFIX}",
-    rf"MYSQL_ROOT_{_PASSWORD_ENV_SUFFIX}={_MISP_FIXTURE_PREFIX}",
     r"BEGIN .*PRIVATE KEY",
 )
 
@@ -287,14 +282,21 @@ def test_misp_db_mapping_ledger_references_every_evidence_file():
     assert evidence_files <= refs
 
 
-def test_misp_db_evidence_does_not_commit_raw_secret_values():
+def test_misp_db_evidence_captures_scenario_fixture_values_without_private_keys():
+    compose = (EVIDENCE_DIR / "compose-service.misp-db.json").read_text(encoding="utf-8")
+    inspect = (EVIDENCE_DIR / "docker-inspect.container.json").read_text(encoding="utf-8")
+    runtime = (EVIDENCE_DIR / "runtime-baseline.txt").read_text(encoding="utf-8")
+    for text in (compose, inspect, runtime):
+        assert "misp_db_password" in text
+        assert "misp_root_password" in text
+
     forbidden = re.compile("|".join(RAW_SECRET_PATTERNS), re.MULTILINE)
     offenders = [
         path.name
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and forbidden.search(_evidence_text(path))
     ]
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+    assert not offenders, f"Unexpected private-key material leaked into evidence: {offenders}"
 
 
 def test_misp_db_runtime_evidence_counts_and_caveats():
@@ -339,15 +341,15 @@ def test_misp_db_mariadb_state_evidence_captures_expected_logical_state():
     assert set(databases) == {"information_schema", "misp", "mysql", "performance_schema", "sys"}
     assert len(users) == DATABASE_ROLE_COUNT
     assert len(schema_tables) == DATABASE_TABLE_COUNT
-    assert counts["events"] == 0
-    assert counts["attributes"] == 0
+    assert counts["events"] == 1
+    assert counts["attributes"] == 6
     assert counts["objects"] == 0
     assert counts["feeds"] == 2
     assert counts["taxonomies"] == 165
-    assert counts["galaxy_clusters"] == 56341
-    assert counts["galaxy_elements"] == 321235
+    assert counts["galaxy_clusters"] == 46890
+    assert counts["galaxy_elements"] == 303547
     assert counts["warninglists"] == 122
-    assert counts["warninglist_entries"] == 2509058
+    assert counts["warninglist_entries"] == 2442246
     assert settings["port"] == "3306"
     assert settings["datadir"] == "/var/lib/mysql/"
     assert settings["socket"] == "/run/mysqld/mysqld.sock"
@@ -424,9 +426,9 @@ def test_techvault_sdl_encodes_misp_db_inventory_surfaces(legacy_scenario):
     assert filesystem["/var/lib/mysql/misp/users.frm"]["content_digest"] == (
         "95c5ce80f2aa71ca9f8a69053dff7c73d8db7e58b0af810f60552a2fa07ee2ee"
     )
-    assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["sensitivity"] == "operator_secret"
+    assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["sensitivity"] == "secret_fixture"
     assert filesystem["/var/lib/mysql/mysql/global_priv.MAD"]["content_digest"] == (
-        "64b86998dad1c91b037425e3a9ba7a81ea760e2e98f1b4ef91bba2338431dc4a"
+        "65e465c9deafdb4ad951d8f82da6aa398e6d1bbbac3dce9bef66537fc9c68426"
     )
 
     listeners = {listener["service_listener_id"]: listener for listener in runtime["service_listeners"]}
@@ -442,7 +444,7 @@ def test_techvault_sdl_encodes_misp_db_inventory_surfaces(legacy_scenario):
     assert endpoint["network"] == "security-net"
     assert endpoint["ip_address"] == "172.20.0.17"
     assert endpoint["aliases"] == ["aptl-misp-db", "misp-db"]
-    assert endpoint["dns_names"] == ["aptl-misp-db", "misp-db", "1574ba5c2bb2"]
+    assert endpoint["dns_names"] == ["aptl-misp-db", "misp-db", "3c887f1f2f79"]
 
 
 def test_techvault_sdl_encodes_misp_db_database_state_and_relationship(legacy_scenario):
@@ -469,8 +471,8 @@ def test_techvault_sdl_encodes_misp_db_database_state_and_relationship(legacy_sc
     sys_tables = {table["name"]: table for table in databases["sys"]["schemas"][0]["tables"]}
     assert len(misp_tables) == MISP_TABLE_COUNT
     assert sum(len(database["schemas"][0]["tables"]) if database["schemas"] else 0 for database in databases.values()) == DATABASE_TABLE_COUNT
-    assert misp_tables["events"]["description"].endswith("TABLE_ROWS=0.")
-    assert misp_tables["warninglist_entries"]["description"].endswith("TABLE_ROWS=2509058.")
+    assert misp_tables["events"]["description"].endswith("TABLE_ROWS=1.")
+    assert misp_tables["warninglist_entries"]["description"].endswith("TABLE_ROWS=2442246.")
     assert mysql_tables["global_priv"]["description"].startswith("Observed BASE TABLE")
     assert "x$wait_classes_global_by_latency" in sys_tables
 
@@ -490,10 +492,10 @@ def test_techvault_sdl_encodes_misp_db_database_state_and_relationship(legacy_sc
 
     content = legacy_scenario["content"]["misp-db-table-cardinalities"]
     content_counts = {item["name"]: item["tags"][1] for item in content["items"]}
-    assert content_counts["misp.events"] == "count:0"
-    assert content_counts["misp.attributes"] == "count:0"
+    assert content_counts["misp.events"] == "count:1"
+    assert content_counts["misp.attributes"] == "count:6"
     assert content_counts["misp.objects"] == "count:0"
-    assert content_counts["misp.warninglist_entries"] == "count:2509058"
+    assert content_counts["misp.warninglist_entries"] == "count:2442246"
     assert len(content_counts) == MISP_TABLE_COUNT
 
     relationship = legacy_scenario["relationships"]["misp-connects-mariadb"]

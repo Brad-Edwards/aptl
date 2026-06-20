@@ -6,7 +6,6 @@ import gzip
 import hashlib
 import json
 import re
-import subprocess
 
 import pytest
 import yaml
@@ -76,14 +75,18 @@ REQUIRED_EVIDENCE_FILES = {
     "wazuh-indexer-index-mappings-census.json",
 }
 
-# These literal strings must NEVER appear in committed evidence; the redaction
-# stream and out-of-band omission are the only acceptable ways for committed
-# evidence to record their existence.
-RAW_SECRET_PATTERNS = (
-    r"BEGIN .*PRIVATE KEY",
-    r"^admin:\s*$",
-    r"\$2[ay]\$\d{2}\$[./A-Za-z0-9]{53}",
-    r"authorization:\s*Bearer\s+[A-Za-z0-9._-]+",
+FORBIDDEN_CAPTURE_PLACEHOLDERS = (
+    r"<REDACTED",
+    r"<OMITTED",
+    r"HTTP-[A-Z-]+-OMITTED",
+    r"value withheld",
+    r"absent from committed evidence",
+)
+FORBIDDEN_CAPTURE_HELPERS = (
+    "redact_stream",
+    "redact_env_jq",
+    "redact_sensitive_keys",
+    "sanitize_http_stream",
 )
 
 
@@ -125,20 +128,6 @@ def _indexer_state_section(name: str) -> str:
     return rest[: next_match.start()].strip()
 
 
-def _redact_with_capture_script(text: str) -> str:
-    script = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
-    match = re.search(r"redact_stream\(\) \{\n.*?\n\}", script, re.DOTALL)
-    assert match, "capture script must define redact_stream"
-    result = subprocess.run(
-        ["bash", "-c", f"{match.group(0)}\nredact_stream"],
-        input=text,
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    return result.stdout
-
-
 def test_wazuh_indexer_inventory_note_declares_scope_and_evidence():
     text = INDEXER_DOC_PATH.read_text(encoding="utf-8")
     required = (
@@ -155,21 +144,19 @@ def test_wazuh_indexer_inventory_note_declares_scope_and_evidence():
         "runtime.identity_authorities",
         "mapping-ledger.yaml",
         "aptl aces-inventory validate",
-        # The note must honestly disclose the blocked surfaces + their ACES
-        # issues, and that the inventory issue stays open until ACES lands them.
-        "Blocked surfaces (open ACES expressivity gaps)",
+        # ACES #468/#469/#470 shipped; the note records that every surface is
+        # now encoded with no remaining expressivity gap, still crediting the
+        # ACES issues that unblocked them.
+        "No known ACES expressivity gap remains",
         "Brad-Edwards/aces#468",
         "Brad-Edwards/aces#469",
         "Brad-Edwards/aces#470",
-        "stays open until these ACES surfaces land",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Wazuh indexer inventory note missing scope markers: {missing}"
-    # The over-claim the original pass shipped must never come back.
-    assert "No known ACES expressivity gap remains" not in text
 
 
-def test_wazuh_indexer_capture_script_pins_toolchain_and_redaction():
+def test_wazuh_indexer_capture_script_pins_toolchain_and_preserves_raw_capture():
     text = CAPTURE_SCRIPT_PATH.read_text(encoding="utf-8")
     required = (
         "aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e",
@@ -180,97 +167,62 @@ def test_wazuh_indexer_capture_script_pins_toolchain_and_redaction():
         "evidence-sha256sums.txt",
         "INDEXER_USERNAME",
         "INDEXER_PASSWORD",
-        "REDACTED-INDEXER-INTERNAL-USER-HASH",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
+    assert "redact_stream" not in text
+    assert "<REDACTED" not in text
     assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
 
 
-def test_wazuh_indexer_capture_stream_redaction_is_key_aware():
-    secret_value = "zulu-4279-mica-1836"
-    public_value = "public-observation-2026"
-    bcrypt_hash = "$2y$12$" + "a" * 53
-    redacted = _redact_with_capture_script(
-        "\n".join(
-            [
-                f"PASSWORD={secret_value}",
-                f"password: {secret_value}",
-                f"api_key = {secret_value}",
-                f"indexer_password: {secret_value}",
-                f"x-api-key: {secret_value}",
-                f"ssl.key = {secret_value}",
-                f"<password>{secret_value}</password>",
-                f"<api_key>{secret_value}</api_key>",
-                f'hash: "{bcrypt_hash}"',
-                f"Authorization: Bearer {secret_value}",
-                f"regular_field: {public_value}",
-            ]
-        )
-    )
+def test_wazuh_indexer_evidence_preserves_secret_shaped_scenario_state():
+    container = json.dumps(_json_file("docker-inspect.container.json"))
+    state = (EVIDENCE_DIR / "wazuh-indexer-state.txt").read_text(encoding="utf-8")
 
-    assert secret_value not in redacted
-    assert bcrypt_hash not in redacted
-    assert public_value in redacted
-    assert "<REDACTED" in redacted
-    assert "<REDACTED-INDEXER-INTERNAL-USER-HASH>" in redacted
+    assert "NAME=wazuh-indexer" in container
+    assert "$2y$12$K/SpwjtB.wOHJ/Nc6GVRDuc1h0rM1DfvziFRNPtk27P.c4yDr9njO" in state
+    assert "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H." in state
+    assert "<REDACTED" not in container
+    assert "<REDACTED" not in state
 
 
-def test_wazuh_indexer_mapping_ledger_validates_with_recorded_aces_gaps():
+def test_wazuh_indexer_mapping_ledger_validates_without_gaps():
     result = validate_mapping_ledger(INDEXER_DIR)
     assert result.ok, result.errors
-    # No untriaged rows, but the OpenSearch cardinality/size, structured
-    # mapping, and node-provenance surfaces are honestly recorded as blocked
-    # on filed ACES expressivity issues rather than forced into SDL prose.
+    # ACES #468/#469/#470 shipped, so the OpenSearch cardinality/size, structured
+    # mapping, and node-provenance surfaces are now encoded from the captured
+    # evidence; no surface remains blocked on an ACES expressivity gap.
     assert result.triage_count == 0
-    assert result.blocked_count == 4
-    assert set(result.gap_issues) == {
-        "Brad-Edwards/aces #468",
-        "Brad-Edwards/aces #469",
-        "Brad-Edwards/aces #470",
-    }
+    assert result.blocked_count == 0
+    assert set(result.gap_issues) == set()
 
     ledger = load_mapping_ledger(LEDGER_PATH)
     assert ledger["asset"]["aptl_issue"] == 341
     assert IMAGE_DIGEST_RE.match(ledger["provenance"]["image_digest"])
     dispositions = {fact["id"]: fact["aces"]["disposition"] for fact in ledger["facts"]}
-    # Encoded surfaces: cluster identity, partition geometry, internal users.
-    assert dispositions["wazuh-indexer.datastore.cluster-identity"] == "encoded_with_caveat"
-    assert dispositions["wazuh-indexer.datastore.partition-geometry"] == "encoded_with_caveat"
-    assert dispositions["wazuh-indexer.identity.internal-users"] == "encoded"
-    # Plugin names encoded, per-plugin version blocked → caveat.
-    assert dispositions["wazuh-indexer.datastore.plugins"] == "encoded_with_caveat"
-    # Blocked surfaces: cardinality/size/identity, structured mappings, node provenance.
-    assert dispositions["wazuh-indexer.datastore.cluster-cardinality"] == "blocked_by_aces_gap"
-    assert dispositions["wazuh-indexer.datastore.partition-cardinality"] == "blocked_by_aces_gap"
-    assert dispositions["wazuh-indexer.datastore.index-mappings"] == "blocked_by_aces_gap"
-    assert dispositions["wazuh-indexer.datastore.node-provenance"] == "blocked_by_aces_gap"
+    # Every datastore surface formerly blocked or caveated on #468/#469/#470 is
+    # now fully encoded from typed fields.
+    for fact_id in (
+        "wazuh-indexer.datastore.cluster-identity",
+        "wazuh-indexer.datastore.cluster-cardinality",
+        "wazuh-indexer.datastore.node-membership",
+        "wazuh-indexer.datastore.node-provenance",
+        "wazuh-indexer.datastore.partition-geometry",
+        "wazuh-indexer.datastore.partition-cardinality",
+        "wazuh-indexer.datastore.index-mappings",
+        "wazuh-indexer.datastore.plugins",
+        "wazuh-indexer.identity.internal-users",
+    ):
+        assert dispositions[fact_id] == "encoded", fact_id
     assert len(ledger["facts"]) >= 30
 
 
-def test_wazuh_indexer_gap_report_records_blocked_surfaces_with_linked_issues():
+def test_wazuh_indexer_gap_report_records_no_blocked_surfaces():
     report = gap_report(INDEXER_DIR)
     assert report["triage_needed"] == []
-    gaps = report["gaps"]
-    by_fact = {g["fact_id"]: g for g in gaps}
-    expected = {
-        "wazuh-indexer.datastore.cluster-cardinality": 468,
-        "wazuh-indexer.datastore.partition-cardinality": 468,
-        "wazuh-indexer.datastore.index-mappings": 469,
-        "wazuh-indexer.datastore.node-provenance": 470,
-    }
-    assert set(by_fact) == set(expected), f"unexpected blocked-fact set: {sorted(by_fact)}"
-    for fact_id, issue_number in expected.items():
-        gap = by_fact[fact_id]
-        assert gap["gap_issue"]["tracker"] == "Brad-Edwards/aces"
-        assert gap["gap_issue"]["number"] == issue_number
-        assert gap["gap_issue"]["url"].endswith(f"/issues/{issue_number}")
-        assert gap["why_not_current_surfaces"]
-    # The structured-mapping gap must point at the real captured evidence,
-    # not at SDL prose.
-    mapping_evidence = {e["path"] for e in by_fact["wazuh-indexer.datastore.index-mappings"]["evidence"]}
-    assert "evidence/wazuh-indexer-index-mappings-census.json" in mapping_evidence
-    assert "evidence/wazuh-indexer-templates.json.gz" in mapping_evidence
+    # ACES #468/#469/#470 shipped and every formerly-blocked surface is encoded;
+    # the gap report is now empty.
+    assert report["gaps"] == []
 
 
 def test_wazuh_indexer_evidence_bundle_files_are_present_and_non_empty():
@@ -308,8 +260,7 @@ def test_wazuh_indexer_mapping_ledger_references_every_evidence_file():
     ledger = load_mapping_ledger(LEDGER_PATH)
     refs = set()
     refs.update(
-        ref["path"]
-        for ref in ledger["provenance"]["attestation"].get("evidence", [])
+        ref["path"] for ref in ledger["provenance"]["attestation"].get("evidence", [])
     )
     for check in ledger["correspondence_checks"]:
         refs.update(ref["path"] for ref in check.get("realized_evidence", []))
@@ -317,24 +268,25 @@ def test_wazuh_indexer_mapping_ledger_references_every_evidence_file():
         refs.update(ref["path"] for ref in fact["evidence"])
 
     evidence_files = {
-        f"evidence/{path.name}"
-        for path in EVIDENCE_DIR.iterdir()
-        if path.is_file()
+        f"evidence/{path.name}" for path in EVIDENCE_DIR.iterdir() if path.is_file()
     }
     assert evidence_files <= refs
 
 
-def test_wazuh_indexer_evidence_does_not_contain_raw_secret_material():
-    patterns = [re.compile(pattern, re.IGNORECASE) for pattern in RAW_SECRET_PATTERNS]
+def test_wazuh_indexer_evidence_has_no_capture_placeholders_or_helpers():
+    patterns = [
+        re.compile(pattern, re.IGNORECASE) for pattern in FORBIDDEN_CAPTURE_PLACEHOLDERS
+    ]
     offenders = {}
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
         text = _evidence_text(path)
-        leaked = [pattern.pattern for pattern in patterns if pattern.search(text)]
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret material leaked into evidence: {offenders}"
+        matches = [pattern.pattern for pattern in patterns if pattern.search(text)]
+        matches.extend(helper for helper in FORBIDDEN_CAPTURE_HELPERS if helper in text)
+        if matches:
+            offenders[path.name] = matches
+    assert not offenders, f"Evidence contains capture placeholders/helpers: {offenders}"
 
 
 def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
@@ -350,11 +302,13 @@ def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
     assert container["Config"]["Hostname"] == "wazuh.indexer"
     assert container["HostConfig"]["Memory"] == 2 * 1024**3
 
-    os_packages = (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    os_packages = (
+        (EVIDENCE_DIR / "os-packages.txt").read_text(encoding="utf-8").splitlines()
+    )
     sbom = _json_file("syft-sbom.cyclonedx.json.gz")
-    filesystem_entries = (EVIDENCE_DIR / "filesystem-tree.txt").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    filesystem_entries = (
+        (EVIDENCE_DIR / "filesystem-tree.txt").read_text(encoding="utf-8").splitlines()
+    )
     # Floor checks - exact counts drift with each scanner DB / image rev but
     # the bundle must never silently shrink.
     assert len(os_packages) >= 100
@@ -392,12 +346,20 @@ def test_wazuh_indexer_runtime_evidence_and_opensearch_counts():
     assert expected_plugins <= plugin_components
     assert len(plugin_components) >= 18
 
-    # Internal users YAML carries the six built-in users with redacted hashes.
+    # Internal users YAML carries the six built-in users with raw bcrypt hashes.
     internal_users_yml = _indexer_state_section("internal-users-yml")
-    assert "<REDACTED-INDEXER-INTERNAL-USER-HASH>" in internal_users_yml
+    assert "<REDACTED" not in internal_users_yml
     parsed_users = yaml.safe_load(internal_users_yml) or {}
     user_names = {k for k in parsed_users.keys() if k != "_meta"}
-    assert user_names == {"admin", "kibanaserver", "kibanaro", "logstash", "readall", "snapshotrestore"}
+    assert user_names == {
+        "admin",
+        "kibanaserver",
+        "kibanaro",
+        "logstash",
+        "readall",
+        "snapshotrestore",
+    }
+    assert parsed_users["admin"]["hash"].startswith("$2y$12$")
 
     # opensearch.yml carries the discovery / port / TLS posture.
     opensearch_yml = _indexer_state_section("opensearch-yml")
@@ -447,43 +409,62 @@ def test_techvault_sdl_encodes_wazuh_indexer_datastore_surface():
     assert any(name.startswith("wazuh-archives-4.x-") for name in partition_names)
     assert ".opendistro_security" in partition_names
     setting_names = {s["name"] for s in ds["settings"]}
-    assert {"discovery.type", "network.host", "http.port", "transport.tcp.port"} <= setting_names
+    assert {
+        "discovery.type",
+        "network.host",
+        "http.port",
+        "transport.tcp.port",
+    } <= setting_names
     assert ds["transport_security"]["mode"] == "mutual_tls"
     assert ds["transport_security"]["client_verification"] is True
-    # Plugin + template NAMES have a typed home and are encoded.
-    assert len(ds["engine_plugins"]) >= 18
-    template_names = set(ds.get("templates", []))
+    # Plugins (with per-plugin versions) and structured templates are encoded.
+    plugins = {p["plugin_id"]: p for p in node_member["plugins"]}
+    assert len(plugins) >= 18
+    assert plugins["opensearch-security"]["version"] == "2.19.1.0"
+    template_names = {t["name"] for t in ds["templates"]}
     assert {"wazuh", "wazuh-agent", "wazuh-statistics"} <= template_names
 
-    # Honesty guard (the bug this re-encode fixes): blocked structured
-    # observables must NOT be forced back into SDL prose. The datastore
-    # service must carry zero per-index/cluster cardinality-size values and
-    # zero engine build provenance in any description string; those live in
-    # evidence + the blocked_by_aces_gap ledger facts.
-    ds_blob = json.dumps(ds)
-    forbidden_prose = [
-        "u-vGl1n0Q7e",            # cluster uuid
-        "docs.count",             # per-index doc count label
-        "store.size",             # per-index store size label
-        "store bytes",
-        "dae2bfc93896",           # node build hash
-        "1053842",                # aggregate doc count
-        "1391460626",             # aggregate store bytes
-    ]
-    leaked = [needle for needle in forbidden_prose if needle in ds_blob]
-    assert not leaked, f"blocked structured values leaked back into SDL prose: {leaked}"
-    # The descriptions must instead reference the ACES blocker issues.
-    assert "Brad-Edwards/aces#468" in ds_blob
-    assert "Brad-Edwards/aces#469" in ds_blob
-    assert "Brad-Edwards/aces#470" in ds_blob
+    # ACES #468/#469/#470 shipped: cluster cardinality, node engine provenance,
+    # per-index cardinality, and structured mappings now have typed homes and are
+    # encoded as field values (no longer blocked from typed SDL representation).
+    assert ds["cluster"]["uuid"] == "u-vGl1n0Q7e-SKz1tWvb-w"
+    assert ds["cluster"]["doc_count"] == 1053842
+    assert ds["cluster"]["store_size_bytes"] == 1391460626
+    assert ds["cluster"]["shard_total"] == 102
+    assert node_member["engine_version"] == "2.19.1"
+    assert node_member["build_hash"] == "dae2bfc93896178873b43cdf4781f183c72b238f"
+    assert node_member["heap_max_bytes"] == 1073741824
+    assert {"client", "peer"} <= {e["role"] for e in node_member["endpoints"]}
+    by_name = {p["name"]: p for p in ds["partitions"]}
+    archive = by_name["wazuh-archives-4.x-2026.05.28"]
+    assert archive["uuid"] == "s0fv6XlzTEuJNcP4RikTQg"
+    assert archive["doc_count"] == 68993
+    assert archive["open_closed_status"] == "open"
+    mapping_names = {m["name"] for m in ds["mappings"]}
+    assert "wazuh-archives-4.x-*" in mapping_names
+    archives_mapping = next(
+        m for m in ds["mappings"] if m["name"] == "wazuh-archives-4.x-*"
+    )
+    assert archives_mapping["leaf_field_count"] == 947
+    assert archives_mapping["schema_digest"].startswith("sha256:")
 
     authorities = runtime["identity_authorities"]
     assert len(authorities) == 1
     authority = authorities[0]
-    assert authority["identity_authority_id"] == "techvault-wazuh-indexer-opensearch-security"
+    assert (
+        authority["identity_authority_id"]
+        == "techvault-wazuh-indexer-opensearch-security"
+    )
     subject_names = {s["name"] for s in authority["subjects"]}
-    assert {"admin", "kibanaserver", "kibanaro", "logstash", "readall", "snapshotrestore"} <= subject_names
-    # Bcrypt hashes are redacted at capture; SDL never carries the raw hash.
+    assert {
+        "admin",
+        "kibanaserver",
+        "kibanaro",
+        "logstash",
+        "readall",
+        "snapshotrestore",
+    } <= subject_names
+    # Raw bcrypt hashes remain in evidence; the SDL authority models subjects and roles.
     flattened = json.dumps(authority)
     assert "$2y$" not in flattened and "$2a$" not in flattened
     # The basic_internal_auth_domain authc service must be present.

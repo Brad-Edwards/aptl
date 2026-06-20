@@ -16,7 +16,7 @@ uid=0(root) gid=0(root) groups=0(root)
 --pwd--
 /
 --uname--
-Linux 1574ba5c2bb2 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Linux 3c887f1f2f79 6.8.0-117-generic #117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 --capabilities-pid1--
 CapInh:	0000000000000000
 CapPrm:	0000000000000000
@@ -26,23 +26,23 @@ CapAmb:	0000000000000000
 --environment--
 GOSU_VERSION=1.19
 HOME=/root
-HOSTNAME=1574ba5c2bb2
+HOSTNAME=3c887f1f2f79
 LANG=C.UTF-8
 MARIADB_VERSION=1:10.11.16+maria~ubu2204
 MYSQL_DATABASE=misp
-MYSQL_PASSWORD=<REDACTED>
-MYSQL_ROOT_PASSWORD=<REDACTED>
+MYSQL_PASSWORD=misp_db_password
+MYSQL_ROOT_PASSWORD=misp_root_password
 MYSQL_USER=misp
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 PWD=/
 --listeners--
 Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
-udp   UNCONN 0      0         127.0.0.11:51888      0.0.0.0:*
-tcp   LISTEN 0      4096      127.0.0.11:42583      0.0.0.0:*
+udp   UNCONN 0      0         127.0.0.11:48043      0.0.0.0:*
+tcp   LISTEN 0      4096      127.0.0.11:37453      0.0.0.0:*
 tcp   LISTEN 0      80           0.0.0.0:3306       0.0.0.0:*
 tcp   LISTEN 0      80              [::]:3306          [::]:*
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51143/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/185/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/180/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/151/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/137/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/123/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/118/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/65/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51150/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51150/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107880/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/185/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/180/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/151/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/145/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/137/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/123/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/118/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/65/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107885/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107885/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -133,8 +133,8 @@ mysql:x:999:
 --process-tree--
     PID    PPID USER     COMMAND
       1       0 mysql    mariadbd
- 604078       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --service-versions--   mariadb --version 2>&1 || mysql --version 2>&1 || true   mariadbd --version 2>&1 || true   healthcheck.sh --help 2>&1 | sed -n "1,20p" || true
- 604101  604078 root     ps -eo pid,ppid,user,args
+  47267       0 root     sh -lc    set -eu   printf "%s\n" --os-release--   cat /etc/os-release 2>/dev/null || true   printf "%s\n" --id--   id   printf "%s\n" --pwd--   pwd   printf "%s\n" --uname--   uname -a   printf "%s\n" --capabilities-pid1--   grep "^Cap" /proc/1/status || true   printf "%s\n" --environment--   env | sort   printf "%s\n" --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   printf "%s\n" --mounts--   mount | sed -n "1,220p"   printf "%s\n" --users--   getent passwd | sed -n "1,260p" || true   printf "%s\n" --groups--   getent group | sed -n "1,260p" || true   printf "%s\n" --process-tree--   ps -eo pid,ppid,user,args || true   printf "%s\n" --service-versions--   mariadb --version 2>&1 || mysql --version 2>&1 || true   mariadbd --version 2>&1 || true   healthcheck.sh --help 2>&1 | sed -n "1,20p" || true
+  47290   47267 root     ps -eo pid,ppid,user,args
 --service-versions--
 mariadb  Ver 15.1 Distrib 10.11.16-MariaDB, for debian-linux-gnu (x86_64) using  EditLine wrapper
 mariadbd  Ver 10.11.16-MariaDB-ubu2204 for debian-linux-gnu on x86_64 (mariadb.org binary distribution)

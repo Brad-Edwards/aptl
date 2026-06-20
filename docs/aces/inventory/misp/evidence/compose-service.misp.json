@@ -13,10 +13,10 @@
     "MYSQL_HOST=misp-db",
     "MYSQL_DATABASE=misp",
     "MYSQL_USER=misp",
-    "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
+    "MYSQL_PASSWORD=misp_db_password",
     "ADMIN_EMAIL=admin@admin.test",
-    "ADMIN_PASSWORD=<REDACTED-ADMIN-PASSWORD>",
-    "ADMIN_KEY=<REDACTED-ADMIN-KEY>",
+    "ADMIN_PASSWORD=admin",
+    "ADMIN_KEY=${MISP_API_KEY:?MISP_API_KEY must be set in .env (copy .env.example to .env)}",
     "BASE_URL=https://localhost",
     "REDIS_HOST=misp-redis"
   ],

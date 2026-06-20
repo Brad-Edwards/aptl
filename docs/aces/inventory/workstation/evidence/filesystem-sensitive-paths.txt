@@ -1,19 +1,255 @@
-/home/dev-user/.bash_history	secret_fixture	checksum-only
-/home/dev-user/.pgpass	secret_fixture	checksum-only
-/home/dev-user/.config/credentials.json	secret_fixture	checksum-only
-/home/dev-user/projects/techvault-portal/.env	secret_fixture	checksum-only
-/home/dev-user/projects/techvault-portal/deploy.sh	secret_fixture	checksum-only
-/home/dev-user/Documents/onboarding-notes.txt	secret_fixture	checksum-only
-/home/dev-user/user.txt	generated_flag	checksum-only
-/home/dev-user/.ssh/id_rsa	secret_fixture_private_key	checksum-only
-/home/dev-user/.ssh/id_rsa.pub	public_fixture	checksum-only
-/home/dev-user/.ssh/known_hosts	public_fixture	checksum-only
-/keys/aptl_lab_key	operator_private_key	metadata-only
-/keys/aptl_lab_key.pub	public_lab_key	checksum-only
-/keys/authorized_keys	public_lab_key	checksum-only
-/root/root.txt	generated_flag	metadata-only
-/etc/ssh/ssh_host_dsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ecdsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ed25519_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_rsa_key	host_private_key	metadata-only
-/var/ossec/etc/client.keys	wazuh_agent_secret	metadata-only
+--path:/home/dev-user/.bash_history--
+ls -la
+cd projects/techvault-portal
+git pull origin main
+cat .env
+ssh labadmin@172.20.2.20
+sshpass -p 'LabAdmin2024!' ssh labadmin@172.20.2.20
+psql -h 172.20.2.11 -U techvault -d techvault -W
+psql -h db.techvault.local -U techvault -d techvault -c "SELECT * FROM customers LIMIT 5"
+curl -X POST http://172.20.2.25:8080/login -d "username=admin&password=admin123"
+scp labadmin@172.20.2.20:/etc/passwd ./audit/
+ssh contractor.temp@172.20.2.10 -p Welcome1!
+cat ~/.pgpass
+git push origin feature/customer-export
+sudo systemctl restart techvault-portal
+docker logs aptl-webapp --tail 50
+
+--path:/home/dev-user/.pgpass--
+172.20.2.11:5432:techvault:techvault:techvault_db_pass
+db.techvault.local:5432:techvault:techvault:techvault_db_pass
+
+--path:/home/dev-user/.config/credentials.json--
+{
+  "webapp": {
+    "url": "http://172.20.2.25:8080",
+    "username": "admin",
+    "password": "admin123",
+    "api_key": "tvault-api-key-2024-admin"
+  },
+  "database": {
+    "host": "172.20.2.11",
+    "port": 5432,
+    "name": "techvault",
+    "username": "techvault",
+    "password": "techvault_db_pass"
+  },
+  "ad": {
+    "domain": "TECHVAULT.LOCAL",
+    "dc": "172.20.2.10",
+    "admin_user": "Administrator",
+    "admin_password": "Admin123!"
+  }
+}
+
+--path:/home/dev-user/projects/techvault-portal/.env--
+# TechVault Portal Configuration
+FLASK_ENV=production
+DB_HOST=172.20.2.11
+DB_PORT=5432
+DB_NAME=techvault
+DB_USER=techvault
+DB_PASSWORD=techvault_db_pass
+JWT_SECRET=techvault-jwt-weak
+API_KEY=tvault-api-key-2024-admin
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+BACKUP_BUCKET=techvault-backups-prod
+SECRET_KEY=techvault-secret-key-2024
+
+--path:/home/dev-user/projects/techvault-portal/deploy.sh--
+#!/bin/bash
+# TechVault Portal Deployment Script
+# Last updated: 2024-01-10 by michael.thompson
+
+set -e
+
+DB_HOST="172.20.2.11"
+DB_USER="techvault"
+DB_PASS="techvault_db_pass"
+DB_NAME="techvault"
+
+AWS_KEY="AKIAIOSFODNN7EXAMPLE"
+AWS_SECRET="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+S3_BUCKET="techvault-backups-prod"
+
+echo "Deploying TechVault Portal..."
+
+# Backup database before deploy
+PGPASSWORD=$DB_PASS pg_dump -h $DB_HOST -U $DB_USER $DB_NAME > /tmp/pre-deploy-backup.sql
+
+# Upload backup to S3
+AWS_ACCESS_KEY_ID=$AWS_KEY AWS_SECRET_ACCESS_KEY=$AWS_SECRET \
+  aws s3 cp /tmp/pre-deploy-backup.sql s3://$S3_BUCKET/backups/
+
+# Deploy application
+cd /opt/techvault-portal
+git pull origin main
+pip install -r requirements.txt
+sudo systemctl restart techvault-portal
+
+echo "Deploy complete!"
+
+--path:/home/dev-user/Documents/onboarding-notes.txt--
+TechVault Engineering Onboarding Notes
+=======================================
+Author: Michael Thompson
+Date: 2024-01-15
+
+Welcome to the team! Here's what you need to get started:
+
+1. AD Account Setup
+   - Domain: TECHVAULT.LOCAL
+   - Your account should already be provisioned by IT
+   - Default password for new accounts: Welcome1!
+   - Please change on first login (but honestly most people don't)
+
+2. VPN Access
+   - Use your AD credentials
+   - Contractor accounts (like contractor.temp) have VPN + RDP access
+   - Ask IT if you need additional access groups
+
+3. Development Environment
+   - Clone the portal repo: git clone git@github.com:techvault/portal.git
+   - Copy .env.example to .env and fill in DB credentials
+   - DB host: 172.20.2.11, user: techvault, ask me for password if needed
+   - JWT secret for local dev: techvault-jwt-weak
+
+4. SSH Access to Servers
+   - app server (victim): 172.20.2.20, use labadmin account
+   - Keep your SSH key in ~/.ssh/id_rsa (no passphrase for convenience)
+   - The deploy key on the fileshare (/IT-Backups/keys/) also works
+
+5. Important
+   - DO NOT commit credentials to git (I know the .env has some... working on it)
+   - The deploy.sh script has hardcoded creds -- legacy issue, will fix "soon"
+   - Password rotation is overdue -- Jessica mentioned it in the last meeting
+
+--path:/home/dev-user/user.txt--
+===== APTL CTF Flag =====
+Flag:  APTL{user_workstation_74302d317e2e0dab73dda9d8bab947fe}
+Token: aptl:v1:workstation:user:74302d317e2e0dab73dda9d8bab947fe:f3548db99bf58385a27474d5716d2972
+==========================
+
+--path:/home/dev-user/.ssh/id_rsa--
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAQEAukpktwCes1KJ0OrR6SKYrXlWLZB4MGrRntNt98wf6t1knQXfFk+5
+UV6HdBEdojouHOmq+rSuFD0B72rIK6k6yftpnWDUNNMs5Ae3YUrm8F+0HyL3VvnE0iPKHN
+02MB/vhc4AleDI8WL+Reb05GqxNDKz0f/kJ1NfxrUb/9YUMC1bo6l4DmX2X1ihVN/wLvnU
+xB3a7xh2adv27xstlPJ6rQ2WOuARzdN2dwUbj9RiRuAAPeMkGNin6uLnDx6u9oy9niZSCv
+2q6Xd8gEU5H3G5tkvNouNvBWkI+vI+ZXFDSt0okgT/Zn6FJi787YDlhesYAzZ6yyF9HvmR
+H45G41L5GQAAA9DPJce6zyXHugAAAAdzc2gtcnNhAAABAQC6SmS3AJ6zUonQ6tHpIpiteV
+YtkHgwatGe0233zB/q3WSdBd8WT7lRXod0ER2iOi4c6ar6tK4UPQHvasgrqTrJ+2mdYNQ0
+0yzkB7dhSubwX7QfIvdW+cTSI8oc3TYwH++FzgCV4MjxYv5F5vTkarE0MrPR/+QnU1/GtR
+v/1hQwLVujqXgOZfZfWKFU3/Au+dTEHdrvGHZp2/bvGy2U8nqtDZY64BHN03Z3BRuP1GJG
+4AA94yQY2Kfq4ucPHq72jL2eJlIK/arpd3yARTkfcbm2S82i428FaQj68j5lcUNK3SiSBP
+9mfoUmLvztgOWF6xgDNnrLIX0e+ZEfjkbjUvkZAAAAAwEAAQAAAQBM9tdNVBA8/ei6S4mV
+zBlP8kVMZdeCCV+5Qpi4O7kkC3u58+cLDLz/hRJpPXkEwQy0HUXqdiNFcT8PbwpsH2qOcD
+ReNNb3TBfLzfRRWeS3gpKkGoodgOtz9h1Wd34fu9H1cfqD8W6Ta9apgpXCmOHFMv1f0Vyt
+cqCrM7/xnryQeje9aPFp5OYR17MLm0N3C8piQk6MHb3FjJcPaPZODylgYNji1ScuW1zM+t
+pZQCbKKn/71otABxfgCZbE5a+XdSVPXwgKbjbsbllTnQ7XCqBfPQf6Hfzgk9NEqMhtgbTB
+bB5MHqT6cshfcNO9fekE09iXhkkhdJ7gtj9fmJhmMQyRAAAAgHA05/DOD0L/vu0AY5Z9lz
+5OhgyLEV2SQr3CulGZqNfPIT3glDfQYY5uMkxlrhcq9f6XOtkVQnL4X9RKntKotAjQ/pLh
+4WS55GTp59c5GZ5sqImpHKzbHuRbBDMXO7xoDbw+A2Ytg4WZ44bfIRznaSSzYIqerpUEIn
+KFt3YkWP1fAAAAgQDttTFYowYa9I0xMKu2Pq1O8ImELwD8ShNjQa/4TpZsKkr7m8fnSVfC
+iWxQfiQrJnTQwvI0pvHkW14iXpmCJENOhwEMiktTYrI8WC2O/VgRSm7Z4gM9c4e8/wu0nm
+8jf5TYR0mnEjYpqMid/fyZwUQwF3gKLawxhluwzpesEmmmcwAAAIEAyKBKOJSTZ8bxqkbJ
+eIIP7CWHGCyOIv6rTIBMyPgY5Qb0vZuFJIvyiiJlZyYpsOvWYiLfn2UFSP71cZ1NuiRZHy
+xIkAf0oGrZA3nCjC3i00DPr1iWwfpoDI5f91tHPJ7pdw38HpGNbUgjg4XfE6fwVoLONFVR
+5KOS3rXdrogOs0MAAAAUcm9vdEBidWlsZGtpdHNhbmRib3gBAgMEBQYH
+-----END OPENSSH PRIVATE KEY-----
+
+--path:/home/dev-user/.ssh/id_rsa.pub--
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC6SmS3AJ6zUonQ6tHpIpiteVYtkHgwatGe0233zB/q3WSdBd8WT7lRXod0ER2iOi4c6ar6tK4UPQHvasgrqTrJ+2mdYNQ00yzkB7dhSubwX7QfIvdW+cTSI8oc3TYwH++FzgCV4MjxYv5F5vTkarE0MrPR/+QnU1/GtRv/1hQwLVujqXgOZfZfWKFU3/Au+dTEHdrvGHZp2/bvGy2U8nqtDZY64BHN03Z3BRuP1GJG4AA94yQY2Kfq4ucPHq72jL2eJlIK/arpd3yARTkfcbm2S82i428FaQj68j5lcUNK3SiSBP9mfoUmLvztgOWF6xgDNnrLIX0e+ZEfjkbjUvkZ root@buildkitsandbox
+
+--path:/home/dev-user/.ssh/known_hosts--
+172.20.2.20 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7fake...
+172.20.2.11 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC8fake...
+172.20.2.10 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC9fake...
+app.techvault.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7fake...
+db.techvault.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC8fake...
+dc.techvault.local ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC9fake...
+
+--path:/root/root.txt--
+===== APTL CTF Flag =====
+Flag:  APTL{root_workstation_174ecd1d2573db726e3897e9dfc65029}
+Token: aptl:v1:workstation:root:174ecd1d2573db726e3897e9dfc65029:792f85ec4f1939a4ff5358fb749d80c9
+==========================
+
+--path:/keys/aptl_lab_key.pub--
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINSYlXWLjM1suxPi3rS+dc8R4PtvtvLKAtNIO/wnjmTl aptl-local-lab
+
+--path:/keys/kali_pivot_key.pub--
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG+/iU2VyAth4Xhh1xZVgnb5434rR4HJNeLiOnxioAY5 aptl-kali-pivot
+
+--path:/etc/ssh/ssh_host_ecdsa_key--
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAaAAAABNlY2RzYS
+1zaGEyLW5pc3RwMjU2AAAACG5pc3RwMjU2AAAAQQS2Fiw66CxEK5mR45aUxYmVsrL4QDuV
+BowuzPk3eBVsoHC1hkHhpq6xtjNogQvWaV+E+yDtkoVyvydn9q6fw8N1AAAAsOc+iAPnPo
+gDAAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLYWLDroLEQrmZHj
+lpTFiZWysvhAO5UGjC7M+Td4FWygcLWGQeGmrrG2M2iBC9ZpX4T7IO2ShXK/J2f2rp/Dw3
+UAAAAhAIKoIHRS0KbJtUI67KCEV2o2ytwHY9wXCyCP6ZfOmG6WAAAAFHJvb3RAYnVpbGRr
+aXRzYW5kYm94AQID
+-----END OPENSSH PRIVATE KEY-----
+
+--path:/etc/ssh/ssh_host_ecdsa_key.pub--
+ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBLYWLDroLEQrmZHjlpTFiZWysvhAO5UGjC7M+Td4FWygcLWGQeGmrrG2M2iBC9ZpX4T7IO2ShXK/J2f2rp/Dw3U= root@buildkitsandbox
+
+--path:/etc/ssh/ssh_host_ed25519_key--
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACB8gB5SoipEq6Nwxck399Wo2d0UEe+pF9Jbu0ruMyzthwAAAJgxV274MVdu
++AAAAAtzc2gtZWQyNTUxOQAAACB8gB5SoipEq6Nwxck399Wo2d0UEe+pF9Jbu0ruMyzthw
+AAAEC2DVSuS2gly0VVoIzDm93OzvbDSj1jPLBmxSkt4xi633yAHlKiKkSro3DFyTf31ajZ
+3RQR76kX0lu7Su4zLO2HAAAAFHJvb3RAYnVpbGRraXRzYW5kYm94AQ==
+-----END OPENSSH PRIVATE KEY-----
+
+--path:/etc/ssh/ssh_host_ed25519_key.pub--
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyAHlKiKkSro3DFyTf31ajZ3RQR76kX0lu7Su4zLO2H root@buildkitsandbox
+
+--path:/etc/ssh/ssh_host_rsa_key--
+-----BEGIN OPENSSH PRIVATE KEY-----
+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
+-----END OPENSSH PRIVATE KEY-----
+
+--path:/etc/ssh/ssh_host_rsa_key.pub--
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC5pPOz4DJFQMhKglqQUpNY9sagikzm2jonyl5VuOw0rM7DGNaB5OYPs3MkcM78/jAQuzdJqdfY+fUeOEieOICjNcR6bArdMRQe8orQGksgOpUl8bl+EL7AYp9uMuf/r+TTnRk6TDaXoBSwi1YdSiHwUddbDhE6GmHNtS0EB1fmo23fqHzC+6GLks2QX+bijXY6k26m+ToTWU5nxALW0pNZ9UqCGTrk65nIhy/BW3teJfO63z0xmCVTynKl07goFIc83rMiz/rJZcwqxlgwf036E7ovvFaN6KwUa3DjypgNF9h11T2rNWKElWQO1Q4f233kpUH1oBT/d3G7y8eBBydDVp3sv544pTuwJnRNm4Z5JleBdP16aPd8UwTjID0mR76y1tb8LUj/dADhOojKEwEg5YuRdHWJvX5Bc63qDoBT+a/eIejbS84HOOaapPjBMU8LjszuoHSr1LsAiv75haFjyWi7UMREpHH0OXy9K7hLxsXCopRDBfCNSJiJpyHnFAk= root@buildkitsandbox
+
+--path:/var/ossec/etc/client.keys--

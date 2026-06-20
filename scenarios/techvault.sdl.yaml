@@ -45,22 +45,39 @@ forwarding_agents:
   implementation: wazuh_agent
   agent_kind: log_forwarder
   name: aptl-suricata-agent
-  description: 'Off-node Wazuh agent sidecar container (compose service wazuh-sidecar-suricata, image aptl-wazuh-sidecar:local, container aptl-wazuh-sidecar-suricata). It mounts the suricata node''s suricata_logs volume read-only at /logs and forwards Suricata EVE JSON from /logs/eve.json (LOG_FORMAT=json) to the wazuh-manager. Registered as aptl-suricata-agent on nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents. Encoded at the scenario level (per Brad-Edwards/aces#460) because the sidecar is an APTL ADR-020 infrastructure carve-out: the suricata node runs upstream jasonish/suricata:7.0 with no first-party Wazuh package, and the sidecar is not itself a scenario participant. Evidenced by docker-compose.yml lines 957-975.'
+  description: 'Off-node Wazuh agent sidecar container (compose service wazuh-sidecar-suricata, image aptl-wazuh-sidecar:local,
+    container aptl-wazuh-sidecar-suricata). It mounts the suricata node''s suricata_logs volume read-only at /logs and forwards
+    Suricata EVE JSON from /logs/eve.json (LOG_FORMAT=json) to the wazuh-manager. Registered as aptl-suricata-agent on
+    nodes.wazuh-manager.runtime.security_monitoring_managers[0].agents (manager agent_control confirms agent id 006, status
+    Active). The sidecar is an APTL ADR-020 carve-out (jasonish/suricata:7.0 has no first-party Wazuh package); as of SCN-010
+    issue #344 its asset-level inventory (image, packages, CVEs, filesystem, identity, runtime) is captured under
+    docs/aces/inventory/wazuh-sidecar-suricata/ and encoded as the participant node nodes.techvault.wazuh-sidecar-suricata.
+    This scenario-level forwarding_agents entry (per Brad-Edwards/aces#460) carries the cross-node forwarding spec that the
+    relationships.suricata-logs-forwarded-wazuh and relationships.wazuh-sidecar-suricata-forwards-wazuh-manager edges resolve
+    to.'
   sources:
   - source_id: aptl-suricata-wazuh-agent-eve
     kind: tailed_path
     location: /logs/eve.json
     parse_format: eve_json
-    description: 'Tails the Suricata EVE JSON alert stream from the read-only suricata_logs mount (compose LOG_PATHS=/logs/eve.json, LOG_FORMAT=json).'
+    description: 'Tails the Suricata EVE JSON alert stream from the read-only suricata_logs mount (compose LOG_PATHS=/logs/eve.json,
+      LOG_FORMAT=json); rendered into /var/ossec/etc/ossec.conf as a localfile block with log_format json (evidenced by
+      wazuh-agent-state.txt).'
   buffer_policy:
     buffer_policy_id: aptl-suricata-wazuh-agent-buffer
-    description: 'Buffer/queue policy is configured inside the aptl-wazuh-sidecar:local image; granular fields are unset because they are not enumerated in the docker-compose.yml authored spec (no sidecar inventory bundle is in scope per APTL #388).'
+    queue_capacity: 5000
+    eps: 500
+    crypto: aes
+    reconnect_seconds: 60
+    description: 'Captured from the rendered /var/ossec/etc/ossec.conf in the wazuh-sidecar-suricata inventory bundle: client_buffer
+      queue_size 5000, events_per_second 500, crypto_method aes, time-reconnect 60s (notify_time 10s).'
   ship_targets:
   - target_id: aptl-suricata-wazuh-agent-events-1514
     target_node_ref: techvault.wazuh-manager
     ingestion_port: 1514
     protocol: tcp
-    description: 'Compose WAZUH_MANAGER=wazuh.manager resolves to the wazuh-manager node; events ship to its agent_event_ingestion listener on TCP/1514.'
+    description: 'Compose `WAZUH_MANAGER=wazuh.manager` resolves to the wazuh-manager node; events ship to its agent_event_ingestion
+      listener on TCP/1514 (already encoded as nodes.wazuh-manager.runtime.security_monitoring_managers[0].listeners agent-events-1514).'
 imports:
 - source: local:techvault/nodes/redteam-net.sdl.yaml
   namespace: techvault
@@ -76,9 +93,21 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/shuffle-opensearch.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/shuffle-frontend.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/shuffle-orborus.sdl.yaml
+  namespace: techvault
 - source: local:techvault/nodes/wazuh-manager.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/wazuh-indexer.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/thehive-es.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/thehive-cassandra.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/thehive.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/cortex.sdl.yaml
   namespace: techvault
 - source: local:techvault/nodes/wazuh-dashboard.sdl.yaml
   namespace: techvault
@@ -110,11 +139,13 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/wazuh-sidecar-db.sdl.yaml
   namespace: techvault
+- source: local:techvault/nodes/wazuh-sidecar-suricata.sdl.yaml
+  namespace: techvault
+- source: local:techvault/nodes/reverse.sdl.yaml
+  namespace: techvault
 - source: local:techvault/sections/infrastructure.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/features.sdl.yaml
-  namespace: techvault
-- source: local:techvault/sections/conditions.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/vulnerabilities.sdl.yaml
   namespace: techvault

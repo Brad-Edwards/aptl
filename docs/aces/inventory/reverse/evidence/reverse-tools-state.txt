@@ -1,0 +1,33 @@
+--analysis-tools-on-path--
+r2 -> /usr/local/bin/r2
+radare2 -> /usr/local/bin/radare2
+rabin2 -> /usr/local/bin/rabin2
+radiff2 -> /usr/local/bin/radiff2
+rafind2 -> /usr/local/bin/rafind2
+r2pm -> /usr/local/bin/r2pm
+yara -> /usr/bin/yara
+yarac -> /usr/bin/yarac
+upx -> /usr/bin/upx
+osslsigncode -> /usr/bin/osslsigncode
+objdump -> /usr/bin/objdump
+nm -> /usr/bin/nm
+readelf -> /usr/bin/readelf
+strings -> /usr/bin/strings
+llvm-objdump -> /usr/bin/llvm-objdump
+java -> /usr/bin/java
+--labadmin-local-bin--
+total 8
+drwxrwxr-x 2 labadmin labadmin 4096 Jun 15 00:52 .
+drwxrwxr-x 4 labadmin labadmin 4096 Jun 15 00:51 ..
+lrwxrwxrwx 1 labadmin labadmin   52 Jun 15 00:52 capa -> /home/labadmin/.local/pipx/venvs/flare-capa/bin/capa
+lrwxrwxrwx 1 labadmin labadmin   54 Jun 15 00:52 floss -> /home/labadmin/.local/pipx/venvs/flare-floss/bin/floss
+--pipx-venvs--
+flare-capa
+flare-floss
+--workspace--
+--analyze-helper--
+--radare2-install--
+6.1.7
+last
+--marker--
+-rw-r--r-- 1 root root 0 Jun 15 05:45 /opt/lab/.reverse_tools_installed

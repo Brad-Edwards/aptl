@@ -1,6 +1,7 @@
 site_name: APTL - Advanced Purple Team Lab
 site_description: A local Docker-based purple team lab infrastructure with Wazuh SIEM, containerized victim machines, and AI-powered red team operations
 site_author: APTL Team
+site_url: https://brad-edwards.github.io/aptl/
 repo_url: https://github.com/Brad-Edwards/aptl
 repo_name: Brad-Edwards/aptl
 
@@ -25,7 +26,6 @@ theme:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
     - navigation.path
     - navigation.top
     - search.suggest
@@ -38,6 +38,13 @@ plugins:
   - search
   - git-revision-date-localized:
       enable_creation_date: true
+      # Page dates are best-effort, not a build gate: fall back to the
+      # build date (instead of failing `mkdocs build --strict`) when git
+      # history is unavailable for a page — uncommitted files, shallow
+      # clones, and git worktrees (where plugin 1.5.x finds no logs).
+      fallback_to_build_date: true
+      enable_git_follow: false
+      strict: false
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -70,47 +77,138 @@ nav:
     - Quick Start: getting-started/quick-start.md
   - Architecture:
     - Overview: architecture/index.md
-    - Docker Compose: architecture/docker-compose.md
     - Networking: architecture/networking.md
-  - Deployment:
-    - Overview: deployment/index.md
-    - Local Setup: deployment/local-setup.md
-    - Configuration: deployment/configuration.md
+    - Enterprise Infrastructure: architecture/enterprise-infrastructure.md
+  - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
+    - Wazuh Active Response: components/wazuh-active-response.md
+    - Default Defensive Posture: components/default-defensive-posture.md
     - Victim Containers: components/victim-containers.md
+    - Victim Template Guide: containers/victim-template-guide.md
     - Kali Red Team: components/kali-redteam.md
+    - Reverse Engineering Container: components/reverse-engineering-container.md
     - MCP Integration: components/mcp-integration.md
-  - Usage:
-    - Exercises: usage/exercises.md
-    - AI Red Teaming: usage/ai-red-teaming.md
-    - Purple Team Scenarios: usage/purple-team-scenarios.md
-  - Troubleshooting:
-    - Overview: troubleshooting/index.md
-    - Common Issues: troubleshooting/common-issues.md
-    - Debugging: troubleshooting/debugging.md
+    - MCP Smoke-Test Protocol: components/mcp-smoke-test-protocol.md
+  - Scenarios (SDL):
+    - Overview: sdl/index.md
+    - Sections: sdl/sections.md
+    - Parser: sdl/parser.md
+    - Validation: sdl/validation.md
+    - Runtime Architecture: sdl/runtime-architecture.md
+    - Complex Scenarios: sdl/complex-scenarios.md
+    - Complex Scenario Authoring Notes: sdl/complex-scenario-authoring-notes.md
+    - Precedents: sdl/precedents.md
+    - Testing: sdl/testing.md
+    - Limitations: sdl/limitations.md
+  - ACES:
+    - Parity Inventory: aces/parity-inventory.md
+    - TechVault SDL Authoring Preflight: aces/techvault-sdl-authoring-preflight.md
+    - TechVault Static Validation Preflight: aces/techvault-static-validation-preflight.md
+    - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
+    - TechVault Live Validation Preflight: aces/techvault-live-validation-preflight.md
+    - TechVault Live Validation Gate: aces/techvault-live-validation-gate.md
+    - TechVault SDL Classification Audit: aces/techvault-sdl-classification-audit.md
+    - Asset Inventory:
+      - Methodology: aces/inventory/asset-inventory-methodology.md
+      - Methodology Assurance Report: aces/inventory/methodology-assurance-report.md
+      - TechVault Inventory Volatility: aces/inventory/techvault-inventory-volatility.md
+      - Preflights:
+        - AD: aces/inventory/ad-preflight.md
+        - Kali: aces/inventory/kali-preflight.md
+        - MISP Redis: aces/inventory/misp-redis-preflight.md
+        - Shuffle Backend: aces/inventory/shuffle-backend-preflight.md
+        - Wazuh Indexer: aces/inventory/wazuh.indexer-preflight.md
+        - Webapp: aces/inventory/webapp-preflight.md
+      - Evidence Bundles:
+        - AD: aces/inventory/ad/README.md
+        - DB: aces/inventory/db/README.md
+        - DNS: aces/inventory/dns/README.md
+        - Fileshare: aces/inventory/fileshare/README.md
+        - Kali: aces/inventory/kali/README.md
+        - Mailserver: aces/inventory/mailserver/README.md
+        - MISP: aces/inventory/misp/README.md
+        - MISP DB: aces/inventory/misp-db/README.md
+        - MISP Redis: aces/inventory/misp-redis/README.md
+        - MISP Suricata Sync: aces/inventory/misp-suricata-sync/README.md
+        - Reverse: aces/inventory/reverse/README.md
+        - Shuffle Backend: aces/inventory/shuffle-backend/README.md
+        - Shuffle Frontend: aces/inventory/shuffle-frontend/README.md
+        - Shuffle OpenSearch: aces/inventory/shuffle-opensearch/README.md
+        - Shuffle Orborus: aces/inventory/shuffle-orborus/README.md
+        - Suricata: aces/inventory/suricata/README.md
+        - TheHive: aces/inventory/thehive/README.md
+        - TheHive Cassandra: aces/inventory/thehive-cassandra/README.md
+        - TheHive Elasticsearch: aces/inventory/thehive-es/README.md
+        - Victim: aces/inventory/victim/README.md
+        - Wazuh Dashboard: aces/inventory/wazuh.dashboard/README.md
+        - Wazuh Indexer: aces/inventory/wazuh.indexer/README.md
+        - Wazuh Manager: aces/inventory/wazuh.manager/README.md
+        - Wazuh Sidecar DB: aces/inventory/wazuh-sidecar-db/README.md
+        - Wazuh Sidecar Suricata: aces/inventory/wazuh-sidecar-suricata/README.md
+        - Webapp: aces/inventory/webapp/README.md
+        - Workstation: aces/inventory/workstation/README.md
+  - Testing:
+    - Smoke Test Plan: testing/smoke-test-plan.md
+    - Property-Based Parser Tests: testing/property-based-parser-tests.md
+  - Reference:
+    - Red Team Taxonomy: red-team-taxonomy.md
+    - TechVault Company Profile: reference/techvault-company-profile.md
+    - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
+    - Experiment Runs: reference/experiment-runs.md
+    - SOC Feature Spec: specs/soc-feature-spec.md
+  - Troubleshooting: troubleshooting/index.md
+  - Records:
+    - CI/CD Remote Deployment (removed): deployment/ci-cd-deploy.md
+    - Smoke Test Results (2026-02-08): history/smoke-test-results-2026-02-08.md
+    - MCP Smoke Test Results (2026-02-22): components/mcp-smoke-test-results-2026-02-22.md
+    - MCP Smoke Test Results (2026-02-22, run 2): components/mcp-smoke-test-results-2026-02-22-run2.md
+    - UAT Findings (2026-02-23): known-issues/uat-findings-2026-02-23.md
   - Decisions:
     - Index: adrs/README.md
     - ADR-000 Use ADRs: adrs/adr-000-use-adrs.md
-    - ADR-001 Docker Deployment: adrs/adr-001-docker-compose-deployment.md
+    - ADR-001 Docker Compose Deployment: adrs/adr-001-docker-compose-deployment.md
     - ADR-002 Wazuh SIEM: adrs/adr-002-wazuh-siem.md
     - ADR-003 MCP Common Library: adrs/adr-003-mcp-common-library.md
-    - ADR-004 Persistent SSH: adrs/adr-004-persistent-ssh-sessions.md
-    - ADR-005 Docker Profiles: adrs/adr-005-docker-compose-profiles.md
+    - ADR-004 Persistent SSH Sessions: adrs/adr-004-persistent-ssh-sessions.md
+    - ADR-005 Docker Compose Profiles: adrs/adr-005-docker-compose-profiles.md
     - ADR-006 Network Segmentation: adrs/adr-006-four-network-segmentation.md
-    - ADR-007 Python CLI: adrs/adr-007-python-cli-control-plane.md
-    - ADR-008 SOC Stack: adrs/adr-008-soc-stack-integration.md
+    - ADR-007 Python CLI Control Plane: adrs/adr-007-python-cli-control-plane.md
+    - ADR-008 SOC Stack Integration: adrs/adr-008-soc-stack-integration.md
     - ADR-009 Scenario Engine: adrs/adr-009-scenario-engine.md
-    - ADR-010 SonarCloud: adrs/adr-010-sonarcloud-quality.md
+    - ADR-010 SonarCloud Quality: adrs/adr-010-sonarcloud-quality.md
     - ADR-011 Web UI: adrs/adr-011-web-ui.md
-  - Reference:
-    - Commands: reference/commands.md
-    - API: reference/api.md
-    - Configuration: reference/configuration.md
+    - ADR-012 OpenTelemetry Integration: adrs/adr-012-opentelemetry-integration.md
+    - ADR-013 Deployment Abstraction: adrs/adr-013-deployment-abstraction.md
+    - ADR-014 Scenario Description Language: adrs/adr-014-scenario-description-language.md
+    - ADR-015 Declarative SDL Objectives: adrs/adr-015-declarative-sdl-objectives.md
+    - ADR-016 Workflows and Enum Variables: adrs/adr-016-workflows-targetable-subobjects-and-enum-variables.md
+    - ADR-017 SDL Runtime Layer: adrs/adr-017-sdl-runtime-layer.md
+    - ADR-018 Control Flow Primitives: adrs/adr-018-control-flow-primitives.md
+    - ADR-019 Suricata IDS-Only: adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md
+    - ADR-020 Wazuh Agents In-Process: adrs/adr-020-wazuh-agents-in-process-vs-sidecar.md
+    - ADR-021 Active-Response Whitelist: adrs/adr-021-active-response-whitelist-via-wrapper.md
+    - ADR-022 MISP-Driven Suricata Rules: adrs/adr-022-misp-driven-suricata-rules.md
+    - ADR-023 Container Interaction Backend: adrs/adr-023-container-interaction-in-deployment-backend.md
+    - ADR-024 Purple Continuity Carve-Out: adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md
+    - ADR-025 Strict First-Party Config Schema: adrs/adr-025-strict-first-party-config-schema.md
+    - ADR-026 Advisory CI Vulnerability Scanning: adrs/adr-026-advisory-ci-vulnerability-scanning.md
+    - ADR-027 Red Team Structured Logging: adrs/adr-027-red-team-structured-logging.md
+    - ADR-028 Runtime-Rendered Service Config: adrs/adr-028-runtime-rendered-service-config.md
+    - ADR-029 Control-Plane Secret Handling: adrs/adr-029-control-plane-secret-handling.md
+    - ADR-030 Startup Partial-Readiness: adrs/adr-030-startup-partial-readiness-classification.md
+    - ADR-031 Lab Orchestration Contract Guards: adrs/adr-031-lab-orchestration-contract-guards.md
+    - ADR-032 Conversation Surface Hardening: adrs/adr-032-conversation-surface-hardening.md
+    - ADR-033 Agent Reasoning Trace Boundary: adrs/adr-033-agent-reasoning-trace-boundary.md
+    - ADR-034 Lab-Managed SOC TLS CA: adrs/adr-034-lab-managed-soc-tls-ca.md
+    - ADR-035 ACES SDL Adoption: adrs/adr-035-aces-sdl-adoption.md
+    - ADR-036 Snapshot Endpoint Registry: adrs/adr-036-snapshot-endpoint-registry.md
+    - ADR-037 Docker Compose Backend Cohesion: adrs/adr-037-docker-compose-backend-cohesion.md
+    - ADR-038 Docs Style Lint and Published Site: adrs/adr-038-docs-style-lint-and-published-site.md
+    - ADR-039 Web Control Plane Authentication: adrs/adr-039-web-control-plane-authentication.md
+    - ADR-040 Terminal SSH Host-Key Verification: adrs/adr-040-terminal-ssh-host-key-verification.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/Brad-Edwards/aptl
-  version:
-    provider: mike

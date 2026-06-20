@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-wazuh-sidecar-suricata\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "config_entrypoint": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "created": "1781193620",
+      "finished_at": "2026-06-11T16:01:14.232376695Z",
+      "id": "df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c",
+      "image": "aptl-wazuh-sidecar:local",
+      "image_id": "1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-wazuh-sidecar-suricata",
+      "net_namespace": "",
+      "path": "/opt/aptl/wazuh/wazuh-agent.sh",
+      "pid": "817388",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-06-11T16:01:14.874663644Z",
+      "state": "running",
+      "status": "Up 23 hours",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

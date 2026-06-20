@@ -1,3 +1,180 @@
+update-alternatives: using /usr/share/zoneinfo/UTC to provide /etc/localtime (localtime) in auto mode
+2026-06-11 16:00:40,047 WARN For [program:nginx], redirect_stderr=true but stderr_logfile has also been set to a filename, the filename has been ignored
+2026-06-11 16:00:40,047 WARN For [program:php-fpm], redirect_stderr=true but stderr_logfile has also been set to a filename, the filename has been ignored
+2026-06-11 16:00:40,047 WARN For [program:rsyslog], redirect_stderr=true but stderr_logfile has also been set to a filename, the filename has been ignored
+2026-06-11 16:00:40,047 INFO Included extra file "/etc/supervisor/conf.d/10-supervisor.conf" during parsing
+2026-06-11 16:00:40,047 INFO Included extra file "/etc/supervisor/conf.d/40-stunnel.conf" during parsing
+2026-06-11 16:00:40,048 INFO Included extra file "/etc/supervisor/conf.d/50-workers.conf" during parsing
+2026-06-11 16:00:40,048 INFO Set uid to user 0 succeeded
+2026-06-11 16:00:40,052 INFO RPC interface 'supervisor' initialized
+2026-06-11 16:00:40,086 INFO RPC interface 'supervisor' initialized
+2026-06-11 16:00:40,086 INFO supervisord started with pid 8
+2026-06-11 16:00:41,089 INFO spawned: 'nginx' with pid 9
+2026-06-11 16:00:41,090 INFO spawned: 'php-fpm' with pid 10
+2026-06-11 16:00:41,092 INFO spawned: 'rsyslog' with pid 11
+INIT | Initialize MySQL ...
+Configure PHP | Change PHP values ...
+Configure PHP | Setting 'memory_limit = 2048M'
+--------------
+DESCRIBE attributes
+--------------
+
+ERROR 1146 (42S02) at line 1: Table 'misp.attributes' doesn't exist
+... database has not been initialized, importing MySQL scheme...
+Configure PHP | Setting 'max_execution_time = 300'
+Configure PHP | Setting 'upload_max_filesize = 50M'
+Configure PHP | Setting 'max_file_uploads = 50'
+Configure PHP | Setting 'post_max_size = 50M'
+Configure PHP | Setting 'max_input_time = 300'
+Configure PHP | Setting 'session.save_path = 'tcp://misp-redis:6379?auth=redispassword'
+Configure PHP | Setting 'date.timezone = UTC'
+Configure PHP | Setting 'pm.max_children = 5'
+Configure PHP | Setting 'pm.start_servers = 2'
+Configure PHP | Setting 'pm.(min|max)_spare_servers = 2'
+Configure PHP | Setting 'pm.max_requests = 0'
+Configure PHP | Disabling 'pm.status_path'
+Configure PHP | Disabling 'pm.status_listen'
+Configure PHP | Starting PHP FPM
+2026-06-11 16:00:42,298 INFO success: nginx entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:00:42,298 INFO success: php-fpm entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:00:42,298 INFO success: rsyslog entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+INIT | Initialize NGINX ...
+... adjusting 'fastcgi_read_timeout' to 300s
+... adjusting 'fastcgi_send_timeout' to 300s
+... adjusting 'fastcgi_connect_timeout' to 300s
+... adjusting 'client_max_body_size' to 50M
+... adjusting Content-Security-Policy
+... no Content-Security-Policy header will be set as CONTENT_SECURITY_POLICY is not defined
+... adjusting X-Frame-Options
+... setting 'X-Frame-Options SAMEORIGIN'
+... adjusting HTTP Strict Transport Security (HSTS)
+... no HSTS header will be set as HSTS_MAX_AGE is not defined
+... enabling port 80 redirect
+... enabling IPv6 on port 80
+... enabling SSL redirect
+... enabling port 443
+... enabling IPv6 on port 443
+... TLS certificates found
+... nginx docroot set to /var/www/html/
+INIT | Initialize MISP files and configurations ...
+... initialize configuration files
+14+1 records in
+14+1 records out
+7321 bytes (7.3 kB, 7.1 KiB) copied, 6.7006e-05 s, 109 MB/s
+3+1 records in
+3+1 records out
+1811 bytes (1.8 kB, 1.8 KiB) copied, 3.5117e-05 s, 51.6 MB/s
+21+1 records in
+21+1 records out
+10814 bytes (11 kB, 11 KiB) copied, 8.1214e-05 s, 133 MB/s
+31+1 records in
+31+1 records out
+16064 bytes (16 kB, 16 KiB) copied, 0.000124986 s, 129 MB/s
+... patch bootstrap.php settings not required
+... initialize database.php settings
+... initialize email.php settings
+... initialize app files
+INIT | Update MISP app/files directory ...
+... found local files/VERSION: v2.5.36
+... local files/ match distribution version, skipping file sync
+INIT | Enforce MISP permissions ...
+... local files/ match distribution version, skipping data permissions in files/
+... chown -R www-data:www-data /var/www/MISP/app/Config
+find & change ... chmod -R 0550 files /var/www/MISP/app/Config ...
+find & change ... chmod -R 0770 directories /var/www/MISP/app/Config
+... chmod 600 /var/www/MISP/app/Config/{config,database,email}.php
+INIT | Flip NGINX live ...
+... nginx docroot set to /var/www/MISP/app/webroot
+... nginx reloaded
+2026/06/11 16:00:54 [notice] 177#177: signal process started
+INIT | Configure MISP installation ...
+MISP | Update CA certificates ...
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+Updating /var/www/MISP/app/Lib/cakephp/lib/Cake/Config/cacert.pem using curl data...
+MISP | Apply minimum configuration directives ...
+... enforcing env var settings
+Enforcing minimum_config setting 'GnuPG.binary' to env var or default value '/usr/bin/gpg'...
+Enforcing minimum_config setting 'MISP.python_bin' to env var or default value '/usr/local/bin/python3'...
+Enforcing minimum_config setting 'MISP.redis_host' to env var or default value 'misp-redis'...
+Enforcing minimum_config setting 'MISP.redis_password' to env var or default value 'redispassword'...
+Enforcing minimum_config setting 'MISP.redis_port' to env var or default value '6379'...
+Enforcing minimum_config setting 'Plugin.ZeroMQ_redis_host' to env var or default value 'misp-redis'...
+Enforcing minimum_config setting 'Plugin.ZeroMQ_redis_password' to env var or default value 'redispassword'...
+Enforcing minimum_config setting 'Plugin.ZeroMQ_redis_port' to env var or default value '6379'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.redis_host' to env var or default value 'misp-redis'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.redis_password' to env var or default value 'redispassword'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.redis_port' to env var or default value '6379'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.supervisor_host' to env var or default value '127.0.0.1'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.supervisor_password' to env var or default value 'supervisor'...
+Enforcing minimum_config setting 'SimpleBackgroundJobs.supervisor_user' to env var or default value 'supervisor'...
+... checking for unset default settings
+Updating unset minimum_config setting 'MISP.attachments_dir' to '/var/www/MISP/app/files'...
+Updating unset minimum_config setting 'MISP.background_jobs' to 'true'...
+Updating unset minimum_config setting 'MISP.ca_path' to '/etc/ssl/certs/ca-certificates.crt'...
+Updating unset minimum_config setting 'MISP.download_gpg_from_homedir' to 'false'...
+Updating unset minimum_config setting 'MISP.menu_custom_right_link' to ''...
+Updating unset minimum_config setting 'MISP.menu_custom_right_link_html' to ''...
+Updating unset minimum_config setting 'MISP.online_version_check' to 'true'...
+Updating unset minimum_config setting 'MISP.osuser' to 'www-data'...
+Updating unset minimum_config setting 'MISP.redis_database' to '13'...
+Updating unset minimum_config setting 'MISP.self_update' to 'false'...
+Updating unset minimum_config setting 'MISP.tmpdir' to '/var/www/MISP/app/tmp'...
+Updating unset minimum_config setting 'Plugin.ZeroMQ_enable' to 'false'...
+Updating unset minimum_config setting 'Security.disable_instance_file_uploads' to 'false'...
+Updating unset minimum_config setting 'Security.disable_local_feed_access' to 'false'...
+Updating unset minimum_config setting 'Security.rest_client_enable_arbitrary_urls' to 'false'...
+Updating unset minimum_config setting 'Security.salt' to ''...
+Updating unset minimum_config setting 'SimpleBackgroundJobs.enabled' to 'true'...
+Updating unset minimum_config setting 'SimpleBackgroundJobs.max_job_history_ttl' to '86400'...
+Updating unset minimum_config setting 'SimpleBackgroundJobs.redis_database' to '1'...
+Updating unset minimum_config setting 'SimpleBackgroundJobs.redis_namespace' to 'background_jobs'...
+Updating unset minimum_config setting 'SimpleBackgroundJobs.supervisor_port' to '9001'...
+MISP | Initialize configuration ...
+... enforcing env var settings
+Enforcing db_enable setting 'MISP.system_setting_db' to env var or default value 'false'...
+... enforcing env var settings
+Enforcing initialisation setting 'MISP.attachments_dir' to env var or default value '/var/www/MISP/app/files'...
+Enforcing initialisation setting 'MISP.baseurl' to env var or default value 'https://localhost'...
+Enforcing initialisation setting 'MISP.contact' to env var or default value 'admin@admin.test'...
+Enforcing initialisation setting 'MISP.email' to env var or default value 'admin@admin.test'...
+Not enforcing initialisation setting 'MISP.uuid' as value is blank...
+Enforcing initialisation setting 'Security.encryption_key' to env var or default value ''...
+Not enforcing initialisation setting 'Security.salt' as value is blank...
+Enforcing initialisation setting 'debug' to env var or default value '0'...
+... checking for unset default settings
+Updating unset initialisation setting 'MISP.default_attribute_distribution' to 'event'...
+Updating unset initialisation setting 'MISP.default_event_distribution' to '1'...
+Updating unset initialisation setting 'MISP.default_event_tag_collection' to '0'...
+Updating unset initialisation setting 'MISP.delegation' to 'true'...
+Updating unset initialisation setting 'MISP.disable_user_login_change' to 'false'...
+Updating unset initialisation setting 'MISP.enableEventBlocklisting' to 'true'...
+Updating unset initialisation setting 'MISP.enableOrgBlocklisting' to 'true'...
+Updating unset initialisation setting 'MISP.event_alert_republish_ban' to 'true'...
+Updating unset initialisation setting 'MISP.event_alert_republish_ban_refresh_on_retry' to 'true'...
+Updating unset initialisation setting 'MISP.event_alert_republish_ban_threshold' to '120'...
+Updating unset initialisation setting 'MISP.full_tags_on_event_index' to '1'...
+Updating unset initialisation setting 'MISP.incoming_tags_disabled_by_default' to 'false'...
+Updating unset initialisation setting 'MISP.language' to 'eng'...
+Updating unset initialisation setting 'MISP.log_auth' to 'true'...
+Updating unset initialisation setting 'MISP.log_new_audit' to 'true'...
+Updating unset initialisation setting 'MISP.proposals_block_attributes' to 'false'...
+Updating unset initialisation setting 'MISP.server_settings_skip_backup_rotate' to 'false'...
+Updating unset initialisation setting 'MISP.showCorrelationsOnIndex' to 'true'...
+Updating unset initialisation setting 'MISP.showorg' to 'true'...
+Updating unset initialisation setting 'MISP.showorgalternate' to 'false'...
+Updating unset initialisation setting 'MISP.store_api_access_time' to 'false'...
+Updating unset initialisation setting 'MISP.tagging' to 'true'...
+Updating unset initialisation setting 'MISP.take_ownership_xml_import' to 'false'...
+Updating unset initialisation setting 'MISP.terms_download' to 'false'...
+Updating unset initialisation setting 'MISP.unpublishedprivate' to 'false'...
+Updating unset initialisation setting 'MISP.user_email_notification_ban' to 'true'...
+Updating unset initialisation setting 'SecureAuth.amount' to '5'...
+Updating unset initialisation setting 'SecureAuth.expire' to '300'...
+Updating unset initialisation setting 'Security.advanced_authkeys' to 'true'...
+Updating unset initialisation setting 'Security.alert_on_suspicious_logins' to 'true'...
 Updating unset initialisation setting 'Security.check_sec_fetch_site_header' to 'true'...
 Updating unset initialisation setting 'Security.disable_browser_cache' to 'true'...
 Updating unset initialisation setting 'Security.do_not_log_authkeys' to 'true'...
@@ -6,50 +183,50 @@ Updating unset initialisation setting 'Security.require_password_confirmation' t
 Updating unset initialisation setting 'Security.username_in_response_header' to 'true'...
 MISP | Initialize workers ...
 ... starting background workers
-2026-05-23 06:19:28,516 INFO spawned: 'default_00' with pid 2584
-2026-05-23 06:19:28,518 INFO spawned: 'default_01' with pid 2585
-2026-05-23 06:19:28,520 INFO spawned: 'default_02' with pid 2586
-2026-05-23 06:19:28,522 INFO spawned: 'default_03' with pid 2588
-2026-05-23 06:19:28,524 INFO spawned: 'default_04' with pid 2590
-2026-05-23 06:19:28,526 INFO spawned: 'email_00' with pid 2594
-2026-05-23 06:19:28,528 INFO spawned: 'email_01' with pid 2599
-2026-05-23 06:19:28,530 INFO spawned: 'email_02' with pid 2608
-2026-05-23 06:19:28,532 INFO spawned: 'email_03' with pid 2614
-2026-05-23 06:19:28,535 INFO spawned: 'email_04' with pid 2627
-2026-05-23 06:19:28,538 INFO spawned: 'cache_00' with pid 2637
-2026-05-23 06:19:28,540 INFO spawned: 'cache_01' with pid 2646
-2026-05-23 06:19:28,543 INFO spawned: 'cache_02' with pid 2652
-2026-05-23 06:19:28,546 INFO spawned: 'cache_03' with pid 2657
-2026-05-23 06:19:28,549 INFO spawned: 'cache_04' with pid 2664
-2026-05-23 06:19:28,551 INFO spawned: 'prio_00' with pid 2667
-2026-05-23 06:19:28,555 INFO spawned: 'prio_01' with pid 2673
-2026-05-23 06:19:28,561 INFO spawned: 'prio_02' with pid 2682
-2026-05-23 06:19:28,566 INFO spawned: 'prio_03' with pid 2693
-2026-05-23 06:19:28,568 INFO spawned: 'prio_04' with pid 2699
-2026-05-23 06:19:28,572 INFO spawned: 'update_00' with pid 2701
-2026-05-23 06:19:28,575 INFO spawned: 'scheduler_00' with pid 2712
-2026-05-23 06:19:29,896 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-23 06:19:29,896 INFO success: scheduler_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:13,812 INFO spawned: 'default_00' with pid 2625
+2026-06-11 16:01:13,813 INFO spawned: 'default_01' with pid 2626
+2026-06-11 16:01:13,815 INFO spawned: 'default_02' with pid 2627
+2026-06-11 16:01:13,816 INFO spawned: 'default_03' with pid 2628
+2026-06-11 16:01:13,818 INFO spawned: 'default_04' with pid 2631
+2026-06-11 16:01:13,820 INFO spawned: 'email_00' with pid 2635
+2026-06-11 16:01:13,822 INFO spawned: 'email_01' with pid 2640
+2026-06-11 16:01:13,824 INFO spawned: 'email_02' with pid 2648
+2026-06-11 16:01:13,826 INFO spawned: 'email_03' with pid 2657
+2026-06-11 16:01:13,828 INFO spawned: 'email_04' with pid 2662
+2026-06-11 16:01:13,830 INFO spawned: 'cache_00' with pid 2670
+2026-06-11 16:01:13,832 INFO spawned: 'cache_01' with pid 2678
+2026-06-11 16:01:13,834 INFO spawned: 'cache_02' with pid 2683
+2026-06-11 16:01:13,836 INFO spawned: 'cache_03' with pid 2690
+2026-06-11 16:01:13,840 INFO spawned: 'cache_04' with pid 2705
+2026-06-11 16:01:13,842 INFO spawned: 'prio_00' with pid 2712
+2026-06-11 16:01:13,845 INFO spawned: 'prio_01' with pid 2722
+2026-06-11 16:01:13,852 INFO spawned: 'prio_02' with pid 2739
+2026-06-11 16:01:13,855 INFO spawned: 'prio_03' with pid 2743
+2026-06-11 16:01:13,860 INFO spawned: 'prio_04' with pid 2749
+2026-06-11 16:01:13,863 INFO spawned: 'update_00' with pid 2754
+2026-06-11 16:01:13,869 INFO spawned: 'scheduler_00' with pid 2757
+2026-06-11 16:01:15,053 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:01:15,053 INFO success: scheduler_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 misp-workers:default_00: started
 misp-workers:default_01: started
 misp-workers:default_02: started
@@ -82,7 +259,7 @@ gpg: keybox '/var/www/MISP/.gnupg/pubring.kbx' created
 gpg: Generating a basic OpenPGP key
 gpg: /var/www/MISP/.gnupg/trustdb.gpg: trustdb created
 gpg: directory '/var/www/MISP/.gnupg/openpgp-revocs.d' created
-gpg: revocation certificate stored as '/var/www/MISP/.gnupg/openpgp-revocs.d/78458504359681455CE3EF7C56667998AE5C8C4F.rev'
+gpg: revocation certificate stored as '/var/www/MISP/.gnupg/openpgp-revocs.d/7F9A7B4934F3A5642B7A281469CC633F6E04BC90.rev'
 gpg: Done
 ... exporting GPG key
 ... enforcing env var settings
@@ -93,8 +270,8 @@ Enforcing gpg setting 'GnuPG.password' to env var or default value 'passphrase'.
 Updating unset gpg setting 'GnuPG.onlyencrypted' to 'false'...
 Updating unset gpg setting 'SMIME.enabled' to 'false'...
 MISP | Init default user and organization ...
-... setting admin key to '<REDACTED-ADMIN-KEY>'
-... admin user key set to '<REDACTED-ADMIN-KEY>'
+... setting admin key to 'JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw'
+... admin user key set to 'JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw'
 ... setting admin password to 'admin'
 Password for admin@admin.test changed.
 MISP | Resolve critical issues ...
@@ -158,11 +335,11 @@ Set live status to True in Redis.
 Set live status in PHP config file.
 MISP is now live. Users can now log in.
 INIT | Configure PHP ...
-2026-05-23 06:21:52,995 INFO waiting for php-fpm to stop
+2026-06-11 16:03:30,910 INFO waiting for php-fpm to stop
 Entrypoint FPM caught SIGTERM signal!
 Killing process 48
-2026-05-23 06:21:52,996 WARN stopped: php-fpm (exit status 143)
-2026-05-23 06:21:53,000 INFO spawned: 'php-fpm' with pid 3782
+2026-06-11 16:03:30,911 WARN stopped: php-fpm (exit status 143)
+2026-06-11 16:03:30,915 INFO spawned: 'php-fpm' with pid 3817
 Configure PHP | Change PHP values ...
 Configure PHP | Setting 'memory_limit = 2048M'
 Configure PHP | Setting 'max_execution_time = 300'
@@ -170,7 +347,7 @@ Configure PHP | Setting 'upload_max_filesize = 50M'
 Configure PHP | Setting 'max_file_uploads = 50'
 Configure PHP | Setting 'post_max_size = 50M'
 Configure PHP | Setting 'max_input_time = 300'
-Configure PHP | Setting 'session.save_path = 'tcp://misp-redis:6379?auth=<REDACTED-SCENARIO-FIXTURE>'
+Configure PHP | Setting 'session.save_path = 'tcp://misp-redis:6379?auth=redispassword'
 Configure PHP | Setting 'date.timezone = UTC'
 Configure PHP | Setting 'pm.max_children = 5'
 Configure PHP | Setting 'pm.start_servers = 2'
@@ -179,322 +356,7 @@ Configure PHP | Setting 'pm.max_requests = 0'
 Configure PHP | Disabling 'pm.status_path'
 Configure PHP | Disabling 'pm.status_listen'
 Configure PHP | Starting PHP FPM
-2026-05-23 06:21:54,128 INFO success: php-fpm entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
+2026-06-11 16:03:32,013 INFO success: php-fpm entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
 php-fpm: stopped
 php-fpm: started
 INIT | Done ...
-2026-05-24 06:19:31,925 INFO exited: default_03 (exit status 0; expected)
-2026-05-24 06:19:31,925 INFO exited: default_02 (exit status 0; expected)
-2026-05-24 06:19:31,928 INFO spawned: 'default_02' with pid 24051
-2026-05-24 06:19:31,930 INFO spawned: 'default_03' with pid 24052
-2026-05-24 06:19:31,936 INFO exited: default_01 (exit status 0; expected)
-2026-05-24 06:19:32,017 INFO spawned: 'default_01' with pid 24067
-2026-05-24 06:19:32,112 INFO exited: default_00 (exit status 0; expected)
-2026-05-24 06:19:32,218 INFO spawned: 'default_00' with pid 24075
-2026-05-24 06:19:32,225 INFO exited: default_04 (exit status 0; expected)
-2026-05-24 06:19:32,337 INFO spawned: 'default_04' with pid 24083
-2026-05-24 06:19:33,457 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:33,457 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:33,457 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:33,457 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:33,457 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:49,635 INFO exited: cache_04 (exit status 0; expected)
-2026-05-24 06:19:49,636 INFO exited: email_01 (exit status 0; expected)
-2026-05-24 06:19:49,636 INFO exited: prio_03 (exit status 0; expected)
-2026-05-24 06:19:49,637 INFO exited: prio_04 (exit status 0; expected)
-2026-05-24 06:19:49,637 INFO exited: email_04 (exit status 0; expected)
-2026-05-24 06:19:49,641 INFO spawned: 'email_01' with pid 24096
-2026-05-24 06:19:49,644 INFO spawned: 'email_04' with pid 24097
-2026-05-24 06:19:49,647 INFO spawned: 'cache_04' with pid 24098
-2026-05-24 06:19:49,649 INFO spawned: 'prio_03' with pid 24099
-2026-05-24 06:19:49,651 INFO spawned: 'prio_04' with pid 24103
-2026-05-24 06:19:49,652 INFO exited: email_00 (exit status 0; expected)
-2026-05-24 06:19:49,652 INFO exited: email_02 (exit status 0; expected)
-2026-05-24 06:19:49,652 INFO exited: email_03 (exit status 0; expected)
-2026-05-24 06:19:49,653 INFO exited: cache_00 (exit status 0; expected)
-2026-05-24 06:19:49,653 INFO exited: cache_01 (exit status 0; expected)
-2026-05-24 06:19:49,653 INFO exited: cache_02 (exit status 0; expected)
-2026-05-24 06:19:49,654 INFO exited: cache_03 (exit status 0; expected)
-2026-05-24 06:19:49,654 INFO exited: prio_00 (exit status 0; expected)
-2026-05-24 06:19:49,654 INFO exited: prio_01 (exit status 0; expected)
-2026-05-24 06:19:49,655 INFO exited: prio_02 (exit status 0; expected)
-2026-05-24 06:19:49,655 INFO exited: update_00 (exit status 0; expected)
-2026-05-24 06:19:49,657 INFO spawned: 'email_00' with pid 24118
-2026-05-24 06:19:49,659 INFO spawned: 'email_02' with pid 24127
-2026-05-24 06:19:49,661 INFO spawned: 'email_03' with pid 24130
-2026-05-24 06:19:49,663 INFO spawned: 'cache_00' with pid 24132
-2026-05-24 06:19:49,667 INFO spawned: 'cache_01' with pid 24144
-2026-05-24 06:19:49,670 INFO spawned: 'cache_02' with pid 24147
-2026-05-24 06:19:49,672 INFO spawned: 'cache_03' with pid 24152
-2026-05-24 06:19:49,674 INFO spawned: 'prio_00' with pid 24158
-2026-05-24 06:19:49,677 INFO spawned: 'prio_01' with pid 24163
-2026-05-24 06:19:49,679 INFO spawned: 'prio_02' with pid 24169
-2026-05-24 06:19:49,681 INFO spawned: 'update_00' with pid 24175
-2026-05-24 06:19:50,855 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-24 06:19:50,855 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:19:59,125 INFO exited: default_03 (exit status 0; expected)
-2026-05-25 06:19:59,218 INFO spawned: 'default_03' with pid 44424
-2026-05-25 06:19:59,226 INFO exited: default_01 (exit status 0; expected)
-2026-05-25 06:19:59,298 INFO spawned: 'default_01' with pid 44432
-2026-05-25 06:19:59,306 INFO exited: default_04 (exit status 0; expected)
-2026-05-25 06:19:59,379 INFO spawned: 'default_04' with pid 44440
-2026-05-25 06:19:59,387 INFO exited: default_02 (exit status 0; expected)
-2026-05-25 06:19:59,387 INFO exited: default_00 (exit status 0; expected)
-2026-05-25 06:19:59,390 INFO spawned: 'default_00' with pid 44445
-2026-05-25 06:19:59,392 INFO spawned: 'default_02' with pid 44449
-2026-05-25 06:19:59,736 INFO exited: prio_03 (exit status 0; expected)
-2026-05-25 06:19:59,737 INFO exited: prio_00 (exit status 0; expected)
-2026-05-25 06:19:59,747 INFO spawned: 'prio_00' with pid 44470
-2026-05-25 06:19:59,749 INFO spawned: 'prio_03' with pid 44471
-2026-05-25 06:19:59,750 INFO exited: email_01 (exit status 0; expected)
-2026-05-25 06:19:59,750 INFO exited: email_04 (exit status 0; expected)
-2026-05-25 06:19:59,750 INFO exited: cache_04 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: prio_04 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: email_00 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: email_02 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: email_03 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: cache_00 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: cache_01 (exit status 0; expected)
-2026-05-25 06:19:59,751 INFO exited: cache_02 (exit status 0; expected)
-2026-05-25 06:19:59,752 INFO exited: cache_03 (exit status 0; expected)
-2026-05-25 06:19:59,752 INFO exited: prio_01 (exit status 0; expected)
-2026-05-25 06:19:59,752 INFO exited: prio_02 (exit status 0; expected)
-2026-05-25 06:19:59,752 INFO exited: update_00 (exit status 0; expected)
-2026-05-25 06:19:59,754 INFO spawned: 'email_00' with pid 44477
-2026-05-25 06:19:59,757 INFO spawned: 'email_01' with pid 44482
-2026-05-25 06:19:59,759 INFO spawned: 'email_02' with pid 44488
-2026-05-25 06:19:59,761 INFO spawned: 'email_03' with pid 44491
-2026-05-25 06:19:59,764 INFO spawned: 'email_04' with pid 44496
-2026-05-25 06:19:59,766 INFO spawned: 'cache_00' with pid 44505
-2026-05-25 06:19:59,768 INFO spawned: 'cache_01' with pid 44512
-2026-05-25 06:19:59,770 INFO spawned: 'cache_02' with pid 44518
-2026-05-25 06:19:59,772 INFO spawned: 'cache_03' with pid 44526
-2026-05-25 06:19:59,774 INFO spawned: 'cache_04' with pid 44529
-2026-05-25 06:19:59,775 INFO spawned: 'prio_01' with pid 44535
-2026-05-25 06:19:59,777 INFO spawned: 'prio_02' with pid 44543
-2026-05-25 06:19:59,779 INFO spawned: 'prio_04' with pid 44548
-2026-05-25 06:19:59,782 INFO spawned: 'update_00' with pid 44554
-2026-05-25 06:20:00,901 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-25 06:20:00,901 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:06,788 INFO exited: update_00 (exit status 0; expected)
-2026-05-26 06:20:07,791 INFO spawned: 'update_00' with pid 64779
-2026-05-26 06:20:08,877 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:09,714 INFO exited: prio_00 (exit status 0; expected)
-2026-05-26 06:20:09,715 INFO exited: prio_03 (exit status 0; expected)
-2026-05-26 06:20:09,716 INFO exited: prio_01 (exit status 0; expected)
-2026-05-26 06:20:09,717 INFO exited: email_03 (exit status 0; expected)
-2026-05-26 06:20:09,717 INFO exited: cache_01 (exit status 0; expected)
-2026-05-26 06:20:09,718 INFO exited: prio_04 (exit status 0; expected)
-2026-05-26 06:20:09,718 INFO exited: email_00 (exit status 0; expected)
-2026-05-26 06:20:09,722 INFO spawned: 'email_00' with pid 64787
-2026-05-26 06:20:09,725 INFO spawned: 'email_03' with pid 64788
-2026-05-26 06:20:09,727 INFO spawned: 'cache_01' with pid 64789
-2026-05-26 06:20:09,730 INFO spawned: 'prio_00' with pid 64792
-2026-05-26 06:20:09,732 INFO spawned: 'prio_01' with pid 64794
-2026-05-26 06:20:09,734 INFO spawned: 'prio_03' with pid 64800
-2026-05-26 06:20:09,736 INFO spawned: 'prio_04' with pid 64806
-2026-05-26 06:20:09,737 INFO exited: email_01 (exit status 0; expected)
-2026-05-26 06:20:09,737 INFO exited: email_02 (exit status 0; expected)
-2026-05-26 06:20:09,738 INFO exited: email_04 (exit status 0; expected)
-2026-05-26 06:20:09,738 INFO exited: cache_00 (exit status 0; expected)
-2026-05-26 06:20:09,738 INFO exited: cache_02 (exit status 0; expected)
-2026-05-26 06:20:09,739 INFO exited: cache_03 (exit status 0; expected)
-2026-05-26 06:20:09,739 INFO exited: cache_04 (exit status 0; expected)
-2026-05-26 06:20:09,739 INFO exited: prio_02 (exit status 0; expected)
-2026-05-26 06:20:09,741 INFO spawned: 'email_01' with pid 64822
-2026-05-26 06:20:09,743 INFO spawned: 'email_02' with pid 64829
-2026-05-26 06:20:09,745 INFO spawned: 'email_04' with pid 64838
-2026-05-26 06:20:09,747 INFO spawned: 'cache_00' with pid 64843
-2026-05-26 06:20:09,750 INFO spawned: 'cache_02' with pid 64849
-2026-05-26 06:20:09,754 INFO spawned: 'cache_03' with pid 64860
-2026-05-26 06:20:09,757 INFO spawned: 'cache_04' with pid 64864
-2026-05-26 06:20:09,760 INFO spawned: 'prio_02' with pid 64875
-2026-05-26 06:20:10,911 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:10,911 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:29,533 INFO exited: default_01 (exit status 0; expected)
-2026-05-26 06:20:29,536 INFO spawned: 'default_01' with pid 64914
-2026-05-26 06:20:29,537 INFO exited: default_00 (exit status 0; expected)
-2026-05-26 06:20:29,623 INFO spawned: 'default_00' with pid 64922
-2026-05-26 06:20:29,634 INFO exited: default_03 (exit status 0; expected)
-2026-05-26 06:20:29,713 INFO spawned: 'default_03' with pid 64930
-2026-05-26 06:20:29,807 INFO exited: default_02 (exit status 0; expected)
-2026-05-26 06:20:29,931 INFO spawned: 'default_02' with pid 64938
-2026-05-26 06:20:29,941 INFO exited: default_04 (exit status 0; expected)
-2026-05-26 06:20:30,026 INFO spawned: 'default_04' with pid 64946
-2026-05-26 06:20:31,114 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:31,114 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:31,114 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:31,114 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-26 06:20:31,114 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:33,620 INFO exited: default_01 (exit status 0; expected)
-2026-05-27 06:20:33,620 INFO exited: default_03 (exit status 0; expected)
-2026-05-27 06:20:33,623 INFO spawned: 'default_01' with pid 85161
-2026-05-27 06:20:33,625 INFO spawned: 'default_03' with pid 85162
-2026-05-27 06:20:33,821 INFO exited: default_00 (exit status 0; expected)
-2026-05-27 06:20:33,822 INFO exited: default_04 (exit status 0; expected)
-2026-05-27 06:20:33,824 INFO spawned: 'default_00' with pid 85177
-2026-05-27 06:20:33,826 INFO spawned: 'default_04' with pid 85178
-2026-05-27 06:20:33,913 INFO exited: default_02 (exit status 0; expected)
-2026-05-27 06:20:34,914 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:34,915 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:34,917 INFO spawned: 'default_02' with pid 85193
-2026-05-27 06:20:34,917 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:34,917 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:35,890 INFO exited: cache_03 (exit status 0; expected)
-2026-05-27 06:20:35,895 INFO spawned: 'cache_03' with pid 85208
-2026-05-27 06:20:35,898 INFO exited: email_00 (exit status 0; expected)
-2026-05-27 06:20:35,898 INFO exited: update_00 (exit status 0; expected)
-2026-05-27 06:20:35,898 INFO exited: email_03 (exit status 0; expected)
-2026-05-27 06:20:35,898 INFO exited: prio_00 (exit status 0; expected)
-2026-05-27 06:20:35,898 INFO exited: cache_04 (exit status 0; expected)
-2026-05-27 06:20:35,898 INFO exited: prio_02 (exit status 0; expected)
-2026-05-27 06:20:35,904 INFO spawned: 'email_00' with pid 85211
-2026-05-27 06:20:35,906 INFO spawned: 'email_03' with pid 85213
-2026-05-27 06:20:35,907 INFO spawned: 'cache_04' with pid 85215
-2026-05-27 06:20:35,908 INFO spawned: 'prio_00' with pid 85219
-2026-05-27 06:20:35,910 INFO spawned: 'prio_02' with pid 85222
-2026-05-27 06:20:35,912 INFO spawned: 'update_00' with pid 85226
-2026-05-27 06:20:35,912 INFO exited: cache_01 (exit status 0; expected)
-2026-05-27 06:20:35,912 INFO exited: prio_01 (exit status 0; expected)
-2026-05-27 06:20:35,912 INFO exited: prio_03 (exit status 0; expected)
-2026-05-27 06:20:35,912 INFO exited: prio_04 (exit status 0; expected)
-2026-05-27 06:20:35,912 INFO exited: email_01 (exit status 0; expected)
-2026-05-27 06:20:35,913 INFO exited: email_02 (exit status 0; expected)
-2026-05-27 06:20:35,913 INFO exited: email_04 (exit status 0; expected)
-2026-05-27 06:20:35,913 INFO exited: cache_00 (exit status 0; expected)
-2026-05-27 06:20:35,913 INFO exited: cache_02 (exit status 0; expected)
-2026-05-27 06:20:35,915 INFO spawned: 'email_01' with pid 85238
-2026-05-27 06:20:35,917 INFO spawned: 'email_02' with pid 85248
-2026-05-27 06:20:35,919 INFO spawned: 'email_04' with pid 85256
-2026-05-27 06:20:35,921 INFO spawned: 'cache_00' with pid 85263
-2026-05-27 06:20:35,923 INFO spawned: 'cache_01' with pid 85270
-2026-05-27 06:20:35,924 INFO spawned: 'cache_02' with pid 85274
-2026-05-27 06:20:35,927 INFO spawned: 'prio_01' with pid 85283
-2026-05-27 06:20:35,929 INFO spawned: 'prio_03' with pid 85287
-2026-05-27 06:20:35,931 INFO spawned: 'prio_04' with pid 85296
-2026-05-27 06:20:36,003 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-27 06:20:37,039 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:34,811 INFO exited: default_03 (exit status 0; expected)
-2026-05-28 06:20:34,811 INFO exited: default_01 (exit status 0; expected)
-2026-05-28 06:20:34,814 INFO spawned: 'default_01' with pid 105543
-2026-05-28 06:20:34,816 INFO spawned: 'default_03' with pid 105544
-2026-05-28 06:20:34,915 INFO exited: default_00 (exit status 0; expected)
-2026-05-28 06:20:35,104 INFO spawned: 'default_00' with pid 105559
-2026-05-28 06:20:35,109 INFO exited: default_04 (exit status 0; expected)
-2026-05-28 06:20:35,193 INFO spawned: 'default_04' with pid 105567
-2026-05-28 06:20:36,277 INFO success: default_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:36,277 INFO success: default_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:36,277 INFO success: default_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:36,277 INFO success: default_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:52,816 INFO exited: cache_03 (exit status 0; expected)
-2026-05-28 06:20:52,817 INFO exited: cache_00 (exit status 0; expected)
-2026-05-28 06:20:52,821 INFO spawned: 'cache_00' with pid 105575
-2026-05-28 06:20:52,823 INFO spawned: 'cache_03' with pid 105576
-2026-05-28 06:20:52,824 INFO exited: email_04 (exit status 0; expected)
-2026-05-28 06:20:52,824 INFO exited: prio_01 (exit status 0; expected)
-2026-05-28 06:20:52,825 INFO exited: prio_03 (exit status 0; expected)
-2026-05-28 06:20:52,825 INFO exited: prio_04 (exit status 0; expected)
-2026-05-28 06:20:52,827 INFO spawned: 'email_04' with pid 105577
-2026-05-28 06:20:52,830 INFO spawned: 'prio_01' with pid 105580
-2026-05-28 06:20:52,832 INFO spawned: 'prio_03' with pid 105584
-2026-05-28 06:20:52,834 INFO spawned: 'prio_04' with pid 105587
-2026-05-28 06:20:52,835 INFO exited: email_00 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: email_03 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: cache_04 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: prio_00 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: prio_02 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: update_00 (exit status 0; expected)
-2026-05-28 06:20:52,835 INFO exited: email_01 (exit status 0; expected)
-2026-05-28 06:20:52,837 INFO exited: email_02 (exit status 0; expected)
-2026-05-28 06:20:52,837 INFO exited: cache_01 (exit status 0; expected)
-2026-05-28 06:20:52,837 INFO exited: cache_02 (exit status 0; expected)
-2026-05-28 06:20:52,839 INFO spawned: 'email_00' with pid 105608
-2026-05-28 06:20:52,842 INFO spawned: 'email_01' with pid 105619
-2026-05-28 06:20:52,844 INFO spawned: 'email_02' with pid 105626
-2026-05-28 06:20:52,845 INFO spawned: 'email_03' with pid 105630
-2026-05-28 06:20:52,848 INFO spawned: 'cache_01' with pid 105635
-2026-05-28 06:20:52,851 INFO spawned: 'cache_02' with pid 105639
-2026-05-28 06:20:52,856 INFO spawned: 'cache_04' with pid 105650
-2026-05-28 06:20:52,859 INFO spawned: 'prio_00' with pid 105657
-2026-05-28 06:20:52,862 INFO spawned: 'prio_02' with pid 105660
-2026-05-28 06:20:52,866 INFO spawned: 'update_00' with pid 105666
-2026-05-28 06:20:54,041 INFO success: email_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: email_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: email_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: email_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: email_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: cache_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: cache_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: cache_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: cache_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: cache_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: prio_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: prio_01 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: prio_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: prio_03 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: prio_04 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:20:54,041 INFO success: update_00 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)
-2026-05-28 06:21:04,990 INFO exited: default_02 (exit status 0; expected)
-2026-05-28 06:21:05,993 INFO spawned: 'default_02' with pid 105710
-2026-05-28 06:21:07,102 INFO success: default_02 entered RUNNING state, process has stayed up for > than 1 seconds (startsecs)

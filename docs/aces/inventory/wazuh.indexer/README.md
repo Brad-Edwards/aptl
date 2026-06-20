@@ -22,12 +22,12 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 | Runtime command | `/entrypoint.sh` → `opensearchwrapper` (PID 1 is the OpenSearch JDK java process, UID 1000) |
 | Reachable participant ports | TCP 9200 (HTTPS REST API), TCP 9300 (OpenSearch transport, cluster-internal only) |
 | Network identity | `security-net` 172.20.0.12 |
-| Host-published ports | 9200/tcp on 0.0.0.0 and :: |
+| Host-published ports | 9200/tcp on 127.0.0.1 (loopback-only) |
 | OpenSearch version | 2.19.1 (Wazuh-indexer 4.12.0/rc1, build hash `dae2bfc93896178873b43cdf4781f183c72b238f`) |
 | Cluster | single-node `opensearch` cluster, uuid `u-vGl1n0Q7e-SKz1tWvb-w`, status green |
-| Indices | 41 indices, 102 primary shards, 1,053,842 documents, ~1.39 GB store (per-index uuid/doc-count/store-size/mapping schema blocked on ACES #468/#469 — see ACES Mapping Result) |
+| Indices | 41 indices, 102 primary shards, 1,053,842 documents, ~1.39 GB store (per-index uuid/doc-count/store-size + per-family mapping schema encoded via ACES #468/#469 — see ACES Mapping Result) |
 | Plugins | 18 installed OpenSearch plugins at 2.19.1.0 (alerting, anomaly-detection, asynchronous-search, cross-cluster-replication, geospatial, index-management, job-scheduler, knn, ml, neural-search, notifications, notifications-core, observability, performance-analyzer, reports-scheduler, security, security-analytics, sql) |
-| Internal users | 6 OpenSearch Security built-in users (`admin`, `kibanaserver`, `kibanaro`, `logstash`, `readall`, `snapshotrestore`); bcrypt hashes redacted |
+| Internal users | 6 OpenSearch Security built-in users (`admin`, `kibanaserver`, `kibanaro`, `logstash`, `readall`, `snapshotrestore`); bcrypt hashes captured verbatim |
 | Package inventory | 110 RPM packages and 840 Syft SBOM components |
 | Trivy vulnerability findings | 276 total: critical 0, high 135, medium 123, low 18 (130 unique CVE IDs) |
 
@@ -41,7 +41,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 | Runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-security.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
 | Persistent volume is recorded. | `evidence/docker-volume.wazuh-indexer-data.json` |
 | OpenSearch logical state is recorded. | `evidence/wazuh-indexer-state.txt`, `evidence/wazuh-indexer-api-probe.json`, `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt` |
-| Structured index mappings + template bodies are recorded (blocked surfaces). | `evidence/wazuh-indexer-templates.json.gz`, `evidence/wazuh-indexer-family-mappings.json.gz`, `evidence/wazuh-indexer-index-mappings-census.json` |
+| Structured index mappings + template bodies are recorded and encoded as typed mappings/templates. | `evidence/wazuh-indexer-templates.json.gz`, `evidence/wazuh-indexer-family-mappings.json.gz`, `evidence/wazuh-indexer-index-mappings-census.json` |
 | OS packages and SBOM component inventories are recorded. | `evidence/os-packages.txt`, `evidence/language-manifests.txt`, `evidence/trivy-sbom.cyclonedx.json.gz`, `evidence/syft-sbom.cyclonedx.json.gz` |
 | Patch state is machine-readable. | `evidence/trivy-vulnerability-counts.json`, `evidence/trivy-vulnerability-list.json` |
 | osquery table attempts are recorded. | `evidence/osquery-apt-sources.json`, `evidence/osquery-docker-containers.json`, `evidence/osquery-docker-images.json`, `evidence/osquery-installed-applications.json`, `evidence/osquery-listening-ports.json`, `evidence/osquery-processes.json`, `evidence/osquery-programs.json` |
@@ -76,13 +76,13 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   indices, 102 primary shards, 1,053,842 documents, ~1.39 GB store at snapshot
   time) and the node carries `cluster_manager`, `data`, `ingest`, and
   `remote_cluster_client` roles. The cluster `uuid` and these aggregate
-  cardinality/size totals are evidence-only, blocked on ACES #468.
+  cardinality/size totals are encoded on `RuntimeDatastoreCluster` (ACES #468).
 - 18 OpenSearch plugins are installed at 2.19.1.0, including the
   `opensearch-security`, `opensearch-security-analytics`,
   `opensearch-performance-analyzer`, and the OpenSearch Alerting / ML /
-  Notifications stacks. Plugin **names** are encoded; per-plugin version is
-  evidence-only, blocked on ACES #470 with the rest of the node engine
-  provenance (`build_hash`, JVM heap, publish addresses).
+  Notifications stacks. Plugin **names and per-plugin versions** are encoded as
+  typed `RuntimeDatastoreEnginePlugin` entries (ACES #470), alongside the rest of
+  the node engine provenance (`build_hash`, JVM heap, publish endpoints).
 - Indexed content is the standard TechVault Wazuh layout: `wazuh-alerts-4.x-*`
   daily indices, `wazuh-archives-4.x-*` daily indices,
   `wazuh-monitoring-2026.*w` weekly indices, `wazuh-statistics-2026.*w`
@@ -91,10 +91,10 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   (`.kibana_1`, `.opendistro_security`, `.opensearch-observability`,
   `.plugins-ml-config`). Each index's **name, shard geometry, and health** are
   encoded as a `RuntimeDatastorePartition`; each index's `uuid`, doc count,
-  store size, creation date, and structured field mapping (up to 947 leaf
-  fields for `wazuh-archives-*`) are evidence-only, blocked on ACES #468
-  (cardinality/size/identity) and ACES #469 (structured mappings + template
-  bodies).
+  store size, creation date, and open/closed status are encoded on the same
+  `RuntimeDatastorePartition` (ACES #468), and the per-family structured field
+  mapping (up to 947 leaf fields for `wazuh-archives-*`) is encoded as a
+  `RuntimeDatastoreMapping` with its field-type census (ACES #469).
 - Persistence is rooted at `path.home=/usr/share/wazuh-indexer`,
   `path.data=/var/lib/wazuh-indexer` (backed by the `wazuh-indexer-data`
   named volume), `path.logs=/var/log/wazuh-indexer`. No snapshot repository
@@ -103,8 +103,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   PEM material under `/usr/share/wazuh-indexer/certs/`. The admin DN
   allowlist is `CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US`; transport
   hostname verification is disabled (default Wazuh-indexer posture).
-  Private-key bytes are intentionally omitted from evidence; their paths
-  are recorded with `<OMITTED-OPERATOR-SECRET-CHECKSUM>` checksums.
+  Private-key checksum values are retained as in-range scenario evidence.
 - The OpenSearch Security HTTP authc chain has six declared domains; only
   `basic_internal_auth_domain` (order 4, basic auth, internal backend) is
   HTTP-enabled. The two LDAP authz domains are disabled. The realized
@@ -112,10 +111,9 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
   authority on the HTTP layer.
 - Six built-in internal users live in the bind-mounted
   `internal_users.yml`: `admin` (reserved), `kibanaserver` (reserved),
-  `kibanaro`, `logstash`, `readall`, `snapshotrestore`. Bcrypt hashes are
-  recorded as `<REDACTED-INDEXER-INTERNAL-USER-HASH>`; reserved/hidden
-  flags, role memberships, and the three demo attributes on `kibanaro`
-  are kept.
+  `kibanaro`, `logstash`, `readall`, `snapshotrestore`. Bcrypt hashes,
+  reserved/hidden flags, role memberships, and the three demo attributes on
+  `kibanaro` are kept.
 - Runtime package state is encoded from the normalized Syft CycloneDX SBOM
   (840 components, JDK + bundled OpenSearch jars) and RPM package list
   (110 packages). Trivy captured 276 vulnerability findings (130 unique
@@ -140,29 +138,31 @@ authc/authz chain on `runtime.identity_authorities`. The
 `data_model=search_index`, `partition_kind=index`) carries the
 OpenSearch-specific surface.
 
-### Blocked surfaces (open ACES expressivity gaps)
+### ACES expressivity — fully encoded
 
-Three catalogued, in-scope observable surfaces have **no typed ACES home today**.
-They are NOT forced into SDL `description` prose — they are captured in the
-evidence bundle and recorded as `blocked_by_aces_gap` facts in
-`mapping-ledger.yaml`, each linked to a filed ACES issue. **This inventory
-issue (Brad-Edwards/aptl#341) stays open until these ACES surfaces land and the
-SDL is updated:**
+Three catalogued observable surfaces previously had no typed ACES home and were
+recorded as `blocked_by_aces_gap` facts pending upstream ACES work. **Those ACES
+surfaces have now landed on aces `dev` and every surface is encoded from the
+captured evidence. No known ACES expressivity gap remains:**
 
 - **Search-index cardinality, size, and identity** — per-index `uuid`,
-  `doc.count`, `doc.deleted`, `store.size`, `creation.date`, open/closed status,
-  and the cluster-level `cluster_uuid` + aggregate node/shard/doc/store totals.
-  `RuntimeDatastoreCluster`/`RuntimeDatastorePartition` have no field for these.
-  → **[Brad-Edwards/aces#468](https://github.com/Brad-Edwards/aces/issues/468)**.
+  `doc_count`, `doc_count_deleted`, `store_size_bytes`, `creation_timestamp`,
+  `open_closed_status`, and the cluster-level `uuid` + aggregate
+  `node_count`/`shard_total`/`shard_primaries`/`doc_count`/`store_size_bytes`,
+  now typed on `RuntimeDatastoreCluster`/`RuntimeDatastorePartition`.
+  → resolved by **[Brad-Edwards/aces#468](https://github.com/Brad-Edwards/aces/issues/468)**.
 - **Structured index mapping + template-body inventory** — the field→type
-  schema each index enforces (wazuh-archives mappings reach 947 leaf fields) and
-  the index-template bodies that seed them. `mappings`/`templates`/`aliases` are
-  name-only `list[str]`; there is no field-schema or template-body model.
-  → **[Brad-Edwards/aces#469](https://github.com/Brad-Edwards/aces/issues/469)**.
+  census each index family enforces (wazuh-archives mappings reach 947 leaf
+  fields) and the index-template bodies that seed them, now typed on
+  `RuntimeDatastoreMapping` (per-family schema geometry, field-type census,
+  dynamic policy, schema digest) and the structured `RuntimeDatastoreTemplate`
+  (index_patterns, settings_summary, template digest).
+  → resolved by **[Brad-Edwards/aces#469](https://github.com/Brad-Edwards/aces/issues/469)**.
 - **Datastore node engine provenance** — engine `version`, `build_hash`,
-  per-plugin versions, JVM heap, and the http/transport publish-address split.
-  `RuntimeDatastoreNode` has none of these; `engine_plugins` is name-only.
-  → **[Brad-Edwards/aces#470](https://github.com/Brad-Edwards/aces/issues/470)**.
+  `build_type`, JVM heap posture, the http/transport publish endpoint split, and
+  typed per-plugin versions, now typed on `RuntimeDatastoreNode` +
+  `RuntimeDatastoreEnginePlugin` + `RuntimeDatastoreNodeEndpoint`.
+  → resolved by **[Brad-Edwards/aces#470](https://github.com/Brad-Edwards/aces/issues/470)**.
 
 The capture does not assert a destructive clean-lab reset, byte-identical
 rebuildability, full root filesystem equivalence outside the scoped capture, or

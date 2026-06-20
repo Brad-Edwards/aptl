@@ -1,12 +1,13 @@
 UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                2955876             2955808             0                   May23               ?                   00:00:56            /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
-pollina+            2957128             2955876             0                   May23               ?                   00:00:04            /usr/sbin/named -g -c /etc/bind/named.conf -u bind
-root                2970733             2955876             0                   May23               ?                   00:00:08            /var/ossec/bin/wazuh-execd
-root                2970957             2955876             0                   May23               ?                   00:00:34            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-root                2985017             2955876             0                   May23               ?                   00:00:08            /var/ossec/bin/wazuh-execd
-syslog              2985213             2955876             0                   May23               ?                   00:01:13            /var/ossec/bin/wazuh-agentd
-root                2985391             2955876             0                   May23               ?                   00:00:06            /var/ossec/bin/wazuh-syscheckd
-root                2985600             2955876             0                   May23               ?                   00:00:30            /var/ossec/bin/wazuh-logcollector
-root                2985614             2955876             0                   May23               ?                   00:00:08            /var/ossec/bin/wazuh-modulesd
-root                2985978             2970957             0                   May23               ?                   00:00:14            tail -F /var/ossec/logs/ossec.log
-root                1764467             2970957             0                   06:09               ?                   00:00:00            sleep 5
+root                804856              804801              0                   Jun11               ?                   00:00:10            /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+pollina+            806275              804856              0                   Jun11               ?                   00:00:00            /usr/sbin/named -g -c /etc/bind/named.conf -u bind
+root                817482              804856              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-execd
+syslog              817494              804856              0                   Jun11               ?                   00:00:13            /var/ossec/bin/wazuh-agentd
+root                817603              804856              0                   Jun11               ?                   00:00:06            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+root                824373              804856              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-execd
+syslog              824381              804856              0                   Jun11               ?                   00:00:13            /var/ossec/bin/wazuh-agentd
+root                824446              804856              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-syscheckd
+root                824476              804856              0                   Jun11               ?                   00:00:05            /var/ossec/bin/wazuh-logcollector
+root                824508              804856              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-modulesd
+root                824768              817603              0                   Jun11               ?                   00:00:02            tail -F /var/ossec/logs/ossec.log
+root                1320741             817603              0                   15:20               ?                   00:00:00            sleep 5

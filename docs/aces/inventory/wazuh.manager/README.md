@@ -20,7 +20,7 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 | Image digest | `wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561` |
 | Runtime OS | Amazon Linux 2023.8.20250818 |
 | Runtime command | `/init` via s6 supervision |
-| Reachable participant ports | TCP 1514, TCP 1515, UDP 514, TCP 55000 |
+| Reachable participant ports | TCP 1514, TCP 1515, UDP 514, TCP 55000 (host-published on `127.0.0.1`, loopback-only) |
 | Network identity | `security-net` 172.20.0.10; `dmz-net` 172.20.1.10; `internal-net` 172.20.2.30 |
 | Wazuh version / revision | `v4.12.0` / `rc1` |
 | Wazuh agents | 7 available agents in the `default` group |
@@ -69,10 +69,8 @@ Use it as a frozen observation of that local steady state, not as clean-lab rebu
 - Runtime package state is encoded from the normalized Syft CycloneDX SBOM
   (322 components) and RPM package list (118 packages). Trivy captured 368
   vulnerability findings at scan time.
-- Raw Wazuh API credentials, indexer credentials, cluster keys, API tokens,
-  and private key material are not committed as raw values. SDL records
-  redacted value classifications and, for selected filesystem entries, path and
-  metadata only.
+- Wazuh API credentials, indexer credentials, cluster keys, API tokens,
+  and private key checksums are retained as in-range scenario evidence.
 - Docker-history strings containing braced shell parameter syntax were
   normalized in SDL to shell-equivalent `$VAR` spelling because ACES reserves
   `${...}` for scenario variables. The raw byte-exact history is preserved in

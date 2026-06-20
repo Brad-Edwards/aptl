@@ -1,0 +1,413 @@
+schema_version: 1
+asset:
+  id: thehive-cassandra
+  scenario: TechVault
+  aptl_issue: 351
+  aces_methodology_issue: 353
+  source_class: upstream-registry-image-datastore
+  proof_scope: steady-state-asset-spec
+provenance:
+  image_digest: cassandra@sha256:bfc28ce8118c09cd32840684f5c31b664f505d0f3e46898147864b18ccefcca0
+  attestation:
+    status: not_available
+    verification_status: not_applicable
+    standards: []
+    predicate_types: []
+    evidence:
+    - path: evidence/docker-buildx-imagetools.image.raw.json
+    - path: evidence/docker-inspect.image.json
+    limits:
+    - Upstream Cassandra registry image; identity is the pinned RepoDigest. The floating tag cassandra:4.1 has moved past
+      this digest since the lab pulled it. No registry-visible OCI/in-toto/SLSA attestation is published for this tag.
+notes:
+- Capture used the already-running aptl project (soc profile up) per operator direction and did not run aptl lab stop -v &&
+  aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof.
+- 'SCN-010 issue #351 inventories TheHive''s Cassandra primary datastore as nodes.techvault.thehive-cassandra (datastore family,
+  upstream cassandra:4.1 image). Every catalogued observable maps to a current ACES surface (datastore_services wide_column
+  profile). No known ACES expressivity gap remains for the catalogued thehive-cassandra steady-state facts.'
+- 'Scoping decision (no distortion): the wide_column profile requires each keyspace partition to carry a replication_factor.
+  The four SimpleStrategy keyspaces (thehive, system_auth, system_distributed, system_traces) are encoded as keyspace partitions;
+  the LocalStrategy (system, system_schema) and virtual (system_virtual_schema, system_views) keyspaces have no replication
+  factor (Cassandra engine internals) and are recorded in cassandra-keyspaces.txt evidence rather than fabricated as partitions.
+  The participant-relevant thehive keyspace is fully encoded.'
+- The thehive keyspace holds TheHive's primary case/alert data; the thehive node connects via CQL/9042 (relationships.thehive-connects-cassandra).
+  CQL is cleartext on security-net (no client TLS configured in the lab).
+correspondence_checks:
+- id: thehive-cassandra-evidence-bundle-integrity
+  status: implemented
+  source: docs/aces/inventory/thehive-cassandra/evidence
+  method: evidence-sha256sums.txt hashes every committed evidence file except the manifest; tests/test_thehive_cassandra_inventory.py
+    recomputes and compares.
+  realized_evidence:
+  - path: evidence/evidence-sha256sums.txt
+  - path: evidence/captured-at-utc.txt
+  ledger_fact_ids:
+  - thehive-cassandra.capture.toolchain-baseline
+- id: thehive-cassandra-sdl-runtime-correspondence
+  status: implemented
+  source: nodes.techvault.thehive-cassandra.runtime
+  method: tests/test_thehive_cassandra_inventory.py parses the ACES SDL and asserts image, package, CVE, filesystem, identity,
+    process, environment, listener, and datastore counts/values against the evidence.
+  realized_evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/os-packages.txt
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/cassandra-state.txt
+  ledger_fact_ids:
+  - thehive-cassandra.runtime.container-host-config
+  - thehive-cassandra.runtime.package-inventory
+  - thehive-cassandra.runtime.vulnerability-scan
+  - thehive-cassandra.runtime.local-identity
+  - thehive-cassandra.datastore.cassandra-service
+- id: thehive-cassandra-datastore-keyspace-correspondence
+  status: implemented
+  source: nodes.techvault.thehive-cassandra.runtime.datastore_services
+  method: README and tests assert the Cassandra engine/version/cluster and the replicated keyspace partitions with their replication
+    factors from cassandra-keyspaces.txt.
+  realized_evidence:
+  - path: evidence/cassandra-state.txt
+  - path: evidence/cassandra-keyspaces.txt
+  ledger_fact_ids:
+  - thehive-cassandra.datastore.cassandra-service
+  - thehive-cassandra.runtime.service-listeners
+- id: thehive-cassandra-scope-and-capture-caveats
+  status: implemented
+  source: docs/aces/inventory/thehive-cassandra/evidence/capture-limits.txt
+  method: README and tests assert non-destructive capture scope, the data-volume manifest exclusion, the LocalStrategy/virtual
+    keyspace scoping, and unavailable osquery tables.
+  realized_evidence:
+  - path: evidence/capture-limits.txt
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-volume.thehive_cassandra_data.json
+  - path: evidence/docker-history.image.txt
+  - path: evidence/language-manifests.txt
+  ledger_fact_ids:
+  - thehive-cassandra.capture.toolchain-baseline
+  - thehive-cassandra.runtime.filesystem-inventory
+  - thehive-cassandra.runtime.osquery-baseline
+  - thehive-cassandra.datastore.cassandra-service
+facts:
+- id: thehive-cassandra.capture.toolchain-baseline
+  category: capture
+  summary: Capture used digest-pinned Trivy, Syft, and osquery images, recorded Docker/Compose versions, capture time, and
+    explicit capture limits.
+  evidence:
+  - path: evidence/captured-at-utc.txt
+  - path: evidence/docker-version.json
+  - path: evidence/docker-compose-version.json
+  - path: evidence/trivy-version.txt
+  - path: evidence/syft-version.json
+  - path: evidence/osquery-version.txt
+  - path: evidence/capture-limits.txt
+  - path: evidence/evidence-sha256sums.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: runtime_contract
+    checked_surfaces:
+    - runtime_contract
+    fields:
+    - docs/aces/inventory/thehive-cassandra/capture-evidence.sh
+    - docs/aces/inventory/thehive-cassandra/evidence/capture-limits.txt
+    rationale: Current ACES SDL runtime fields carry this catalogued thehive-cassandra fact directly.
+    caveat: Scanner/runtime observations are time-sensitive evidence from the current-running lab, not clean-reset proof.
+- id: thehive-cassandra.image.identity-provenance
+  category: image
+  summary: The datastore resolves to the upstream registry image cassandra:4.1 (pinned RepoDigest); Debian 12 base.
+  evidence:
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/docker-buildx-imagetools.image.raw.json
+  - path: evidence/docker-buildx-imagetools.image.txt
+  - path: evidence/osquery-docker-images.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.source.name
+    - nodes.techvault.thehive-cassandra.source.version
+    - nodes.techvault.thehive-cassandra.os_version
+    rationale: Current ACES SDL node source fields carry the upstream registry image identity directly.
+    caveat: The upstream floating tag cassandra:4.1 has moved past the locally-pinned RepoDigest since the lab pulled it;
+      source.version records the deployed digest (both captured in the imagetools evidence).
+- id: thehive-cassandra.image.build-recipe
+  category: image
+  summary: The build recipe (instructions/layers from docker history, default config, absent attestation) is encoded as upstream-image
+    provenance.
+  evidence:
+  - path: evidence/docker-history.image.txt
+  - path: evidence/docker-history.image.jsonl
+  - path: evidence/docker-inspect.image.json
+  - path: evidence/source-checksums.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.source.build.instructions
+    - nodes.techvault.thehive-cassandra.source.build.layers
+    - nodes.techvault.thehive-cassandra.source.build.config
+    - nodes.techvault.thehive-cassandra.source.build.attestation
+    rationale: Current ACES SDL node build fields carry the history-reconstructed recipe directly.
+- id: thehive-cassandra.compose.service-contract
+  category: compose
+  summary: Compose declares aptl-thehive-cassandra, image cassandra:4.1, CASSANDRA_CLUSTER_NAME=thehive, MAX_HEAP_SIZE/HEAP_NEWSIZE,
+    the thehive_cassandra_data volume, 1g memory, and security-net 172.20.0.4 (no host-published ports).
+  evidence:
+  - path: evidence/compose-service.thehive-cassandra.json
+  - path: evidence/docker-compose-version.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.environment
+    - nodes.techvault.thehive-cassandra.runtime.operational_policy
+    - nodes.techvault.thehive-cassandra.runtime.mounts
+    - nodes.techvault.thehive-cassandra.runtime.network
+    rationale: Current ACES SDL node runtime fields carry the compose contract directly.
+- id: thehive-cassandra.runtime.container-host-config
+  category: runtime
+  summary: Docker runtime policy captures restart, 1 GiB memory, namespaces, masked/read-only paths, no added capabilities,
+    and runc runtime.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/docker-top.txt
+  - path: evidence/docker-logs.thehive-cassandra.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.container
+    - nodes.techvault.thehive-cassandra.runtime.operational_policy
+    - nodes.techvault.thehive-cassandra.runtime.linux_capabilities
+    rationale: Current ACES SDL node runtime fields carry this catalogued fact directly.
+- id: thehive-cassandra.network.identity
+  category: network
+  summary: The datastore is attached to security-net only at 172.20.0.4; 9042/7000/7199 are NOT host-published; kali (other
+    subnets) cannot route to it.
+  evidence:
+  - path: evidence/docker-network.aptl-security.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/participant-discovery.kali.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.network.endpoints
+    - nodes.techvault.thehive-cassandra.runtime.network.published_ports
+    rationale: Current ACES SDL node network fields carry the realized endpoint and no-published-port facts directly.
+- id: thehive-cassandra.runtime.service-listeners
+  category: runtime
+  summary: Cassandra listens on TCP/9042 (CQL, wildcard), TCP/7000 (inter-node, security-net IP), and TCP/7199 (JMX, loopback-only);
+    all security-net.
+  evidence:
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/cassandra-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.service_listeners
+    - nodes.techvault.thehive-cassandra.services
+    rationale: Current ACES SDL node service_listeners + services carry the listener facts directly.
+- id: thehive-cassandra.runtime.mounts
+  category: runtime
+  summary: The thehive_cassandra_data named volume is mounted at /var/lib/cassandra; the runtime mount table and volume inspect
+    record it.
+  evidence:
+  - path: evidence/docker-volume.thehive_cassandra_data.json
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.mounts
+    rationale: Current ACES SDL node runtime.mounts carries the data-volume mount directly.
+- id: thehive-cassandra.runtime.filesystem-inventory
+  category: filesystem
+  summary: The Cassandra install tree (bin, conf, lib) and os-release are encoded with checksums for stable files; the data
+    volume is excluded.
+  evidence:
+  - path: evidence/filesystem-tree.txt.gz
+  - path: evidence/filesystem-checksums.txt.xz
+  - path: evidence/capture-limits.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.filesystem_inventory
+    rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
+    caveat: The /var/lib/cassandra volume content (commitlog, data, hints, saved_caches) is excluded from the manifest (top-level
+      rows only); schema-level state is in cassandra-state.txt + the datastore keyspaces instead.
+- id: thehive-cassandra.runtime.process-set
+  category: runtime
+  summary: PID 1 is the Cassandra 4.1 JVM ('cassandra -f'); a single long-lived java process.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/runtime-baseline.txt
+  - path: evidence/docker-top.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.processes
+    rationale: Current ACES SDL node runtime.processes carries the captured process set directly.
+- id: thehive-cassandra.runtime.environment
+  category: runtime
+  summary: Runtime environment is eleven variables (CASSANDRA_CLUSTER_NAME, MAX_HEAP_SIZE, HEAP_NEWSIZE + image vars); no
+    secret-bearing values.
+  evidence:
+  - path: evidence/docker-inspect.container.json
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.environment
+    rationale: Current ACES SDL node runtime.environment carries the captured variables directly.
+- id: thehive-cassandra.runtime.local-identity
+  category: identity
+  summary: Local passwd/group inventory records 19 users and 39 groups (stock Debian 12 + the cassandra service account);
+    no sudo rules.
+  evidence:
+  - path: evidence/runtime-baseline.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.local_identity
+    rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
+- id: thehive-cassandra.application.software-versions
+  category: runtime
+  summary: Apache Cassandra 4.1.11 is the application component; identified from system.local and the install tree.
+  evidence:
+  - path: evidence/language-manifests.txt
+  - path: evidence/cassandra-state.txt
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.software_components
+    rationale: Current ACES SDL node runtime.software_components carries the Cassandra version directly.
+- id: thehive-cassandra.runtime.package-inventory
+  category: runtime
+  summary: dpkg package inventory captures 122 installed OS packages from the Cassandra Debian 12 base.
+  evidence:
+  - path: evidence/os-packages.txt
+  - path: evidence/osquery-apt-sources.json
+  aces:
+    disposition: encoded
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.packages
+    rationale: Current ACES SDL node runtime.packages carries the dpkg inventory directly.
+- id: thehive-cassandra.runtime.vulnerability-scan
+  category: runtime
+  summary: Trivy captured 398 image-layer vulnerability findings (15 critical, 55 high, 191 medium, 132 low, 5 unknown).
+  evidence:
+  - path: evidence/trivy-vulnerabilities.json.gz
+  - path: evidence/trivy-vulnerability-list.json
+  - path: evidence/trivy-vulnerability-counts.json
+  - path: evidence/trivy-version.txt
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.package_vulnerabilities
+    rationale: Current ACES SDL node runtime.package_vulnerabilities carries the per-CVE findings directly.
+    caveat: Scanner output is time-sensitive and tied to the captured Trivy version/database state.
+- id: thehive-cassandra.runtime.sbom-toolchain
+  category: runtime
+  summary: Required Trivy CycloneDX and useful-optional Syft CycloneDX SBOMs are captured; Syft output is deterministically
+    normalized.
+  evidence:
+  - path: evidence/trivy-sbom.cyclonedx.json.gz
+  - path: evidence/syft-sbom.cyclonedx.json.gz
+  - path: evidence/syft-version.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.packages
+    - nodes.techvault.thehive-cassandra.runtime.software_components
+    rationale: SDL package fields use dpkg + scanner-derived summaries; full CycloneDX docs retained as evidence.
+    caveat: SBOMs retained as evidence; SDL package fields do not embed the full CycloneDX documents.
+- id: thehive-cassandra.runtime.osquery-baseline
+  category: runtime
+  summary: osquery captured processes, listeners, host-side Docker container/image rows, apt sources, and the unavailable
+    Linux application/program table status.
+  evidence:
+  - path: evidence/osquery-processes.json
+  - path: evidence/osquery-listening-ports.json
+  - path: evidence/osquery-docker-containers.json
+  - path: evidence/osquery-docker-images.json
+  - path: evidence/osquery-apt-sources.json
+  - path: evidence/osquery-installed-applications.json
+  - path: evidence/osquery-programs.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.processes
+    - nodes.techvault.thehive-cassandra.runtime.service_listeners
+    rationale: Current ACES SDL node fields carry the osquery-derived baseline directly.
+    caveat: installed_applications and programs tables are unavailable in the digest-pinned Linux osquery image (recorded
+      as capture limits).
+- id: thehive-cassandra.datastore.cassandra-service
+  category: datastore
+  summary: 'The Cassandra wide-column datastore is encoded: engine cassandra 4.1.11, single-node cluster ''thehive'' (Murmur3Partitioner),
+    the node with 16 vnode tokens, the four replicated keyspaces (thehive RF1, system_auth RF1, system_distributed RF3, system_traces
+    RF2) as keyspace partitions, native-transport security, and cluster settings.'
+  evidence:
+  - path: evidence/cassandra-state.txt
+  - path: evidence/cassandra-keyspaces.txt
+  - path: evidence/docker-inspect.container.json
+  aces:
+    disposition: encoded_with_caveat
+    surface: nodes
+    checked_surfaces:
+    - nodes
+    fields:
+    - nodes.techvault.thehive-cassandra.runtime.datastore_services
+    rationale: Current ACES SDL node runtime.datastore_services (wide_column profile) carries the engine, cluster, node, keyspace
+      partitions with replication, transport, and settings facts directly.
+    caveat: The wide_column profile models replicated keyspaces (replication_factor required). The LocalStrategy keyspaces
+      (system, system_schema) and virtual keyspaces (system_virtual_schema, system_views) carry no replication factor and
+      are Cassandra engine-internal catalogs; they are recorded in cassandra-keyspaces.txt evidence but not encoded as keyspace
+      partitions. The participant-relevant thehive keyspace is fully encoded. The cassandra.yaml authenticator config was
+      not captured this pass; transport_security mode=none reflects the observed cleartext CQL listener on security-net.

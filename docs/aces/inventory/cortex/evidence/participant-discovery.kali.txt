@@ -1,0 +1,12 @@
+--kali-route--
+172.20.1.0/24 dev eth0 proto kernel scope link src 172.20.1.30
+172.20.2.0/24 dev eth1 proto kernel scope link src 172.20.2.35
+172.20.4.0/24 dev eth2 proto kernel scope link src 172.20.4.30
+--kali-hosts--
+--kali-cortex-port--
+bash: connect: Network is unreachable
+bash: line 1: /dev/tcp/172.20.0.22/9001: Network is unreachable
+tcp-closed
+--kali-cortex-status--
+--thehive-cortex-status--
+{"versions":{"Cortex":"3.1.8-1","Elastic4Play":"1.13.6","Play":"2.8.19","Elastic4s":"7.17.2","ElasticSearch client":"7.17.1"},"config":{"protectDownloadsWith":"malware","authType":["key","local"],"capabilities":["authByKey","changePassword","setPassword"],"ssoAutoLogin":false}}

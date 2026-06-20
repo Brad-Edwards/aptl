@@ -1,8 +1,8 @@
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)
 
-🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322) and [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785).** Live demos at both conferences.
+🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.** Live Arsenal demos at both conferences, plus the SecTor Briefing talk **APTL for Agentic Purple Teaming**.
 
-# APTL — Advanced Purple Team Lab
+# APTL—Advanced Purple Team Lab
 
 **Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
 
@@ -12,7 +12,7 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 
 ## Status
 
-**🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible — keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.
+**🚧 Active development. Not for production. Not hardened.** This lab gives AI agents access to real penetration-testing tools and runs intentionally vulnerable services. Container escapes and other security issues are possible—keep it on a host you can rebuild and a network you control. Always monitor red-team agents during scenarios.
 
 ## Quick Start
 
@@ -20,16 +20,20 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 pip install -e .
+cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
+
+`aptl lab start` refuses to run while `.env` still contains the
+`.env.example` placeholder values.
 
 Once it's up:
 
 | Surface | URL / command |
 |---|---|
-| Wazuh Dashboard | <https://localhost:443> (`admin` / `SecretPassword`) |
-| Victim SSH | `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022` |
-| Kali SSH | `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023` |
+| Wazuh Dashboard | <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`) |
+| Victim shell | `aptl container shell aptl-victim` |
+| Kali shell | `aptl container shell aptl-kali` |
 | Reverse engineering SSH | `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027` |
 
 Lifecycle:
@@ -48,7 +52,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 - Python 3.11+
 - 8 GB RAM, 20 GB disk
 - Linux / macOS / WSL2
-- Open ports: 443, 2022, 2023, 2027, 9200, 55000
+- Open ports: 443, 2027, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
 
 ## Architecture
 
@@ -84,7 +88,7 @@ flowchart TD
     Scenario -.->|logs / telemetry| SOC
 ```
 
-The scenario environment is whatever the YAML scenario defines — there's a default TechVault topology (AD, web, DB, file share, DNS, mail, victims) but scenarios can compose other shapes. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+The scenario environment is whatever the YAML scenario defines—there's a default TechVault topology (AD, web, DB, file share, DNS, mail, victims) but scenarios can compose other shapes. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
 
 ## AI Agents (MCP)
 
@@ -129,9 +133,9 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 ## Ethics & Disclaimers
 
-APTL uses commodity services and basic integrations. AI agents get Kali access — no enhancements to their latent capabilities beyond that. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
+APTL uses commodity services and basic integrations. AI agents get Kali access—no enhancements to their latent capabilities beyond that. **No red-team enhancements will be added to this public repository.** An autonomous cyber-operations range is under development as a separate project.
 
-You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality — dummy values for educational use, not production secrets.
+You are responsible for following all applicable laws. The author takes no responsibility for your use of this lab. The repository contains intentional **test credentials** (covered by `.gitguardian.yaml`) for lab functionality—dummy values for educational use, not production secrets.
 
 ## License
 

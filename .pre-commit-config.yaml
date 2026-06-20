@@ -26,6 +26,9 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         # `tests/` historically holds private-key-shaped fixtures.
+        # TechVault inventory evidence captures scenario target filesystem
+        # secrets verbatim; those files are reviewed scenario content, not
+        # operator credentials.
         # `mcp/aptl-mcp-common/{src,tests}/redaction.{ts,test.ts}` and
         # `src/aptl/utils/redaction.py` (+ its test) intentionally embed
         # PEM block markers — they implement and verify masking of those
@@ -33,6 +36,11 @@ repos:
         exclude: |
           (?x)^(
             tests/.*|
+            docs/aces/inventory/fileshare/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/reverse/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/shuffle-frontend/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/victim/evidence/filesystem-sensitive-paths\.txt|
+            docs/aces/inventory/workstation/evidence/filesystem-sensitive-paths\.txt|
             mcp/aptl-mcp-common/src/redaction\.ts|
             mcp/aptl-mcp-common/tests/redaction\.test\.ts|
             src/aptl/utils/redaction\.py
@@ -65,15 +73,73 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|pyproject\.toml)$
 
+      - id: ts-complexity
+        name: TypeScript complexity gate (ESLint complexity)
+        # Hard, repo-wide gate on per-function cyclomatic complexity for the
+        # TypeScript surfaces — the sibling of `ruff-complexity` above, and the
+        # same cyclomatic metric. Config (threshold, target globs, legacy
+        # exemptions) lives in the root `eslint.config.js`; ONLY the core
+        # `complexity` rule is enabled there, so this is a complexity guard, not
+        # a style linter. `language: node` with pinned `additional_dependencies`
+        # so the hook is self-contained — it installs its own toolchain into
+        # pre-commit's isolated node env and does NOT need any package's
+        # node_modules (the CI "Pre-commit hooks" job only `pip install
+        # pre-commit`s, no Node project deps). `--quiet` drops ESLint's
+        # `noInlineConfig` meta-warnings — the gate's only rule is an error, so
+        # nothing real is hidden. `pass_filenames: false`: always lints the full
+        # configured globs (mcp/*/src + web/src), not just the changed files.
+        # Runs before the slower vitest hooks so a god-method fails fast
+        # (fail_fast: true). This hook is deliberately NOT in the CI `SKIP` list
+        # (.github/workflows/checks.yml), so it gates in the required
+        # "Pre-commit hooks" job exactly as it does locally.
+        entry: eslint
+        args: [--config, eslint.config.js, --quiet, mcp, web/src]
+        language: node
+        additional_dependencies:
+          - "eslint@9.34.0"
+          - "@typescript-eslint/parser@8.41.0"
+          - "svelte-eslint-parser@1.8.0"
+          - "svelte@5.54.0"
+        pass_filenames: false
+        files: ^(mcp/[^/]+/src/.*\.ts|web/src/.*\.(ts|svelte)|eslint\.config\.js)$
+
+      - id: vale-prose-lint
+        name: Vale prose lint (ADR-038)
+        # Lints staged markdown against Google style + AptlProject house
+        # rules. The exclude regex mirrors the lintable-corpus filter in
+        # tools/vale-lint-all.sh (generated artifacts, agent-facing
+        # contracts, dated point-in-time records) — keep the two in sync.
+        entry: tools/vale-lint-hook.sh
+        language: system
+        types_or: [markdown]
+        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|docs/history/|docs/known-issues/|docs/components/mcp-smoke-test-results-|node_modules/|\.tools/|\.vale/)
+
       - id: pytest
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it
         # before committing). Fall back to PATH for contributors using a
-        # different venv layout that they've already activated.
+        # different venv layout that they've already activated. Scenario SDL,
+        # the import lockfile, and the parity inventory are included so an edit
+        # to those runs the fast ACES validation-gate logic tests (the slow
+        # full-scenario gate is the manual `aces-scenario-gate` hook below).
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration"; else exec pytest tests/ -q -k "not integration"; fi'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml)$
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|docs/aces/parity-inventory\.yaml)$
+
+      - id: aces-scenario-gate
+        name: ACES scenario validation gate (manual; slow — TechVault parse + verify-imports)
+        # SCN-010E / #322. The full-scenario gate parses TechVault's large SDL
+        # tree and runs `aces sdl verify-imports` (~minutes each), so it is a
+        # manual-stage hook, not part of the per-commit path. Run it before
+        # pushing a scenario/manifest/parity change:
+        #   pre-commit run aces-scenario-gate --hook-stage manual
+        # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
+        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
+        language: system
+        pass_filenames: false
+        stages: [manual]
+        files: ^(scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py|docs/aces/parity-inventory\.yaml)$
 
       - id: vitest-mcp-common
         name: MCP TypeScript tests (aptl-mcp-common vitest)

@@ -1,0 +1,105 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-thehive-cassandra network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "172.20.0.4",
+      "path": "",
+      "pid": "-1",
+      "port": "7000",
+      "protocol": "6",
+      "socket": "637266567"
+    },
+    {
+      "address": "172.20.0.4",
+      "path": "",
+      "pid": "-1",
+      "port": "7000",
+      "protocol": "6",
+      "socket": "637266567"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "7199",
+      "protocol": "6",
+      "socket": "637254064"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "7199",
+      "protocol": "6",
+      "socket": "637254064"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "9042",
+      "protocol": "6",
+      "socket": "637319874"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "-1",
+      "port": "9042",
+      "protocol": "6",
+      "socket": "637319874"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "39931",
+      "protocol": "6",
+      "socket": "637244314"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "39931",
+      "protocol": "6",
+      "socket": "637244314"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "41195",
+      "protocol": "6",
+      "socket": "637265932"
+    },
+    {
+      "address": "127.0.0.1",
+      "path": "",
+      "pid": "-1",
+      "port": "41195",
+      "protocol": "6",
+      "socket": "637265932"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "54747",
+      "protocol": "17",
+      "socket": "637244313"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "54747",
+      "protocol": "17",
+      "socket": "637244313"
+    }
+  ]
+}

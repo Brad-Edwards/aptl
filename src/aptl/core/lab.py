@@ -7,10 +7,11 @@ startup.
 """
 
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import icontract
 import yaml
@@ -39,13 +40,13 @@ from aptl.core.env import (
 )
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
 # The leaf has no back-edges, so this is a normal top-level import.
-from aptl.core.lab_types import (  # noqa: F401
-    DiagnosticImpact,
-    DiagnosticSeverity,
-    LabResult,
-    LabStatus,
-    StartupDiagnostic,
-    StartupOutcome,
+from aptl.core.lab_types import (
+    DiagnosticImpact as DiagnosticImpact,
+    DiagnosticSeverity as DiagnosticSeverity,
+    LabResult as LabResult,
+    LabStatus as LabStatus,
+    StartupDiagnostic as StartupDiagnostic,
+    StartupOutcome as StartupOutcome,
 )
 from aptl.core.services import (
     check_indexer_ready,
@@ -53,20 +54,51 @@ from aptl.core.services import (
     test_ssh_connection,
     wait_for_service,
 )
-from aptl.core.endpoints import select_ssh_host
-from aptl.core.snapshot import capture_snapshot, container_networks
-from aptl.core.ssh import ensure_ssh_keys
+from aptl.core.endpoints import (
+    build_ssh_endpoints,
+    select_ssh_host,
+    terminal_ssh_endpoints,
+)
+from aptl.core.host_keys import pin_terminal_host_keys
+from aptl.core.snapshot import (
+    SSHEndpoint,
+    capture_snapshot,
+    container_networks,
+    list_container_snapshots,
+)
+from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from docker.client import DockerClient
+
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
 
 
-def _runtime_require(condition, description):
+def start_aces_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+) -> LabResult:
+    """Lazy ACES handoff import for the public lab-start path."""
+    try:
+        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+    except ImportError as exc:
+        error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
+        log.error(error)
+        return LabResult(success=False, error=error)
+
+    return _start_aces_scenario(project_dir, config, backend)
+
+
+def _runtime_require(
+    condition: Callable[..., bool],
+    description: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """`icontract.require` that survives `python -O` AND keeps violation
     messages secret-safe.
 
@@ -95,7 +127,8 @@ def _runtime_require(condition, description):
     # kwargs. A no-arg factory sidesteps that check entirely: icontract
     # detects `parameters` is empty, skips kwarg resolution, and calls
     # `error()` directly.
-    def _narrow_violation():
+    def _narrow_violation() -> icontract.ViolationError:
+        """Return a fixed violation without rendering bound arguments."""
         return icontract.ViolationError(description)
 
     return icontract.require(
@@ -118,9 +151,10 @@ ALL_KNOWN_PROFILES = [
 ]
 
 
-def docker_client():
+def docker_client() -> "DockerClient":
     """Get a Docker client. Separated for easy mocking."""
-    import docker  # noqa: delayed import for mocking
+    import docker
+
     return docker.from_env()
 
 
@@ -267,6 +301,23 @@ def lab_status(
     return backend.status()
 
 
+def lab_terminal_ssh_endpoints(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"] = None,
+) -> dict[str, SSHEndpoint]:
+    """Resolve the running lab's terminal SSH endpoints (ADR-040).
+
+    Projects ``ENDPOINT_REGISTRY`` over live container inventory so the
+    WebSocket relay derives each target's host/user/port from the
+    canonical boundary (container IP over the bridge, issue #293) instead
+    of a hardcoded ``localhost`` map. Keyed by terminal short-name
+    (``victim`` / ``kali`` / ``reverse`` / ``workstation``).
+    """
+    if backend is None:
+        backend = _get_backend(project_dir)
+    return terminal_ssh_endpoints(list_container_snapshots(backend))
+
+
 def _check_bind_mounts(
     project_dir: Path,
     enabled_profiles: list[str] | None = None,
@@ -367,7 +418,7 @@ def _validate_env_secrets(raw_env: dict[str, str]) -> "LabResult | None":
 
 
 @dataclass
-class _LabStartContext:
+class _LabStartContext(object):
     """Mutable scratchpad threaded through the lab-start steps.
 
     Each step reads inputs it needs from this struct and writes back
@@ -429,8 +480,10 @@ def derive_startup_outcome(
 
     Pure function; safe to call from tests directly.
     """
+    outcome = StartupOutcome.READY
     if fatal:
-        return StartupOutcome.FAILED
+        outcome = StartupOutcome.FAILED
+        return outcome
     has_unusable = False
     has_degrading = False
     for diag in diagnostics:
@@ -439,12 +492,13 @@ def derive_startup_outcome(
         has_degrading = True
         if diag.impact in _UNUSABLE_IMPACTS:
             has_unusable = True
-            break  # already the worst non-fatal bucket
+            # Already the worst non-fatal bucket.
+            break
     if has_unusable:
-        return StartupOutcome.DEGRADED_UNUSABLE
-    if has_degrading:
-        return StartupOutcome.DEGRADED_USABLE
-    return StartupOutcome.READY
+        outcome = StartupOutcome.DEGRADED_UNUSABLE
+    elif has_degrading:
+        outcome = StartupOutcome.DEGRADED_USABLE
+    return outcome
 
 
 def _emit_diagnostic(
@@ -490,18 +544,20 @@ def _emit_diagnostic(
 
 
 def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
+    """Load and validate environment values for lab startup."""
     log.info("Step 1: Loading environment variables...")
     env_path = ctx.project_dir / ".env"
     try:
         ctx.raw_env = load_dotenv(env_path)
         ctx.env = env_vars_from_dict(ctx.raw_env)
     except (FileNotFoundError, ValueError) as exc:
-        log.error("Failed to load .env: %s", exc)
+        log.exception("Failed to load .env")
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
     return _validate_env_secrets(ctx.raw_env)
 
 
 def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
+    """Load aptl.json and initialize the configured deployment backend."""
     log.info("Step 2: Loading configuration...")
     config_path = find_config(ctx.project_dir)
     if config_path is None:
@@ -513,13 +569,14 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
     try:
         ctx.config = load_config(config_path)
     except (FileNotFoundError, ValueError) as exc:
-        log.error("Failed to load config: %s", exc)
+        log.exception("Failed to load config")
         return LabResult(success=False, error=f"Failed to load config: {exc}")
     ctx.backend = _get_backend(ctx.project_dir, ctx.config)
     return None
 
 
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
+    """Ensure the host-side lab SSH key exists."""
     log.info("Step 3: Generating SSH keys...")
     keys_dir = ctx.project_dir / "keys"
     host_ssh_dir = Path.home() / ".ssh"
@@ -533,10 +590,22 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     ctx.ssh_key_path = ssh_result.key_path or (
         Path.home() / ".ssh" / "aptl_lab_key"
     )
+
+    # SEC #417: the kali pivot key is scenario content (kali -> targets),
+    # separate from the control-plane key above. Generated into a gitignored
+    # dir and bind-mounted (private -> kali, public -> targets).
+    pivot_result = ensure_pivot_key(pivot_dir=ctx.project_dir / "config" / "lab-ssh")
+    if not pivot_result.success:
+        log.error("Pivot key generation failed: %s", pivot_result.error)
+        return LabResult(
+            success=False,
+            error=f"Pivot key generation failed: {pivot_result.error}",
+        )
     return None
 
 
 def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
+    """Validate host kernel settings required by Wazuh."""
     log.info("Step 4: Checking system requirements...")
     sysreq_result = check_max_map_count()
     if sysreq_result.passed:
@@ -557,7 +626,11 @@ def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
-def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
+def _run_credential_sync(
+    label: str,
+    fn: Callable[..., object],
+    *args: object,
+) -> LabResult | None:
     """Render one credentialized config file; any failure aborts lab start.
 
     The rendered file is a mandatory Docker Compose bind-mount source
@@ -572,10 +645,10 @@ def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
     try:
         fn(*args)
     except PathContainmentError as exc:
-        log.error("%s containment violation: %s", label, exc)
+        log.exception("%s containment violation", label)
         return LabResult(success=False, error=f"{label}: {exc}")
-    except Exception as exc:  # noqa: BLE001 - converted to a fatal LabResult
-        log.error("Failed to render %s: %s", label.lower(), exc)
+    except Exception as exc:
+        log.exception("Failed to render %s", label.lower())
         return LabResult(
             success=False, error=f"Failed to render {label.lower()}: {exc}"
         )
@@ -591,8 +664,10 @@ def _run_credential_sync(label: str, fn, *args) -> LabResult | None:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
+    """Render credentialized service configuration files."""
     log.info("Step 5: Rendering credentialized service config...")
-    assert ctx.env is not None  # contract above is the runtime guard; assert is a typing hint
+    # Contract above is the runtime guard; this assert is a typing hint.
+    assert ctx.env is not None
     # The rendered files (.aptl/config/...) are Docker bind-mount sources
     # resolved on the *daemon's* filesystem. With the SSH-remote backend
     # the daemon is on another host, so rendering locally would leave the
@@ -647,6 +722,7 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
 def _step_sync_suricata_misp_rule_baselines(
     ctx: _LabStartContext,
 ) -> LabResult | None:
+    """Render writable Suricata MISP rule baseline files."""
     log.info("Step 5b: Seeding Suricata MISP rule baselines...")
     from aptl.core.deployment import SSHComposeBackend
     if isinstance(ctx.backend, SSHComposeBackend):
@@ -669,6 +745,7 @@ def _step_sync_suricata_misp_rule_baselines(
 
 
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
+    """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
@@ -740,6 +817,7 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
+    """Validate active Compose bind-mount sources before Docker runs."""
     log.info("Step 6b: Checking bind-mount sources...")
     enabled = (
         ctx.config.containers.enabled_profiles() if ctx.config is not None else None
@@ -760,8 +838,10 @@ def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
+    """Pre-pull high-latency images before Compose startup."""
     log.info("Step 7: Pre-pulling container images...")
-    assert ctx.backend is not None  # contract above is the runtime guard
+    # Contract above is the runtime guard.
+    assert ctx.backend is not None
     images = [
         f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
         f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
@@ -799,11 +879,11 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
+    """Start the selected lab profiles through the ACES handoff."""
     log.info("Step 8: Starting containers...")
-    assert ctx.config is not None and ctx.backend is not None  # runtime guards above
-    start_result = start_lab(
-        ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-    )
+    # Runtime guards above.
+    assert ctx.config is not None and ctx.backend is not None
+    start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if not start_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -811,9 +891,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         )
         import time
         time.sleep(60)
-        start_result = start_lab(
-            ctx.config, project_dir=ctx.project_dir, backend=ctx.backend
-        )
+        start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
     if start_result.success:
         return None
     log.error("Lab start failed: %s", start_result.error)
@@ -832,8 +910,10 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     description="env_is_loaded(ctx.env)",
 )
 def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
+    """Wait for Wazuh services and emit degraded-readiness diagnostics."""
     log.info("Step 9: Waiting for services...")
-    assert ctx.config is not None and ctx.env is not None  # runtime guards above
+    # Runtime guards above.
+    assert ctx.config is not None and ctx.env is not None
     if not ctx.config.containers.wazuh:
         return None
 
@@ -904,6 +984,7 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     description="ssh_key_is_ready(ctx.ssh_key_path)",
 )
 def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
+    """Probe SSH reachability for enabled interactive lab targets."""
     log.info("Step 10: Testing SSH connectivity...")
     # config / ssh_key guarded by the decorators above; backend is set
     # by the earlier compose-up step and is a structural invariant here.
@@ -980,16 +1061,17 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
+    """Capture a non-fatal inventory snapshot of the started range."""
     log.info("Step 11: Capturing range snapshot...")
     try:
         snapshot = capture_snapshot(
             config_dir=ctx.project_dir, backend=ctx.backend
         )
-    except Exception as exc:  # noqa: BLE001 — converted to structured diagnostic
+    except Exception:
         # Snapshot is the run-archive inventory; its loss is observability
-        # debt, not a hard failure (ADR-030). Keep the raw exception in
-        # the log only (existing redaction owns it); diagnostic is narrow.
-        log.warning("Range snapshot capture failed: %s", exc)
+        # debt, not a hard failure (ADR-030). Keep exception detail in
+        # the log only; diagnostic is narrow.
+        log.exception("Range snapshot capture failed")
         _emit_diagnostic(
             ctx,
             step="capture_snapshot",
@@ -1012,7 +1094,40 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
+    """Pin lab SSH host keys for the operator terminal relay (ADR-040).
+
+    Captures each reachable SSH endpoint's server host key (trust-on-
+    first-use is permitted only here, during provisioning on the trusted
+    host) and writes the ``.aptl/known_hosts`` file the WebSocket relay
+    later verifies against. Non-fatal: an endpoint that cannot be pinned
+    (not running, not yet reachable) simply makes the relay fail closed
+    for that container until the next lab start, so a pinning hiccup must
+    not abort an otherwise-healthy lab.
+    """
+    log.info("Step 11b: Pinning terminal SSH host keys...")
+    if ctx.backend is None or ctx.ssh_key_path is None:
+        log.debug("Skipping host-key pinning: backend or ssh key unavailable")
+        return None
+    try:
+        endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
+        result = pin_terminal_host_keys(
+            ctx.project_dir, endpoints, ctx.ssh_key_path
+        )
+    # Observability only: pinning failures are never fatal to lab start.
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Terminal SSH host-key pinning failed: %s", exc)
+        return None
+    if result.failed:
+        log.warning(
+            "Terminal SSH host keys not pinned for: %s",
+            ", ".join(result.failed),
+        )
+    return None
+
+
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
+    """Build local MCP server artifacts after the lab is running."""
     log.info("Step 12: Building MCP servers...")
     mcp_script = ctx.project_dir / "mcp" / "build-all-mcps.sh"
     if not mcp_script.exists():
@@ -1081,53 +1196,57 @@ _PRIME_REQUIRED_PROFILES = frozenset(
     {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
 )
 
+_SEED_SOC_RERUN_ACTION = (
+    "Re-run scripts/seed-prime.sh manually once SOC containers are healthy"
+)
+
 
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
 )
 def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
+    """Seed SOC tools when the configured profile set can support it."""
     if ctx.skip_seed:
         log.info("Step 13: Skipping SOC seeding (--skip-seed)")
-        return None
-    log.info("Step 13: Seeding SOC tools...")
-    assert ctx.config is not None  # runtime guard above
-    # Order the SOC-enabled check first so a missing script with SOC
-    # disabled stays a silent no-op (no degradation), while a missing
-    # script with SOC *enabled* surfaces as a capability warning —
-    # otherwise the lab would come up with empty SOC tools and the
-    # outcome would still be `ready` (codex review #202 cycle 1).
-    if not ctx.config.containers.soc:
-        log.debug("SOC profile not enabled, skipping seed")
-        return None
-    # SOC requested but prime profiles partially missing → soft
-    # CAPABILITY warning, not a fatal contract breach. ADR-005 allows
-    # selective SOC labs; making this fatal would regress smoke-test
-    # configs and any operator running a slim SOC subset for triage.
-    # The reusable `required_profiles_enabled` predicate is still the
-    # right callable for a *prime-scenario-explicit* entrypoint when
-    # one exists; here we surface the gap and continue.
-    if not required_profiles_enabled(ctx.config, _PRIME_REQUIRED_PROFILES):
-        missing = sorted(
-            _PRIME_REQUIRED_PROFILES
-            - set(ctx.config.containers.enabled_profiles())
-        )
-        _emit_diagnostic(
-            ctx,
-            step="seed_soc",
-            impact=DiagnosticImpact.CAPABILITY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Prime SOC seed needs the full prime profile set; "
-                f"missing: {', '.join(missing)}. SOC tools will start empty."
-            ),
-            operator_action=(
-                "Enable the missing prime profiles in aptl.json and "
-                "re-run `aptl lab start`, or run `scripts/seed-prime.sh` "
-                "manually once the prime stack is up."
-            ),
-        )
-        return None
+    else:
+        log.info("Step 13: Seeding SOC tools...")
+        # Runtime guard above.
+        assert ctx.config is not None
+        if not ctx.config.containers.soc:
+            log.debug("SOC profile not enabled, skipping seed")
+        elif not required_profiles_enabled(ctx.config, _PRIME_REQUIRED_PROFILES):
+            _emit_missing_prime_profiles(ctx)
+        else:
+            _run_seed_soc_script(ctx)
+    return None
+
+
+def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
+    """Emit the non-fatal diagnostic for partial prime profile sets."""
+    assert ctx.config is not None
+    missing = sorted(
+        _PRIME_REQUIRED_PROFILES - set(ctx.config.containers.enabled_profiles())
+    )
+    _emit_diagnostic(
+        ctx,
+        step="seed_soc",
+        impact=DiagnosticImpact.CAPABILITY,
+        severity=DiagnosticSeverity.WARNING,
+        message=(
+            "Prime SOC seed needs the full prime profile set; "
+            f"missing: {', '.join(missing)}. SOC tools will start empty."
+        ),
+        operator_action=(
+            "Enable the missing prime profiles in aptl.json and "
+            "re-run `aptl lab start`, or run `scripts/seed-prime.sh` "
+            "manually once the prime stack is up."
+        ),
+    )
+
+
+def _run_seed_soc_script(ctx: _LabStartContext) -> None:
+    """Run ``seed-prime.sh`` and convert soft failures to diagnostics."""
     seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
     if not seed_script.exists():
         log.warning(
@@ -1147,7 +1266,12 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
                 "containers are healthy"
             ),
         )
-        return None
+    else:
+        _execute_seed_soc_script(ctx, seed_script)
+
+
+def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
+    """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
         seed_result = subprocess.run(
             [str(seed_script)],
@@ -1164,10 +1288,7 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
                 impact=DiagnosticImpact.CAPABILITY,
                 severity=DiagnosticSeverity.WARNING,
                 message="SOC seeding returned non-zero exit; see lab logs",
-                operator_action=(
-                    "Re-run scripts/seed-prime.sh manually once SOC "
-                    "containers are healthy"
-                ),
+                operator_action=_SEED_SOC_RERUN_ACTION,
             )
         else:
             log.info("SOC tools seeded successfully")
@@ -1179,10 +1300,7 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="SOC seeding timed out; SOC tools will start empty",
-            operator_action=(
-                "Re-run scripts/seed-prime.sh manually once SOC "
-                "containers are healthy"
-            ),
+            operator_action=_SEED_SOC_RERUN_ACTION,
         )
     except (FileNotFoundError, OSError) as exc:
         log.warning("Failed to seed SOC tools: %s", exc)
@@ -1196,10 +1314,10 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
                 "Inspect scripts/seed-prime.sh permissions and tooling"
             ),
         )
-    return None
 
 
 def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
+    """Refresh local MCP client env keys after SOC seeding."""
     # `.mcp.json` is the canonical config Claude Code, Cursor, and Cline
     # read to spawn MCP servers. Seed-prime writes API keys (TheHive
     # provisioned, MISP/Shuffle defaults) to `.env`. If the user has a
@@ -1209,10 +1327,10 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 14: Syncing MCP client config with seeded API keys...")
     try:
         _sync_mcp_config_keys(ctx.project_dir)
-    except Exception as exc:  # noqa: BLE001 — converted to structured diagnostic
+    except Exception:
         # Exception text may include API key names — keep it in the log
         # only (existing redaction). Diagnostic stays narrow.
-        log.warning("MCP config sync skipped: %s", exc)
+        log.exception("MCP config sync skipped")
         _emit_diagnostic(
             ctx,
             step="mcp_config_sync",
@@ -1248,6 +1366,7 @@ _LAB_START_STEPS = (
     _step_wait_for_services,
     _step_test_ssh,
     _step_capture_snapshot,
+    _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,
     _step_sync_mcp_config,

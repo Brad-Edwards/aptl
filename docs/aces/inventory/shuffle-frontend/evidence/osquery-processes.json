@@ -1,0 +1,162 @@
+{
+  "table": "processes",
+  "query": "select pid, name, path, cmdline, uid, gid, start_time from processes where name != \"osqueryi\" order by pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-shuffle-frontend PID namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "cmdline": "nginx: master process nginx -g daemon off;",
+      "gid": "0",
+      "name": "nginx",
+      "path": "/usr/sbin/nginx",
+      "pid": "1",
+      "start_time": "1781133561",
+      "uid": "0"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "8",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "9",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "10",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "11",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "12",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "13",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "14",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "15",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "16",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "17",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "18",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "19",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "20",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "21",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "22",
+      "start_time": "1781133561",
+      "uid": "65534"
+    },
+    {
+      "cmdline": "nginx: worker process",
+      "gid": "65534",
+      "name": "nginx",
+      "path": "",
+      "pid": "23",
+      "start_time": "1781133561",
+      "uid": "65534"
+    }
+  ]
+}

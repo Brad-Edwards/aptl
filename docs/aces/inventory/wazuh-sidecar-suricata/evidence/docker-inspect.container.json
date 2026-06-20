@@ -1,0 +1,228 @@
+[
+  {
+    "Id": "df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c",
+    "Created": "2026-06-11T16:00:20.002400192Z",
+    "Path": "/opt/aptl/wazuh/wazuh-agent.sh",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 817388,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-06-11T16:01:14.874663644Z",
+      "FinishedAt": "2026-06-11T16:01:14.232376695Z"
+    },
+    "Image": "sha256:1a9c99918f73a234721fe07ccafdcc6c49e1b3784a16ce86cdb2864636345d25",
+    "ResolvConfPath": "/var/lib/docker/containers/df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c/hostname",
+    "HostsPath": "/var/lib/docker/containers/df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c/hosts",
+    "LogPath": "/var/lib/docker/containers/df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c/df22d1f07a1c45816554595dce7defa6ef5beec882360dbcbf66a7ed4a44c63c-json.log",
+    "Name": "/aptl-wazuh-sidecar-suricata",
+    "RestartCount": 1,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "aptl_suricata_logs:/logs:ro"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 536870912,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_logs",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_logs/_data",
+        "Destination": "/logs",
+        "Driver": "local",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": ""
+      }
+    ],
+    "Config": {
+      "Hostname": "wazuh-sidecar-suricata",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "LOG_FORMAT=json",
+        "WAZUH_MANAGER=wazuh.manager",
+        "AGENT_NAME=aptl-suricata-agent",
+        "LOG_PATHS=/logs/eve.json",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "DEBIAN_FRONTEND=noninteractive"
+      ],
+      "Cmd": null,
+      "Image": "aptl-wazuh-sidecar:local",
+      "Volumes": null,
+      "WorkingDir": "",
+      "Entrypoint": [
+        "/opt/aptl/wazuh/wazuh-agent.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "2307df3cc0140e6cb4dbe2f8cf64ec4b7eea80632c324b985d23c6492c8312cd",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "wazuh.manager:service_healthy:false",
+        "com.docker.compose.image": "sha256:1c1d665099f3d8a1ea97d2cb7970abaf4c8b62e077331857101ed4f9e9abf961",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "wazuh-sidecar-suricata",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "10a89b9d920d9f2aa0a01165160a5e9e6c997982983ae24b9537f6508b33a891",
+      "SandboxKey": "/var/run/docker/netns/10a89b9d920d",
+      "Ports": {},
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.36"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-wazuh-sidecar-suricata",
+            "wazuh-sidecar-suricata"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "7e2ba2f38a00f63594a5b0bf2b1c44a65789c5bacffbb56b2c293b1d5e4040bc",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.36",
+          "MacAddress": "f6:68:93:9d:24:8c",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-wazuh-sidecar-suricata",
+            "wazuh-sidecar-suricata",
+            "df22d1f07a1c"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:0cf1afa8026b4deadf55d31572e2b5fdfa24e784fc0f6d8d5e1a71c11785ac4c",
+      "size": 1806,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

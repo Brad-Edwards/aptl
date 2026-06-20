@@ -21,8 +21,8 @@ local lab state, not as clean-lab rebuild proof.
 | Source class | `custom-build` |
 | Source package | `containers/workstation/`, `containers/base/scripts/`, `containers/base/falco_custom.yaml`, `keys/aptl_lab_key.pub`, `keys/authorized_keys` |
 | Image tag | `aptl-workstation:latest` |
-| Image digest | `aptl-workstation@sha256:7843052c4410f05703c15e400d434ecfe7999de9da2078ad127839ea3ddee14f` |
-| Runtime OS | Rocky Linux 9.7 (Blue Onyx) |
+| Image digest | `aptl-workstation@sha256:a407dd9bd9aecf297a51bd747215873e5edcc71e8618e9775bea9a5bb654dcbd` |
+| Runtime OS | Rocky Linux 9.8 (Blue Onyx) |
 | Runtime command | `/usr/local/bin/entrypoint.sh` then `/usr/sbin/init` |
 | Listener | SSH on `0.0.0.0:22` and `[::]:22` |
 | Network identity | `aptl_aptl-internal` IPv4 `172.20.2.40` |
@@ -37,13 +37,13 @@ local lab state, not as clean-lab rebuild proof.
 | --- | --- |
 | Capture commands are reproducible. | `capture-evidence.sh`, `normalize-syft-cyclonedx.jq` |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/syft-version.json`, `evidence/osquery-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.workstation.json` |
+| Docker Compose service intent is represented by the Compose service slice. | `evidence/compose-service.workstation.json` |
 | Custom image identity, config, source inputs, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt`, `evidence/docker-history.image.jsonl`, `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.workstation-logs.json`, `evidence/docker-volume.workstation-home.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
 | RPM repositories, packages, language/tool manifests, and SBOM component inventories are recorded. | `evidence/rpm-repositories.txt`, `evidence/os-packages.txt`, `evidence/language-manifests.txt`, `evidence/trivy-sbom.cyclonedx.json.gz`, `evidence/syft-sbom.cyclonedx.json.gz` |
 | Patch state is machine-readable. | `evidence/trivy-vulnerability-counts.json`, `evidence/trivy-vulnerability-list.json` |
 | osquery table attempts are recorded. | `evidence/osquery-apt-sources.json`, `evidence/osquery-docker-containers.json`, `evidence/osquery-docker-images.json`, `evidence/osquery-installed-applications.json`, `evidence/osquery-listening-ports.json`, `evidence/osquery-processes.json`, `evidence/osquery-programs.json` |
-| Catalogued filesystem paths, secret boundaries, and checksums are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt`, `evidence/filesystem-sensitive-paths.txt` |
+| Catalogued filesystem paths, checksums, and verbatim sensitive file contents are recorded. | `evidence/filesystem-tree.txt`, `evidence/filesystem-checksums.txt`, `evidence/filesystem-sensitive-paths.txt` |
 | Systemd unit-file and selected runtime unit states are recorded. | `evidence/systemd-units.txt` |
 | Evidence files have integrity checksums. | `evidence/evidence-sha256sums.txt` |
 | Captured facts are mapped to current ACES surfaces or gap issues. | `mapping-ledger.yaml` |
@@ -71,9 +71,9 @@ local lab state, not as clean-lab rebuild proof.
 - Wazuh and Falco packages/configuration are present. Their realized unit
   states are encoded through the ACES service-manager unit surface added by
   Brad-Edwards/aces#418.
-- The committed SDL encodes 191 runtime filesystem entries, 184 workstation
+- The committed SDL encodes 192 runtime filesystem entries, 185 workstation
   content entries, 20 host-local accounts, 39 host-local groups, 2 NOPASSWD
-  sudo rules, 74 systemd service-manager unit records, 261 RPM packages, and
+  sudo rules, 73 systemd service-manager unit records, 261 RPM packages, and
   42 Trivy package findings.
 - Trivy 0.70.0 reported 42 vulnerability findings at scan time: 2 critical,
   22 high, 17 medium, and 1 low.
@@ -87,10 +87,10 @@ local lab state, not as clean-lab rebuild proof.
   evidence files. The Trivy and Syft CycloneDX SBOM files are deterministic
   gzip-compressed minified JSON to satisfy the repository added-file size gate;
   compression is lossless.
-- Raw credential fixture contents, generated flags, private keys, and operator
-  key material are absent from committed evidence. The SDL records those
-  surfaces through metadata, checksums where appropriate, secret-fixture
-  classification, and scenario weakness IDs.
+- Credential fixture contents, generated flags, private keys, and operator
+  key material are retained in committed evidence. The SDL records those
+  surfaces through metadata, checksums, secret-fixture classification, and
+  scenario weakness IDs.
 
 ## ACES Mapping Result
 
@@ -123,10 +123,9 @@ aptl aces-inventory gaps docs/aces/inventory/workstation
   `aptl lab stop -v && aptl lab start` reproduces the same state.
 - The capture does not prove byte-identical rebuildability or full root
   filesystem equivalence.
-- Raw credential, key, and flag contents are intentionally absent from committed
-  evidence.
-- The `/keys/aptl_lab_key` operator private key is catalogued by path metadata
-  only; its checksum is intentionally omitted.
+- Credential, key, and flag contents under the captured scenario target paths
+  are retained verbatim in `filesystem-sensitive-paths.txt` and checksummed in
+  `filesystem-checksums.txt` where files are present.
 - Vulnerability results are time-sensitive to the Trivy database and advisory
   feeds.
 - The capture does not assert attack-induced state changes or later

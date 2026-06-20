@@ -407,6 +407,9 @@ archive/
 
 keys/*
 
+# SEC #417: kali pivot keypair (scenario content), generated at lab standup.
+config/lab-ssh/
+
 config/wazuh_indexer_ssl_certs/*
 
 .cursor/mcp.json
@@ -415,6 +418,10 @@ config/wazuh_indexer_ssl_certs/*
 
 # Purple-loop archive directories (per-run state moved aside before fresh runs)
 .aptl_archive_*
+
+# Local run archive (default run_storage.local_path = ./runs); per-run
+# experiment evidence, including live-gate manifests. Never committed.
+/runs/
 
 # Playwright MCP session cache
 .playwright-mcp/
@@ -427,3 +434,11 @@ notes/
 research/
 
 data/
+
+# Vale prose linter binary (installed by tools/install-vale.sh) and the
+# synced Google package under .vale/styles/Google/ are not tracked —
+# run tools/install-vale.sh to restore them. House-style overrides
+# under .vale/styles/AptlProject/ are tracked.
+.tools/
+.vale/styles/*
+!.vale/styles/AptlProject/

@@ -1,15 +1,21 @@
 {
   "table": "docker_images",
-  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%aptl-dns%\";",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%dns%\";",
   "tool": "osqueryi version 4.9.0",
   "vantage": "containerized osquery host-side Docker socket view",
   "status": "captured",
   "rows": [
     {
       "created": "1779065893",
-      "id": "98deb7dcc1ef3e3435bfeb4a9bffaac8a177636da8505164fba9eeee7508ec75",
+      "id": "915548f73e04907ca2cd92ad535114c2d610480032a4a3081b645ad662451ea6",
       "size_bytes": "297814559",
       "tags": "aptl-dns:latest"
+    },
+    {
+      "created": "1779354073",
+      "id": "e60bcb5d5d6bdd8ee9798de55b211ce11c61e206b81a33518359578b17ba896d",
+      "size_bytes": "297814561",
+      "tags": "aptl2-dns:latest"
     }
   ]
 }

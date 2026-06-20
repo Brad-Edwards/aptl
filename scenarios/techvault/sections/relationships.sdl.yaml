@@ -4,19 +4,53 @@ relationships:
     type: connects_to
     source: techvault.suricata
     target: techvault.wazuh-manager
-    description: 'The off-node wazuh-sidecar-suricata container tails Suricata eve.json from the read-only suricata_logs volume and forwards alert telemetry to the SOC stack. Typed forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460); the sidecar is an APTL ADR-020 carve-out (jasonish/suricata:7.0 has no first-party Wazuh package) and is not itself a scenario participant node.'
+    description: 'Logical log-origin edge: the suricata container''s EVE JSON alert stream reaches the SOC stack via the
+      off-node wazuh-sidecar-suricata container, which tails it from the shared suricata_logs volume. Typed
+      forwarding_edge.forwarder_ref resolves into the scenario-level forwarding_agents registry (Brad-Edwards/aces#460).
+      As of SCN-010 issue #344 the sidecar itself is inventoried as the participant node nodes.techvault.wazuh-sidecar-suricata;
+      the realized sidecar-to-manager network edge is wazuh-sidecar-suricata-forwards-wazuh-manager.
+
+      '
     properties: {}
     database_access: null
     mail_access: null
     forwarding_edge:
       forwarder_ref: aptl-suricata-wazuh-agent
-      target_listener_role: other
+      target_listener_role: agent_event_ingestion
       enrollment_identity_ref: ''
       enrollment_identity_classification: none
-      protocol: ''
-      crypto_method: ''
+      protocol: tcp
+      crypto_method: aes
       parse_format: eve_json
-      description: ''
+      description: 'Now evidenced by the wazuh-sidecar-suricata inventory bundle (rendered ossec.conf: server wazuh.manager:1514
+        tcp, crypto aes, localfile json /logs/eve.json).'
+    service_integration: null
+    proxy_upstream: null
+  wazuh-sidecar-suricata-forwards-wazuh-manager:
+    type: connects_to
+    source: techvault.wazuh-sidecar-suricata
+    target: techvault.wazuh-manager
+    description: 'Realized network edge from the wazuh-sidecar-suricata node: its wazuh-agentd dials the manager on TCP/1514
+      and registers via agent-auth. The manager agent_control lists it as agent id 006 aptl-suricata-agent, status Active
+      (evidenced by observer-discovery.wazuh-manager.txt); the agent is currently connected with events flowing
+      (wazuh-agent-state.txt: status=connected). The sidecar publishes no inbound listener and is unreachable from the kali
+      participant vantage (participant-discovery.kali.txt). SCN-010 issue #344.'
+    properties:
+      protocol: wazuh-agent
+      port: '1514'
+      vantage: aptl-wazuh-manager
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: aptl-suricata-wazuh-agent
+      target_listener_role: agent_event_ingestion
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: tcp
+      crypto_method: aes
+      parse_format: eve_json
+      description: 'Resolves to the aptl-suricata-wazuh-agent scenario-level forwarding agent; enrollment on TCP/1515, event
+        shipping on TCP/1514.'
     service_integration: null
     proxy_upstream: null
   db-logs-forwarded-wazuh:
@@ -87,6 +121,32 @@ relationships:
       description: ''
     mail_access: null
     forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  reverse-forwards-wazuh:
+    type: connects_to
+    source: techvault.reverse
+    target: techvault.wazuh-manager
+    description: 'The reverse node forwards log telemetry to the SOC stack via an in-process Wazuh agent (wazuh-agentd dials
+      the manager on TCP/1514, enrollment TCP/1515) and rsyslog. The manager agent_control shows the agent Active; the
+      registration name is runtime-generated (reverse-$(hostname)-$(date +%s), id 009 in the SCN-010 #338 capture), so the
+      manager-side agents[] enumeration is intentionally not extended for this node (see docs/aces/inventory/reverse/).'
+    properties:
+      protocol: wazuh-agent
+      port: '1514'
+      vantage: aptl-wazuh-manager
+    database_access: null
+    mail_access: null
+    forwarding_edge:
+      forwarder_ref: reverse-wazuh-agent
+      target_listener_role: agent_event_ingestion
+      enrollment_identity_ref: ''
+      enrollment_identity_classification: none
+      protocol: tcp
+      crypto_method: aes
+      parse_format: unknown
+      description: 'Resolves to the reverse-wazuh-agent runtime forwarding agent on the reverse node; crypto_method aes from
+        the rendered ossec.conf, enrollment on TCP/1515, event shipping on TCP/1514.'
     service_integration: null
     proxy_upstream: null
   webapp-forwards-wazuh:
@@ -332,13 +392,13 @@ relationships:
     source: nodes.techvault.misp.runtime.applications.misp-web
     target: nodes.techvault.misp-db.runtime.database_services.misp-mariadb.databases.misp
     description: MISP application configuration points at the MariaDB companion service using MYSQL_HOST=misp-db, database
-      misp, and user misp; password value is redacted.
+      misp, user misp, and password misp_db_password.
     properties:
       protocol: mysql
       port: '3306'
       database: misp
       auth_method: password
-      credential_source: MYSQL_PASSWORD redacted
+      credential_source: MYSQL_PASSWORD=misp_db_password
     database_access:
       role_ref: misp
       auth_method: password
@@ -365,12 +425,72 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  thehive-connects-cassandra:
+    type: connects_to
+    source: techvault.thehive
+    target: techvault.thehive-cassandra
+    description: 'TheHive persists its primary case/alert data in Cassandra over the CQL native transport (TCP/9042),
+      configured via the --cql-hostnames thehive-cassandra container argument. The thehive keyspace (RF 1) holds the
+      application data. This is TheHive''s active datastore; its search index is local Lucene (not thehive-es).'
+    properties:
+      protocol: cql
+      port: '9042'
+      backend: cassandra
+      keyspace: thehive
+      vantage: aptl-thehive
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  cortex-connects-thehive-es:
+    type: connects_to
+    source: techvault.cortex
+    target: techvault.thehive-es
+    description: 'Cortex stores organization/user metadata in the shared TheHive Elasticsearch service over HTTP/9200 using
+      search.uri=http://thehive-es:9200 and index cortex_6. The cortex-index-init one-shot service pre-creates relations,
+      status, and key as keyword fields so Cortex key-auth term queries match the seeded service account.'
+    properties:
+      protocol: http
+      port: '9200'
+      backend: elasticsearch
+      index: cortex_6
+      auth_method: none
+      vantage: aptl-cortex
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  thehive-connects-cortex:
+    type: connects_to
+    source: techvault.thehive
+    target: techvault.cortex
+    description: 'TheHive consumes Cortex analyzers over the internal aptl-security network at http://cortex:9001. The
+      connector is configured by docker-compose --cortex-proto/--cortex-hostnames/--cortex-port flags and authenticates with
+      the fixture API key aptlcortexlabapikey2026purple from config/cortex/thehive-cortex.env; Cortex observes it as aptl-svc@cortex.local in
+      organization APTL with read/analyze/orgadmin roles.'
+    properties:
+      protocol: http
+      port: '9001'
+      auth_method: bearer_api_key
+      credential_classification: secret_fixture
+      credential_value: aptlcortexlabapikey2026purple
+      vantage: aptl-thehive
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
   misp-suricata-sync-queries-misp-api:
     type: connects_to
     source: techvault.misp-suricata-sync
     target: nodes.techvault.misp.runtime.applications.misp-web
-    description: The MISP-to-Suricata sync service resolves the MISP container, reaches TCP 443/80, and verifies the MISP
-      TLS certificate with the lab CA before using the API key supplied out of band.
+    description: 'The MISP-to-Suricata sync service resolves the MISP container, reaches TCP 443/80, and verifies the MISP
+      TLS certificate with the lab CA before authenticating with the MISP admin API key (the secret_fixture value disclosed
+      on nodes.techvault.misp runtime environment, carried on this node as MISP_API_KEY). As of SCN-010 issue #349 the sync
+      service is inventoried as the participant node nodes.techvault.misp-suricata-sync; the lab-CA trust input and the
+      sync loop are evidenced by docs/aces/inventory/misp-suricata-sync/ (sync-service-state.txt, docker-logs).'
     properties:
       protocol: https
       port: '443'
@@ -382,19 +502,78 @@ relationships:
     forwarding_edge: null
     service_integration: null
     proxy_upstream: null
+  misp-suricata-sync-updates-suricata-rules:
+    type: connects_to
+    source: techvault.misp-suricata-sync
+    target: techvault.suricata
+    description: 'Realized IOC-enforcement handoff edge (SCN-010 issue #349): every SYNC_INTERVAL_SECONDS (300) the sync
+      service atomically rewrites /var/lib/suricata/rules/misp/misp-iocs.rules (alert-only rules per ADR-019, sid_base
+      99000000, tag filter aptl:enforce) on the shared host bind (.aptl/suricata/rules/misp) and triggers a Suricata rule
+      reload over the shared suricata_command_socket unix socket (/var/run/suricata/suricata-command.socket, owned by the
+      suricata service account uid/gid 998). The suricata node consumes the same directory as authored content; the rules
+      file held ioc_count=0 at the capture snapshot. Evidenced by sync-service-state.txt and
+      observer-discovery.suricata.txt in docs/aces/inventory/misp-suricata-sync/.'
+    properties:
+      protocol: unix-socket
+      socket_path: /var/run/suricata/suricata-command.socket
+      rules_path: /var/lib/suricata/rules/misp/misp-iocs.rules
+      vantage: aptl-misp-suricata-sync
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  shuffle-frontend-proxies-backend:
+    type: connects_to
+    source: techvault.shuffle-frontend
+    target: techvault.shuffle-backend
+    description: 'The Shuffle frontend nginx reverse-proxies all /api/v1 and /api/v2 requests to the shuffle-backend SOAR API
+      on TCP/5001 (nginx proxy_pass http://shuffle-backend:5001, BACKEND_HOSTNAME=shuffle-backend); it also serves the static
+      React SPA from /usr/share/nginx/html. Evidenced by the rendered nginx config in frontend-state.txt.'
+    properties:
+      protocol: http
+      port: '5001'
+      proxy_pass: http://shuffle-backend:5001
+      proxied_paths: /api/v1,/api/v2
+      vantage: aptl-shuffle-frontend
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
   shuffle-backend-connects-opensearch:
     type: connects_to
     source: nodes.techvault.shuffle-backend.runtime.platform_applications.shuffle-soar
     target: techvault.shuffle-opensearch
     description: The Shuffle backend persists all organisation, user, workflow, app, and execution state in the OpenSearch
       datastore at SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200. Authentication is HTTP basic (admin); TLS
-      verification is disabled via SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true and the password value is redacted.
+      verification is disabled via SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true and the password is StrongPassword123!.
     properties:
       protocol: https
       port: '9200'
       auth_method: password
       tls_verification: disabled
-      credential_source: SHUFFLE_OPENSEARCH_PASSWORD redacted
+      credential_source: SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123!
+    database_access: null
+    mail_access: null
+    forwarding_edge: null
+    service_integration: null
+    proxy_upstream: null
+  orborus-polls-backend:
+    type: connects_to
+    source: techvault.shuffle-orborus
+    target: techvault.shuffle-backend
+    description: 'The Shuffle orborus worker orchestrator polls the shuffle-backend SOAR API over http://shuffle-backend:5001
+      (BASE_URL) for execution jobs; the outbound TCP/5001 connection is ESTABLISHED at capture (orborus PID 1) and compose
+      declares depends_on shuffle-backend. Evidenced by orborus-state.txt (--outbound-target-backend--) and the
+      runtime-baseline.txt outbound connections.'
+    properties:
+      protocol: http
+      port: '5001'
+      base_url: http://shuffle-backend:5001
+      direction: outbound
+      connection_state: ESTABLISHED
+      vantage: aptl-shuffle-orborus
     database_access: null
     mail_access: null
     forwarding_edge: null

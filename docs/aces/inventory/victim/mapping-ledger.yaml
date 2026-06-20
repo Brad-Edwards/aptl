@@ -7,7 +7,7 @@ asset:
   source_class: custom-build
   proof_scope: steady-state-asset-spec
 provenance:
-  image_digest: aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310
+  image_digest: aptl-victim@sha256:2a93b5ed32f7e62b4fb7b8a66b2b94c0da9a4439a2cfeb20634ebbb832fc3240
   attestation:
     status: not_available
     verification_status: not_applicable
@@ -63,13 +63,14 @@ correspondence_checks:
 notes:
 - The capture used the already-running local lab and did not run `aptl lab stop -v && aptl lab start`; this is a non-destructive
   frozen observation of the realized victim container.
-- Raw generated flags, private-key material, and the operator private key at /keys/aptl_lab_key are intentionally absent from
-  committed evidence. Path metadata and checksums are retained where the redaction boundary permits them.
+- 'Generated flags and SSH host private-key material are captured verbatim where present in filesystem-sensitive-paths.txt
+  and checksummed in filesystem-checksums.txt. Per SEC #417 no operator private key is mounted into the target; /keys holds
+  only public material (the control-plane pubkey and the kali pivot pubkey).'
 - No known ACES expressivity blocker or needs_gap_triage disposition remains in this ledger.
 facts:
 - id: victim.image.identity
   category: provenance
-  summary: The asset uses first-party local image aptl-victim:latest, captured as aptl-victim@sha256:6ff54c44fdc14d319c7df44e76db5363a440eddb3ee27dae638619daee22f310.
+  summary: The asset uses first-party local image aptl-victim:latest, captured as aptl-victim@sha256:3bee36ded583ec3b192c4a431ee13ecdc7a60a66aac742971d351580acc7828f.
   evidence:
   - path: evidence/docker-inspect.image.json
   - path: evidence/docker-inspect.container.json
@@ -158,8 +159,9 @@ facts:
       policy.
 - id: victim.runtime.mount-table
   category: runtime-configuration
-  summary: The observed runtime mount table includes 30 mount targets, including overlay root, proc/sys/tmpfs pseudo-filesystems,
-    /run and /tmp tmpfs mounts, /sys/fs/cgroup bind mount, /keys bind mount, /var/log named volume, and anonymous /home volume.
+  summary: The observed runtime mount table includes 31 mount targets, including overlay root, proc/sys/tmpfs pseudo-filesystems,
+    /run and /tmp tmpfs mounts, /sys/fs/cgroup bind mount, two /keys public-key file binds, /var/log named volume, and anonymous
+    /home volume.
   evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/docker-inspect.container.json
@@ -225,8 +227,8 @@ facts:
       environment values with value classifications.
 - id: victim.runtime.filesystem-inventory
   category: filesystem-inventory
-  summary: The committed runtime filesystem inventory includes 173 catalogued paths and 119 checksum-backed files across /home,
-    /root, /keys, /etc, /opt, /var/ossec, and /var/log, with sensitive paths tagged by redaction boundary.
+  summary: The committed runtime filesystem inventory includes 173 catalogued paths and 126 checksum-backed files across /home,
+    /root, /keys, /etc, /opt, /var/ossec, and /var/log, with sensitive file contents retained in filesystem-sensitive-paths.txt.
   evidence:
   - path: evidence/filesystem-tree.txt
   - path: evidence/filesystem-checksums.txt
@@ -341,8 +343,8 @@ facts:
       encoded as observed runtime state rather than as provisioning intent.
 - id: victim.access-policy
   category: scenario-weakness
-  summary: Victim participant-visible access policy includes public-key SSH for labadmin and a NOPASSWD sudo grant; raw operator
-    private-key material and generated flag values are absent from committed evidence.
+  summary: Victim participant-visible access policy includes public-key SSH for labadmin and a NOPASSWD sudo grant; private-key
+    material and generated flag values are retained in committed evidence.
   evidence:
   - path: evidence/filesystem-sensitive-paths.txt
   - path: evidence/filesystem-tree.txt
@@ -355,8 +357,8 @@ facts:
     - vulnerabilities.victim-nopasswd-sudo
     - nodes.techvault.victim.vulnerabilities
     - content.victim-*
-    rationale: ACES vulnerabilities and content encode the scenario weakness ID, CWE class, sensitive fixture files, and checksum/metadata-only
-      redaction boundary without committing raw secret values.
+    rationale: ACES vulnerabilities and content encode the scenario weakness ID, CWE class, sensitive fixture files, and the
+      verbatim evidence/checksum surfaces for the generated flags and key material.
 - id: victim.relationships
   category: topology
   summary: >

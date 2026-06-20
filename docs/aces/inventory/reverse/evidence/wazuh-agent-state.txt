@@ -1,0 +1,174 @@
+--wazuh-control-info--
+WAZUH_VERSION="v4.12.0"
+WAZUH_REVISION="rc1"
+WAZUH_TYPE="agent"
+--wazuh-control-status--
+wazuh-modulesd is running...
+wazuh-logcollector is running...
+wazuh-syscheckd is running...
+wazuh-agentd is running...
+wazuh-execd is running...
+--ossec-conf--
+<ossec_config>
+  <client>
+    <enrollment>
+      <agent_name>reverse-reverse-host-1781502034</agent_name>
+    </enrollment>
+    <server>
+      <address>172.20.0.10</address>
+    </server>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+  <rootcheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <system_audit>/var/ossec/etc/shared/system_audit_rcl.txt</system_audit>
+    <system_audit>/var/ossec/etc/shared/system_audit_ssh.txt</system_audit>
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <scan_on_start>yes</scan_on_start>
+    <directories>/etc,/usr/bin,/usr/sbin</directories>
+    <directories>/bin,/sbin</directories>
+  </syscheck>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/messages</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/secure</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/maillog</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+
+  <!-- Falco events monitoring -->
+  <localfile>
+    <location>/var/log/falco_events.json</location>
+    <log_format>json</log_format>
+  </localfile>
+
+  <!-- Command history monitoring for shell activity -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/bash_history.log</location>
+    <alias>bash_history</alias>
+  </localfile>
+
+  <active-response>
+    <disabled>no</disabled>
+  </active-response>
+
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>1h</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+  </wodle>
+
+</ossec_config>
+--agentd-state--
+# State file for wazuh-agentd
+
+# Agent status:
+# - pending:      waiting to get connected.
+# - connected:    connection established with manager in the last 10 seconds.
+# - disconnected: connection lost or no ACK received in the last 60 seconds.
+status='connected'
+
+# Last time a keepalive was sent
+last_keepalive='2026-06-15 05:48:10'
+
+# Last time a control message was received
+last_ack='2026-06-15 05:48:10'
+
+# Number of generated events
+msg_count='9009'
+
+# Number of messages (events + control messages) sent to the manager
+msg_sent='9053'
+
+# Number of events currently buffered
+# Empty if anti-flooding mechanism is disabled
+msg_buffer='0'
+--client-keys-presence--
+client.keys present: 1 line(s), 86 bytes
+011 reverse-host any 84174903e1dd30d4e03a11b2205e375bde2b83561dc433161454848ca752219a
+--rsyslog-forwarding--
+#  Default rules for rsyslog.
+#
+#			For more information see rsyslog.conf(5) and /etc/rsyslog.conf
+
+#
+# First some standard log files.  Log by facility.
+#
+auth,authpriv.*			/var/log/auth.log
+*.*;auth,authpriv.none		-/var/log/syslog
+#cron.*				/var/log/cron.log
+#daemon.*			-/var/log/daemon.log
+kern.*				-/var/log/kern.log
+#lpr.*				-/var/log/lpr.log
+mail.*				-/var/log/mail.log
+#user.*				-/var/log/user.log
+
+#
+# Logging for the mail system.  Split it up so that
+# it is easy to write scripts to parse these files.
+#
+#mail.info			-/var/log/mail.info
+#mail.warn			-/var/log/mail.warn
+mail.err			/var/log/mail.err
+
+#
+# Some "catch-all" log files.
+#
+#*.=debug;\
+#	auth,authpriv.none;\
+#	news.none;mail.none	-/var/log/debug
+#*.=info;*.=notice;*.=warn;\
+#	auth,authpriv.none;\
+#	cron,daemon.none;\
+#	mail,news.none		-/var/log/messages
+
+#
+# Emergencies are sent to everybody logged in.
+#
+*.emerg				:omusrmsg:*
+
+#
+# I like to have messages displayed on the console, but only on a virtual
+# console I usually leave idle.
+#
+#daemon,mail.*;\
+#	news.=crit;news.=err;news.=notice;\
+#	*.=debug;*.=info;\
+#	*.=notice;*.=warn	/dev/tty8
+# Purple Team Lab - Forward all logs to Wazuh SIEM
+*.* @172.20.0.10:514

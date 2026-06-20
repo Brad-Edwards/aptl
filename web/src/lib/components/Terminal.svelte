@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, getContext } from 'svelte';
 	import { Terminal } from '@xterm/xterm';
 	import { FitAddon } from '@xterm/addon-fit';
 	import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -10,6 +10,8 @@
 	}
 
 	let { container }: Props = $props();
+
+	const { apiHost, wsToken } = getContext<{ apiHost: string; wsToken: string }>('apiCtx');
 
 	let terminalDiv: HTMLDivElement;
 	let term: Terminal | null = null;
@@ -44,10 +46,12 @@
 		term.open(terminalDiv);
 		fitAddon.fit();
 
-		// WebSocket connection
+		// WebSocket connection — direct to the API host (not via SvelteKit proxy).
+		// Token is sent as a Sec-WebSocket-Protocol subprotocol field so it never
+		// appears in the URL (ADR-039). The server validates it before accept().
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host}/api/terminal/ws/${container}`;
-		ws = new WebSocket(wsUrl);
+		const wsUrl = `${protocol}//${apiHost}/api/terminal/ws/${container}`;
+		ws = new WebSocket(wsUrl, wsToken ? [`aptl-token.${wsToken}`] : []);
 
 		ws.onopen = () => {
 			term?.write('\r\nConnecting to ' + container + '...\r\n');

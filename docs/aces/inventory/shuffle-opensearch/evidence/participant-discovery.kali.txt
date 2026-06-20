@@ -1,0 +1,16 @@
+--opensearch-dhcp-ip-at-capture--
+172.20.0.3
+--dns--
+--route-to-security-net--
+RTNETLINK answers: Network is unreachable
+--tcp-probe-9200--
+172.20.0.3: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.3] 9200 (?) : Network is unreachable
+--tcp-probe-9300--
+172.20.0.3: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.3] 9300 (?) : Network is unreachable
+--tcp-probe-9600--
+172.20.0.3: inverse host lookup failed: Host name lookup failure
+(UNKNOWN) [172.20.0.3] 9600 (?) : Network is unreachable
+--ping--
+ping: connect: Network is unreachable

@@ -233,8 +233,7 @@ nodes:
     os_version: Ubuntu 22.04.5 LTS (Jammy Jellyfish)
     features:
       techvault.techvault-misp-db-service: misp-db-mysql
-    conditions:
-      techvault.misp-db-ready: misp-db-mysql
+    conditions: {}
     injects: {}
     vulnerabilities: []
     roles:
@@ -1327,9 +1326,9 @@ nodes:
         mode: '660'
         size: 147456
         stability: volume_backed
-        sensitivity: operator_secret
-        description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
-        content_digest: 4af178a60892f5d0e55bcb4261cdae6ea4e2c2aeb45d0bf1eb3694e50567315d
+        sensitivity: secret_fixture
+        description: Captured MariaDB auth key table data file; checksum verified from the live container.
+        content_digest: 20bc8cb413d2dcf61faed2fe81f5610ea4b9b62aeca6602ade0f6f55cddf13dc
         digest_algorithm: sha256
       - path: /var/lib/mysql/misp/bookmarks.frm
         entry_type: file
@@ -3805,9 +3804,9 @@ nodes:
         mode: '660'
         size: 131072
         stability: volume_backed
-        sensitivity: operator_secret
-        description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
-        content_digest: 4dd61b42be23889e619f0531b6db1f39c96d4891a15bf4781aef68615b5d935d
+        sensitivity: secret_fixture
+        description: Captured MariaDB users table data file; checksum verified from the live container.
+        content_digest: 05dc4266af980a164307cd4e38ffea76ac9f6e6349ae83fa6694d589fa6c27bf
         digest_algorithm: sha256
       - path: /var/lib/mysql/misp/warninglist_entries.frm
         entry_type: file
@@ -4250,11 +4249,11 @@ nodes:
         gid: 999
         mode: '660'
         size: 16384
-        content_digest: 64b86998dad1c91b037425e3a9ba7a81ea760e2e98f1b4ef91bba2338431dc4a
+        content_digest: 65e465c9deafdb4ad951d8f82da6aa398e6d1bbbac3dce9bef66537fc9c68426
         digest_algorithm: sha256
         stability: volume_backed
-        sensitivity: operator_secret
-        description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
+        sensitivity: secret_fixture
+        description: Captured MariaDB global privilege table data file; checksum verified from the live container.
       - path: /var/lib/mysql/mysql/global_priv.MAI
         entry_type: file
         presence: present
@@ -4264,11 +4263,11 @@ nodes:
         gid: 999
         mode: '660'
         size: 16384
-        content_digest: 6ebc31b709bd56e7edecc4ba5d37ee7a249515e436a9c639dfe529288a03609e
+        content_digest: 6f30d346d4185721032bd6ded4fd88aac331ee98d602f9be4e0bfed257b8e513
         digest_algorithm: sha256
         stability: volume_backed
-        sensitivity: operator_secret
-        description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
+        sensitivity: secret_fixture
+        description: Captured MariaDB global privilege table index file; checksum verified from the live container.
       - path: /var/lib/mysql/mysql/global_priv.frm
         entry_type: file
         presence: present
@@ -4278,11 +4277,11 @@ nodes:
         gid: 999
         mode: '660'
         size: 2183
-        content_digest: 2e8f3e7bf74781236bf1b4c05d17abd27d894409ce4555c37c6045092f7ec701
+        content_digest: 3b68049250c229709900d795034c1c62d43583c675132b456f45484329b2b8b2
         digest_algorithm: sha256
         stability: volume_backed
-        sensitivity: operator_secret
-        description: Captured filesystem inventory entry from filesystem-tree.txt.gz.
+        sensitivity: secret_fixture
+        description: Captured MariaDB global privilege table definition file; checksum verified from the live container.
       - path: /var/lib/mysql/mysql/gtid_slave_pos.frm
         entry_type: file
         presence: present
@@ -6750,7 +6749,7 @@ nodes:
         source: runtime-baseline.txt
         description: Runtime-observed process environment value not present in docker inspect Config.Env.
       - name: HOSTNAME
-        value: 1574ba5c2bb2
+        value: 3c887f1f2f79
         value_classification: plain
         provenance: runtime
         source: runtime-baseline.txt
@@ -7385,28 +7384,28 @@ nodes:
       file_services: []
       mail_services: []
       network:
-        hostname: 1574ba5c2bb2
+        hostname: 3c887f1f2f79
         domainname: ''
         endpoints:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: 16c627c6f35a90e618081014ff0ca0715aec52c1999dcb38b97caef2ca822acb
+          endpoint_id: 73e39ff049ae6a7ca17d27fd6cacd9508b44d494c82c67f907e9226bf5f77eed
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.17
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 92:10:31:d6:8d:68
+          mac_address: 4a:86:7e:26:b7:4d
           aliases:
           - aptl-misp-db
           - misp-db
           dns_names:
           - aptl-misp-db
           - misp-db
-          - 1574ba5c2bb2
+          - 3c887f1f2f79
           generated_dns_names:
-          - 1574ba5c2bb2
+          - 3c887f1f2f79
           backend:
             driver: bridge
             ipam_driver: default
@@ -7526,7 +7525,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-attributes
               name: attributes
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=6.
             - table_id: misp-attribute-tags
               name: attribute_tags
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7535,7 +7534,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-audit-logs
               name: audit_logs
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=99824.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=107252.
             - table_id: misp-auth-keys
               name: auth_keys
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=1.
@@ -7586,7 +7585,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-events
               name: events
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=1.
             - table_id: misp-event-blocklists
               name: event_blocklists
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7610,7 +7609,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-event-tags
               name: event_tags
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=2.
             - table_id: misp-favourite-tags
               name: favourite_tags
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7625,28 +7624,28 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=112.
             - table_id: misp-galaxy-clusters
               name: galaxy_clusters
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=56341.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=46890.
             - table_id: misp-galaxy-cluster-blocklists
               name: galaxy_cluster_blocklists
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-galaxy-cluster-relations
               name: galaxy_cluster_relations
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=59905.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=59876.
             - table_id: misp-galaxy-cluster-relation-tags
               name: galaxy_cluster_relation_tags
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=18934.
             - table_id: misp-galaxy-elements
               name: galaxy_elements
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=321235.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=303547.
             - table_id: misp-inbox
               name: inbox
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-jobs
               name: jobs
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=126.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=18.
             - table_id: misp-logs
               name: logs
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=3935.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=557.
             - table_id: misp-news
               name: news
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7679,7 +7678,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=388.
             - table_id: misp-object-template-elements
               name: object_template_elements
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=5523.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=5506.
             - table_id: misp-opinions
               name: opinions
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7748,7 +7747,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
             - table_id: misp-tags
               name: tags
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=5.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=7.
             - table_id: misp-tag-collections
               name: tag_collections
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=0.
@@ -7766,7 +7765,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=165.
             - table_id: misp-taxonomy-entries
               name: taxonomy_entries
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=12986.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=13407.
             - table_id: misp-taxonomy-predicates
               name: taxonomy_predicates
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=1215.
@@ -7808,7 +7807,7 @@ nodes:
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=122.
             - table_id: misp-warninglist-entries
               name: warninglist_entries
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=2509058.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=2442246.
             - table_id: misp-warninglist-types
               name: warninglist_types
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=570.
@@ -7869,7 +7868,7 @@ nodes:
               description: Observed BASE TABLE; engine=Aria; TABLE_ROWS=0.
             - table_id: mysql-innodb-index-stats
               name: innodb_index_stats
-              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=1255.
+              description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=1514.
             - table_id: mysql-innodb-table-stats
               name: innodb_table_stats
               description: Observed BASE TABLE; engine=InnoDB; TABLE_ROWS=104.
@@ -8319,7 +8318,7 @@ nodes:
           provenance: introspection
           description: SHOW GLOBAL VARIABLES observation captured from MariaDB.
         - name: hostname
-          value: 1574ba5c2bb2
+          value: 3c887f1f2f79
           value_classification: plain
           provenance: introspection
           description: SHOW GLOBAL VARIABLES observation captured from MariaDB.

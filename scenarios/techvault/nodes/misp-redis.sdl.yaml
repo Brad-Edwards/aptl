@@ -253,15 +253,14 @@ nodes:
         uid: 999
         gid: 1000
         mode: '600'
-        size: 44524
-        content_digest: ''
-        digest_algorithm: ''
+        size: 45267
+        content_digest: 716192aac3da66017ede5dbdb61ebb039ccc842573e042a42e63af218595a54d
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
         stability: runtime_created
-        sensitivity: operator_secret
-        description: RDB persistence snapshot of MISP's cached keyspace; volatile binary, excluded from
-          content checksums.
+        sensitivity: secret_fixture
+        description: RDB persistence snapshot of MISP's cached keyspace; volatile binary captured as scenario runtime state.
       - path: /usr/local/bin
         entry_type: directory
         presence: present
@@ -448,13 +447,13 @@ nodes:
         gid: 42
         mode: '640'
         size: 287
-        content_digest: ''
-        digest_algorithm: ''
+        content_digest: ca53a080cdd6f1d90932ebd6f4ba51624964c0a8487f9355547291d055993b02
+        digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/misp-redis/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-redis/evidence/filesystem-checksums.txt.xz
         stability: stable
-        sensitivity: operator_secret
-        description: Local shadow password store; represented by metadata only, content checksum omitted.
+        sensitivity: secret_fixture
+        description: Local shadow password store represented by its captured metadata row.
       - path: /etc/os-release
         entry_type: symlink
         presence: present
@@ -1134,7 +1133,7 @@ nodes:
           name: default
           reserved: true
           hidden: false
-          credential_classification: redacted
+          credential_classification: none
           backend_roles: []
           description: The built-in Redis 'default' user, enabled (on) with sanitize-payload and password
             authentication required. The credential value is the disclosed scenario fixture recorded in
@@ -1159,28 +1158,28 @@ nodes:
       file_services: []
       mail_services: []
       network:
-        hostname: 45f5c73dd160
+        hostname: 15776121bcbe
         domainname: ''
         endpoints:
         - network: techvault.security-net
-          network_id: ''
+          network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: ''
+          endpoint_id: 3adbeefef751f220f107dfce2404ff362c214bf145f9378cd7239cedb7383dee
           endpoint_id_stability: ephemeral
           backend_generated: true
-          ip_address: 172.20.0.3
+          ip_address: 172.20.0.2
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 92:11:52:ea:7d:44
+          mac_address: da:8e:cb:fa:b6:2b
           aliases:
           - aptl-misp-redis
           - misp-redis
           dns_names:
           - aptl-misp-redis
           - misp-redis
-          - 45f5c73dd160
+          - 15776121bcbe
           generated_dns_names:
-          - 45f5c73dd160
+          - 15776121bcbe
           backend:
             driver: bridge
             ipam_driver: default
@@ -1188,7 +1187,7 @@ nodes:
             ipam_options: {}
             description: ''
           description: DHCP-assigned address on aptl-security (no static ipv4_address in Compose; observed
-            172.20.0.3 at capture time).
+            172.20.0.2 at capture time).
         published_ports: []
         description: ''
       service_listeners:
@@ -1205,7 +1204,7 @@ nodes:
         process_name: redis-server
         published_port_refs: []
         readiness:
-          probe: redis-cli -a <redacted> PING
+          probe: redis-cli -a redispassword PING
           criteria: PONG
           evidence_refs:
           - docs/aces/inventory/misp-redis/evidence/redis-state.txt
@@ -1353,7 +1352,6 @@ nodes:
             maxmemory 0 (unbounded by Redis, bounded only by the 128 MiB container memory limit).
         pubsub_channels: []
         queues_streams: []
-        engine_plugins: []
         transport_security:
           transport_security_id: misp_redis_transport
           mode: none
@@ -1484,7 +1482,7 @@ nodes:
         - setting_id: redis_cfg_requirepass
           scope: engine
           provenance: configuration_file
-          classification: secret_fixture
+          classification: plain
           name: requirepass
           value: redispassword
           description: Scenario fixture password enforced via the Compose command (redis-server --requirepass

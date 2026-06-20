@@ -1029,8 +1029,8 @@ nodes:
         issuer: ''
         tenant_id: ''
         base_dn: ''
-        description: Shuffle organisations, users, and API-key metadata persisted in the shuffle-opensearch datastore; raw
-          API key, password, and session material is redacted from committed evidence.
+        description: Shuffle organisations, users, and API-key metadata persisted in the shuffle-opensearch datastore; the
+          admin API key 31a211c4-ea5c-4a49-b022-5e2434e758a7 and password ShuffleAdmin2024! are fixture values.
         services:
         - service_id: shuffle-rest-api
           service: shuffle-api
@@ -1104,7 +1104,7 @@ nodes:
             origin: runtime_created
             provenance: unknown
             description: ''
-          description: Seeded Shuffle admin user (SHUFFLE_DEFAULT_USERNAME=admin); raw password redacted from committed evidence.
+          description: Seeded Shuffle admin user (SHUFFLE_DEFAULT_USERNAME=admin, SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024!).
         - subject_id: apikey-default-admin
           kind: service_principal
           name: SHUFFLE_DEFAULT_APIKEY (admin)
@@ -1130,8 +1130,7 @@ nodes:
             origin: runtime_created
             provenance: unknown
             description: ''
-          description: Seeded admin API key supplied via the SHUFFLE_DEFAULT_APIKEY compose secret; the value is redacted
-            from all committed artifacts.
+          description: Seeded admin API key supplied via the SHUFFLE_DEFAULT_APIKEY compose secret, value 31a211c4-ea5c-4a49-b022-5e2434e758a7.
         policies: []
         relationships: []
       file_services: []
@@ -1143,22 +1142,22 @@ nodes:
         - network: techvault.security-net
           network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
           network_id_stability: stable
-          endpoint_id: d4294cfc69dd529f1d3d826007ac7fc22c76094148e61be663ac8bf9d1752e22
+          endpoint_id: 3c817c2641a39319d11eb701d2aebefe660560be9a36b15173c79888bf731f94
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.0.20
           ip_prefix_length: 24
           gateway: 172.20.0.1
-          mac_address: 12:03:45:c0:31:dd
+          mac_address: ba:57:1a:c6:a8:f8
           aliases:
           - aptl-shuffle-backend
           - shuffle-backend
           dns_names:
           - aptl-shuffle-backend
           - shuffle-backend
-          - b735a6511901
+          - 35eaf7464bfd
           generated_dns_names:
-          - b735a6511901
+          - 35eaf7464bfd
           backend:
             driver: bridge
             ipam_driver: default

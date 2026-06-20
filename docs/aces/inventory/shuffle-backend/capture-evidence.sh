@@ -34,46 +34,11 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-# Text redaction for raw command output. Catches NAME=value secret env, JSON
-# "key":"value" secrets, and PEM private-key envelopes.
-redact_stream() {
-  sed -E \
-    -e 's/(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)=([^[:space:]]+)/\1=<REDACTED>/Ig' \
-    -e 's/("?(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie)"?[[:space:]]*[:=][[:space:]]*")[^"]*(")/\1<REDACTED>\3/Ig' \
-    -e 's/(31a211c4-ea5c-4a49-b022-5e2434e758a7)/<REDACTED-SCENARIO-APIKEY>/g' \
-    -e 's/(ShuffleAdmin2024!|StrongPassword123!)/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/-----BEGIN [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-BEGIN>/g' \
-    -e 's/-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY-END>/g'
+# Scenario target values are captured verbatim; placeholders in committed
+# evidence are defects because these secrets are part of the TechVault content.
+capture_stream() {
+  cat
 }
-
-redact_env_jq='
-  def redact_env:
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys:
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test("(password|pass|secret|token|apikey|api_key|session_key|private_key|jwt|cookie|authorization)$"; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
 
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
@@ -86,30 +51,18 @@ with open(sys.argv[1]) as fh:
     data = yaml.safe_load(fh)
 json.dump(data["services"]["shuffle-backend"], sys.stdout)
 ' "$ROOT/docker-compose.yml" \
-  | jq '
-      .environment |= map(
-        if test("^(?<name>[^=]+)=") then
-          capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-          | if ($m.name | test("(PASSWORD|PASS|SECRET|TOKEN|APIKEY|API_KEY|KEY|COOKIE|SESSION|PRIVATE_KEY|JWT)$"; "i"))
-            then "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-            else .
-            end
-        else
-          .
-        end
-      )
-    ' > "$OUT/compose-service.shuffle-backend.json"
+  | jq . > "$OUT/compose-service.shuffle-backend.json"
 record_limit "Compose service evidence was extracted from docker-compose.yml with yq because the full local compose project has an unrelated invalid dependency reference that prevents docker compose config from rendering."
 
 docker inspect "$CONTAINER" \
-  | jq "$redact_env_jq .[].Config.Env |= ((. // []) | map(redact_env)) | redact_sensitive_keys" \
+  | jq . \
   > "$OUT/docker-inspect.container.json"
 
 docker image inspect "$IMAGE" \
-  | jq "$redact_env_jq redact_sensitive_keys" \
+  | jq . \
   > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_stream > "$OUT/docker-history.image.txt"
-docker history --no-trunc --format '{{json .}}' "$IMAGE" | redact_stream > "$OUT/docker-history.image.jsonl"
+docker history --no-trunc "$IMAGE" | capture_stream > "$OUT/docker-history.image.txt"
+docker history --no-trunc --format '{{json .}}' "$IMAGE" | capture_stream > "$OUT/docker-history.image.jsonl"
 
 if docker buildx imagetools inspect "$IMAGE" > "$OUT/docker-buildx-imagetools.image.txt" 2>"$OUT/docker-buildx-imagetools.image.err"; then
   docker buildx imagetools inspect "$IMAGE" --raw \
@@ -132,13 +85,13 @@ fi
 
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_shuffle_data | jq . > "$OUT/docker-volume.shuffle-data.json"
-docker top "$CONTAINER" | redact_stream > "$OUT/docker-top.txt"
-docker logs "$CONTAINER" --tail 500 2>&1 | redact_stream > "$OUT/docker-logs.shuffle-backend.txt"
+docker top "$CONTAINER" | capture_stream > "$OUT/docker-top.txt"
+docker logs "$CONTAINER" --tail 500 2>&1 | capture_stream > "$OUT/docker-logs.shuffle-backend.txt"
 
 record_limit "Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start; this bundle is a steady-state observation of that local lab, not clean-reset rebuild proof."
 record_limit "Full filesystem evidence is captured as compressed manifests. SDL encodes load-bearing participant-visible paths and structured runtime surfaces directly; byte-identical rebuild proof remains out of scope for this inventory issue."
-record_limit "Shuffle persistent state lives in the shuffle-opensearch datastore, not in the aptl_shuffle_data volume (which is empty at steady state). Application state was captured via the Shuffle backend HTTP API and OpenSearch _cat/indices, with apikey/password/session fields redacted."
-record_limit "Secret env values, the scenario admin password, the SHUFFLE_DEFAULT_APIKEY, and the OpenSearch password are redacted from every committed artifact; their declaration, classification, and mount/source are captured instead."
+record_limit "Shuffle persistent state lives in the shuffle-opensearch datastore, not in the aptl_shuffle_data volume (which is empty at steady state). Application state was captured via the Shuffle backend HTTP API and OpenSearch _cat/indices with scenario values retained verbatim."
+record_limit "Scenario fixture secret values, including the admin password, SHUFFLE_DEFAULT_APIKEY, and OpenSearch password, are retained verbatim because they are TechVault scenario content."
 
 sha256sum \
   "$ROOT/docker-compose.yml" \
@@ -190,7 +143,7 @@ docker exec "$CONTAINER" sh -lc "
           /shuffle-database/*) stability=volume_backed ;;
           /app/generated/*) stability=runtime_created ;;
           /run/*) stability=runtime_created ;;
-          /etc/*shadow*|/etc/*passwd-*) sensitivity=operator_secret ;;
+          /etc/*shadow*|/etc/*passwd-*) sensitivity=plain ;;
         esac
         stat -c \"%F\t%A\t%a\t%u\t%U\t%g\t%G\t%s\t%Y\t\${stability}\t\${sensitivity}\t%n\" \"\$path\"
       done
@@ -244,13 +197,12 @@ docker exec "$CONTAINER" sh -lc '
   printf "%s\n" --binary-info--
   ls -l /app/shufflebackend
   file /app/shufflebackend 2>/dev/null || true
-' | redact_stream > "$OUT/runtime-baseline.txt"
+' | capture_stream > "$OUT/runtime-baseline.txt"
 
 # --- Shuffle application state (HTTP API + OpenSearch datastore) -------------
 # The shuffle-backend Alpine image has no jq, so wget runs in-container (raw
-# JSON) and jq/redaction run on the host. jq projections select only structural
-# fields; apikey/password/session fields are dropped and redact_stream is the
-# defense-in-depth backstop.
+# JSON) and jq run on the host. jq projections select structural fields while
+# scenario target values remain available in runtime and Compose evidence.
 fetch_be() {
   docker exec "$CONTAINER" sh -c \
     'wget -qO- --timeout=15 --header="Authorization: Bearer $SHUFFLE_DEFAULT_APIKEY" "http://localhost:5001$1"' _ "$1" 2>/dev/null
@@ -294,7 +246,7 @@ post_os() {
   printf "%s\n" --opensearch-workflowapps--
   post_os "/workflowapp-000001/_search" "{\"size\":50,\"_source\":[\"name\",\"app_version\",\"is_valid\",\"generated\",\"activated\",\"sharing\",\"public\",\"categories\"]}" \
     | jq "{total: .hits.total.value, apps: ([.hits.hits[]?._source] | sort_by(.name))}" 2>/dev/null || echo "workflowapp search unavailable"
-} | redact_stream > "$OUT/shuffle-state.txt"
+} | capture_stream > "$OUT/shuffle-state.txt"
 
 # --- Participant-vantage discovery ------------------------------------------
 if docker inspect "$ORBORUS_CONTAINER" >/dev/null 2>&1; then
@@ -307,7 +259,7 @@ if docker inspect "$ORBORUS_CONTAINER" >/dev/null 2>&1; then
     printf "%s\n" --tcp5001--
     (timeout 5 sh -c "wget -q --spider http://shuffle-backend:5001/ 2>&1; echo rc=$?") 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.shuffle-orborus.txt"
+  ' | capture_stream > "$OUT/participant-discovery.shuffle-orborus.txt"
 else
   record_limit "shuffle-orborus participant-vantage discovery was skipped because $ORBORUS_CONTAINER was not present."
   printf '%s container unavailable\n' "$ORBORUS_CONTAINER" > "$OUT/participant-discovery.shuffle-orborus.txt"
@@ -322,7 +274,7 @@ if docker inspect aptl-kali >/dev/null 2>&1; then
     timeout 5 sh -c "nc -vz 172.20.0.20 5001" 2>&1
     timeout 5 sh -c "nc -vz shuffle-backend 5001" 2>&1
     true
-  ' | redact_stream > "$OUT/participant-discovery.kali.txt"
+  ' | capture_stream > "$OUT/participant-discovery.kali.txt"
 else
   record_limit "Kali participant-vantage discovery was skipped because aptl-kali was not present."
   printf 'aptl-kali container unavailable\n' > "$OUT/participant-discovery.kali.txt"

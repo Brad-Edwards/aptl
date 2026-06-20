@@ -375,7 +375,7 @@ facts:
   - id: mailserver.mail.runtime-settings
     category: mail-service
     summary: postconf -n and doveconf -n yielded 156 non-default or runtime-effective mail settings encoded with component,
-      source path, provenance, and redaction classification.
+      source path, provenance, and value classification.
     evidence:
       - path: evidence/mailserver-state.txt
       - path: evidence/filesystem-tree.txt
@@ -388,7 +388,7 @@ facts:
         for the SDL encoding.
   - id: mailserver.capture.toolchain-baseline
     category: capture-methodology
-    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, redaction, and capture-limit evidence
+    summary: The bundle records Trivy, Syft, osquery, Docker, Compose, filesystem manifest, runtime value, and capture-limit evidence
       for rerunnable methodology review.
     evidence:
       - path: evidence/capture-limits.txt

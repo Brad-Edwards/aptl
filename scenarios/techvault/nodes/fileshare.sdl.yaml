@@ -5,7 +5,7 @@ nodes:
     description: TechVault Samba fileshare container steady-state inventory.
     source:
       name: aptl-fileshare
-      version: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
+      version: aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96
       build:
         base_image: ubuntu:22.04
         base_image_digest: ''
@@ -21,7 +21,7 @@ nodes:
           description: ''
         - instruction: run
           arguments:
-          - apt-get update && apt-get install -y samba smbclient rsyslog net-tools iptables supervisor && rm -rf /var/lib/apt/lists/*
+          - apt-get update && apt-get install -y samba smbclient rsyslog net-tools iptables supervisor openssh-client && rm -rf /var/lib/apt/lists/*
           description: ''
         - instruction: copy
           arguments:
@@ -95,22 +95,22 @@ nodes:
           size: 0
           empty: true
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:e1ab6369a5d252073f64d8ba2a50c227d1197a2e8044425cf2efb3fb675c809f
+        - digest: sha256:25583e0793fbf204f7bfd5e3ec06e5fb243d58cd3a4599d9679c600790dfb11d
           created_by: 'RUN /bin/sh -c chmod +x /opt/setup-shares.sh # buildkit'
           size: 16400
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:8d14ef159cff0275ecf020f6133bfabb154a4d61c02b9ac35aff36e480174b30
+        - digest: sha256:36d5a316985a823bcf913e8825518dba06cb6e5c16f3ec97b484ea10852fc9e7
           created_by: 'COPY containers/fileshare/supervisord.conf /etc/supervisor/conf.d/fileshare.conf # buildkit'
           size: 20500
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:d3b638176c6cc6ac9ae8b7affe7796751a55071df4ccde66520858b53ea12049
+        - digest: sha256:9b33e9992d4397410f99bd2a7ae48c331eb152ee75e55be3c5fa34fe31572497
           created_by: 'COPY containers/fileshare/smb.conf /etc/samba/smb.conf # buildkit'
           size: 16400
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:b4cbeb5a35ddc5ee7073671859a839c38ee2a35f3c89b51227023a99cca06206
+        - digest: sha256:a12f81844d206a93525e6df943c96870ec0a951cbd4f218961842efdbe4b670d
           created_by: 'COPY containers/fileshare/setup-shares.sh /opt/setup-shares.sh # buildkit'
           size: 16400
           empty: false
@@ -120,39 +120,39 @@ nodes:
           size: 4100
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:5fb665059c7c732e1fb5409520cbedae78fa75fe7c19ae4b596fb710f4561084
+        - digest: sha256:c5f9686164c4e9b07705c8ae15f95654638952eeeca28d491521033c00911da4
           created_by: 'COPY containers/_wazuh-agent/wazuh-agent.sh /opt/aptl/wazuh/wazuh-agent.sh # buildkit'
           size: 24600
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:f592f6ef1a90353a80f98fd31efb6c6fd26b7e30e3202bc99d1a362b184317a1
+        - digest: sha256:6c8330d8e028448289ebe63ecbafba5b0f366c0d4abfb4d1138e1809ceae05f3
           created_by: 'COPY containers/_wazuh-agent/ossec.conf.template /opt/aptl/wazuh/ossec.conf.template # buildkit'
           size: 20500
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:294f532a1588359110b7f3fae8972d90e5d4014216ed762b784e321a09adf8ad
+        - digest: sha256:c1e69514ad3599dfcf909b0a9fc1a10cd92b22a50256cb80f300eba6db67ba36
           created_by: 'RUN /bin/sh -c /tmp/install-wazuh.sh &&     rm /tmp/install-wazuh.sh /tmp/aptl-firewall-drop.sh /tmp/active-response-whitelist
             # buildkit'
           size: 30400000
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:6e55499bda71fd1fa90875696e869676806f4be7df36befc0cc89ffc7e28e0c1
+        - digest: sha256:1f53b53829635a46e3f7912f2b91dac36fb1787c1e06ba11b3b43e140f03bf16
           created_by: 'COPY config/wazuh_cluster/etc/lists/active-response-whitelist /tmp/active-response-whitelist # buildkit'
           size: 12300
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:58c843b57ca70c01ce9cad5f9e5f04efc68badff82caf68f0d416557c899e9bc
+        - digest: sha256:07ab72426629884d907d8b782e68f9dece9166e37dedaf18b1bd7acc76547a48
           created_by: 'COPY containers/_wazuh-agent/aptl-firewall-drop.sh /tmp/aptl-firewall-drop.sh # buildkit'
           size: 16400
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:eeb454317012f774808c73b6b10db5003527c2fc59fa54ddbedada5034c005e6
+        - digest: sha256:9b214b9d4e2363d3108f52bc30f37575addfbbf681f17ebd381ad75b26fbec15
           created_by: 'COPY containers/_wazuh-agent/install.sh /tmp/install-wazuh.sh # buildkit'
           size: 12300
           empty: false
           description: 'Docker history comment: buildkit.dockerfile.v0.'
-        - digest: sha256:e6bdf78f20cc958cc6894c9f39193e5fd77595b1321b3fe39c99965a8ddb41b4
-          created_by: 'RUN /bin/sh -c apt-get update && apt-get install -y     samba     smbclient     rsyslog     net-tools     iptables     supervisor     &&
+        - digest: sha256:f0efbf3bf8fc06de978e70df7a1bfd4dd57a2e37575a16113bf2d1bf09c33ba0
+          created_by: 'RUN /bin/sh -c apt-get update && apt-get install -y     samba     smbclient     rsyslog     net-tools     iptables     supervisor     openssh-client     &&
             rm -rf /var/lib/apt/lists/* # buildkit'
           size: 228000000
           empty: false
@@ -248,13 +248,13 @@ nodes:
         - identifier: containers-fileshare-Dockerfile
           source_path: containers/fileshare/Dockerfile
           destination_path: ''
-          checksum: ca067e0c18e9c805a068e6dbc3dbe960c4b8b2522bcaaeba3867ee206df01622
+          checksum: 4ff23d642fd084971f1f588cb13ea98e738ab03035df4813a98710feae31183f
           checksum_algorithm: sha256
           description: ''
         - identifier: containers-fileshare-setup-shares-sh
           source_path: containers/fileshare/setup-shares.sh
           destination_path: /opt/setup-shares.sh
-          checksum: fd5633ace91fd172502fef9e63eca6e46c8cf7dc527d92edcece14899b7675e1
+          checksum: 465d1ae4ff0d006017f9addfce38ba36fb618c0b56391b6bb560ae2fc5bcb07f
           checksum_algorithm: sha256
           description: ''
         - identifier: containers-fileshare-smb-conf
@@ -315,8 +315,7 @@ nodes:
       techvault.techvault-fileshare-service: fileshare-root
       techvault.fileshare-rsyslog-forwarding: fileshare-root
       techvault.fileshare-wazuh-agent: fileshare-root
-    conditions:
-      techvault.fileshare-smb-ready: fileshare-root
+    conditions: {}
     injects: {}
     vulnerabilities:
     - techvault.fileshare-guest-writable-shares
@@ -793,8 +792,8 @@ nodes:
         uid: 0
         gid: 0
         mode: '0775'
-        size: 5271
-        content_digest: fd5633ace91fd172502fef9e63eca6e46c8cf7dc527d92edcece14899b7675e1
+        size: 5569
+        content_digest: 465d1ae4ff0d006017f9addfce38ba36fb618c0b56391b6bb560ae2fc5bcb07f
         digest_algorithm: sha256
         source_path: containers/fileshare/setup-shares.sh
         provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt
@@ -887,7 +886,7 @@ nodes:
         owner_user: root
         owner_group: wazuh
         uid: 0
-        gid: 106
+        gid: 107
         mode: '0640'
         size: 881
         content_digest: 2d0a17b34cd49d424f9d2049d4a402eb6498f5ce8462f358518a1f378b5ec396
@@ -897,6 +896,22 @@ nodes:
         stability: stable
         sensitivity: plain
         description: ''
+      - path: /var/ossec/etc/client.keys
+        entry_type: file
+        presence: present
+        owner_user: root
+        owner_group: wazuh
+        uid: 0
+        gid: 107
+        mode: '0640'
+        size: 94
+        content_digest: 93779c006f1ac5556227b1d50a3d50c7e90e7a7793b785768f28191fb29e9d76
+        digest_algorithm: sha256
+        source_path: ''
+        provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt; docs/aces/inventory/fileshare/evidence/filesystem-sensitive-paths.txt
+        stability: runtime_created
+        sensitivity: secret_fixture
+        description: Wazuh agent-registration key captured live from /var/ossec/etc/client.keys.
       - path: /srv/shares
         entry_type: directory
         presence: present
@@ -1160,9 +1175,9 @@ nodes:
         owner_group: root
         uid: 0
         gid: 0
-        mode: '0600'
+        mode: '0700'
         size: 1831
-        content_digest: ef731cb1a6c3cd4cbeebb6d329f3e964ad681bb95d55ed8c50dae19c164b0563
+        content_digest: 824d3000d16d2a0a8982107ff0cf0b28ac12a97f0c628b0d6cbd8ac72dbce9b0
         digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt
@@ -1178,9 +1193,9 @@ nodes:
         owner_group: root
         uid: 0
         gid: 0
-        mode: '0644'
-        size: 404
-        content_digest: 18552a0fe052a2df2c30e53fcfcc11f85c472ee384b6d45bbda0573ba0454469
+        mode: '0700'
+        size: 408
+        content_digest: be4d19d2b59bd9c641f192829adb235f1d9bba0fc481622cfcfe9a3f641bc053
         digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt
@@ -1261,7 +1276,7 @@ nodes:
         gid: 0
         mode: '0644'
         size: 210
-        content_digest: bc2ea9704988a87ac19fc1ce5092e3c03e3efe25a08bddb242623acaaafb70b1
+        content_digest: e30d90d0cbcae561369c9a57aefa27fb26056b974b58fb0a2a95d843a2ece535
         digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt
@@ -1277,7 +1292,7 @@ nodes:
         gid: 0
         mode: '0600'
         size: 210
-        content_digest: 1ad329ace87a3bb779f9e785bd0834444dee6186c95067baa64142e3ea62e567
+        content_digest: 6f4abd1d53d3539f8bd4dbafd9bc74415e61a2f6f1055db6cc0b7b9c89d3dc58
         digest_algorithm: sha256
         source_path: ''
         provenance: docs/aces/inventory/fileshare/evidence/filesystem-tree.txt; docs/aces/inventory/fileshare/evidence/filesystem-checksums.txt
@@ -2052,13 +2067,18 @@ nodes:
           members: []
           provenance: image
           description: ''
-        - name: sambashare
+        - name: _ssh
           gid: 105
           members: []
           provenance: image
           description: ''
-        - name: wazuh
+        - name: sambashare
           gid: 106
+          members: []
+          provenance: image
+          description: ''
+        - name: wazuh
+          gid: 107
           members: []
           provenance: image
           description: ''
@@ -2389,23 +2409,23 @@ nodes:
         - network: techvault.internal-net
           network_id: 5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f
           network_id_stability: stable
-          endpoint_id: 329bb36706e30e185325da0c1360c6cb18fdb4e92f84f586e0f5162da616f53e
+          endpoint_id: a744f96583d9e5f32b0d5831c81f05a17c38d166b74d54f53a5c1e40a907faac
           endpoint_id_stability: ephemeral
           backend_generated: true
           ip_address: 172.20.2.12
           ip_prefix_length: 24
           gateway: ''
-          mac_address: 26:36:cc:03:76:e1
+          mac_address: aa:0a:ca:f6:3f:b1
           aliases:
           - aptl-fileshare
           - fileshare
           dns_names:
           - aptl-fileshare
           - fileshare
-          - 961e464bcbf1
+          - 21eda147ba30
           - files.techvault.local
           generated_dns_names:
-          - 961e464bcbf1
+          - 21eda147ba30
           backend:
             driver: bridge
             ipam_driver: default
@@ -2470,1416 +2490,1487 @@ nodes:
       service_manager_units: []
       packages:
       - manager: dpkg
-        name: adduser
-        version: 3.118ubuntu5
-        architecture: all
+        name: 'adduser'
+        version: '3.118ubuntu5'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: apt
-        version: 2.4.14
-        architecture: amd64
+        name: 'apt'
+        version: '2.4.14'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: attr
-        version: 1:2.5.1-1build1
-        architecture: amd64
+        name: 'attr'
+        version: '1:2.5.1-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: base-files
-        version: 12ubuntu4.7
-        architecture: amd64
+        name: 'base-files'
+        version: '12ubuntu4.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: base-passwd
-        version: 3.5.52build1
-        architecture: amd64
+        name: 'base-passwd'
+        version: '3.5.52build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: bash
-        version: 5.1-6ubuntu1.1
-        architecture: amd64
+        name: 'bash'
+        version: '5.1-6ubuntu1.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: bsdutils
-        version: 1:2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'bsdutils'
+        version: '1:2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ca-certificates
-        version: 20240203~22.04.1
-        architecture: all
+        name: 'ca-certificates'
+        version: '20240203~22.04.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: coreutils
-        version: 8.32-4.1ubuntu1.3
-        architecture: amd64
+        name: 'coreutils'
+        version: '8.32-4.1ubuntu1.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: cron
-        version: 3.0pl1-137ubuntu3
-        architecture: amd64
+        name: 'cron'
+        version: '3.0pl1-137ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: curl
-        version: 7.81.0-1ubuntu1.24
-        architecture: amd64
+        name: 'curl'
+        version: '7.81.0-1ubuntu1.24'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: dash
-        version: 0.5.11+git20210903+057cd650a4ed-3build1
-        architecture: amd64
+        name: 'dash'
+        version: '0.5.11+git20210903+057cd650a4ed-3build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: dbus
-        version: 1.12.20-2ubuntu4.1
-        architecture: amd64
+        name: 'dbus'
+        version: '1.12.20-2ubuntu4.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: debconf
-        version: 1.5.79ubuntu1
-        architecture: all
+        name: 'debconf'
+        version: '1.5.79ubuntu1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: debianutils
-        version: 5.5-1ubuntu2
-        architecture: amd64
+        name: 'debianutils'
+        version: '5.5-1ubuntu2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: diffutils
-        version: 1:3.8-0ubuntu2
-        architecture: amd64
+        name: 'diffutils'
+        version: '1:3.8-0ubuntu2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: dirmngr
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'dirmngr'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: distro-info-data
-        version: 0.52ubuntu0.12
-        architecture: all
+        name: 'distro-info-data'
+        version: '0.52ubuntu0.12'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: dpkg
-        version: 1.21.1ubuntu2.6
-        architecture: amd64
+        name: 'dpkg'
+        version: '1.21.1ubuntu2.6'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: e2fsprogs
-        version: 1.46.5-2ubuntu1.2
-        architecture: amd64
+        name: 'e2fsprogs'
+        version: '1.46.5-2ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: findutils
-        version: 4.8.0-1ubuntu3
-        architecture: amd64
+        name: 'findutils'
+        version: '4.8.0-1ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gcc-12-base:amd64
-        version: 12.3.0-1ubuntu1~22.04.3
-        architecture: amd64
+        name: 'gcc-12-base:amd64'
+        version: '12.3.0-1ubuntu1~22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gnupg
-        version: 2.2.27-3ubuntu2.5
-        architecture: all
+        name: 'gnupg'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gnupg-l10n
-        version: 2.2.27-3ubuntu2.5
-        architecture: all
+        name: 'gnupg-l10n'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gnupg-utils
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gnupg-utils'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpg
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpg'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpg-agent
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpg-agent'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpg-wks-client
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpg-wks-client'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpg-wks-server
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpg-wks-server'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpgconf
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpgconf'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpgsm
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpgsm'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gpgv
-        version: 2.2.27-3ubuntu2.5
-        architecture: amd64
+        name: 'gpgv'
+        version: '2.2.27-3ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: grep
-        version: 3.7-1build1
-        architecture: amd64
+        name: 'grep'
+        version: '3.7-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: gzip
-        version: 1.10-4ubuntu4.1
-        architecture: amd64
+        name: 'gzip'
+        version: '1.10-4ubuntu4.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: hostname
-        version: 3.23ubuntu2
-        architecture: amd64
+        name: 'hostname'
+        version: '3.23ubuntu2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ibverbs-providers:amd64
-        version: 39.0-1
-        architecture: amd64
+        name: 'ibverbs-providers:amd64'
+        version: '39.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: init-system-helpers
+        name: 'init-system-helpers'
         version: '1.62'
-        architecture: all
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: iptables
-        version: 1.8.7-1ubuntu5.2
-        architecture: amd64
+        name: 'iptables'
+        version: '1.8.7-1ubuntu5.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: jq
-        version: 1.6-2.1ubuntu3.2
-        architecture: amd64
+        name: 'jq'
+        version: '1.6-2.1ubuntu3.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libacl1:amd64
-        version: 2.3.1-1
-        architecture: amd64
+        name: 'libacl1:amd64'
+        version: '2.3.1-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libapparmor1:amd64
-        version: 3.0.4-2ubuntu2.5
-        architecture: amd64
+        name: 'libapparmor1:amd64'
+        version: '3.0.4-2ubuntu2.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libapt-pkg6.0:amd64
-        version: 2.4.14
-        architecture: amd64
+        name: 'libapt-pkg6.0:amd64'
+        version: '2.4.14'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libarchive13:amd64
-        version: 3.6.0-1ubuntu1.6
-        architecture: amd64
+        name: 'libarchive13:amd64'
+        version: '3.6.0-1ubuntu1.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libassuan0:amd64
-        version: 2.5.5-1build1
-        architecture: amd64
+        name: 'libassuan0:amd64'
+        version: '2.5.5-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libattr1:amd64
-        version: 1:2.5.1-1build1
-        architecture: amd64
+        name: 'libattr1:amd64'
+        version: '1:2.5.1-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libaudit-common
-        version: 1:3.0.7-1build1
-        architecture: all
+        name: 'libaudit-common'
+        version: '1:3.0.7-1build1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libaudit1:amd64
-        version: 1:3.0.7-1build1
-        architecture: amd64
+        name: 'libaudit1:amd64'
+        version: '1:3.0.7-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libavahi-client3:amd64
-        version: 0.8-5ubuntu5.5
-        architecture: amd64
+        name: 'libavahi-client3:amd64'
+        version: '0.8-5ubuntu5.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libavahi-common-data:amd64
-        version: 0.8-5ubuntu5.5
-        architecture: amd64
+        name: 'libavahi-common-data:amd64'
+        version: '0.8-5ubuntu5.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libavahi-common3:amd64
-        version: 0.8-5ubuntu5.5
-        architecture: amd64
+        name: 'libavahi-common3:amd64'
+        version: '0.8-5ubuntu5.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libblkid1:amd64
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'libblkid1:amd64'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libboost-iostreams1.74.0:amd64
-        version: 1.74.0-14ubuntu3
-        architecture: amd64
+        name: 'libboost-iostreams1.74.0:amd64'
+        version: '1.74.0-14ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libboost-thread1.74.0:amd64
-        version: 1.74.0-14ubuntu3
-        architecture: amd64
+        name: 'libboost-thread1.74.0:amd64'
+        version: '1.74.0-14ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libbrotli1:amd64
-        version: 1.0.9-2build6
-        architecture: amd64
+        name: 'libbrotli1:amd64'
+        version: '1.0.9-2build6'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libbsd0:amd64
-        version: 0.11.5-1
-        architecture: amd64
+        name: 'libbsd0:amd64'
+        version: '0.11.5-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libbz2-1.0:amd64
-        version: 1.0.8-5build1
-        architecture: amd64
+        name: 'libbz2-1.0:amd64'
+        version: '1.0.8-5build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libc-bin
-        version: 2.35-0ubuntu3.13
-        architecture: amd64
+        name: 'libc-bin'
+        version: '2.35-0ubuntu3.13'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libc6:amd64
-        version: 2.35-0ubuntu3.13
-        architecture: amd64
+        name: 'libc6:amd64'
+        version: '2.35-0ubuntu3.13'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcap-ng0:amd64
-        version: 0.7.9-2.2build3
-        architecture: amd64
+        name: 'libcap-ng0:amd64'
+        version: '0.7.9-2.2build3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcap2:amd64
-        version: 1:2.44-1ubuntu0.22.04.3
-        architecture: amd64
+        name: 'libcap2:amd64'
+        version: '1:2.44-1ubuntu0.22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcephfs2
-        version: 17.2.9-0ubuntu0.22.04.3
-        architecture: amd64
+        name: 'libcbor0.8:amd64'
+        version: '0.8.0-2ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcom-err2:amd64
-        version: 1.46.5-2ubuntu1.2
-        architecture: amd64
+        name: 'libcephfs2'
+        version: '17.2.9-0ubuntu0.22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcrypt1:amd64
-        version: 1:4.4.27-1
-        architecture: amd64
+        name: 'libcom-err2:amd64'
+        version: '1.46.5-2ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcups2:amd64
-        version: 2.4.1op1-1ubuntu4.16
-        architecture: amd64
+        name: 'libcrypt1:amd64'
+        version: '1:4.4.27-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libcurl4:amd64
-        version: 7.81.0-1ubuntu1.24
-        architecture: amd64
+        name: 'libcups2:amd64'
+        version: '2.4.1op1-1ubuntu4.20'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libdb5.3:amd64
-        version: 5.3.28+dfsg1-0.8ubuntu3
-        architecture: amd64
+        name: 'libcurl4:amd64'
+        version: '7.81.0-1ubuntu1.24'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libdbus-1-3:amd64
-        version: 1.12.20-2ubuntu4.1
-        architecture: amd64
+        name: 'libdb5.3:amd64'
+        version: '5.3.28+dfsg1-0.8ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libdebconfclient0:amd64
-        version: 0.261ubuntu1
-        architecture: amd64
+        name: 'libdbus-1-3:amd64'
+        version: '1.12.20-2ubuntu4.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libestr0:amd64
-        version: 0.1.10-2.1build3
-        architecture: amd64
+        name: 'libdebconfclient0:amd64'
+        version: '0.261ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libexpat1:amd64
-        version: 2.4.7-1ubuntu0.7
-        architecture: amd64
+        name: 'libedit2:amd64'
+        version: '3.1-20210910-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libext2fs2:amd64
-        version: 1.46.5-2ubuntu1.2
-        architecture: amd64
+        name: 'libestr0:amd64'
+        version: '0.1.10-2.1build3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libfastjson4:amd64
-        version: 0.99.9-1build2
-        architecture: amd64
+        name: 'libexpat1:amd64'
+        version: '2.4.7-1ubuntu0.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libffi8:amd64
-        version: 3.4.2-4
-        architecture: amd64
+        name: 'libext2fs2:amd64'
+        version: '1.46.5-2ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgcc-s1:amd64
-        version: 12.3.0-1ubuntu1~22.04.3
-        architecture: amd64
+        name: 'libfastjson4:amd64'
+        version: '0.99.9-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgcrypt20:amd64
-        version: 1.9.4-3ubuntu3
-        architecture: amd64
+        name: 'libffi8:amd64'
+        version: '3.4.2-4'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgfapi0:amd64
-        version: 10.1-1ubuntu0.2
-        architecture: amd64
+        name: 'libfido2-1:amd64'
+        version: '1.10.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgfrpc0:amd64
-        version: 10.1-1ubuntu0.2
-        architecture: amd64
+        name: 'libgcc-s1:amd64'
+        version: '12.3.0-1ubuntu1~22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgfxdr0:amd64
-        version: 10.1-1ubuntu0.2
-        architecture: amd64
+        name: 'libgcrypt20:amd64'
+        version: '1.9.4-3ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libglusterfs0:amd64
-        version: 10.1-1ubuntu0.2
-        architecture: amd64
+        name: 'libgfapi0:amd64'
+        version: '10.1-1ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgmp10:amd64
-        version: 2:6.2.1+dfsg-3ubuntu1
-        architecture: amd64
+        name: 'libgfrpc0:amd64'
+        version: '10.1-1ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgnutls30:amd64
-        version: 3.7.3-4ubuntu1.8
-        architecture: amd64
+        name: 'libgfxdr0:amd64'
+        version: '10.1-1ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgpg-error0:amd64
-        version: 1.43-3
-        architecture: amd64
+        name: 'libglusterfs0:amd64'
+        version: '10.1-1ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgpgme11:amd64
-        version: 1.16.0-1.2ubuntu4.2
-        architecture: amd64
+        name: 'libgmp10:amd64'
+        version: '2:6.2.1+dfsg-3ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libgssapi-krb5-2:amd64
-        version: 1.19.2-2ubuntu0.7
-        architecture: amd64
+        name: 'libgnutls30:amd64'
+        version: '3.7.3-4ubuntu1.8'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libhogweed6:amd64
-        version: 3.7.3-1build2
-        architecture: amd64
+        name: 'libgpg-error0:amd64'
+        version: '1.43-3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libibverbs1:amd64
-        version: 39.0-1
-        architecture: amd64
+        name: 'libgpgme11:amd64'
+        version: '1.16.0-1.2ubuntu4.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libicu70:amd64
-        version: 70.1-2
-        architecture: amd64
+        name: 'libgssapi-krb5-2:amd64'
+        version: '1.19.2-2ubuntu0.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libidn2-0:amd64
-        version: 2.3.2-2build1
-        architecture: amd64
+        name: 'libhogweed6:amd64'
+        version: '3.7.3-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libip4tc2:amd64
-        version: 1.8.7-1ubuntu5.2
-        architecture: amd64
+        name: 'libibverbs1:amd64'
+        version: '39.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libip6tc2:amd64
-        version: 1.8.7-1ubuntu5.2
-        architecture: amd64
+        name: 'libicu70:amd64'
+        version: '70.1-2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libjansson4:amd64
-        version: 2.13.1-1.1build3
-        architecture: amd64
+        name: 'libidn2-0:amd64'
+        version: '2.3.2-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libjq1:amd64
-        version: 1.6-2.1ubuntu3.2
-        architecture: amd64
+        name: 'libip4tc2:amd64'
+        version: '1.8.7-1ubuntu5.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libk5crypto3:amd64
-        version: 1.19.2-2ubuntu0.7
-        architecture: amd64
+        name: 'libip6tc2:amd64'
+        version: '1.8.7-1ubuntu5.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libkeyutils1:amd64
-        version: 1.6.1-2ubuntu3
-        architecture: amd64
+        name: 'libjansson4:amd64'
+        version: '2.13.1-1.1build3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libkrb5-3:amd64
-        version: 1.19.2-2ubuntu0.7
-        architecture: amd64
+        name: 'libjq1:amd64'
+        version: '1.6-2.1ubuntu3.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libkrb5support0:amd64
-        version: 1.19.2-2ubuntu0.7
-        architecture: amd64
+        name: 'libk5crypto3:amd64'
+        version: '1.19.2-2ubuntu0.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libksba8:amd64
-        version: 1.6.0-2ubuntu0.2
-        architecture: amd64
+        name: 'libkeyutils1:amd64'
+        version: '1.6.1-2ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libldap-2.5-0:amd64
-        version: 2.5.20+dfsg-0ubuntu0.22.04.1
-        architecture: amd64
+        name: 'libkrb5-3:amd64'
+        version: '1.19.2-2ubuntu0.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libldap-common
-        version: 2.5.20+dfsg-0ubuntu0.22.04.1
-        architecture: all
+        name: 'libkrb5support0:amd64'
+        version: '1.19.2-2ubuntu0.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libldb2:amd64
-        version: 2:2.4.4-0ubuntu0.22.04.2
-        architecture: amd64
+        name: 'libksba8:amd64'
+        version: '1.6.0-2ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: liblmdb0:amd64
-        version: 0.9.24-1build2
-        architecture: amd64
+        name: 'libldap-2.5-0:amd64'
+        version: '2.5.20+dfsg-0ubuntu0.22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: liblz4-1:amd64
-        version: 1.9.3-2build2
-        architecture: amd64
+        name: 'libldap-common'
+        version: '2.5.20+dfsg-0ubuntu0.22.04.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: liblzma5:amd64
-        version: 5.2.5-2ubuntu1
-        architecture: amd64
+        name: 'libldb2:amd64'
+        version: '2:2.4.4-0ubuntu0.22.04.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libmd0:amd64
-        version: 1.0.4-1build1
-        architecture: amd64
+        name: 'liblmdb0:amd64'
+        version: '0.9.24-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libmnl0:amd64
-        version: 1.0.4-3build2
-        architecture: amd64
+        name: 'liblz4-1:amd64'
+        version: '1.9.3-2build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libmount1:amd64
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'liblzma5:amd64'
+        version: '5.2.5-2ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libmpdec3:amd64
-        version: 2.5.1-2build2
-        architecture: amd64
+        name: 'libmd0:amd64'
+        version: '1.0.4-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libncurses6:amd64
-        version: 6.3-2ubuntu0.1
-        architecture: amd64
+        name: 'libmnl0:amd64'
+        version: '1.0.4-3build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libncursesw6:amd64
-        version: 6.3-2ubuntu0.1
-        architecture: amd64
+        name: 'libmount1:amd64'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnetfilter-conntrack3:amd64
-        version: 1.0.9-1
-        architecture: amd64
+        name: 'libmpdec3:amd64'
+        version: '2.5.1-2build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnettle8:amd64
-        version: 3.7.3-1build2
-        architecture: amd64
+        name: 'libncurses6:amd64'
+        version: '6.3-2ubuntu0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnfnetlink0:amd64
-        version: 1.0.1-3build3
-        architecture: amd64
+        name: 'libncursesw6:amd64'
+        version: '6.3-2ubuntu0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnftnl11:amd64
-        version: 1.2.1-1build1
-        architecture: amd64
+        name: 'libnetfilter-conntrack3:amd64'
+        version: '1.0.9-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnghttp2-14:amd64
-        version: 1.43.0-1ubuntu0.3
-        architecture: amd64
+        name: 'libnettle8:amd64'
+        version: '3.7.3-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnl-3-200:amd64
-        version: 3.5.0-0.1
-        architecture: amd64
+        name: 'libnfnetlink0:amd64'
+        version: '1.0.1-3build3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnl-route-3-200:amd64
-        version: 3.5.0-0.1
-        architecture: amd64
+        name: 'libnftnl11:amd64'
+        version: '1.2.1-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnpth0:amd64
-        version: 1.6-3build2
-        architecture: amd64
+        name: 'libnghttp2-14:amd64'
+        version: '1.43.0-1ubuntu0.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libnsl2:amd64
-        version: 1.3.0-2build2
-        architecture: amd64
+        name: 'libnl-3-200:amd64'
+        version: '3.5.0-0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libonig5:amd64
-        version: 6.9.7.1-2build1
-        architecture: amd64
+        name: 'libnl-route-3-200:amd64'
+        version: '3.5.0-0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libp11-kit0:amd64
-        version: 0.24.0-6build1
-        architecture: amd64
+        name: 'libnpth0:amd64'
+        version: '1.6-3build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpam-modules-bin
-        version: 1.4.0-11ubuntu2.6
-        architecture: amd64
+        name: 'libnsl2:amd64'
+        version: '1.3.0-2build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpam-modules:amd64
-        version: 1.4.0-11ubuntu2.6
-        architecture: amd64
+        name: 'libonig5:amd64'
+        version: '6.9.7.1-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpam-runtime
-        version: 1.4.0-11ubuntu2.6
-        architecture: all
+        name: 'libp11-kit0:amd64'
+        version: '0.24.0-6build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpam0g:amd64
-        version: 1.4.0-11ubuntu2.6
-        architecture: amd64
+        name: 'libpam-modules-bin'
+        version: '1.4.0-11ubuntu2.6'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpcre2-8-0:amd64
-        version: 10.39-3ubuntu0.1
-        architecture: amd64
+        name: 'libpam-modules:amd64'
+        version: '1.4.0-11ubuntu2.6'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpcre3:amd64
-        version: 2:8.39-13ubuntu0.22.04.1
-        architecture: amd64
+        name: 'libpam-runtime'
+        version: '1.4.0-11ubuntu2.6'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpopt0:amd64
-        version: 1.18-3build1
-        architecture: amd64
+        name: 'libpam0g:amd64'
+        version: '1.4.0-11ubuntu2.6'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libprocps8:amd64
-        version: 2:3.3.17-6ubuntu2.1
-        architecture: amd64
+        name: 'libpcre2-8-0:amd64'
+        version: '10.39-3ubuntu0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpsl5:amd64
-        version: 0.21.0-1.2build2
-        architecture: amd64
+        name: 'libpcre3:amd64'
+        version: '2:8.39-13ubuntu0.22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpython3-stdlib:amd64
-        version: 3.10.6-1~22.04.1
-        architecture: amd64
+        name: 'libpopt0:amd64'
+        version: '1.18-3build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpython3.10-minimal:amd64
-        version: 3.10.12-1~22.04.15
-        architecture: amd64
+        name: 'libprocps8:amd64'
+        version: '2:3.3.17-6ubuntu2.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpython3.10-stdlib:amd64
-        version: 3.10.12-1~22.04.15
-        architecture: amd64
+        name: 'libpsl5:amd64'
+        version: '0.21.0-1.2build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libpython3.10:amd64
-        version: 3.10.12-1~22.04.15
-        architecture: amd64
+        name: 'libpython3-stdlib:amd64'
+        version: '3.10.6-1~22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: librados2
-        version: 17.2.9-0ubuntu0.22.04.3
-        architecture: amd64
+        name: 'libpython3.10-minimal:amd64'
+        version: '3.10.12-1~22.04.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: librdmacm1:amd64
-        version: 39.0-1
-        architecture: amd64
+        name: 'libpython3.10-stdlib:amd64'
+        version: '3.10.12-1~22.04.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libreadline8:amd64
-        version: 8.1.2-1
-        architecture: amd64
+        name: 'libpython3.10:amd64'
+        version: '3.10.12-1~22.04.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: librtmp1:amd64
-        version: 2.4+20151223.gitfa8646d.1-2build4
-        architecture: amd64
+        name: 'librados2'
+        version: '17.2.9-0ubuntu0.22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsasl2-2:amd64
-        version: 2.1.27+dfsg2-3ubuntu1.2
-        architecture: amd64
+        name: 'librdmacm1:amd64'
+        version: '39.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsasl2-modules-db:amd64
-        version: 2.1.27+dfsg2-3ubuntu1.2
-        architecture: amd64
+        name: 'libreadline8:amd64'
+        version: '8.1.2-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsasl2-modules:amd64
-        version: 2.1.27+dfsg2-3ubuntu1.2
-        architecture: amd64
+        name: 'librtmp1:amd64'
+        version: '2.4+20151223.gitfa8646d.1-2build4'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libseccomp2:amd64
-        version: 2.5.3-2ubuntu3~22.04.1
-        architecture: amd64
+        name: 'libsasl2-2:amd64'
+        version: '2.1.27+dfsg2-3ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libselinux1:amd64
-        version: 3.3-1build2
-        architecture: amd64
+        name: 'libsasl2-modules-db:amd64'
+        version: '2.1.27+dfsg2-3ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsemanage-common
-        version: 3.3-1build2
-        architecture: all
+        name: 'libsasl2-modules:amd64'
+        version: '2.1.27+dfsg2-3ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsemanage2:amd64
-        version: 3.3-1build2
-        architecture: amd64
+        name: 'libseccomp2:amd64'
+        version: '2.5.3-2ubuntu3~22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsepol2:amd64
-        version: 3.3-1build1
-        architecture: amd64
+        name: 'libselinux1:amd64'
+        version: '3.3-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsmartcols1:amd64
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'libsemanage-common'
+        version: '3.3-1build2'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsmbclient:amd64
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'libsemanage2:amd64'
+        version: '3.3-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsqlite3-0:amd64
-        version: 3.37.2-2ubuntu0.5
-        architecture: amd64
+        name: 'libsepol2:amd64'
+        version: '3.3-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libss2:amd64
-        version: 1.46.5-2ubuntu1.2
-        architecture: amd64
+        name: 'libsmartcols1:amd64'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libssh-4:amd64
-        version: 0.9.6-2ubuntu0.22.04.7
-        architecture: amd64
+        name: 'libsmbclient:amd64'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libssl3:amd64
-        version: 3.0.2-0ubuntu1.23
-        architecture: amd64
+        name: 'libsqlite3-0:amd64'
+        version: '3.37.2-2ubuntu0.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libstdc++6:amd64
-        version: 12.3.0-1ubuntu1~22.04.3
-        architecture: amd64
+        name: 'libss2:amd64'
+        version: '1.46.5-2ubuntu1.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libsystemd0:amd64
-        version: 249.11-0ubuntu3.20
-        architecture: amd64
+        name: 'libssh-4:amd64'
+        version: '0.9.6-2ubuntu0.22.04.7'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtalloc2:amd64
-        version: 2.3.3-2build1
-        architecture: amd64
+        name: 'libssl3:amd64'
+        version: '3.0.2-0ubuntu1.23'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtasn1-6:amd64
-        version: 4.18.0-4ubuntu0.2
-        architecture: amd64
+        name: 'libstdc++6:amd64'
+        version: '12.3.0-1ubuntu1~22.04.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtdb1:amd64
-        version: 1.4.5-2build1
-        architecture: amd64
+        name: 'libsystemd0:amd64'
+        version: '249.11-0ubuntu3.20'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtevent0:amd64
-        version: 0.11.0-1build1
-        architecture: amd64
+        name: 'libtalloc2:amd64'
+        version: '2.3.3-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtinfo6:amd64
-        version: 6.3-2ubuntu0.1
-        architecture: amd64
+        name: 'libtasn1-6:amd64'
+        version: '4.18.0-4ubuntu0.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtirpc-common
-        version: 1.3.2-2ubuntu0.1
-        architecture: all
+        name: 'libtdb1:amd64'
+        version: '1.4.5-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libtirpc3:amd64
-        version: 1.3.2-2ubuntu0.1
-        architecture: amd64
+        name: 'libtevent0:amd64'
+        version: '0.11.0-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libudev1:amd64
-        version: 249.11-0ubuntu3.20
-        architecture: amd64
+        name: 'libtinfo6:amd64'
+        version: '6.3-2ubuntu0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libunistring2:amd64
-        version: 1.0-1
-        architecture: amd64
+        name: 'libtirpc-common'
+        version: '1.3.2-2ubuntu0.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: liburing2:amd64
-        version: 2.1-2build1
-        architecture: amd64
+        name: 'libtirpc3:amd64'
+        version: '1.3.2-2ubuntu0.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libuuid1:amd64
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'libudev1:amd64'
+        version: '249.11-0ubuntu3.20'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libwbclient0:amd64
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'libunistring2:amd64'
+        version: '1.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libxml2:amd64
-        version: 2.9.13+dfsg-1ubuntu0.11
-        architecture: amd64
+        name: 'liburing2:amd64'
+        version: '2.1-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libxtables12:amd64
-        version: 1.8.7-1ubuntu5.2
-        architecture: amd64
+        name: 'libuuid1:amd64'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libxxhash0:amd64
-        version: 0.8.1-1
-        architecture: amd64
+        name: 'libwbclient0:amd64'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libyaml-0-2:amd64
-        version: 0.2.2-1build2
-        architecture: amd64
+        name: 'libx11-6:amd64'
+        version: '2:1.7.5-1ubuntu0.3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: libzstd1:amd64
-        version: 1.4.8+dfsg-3build1
-        architecture: amd64
+        name: 'libx11-data'
+        version: '2:1.7.5-1ubuntu0.3'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: login
-        version: 1:4.8.1-2ubuntu2.2
-        architecture: amd64
+        name: 'libxau6:amd64'
+        version: '1:1.0.9-1build5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: logrotate
-        version: 3.19.0-1ubuntu1.1
-        architecture: amd64
+        name: 'libxcb1:amd64'
+        version: '1.14-3ubuntu3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: logsave
-        version: 1.46.5-2ubuntu1.2
-        architecture: amd64
+        name: 'libxdmcp6:amd64'
+        version: '1:1.1.3-0ubuntu5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: lsb-base
-        version: 11.1.0ubuntu4
-        architecture: all
+        name: 'libxext6:amd64'
+        version: '2:1.3.4-1build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: lsb-release
-        version: 11.1.0ubuntu4
-        architecture: all
+        name: 'libxml2:amd64'
+        version: '2.9.13+dfsg-1ubuntu0.11'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: mawk
-        version: 1.3.4.20200120-3
-        architecture: amd64
+        name: 'libxmuu1:amd64'
+        version: '2:1.1.3-3'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: media-types
-        version: 7.0.0
-        architecture: all
+        name: 'libxtables12:amd64'
+        version: '1.8.7-1ubuntu5.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: mount
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'libxxhash0:amd64'
+        version: '0.8.1-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ncurses-base
-        version: 6.3-2ubuntu0.1
-        architecture: all
+        name: 'libyaml-0-2:amd64'
+        version: '0.2.2-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ncurses-bin
-        version: 6.3-2ubuntu0.1
-        architecture: amd64
+        name: 'libzstd1:amd64'
+        version: '1.4.8+dfsg-3build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: net-tools
-        version: 1.60+git20181103.0eebece-1ubuntu5.4
-        architecture: amd64
+        name: 'login'
+        version: '1:4.8.1-2ubuntu2.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: netbase
+        name: 'logrotate'
+        version: '3.19.0-1ubuntu1.1'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'logsave'
+        version: '1.46.5-2ubuntu1.2'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'lsb-base'
+        version: '11.1.0ubuntu4'
+        architecture: 'all'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'lsb-release'
+        version: '11.1.0ubuntu4'
+        architecture: 'all'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'mawk'
+        version: '1.3.4.20200120-3'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'media-types'
+        version: '7.0.0'
+        architecture: 'all'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'mount'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'ncurses-base'
+        version: '6.3-2ubuntu0.1'
+        architecture: 'all'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'ncurses-bin'
+        version: '6.3-2ubuntu0.1'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'net-tools'
+        version: '1.60+git20181103.0eebece-1ubuntu5.4'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'netbase'
         version: '6.3'
-        architecture: all
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: netcat-openbsd
-        version: 1.218-4ubuntu1
-        architecture: amd64
+        name: 'netcat-openbsd'
+        version: '1.218-4ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: openssl
-        version: 3.0.2-0ubuntu1.23
-        architecture: amd64
+        name: 'openssh-client'
+        version: '1:8.9p1-3ubuntu0.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: passwd
-        version: 1:4.8.1-2ubuntu2.2
-        architecture: amd64
+        name: 'openssl'
+        version: '3.0.2-0ubuntu1.25'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: perl-base
-        version: 5.34.0-3ubuntu1.5
-        architecture: amd64
+        name: 'passwd'
+        version: '1:4.8.1-2ubuntu2.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: pinentry-curses
-        version: 1.1.1-1build2
-        architecture: amd64
+        name: 'perl-base'
+        version: '5.34.0-3ubuntu1.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: procps
-        version: 2:3.3.17-6ubuntu2.1
-        architecture: amd64
+        name: 'pinentry-curses'
+        version: '1.1.1-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3
-        version: 3.10.6-1~22.04.1
-        architecture: amd64
+        name: 'procps'
+        version: '2:3.3.17-6ubuntu2.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-certifi
-        version: 2020.6.20-1
-        architecture: all
+        name: 'python3'
+        version: '3.10.6-1~22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-cffi-backend:amd64
-        version: 1.15.0-1build2
-        architecture: amd64
+        name: 'python3-certifi'
+        version: '2020.6.20-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-chardet
-        version: 4.0.0-1
-        architecture: all
+        name: 'python3-cffi-backend:amd64'
+        version: '1.15.0-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-cryptography
-        version: 3.4.8-1ubuntu2.4
-        architecture: amd64
+        name: 'python3-chardet'
+        version: '4.0.0-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-dnspython
-        version: 2.1.0-1ubuntu1
-        architecture: all
+        name: 'python3-cryptography'
+        version: '3.4.8-1ubuntu2.4'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-gpg
-        version: 1.16.0-1.2ubuntu4.2
-        architecture: amd64
+        name: 'python3-dnspython'
+        version: '2.1.0-1ubuntu1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-idna
-        version: 3.3-1ubuntu0.1
-        architecture: all
+        name: 'python3-gpg'
+        version: '1.16.0-1.2ubuntu4.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-importlib-metadata
-        version: 4.6.4-1
-        architecture: all
+        name: 'python3-idna'
+        version: '3.3-1ubuntu0.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-ldb
-        version: 2:2.4.4-0ubuntu0.22.04.2
-        architecture: amd64
+        name: 'python3-importlib-metadata'
+        version: '4.6.4-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-markdown
-        version: 3.3.6-1
-        architecture: all
+        name: 'python3-ldb'
+        version: '2:2.4.4-0ubuntu0.22.04.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-minimal
-        version: 3.10.6-1~22.04.1
-        architecture: amd64
+        name: 'python3-markdown'
+        version: '3.3.6-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-more-itertools
-        version: 8.10.0-2
-        architecture: all
+        name: 'python3-minimal'
+        version: '3.10.6-1~22.04.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-pkg-resources
-        version: 59.6.0-1.2ubuntu0.22.04.3
-        architecture: all
+        name: 'python3-more-itertools'
+        version: '8.10.0-2'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-pygments
-        version: 2.11.2+dfsg-2ubuntu0.1
-        architecture: all
+        name: 'python3-pkg-resources'
+        version: '59.6.0-1.2ubuntu0.22.04.3'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-requests
-        version: 2.25.1+dfsg-2ubuntu0.3
-        architecture: all
+        name: 'python3-pygments'
+        version: '2.11.2+dfsg-2ubuntu0.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-requests-toolbelt
-        version: 0.9.1-1
-        architecture: all
+        name: 'python3-requests'
+        version: '2.25.1+dfsg-2ubuntu0.3'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-samba
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'python3-requests-toolbelt'
+        version: '0.9.1-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-six
-        version: 1.16.0-3ubuntu1
-        architecture: all
+        name: 'python3-samba'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-talloc:amd64
-        version: 2.3.3-2build1
-        architecture: amd64
+        name: 'python3-six'
+        version: '1.16.0-3ubuntu1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-tdb
-        version: 1.4.5-2build1
-        architecture: amd64
+        name: 'python3-talloc:amd64'
+        version: '2.3.3-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-urllib3
-        version: 1.26.5-1~exp1ubuntu0.6
-        architecture: all
+        name: 'python3-tdb'
+        version: '1.4.5-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-yaml
-        version: 5.4.1-1ubuntu1
-        architecture: amd64
+        name: 'python3-urllib3'
+        version: '1.26.5-1~exp1ubuntu0.7'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3-zipp
-        version: 1.0.0-3ubuntu0.1
-        architecture: all
+        name: 'python3-yaml'
+        version: '5.4.1-1ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3.10
-        version: 3.10.12-1~22.04.15
-        architecture: amd64
+        name: 'python3-zipp'
+        version: '1.0.0-3ubuntu0.1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: python3.10-minimal
-        version: 3.10.12-1~22.04.15
-        architecture: amd64
+        name: 'python3.10'
+        version: '3.10.12-1~22.04.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: readline-common
-        version: 8.1.2-1
-        architecture: all
+        name: 'python3.10-minimal'
+        version: '3.10.12-1~22.04.15'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: rsyslog
-        version: 8.2112.0-2ubuntu2.2
-        architecture: amd64
+        name: 'readline-common'
+        version: '8.1.2-1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'rsyslog'
+        version: '8.2112.0-2ubuntu2.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba-common
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: all
+        name: 'samba'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba-common-bin
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'samba-common'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba-dsdb-modules:amd64
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'samba-common-bin'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba-libs:amd64
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'samba-dsdb-modules:amd64'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: samba-vfs-modules:amd64
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'samba-libs:amd64'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: sed
-        version: 4.8-1ubuntu2.1
-        architecture: amd64
+        name: 'samba-vfs-modules:amd64'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: sensible-utils
-        version: 0.0.17
-        architecture: all
+        name: 'sed'
+        version: '4.8-1ubuntu2.1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: smbclient
-        version: 2:4.15.13+dfsg-0ubuntu1.10
-        architecture: amd64
+        name: 'sensible-utils'
+        version: '0.0.17'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: supervisor
-        version: 4.2.1-1ubuntu1
-        architecture: all
+        name: 'smbclient'
+        version: '2:4.15.13+dfsg-0ubuntu1.12'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: sysvinit-utils
-        version: 3.01-1ubuntu1
-        architecture: amd64
+        name: 'supervisor'
+        version: '4.2.1-1ubuntu1'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: tar
-        version: 1.34+dfsg-1ubuntu0.1.22.04.2
-        architecture: amd64
+        name: 'sysvinit-utils'
+        version: '3.01-1ubuntu1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: tdb-tools
-        version: 1.4.5-2build1
-        architecture: amd64
+        name: 'tar'
+        version: '1.34+dfsg-1ubuntu0.1.22.04.2'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ubuntu-keyring
-        version: 2021.03.26
-        architecture: all
+        name: 'tdb-tools'
+        version: '1.4.5-2build1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: ucf
+        name: 'ubuntu-keyring'
+        version: '2021.03.26'
+        architecture: 'all'
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: 'ucf'
         version: '3.0043'
-        architecture: all
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: usrmerge
-        version: 25ubuntu2
-        architecture: all
+        name: 'usrmerge'
+        version: '25ubuntu2'
+        architecture: 'all'
         source: ''
         purl: ''
       - manager: dpkg
-        name: util-linux
-        version: 2.37.2-4ubuntu3.5
-        architecture: amd64
+        name: 'util-linux'
+        version: '2.37.2-4ubuntu3.5'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: wazuh-agent
-        version: 4.12.0-1
-        architecture: amd64
+        name: 'wazuh-agent'
+        version: '4.12.0-1'
+        architecture: 'amd64'
         source: ''
         purl: ''
       - manager: dpkg
-        name: zlib1g:amd64
-        version: 1:1.2.11.dfsg-2ubuntu9.2
-        architecture: amd64
+        name: 'xauth'
+        version: '1:1.1-1build2'
+        architecture: 'amd64'
         source: ''
         purl: ''
-      software_components: []
+      - manager: dpkg
+        name: 'zlib1g:amd64'
+        version: '1:1.2.11.dfsg-2ubuntu9.2'
+        architecture: 'amd64'
+        source: ''
+        purl: ''
       dependency_manifests:
       - ecosystem: dpkg
         path: /var/lib/dpkg/status
@@ -3897,1323 +3988,1455 @@ nodes:
         name: supervisor
         version: 4.2.1
       package_vulnerabilities:
-      - id: CVE-2026-27456
-        package_name: bsdutils
-        installed_version: 1:2.37.2-4ubuntu3.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2023-34969
-        package_name: dbus
-        installed_version: 1.12.20-2ubuntu4.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-27943
-        package_name: gcc-12-base
-        installed_version: 12.3.0-1ubuntu1~22.04.3
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4424
-        package_name: libarchive13
-        installed_version: 3.6.0-1ubuntu1.6
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.6.0-1ubuntu1.7
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4424
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4426
-        package_name: libarchive13
-        installed_version: 3.6.0-1ubuntu1.6
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.6.0-1ubuntu1.7
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4426
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-5121
-        package_name: libarchive13
-        installed_version: 3.6.0-1ubuntu1.6
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.6.0-1ubuntu1.7
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5121
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-5745
-        package_name: libarchive13
-        installed_version: 3.6.0-1ubuntu1.6
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5745
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2025-59529
-        package_name: libavahi-client3
-        installed_version: 0.8-5ubuntu5.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52615
-        package_name: libavahi-client3
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52616
-        package_name: libavahi-client3
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2025-59529
-        package_name: libavahi-common-data
-        installed_version: 0.8-5ubuntu5.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52615
-        package_name: libavahi-common-data
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52616
-        package_name: libavahi-common-data
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2025-59529
-        package_name: libavahi-common3
-        installed_version: 0.8-5ubuntu5.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-59529
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52615
-        package_name: libavahi-common3
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-52616
-        package_name: libavahi-common3
-        installed_version: 0.8-5ubuntu5.5
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-52616
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: libblkid1
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4046
-        package_name: libc-bin
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4437
-        package_name: libc-bin
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4438
-        package_name: libc-bin
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4046
-        package_name: libc6
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4046
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4437
-        package_name: libc6
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4437
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-4438
-        package_name: libc6
-        installed_version: 2.35-0ubuntu3.13
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4438
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-41079
-        package_name: libcups2
-        installed_version: 2.4.1op1-1ubuntu4.16
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-41079
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2023-34969
-        package_name: libdbus-1-3
-        installed_version: 1.12.20-2ubuntu4.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-34969
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2025-66382
-        package_name: libexpat1
-        installed_version: 2.4.7-1ubuntu0.7
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-66382
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-27943
-        package_name: libgcc-s1
-        installed_version: 12.3.0-1ubuntu1~22.04.3
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-2236
-        package_name: libgcrypt20
-        installed_version: 1.9.4-3ubuntu3
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-2236
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-33845
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33845
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-33846
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-33846
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-3832
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3832
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-3833
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3833
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42009
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42009
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42010
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42010
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42011
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42011
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42012
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42012
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42013
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42013
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42014
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42014
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-42015
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42015
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-5260
-        package_name: libgnutls30
-        installed_version: 3.7.3-4ubuntu1.8
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: 3.7.3-4ubuntu1.9
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5260
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2025-5222
-        package_name: libicu70
-        installed_version: 70.1-2
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-5222
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-22185
-        package_name: liblmdb0
-        installed_version: 0.9.24-1build2
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: libmount1
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2023-50495
-        package_name: libncurses6
-        installed_version: 6.3-2ubuntu0.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2023-50495
-        package_name: libncursesw6
-        installed_version: 6.3-2ubuntu0.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-41409
-        package_name: libpcre2-8-0
-        installed_version: 10.39-3ubuntu0.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-41409
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2017-11164
-        package_name: libpcre3
-        installed_version: 2:8.39-13ubuntu0.22.04.1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2017-11164
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-2297
-        package_name: libpython3.10
-        installed_version: 3.10.12-1~22.04.15
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-2297
-        package_name: libpython3.10-minimal
-        installed_version: 3.10.12-1~22.04.15
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-2297
-        package_name: libpython3.10-stdlib
-        installed_version: 3.10.12-1~22.04.15
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: libsmartcols1
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: libsmbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: libsmbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2026-27456'
+        package_name: 'bsdutils'
+        installed_version: '1:2.37.2-4ubuntu3.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: libsmbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2023-34969'
+        package_name: 'dbus'
+        installed_version: '1.12.20-2ubuntu4.1'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-34969'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: libsmbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-27943'
+        package_name: 'gcc-12-base'
+        installed_version: '12.3.0-1ubuntu1~22.04.3'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: libsmbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2026-5745'
+        package_name: 'libarchive13'
+        installed_version: '3.6.0-1ubuntu1.7'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5745'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-27943
-        package_name: libstdc++6
-        installed_version: 12.3.0-1ubuntu1~22.04.3
-        severity: low
+      - id: 'CVE-2025-59529'
+        package_name: 'libavahi-client3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-27943
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-59529'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-7008
-        package_name: libsystemd0
-        installed_version: 249.11-0ubuntu3.20
-        severity: low
+      - id: 'CVE-2024-52615'
+        package_name: 'libavahi-client3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-50495
-        package_name: libtinfo6
-        installed_version: 6.3-2ubuntu0.1
-        severity: low
+      - id: 'CVE-2024-52616'
+        package_name: 'libavahi-client3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52616'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-7008
-        package_name: libudev1
-        installed_version: 249.11-0ubuntu3.20
-        severity: low
+      - id: 'CVE-2025-59529'
+        package_name: 'libavahi-common-data'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-7008
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-59529'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: libuuid1
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
+      - id: 'CVE-2024-52615'
+        package_name: 'libavahi-common-data'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: libwbclient0
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
+      - id: 'CVE-2024-52616'
+        package_name: 'libavahi-common-data'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52616'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: libwbclient0
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2025-59529'
+        package_name: 'libavahi-common3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-59529'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: libwbclient0
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2024-52615'
+        package_name: 'libavahi-common3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: libwbclient0
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2024-52616'
+        package_name: 'libavahi-common3'
+        installed_version: '0.8-5ubuntu5.5'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-52616'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: libwbclient0
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2026-27456'
+        package_name: 'libblkid1'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-4899
-        package_name: libzstd1
-        installed_version: 1.4.8+dfsg-3build1
-        severity: low
+      - id: 'CVE-2026-4046'
+        package_name: 'libc-bin'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-4899
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-4046'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-29383
-        package_name: login
-        installed_version: 1:4.8.1-2ubuntu2.2
-        severity: low
+      - id: 'CVE-2026-5435'
+        package_name: 'libc-bin'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5435'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2024-56433
-        package_name: login
-        installed_version: 1:4.8.1-2ubuntu2.2
-        severity: low
+      - id: 'CVE-2026-6238'
+        package_name: 'libc-bin'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-6238'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: mount
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
+      - id: 'CVE-2026-4046'
+        package_name: 'libc6'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-4046'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-50495
-        package_name: ncurses-base
-        installed_version: 6.3-2ubuntu0.1
-        severity: low
+      - id: 'CVE-2026-5435'
+        package_name: 'libc6'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5435'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-50495
-        package_name: ncurses-bin
-        installed_version: 6.3-2ubuntu0.1
-        severity: low
+      - id: 'CVE-2026-6238'
+        package_name: 'libc6'
+        installed_version: '2.35-0ubuntu3.13'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-50495
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-6238'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2023-29383
-        package_name: passwd
-        installed_version: 1:4.8.1-2ubuntu2.2
-        severity: low
+      - id: 'CVE-2023-34969'
+        package_name: 'libdbus-1-3'
+        installed_version: '1.12.20-2ubuntu4.1'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29383
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2024-56433
-        package_name: passwd
-        installed_version: 1:4.8.1-2ubuntu2.2
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2023-29483
-        package_name: python3-dnspython
-        installed_version: 2.1.0-1ubuntu1
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2023-29483
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: python3-samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: python3-samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: python3-samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: python3-samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: python3-samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-2297
-        package_name: python3.10
-        installed_version: 3.10.12-1~22.04.15
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2026-2297
-        package_name: python3.10-minimal
-        installed_version: 3.10.12-1~22.04.15
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-2297
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-34969'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2025-66382'
+        package_name: 'libexpat1'
+        installed_version: '2.4.7-1ubuntu0.7'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-66382'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-27943'
+        package_name: 'libgcc-s1'
+        installed_version: '12.3.0-1ubuntu1~22.04.3'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-41989'
+        package_name: 'libgcrypt20'
+        installed_version: '1.9.4-3ubuntu3'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '1.9.4-3ubuntu3.2'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-41989'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2024-2236'
+        package_name: 'libgcrypt20'
+        installed_version: '1.9.4-3ubuntu3'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-2236'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-33845'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-33845'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-33846'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-33846'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-3832'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3832'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-3833'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-3833'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42009'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42009'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42010'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42010'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42011'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42011'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42012'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42012'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42013'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42013'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42014'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42014'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42015'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42015'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-5260'
+        package_name: 'libgnutls30'
+        installed_version: '3.7.3-4ubuntu1.8'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.7.3-4ubuntu1.9'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5260'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2025-5222'
+        package_name: 'libicu70'
+        installed_version: '70.1-2'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-5222'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-22185'
+        package_name: 'liblmdb0'
+        installed_version: '0.9.24-1build2'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-22185'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-34743'
+        package_name: 'liblzma5'
+        installed_version: '5.2.5-2ubuntu1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '5.2.5-2ubuntu1.1'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-27456'
+        package_name: 'libmount1'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-50495'
+        package_name: 'libncurses6'
+        installed_version: '6.3-2ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-50495'
+        package_name: 'libncursesw6'
+        installed_version: '6.3-2ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-41409'
+        package_name: 'libpcre2-8-0'
+        installed_version: '10.39-3ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-41409'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2017-11164'
+        package_name: 'libpcre3'
+        installed_version: '2:8.39-13ubuntu0.22.04.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2017-11164'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-2297'
+        package_name: 'libpython3.10'
+        installed_version: '3.10.12-1~22.04.15'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-2297'
+        package_name: 'libpython3.10-minimal'
+        installed_version: '3.10.12-1~22.04.15'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-2297'
+        package_name: 'libpython3.10-stdlib'
+        installed_version: '3.10.12-1~22.04.15'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-27456'
+        package_name: 'libsmartcols1'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'libsmbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'libsmbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'libsmbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'libsmbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'libsmbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-45447'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'high'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45447'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-34182'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34182'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-45445'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45445'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-34180'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-34180'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42766'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42766'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42767'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42767'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-42770'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-42770'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-45446'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-45446'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-7383'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-7383'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-9076'
+        package_name: 'libssl3'
+        installed_version: '3.0.2-0ubuntu1.23'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '3.0.2-0ubuntu1.25'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-9076'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-27943'
+        package_name: 'libstdc++6'
+        installed_version: '12.3.0-1ubuntu1~22.04.3'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-27943'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-40226'
+        package_name: 'libsystemd0'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '249.11-0ubuntu3.21'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40226'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-7008'
+        package_name: 'libsystemd0'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '249.11-0ubuntu3.21'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-7008'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-40228'
+        package_name: 'libsystemd0'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40228'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-50495'
+        package_name: 'libtinfo6'
+        installed_version: '6.3-2ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-40226'
+        package_name: 'libudev1'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '249.11-0ubuntu3.21'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40226'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-7008'
+        package_name: 'libudev1'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: '249.11-0ubuntu3.21'
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-7008'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-40228'
+        package_name: 'libudev1'
+        installed_version: '249.11-0ubuntu3.20'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-40228'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-27456'
+        package_name: 'libuuid1'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'libwbclient0'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'libwbclient0'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'libwbclient0'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'libwbclient0'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'libwbclient0'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-4899'
+        package_name: 'libzstd1'
+        installed_version: '1.4.8+dfsg-3build1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-4899'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-29383'
+        package_name: 'login'
+        installed_version: '1:4.8.1-2ubuntu2.2'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-29383'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2024-56433'
+        package_name: 'login'
+        installed_version: '1:4.8.1-2ubuntu2.2'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-56433'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-27456'
+        package_name: 'mount'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-50495'
+        package_name: 'ncurses-base'
+        installed_version: '6.3-2ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-50495'
+        package_name: 'ncurses-bin'
+        installed_version: '6.3-2ubuntu0.1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-50495'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-29383'
+        package_name: 'passwd'
+        installed_version: '1:4.8.1-2ubuntu2.2'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-29383'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2024-56433'
+        package_name: 'passwd'
+        installed_version: '1:4.8.1-2ubuntu2.2'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2024-56433'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2023-29483'
+        package_name: 'python3-dnspython'
+        installed_version: '2.1.0-1ubuntu1'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2023-29483'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'python3-samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'python3-samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'python3-samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'python3-samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'python3-samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-2297'
+        package_name: 'python3.10'
+        installed_version: '3.10.12-1~22.04.15'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2026-2297'
+        package_name: 'python3.10-minimal'
+        installed_version: '3.10.12-1~22.04.15'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-2297'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'samba'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'samba-common'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'samba-common'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'samba-common'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'samba-common'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'samba-common'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'samba-common-bin'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'samba-common-bin'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2021-20251'
+        package_name: 'samba-common-bin'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-1615'
+        package_name: 'samba-common-bin'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2022-32743'
+        package_name: 'samba-common-bin'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2020-25720'
+        package_name: 'samba-dsdb-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
+        scanner_database: ''
+      - id: 'CVE-2018-14628'
+        package_name: 'samba-dsdb-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
+        fixed_version: ''
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba-common
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba-common
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba-common
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba-common
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba-common
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba-common-bin
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba-common-bin
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba-common-bin
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba-common-bin
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba-common-bin
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba-dsdb-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba-dsdb-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
-        fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
-        scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba-dsdb-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
-        scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+      - id: 'CVE-2021-20251'
+        package_name: 'samba-dsdb-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
+        scanner: trivy
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba-dsdb-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-1615'
+        package_name: 'samba-dsdb-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba-dsdb-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-32743'
+        package_name: 'samba-dsdb-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba-libs
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
+      - id: 'CVE-2020-25720'
+        package_name: 'samba-libs'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba-libs
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2018-14628'
+        package_name: 'samba-libs'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba-libs
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2021-20251'
+        package_name: 'samba-libs'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba-libs
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-1615'
+        package_name: 'samba-libs'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba-libs
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-32743'
+        package_name: 'samba-libs'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: samba-vfs-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
+      - id: 'CVE-2020-25720'
+        package_name: 'samba-vfs-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: samba-vfs-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2018-14628'
+        package_name: 'samba-vfs-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: samba-vfs-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2021-20251'
+        package_name: 'samba-vfs-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: samba-vfs-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-1615'
+        package_name: 'samba-vfs-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: samba-vfs-modules
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-32743'
+        package_name: 'samba-vfs-modules'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2020-25720
-        package_name: smbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: medium
+      - id: 'CVE-2020-25720'
+        package_name: 'smbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2020-25720
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2020-25720'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2018-14628
-        package_name: smbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2018-14628'
+        package_name: 'smbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2018-14628
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2018-14628'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2021-20251
-        package_name: smbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2021-20251'
+        package_name: 'smbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2021-20251
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2021-20251'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-1615
-        package_name: smbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-1615'
+        package_name: 'smbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-1615
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-1615'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2022-32743
-        package_name: smbclient
-        installed_version: 2:4.15.13+dfsg-0ubuntu1.10
-        severity: low
+      - id: 'CVE-2022-32743'
+        package_name: 'smbclient'
+        installed_version: '2:4.15.13+dfsg-0ubuntu1.12'
+        severity: 'low'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2022-32743
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2022-32743'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2025-45582
-        package_name: tar
-        installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
-        severity: medium
+      - id: 'CVE-2025-45582'
+        package_name: 'tar'
+        installed_version: '1.34+dfsg-1ubuntu0.1.22.04.2'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2025-45582
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2025-45582'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2026-5704
-        package_name: tar
-        installed_version: 1.34+dfsg-1ubuntu0.1.22.04.2
-        severity: medium
+      - id: 'CVE-2026-5704'
+        package_name: 'tar'
+        installed_version: '1.34+dfsg-1ubuntu0.1.22.04.2'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-5704'
+        scanner_version: '0.70.0'
         scanner_database: ''
-      - id: CVE-2026-27456
-        package_name: util-linux
-        installed_version: 2.37.2-4ubuntu3.5
-        severity: medium
+      - id: 'CVE-2026-27456'
+        package_name: 'util-linux'
+        installed_version: '2.37.2-4ubuntu3.5'
+        severity: 'medium'
         scanner: trivy
-        image_digest: aptl-fileshare@sha256:4defa1d902153bd9a4c552adbf0763a5b9fa48a6bc99acad2df6c4a2fe4c7c59
-        scan_time: '2026-05-26T02:51:35Z'
+        image_digest: 'aptl-fileshare@sha256:596f9ccd677197281a07881dee5bddf550e251cb8fc83a5f27a268f55682bc96'
+        scan_time: '2026-06-12T12:25:44Z'
         fixed_version: ''
-        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
-        scanner_version: 0.70.0
+        advisory_url: 'https://avd.aquasec.com/nvd/cve-2026-27456'
+        scanner_version: '0.70.0'
         scanner_database: ''

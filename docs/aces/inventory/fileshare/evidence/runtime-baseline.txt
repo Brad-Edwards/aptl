@@ -35,17 +35,17 @@ PWD=/
 SIEM_IP=172.20.0.10
 WAZUH_MANAGER=wazuh.manager
 --listeners--
-sh: 20: ss: not found
+sh: 16: ss: not found
 Active Internet connections (only servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 0.0.0.0:139             0.0.0.0:*               LISTEN      61/smbd
-tcp        0      0 0.0.0.0:445             0.0.0.0:*               LISTEN      61/smbd
-tcp        0      0 127.0.0.11:42355        0.0.0.0:*               LISTEN      -
-tcp6       0      0 :::139                  :::*                    LISTEN      61/smbd
-tcp6       0      0 :::445                  :::*                    LISTEN      61/smbd
-udp        0      0 127.0.0.11:42158        0.0.0.0:*                           -
+tcp        0      0 127.0.0.11:45667        0.0.0.0:*               LISTEN      -
+tcp        0      0 0.0.0.0:139             0.0.0.0:*               LISTEN      62/smbd
+tcp        0      0 0.0.0.0:445             0.0.0.0:*               LISTEN      62/smbd
+tcp6       0      0 :::139                  :::*                    LISTEN      62/smbd
+tcp6       0      0 :::445                  :::*                    LISTEN      62/smbd
+udp        0      0 127.0.0.11:34332        0.0.0.0:*                           -
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51136/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31645/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31644/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31643/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31642/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31641/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31640/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31639/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31638/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31637/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31636/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31635/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31634/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51157/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51157/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107879/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106879/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106878/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106877/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106876/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106875/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106874/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106873/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106871/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106870/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106869/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106868/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106865/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107891/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107891/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -94,7 +94,7 @@ nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
 _apt:x:100:65534::/nonexistent:/usr/sbin/nologin
 messagebus:x:101:102::/nonexistent:/usr/sbin/nologin
 syslog:x:102:103::/home/syslog:/usr/sbin/nologin
-wazuh:x:103:106::/var/ossec:/sbin/nologin
+wazuh:x:103:107::/var/ossec:/sbin/nologin
 svc-fileshare:x:1000:1000::/home/svc-fileshare:/bin/sh
 --groups--
 root:x:0:
@@ -140,8 +140,9 @@ crontab:x:101:
 messagebus:x:102:
 syslog:x:103:
 rdma:x:104:
-sambashare:x:105:
-wazuh:x:106:
+_ssh:x:105:
+sambashare:x:106:
+wazuh:x:107:
 svc-fileshare:x:1000:
 --samba-shares--
 
@@ -214,8 +215,8 @@ SMB1 disabled -- no workgroup available
 Unix username:        nobody
 NT username:
 Account Flags:        [U          ]
-User SID:             S-1-5-21-214444308-4060190868-1613949656-501
-Primary Group SID:    S-1-5-21-214444308-4060190868-1613949656-513
+User SID:             S-1-5-21-2772929106-1786663067-3322970062-501
+Primary Group SID:    S-1-5-21-2772929106-1786663067-3322970062-513
 Full Name:            nobody
 Home Directory:
 HomeDir Drive:        (null)
@@ -238,8 +239,8 @@ Logon hours         : FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 Unix username:        svc-fileshare
 NT username:
 Account Flags:        [U          ]
-User SID:             S-1-5-21-214444308-4060190868-1613949656-1000
-Primary Group SID:    S-1-5-21-214444308-4060190868-1613949656-513
+User SID:             S-1-5-21-2772929106-1786663067-3322970062-1000
+Primary Group SID:    S-1-5-21-2772929106-1786663067-3322970062-513
 Full Name:
 Home Directory:       \\FILES\svc-fileshare
 HomeDir Drive:
@@ -252,31 +253,31 @@ Munged dial:
 Logon time:           0
 Logoff time:          Wed, 06 Feb 2036 15:06:39 UTC
 Kickoff time:         Wed, 06 Feb 2036 15:06:39 UTC
-Password last set:    Sat, 23 May 2026 06:18:36 UTC
-Password can change:  Sat, 23 May 2026 06:18:36 UTC
+Password last set:    Thu, 11 Jun 2026 16:00:24 UTC
+Password can change:  Thu, 11 Jun 2026 16:00:24 UTC
 Password must change: never
 Last bad password   : 0
 Bad password count  : 0
 Logon hours         : FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 --supervisor--
-rsyslog                          RUNNING   pid 60, uptime 2 days, 20:33:00
-samba                            RUNNING   pid 61, uptime 2 days, 20:33:00
-wazuh-agent                      RUNNING   pid 423, uptime 2 days, 20:32:06
+rsyslog                          RUNNING   pid 61, uptime 20:25:19
+samba                            RUNNING   pid 62, uptime 20:25:19
+wazuh-agent                      RUNNING   pid 415, uptime 20:24:22
 --process-tree--
     PID    PPID USER     COMMAND
       1       0 root     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
-     60       1 syslog   /usr/sbin/rsyslogd -n
-     61       1 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
-     70      61 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
-     71      61 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
-     72      61 root     /usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=43 --parent-watch-fd=9 --debuglevel=0 -F
-    423       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-    469       1 root     /var/ossec/bin/wazuh-execd
-    484       1 wazuh    /var/ossec/bin/wazuh-agentd
-    506       1 root     /var/ossec/bin/wazuh-syscheckd
-    516       1 root     /var/ossec/bin/wazuh-logcollector
-    537       1 root     /var/ossec/bin/wazuh-modulesd
-    607     423 root     tail -F /var/ossec/logs/ossec.log
- 198485     423 root     sleep 5
- 198605       0 root     sh -lc    set -eu   redact_env() {     sed -E "s/^(APTL_FLAG_KEY|WAZUH_PASSWORD|WAZUH_REGISTRATION_PASSWORD|WAZUH_API_PASSWORD)=.*/\1=<REDACTED-\1>/" \       | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-WAZUH_PASSWORD>/<REDACTED-WAZUH-PASSWORD>/;s/<REDACTED-WAZUH_REGISTRATION_PASSWORD>/<REDACTED-WAZUH-REGISTRATION-PASSWORD>/;s/<REDACTED-WAZUH_API_PASSWORD>/<REDACTED-WAZUH-API-PASSWORD>/"   }   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort | redact_env   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,160p"   echo --users--   getent passwd | sed -n "1,220p"   echo --groups--   getent group | sed -n "1,220p"   echo --samba-shares--   smbclient -L localhost -N || true   echo --samba-config-shares--   testparm -s 2>/dev/null | sed -n "/^\\[/,\$p" || true   echo --samba-users--   pdbedit -L -v 2>/dev/null | sed -E "s/(NT password|LM password):.*/\1:<REDACTED>/" || true   echo --supervisor--   supervisorctl status || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
- 198640  198605 root     ps -eo pid,ppid,user,args
+     61       1 syslog   /usr/sbin/rsyslogd -n
+     62       1 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     71      62 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     72      62 root     /usr/sbin/smbd --foreground --no-process-group --debug-stdout
+     73      62 root     /usr/lib/x86_64-linux-gnu/samba/samba-bgqd --ready-signal-fd=43 --parent-watch-fd=9 --debuglevel=0 -F
+    415       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    461       1 root     /var/ossec/bin/wazuh-execd
+    479       1 wazuh    /var/ossec/bin/wazuh-agentd
+    498       1 root     /var/ossec/bin/wazuh-syscheckd
+    508       1 root     /var/ossec/bin/wazuh-logcollector
+    529       1 root     /var/ossec/bin/wazuh-modulesd
+    599     415 root     tail -F /var/ossec/logs/ossec.log
+  59362     415 root     sleep 5
+  59488       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,160p"   echo --users--   getent passwd | sed -n "1,220p"   echo --groups--   getent group | sed -n "1,220p"   echo --samba-shares--   smbclient -L localhost -N || true   echo --samba-config-shares--   testparm -s 2>/dev/null | sed -n "/^\\[/,\$p" || true   echo --samba-users--   pdbedit -L -v 2>/dev/null || true   echo --supervisor--   supervisorctl status || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
+  59519   59488 root     ps -eo pid,ppid,user,args

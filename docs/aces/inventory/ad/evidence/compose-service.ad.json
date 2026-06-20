@@ -9,17 +9,17 @@
   "container_name": "aptl-ad",
   "hostname": "dc.techvault.local",
   "restart": "unless-stopped",
-  "environment": {
-    "SAMBA_DOMAIN": "TECHVAULT",
-    "SAMBA_REALM": "TECHVAULT.LOCAL",
-    "SAMBA_ADMIN_PASSWORD": "<REDACTED-SCENARIO-FIXTURE>",
-    "DNS_FORWARDER": "172.20.1.22",
-    "SIEM_IP": "172.20.2.30",
-    "WAZUH_MANAGER": "wazuh.manager",
-    "AGENT_NAME": "aptl-ad-agent",
-    "LOG_PATHS": "/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd",
-    "LOG_FORMAT": "syslog"
-  },
+  "environment": [
+    "SAMBA_DOMAIN=TECHVAULT",
+    "SAMBA_REALM=TECHVAULT.LOCAL",
+    "SAMBA_ADMIN_PASSWORD=Admin123!",
+    "DNS_FORWARDER=172.20.1.22",
+    "SIEM_IP=172.20.2.30",
+    "WAZUH_MANAGER=wazuh.manager",
+    "AGENT_NAME=aptl-ad-agent",
+    "LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd",
+    "LOG_FORMAT=syslog"
+  ],
   "volumes": [
     "ad_data:/var/lib/samba",
     "ad_logs:/var/log/samba"

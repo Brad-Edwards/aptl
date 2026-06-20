@@ -7,22 +7,6 @@
   "rows": [
     {
       "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/upgrade",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/dev/log",
       "pid": "-1",
       "port": "0",
@@ -31,23 +15,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/control",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/supervisor.sock.1",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/queue",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -71,7 +39,7 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/61",
+      "path": "queue/sockets/wmodules",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -79,7 +47,47 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/70",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/queue",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/lib/samba/private/msg.sock/62",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -88,6 +96,22 @@
     {
       "address": "",
       "path": "/var/lib/samba/private/msg.sock/71",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/lib/samba/private/msg.sock/72",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/samba/ncalrpc/np/wkssvc",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -151,14 +175,6 @@
     },
     {
       "address": "",
-      "path": "/var/run/samba/ncalrpc/np/wkssvc",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/samba/ncalrpc/np/netdfs",
       "pid": "-1",
       "port": "0",
@@ -199,14 +215,6 @@
     },
     {
       "address": "",
-      "path": "queue/alerts/execq",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/samba/ncalrpc/np/srvsvc",
       "pid": "-1",
       "port": "0",
@@ -223,7 +231,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/wmodules",
+      "path": "queue/alerts/execq",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -239,31 +247,7 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/72",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/upgrade",
+      "path": "/var/lib/samba/private/msg.sock/73",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -279,23 +263,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/control",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/supervisor.sock.1",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/queue",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -319,7 +287,7 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/61",
+      "path": "queue/sockets/wmodules",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -327,7 +295,47 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/70",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/upgrade",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/control",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/queue",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "queue/sockets/com",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/lib/samba/private/msg.sock/62",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -336,6 +344,22 @@
     {
       "address": "",
       "path": "/var/lib/samba/private/msg.sock/71",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/lib/samba/private/msg.sock/72",
+      "pid": "-1",
+      "port": "0",
+      "protocol": "0",
+      "socket": "0"
+    },
+    {
+      "address": "",
+      "path": "/var/run/samba/ncalrpc/np/wkssvc",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -399,14 +423,6 @@
     },
     {
       "address": "",
-      "path": "/var/run/samba/ncalrpc/np/wkssvc",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/samba/ncalrpc/np/netdfs",
       "pid": "-1",
       "port": "0",
@@ -447,14 +463,6 @@
     },
     {
       "address": "",
-      "path": "queue/alerts/execq",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
       "path": "/var/run/samba/ncalrpc/np/srvsvc",
       "pid": "-1",
       "port": "0",
@@ -471,7 +479,7 @@
     },
     {
       "address": "",
-      "path": "queue/sockets/wmodules",
+      "path": "queue/alerts/execq",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -487,15 +495,7 @@
     },
     {
       "address": "",
-      "path": "/var/lib/samba/private/msg.sock/72",
-      "pid": "-1",
-      "port": "0",
-      "protocol": "0",
-      "socket": "0"
-    },
-    {
-      "address": "",
-      "path": "queue/sockets/com",
+      "path": "/var/lib/samba/private/msg.sock/73",
       "pid": "-1",
       "port": "0",
       "protocol": "0",
@@ -507,7 +507,7 @@
       "pid": "-1",
       "port": "139",
       "protocol": "6",
-      "socket": "170222082"
+      "socket": "637262983"
     },
     {
       "address": "::",
@@ -515,7 +515,7 @@
       "pid": "-1",
       "port": "139",
       "protocol": "6",
-      "socket": "170222080"
+      "socket": "637262981"
     },
     {
       "address": "0.0.0.0",
@@ -523,7 +523,7 @@
       "pid": "-1",
       "port": "139",
       "protocol": "6",
-      "socket": "170222082"
+      "socket": "637262983"
     },
     {
       "address": "::",
@@ -531,7 +531,7 @@
       "pid": "-1",
       "port": "139",
       "protocol": "6",
-      "socket": "170222080"
+      "socket": "637262981"
     },
     {
       "address": "0.0.0.0",
@@ -539,7 +539,7 @@
       "pid": "-1",
       "port": "445",
       "protocol": "6",
-      "socket": "170222081"
+      "socket": "637262982"
     },
     {
       "address": "::",
@@ -547,7 +547,7 @@
       "pid": "-1",
       "port": "445",
       "protocol": "6",
-      "socket": "170222079"
+      "socket": "637262980"
     },
     {
       "address": "0.0.0.0",
@@ -555,7 +555,7 @@
       "pid": "-1",
       "port": "445",
       "protocol": "6",
-      "socket": "170222081"
+      "socket": "637262982"
     },
     {
       "address": "::",
@@ -563,39 +563,39 @@
       "pid": "-1",
       "port": "445",
       "protocol": "6",
-      "socket": "170222079"
+      "socket": "637262980"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "42158",
+      "port": "34332",
       "protocol": "17",
-      "socket": "170221918"
+      "socket": "637246418"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "42158",
+      "port": "34332",
       "protocol": "17",
-      "socket": "170221918"
+      "socket": "637246418"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "42355",
+      "port": "45667",
       "protocol": "6",
-      "socket": "170221919"
+      "socket": "637246419"
     },
     {
       "address": "127.0.0.11",
       "path": "",
       "pid": "-1",
-      "port": "42355",
+      "port": "45667",
       "protocol": "6",
-      "socket": "170221919"
+      "socket": "637246419"
     }
   ]
 }

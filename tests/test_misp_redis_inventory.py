@@ -369,7 +369,7 @@ def test_misp_redis_state_evidence_captures_expected_logical_state():
 def test_misp_redis_participant_discovery_records_expected_reachability():
     misp = (EVIDENCE_DIR / "participant-discovery.misp.txt").read_text(encoding="utf-8")
     kali = (EVIDENCE_DIR / "participant-discovery.kali.txt").read_text(encoding="utf-8")
-    assert "172.20.0.3      misp-redis" in misp
+    assert "172.20.0.2      misp-redis" in misp
     assert "misp-redis:6379 reachable" in misp
     assert "Network is unreachable" in kali
 
@@ -430,9 +430,14 @@ def test_techvault_sdl_encodes_misp_redis_inventory_surfaces(legacy_scenario):
     assert filesystem["/usr/local/bin/redis-server"]["content_digest"] == (
         "a5fed84c8d1d871609f9faa8b85a8b4ac79d98f5e9a3d5e4939af56223d6061c"
     )
-    assert filesystem["/data/dump.rdb"]["sensitivity"] == "operator_secret"
-    assert filesystem["/data/dump.rdb"]["content_digest"] == ""
-    assert filesystem["/etc/shadow"]["sensitivity"] == "operator_secret"
+    assert filesystem["/data/dump.rdb"]["sensitivity"] == "secret_fixture"
+    assert filesystem["/data/dump.rdb"]["content_digest"] == (
+        "716192aac3da66017ede5dbdb61ebb039ccc842573e042a42e63af218595a54d"
+    )
+    assert filesystem["/etc/shadow"]["sensitivity"] == "secret_fixture"
+    assert filesystem["/etc/shadow"]["content_digest"] == (
+        "ca53a080cdd6f1d90932ebd6f4ba51624964c0a8487f9355547291d055993b02"
+    )
 
     listeners = {listener["service_listener_id"]: listener for listener in runtime["service_listeners"]}
     assert listeners["redis-6379-ipv4"]["scope"] == "wildcard"
@@ -443,7 +448,7 @@ def test_techvault_sdl_encodes_misp_redis_inventory_surfaces(legacy_scenario):
     network = runtime["network"]
     assert network["published_ports"] == []
     endpoint = network["endpoints"][0]
-    assert endpoint["ip_address"] == "172.20.0.3"
+    assert endpoint["ip_address"] == "172.20.0.2"
     assert "misp-redis" in endpoint["aliases"]
 
 
@@ -482,9 +487,9 @@ def test_techvault_sdl_encodes_misp_redis_datastore_and_acl(legacy_scenario):
     assert settings["databases"]["value"] == "16"
     assert settings["maxmemory-policy"]["value"] == "noeviction"
     # The requirepass fixture is a disclosed scenario realization fact (ACES
-    # #471): its value is preserved and classified secret_fixture, NOT redacted.
+    # #471): its value is preserved in the setting value, NOT redacted.
     assert settings["requirepass"]["value"] == _REDIS_FIXTURE
-    assert settings["requirepass"]["classification"] == "secret_fixture"
+    assert settings["requirepass"]["classification"] == "plain"
 
     acl = runtime["app_authorizations"][0]
     assert acl["app_authorization_id"] == "misp_redis_acl"
@@ -492,7 +497,7 @@ def test_techvault_sdl_encodes_misp_redis_datastore_and_acl(legacy_scenario):
     principal = acl["principals"][0]
     assert principal["kind"] == "user"
     assert principal["name"] == "default"
-    assert principal["credential_classification"] == "redacted"
+    assert principal["credential_classification"] == "none"
     grant = acl["permission_grants"][0]
     assert grant["resource_kind"] == "redis_acl"
     assert grant["actions"] == ["+@all"]

@@ -25,7 +25,7 @@ clean-lab rebuild proof and not a byte-identical rebuildability proof.
 | Source class | `custom-build` |
 | Source package | `containers/kali/` |
 | Image tag | `aptl-kali:latest` |
-| Image digest | `aptl-kali@sha256:f524320106669c6885679587510652c8a78ca1961b7545692f0fa8f4695974b9` |
+| Image digest | `aptl-kali@sha256:fee0813b38264c78fab66c86167595715803a6fd9152bf6c0af8e6835d368462` |
 | Base image | `kalilinux/kali-last-release:latest` (mutable upstream tag) |
 | Runtime OS | Kali GNU/Linux Rolling 2026.1 (`kali-rolling`) |
 | Entrypoint | `/entrypoint.sh` under `/sbin/docker-init` (PID 1) |
@@ -41,7 +41,7 @@ clean-lab rebuild proof and not a byte-identical rebuildability proof.
 | Claim | Evidence |
 | --- | --- |
 | Capture time, tool versions, and limits are recorded. | `evidence/captured-at-utc.txt`, `evidence/capture-limits.txt`, `evidence/docker-version.json`, `evidence/docker-compose-version.json`, `evidence/trivy-version.txt`, `evidence/grype-version.txt` |
-| Docker Compose service intent is represented by the redacted Compose service slice. | `evidence/compose-service.kali.json` |
+| Docker Compose service intent is represented by the authored Compose service slice. | `evidence/compose-service.kali.json` |
 | Custom image identity, config, and layers are recorded. | `evidence/docker-inspect.image.json`, `evidence/docker-history.image.txt` |
 | Source package inputs are checksum-addressable. | `evidence/source-checksums.txt` |
 | Realized runtime state is recorded. | `evidence/docker-inspect.container.json`, `evidence/docker-network.aptl-redteam.json`, `evidence/docker-network.aptl-dmz.json`, `evidence/docker-network.aptl-internal.json`, `evidence/docker-volume.kali-operations.json`, `evidence/docker-volume.kali-captures.json`, `evidence/docker-top.txt`, `evidence/runtime-baseline.txt` |
@@ -140,9 +140,12 @@ aptl aces-inventory gaps docs/aces/inventory/kali
   not registry-published and were not independently verified.
 - Vulnerability results are time-sensitive to the Grype and Trivy databases
   and advisory feeds.
-- The `kali_captures` and `kali_operations` named volumes and the
-  `/host-ssh-keys` operator bind mount are recorded by mount metadata only;
+- The `kali_captures` and `kali_operations` named volumes and the two
+  `/host-ssh-keys` file binds (the dedicated kali pivot private key and the
+  labadmin `authorized_keys`, per SEC #417) are recorded by mount metadata only;
   their contents are out of scope for this committed bundle per ADR-033 and
-  ADR-029.
+  ADR-029. The node SDL mount table reflects the SEC #417 key split; the
+  committed `docker-inspect` evidence predates that re-capture and still shows
+  the prior whole-`./keys` directory mount.
 - The capture does not assert attack-induced state changes or later
   operator-driven runtime modifications.

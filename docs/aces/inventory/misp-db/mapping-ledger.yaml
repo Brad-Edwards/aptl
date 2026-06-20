@@ -22,8 +22,8 @@ notes:
 - Capture used the already-running aptl project per operator direction and did not run aptl lab stop -v && aptl lab start.
 - 'Brad-Edwards/aces#388 and #431 are consumed through runtime.database_services and runtime.service_listeners; no known ACES
   expressivity gap remains for the catalogued MISP DB steady-state facts.'
-- Raw MariaDB authentication material is redacted; secret-bearing table files are represented by metadata and selected safe
-  checksums rather than contents.
+- MariaDB authentication fixture values are retained as scenario evidence; table files are represented by metadata and selected
+  checksums rather than raw table contents.
 correspondence_checks:
 - id: misp-db-evidence-bundle-integrity
   status: implemented
@@ -52,11 +52,11 @@ correspondence_checks:
   - misp-db.database.databases-schemas-tables
   - misp-db.database.table-cardinalities
   - misp-db.runtime.vulnerability-scan
-- id: misp-db-scope-and-redaction-caveats
+- id: misp-db-scope-and-capture-caveats
   status: implemented
   source: docs/aces/inventory/misp-db/evidence/capture-limits.txt
-  method: README and tests assert non-destructive capture scope, secret redaction, Syft normalization, unavailable osquery
-    tables, and database auth material caveats.
+  method: README and tests assert non-destructive capture scope, retained scenario secret values, Syft normalization,
+    unavailable osquery tables, and database auth material caveats.
   realized_evidence:
   - path: evidence/capture-limits.txt
   - path: evidence/osquery-installed-applications.json
@@ -129,7 +129,7 @@ facts:
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
 - id: misp-db.compose.service-contract
   category: compose
-  summary: Compose declares aptl-misp-db, image mariadb:10.11, healthcheck, memory limit, data volume, redacted fixture env,
+  summary: Compose declares aptl-misp-db, image mariadb:10.11, healthcheck, memory limit, data volume, fixture env,
     and security-net address.
   evidence:
   - path: evidence/compose-service.misp-db.json
@@ -266,7 +266,7 @@ facts:
 - id: misp-db.runtime.environment
   category: runtime
   summary: Runtime environment includes MariaDB image defaults, MISP database/user variables, runtime HOME/HOSTNAME/PWD, and
-    redacted password values.
+    password fixture values.
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
@@ -435,8 +435,8 @@ facts:
     - accounts.misp-db-role-misp
     - accounts.misp-db-role-root
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
-    caveat: Raw authentication strings are omitted; per-engine privilege booleans are preserved in role descriptions while
-      portable login/type/origin fields remain structured.
+    caveat: Raw authentication strings are retained as scenario content; per-engine privilege booleans are preserved in
+      role descriptions while portable login/type/origin fields remain structured.
 - id: misp-db.database.settings
   category: database
   summary: SHOW GLOBAL VARIABLES captures 15 MariaDB runtime settings including port, datadir, socket, sql_mode, and max_connections.
@@ -484,7 +484,7 @@ facts:
     rationale: Current ACES SDL runtime/profile fields can carry this catalogued MISP DB fact directly.
 - id: misp-db.relationship.misp
   category: relationship
-  summary: MISP points at misp-db using MYSQL_HOST, database misp, user misp, and a redacted password.
+  summary: MISP points at misp-db using MYSQL_HOST, database misp, user misp, and the password fixture.
   evidence:
   - path: evidence/compose-service.misp-db.json
   - path: evidence/docker-inspect.container.json

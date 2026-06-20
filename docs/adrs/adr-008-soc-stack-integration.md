@@ -18,7 +18,7 @@ APTL's original blue team capability was Wazuh alone ([ADR-002](adr-002-wazuh-si
 
 2. **No case management**: Alerts fire and scroll. There's no way to group related alerts into an investigation, track progress, assign ownership, document findings, or close a case. For an agentic SOC where AI agents investigate incidents, case management provides the structured workflow they need.
 
-3. **No automated response**: Wazuh has active response (block IPs, run scripts) but no orchestration layer. Complex response workflows — "if critical alert AND known IOC AND business hours, then isolate host AND create case AND notify Slack" — require a SOAR platform.
+3. **No automated response**: Wazuh has active response (block IPs, run scripts) but no orchestration layer. Complex response workflows—"if critical alert AND known IOC AND business hours, then isolate host AND create case AND notify Slack"—require a SOAR platform.
 
 4. **No network detection**: Wazuh sees host-level logs but is blind to network traffic. Command-and-control channels, lateral movement over the wire, data exfiltration, and DNS tunneling are invisible without network IDS.
 
@@ -44,11 +44,11 @@ Add five SOC tools under the `soc` Docker Compose profile ([ADR-005](adr-005-doc
 
 - Deployed in IDS mode with pcap capture on Docker networks (dmz, internal, security)
 - Initially configured in `network_mode: host` but switched to Docker networks with pcap capture after the host interface (`eth0`) wasn't available in container mode
-- Custom local rules for lab-specific detection (e.g., detecting attack patterns in the TechVault scenario)
+- Custom local rules for lab-specific detection (for example, detecting attack patterns in the TechVault scenario)
 - Requires `NET_ADMIN`, `NET_RAW`, `SYS_NICE` capabilities for packet capture
-- MCP server: `mcp-network` — query alerts, manage rules, search flow data
+- MCP server: `mcp-network`—query alerts, manage rules, search flow data
 
-> **Update (ADR-019, 2026-05-02):** Inline IPS via NFQ was evaluated and deferred — bridge+NFQ is upstream-broken (Suricata Support #2135) and Docker 26+'s `ip raw PREROUTING` anti-spoof rules block the L3-routing-IPS alternative. Suricata remains IDS-only; packet-level prevention is delivered by Wazuh active-response on in-process agents (#248, #249). See [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md).
+> **Update (ADR-019, 2026-05-02):** Inline IPS via NFQ was evaluated and deferred—bridge+NFQ is upstream-broken (Suricata Support #2135) and Docker 26+'s `ip raw PREROUTING` anti-spoof rules block the L3-routing-IPS alternative. Suricata remains IDS-only; packet-level prevention is delivered by Wazuh active-response on in-process agents (#248, #249). See [ADR-019](adr-019-suricata-ids-only-prevention-via-wazuh-ar.md).
 
 #### 2. MISP Threat Intel (`aptl-misp`, 172.20.0.16)
 
@@ -57,8 +57,8 @@ Add five SOC tools under the `soc` Docker Compose profile ([ADR-005](adr-005-doc
 - Pre-loaded with IOCs relevant to lab scenarios via `scripts/seed-misp.sh`
 - Feed integration for abuse.ch, OTX, CIRCL threat data
 - PyMISP client for API access (installed in a virtualenv within the MCP server container)
-- MCP server: `mcp-threatintel` — query IOCs by type, submit indicators, correlate with SIEM alerts, pull ATT&CK technique mappings
-- Known issue: MISP healthcheck passes on 503 "loading" response — fixed with `-f` flag and nginx reload (v4.6.1)
+- MCP server: `mcp-threatintel`—query IOCs by type, submit indicators, correlate with SIEM alerts, pull ATT&CK technique mappings
+- Known issue: MISP healthcheck passes on 503 "loading" response—fixed with `-f` flag and nginx reload (v4.6.1)
 
 #### 3. TheHive Case Management (`aptl-thehive`, 172.20.0.18)
 
@@ -68,12 +68,12 @@ TheHive 5 provides case management with alert escalation, observable tracking, a
 - Case templates for common incident types
 - Alert escalation from Wazuh → TheHive via Shuffle workflows
 - API key provisioning via `scripts/thehive-apikey.sh` (takes ~24s on first run; timeout was initially set to 10s, causing failures)
-- MCP server: `mcp-casemgmt` — create cases, add observables, run Cortex analyzers, update case status, generate reports
-- Known issue: TheHive-ES JVM memory starvation — 256MB heap in 512MB container caused Cassandra query timeouts. Fixed by doubling heap to 512MB and container limit to 1GB (v4.1.0).
+- MCP server: `mcp-casemgmt`—create cases, add observables, run Cortex analyzers, update case status, generate reports
+- Known issue: TheHive-ES JVM memory starvation—256MB heap in 512MB container caused Cassandra query timeouts. Fixed by doubling heap to 512MB and container limit to 1GB (v4.1.0).
 
 #### 4. Cortex Enrichment (`aptl-cortex`, 172.20.0.22)
 
-Cortex provides automated observable enrichment — analyzing IPs, domains, hashes, and emails against external sources (VirusTotal, abuse.ch, WHOIS). Tightly integrated with TheHive; analyzers are triggered from case observables.
+Cortex provides automated observable enrichment—analyzing IPs, domains, hashes, and emails against external sources (VirusTotal, abuse.ch, WHOIS). Tightly integrated with TheHive; analyzers are triggered from case observables.
 
 - Shares TheHive's Elasticsearch backend
 - Accessible via TheHive's MCP server (no separate MCP server)
@@ -86,8 +86,8 @@ Cortex provides automated observable enrichment — analyzing IPs, domains, hash
   - Alert-to-Case: Wazuh alert → TheHive case creation
   - IOC enrichment: Extract observables → MISP lookup → annotate case
 - Webhook triggers from Wazuh alerts
-- MCP server: `mcp-shuffle` (initially `mcp-soar`) — trigger playbooks, check execution status, manage response actions
-- Known issue: Initial MCP implementation built against a non-existent single-execution API endpoint — rewritten in v4.0.1
+- MCP server: `mcp-shuffle` (initially `mcp-soar`)—trigger playbooks, check execution status, manage response actions
+- Known issue: Initial MCP implementation built against a non-existent single-execution API endpoint—rewritten in v4.0.1
 
 ### Network Placement
 
@@ -101,9 +101,9 @@ Each SOC tool gets a dedicated MCP server using the config-driven architecture f
 
 ### Positive
 
-- **Full SOC workflow**: Alert → Triage → Enrich → Investigate → Contain → Report — all steps have tooling and MCP integration
+- **Full SOC workflow**: Alert → Triage → Enrich → Investigate → Contain → Report—all steps have tooling and MCP integration
 - **Agentic SOC capability**: AI agents can now run complete investigation workflows through MCP tool calls, not just query logs
-- **Network visibility**: Suricata fills the critical gap — C2 detection, lateral movement, exfiltration are now detectable
+- **Network visibility**: Suricata fills the critical gap—C2 detection, lateral movement, exfiltration are now detectable
 - **Structured threat intel**: MISP provides context for every indicator, turning raw alerts into enriched investigations
 - **Automated response**: Shuffle playbooks enable programmatic containment actions without manual intervention
 
@@ -118,4 +118,4 @@ Each SOC tool gets a dedicated MCP server using the config-driven architecture f
 
 - SOC tool versions are not pinned as strictly as Wazuh (which pins to 4.12.0 exactly). Major version upgrades to TheHive, MISP, or Shuffle could break API contracts with MCP servers.
 - The MISP `restSearch` API only supports a lower-bound `timestamp` parameter, requiring client-side post-filtering for upper bounds (fixed in v4.6.3). Similar API limitations in other tools may surface.
-- Shuffle playbook execution is eventually consistent — workflow completion status may not reflect in TheHive immediately, causing race conditions in automated investigation workflows.
+- Shuffle playbook execution is eventually consistent—workflow completion status may not reflect in TheHive immediately, causing race conditions in automated investigation workflows.

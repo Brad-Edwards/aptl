@@ -1,0 +1,81 @@
+[
+  {
+    "Id": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
+    "RepoTags": [
+      "ghcr.io/shuffle/shuffle-frontend:latest"
+    ],
+    "RepoDigests": [
+      "ghcr.io/shuffle/shuffle-frontend@sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f"
+    ],
+    "Comment": "buildkit.dockerfile.v0",
+    "Created": "2026-02-12T15:23:17.721469726Z",
+    "Config": {
+      "ExposedPorts": {
+        "443/tcp": {},
+        "80/tcp": {}
+      },
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "NGINX_VERSION=1.29.3",
+        "NJS_VERSION=0.9.4",
+        "NJS_RELEASE=1~trixie",
+        "PKG_RELEASE=1~trixie",
+        "DYNPKG_RELEASE=1~trixie",
+        "BACKEND_HOSTNAME=shuffle-backend"
+      ],
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Cmd": [
+        "nginx",
+        "-g",
+        "daemon off;"
+      ],
+      "Labels": {
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+      },
+      "StopSignal": "SIGQUIT",
+      "ArgsEscaped": true
+    },
+    "Architecture": "amd64",
+    "Os": "linux",
+    "Size": 79312182,
+    "RootFS": {
+      "Type": "layers",
+      "Layers": [
+        "sha256:77a2b55fbe8b9984ce0af3ffc0b0ab62507668e63306ec161a585e587a3eb164",
+        "sha256:6bc45a637cf2a9418f85eba2597a85454e58879ab2719a5699741527d28dca08",
+        "sha256:b6c87b7ba06de17802fab1caed41a55c0fc2bd1bfa85f9446a8f997ecaa3878b",
+        "sha256:86117c03a4133b17da9833bfcc5698f9ac4a746fb09d78835b86eb45ba23944a",
+        "sha256:faa7269963050d291afff711157493e2e32b121886291db0f78215312b0f566b",
+        "sha256:2f39eb754e0f61ba5007b100fb63a98f561005676807c7aa5c993730351f01a8",
+        "sha256:328cb503c9ac5e22ec7b192836d03a70e47df4bc1fd82942812ede8d3d615093",
+        "sha256:81f6435a3eacca4728782399b34bd9c87d73fe8a1f894631767c1e43b52db8a9",
+        "sha256:67d66a123865e99ed26f309290cdc6571fd571879fe95f23d06e46f158acbb4d",
+        "sha256:74db25fefa330933c9a7ea5a34e530848f4671385be821dfb54e8d607efa2f1e",
+        "sha256:29560c83775734f7847e0a760a07f045d2241b3584d56fc6ded5c73d829a40a1",
+        "sha256:498b89d50da1cd8bf984e244d1030588f2702fe7f4ece9bb4d242a3d315b1b0e",
+        "sha256:b2282a0eabd71468928c552707bb317443e81b3107f77eed9b98b2b1e4f1c060",
+        "sha256:fd84a62b96a479e3230835552ba78a71a7c5daeca178b6e1d9e11ac142425048",
+        "sha256:8ff6d1fda19f0f1a12ec18f18bd6a073ab74cf515111c4ab51f34031fca7a1e6",
+        "sha256:7884729ed5923c4e739e0a6b55b5e56ba9ae1e5095aa70c8e722de2c26fd16d5",
+        "sha256:bc84b229aaff7cc03215ed5743bde60226fe8aacf47e46bf110614c36f0f8d9a"
+      ]
+    },
+    "Metadata": {
+      "LastTagTime": "2026-04-29T04:09:02.611545322Z"
+    },
+    "Descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
+      "size": 1609
+    },
+    "Identity": {
+      "Pull": [
+        {
+          "Repository": "ghcr.io/shuffle/shuffle-frontend"
+        }
+      ]
+    }
+  }
+]

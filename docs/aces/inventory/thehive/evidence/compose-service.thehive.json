@@ -1,0 +1,75 @@
+{
+  "profiles": [
+    "soc"
+  ],
+  "image": "strangebee/thehive:5.4",
+  "container_name": "aptl-thehive",
+  "hostname": "thehive",
+  "restart": "unless-stopped",
+  "ports": [
+    "9000:9000"
+  ],
+  "environment": [
+    "JVM_OPTS=-Xms512m -Xmx512m"
+  ],
+  "env_file": [
+    "./config/soc_certs/thehive/keystore.p12.password",
+    "./config/cortex/thehive-cortex.env"
+  ],
+  "volumes": [
+    "thehive_data:/opt/thp/thehive/data",
+    "thehive_index:/opt/thp/thehive/index",
+    "./config/soc_certs/thehive/keystore.p12:/etc/thehive/keystore.p12:ro",
+    "./config/thehive/application.conf:/etc/thehive/application.conf:ro",
+    "./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+  ],
+  "command": [
+    "--secret",
+    "aptl-thehive-lab-secret-key-2024-purple",
+    "--cql-hostnames",
+    "thehive-cassandra",
+    "--index-backend",
+    "lucene",
+    "--es-hostnames",
+    "thehive-es",
+    "--cortex-proto",
+    "http",
+    "--cortex-hostnames",
+    "cortex",
+    "--cortex-port",
+    "9001"
+  ],
+  "healthcheck": {
+    "test": [
+      "CMD-SHELL",
+      "curl -ksf https://localhost:9000/api/status || exit 1"
+    ],
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 15,
+    "start_period": "300s"
+  },
+  "deploy": {
+    "resources": {
+      "limits": {
+        "memory": "1g"
+      }
+    }
+  },
+  "depends_on": {
+    "thehive-cassandra": {
+      "condition": "service_healthy"
+    },
+    "thehive-es": {
+      "condition": "service_healthy"
+    },
+    "cortex": {
+      "condition": "service_healthy"
+    }
+  },
+  "networks": {
+    "aptl-security": {
+      "ipv4_address": "172.20.0.18"
+    }
+  }
+}

@@ -6,8 +6,12 @@
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 pip install -e .
+cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
+
+`aptl lab start` refuses to run while `.env` still contains the
+`.env.example` placeholder values.
 
 The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
 
@@ -17,9 +21,9 @@ The CLI handles SSH keys, SSL certificates, system requirements, and container s
 
 | Component | Access | Credentials |
 |-----------|--------|-------------|
-| Wazuh Dashboard | <https://localhost:443> | admin / SecretPassword |
-| Victim (target) | SSH port 2022 | labadmin / aptl_lab_key |
-| Kali (attacker) | SSH port 2023 | kali / aptl_lab_key |
+| Wazuh Dashboard | <https://localhost:443> | `admin` / your `INDEXER_PASSWORD` from `.env` |
+| Victim (target) | `aptl container shell aptl-victim` | container shell (no host SSH port) |
+| Kali (attacker) | `aptl container shell aptl-kali` | container shell (no host SSH port) |
 
 ## Network
 

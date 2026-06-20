@@ -27,10 +27,19 @@ _CA_VALIDITY_DAYS = 10 * 365
 # server certs occasionally without ever touching the trust anchor.
 _SVC_VALIDITY_DAYS = 5 * 365
 
+# RSA key strengths for the lab CA and the per-service server certs.
+# Production-grade by default. The test suite (tests/conftest.py) patches
+# these down so the dozens of fresh-CA generations it drives are not
+# dominated by 4096-bit prime search, which is CPU-bound and can stall on a
+# loaded host. The CA-chain behaviour the tests assert — signing, SANs, EKU,
+# permissions, regeneration — is independent of key strength.
+_CA_KEY_SIZE = 4096
+_SVC_KEY_SIZE = 2048
+
 
 def _build_ca() -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
-    """Produce a fresh 4096-bit RSA CA cert + key."""
-    key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    """Produce a fresh RSA CA cert + key (``_CA_KEY_SIZE`` bits)."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=_CA_KEY_SIZE)
     now = datetime.now(timezone.utc)
     subject = issuer = x509.Name(
         [
@@ -75,8 +84,8 @@ def _build_server_cert(
     ca_key: rsa.RSAPrivateKey,
     ca_cert: x509.Certificate,
 ) -> tuple[rsa.RSAPrivateKey, x509.Certificate]:
-    """Produce a 2048-bit RSA server cert + key signed by *ca_cert*."""
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    """Produce an RSA server cert + key (``_SVC_KEY_SIZE`` bits) signed by *ca_cert*."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=_SVC_KEY_SIZE)
     now = datetime.now(timezone.utc)
     subject = x509.Name(
         [

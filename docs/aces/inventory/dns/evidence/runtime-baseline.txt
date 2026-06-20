@@ -35,6 +35,22 @@ PWD=/
 WAZUH_MANAGER=wazuh.manager
 --listeners--
 Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
+udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.2.27:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.2.27:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.2.27:53         0.0.0.0:*
@@ -67,22 +83,6 @@ udp   UNCONN 0      0        172.20.1.22:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.1.22:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.1.22:53         0.0.0.0:*
 udp   UNCONN 0      0        172.20.1.22:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
-udp   UNCONN 0      0        172.20.0.25:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
@@ -99,40 +99,7 @@ udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
 udp   UNCONN 0      0          127.0.0.1:53         0.0.0.0:*
-udp   UNCONN 0      0         127.0.0.11:34817      0.0.0.0:*
-tcp   LISTEN 0      4096      127.0.0.11:34517      0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
-tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+udp   UNCONN 0      0         127.0.0.11:42452      0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
@@ -149,6 +116,38 @@ tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
 tcp   LISTEN 0      10         127.0.0.1:53         0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      5          127.0.0.1:953        0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
+tcp   LISTEN 0      10       172.20.2.27:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
@@ -165,6 +164,7 @@ tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.1.22:53         0.0.0.0:*
+tcp   LISTEN 0      4096      127.0.0.11:38227      0.0.0.0:*
 tcp   LISTEN 0      10       172.20.0.25:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.0.25:53         0.0.0.0:*
 tcp   LISTEN 0      10       172.20.0.25:53         0.0.0.0:*
@@ -198,7 +198,7 @@ tcp   LISTEN 0      5              [::1]:953           [::]:*
 tcp   LISTEN 0      5              [::1]:953           [::]:*
 tcp   LISTEN 0      5              [::1]:953           [::]:*
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51141/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31591/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31590/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31589/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31588/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31587/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31586/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31585/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31584/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31583/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31582/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31581/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31580/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51149/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51149/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107878/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31591/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31590/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31589/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31588/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31587/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31586/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31585/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31584/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31583/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31582/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31581/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31580/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/31540/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107894/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107894/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -292,8 +292,8 @@ syslog:x:102:
 bind:x:103:
 wazuh:x:104:
 --supervisor--
-named                            RUNNING   pid 7, uptime 4 days, 21:50:25
-wazuh-agent                      RUNNING   pid 391, uptime 4 days, 21:49:31
+named                            RUNNING   pid 7, uptime 21:20:04
+wazuh-agent                      RUNNING   pid 399, uptime 21:19:12
 --dns-soa--
 ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
 --dns-forward-records--
@@ -338,7 +338,7 @@ www.techvault.local.	86400	IN	A	172.20.1.20
 techvault.local.	86400	IN	SOA	ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
 ;; Query time: 0 msec
 ;; SERVER: 127.0.0.1#53(localhost) (TCP)
-;; WHEN: Thu May 28 04:09:02 UTC 2026
+;; WHEN: Fri Jun 12 13:20:28 UTC 2026
 ;; XFR size: 35 records (messages 1, bytes 1031)
 
 --dns-reverse-zone--
@@ -365,19 +365,20 @@ techvault.local.	86400	IN	SOA	ns1.techvault.local. admin.techvault.local. 202401
 20.172.in-addr.arpa.	86400	IN	SOA	ns1.techvault.local. admin.techvault.local. 2024010101 3600 900 604800 86400
 ;; Query time: 1 msec
 ;; SERVER: 127.0.0.1#53(localhost) (TCP)
-;; WHEN: Thu May 28 04:09:02 UTC 2026
+;; WHEN: Fri Jun 12 13:20:28 UTC 2026
 ;; XFR size: 17 records (messages 1, bytes 570)
 
 --process-tree--
     PID    PPID USER     COMMAND
       1       0 root     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
       7       1 bind     /usr/sbin/named -g -c /etc/bind/named.conf -u bind
-    387       1 root     /var/ossec/bin/wazuh-execd
-    391       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-    884       1 root     /var/ossec/bin/wazuh-execd
-    895       1 wazuh    /var/ossec/bin/wazuh-agentd
-    910       1 root     /var/ossec/bin/wazuh-syscheckd
-    922       1 root     /var/ossec/bin/wazuh-logcollector
-    936       1 root     /var/ossec/bin/wazuh-modulesd
-    954     391 root     tail -F /var/ossec/logs/ossec.log
- 339526     391 root     sleep 5
+    384       1 root     /var/ossec/bin/wazuh-execd
+    392       1 wazuh    /var/ossec/bin/wazuh-agentd
+    399       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    891       1 root     /var/ossec/bin/wazuh-execd
+    899       1 wazuh    /var/ossec/bin/wazuh-agentd
+    912       1 root     /var/ossec/bin/wazuh-syscheckd
+    925       1 root     /var/ossec/bin/wazuh-logcollector
+    942       1 root     /var/ossec/bin/wazuh-modulesd
+    960     399 root     tail -F /var/ossec/logs/ossec.log
+  62091     399 root     sleep 5

@@ -11,6 +11,68 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 
+class TestLabImportContracts:
+    """Import contracts for core lab orchestration."""
+
+    def test_aces_handoff_import_failure_returns_failed_lab_result(
+        self, monkeypatch, tmp_path
+    ):
+        import builtins
+        import sys
+
+        import aptl.backends as backends
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import start_aces_scenario
+
+        real_import = builtins.__import__
+
+        def guarded_import(
+            name, global_vars=None, local_vars=None, fromlist=(), level=0
+        ):
+            if name == "aptl.backends.aces":
+                raise ModuleNotFoundError("No module named 'aces_sdl'")
+            return real_import(name, global_vars, local_vars, fromlist, level)
+
+        monkeypatch.delitem(sys.modules, "aptl.backends.aces", raising=False)
+        monkeypatch.delattr(backends, "aces", raising=False)
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        backend = MagicMock()
+        result = start_aces_scenario(tmp_path, AptlConfig(), backend)
+
+        assert result.success is False
+        assert "ACES runtime handoff unavailable" in result.error
+        backend.start.assert_not_called()
+
+    def test_import_does_not_eagerly_load_aces_backend(self):
+        import subprocess
+        import sys
+
+        code = """
+import importlib.abc
+import sys
+
+
+class BlockAcesBackend(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "aptl.backends.aces":
+            raise RuntimeError("aptl.backends.aces imported eagerly")
+        return None
+
+
+sys.meta_path.insert(0, BlockAcesBackend())
+import aptl.core.lab
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+
+
 class TestComposeCommandBuilder:
     """Tests for building docker compose commands."""
 
@@ -693,6 +755,17 @@ class TestOrchestrateLabStart:
                 key_path=Path.home() / ".ssh" / "aptl_lab_key",
             ),
         )
+        # SEC #417: the kali pivot key is generated at startup via ssh-keygen,
+        # which is not present in the CI Python-tests container; mock it like
+        # ensure_ssh_keys so the orchestration tests do not shell out.
+        mocks["pivot"] = mocker.patch(
+            "aptl.core.lab.ensure_pivot_key",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=Path("config") / "lab-ssh" / "kali_pivot_key",
+            ),
+        )
 
         # Mock sysreqs
         from aptl.core.sysreqs import SysReqResult
@@ -715,10 +788,10 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock docker compose start
+        # Mock ACES runtime handoff start
         from aptl.core.lab import LabResult
         mocks["start"] = mocker.patch(
-            "aptl.core.lab.start_lab",
+            "aptl.core.lab.start_aces_scenario",
             return_value=LabResult(success=True, message="Lab started"),
         )
 
@@ -964,7 +1037,7 @@ class TestOrchestrateLabStart:
             "containers": {"wazuh": False, "victim": False, "kali": False, "reverse": False},
         }))
 
-        # Re-mock start_lab and wait_for_service since config changes
+        # Re-mock ACES handoff and wait_for_service since config changes
         from aptl.core.lab import LabResult
         mocks["start"].return_value = LabResult(success=True, message="Lab started")
 
@@ -984,9 +1057,19 @@ class TestOrchestrateLabStart:
 
     def test_pre_pull_runs_before_compose_up(self, mocker, tmp_path):
         """Should call docker pull for images before compose up."""
-        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab import (
+            _LAB_START_STEPS,
+            _step_pull_images,
+            _step_start_containers,
+            orchestrate_lab_start,
+        )
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+
+        step_names = [step.__name__ for step in _LAB_START_STEPS]
+        assert step_names.index(_step_pull_images.__name__) < step_names.index(
+            _step_start_containers.__name__
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2043,6 +2126,22 @@ class TestLabOrchestrationContracts:
         with pytest.raises(icontract.ViolationError):
             _step_start_containers(ctx)
 
+    def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=LabResult(success=True, message="ok"),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        start_aces.assert_called_once_with(tmp_path, ctx.config, ctx.backend)
+
     # -- ssh_key_is_ready --------------------------------------------
 
     def test_test_ssh_without_ssh_key_raises_violation(self, tmp_path):
@@ -2472,3 +2571,57 @@ class TestGenerateSocCertsStep:
             f"_step_generate_soc_certs must precede _step_check_bind_mounts; "
             f"got order {names[i_soc]} → ... → {names[i_mounts]}"
         )
+
+
+class TestTerminalHostKeyPinningStep:
+    """The lab-start step that pins terminal SSH host keys (ADR-040,
+    issue #418) — registered after snapshot capture and non-fatal."""
+
+    def test_step_registered_after_capture_before_mcps(self):
+        from aptl.core.lab import _LAB_START_STEPS
+
+        names = [s.__name__ for s in _LAB_START_STEPS]
+        assert "_step_pin_terminal_host_keys" in names
+        i_pin = names.index("_step_pin_terminal_host_keys")
+        i_cap = names.index("_step_capture_snapshot")
+        i_mcp = names.index("_step_build_mcps")
+        assert i_cap < i_pin < i_mcp
+
+    @patch("aptl.core.lab.pin_terminal_host_keys")
+    @patch("aptl.core.lab.list_container_snapshots")
+    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path):
+        from aptl.core.host_keys import HostKeyPinResult
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        mock_list.return_value = []
+        mock_pin.return_value = HostKeyPinResult(
+            path=tmp_path / ".aptl" / "known_hosts", pinned=["Victim"], failed=[]
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = MagicMock()
+        ctx.ssh_key_path = tmp_path / "key"
+
+        assert _step_pin_terminal_host_keys(ctx) is None
+        mock_pin.assert_called_once()
+
+    @patch("aptl.core.lab.pin_terminal_host_keys")
+    def test_step_noop_without_backend(self, mock_pin, tmp_path):
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = None
+        ctx.ssh_key_path = tmp_path / "key"
+
+        assert _step_pin_terminal_host_keys(ctx) is None
+        mock_pin.assert_not_called()
+
+    @patch("aptl.core.lab.list_container_snapshots", side_effect=RuntimeError("boom"))
+    def test_step_swallows_errors(self, _mock_list, tmp_path):
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = MagicMock()
+        ctx.ssh_key_path = tmp_path / "key"
+
+        # A pinning failure must never abort an otherwise-healthy lab start.
+        assert _step_pin_terminal_host_keys(ctx) is None

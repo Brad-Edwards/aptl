@@ -1,0 +1,331 @@
+[
+  {
+    "Id": "0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450",
+    "Created": "2026-06-11T16:00:20.113695544Z",
+    "Path": "/entrypoint.sh",
+    "Args": [
+      "nginx",
+      "-g",
+      "daemon off;"
+    ],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 807936,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-06-11T16:00:38.788083283Z",
+      "FinishedAt": "0001-01-01T00:00:00Z",
+      "Health": {
+        "Status": "healthy",
+        "FailingStreak": 0,
+        "Log": [
+          {
+            "Start": "2026-06-12T14:10:05.666117053+02:00",
+            "End": "2026-06-12T14:10:05.733965876+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+          },
+          {
+            "Start": "2026-06-12T14:10:35.734905227+02:00",
+            "End": "2026-06-12T14:10:35.787988357+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+          },
+          {
+            "Start": "2026-06-12T14:11:05.788862259+02:00",
+            "End": "2026-06-12T14:11:05.833409382+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+          },
+          {
+            "Start": "2026-06-12T14:11:35.834841519+02:00",
+            "End": "2026-06-12T14:11:35.893380498+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+          },
+          {
+            "Start": "2026-06-12T14:12:05.895118572+02:00",
+            "End": "2026-06-12T14:12:05.943907506+02:00",
+            "ExitCode": 0,
+            "Output": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <link rel=\"shortcut icon\" href=\"/favicon.ico\" />\n    <meta\n      name=\"viewport\"\n      content=\"width=device-width, initial-scale=1, shrink-to-fit=no\"\n    />\n    <meta name=\"theme-color\" content=\"#000000\" />\n    <link rel=\"manifest\" href=\"/manifest.json\" />\n    <title>Shuffle</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-DMZBEHv2.js\"></script>\n    <link rel=\"stylesheet\" crossorigin href=\"/assets/index-Bxl6IZFs.css\">\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n"
+          }
+        ]
+      }
+    },
+    "Image": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
+    "ResolvConfPath": "/var/lib/docker/containers/0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450/hostname",
+    "HostsPath": "/var/lib/docker/containers/0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450/hosts",
+    "LogPath": "/var/lib/docker/containers/0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450/0ac6370712e66ca445fca393e928243e0ae71a42529235da2c3ee00ede094450-json.log",
+    "Name": "/aptl-shuffle-frontend",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.pem:/etc/nginx/fullchain.cert.pem:ro",
+        "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.key:/etc/nginx/privkey.pem:ro",
+        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {
+        "443/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "3443"
+          }
+        ],
+        "80/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "3001"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 536870912,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.pem",
+        "Destination": "/etc/nginx/fullchain.cert.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/shuffle-frontend/server.key",
+        "Destination": "/etc/nginx/privkey.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem",
+        "Destination": "/etc/lab-ca/lab-ca.pem",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "Config": {
+      "Hostname": "0ac6370712e6",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "443/tcp": {},
+        "80/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "BACKEND_HOSTNAME=shuffle-backend",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "NGINX_VERSION=1.29.3",
+        "NJS_VERSION=0.9.4",
+        "NJS_RELEASE=1~trixie",
+        "PKG_RELEASE=1~trixie",
+        "DYNPKG_RELEASE=1~trixie"
+      ],
+      "Cmd": [
+        "nginx",
+        "-g",
+        "daemon off;"
+      ],
+      "Healthcheck": {
+        "Test": [
+          "CMD-SHELL",
+          "curl -ksf https://localhost/ || exit 1"
+        ],
+        "Interval": 30000000000,
+        "Timeout": 10000000000,
+        "StartPeriod": 60000000000,
+        "Retries": 10
+      },
+      "Image": "ghcr.io/shuffle/shuffle-frontend:latest",
+      "Volumes": null,
+      "WorkingDir": "",
+      "Entrypoint": [
+        "/entrypoint.sh"
+      ],
+      "Labels": {
+        "com.docker.compose.config-hash": "b61d6ad5d307e484d269b2fe8685c2a2ca9156cbdc055229913a746c69ad95e2",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "shuffle-backend:service_started:false",
+        "com.docker.compose.image": "sha256:3c471f39c4d0a773ee22ed8575a68579ff08dd7123e94e70a2482973a4cc296f",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "shuffle-frontend",
+        "com.docker.compose.version": "5.1.3",
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+      },
+      "StopSignal": "SIGQUIT"
+    },
+    "NetworkSettings": {
+      "SandboxID": "c4e3bf9177946e75e3695df4d153f5ba14701646678cdbaba2b11fe8d37069fe",
+      "SandboxKey": "/var/run/docker/netns/c4e3bf917794",
+      "Ports": {
+        "443/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3443"
+          }
+        ],
+        "80/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "3001"
+          }
+        ]
+      },
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": {
+            "IPv4Address": "172.20.0.21"
+          },
+          "Links": null,
+          "Aliases": [
+            "aptl-shuffle-frontend",
+            "shuffle-frontend"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "6b1df095e0e68b9efe75f89690336495533e160a1a2c35fa533cf074ef1626a3",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.21",
+          "MacAddress": "3e:24:fe:1c:9d:fe",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-shuffle-frontend",
+            "shuffle-frontend",
+            "0ac6370712e6"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:9c791a038f1bf162234f37118f7c86f09dbebb2828ebcc3b8bc9ef22f5a9df81",
+      "size": 3510,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

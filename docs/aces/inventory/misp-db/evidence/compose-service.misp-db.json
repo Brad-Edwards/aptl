@@ -8,8 +8,8 @@
   "environment": [
     "MYSQL_DATABASE=misp",
     "MYSQL_USER=misp",
-    "MYSQL_PASSWORD=<REDACTED-MYSQL-PASSWORD>",
-    "MYSQL_ROOT_PASSWORD=<REDACTED-MYSQL-ROOT-PASSWORD>"
+    "MYSQL_PASSWORD=misp_db_password",
+    "MYSQL_ROOT_PASSWORD=misp_root_password"
   ],
   "volumes": [
     "misp_db_data:/var/lib/mysql"

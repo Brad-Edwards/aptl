@@ -157,15 +157,41 @@ active.
   Cortex-bundled Play artifact, not the keystore generation pipeline
   (which round-trips cleanly via `tests/test_soc_ca.py::TestKeystore`).
   Cortex therefore remains HTTP-only on the `aptl-security` network
-  until either a Cortex 4.x upgrade or an external consumer (e.g.,
-  `mcp-cortex` per INT-006) arrives — at which point the existing
-  keystore in `config/soc_certs/cortex/` and the placeholder
-  `config/cortex/application.conf` can be wired on. The lab CA bundle
-  is still mounted into the Cortex container for outbound trust.
-  Cortex has no external client today (TheHive launches with
-  `--no-config-cortex`, no `mcp-cortex` exists, no collector reaches
-  Cortex), so the deferral does not regress any consumer-side
-  verification contract.
+  until either a Cortex 4.x upgrade or a Play SSL-provider fix lands.
+  TheHive now consumes Cortex in-network using the deterministic lab
+  fixture key provisioned by `scripts/cortex-apikey.sh` and injected
+  into TheHive from `config/cortex/thehive-cortex.env`; there is still
+  no separate host-facing `mcp-cortex` client. The existing keystore
+  under `config/soc_certs/cortex/` stays reserved for a future HTTPS
+  cutover, and the lab CA bundle remains mounted into the Cortex
+  container for outbound trust. This defers Cortex server-side TLS
+  without disabling TLS verification for any host-facing SOC API.
+
+## Host Exposure Amendment
+
+Host-published SOC management surfaces are operator control-plane surfaces, not
+deliberately vulnerable victim targets. When a SOC service is published only so
+the operator can use the lab locally, its Compose mapping must bind to
+`127.0.0.1` by default. This applies especially to services that also hold
+host-equivalent orchestration authority, such as Cortex or Shuffle components
+with `/var/run/docker.sock`, but the same default should cover TheHive, Wazuh,
+MISP, Shuffle frontend, and future SOC management UIs unless a separate
+requirement explicitly declares remote operator access.
+
+The host bind address is the exposure-policy seam. A future documented
+multi-operator or remote-lab mode may parameterize that value at the deployment
+boundary, but it must not scatter `0.0.0.0` literals across Compose, scripts,
+tests, and docs. Host-side scripts and MCP clients should continue to use
+`localhost` URLs and the existing CA / auth helpers; loopback binding does not
+change the in-container Docker-network URLs that SOC services use to talk to
+each other.
+
+Loopback binding is a network guardrail, not a substitute for authentication,
+TLS verification, generated-secret handling, or least-privilege Docker
+orchestration. Replacing raw Docker socket mounts with a scoped socket proxy is
+the follow-up hardening seam for SOC tools that need to launch analyzers,
+responders, or workers; it should be designed as a shared Docker API boundary,
+not as per-service ad hoc volume tweaks.
 
 ## Non-Goals
 
@@ -179,6 +205,11 @@ active.
   state into `aptl.json`, MCP JSON config, README snippets, or run artifacts.
 - Do not make collector persistence, OTel tracing, or export packaging the
   first place where secrets are sanitized.
+- Do not make remote LAN exposure of SOC management ports the default lab
+  posture. Remote access needs an explicit deployment-mode decision.
+- Do not replace raw Docker socket mounts as part of a loopback-only exposure
+  fix unless the issue explicitly covers the socket proxy design and validation
+  surface.
 
 ## Anti-Patterns
 
@@ -192,18 +223,23 @@ active.
   unredacted exception text.
 - Treating Wazuh inter-component TLS allowances as permission to weaken SOC
   stack consumers.
+- Treating `9001:9001`, `3443:443`, or similar bare Compose mappings as
+  harmless because a UI has login or TLS. Bare host mappings publish on all
+  interfaces unless Compose is given a loopback host IP.
+- Changing host-side scripts to use container IPs or security-network addresses
+  to compensate for loopback publishes. That bypasses the intended operator
+  boundary and makes local versus in-container routes harder to reason about.
 
 ## References
 
-- SEC-006 / GitHub issue #258 — Verified TLS for SOC Stack Clients via
+- SEC-006 / GitHub issue #258—Verified TLS for SOC Stack Clients via
   Lab-Managed CA
-- [ADR-003](adr-003-mcp-common-library.md) — MCP Common Library
-- [ADR-008](adr-008-soc-stack-integration.md) — SOC Stack Integration
-- [ADR-022](adr-022-misp-driven-suricata-rules.md) — MISP sync client TLS hook
-- [ADR-025](adr-025-strict-first-party-config-schema.md) — Strict first-party
+- [ADR-003](adr-003-mcp-common-library.md): MCP Common Library
+- [ADR-008](adr-008-soc-stack-integration.md): SOC Stack Integration
+- [ADR-022](adr-022-misp-driven-suricata-rules.md): MISP sync client TLS hook
+- [ADR-025](adr-025-strict-first-party-config-schema.md): Strict first-party
   config schema
-- [ADR-028](adr-028-runtime-rendered-service-config.md) —
-  Runtime-rendered generated artifacts
-- [ADR-029](adr-029-control-plane-secret-handling.md) — Secret handling
-- [ADR-031](adr-031-lab-orchestration-contract-guards.md) — Lab orchestration
+- [ADR-028](adr-028-runtime-rendered-service-config.md): Runtime-rendered generated artifacts
+- [ADR-029](adr-029-control-plane-secret-handling.md): Secret handling
+- [ADR-031](adr-031-lab-orchestration-contract-guards.md): Lab orchestration
   contracts

@@ -160,7 +160,7 @@ vulnerabilities:
   workstation-bash-history-credential-disclosure:
     name: Bash history credential disclosure
     description: dev-user bash history contains commands with reusable credentials and internal target references. Raw values
-      are redacted from evidence and represented as secret fixtures.
+      are represented as secret fixtures in the TechVault scenario.
     technical: true
     class: CWE-522
   workstation-pgpass-credential-disclosure:
@@ -187,5 +187,10 @@ vulnerabilities:
   victim-nopasswd-sudo:
     name: Passwordless sudo grant
     description: labadmin has a NOPASSWD sudo grant in /etc/sudoers.d/labadmin.
+    technical: true
+    class: CWE-269
+  reverse-nopasswd-sudo:
+    name: Passwordless sudo grant
+    description: labadmin has a NOPASSWD sudo grant in /etc/sudoers.d/labadmin on the reverse node.
     technical: true
     class: CWE-269

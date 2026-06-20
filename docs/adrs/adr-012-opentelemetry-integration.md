@@ -8,9 +8,9 @@
 
 APTL had two custom JSONL tracing systems:
 
-1. **Python `EventLog`** — per-scenario JSONL files recording lifecycle events
+1. **Python `EventLog`**—per-scenario JSONL files recording lifecycle events
    (start, stop, preconditions, objectives, hints, evaluations).
-2. **TypeScript `ToolTracer`** — per-MCP-server JSONL files recording every
+2. **TypeScript `ToolTracer`**—per-MCP-server JSONL files recording every
    tool invocation with arguments, responses, timing, and errors.
 
 At run assembly, `collect_mcp_traces()` read JSONL files from disk and merged
@@ -59,10 +59,10 @@ env var controls the endpoint.
 
 The OTel stack is always-on lab infrastructure (not optional):
 
-- **OTel Collector** (`otel/opentelemetry-collector-contrib`) — receives OTLP,
+- **OTel Collector** (`otel/opentelemetry-collector-contrib`)—receives OTLP,
   batches, forwards to Tempo
-- **Grafana Tempo** — trace storage with 72h retention
-- **Grafana** — trace visualization at `http://localhost:3100` (bound to
+- **Grafana Tempo**: trace storage with 72h retention
+- **Grafana**: trace visualization at `http://localhost:3100` (bound to
   localhost only; default credentials `admin`/`aptl-otel`)
 
 All services run under the `otel` Docker Compose profile, automatically
@@ -108,7 +108,7 @@ call-site filtering:
 - Distributed tracing links Python CLI and TypeScript MCP server spans
 - Real-time visibility into running scenarios (not just post-hoc)
 - Run archives contain complete trace data in `traces/spans.json`
-- OTel SDK gracefully degrades — if Collector is unreachable, spans are silently dropped
+- OTel SDK gracefully degrades—if Collector is unreachable, spans are silently dropped
 
 ### Negative
 
@@ -126,10 +126,10 @@ call-site filtering:
 
 ### Files Added
 
-- `src/aptl/core/telemetry.py` — Python OTel module
-- `mcp/aptl-mcp-common/src/telemetry.ts` — TypeScript OTel module
-- `config/otel/*.yaml` — Collector, Tempo, Grafana configs
-- `tests/test_telemetry.py` — Python telemetry tests
+- `src/aptl/core/telemetry.py`: Python OTel module
+- `mcp/aptl-mcp-common/src/telemetry.ts`: TypeScript OTel module
+- `config/otel/*.yaml`: Collector, Tempo, Grafana configs
+- `tests/test_telemetry.py`: Python telemetry tests
 
 ### Run Archive Format Change
 

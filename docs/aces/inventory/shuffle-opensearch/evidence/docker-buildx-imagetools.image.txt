@@ -1,0 +1,12 @@
+Name:      docker.io/opensearchproject/opensearch:2.14.0
+MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+Digest:    sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff
+
+Manifests:
+  Name:      docker.io/opensearchproject/opensearch:2.14.0@sha256:c66e142a7753fff4a55009b88f013ce8649f8fe8b37d7d714d3c30b08846d419
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/amd64
+
+  Name:      docker.io/opensearchproject/opensearch:2.14.0@sha256:d86966d05bf5835b0b2bfe2034fbf294e9db95530fc04cc6dd26fa31c06cf19e
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm64

@@ -16,8 +16,11 @@ the issue phase marker, but the tool did not create a repo-local note file.
   <https://github.com/Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md>,
   `src/aptl/core/aces_inventory.py`, `src/aptl/cli/aces_inventory.py`, the
   existing webapp and db inventory bundles, and `docs/aces/parity-inventory.yaml`.
-- Redact AD administrator credentials, generated flags, Kerberos/Samba secret
-  material, Wazuh client keys, and private key contents from committed evidence.
+- Preserve scenario target values such as AD administrator credentials and
+  generated flags in committed evidence; they are TechVault scenario content.
+  Kerberos/Samba databases, Wazuh client keys, and private key files are still
+  captured through live paths, metadata, and checksums unless their bytes are
+  explicitly captured by the asset bundle.
 - Keep legacy `aptl.core.sdl` and `scenarios/*.yaml` functional until the
   ADR-035 cutover PR. This issue does not change backend runtime behavior or
   flip default scenario selection.

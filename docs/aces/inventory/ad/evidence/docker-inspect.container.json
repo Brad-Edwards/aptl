@@ -1,7 +1,7 @@
 [
   {
-    "Id": "a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099",
-    "Created": "2026-05-23T06:18:29.915397621Z",
+    "Id": "c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209",
+    "Created": "2026-06-11T16:00:17.86786395Z",
     "Path": "/opt/setup-ad.sh",
     "Args": [],
     "State": {
@@ -11,53 +11,53 @@
       "Restarting": false,
       "OOMKilled": false,
       "Dead": false,
-      "Pid": 2956004,
+      "Pid": 805146,
       "ExitCode": 0,
       "Error": "",
-      "StartedAt": "2026-05-23T06:18:34.745080669Z",
+      "StartedAt": "2026-06-11T16:00:22.340786122Z",
       "FinishedAt": "0001-01-01T00:00:00Z",
       "Health": {
         "Status": "healthy",
         "FailingStreak": 0,
         "Log": [
           {
-            "Start": "2026-05-23T08:20:42.416356194+02:00",
-            "End": "2026-05-23T08:20:42.598135793+02:00",
+            "Start": "2026-06-12T11:39:05.350572715+02:00",
+            "End": "2026-06-12T11:39:05.532906473+02:00",
             "ExitCode": 0,
             "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
           },
           {
-            "Start": "2026-05-23T08:21:12.598582734+02:00",
-            "End": "2026-05-23T08:21:12.794352663+02:00",
+            "Start": "2026-06-12T11:39:35.53376802+02:00",
+            "End": "2026-06-12T11:39:35.696258173+02:00",
             "ExitCode": 0,
             "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
           },
           {
-            "Start": "2026-05-23T08:21:42.795196614+02:00",
-            "End": "2026-05-23T08:21:43.015927708+02:00",
+            "Start": "2026-06-12T11:40:05.696907586+02:00",
+            "End": "2026-06-12T11:40:05.87749161+02:00",
             "ExitCode": 0,
             "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
           },
           {
-            "Start": "2026-05-23T08:22:13.016637823+02:00",
-            "End": "2026-05-23T08:22:13.178799051+02:00",
+            "Start": "2026-06-12T11:40:35.878307354+02:00",
+            "End": "2026-06-12T11:40:36.038905375+02:00",
             "ExitCode": 0,
             "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
           },
           {
-            "Start": "2026-05-23T08:22:43.180133616+02:00",
-            "End": "2026-05-23T08:22:43.347342535+02:00",
+            "Start": "2026-06-12T11:41:06.039756057+02:00",
+            "End": "2026-06-12T11:41:06.202298214+02:00",
             "ExitCode": 0,
             "Output": "Forest           : techvault.local\nDomain           : techvault.local\nNetbios domain   : TECHVAULT\nDC name          : dc.techvault.local\nDC netbios name  : DC\nServer site      : Default-First-Site-Name\nClient site      : Default-First-Site-Name\n"
           }
         ]
       }
     },
-    "Image": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
-    "ResolvConfPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/resolv.conf",
-    "HostnamePath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/hostname",
-    "HostsPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/hosts",
-    "LogPath": "/var/lib/docker/containers/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099/a8e5b007ae34ab2505b07d00c64e4658de68028b7d1b53cd074edff4f4391099-json.log",
+    "Image": "sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957",
+    "ResolvConfPath": "/var/lib/docker/containers/c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209/hostname",
+    "HostsPath": "/var/lib/docker/containers/c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209/hosts",
+    "LogPath": "/var/lib/docker/containers/c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209/c52389d21df025454c609e0e9ecd1ed288e41f968764a5ac01eaf55b03684209-json.log",
     "Name": "/aptl-ad",
     "RestartCount": 0,
     "Driver": "overlayfs",
@@ -221,15 +221,15 @@
       "OpenStdin": false,
       "StdinOnce": false,
       "Env": [
-        "DNS_FORWARDER=172.20.1.22",
-        "LOG_FORMAT=syslog",
-        "SAMBA_DOMAIN=TECHVAULT",
-        "LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd",
-        "SIEM_IP=172.20.2.30",
-        "SAMBA_REALM=TECHVAULT.LOCAL",
-        "SAMBA_ADMIN_PASSWORD=<REDACTED-SCENARIO-FIXTURE>",
-        "AGENT_NAME=aptl-ad-agent",
         "WAZUH_MANAGER=wazuh.manager",
+        "AGENT_NAME=aptl-ad-agent",
+        "DNS_FORWARDER=172.20.1.22",
+        "LOG_PATHS=/var/log/samba/log.samba,/var/log/samba/log.smbd,/var/log/samba/log.winbindd",
+        "SAMBA_REALM=TECHVAULT.LOCAL",
+        "SAMBA_ADMIN_PASSWORD=Admin123!",
+        "SIEM_IP=172.20.2.30",
+        "SAMBA_DOMAIN=TECHVAULT",
+        "LOG_FORMAT=syslog",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "DEBIAN_FRONTEND=noninteractive"
       ],
@@ -254,7 +254,7 @@
         "com.docker.compose.config-hash": "060e21aacc7dac7361aa9f984d69162040f3330cdb30daf17a123c8234f44378",
         "com.docker.compose.container-number": "1",
         "com.docker.compose.depends_on": "",
-        "com.docker.compose.image": "sha256:5806c59b401c045391be53c0d3e0c4feb6304030e716ff3b12b79415fbb1b052",
+        "com.docker.compose.image": "sha256:e52bc1094b3058452faaf4d88b11712c41b67029d85f88cbdae1f7475bbcf957",
         "com.docker.compose.oneoff": "False",
         "com.docker.compose.project": "aptl",
         "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
@@ -265,8 +265,8 @@
       }
     },
     "NetworkSettings": {
-      "SandboxID": "c2b552eb10a3930055fd848ac6f9aab09d912d33d07effe10c728961d7b42dcb",
-      "SandboxKey": "/var/run/docker/netns/c2b552eb10a3",
+      "SandboxID": "88a15952488e5bc8c309016ef9663c9bae838dcd0bd08bd164e66e7d5415cb8a",
+      "SandboxKey": "/var/run/docker/netns/88a15952488e",
       "Ports": {
         "135/tcp": null,
         "139/tcp": null,
@@ -296,10 +296,10 @@
           "DriverOpts": null,
           "GwPriority": 0,
           "NetworkID": "5ff51718a317cb3504a5aae6bbbb69bc6b4f9deb61360c0df4a7d4440a64ef7f",
-          "EndpointID": "32b08283f847efb5a3f922194ab22b9bada1e00f368ed7e8c47b0db8a6252a24",
+          "EndpointID": "8c7660994ec8be4206d734b5210685bc87ddd8b96efcddb2781dc08dad307a28",
           "Gateway": "",
           "IPAddress": "172.20.2.10",
-          "MacAddress": "2a:94:5f:9a:c2:45",
+          "MacAddress": "16:e0:d4:a0:19:61",
           "IPPrefixLen": 24,
           "IPv6Gateway": "",
           "GlobalIPv6Address": "",
@@ -307,7 +307,7 @@
           "DNSNames": [
             "aptl-ad",
             "ad",
-            "a8e5b007ae34",
+            "c52389d21df0",
             "dc.techvault.local"
           ]
         }

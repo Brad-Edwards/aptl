@@ -16,8 +16,6 @@ SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987d
 OSQUERY_IMAGE="${OSQUERY_IMAGE:-osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd}"
 SYFT_NORMALIZER="$ASSET_DIR/normalize-syft-cyclonedx.jq"
 
-SECRET_NAME_REGEX="(token|secret|password|credential|cookie|session|private_key|api_key|jwt|flag_key|access_key)"
-
 require() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'required command missing: %s\n' "$1" >&2
@@ -29,78 +27,6 @@ record_limit() {
   printf -- '- %s\n' "$*" >> "$OUT/capture-limits.txt"
 }
 
-redact_fixture_stream() {
-  sed -E \
-    -e 's/Summer2024/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/LabAdmin2024!/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/Welcome1!/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/Admin123!/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/admin123/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/techvault_db_pass/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/techvault-jwt-weak/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/tvault-api-key-2024-admin/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/techvault-secret-key-2024/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's/AKIAIOSFODNN7EXAMPLE/<REDACTED-SCENARIO-FIXTURE>/g' \
-    -e 's#wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY#<REDACTED-SCENARIO-FIXTURE>#g' \
-    -e 's/APTL\{[^}]+\}/<REDACTED-SCENARIO-FLAG>/g'
-}
-
-redact_text_stream() {
-  awk -v secret_re="$SECRET_NAME_REGEX" '
-    {
-      for (i = 1; i <= NF; i++) {
-        token = $i
-        lowered = tolower(token)
-        if (lowered == "passwordauthentication") {
-          $i = token
-        } else if (lowered ~ secret_re) {
-          if (token ~ /=/) {
-            sub(/=.*/, "=<REDACTED>", token)
-          } else if (token ~ /:/) {
-            sub(/:.*/, ":<REDACTED>", token)
-          } else {
-            token = "<REDACTED>"
-            if (i < NF) {
-              $(i + 1) = "<REDACTED>"
-            }
-          }
-          $i = token
-        }
-      }
-      print
-    }
-  ' | redact_fixture_stream
-}
-
-redact_env_jq='
-  def redact_env($secret_re):
-    if contains("=") then
-      capture("^(?<name>[^=]+)=(?<value>.*)$") as $m
-      | if ($m.name | test($secret_re; "i")) then
-          "\($m.name)=<REDACTED-\($m.name | gsub("_"; "-"))>"
-        else
-          .
-        end
-    else
-      .
-    end;
-
-  def redact_sensitive_keys($secret_re):
-    walk(
-      if type == "object" then
-        with_entries(
-          if (.key | test($secret_re; "i")) then
-            .value = "<REDACTED>"
-          else
-            .
-          end
-        )
-      else
-        .
-      end
-    );
-'
-
 require docker
 require gzip
 require jq
@@ -111,42 +37,21 @@ mkdir -p "$OUT"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$OUT/captured-at-utc.txt"
 
 record_limit "This capture used the already-running local lab and did not run aptl lab stop -v && aptl lab start; it is a frozen steady-state observation, not a clean-lab rebuild proof."
-record_limit "Raw generated flag contents, SSH private keys, and Wazuh agent key material are intentionally absent from committed evidence; sensitive paths are catalogued by metadata and checksums only where permitted."
-record_limit "The host-mounted operator private key /keys/aptl_lab_key is catalogued by path metadata only; its content checksum is omitted as an operator-secret boundary."
+record_limit "Generated flag contents, scenario host SSH private keys, and Wazuh agent key material are captured verbatim where present in filesystem-sensitive-paths.txt and checksummed in filesystem-checksums.txt. Per the SEC #417 key split, the target /keys holds only public key material — aptl_lab_key.pub (operator/control-plane pubkey) and kali_pivot_key.pub (scenario pivot pubkey); no private key is mounted into the target."
 
 docker version --format json | jq . > "$OUT/docker-version.json"
 docker compose version --format json | jq . > "$OUT/docker-compose-version.json"
 
 COMPOSE_PROFILES="$COMPOSE_PROFILES" docker compose -f "$COMPOSE_FILE" config --format json \
-  | jq \
-    --arg service "$COMPOSE_SERVICE" \
-    --arg secret_re "$SECRET_NAME_REGEX" '
-      .services[$service]
-      | .environment = (
-          (.environment // {})
-          | with_entries(
-              if (.key | test($secret_re; "i")) then
-                .value = ("<REDACTED-" + (.key | gsub("_"; "-")) + ">")
-              else
-                .
-              end
-            )
-        )
-    ' > "$OUT/compose-service.victim.json"
+  | jq --arg service "$COMPOSE_SERVICE" '.services[$service]' \
+  > "$OUT/compose-service.victim.json"
 
-docker inspect "$CONTAINER" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" \
-      "$redact_env_jq
-      .[].Config.Env |= ((. // []) | map(redact_env(\$secret_re)))
-      | redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.container.json"
+docker inspect "$CONTAINER" | jq . > "$OUT/docker-inspect.container.json"
 
-docker image inspect "$IMAGE" \
-  | jq --arg secret_re "$SECRET_NAME_REGEX" "$redact_env_jq redact_sensitive_keys(\$secret_re)" \
-  > "$OUT/docker-inspect.image.json"
-docker history --no-trunc "$IMAGE" | redact_fixture_stream > "$OUT/docker-history.image.txt"
+docker image inspect "$IMAGE" | jq . > "$OUT/docker-inspect.image.json"
+docker history --no-trunc "$IMAGE" > "$OUT/docker-history.image.txt"
 docker history --no-trunc --format '{{json .}}' "$IMAGE" \
-  | redact_fixture_stream > "$OUT/docker-history.image.jsonl"
+  > "$OUT/docker-history.image.jsonl"
 docker network inspect aptl_aptl-internal | jq . > "$OUT/docker-network.aptl-internal.json"
 docker volume inspect aptl_victim_logs | jq . > "$OUT/docker-volume.victim-logs.json"
 
@@ -160,7 +65,7 @@ else
   record_limit "The anonymous /home volume was not found in Docker inspect output."
 fi
 
-docker top "$CONTAINER" | redact_fixture_stream > "$OUT/docker-top.txt"
+docker top "$CONTAINER" > "$OUT/docker-top.txt"
 
 sha256sum \
   "$ROOT/containers/victim/Dockerfile" \
@@ -173,7 +78,7 @@ sha256sum \
   "$ROOT/containers/base/scripts/ossec.conf.template" \
   "$ROOT/containers/base/falco_custom.yaml" \
   "$ROOT/keys/aptl_lab_key.pub" \
-  "$ROOT/keys/authorized_keys" \
+  "$ROOT/config/lab-ssh/kali_pivot_key.pub" \
   | sed "s#  $ROOT/#  #" > "$OUT/source-checksums.txt"
 
 docker exec "$CONTAINER" bash -lc '
@@ -196,7 +101,7 @@ docker exec "$CONTAINER" bash -lc '
     echo "[$var]"
     cat "$var"
   done
-' | redact_fixture_stream > "$OUT/rpm-repositories.txt"
+' > "$OUT/rpm-repositories.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -214,7 +119,7 @@ docker exec "$CONTAINER" bash -lc '
   falco --version 2>&1
   echo --wazuh--
   /var/ossec/bin/wazuh-control info 2>&1
-' | redact_fixture_stream > "$OUT/language-manifests.txt"
+' > "$OUT/language-manifests.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set +e
@@ -259,7 +164,7 @@ docker exec "$CONTAINER" bash -lc '
   systemctl --no-pager --type=service --state=running,exited,failed || true
   echo --process-tree--
   ps -eo pid,ppid,user,args || true
-' | redact_fixture_stream > "$OUT/runtime-baseline.txt"
+' > "$OUT/runtime-baseline.txt"
 sed -i 's/[[:space:]]\+$//' "$OUT/runtime-baseline.txt" "$OUT/docker-top.txt"
 
 docker exec "$CONTAINER" bash -lc '
@@ -279,7 +184,7 @@ docker exec "$CONTAINER" bash -lc '
     falco-bpf.service \
     falco-kmod.service \
     falco-custom.service || true
-' | redact_fixture_stream > "$OUT/systemd-units.txt"
+' > "$OUT/systemd-units.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set -euo pipefail
@@ -304,7 +209,7 @@ docker exec "$CONTAINER" bash -lc '
     -maxdepth 6 \
     -printf "%M %u %g %s %p\n" 2>/dev/null \
     | sort
-' | redact_fixture_stream > "$OUT/filesystem-tree.txt"
+' > "$OUT/filesystem-tree.txt"
 
 docker exec "$CONTAINER" bash -lc '
   set -euo pipefail
@@ -328,27 +233,39 @@ docker exec "$CONTAINER" bash -lc '
     -xdev \
     -maxdepth 6 \
     -type f \
-    ! -path /keys/aptl_lab_key \
-    ! -path "/etc/ssh/ssh_host_*_key" \
-    ! -path /var/ossec/etc/client.keys \
-    ! -path /root/root.txt \
     -print0 2>/dev/null \
     | sort -z \
     | xargs -0 sha256sum
 ' > "$OUT/filesystem-checksums.txt"
 
-cat > "$OUT/filesystem-sensitive-paths.txt" <<'EOF'
-/home/labadmin/user.txt	generated_flag	checksum-only
-/keys/aptl_lab_key	operator_private_key	metadata-only
-/keys/aptl_lab_key.pub	public_lab_key	checksum-only
-/keys/authorized_keys	public_lab_key	checksum-only
-/root/root.txt	generated_flag	metadata-only
-/etc/ssh/ssh_host_dsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ecdsa_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_ed25519_key	host_private_key	metadata-only
-/etc/ssh/ssh_host_rsa_key	host_private_key	metadata-only
-/var/ossec/etc/client.keys	wazuh_agent_secret	metadata-only
-EOF
+docker exec "$CONTAINER" sh -c '
+  for f in \
+    /home/labadmin/user.txt \
+    /root/root.txt \
+    /keys/aptl_lab_key.pub \
+    /keys/kali_pivot_key.pub \
+    /etc/ssh/ssh_host_dsa_key \
+    /etc/ssh/ssh_host_dsa_key.pub \
+    /etc/ssh/ssh_host_ecdsa_key \
+    /etc/ssh/ssh_host_ecdsa_key.pub \
+    /etc/ssh/ssh_host_ed25519_key \
+    /etc/ssh/ssh_host_ed25519_key.pub \
+    /etc/ssh/ssh_host_rsa_key \
+    /etc/ssh/ssh_host_rsa_key.pub \
+    /var/ossec/etc/client.keys; do
+      [ -e "$f" ] || continue
+      printf "%s\n" "--path:$f--"
+      cat "$f"
+      printf "\n"
+  done
+' > "$OUT/filesystem-sensitive-paths.txt"
+
+# Drop the trailing blank separator emitted after the last captured file so the
+# committed evidence ends with a single newline; otherwise the pre-commit
+# end-of-file-fixer rewrites it and stales evidence-sha256sums.txt.
+printf '%s\n' "$(cat "$OUT/filesystem-sensitive-paths.txt")" \
+  > "$OUT/filesystem-sensitive-paths.txt.tmp"
+mv "$OUT/filesystem-sensitive-paths.txt.tmp" "$OUT/filesystem-sensitive-paths.txt"
 
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" --version \
   > "$OUT/trivy-version.txt"

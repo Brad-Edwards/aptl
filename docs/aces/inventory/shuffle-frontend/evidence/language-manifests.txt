@@ -1,0 +1,27 @@
+--nginx-version--
+nginx version: nginx/1.29.3
+--runtime-presence--
+nginx present: /usr/sbin/nginx
+node absent
+npm absent
+yarn absent
+python3 absent
+--web-root-build-manifest--
+50x.html
+aiGenerateWorkflowSteps.svg
+assets
+build
+css
+favicon.ico
+icons
+images
+img
+index.html
+js
+manifest.json
+--web-root-file-count--
+96
+--bundled-js-asset-names--
+/usr/share/nginx/html/assets/ApiExplorer-ELB0KiQ_.js
+/usr/share/nginx/html/assets/index-Bxl6IZFs.css
+/usr/share/nginx/html/assets/index-DMZBEHv2.js

@@ -1,0 +1,73 @@
+{
+  "table": "listening_ports",
+  "query": "select port, protocol, address, pid, socket, path from listening_ports order by port, protocol, pid;",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery sharing aptl-shuffle-frontend network namespace",
+  "status": "captured",
+  "rows": [
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "1",
+      "port": "80",
+      "protocol": "6",
+      "socket": "617404421"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "1",
+      "port": "80",
+      "protocol": "6",
+      "socket": "617404421"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "1",
+      "port": "443",
+      "protocol": "6",
+      "socket": "617404422"
+    },
+    {
+      "address": "0.0.0.0",
+      "path": "",
+      "pid": "1",
+      "port": "443",
+      "protocol": "6",
+      "socket": "617404422"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34545",
+      "protocol": "6",
+      "socket": "617395171"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "34545",
+      "protocol": "6",
+      "socket": "617395171"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "56793",
+      "protocol": "17",
+      "socket": "617395170"
+    },
+    {
+      "address": "127.0.0.11",
+      "path": "",
+      "pid": "-1",
+      "port": "56793",
+      "protocol": "17",
+      "socket": "617395170"
+    }
+  ]
+}

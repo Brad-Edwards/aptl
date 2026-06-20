@@ -3,26 +3,28 @@
 import asyncio
 import json
 from pathlib import Path
+from typing import Annotated
 
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from aptl.api.deps import ALLOWED_ORIGINS, get_project_dir
-from aptl.core.lab import lab_status
+from aptl.api.deps import (
+    ALLOWED_ORIGINS,
+    WebAuthSettings,
+    get_project_dir,
+    get_web_auth,
+    verify_ws_token,
+)
+from aptl.core.endpoints import TERMINAL_CONTAINER_NAMES
+from aptl.core.host_keys import known_hosts_path
+from aptl.core.lab import lab_status, lab_terminal_ssh_endpoints
+from aptl.core.snapshot import SSHEndpoint
 from aptl.core.ssh import _KEY_NAME
 from aptl.utils.logging import get_logger
 
 log = get_logger("api.terminal")
 
 router = APIRouter(tags=["terminal"])
-
-# SSH endpoint map: container -> (port, username)
-SSH_ENDPOINTS: dict[str, tuple[int, str]] = {
-    "victim": (2022, "labadmin"),
-    "kali": (2023, "kali"),
-    "reverse": (2027, "labadmin"),
-    "workstation": (2028, "labadmin"),
-}
 
 
 def _get_key_path() -> Path:
@@ -67,17 +69,45 @@ async def _relay_ws_to_ssh(
         log.debug("Malformed WebSocket message, ignoring")
 
 
-@router.websocket("/terminal/ws/{container}")
-async def terminal_ws(
+def _sanitize(value: str) -> str:
+    """Strip CR/LF from *value* to defend against log injection (S5145)."""
+    return value.replace("\r", "").replace("\n", "")
+
+
+class _TerminalReject(Exception):
+    """Internal signal that a pre-dial gate has closed the WebSocket.
+
+    Each validation gate performs its own accept/send/close I/O and then
+    raises this so the resolver funnels through a single success return
+    (keeping the cyclomatic return count low) while the caller simply
+    stops.
+    """
+
+
+async def _resolve_terminal_target(
     websocket: WebSocket,
     container: str,
-    project_dir: Path = Depends(get_project_dir),
-) -> None:
-    """WebSocket endpoint for interactive terminal sessions.
+    project_dir: Path,
+    auth: WebAuthSettings,
+) -> tuple[SSHEndpoint, Path]:
+    """Run the pre-dial validation gates for a terminal connection.
 
-    Opens an SSH PTY connection to the specified container and relays
-    stdin/stdout between the WebSocket and the SSH process.
+    Performs the bearer-token, origin, container-allowlist, lab-running,
+    endpoint, and host-key-pin checks. Returns the resolved endpoint and
+    known_hosts path on success, or raises :class:`_TerminalReject` after
+    closing the WebSocket if any gate rejects the connection. ``container``
+    is the original path param (used for the allowlist check); callers must
+    sanitize it before logging.
     """
+    safe_container = _sanitize(container)
+
+    # Verify the bearer token before the handshake is accepted (ADR-039).
+    protocol = websocket.headers.get("sec-websocket-protocol", "")
+    if not verify_ws_token(protocol, auth):
+        await websocket.close(code=1008, reason="Unauthorized")
+        log.warning("Rejected WebSocket: invalid or missing auth token")
+        raise _TerminalReject
+
     # Reject cross-origin WebSocket connections.
     # CORS middleware does NOT protect WebSocket upgrades — browsers send
     # them cross-origin without preflight. Without this check, any website
@@ -86,14 +116,15 @@ async def terminal_ws(
     if not origin or origin not in ALLOWED_ORIGINS:
         await websocket.close(code=1008, reason="Origin not allowed")
         log.warning("Rejected WebSocket from disallowed origin: %s", origin)
-        return
+        raise _TerminalReject
 
-    # Validate container name
-    if container not in SSH_ENDPOINTS:
+    # Validate container name against the canonical registry projection
+    # (ADR-040) — a cheap reject before touching runtime inventory.
+    if container not in TERMINAL_CONTAINER_NAMES:
         await websocket.accept()
         await websocket.close(code=1008, reason="Unknown container")
         log.warning("Rejected terminal connection for unknown container")
-        return
+        raise _TerminalReject
 
     # Check lab is running
     status = await asyncio.to_thread(lab_status, project_dir=project_dir)
@@ -104,22 +135,76 @@ async def terminal_ws(
         )
         await websocket.close(code=1008, reason="Lab not running")
         log.warning("Rejected terminal connection: lab not running")
-        return
-
-    port, username = SSH_ENDPOINTS[container]
-    key_path = _get_key_path()
+        raise _TerminalReject
 
     await websocket.accept()
-    log.info("Terminal WebSocket accepted on port %d", port)
+
+    # Endpoint identity gate (ADR-040): host/user/port come from the
+    # canonical endpoint registry projected over runtime inventory
+    # (container IP over the bridge, issue #293), not a hardcoded
+    # localhost map. A target that is not currently running fails closed.
+    endpoints = await asyncio.to_thread(
+        lab_terminal_ssh_endpoints, project_dir
+    )
+    endpoint = endpoints.get(container)
+    if endpoint is None:
+        await websocket.send_json(
+            {"type": "error", "message": "Container not available"}
+        )
+        await websocket.close(code=1008, reason="Container not available")
+        log.warning("Terminal target not available in runtime inventory")
+        raise _TerminalReject
+
+    # SSH trust gate (ADR-040): verify the server host key against the
+    # lab-start-pinned known_hosts file. A missing pin fails closed
+    # rather than silently disabling verification.
+    kh_path = known_hosts_path(project_dir)
+    if not kh_path.exists():
+        await websocket.send_json(
+            {
+                "type": "error",
+                "message": "SSH host keys not pinned; restart the lab",
+            }
+        )
+        await websocket.close(code=1008, reason="Host keys not pinned")
+        log.warning("Terminal refused: no pinned known_hosts at %s", kh_path)
+        raise _TerminalReject
+
+    log.info("Terminal WebSocket accepted for %s", safe_container)
+    return endpoint, kh_path
+
+
+@router.websocket("/terminal/ws/{container}")
+async def terminal_ws(
+    websocket: WebSocket,
+    container: str,
+    project_dir: Path = Depends(get_project_dir),
+    auth: Annotated[WebAuthSettings, Depends(get_web_auth)] = ...,  # type: ignore[assignment]
+) -> None:
+    """WebSocket endpoint for interactive terminal sessions.
+
+    Opens an SSH PTY connection to the specified container and relays
+    stdin/stdout between the WebSocket and the SSH process.
+    """
+    safe_container = _sanitize(container)
+
+    try:
+        endpoint, kh_path = await _resolve_terminal_target(
+            websocket, container, project_dir, auth
+        )
+    except _TerminalReject:
+        return
+
+    key_path = _get_key_path()
 
     conn = None
     try:
         conn = await asyncssh.connect(
-            host="localhost",
-            port=port,
-            username=username,
+            host=endpoint.host,
+            port=endpoint.port,
+            username=endpoint.user,
             client_keys=[str(key_path)],
-            known_hosts=None,  # localhost-only; containers regenerate host keys on rebuild
+            known_hosts=str(kh_path),
         )
         process = await conn.create_process(
             term_type="xterm-256color",
@@ -131,7 +216,7 @@ async def terminal_ws(
             _relay_ws_to_ssh(websocket, process),
         )
     except asyncssh.Error as exc:
-        log.exception("SSH connection error on port %d: %s", port, exc)
+        log.exception("SSH connection error for %s: %s", safe_container, exc)
         try:
             await websocket.send_json(
                 {"type": "error", "message": "SSH connection failed"}
@@ -139,8 +224,8 @@ async def terminal_ws(
         except Exception:
             pass
     except WebSocketDisconnect:
-        log.info("Terminal WebSocket disconnected from port %d", port)
+        log.info("Terminal WebSocket disconnected from %s", safe_container)
     finally:
         if conn is not None:
             conn.close()
-        log.info("Terminal session cleaned up for port %d", port)
+        log.info("Terminal session cleaned up for %s", safe_container)

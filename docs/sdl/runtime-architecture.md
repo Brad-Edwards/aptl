@@ -170,6 +170,40 @@ snapshot than the one it was reconciled against.
 exceptions and invalid lifecycle return payloads are converted into structured
 runtime diagnostics instead of surfacing as unhandled crashes.
 
+## APTL ACES Provisioning Realization Contract
+
+The APTL ACES target is a provisioning-only backend. It interprets the ACES
+`ProvisioningPlan` emitted by the reference runtime compiler rather than
+dispatching on scenario name, path, or metadata. The supported provisioning
+resource kinds are:
+
+- `network`
+- `node`
+- `feature-binding`
+- `content-placement`
+- `account-placement`
+
+Node resources are realized into existing APTL Docker Compose profiles by
+matching declared ACES node payload values and explicit backend profile hints
+against the Compose profile index. Network and placement resources are retained
+in the realization details so static and live gates can audit which ACES
+declarations drove the backend decision. Feature, content, and account
+placements must target a declared node by address or node name; missing targets
+fail with ACES diagnostics instead of falling back to TechVault defaults.
+
+`ApplyResult.details["realization"]` is the stable audit surface for the
+provisioning target. It includes sorted selected profile inputs, resource
+counts, node services/config/evidence/telemetry hints, declared networks, and
+node-scoped placements. Unsupported provisioning resource kinds, malformed
+payloads, missing node/profile bindings, and configured-profile mismatches are
+reported as `aptl.provisioner.*` diagnostics.
+
+Orchestration and evaluation remain capability-gated by the ACES target
+manifest and `RuntimeManager` preconditions. Scenarios that require workflows,
+inject execution, scoring, or objectives need an orchestration/evaluation
+capable target before apply; the provisioning interpreter must not treat those
+sections as hidden TechVault presets.
+
 ## RTE-001 Guardrails
 
 The scenario runtime engine must extend the SDL-native runtime described here.
@@ -211,14 +245,14 @@ The purple-team continuity carve-out from issue #252 is an orchestrator-side
 intervention, not an active-response rewrite. The in-band whitelist remains
 ADR-021's `aptl-firewall-drop` contract. The post-iteration audit that
 inspects and removes blanket kali source-IP drops is modeled as an
-orchestration lifecycle action with archive evidence and diagnostics — see
+orchestration lifecycle action with archive evidence and diagnostics—see
 [ADR-024](../adrs/adr-024-orchestrator-side-purple-continuity-carve-out.md)
 for the implementation contract.
 
 Mode-gating: runtime behavior must not infer purple mode from filenames,
 legacy fixtures, agents present, or CLI defaults. Today the continuity
 carve-out runs unconditionally because every shipped APTL scenario is
-purple by design — it does not read or guess `mode` from any source.
+purple by design—it does not read or guess `mode` from any source.
 Once SDL adds an authoritative `mode` field (issue #263), the carve-out
 gains a `scenario.mode == PURPLE` gate at its orchestration call site so
 that `red` and `blue` runs are explicitly skipped. That migration is a

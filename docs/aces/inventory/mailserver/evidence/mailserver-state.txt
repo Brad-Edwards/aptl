@@ -20,8 +20,8 @@
 * security@techvault.local ( 0 / ~ ) [0%]
 
 --setup-alias-list--
-2026-05-28 06:08:02+00:00 [1;31mERROR[0m listalias: '/tmp/docker-mailserver/postfix-virtual.cf' does not exist
-2026-05-28 06:08:02+00:00 [1;31mERROR[0m listalias: Aborting
+2026-06-12 10:36:12+00:00 [1;31mERROR[0m listalias: '/tmp/docker-mailserver/postfix-virtual.cf' does not exist
+2026-06-12 10:36:12+00:00 [1;31mERROR[0m listalias: Aborting
 --postfix-non-default-config--
 alias_database = hash:/etc/aliases
 alias_maps = hash:/etc/aliases
@@ -274,24 +274,24 @@ protocol imap {
 --postqueue--
 Mail queue is empty
 --supervisor--
-amavis                           RUNNING   pid 1369, uptime 0:05:45
-changedetector                   RUNNING   pid 1424, uptime 0:05:45
+amavis                           RUNNING   pid 1369, uptime 15 days, 4:33:55
+changedetector                   RUNNING   pid 1424, uptime 15 days, 4:33:55
 clamav                           STOPPED   Not started
-cron                             RUNNING   pid 1263, uptime 0:05:46
-dovecot                          RUNNING   pid 1273, uptime 0:05:45
+cron                             RUNNING   pid 1263, uptime 15 days, 4:33:56
+dovecot                          RUNNING   pid 1273, uptime 15 days, 4:33:55
 fail2ban                         STOPPED   Not started
 fetchmail                        STOPPED   Not started
 getmail                          STOPPED   Not started
-mailserver                       RUNNING   pid 8, uptime 0:06:17
+mailserver                       RUNNING   pid 8, uptime 15 days, 4:34:27
 mta-sts-daemon                   STOPPED   Not started
-opendkim                         RUNNING   pid 1312, uptime 0:05:45
-opendmarc                        RUNNING   pid 1322, uptime 0:05:45
-postfix                          RUNNING   pid 1334, uptime 0:05:45
+opendkim                         RUNNING   pid 1312, uptime 15 days, 4:33:55
+opendmarc                        RUNNING   pid 1322, uptime 15 days, 4:33:55
+postfix                          RUNNING   pid 1334, uptime 15 days, 4:33:55
 postgrey                         STOPPED   Not started
 postsrsd                         STOPPED   Not started
 rspamd                           STOPPED   Not started
 rspamd-redis                     STOPPED   Not started
-rsyslog                          RUNNING   pid 1267, uptime 0:05:46
+rsyslog                          RUNNING   pid 1267, uptime 15 days, 4:33:56
 saslauthd_ldap                   STOPPED   Not started
 saslauthd_rimap                  STOPPED   Not started
-update-check                     RUNNING   pid 1282, uptime 0:05:45
+update-check                     RUNNING   pid 1282, uptime 15 days, 4:33:55

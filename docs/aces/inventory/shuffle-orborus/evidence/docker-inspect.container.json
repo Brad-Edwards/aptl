@@ -1,0 +1,232 @@
+[
+  {
+    "Id": "3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb",
+    "Created": "2026-06-11T16:00:20.107416558Z",
+    "Path": "./orborus",
+    "Args": [],
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "OOMKilled": false,
+      "Dead": false,
+      "Pid": 807959,
+      "ExitCode": 0,
+      "Error": "",
+      "StartedAt": "2026-06-11T16:00:38.812642504Z",
+      "FinishedAt": "0001-01-01T00:00:00Z"
+    },
+    "Image": "sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44",
+    "ResolvConfPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/resolv.conf",
+    "HostnamePath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/hostname",
+    "HostsPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/hosts",
+    "LogPath": "/var/lib/docker/containers/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb/3915bf99db610fc31263974fe29386dc468257123d1d6cfbea40af28ded147eb-json.log",
+    "Name": "/aptl-shuffle-orborus",
+    "RestartCount": 0,
+    "Driver": "overlayfs",
+    "Platform": "linux",
+    "MountLabel": "",
+    "ProcessLabel": "",
+    "AppArmorProfile": "docker-default",
+    "ExecIDs": null,
+    "HostConfig": {
+      "Binds": [
+        "/var/run/docker.sock:/var/run/docker.sock:rw"
+      ],
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "aptl_aptl-security",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": null,
+      "CgroupnsMode": "private",
+      "Dns": null,
+      "DnsOptions": null,
+      "DnsSearch": null,
+      "ExtraHosts": [],
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": false,
+      "SecurityOpt": null,
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 268435456,
+      "NanoCpus": 0,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": null,
+      "BlkioDeviceReadBps": null,
+      "BlkioDeviceWriteBps": null,
+      "BlkioDeviceReadIOps": null,
+      "BlkioDeviceWriteIOps": null,
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": null,
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 536870912,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": null,
+      "Ulimits": null,
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "MaskedPaths": [
+        "/proc/acpi",
+        "/proc/asound",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/sys/devices/virtual/powercap",
+        "/sys/firmware"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Storage": {
+      "RootFS": {
+        "Snapshot": {
+          "Name": "overlayfs"
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "Config": {
+      "Hostname": "shuffle-orborus",
+      "Domainname": "",
+      "User": "",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "DOCKER_API_VERSION=1.44",
+        "SHUFFLE_STATS_DISABLED=true",
+        "ORBORUS_CONTAINER_NAME=aptl-shuffle-orborus",
+        "SHUFFLE_SKIP_PIPELINES=true",
+        "ORG_ID=Shuffle",
+        "SHUFFLE_APP_SDK_TIMEOUT=300",
+        "BASE_URL=http://shuffle-backend:5001",
+        "SHUFFLE_LOGS_DISABLED=true",
+        "SHUFFLE_WORKER_IMAGE=ghcr.io/shuffle/shuffle-worker:latest",
+        "SHUFFLE_ORBORUS_EXECUTION_TIMEOUT=600",
+        "ENVIRONMENT_NAME=Shuffle",
+        "CLEANUP=false",
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "SHUFFLE_OPENSEARCH_URL=https://opensearch:9200"
+      ],
+      "Cmd": [
+        "./orborus"
+      ],
+      "Image": "ghcr.io/shuffle/shuffle-orborus:latest",
+      "Volumes": null,
+      "WorkingDir": "/",
+      "Entrypoint": null,
+      "Labels": {
+        "com.docker.compose.config-hash": "e42ff9e51c6bf197549bfc7d4c2005222c50ae86b3ed4f9976cded2cb14ccce5",
+        "com.docker.compose.container-number": "1",
+        "com.docker.compose.depends_on": "shuffle-backend:service_started:false",
+        "com.docker.compose.image": "sha256:e74e0246ba3acd0daaa8343e58da859f7908f06b9f51094a9cd9f9ea8cbf7a44",
+        "com.docker.compose.oneoff": "False",
+        "com.docker.compose.project": "aptl",
+        "com.docker.compose.project.config_files": "/home/atomik/src/aptl/docker-compose.yml",
+        "com.docker.compose.project.working_dir": "/home/atomik/src/aptl",
+        "com.docker.compose.service": "shuffle-orborus",
+        "com.docker.compose.version": "5.1.3"
+      }
+    },
+    "NetworkSettings": {
+      "SandboxID": "8bc21c9251e0e7ae1f5488b302d4bd13f5912ad90b6a9957f5e808d74465d1a2",
+      "SandboxKey": "/var/run/docker/netns/8bc21c9251e0",
+      "Ports": {},
+      "Networks": {
+        "aptl_aptl-security": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": [
+            "aptl-shuffle-orborus",
+            "shuffle-orborus"
+          ],
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f",
+          "EndpointID": "4c1236121cc15fea3e9cdbb210edcc2b26fd8aac31d24b87f20031bb13b471dc",
+          "Gateway": "172.20.0.1",
+          "IPAddress": "172.20.0.7",
+          "MacAddress": "06:7a:92:c0:08:df",
+          "IPPrefixLen": 24,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "aptl-shuffle-orborus",
+            "shuffle-orborus",
+            "3915bf99db61"
+          ]
+        }
+      }
+    },
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:40479aae5f81c4d6e5086d5ab20ac35509bac524c9ededa57b969a76e08c5cab",
+      "size": 865,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    }
+  }
+]

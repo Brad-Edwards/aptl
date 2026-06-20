@@ -25,7 +25,7 @@ CapAmb:	0000000000000000
 AGENT_NAME=aptl-webapp-agent
 DB_HOST=172.20.2.11
 DB_NAME=techvault
-DB_PASSWORD=<REDACTED-DB-PASSWORD>
+DB_PASSWORD=techvault_db_pass
 DB_PORT=5432
 DB_USER=techvault
 DEBIAN_FRONTEND=noninteractive
@@ -44,15 +44,15 @@ PYTHON_VERSION=3.11.15
 SIEM_IP=172.20.2.30
 WAZUH_MANAGER=wazuh.manager
 --listeners--
-sh: 20: ss: not found
+sh: 16: ss: not found
 Active Internet connections (only servers)
 Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
-tcp        0      0 127.0.0.11:33569        0.0.0.0:*               LISTEN      -
+tcp        0      0 127.0.0.11:46431        0.0.0.0:*               LISTEN      -
 tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      11/python3.11
-udp        0      0 0.0.0.0:47201           0.0.0.0:*                           10/rsyslogd
-udp        0      0 127.0.0.11:48043        0.0.0.0:*                           -
+udp        0      0 127.0.0.11:34526        0.0.0.0:*                           -
+udp        0      0 0.0.0.0:36548           0.0.0.0:*                           10/rsyslogd
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51162/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51133/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51132/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51131/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51130/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51129/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51128/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51127/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51126/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51125/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51124/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51123/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51122/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51121/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51120/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51119/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51118/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44925/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44924/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44923/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44922/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51169/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51169/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107900/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106897/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106896/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106895/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106894/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106893/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106891/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106890/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106889/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106888/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106886/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106885/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106884/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106883/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106882/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106881/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106872/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106763/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106762/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106761/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106759/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107905/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/107905/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -149,9 +149,9 @@ Debian-exim:x:101:
 messagebus:x:995:
 wazuh:x:102:
 --supervisor--
-gunicorn                         RUNNING   pid 11, uptime 2 days, 13:11:32
-rsyslog                          RUNNING   pid 10, uptime 2 days, 13:11:32
-wazuh-agent                      RUNNING   pid 346, uptime 2 days, 13:10:46
+gunicorn                         RUNNING   pid 11, uptime 16:51:28
+rsyslog                          RUNNING   pid 10, uptime 16:51:28
+wazuh-agent                      RUNNING   pid 409, uptime 16:50:36
 --process-tree--
     PID    PPID USER     COMMAND
       1       0 root     /usr/bin/python3 /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
@@ -159,13 +159,18 @@ wazuh-agent                      RUNNING   pid 346, uptime 2 days, 13:10:46
      11       1 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
      20      11 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
      21      11 root     /usr/local/bin/python3.11 /usr/local/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
-    346       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-    385       1 root     /var/ossec/bin/wazuh-execd
-    393       1 wazuh    /var/ossec/bin/wazuh-agentd
-    411       1 root     /var/ossec/bin/wazuh-syscheckd
-    421       1 root     /var/ossec/bin/wazuh-logcollector
-    435       1 root     /var/ossec/bin/wazuh-modulesd
-    503     346 root     tail -F /var/ossec/logs/ossec.log
- 147128     346 root     sleep 5
- 147200       0 root     sh -lc    set -eu   redact_env() {     sed -E "s/^(APTL_FLAG_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY)=.*/\1=<REDACTED-\1>/" \       | sed "s/<REDACTED-APTL_FLAG_KEY>/<REDACTED-APTL-FLAG-KEY>/;s/<REDACTED-DB_PASSWORD>/<REDACTED-DB-PASSWORD>/;s/<REDACTED-JWT_SECRET>/<REDACTED-JWT-SECRET>/;s/<REDACTED-SECRET_KEY>/<REDACTED-SECRET-KEY>/"   }   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort | redact_env   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,120p"   echo --users--   getent passwd | sed -n "1,160p"   echo --groups--   getent group | sed -n "1,120p"   echo --supervisor--   supervisorctl status || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
- 147227  147200 root     ps -eo pid,ppid,user,args
+    351       1 root     /var/ossec/bin/wazuh-execd
+    359       1 wazuh    /var/ossec/bin/wazuh-agentd
+    373       1 root     /var/ossec/bin/wazuh-syscheckd
+    383       1 root     /var/ossec/bin/wazuh-logcollector
+    397       1 root     /var/ossec/bin/wazuh-modulesd
+    409       1 root     /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
+    456       1 root     /var/ossec/bin/wazuh-execd
+    464       1 wazuh    /var/ossec/bin/wazuh-agentd
+    477       1 root     /var/ossec/bin/wazuh-syscheckd
+    487       1 root     /var/ossec/bin/wazuh-logcollector
+    504       1 root     /var/ossec/bin/wazuh-modulesd
+    522     409 root     tail -F /var/ossec/logs/ossec.log
+  40817     409 root     sleep 5
+  40818       0 root     sh -lc    set -eu   echo --os-release--   cat /etc/os-release   echo --id--   id   echo --pwd--   pwd   echo --uname--   uname -a   echo --capabilities-pid1--   grep "^Cap" /proc/1/status || true   echo --environment--   env | sort   echo --listeners--   (ss -lntup || netstat -lntup || true) 2>&1   echo --mounts--   mount | sed -n "1,120p"   echo --users--   getent passwd | sed -n "1,160p"   echo --groups--   getent group | sed -n "1,120p"   echo --supervisor--   supervisorctl status || true   echo --process-tree--   ps -eo pid,ppid,user,args || true
+  40842   40818 root     ps -eo pid,ppid,user,args

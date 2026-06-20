@@ -1,4 +1,4 @@
-c962f600909be06e796c49d758e7873bb8cfba4885efe95ae4c8b8fa77ff366b  docs/aces/inventory/wazuh.dashboard/evidence/capture-limits.txt
+0f8d733e71bd0726d9e757666bcbc4cbf76214fb276c5df18c1d7659a616ee16  docs/aces/inventory/wazuh.dashboard/evidence/capture-limits.txt
 95caeb4dcd323e6b34923097263e2f61607fd168da97f6a7fe4c4bbc3927dd18  docs/aces/inventory/wazuh.dashboard/evidence/captured-at-utc.txt
 7a1dcf30c792bb158e6ec169efb0b36826087aa85321d46a752af57149e72dfd  docs/aces/inventory/wazuh.dashboard/evidence/compose-service.wazuh.dashboard.json
 243b17bd3bd38acee5ab619f467d423bbef2e2e286bee63c2b268f8a80d79e91  docs/aces/inventory/wazuh.dashboard/evidence/dashboard-config-files.txt
@@ -7,9 +7,9 @@ c962f600909be06e796c49d758e7873bb8cfba4885efe95ae4c8b8fa77ff366b  docs/aces/inve
 44f3ef17b42afec3edf07e584987dc8c8f9421969d225852c6fa9483ec12f3a7  docs/aces/inventory/wazuh.dashboard/evidence/docker-compose-version.json
 d83bd7706485fab876c54baca65b02561ca9bdea495770cebb9ad9c2f479694e  docs/aces/inventory/wazuh.dashboard/evidence/docker-history.image.jsonl
 32eba9071017315d62ca16d3519397a210eaec6666564eaaaac1cafb460672ad  docs/aces/inventory/wazuh.dashboard/evidence/docker-history.image.txt
-319b5d9ce30933096083664024fed360cc2526b7d18ce48fa45abdff91d0695c  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.container.json
+9c42c178e31a645f236c7cfee8c6915a21f9ff0162cbdc356223c22dbd8ee437  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.container.json
 bceb02db9e9e0d80421fab6d6f03bed33aa6dc9f2d5fe0bbe397d4cab4735aae  docs/aces/inventory/wazuh.dashboard/evidence/docker-inspect.image.json
-fdad524a0d3d888a2779e7e3670e7c71e42947c4ee853b8df157516ab1077d25  docs/aces/inventory/wazuh.dashboard/evidence/docker-network.aptl-security.json
+40aedbb9a9ca01e0dff69672cfbe50b67c0569c2115d57a8d9e9cc570c80a34e  docs/aces/inventory/wazuh.dashboard/evidence/docker-network.aptl-security.json
 9d64be70ca994e1a269d40dd30f0f55afd69cc0e3e3acae50611b679ad443e00  docs/aces/inventory/wazuh.dashboard/evidence/docker-top.txt
 b36f5346fbc3c3655bcc3c8086a51b11dca27ead2139c794cd91dc8862357a47  docs/aces/inventory/wazuh.dashboard/evidence/docker-version.json
 44ba968ca4b5be962fbe913be448b4770ba85f16926d52d6caf6b430568b1876  docs/aces/inventory/wazuh.dashboard/evidence/docker-volume.wazuh-dashboard-config.json
@@ -25,7 +25,7 @@ caea769f2aebbda20abaf15c3eb5dbdb63c08b359be4254cc16760529f773e46  docs/aces/inve
 ba6ebce3489fe13c4650e1c6b8e40475150bfb318b0e8412bf9ab870c8133202  docs/aces/inventory/wazuh.dashboard/evidence/language-manifests.txt
 447c2a662b8f38491d9cdc1b56c9f26ea1adea0133f0a907b4e46d89e2d20236  docs/aces/inventory/wazuh.dashboard/evidence/os-packages.txt
 a53726e090c8dae0cf1aaea5cf9f3756331678d305b7a0145fd1be1540c3d8c1  docs/aces/inventory/wazuh.dashboard/evidence/osquery-apt-sources.json
-b34cd78f397687973921606a6639b5879e8dcb502073014533ddcbcc91dd34db  docs/aces/inventory/wazuh.dashboard/evidence/osquery-docker-containers.json
+4c3ed23aeb20ed306d37f7a03f1788097fd1bd56423f55049d2da435e0ab842a  docs/aces/inventory/wazuh.dashboard/evidence/osquery-docker-containers.json
 d035c10a59d46606cf7294783e02c3c6e88ee5eec1df62a60fe58c05d934d0b6  docs/aces/inventory/wazuh.dashboard/evidence/osquery-docker-images.json
 9ec147b95b0ccd7e2893f01192d9e0db4a6c0a3e3e3ff5fe6e9f72781f18aad0  docs/aces/inventory/wazuh.dashboard/evidence/osquery-installed-applications.json
 f2660ef38f94b53f8e37fb1ca4a00a1d5bef8cb71c9f90c7e62769df5645aaf4  docs/aces/inventory/wazuh.dashboard/evidence/osquery-listening-ports.json
@@ -40,5 +40,5 @@ d5e918bbffeb19732084528c5f9b0e77aa475f6c1033c9ce5b80b238402f4671  docs/aces/inve
 a1acfe5710e25be9ba076b4a9c9ed8d66041ee23e6b389fbbb9f7b8f7ddeb178  docs/aces/inventory/wazuh.dashboard/evidence/trivy-version.txt
 6a8126bb3b16754d70a27921c513278acd93b9bb60327369742c51bd57983f5d  docs/aces/inventory/wazuh.dashboard/evidence/trivy-vulnerability-counts.json
 709ce1adc23013d4501ce8faf0ebc83f164c260f950521329a6b944101c84080  docs/aces/inventory/wazuh.dashboard/evidence/trivy-vulnerability-list.json
-a4db482a8e7834520e0a52471b04fc6b7abbc8ba93ef09a7c4a55b6fd8aeea16  docs/aces/inventory/wazuh.dashboard/evidence/wazuh-dashboard-probe.json
+314ed9bffda5183bec56af9f496d68c17d3dac79fe81d016814d9fa44059790e  docs/aces/inventory/wazuh.dashboard/evidence/wazuh-dashboard-probe.json
 77eb67e61c66878311b1bcc08e8e04e9b31330e84c00011be05e02a2bddb258c  docs/aces/inventory/wazuh.dashboard/evidence/wazuh-dashboard-state.txt

@@ -1,0 +1,16 @@
+[
+  {
+    "CreatedAt": "2026-05-23T08:18:29+02:00",
+    "Driver": "local",
+    "Labels": {
+      "com.docker.compose.config-hash": "5730a2b02945d9bb51e039a062951897271f26821d009968c089ffe086c3329b",
+      "com.docker.compose.project": "aptl",
+      "com.docker.compose.version": "5.1.3",
+      "com.docker.compose.volume": "thehive_data"
+    },
+    "Mountpoint": "/var/lib/docker/volumes/aptl_thehive_data/_data",
+    "Name": "aptl_thehive_data",
+    "Options": null,
+    "Scope": "local"
+  }
+]

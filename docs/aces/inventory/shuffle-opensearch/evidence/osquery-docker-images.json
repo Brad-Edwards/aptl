@@ -1,0 +1,15 @@
+{
+  "table": "docker_images",
+  "query": "select id, tags, created, size_bytes from docker_images where tags like \"%shuffle-opensearch%\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "created": "1718479040",
+      "id": "466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff",
+      "size_bytes": "2300037942",
+      "tags": "opensearchproject/opensearch:2.14.0"
+    }
+  ]
+}

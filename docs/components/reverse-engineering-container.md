@@ -9,7 +9,7 @@ The reverse engineering container provides a platform for binary analysis and ma
 - **User**: `labadmin` with sudo privileges
 - **SSH**: Key-based authentication only (port 22, mapped to host 2027)
 
-See [containers/reverse/Dockerfile](../../containers/reverse/Dockerfile) for complete build configuration.
+See [containers/reverse/Dockerfile](https://github.com/Brad-Edwards/aptl/blob/main/containers/reverse/Dockerfile) for complete build configuration.
 
 ## Network Access
 
@@ -18,7 +18,7 @@ See [containers/reverse/Dockerfile](../../containers/reverse/Dockerfile) for com
 
 ## MCP Integration
 
-AI agents control this container via [Reverse Engineering MCP](../../mcp/mcp-reverse/README.md).
+AI agents control this container via [Reverse Engineering MCP](https://github.com/Brad-Edwards/aptl/tree/main/mcp/mcp-reverse).
 
 - **Tools**: `reverse_run_command`, `reverse_info`, etc.
 - **Access Method**: SSH with key authentication

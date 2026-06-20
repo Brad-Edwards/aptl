@@ -2,20 +2,4334 @@ name: techvault-node-misp-suricata-sync
 nodes:
   misp-suricata-sync:
     type: vm
-    description: 'MISP-to-Suricata IOC synchronization companion service stub; full steady-state inventory is owned by issue
-      #349.'
+    description: 'MISP-to-Suricata IOC synchronization service (compose service misp-suricata-sync, container aptl-misp-suricata-sync,
+      custom python:3.11-slim build). Every SYNC_INTERVAL_SECONDS (300) it pulls indicators tagged aptl:enforce from the MISP
+      HTTPS API (lab-CA-verified, MISP admin API key fixture), translates them into Suricata alert rules (ADR-019 IDS-only),
+      atomically rewrites /var/lib/suricata/rules/misp/misp-iocs.rules on the shared host bind, and triggers a Suricata rule
+      reload over the shared unix-command socket. No inbound listener; outbound HTTPS to misp:443 only. Inventoried at experiment
+      grade under docs/aces/inventory/misp-suricata-sync/ (SCN-010 issue #349). The realized edges are relationships.misp-suricata-sync-queries-misp-api
+      and relationships.misp-suricata-sync-updates-suricata-rules.'
+    os: linux
+    os_version: Debian GNU/Linux 13 (trixie)
     source:
       name: aptl-misp-suricata-sync
-      version: local-build:containers/misp-suricata-sync/Dockerfile
-      build: null
-    resources: null
-    os: linux
-    os_version: ''
-    features: {}
-    conditions: {}
-    injects: {}
-    vulnerabilities: []
-    roles: {}
+      version: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+      build:
+        description: Locally built APTL image (aptl-misp-suricata-sync:latest); not a registry artifact, so source.version
+          is the local image config ID (sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb, docker image
+          inspect .Id) and docker buildx imagetools inspect fails (see capture-limits.txt). The build context is the repo
+          root; the Dockerfile (containers/misp-suricata-sync/Dockerfile) COPYs pyproject.toml and the entire src/ tree, then
+          pip-installs the aptl package whose aptl-misp-suricata-sync console script is the entrypoint. source_inputs checksums
+          cover the packaging metadata and the executed aptl.services.misp_suricata_sync package; the full src/ copy is evidenced
+          by the in-image filesystem manifest. Layer sizes are docker history values (BuildKit; base python:3.11-slim rows
+          included).
+        base_image: python:3.11-slim
+        base_image_digest: ''
+        dockerfile_path: containers/misp-suricata-sync/Dockerfile
+        instructions:
+        - instruction: from
+          arguments:
+          - python:3.11-slim
+          description: Base image (Debian 13 trixie slim with CPython 3.11).
+        - instruction: run
+          arguments:
+          - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git && rm -rf /var/lib/apt/lists/*
+          description: OS prerequisites for the pip install (git is purged again afterwards).
+        - instruction: workdir
+          arguments:
+          - /app
+          description: ''
+        - instruction: copy
+          arguments:
+          - pyproject.toml
+          - /app/
+          description: Packaging metadata for the aptl distribution.
+        - instruction: copy
+          arguments:
+          - src
+          - /app/src
+          description: Entire repo src/ tree (the executed code is the aptl.services.misp_suricata_sync package).
+        - instruction: run
+          arguments:
+          - pip install --no-cache-dir . && apt-get purge -y git && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+          description: Installs the aptl package (console script aptl-misp-suricata-sync) and trims git.
+        - instruction: entrypoint
+          arguments:
+          - '["aptl-misp-suricata-sync"]'
+          description: Runs the sync service as PID 1 (root per the Dockerfile bind-mount ownership rationale).
+        layers:
+        - digest: ''
+          created_by: '# debian.sh --arch ''amd64'' out/ ''trixie'' ''@1779062400'''
+          size: 87400000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: ENV PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: ENV LANG=C.UTF-8
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: 'RUN /bin/sh -c set -eux;  apt-get update;  apt-get install -y --no-install-recommends   ca-certificates   netbase   tzdata  ;  apt-get
+            dist-clean # buildkit'
+          size: 4950000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: ENV GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D weeks ago
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: ENV PYTHON_VERSION=3.11.15
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: ENV PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: 'RUN /bin/sh -c set -eux;   savedAptMark="$(apt-mark showmanual)";  apt-get update;  apt-get install
+            -y --no-install-recommends   dpkg-dev   gcc   gnupg   libbluetooth-dev   libbz2-dev   libc6-dev   libdb-dev   libffi-dev   libgdbm-dev   liblzma-dev   libncursesw5-dev   libreadline-dev   libsqlite3-dev   libssl-dev   make   tk-dev   uuid-dev   wget   xz-utils   zlib1g-dev  ;   wget
+            -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz";  echo
+            "$PYTHON_SHA256 *python.tar.xz" | sha256sum -c -;  wget -O python.tar.xz.asc "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz.asc";  GNUPGHOME="$(mktemp
+            -d)"; export GNUPGHOME;  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY";  gpg --batch
+            --verify python.tar.xz.asc python.tar.xz;  gpgconf --kill all;  rm -rf "$GNUPGHOME" python.tar.xz.asc;  mkdir
+            -p /usr/src/python;  tar --extract --directory /usr/src/python --strip-components=1 --file python.tar.xz;  rm
+            python.tar.xz;   cd /usr/src/python;  gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)";  ./configure   --build="$gnuArch"   --enable-loadable-sqlite-extensions   --enable-optimizations   --enable-option-checking=fatal   --enable-shared   $(test
+            "${gnuArch%%-*}" != ''riscv64'' && echo ''--with-lto'')   --with-ensurepip  ;  nproc="$(nproc)";  EXTRA_CFLAGS="$(dpkg-buildflags
+            --get CFLAGS)";  LDFLAGS="$(dpkg-buildflags --get LDFLAGS)";  LDFLAGS="${LDFLAGS:-} -Wl,--strip-all";  make -j
+            "$nproc"   "EXTRA_CFLAGS=${EXTRA_CFLAGS:-}"   "LDFLAGS=${LDFLAGS:-}"  ;  rm python;  make -j "$nproc"   "EXTRA_CFLAGS=${EXTRA_CFLAGS:-}"   "LDFLAGS=${LDFLAGS:-}
+            -Wl,-rpath=''\$\$ORIGIN/../lib''"   python  ;  make install;   cd /;  rm -rf /usr/src/python;   find /usr/local
+            -depth   \(    \( -type d -a \( -name test -o -name tests -o -name idle_test \) \)    -o \( -type f -a \( -name
+            ''*.pyc'' -o -name ''*.pyo'' -o -name ''libpython*.a'' \) \)   \) -exec rm -rf ''{}'' +  ;   ldconfig;   apt-mark
+            auto ''.*'' > /dev/null;  apt-mark manual $savedAptMark;  find /usr/local -type f -executable -not \( -name ''*tkinter*''
+            \) -exec ldd ''{}'' '';''   | awk ''/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?",
+            "", so); printf "*%s\n", so }''   | sort -u   | xargs -rt dpkg-query --search   | awk ''sub(":$", "", $1) { print
+            $1 }''   | sort -u   | xargs -r apt-mark manual  ;  apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false;  apt-get
+            dist-clean;   export PYTHONDONTWRITEBYTECODE=1;  python3 --version;   pip3 install   --disable-pip-version-check   --no-cache-dir   --no-compile   ''setuptools==79.0.1''   ''wheel<0.46''  ;  pip3
+            --version # buildkit'
+          size: 48400000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: 'RUN /bin/sh -c set -eux;  for src in idle3 pip3 pydoc3 python3 python3-config; do   dst="$(echo "$src"
+            | tr -d 3)";   [ -s "/usr/local/bin/$src" ];   [ ! -e "/usr/local/bin/$dst" ];   ln -svT "$src" "/usr/local/bin/$dst";  done
+            # buildkit'
+          size: 16400
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: CMD ["python3"]
+          size: 0
+          empty: true
+          description: ''
+        - digest: ''
+          created_by: 'RUN /bin/sh -c apt-get update     && apt-get install -y --no-install-recommends curl ca-certificates
+            git     && rm -rf /var/lib/apt/lists/* # buildkit'
+          size: 107000000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: WORKDIR /app
+          size: 8189
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: 'COPY pyproject.toml /app/ # buildkit'
+          size: 12300
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: 'COPY src /app/src # buildkit'
+          size: 2430000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: 'RUN /bin/sh -c pip install --no-cache-dir .     && apt-get purge -y git     && apt-get autoremove -y     &&
+            apt-get clean     && rm -rf /var/lib/apt/lists/* # buildkit'
+          size: 120000000
+          empty: false
+          description: ''
+        - digest: ''
+          created_by: ENTRYPOINT ["aptl-misp-suricata-sync"]
+          size: 0
+          empty: true
+          description: ''
+        build_args: []
+        copied_sources: []
+        config:
+          entrypoint:
+          - aptl-misp-suricata-sync
+          command: []
+          working_directory: /app
+          exposed_ports: []
+          labels:
+            com.docker.compose.project: aptl
+            com.docker.compose.service: misp-suricata-sync
+            com.docker.compose.version: 5.1.3
+          default_environment:
+          - name: PATH
+            value: /usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            value_classification: plain
+          - name: LANG
+            value: C.UTF-8
+            value_classification: plain
+          - name: GPG_KEY
+            value: A035C8C19219BA821ECEA86B64E628F8D684696D
+            value_classification: secret_fixture
+          - name: PYTHON_VERSION
+            value: 3.11.15
+            value_classification: plain
+          - name: PYTHON_SHA256
+            value: 272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+            value_classification: plain
+        attestation:
+          status: absent
+          verification: not_applicable
+          attestation_type: none
+          description: Locally built image; no registry-visible OCI/in-toto/SLSA attestation. docker buildx imagetools inspect
+            failed (no registry manifest).
+        source_inputs:
+        - identifier: pyproject
+          source_path: pyproject.toml
+          destination_path: /app/pyproject.toml
+          checksum: cd2d167ece0a39e192f8c719d19b7d88953499dd226bdec0034eefd53e75bd81
+          checksum_algorithm: sha256
+        - identifier: service---init--
+          source_path: src/aptl/services/misp_suricata_sync/__init__.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/__init__.py
+          checksum: 69a6eb80cc0d3b8301d1e8b03d8eced9738d9ed627ea7025b36b63be429cb6b2
+          checksum_algorithm: sha256
+        - identifier: service-config
+          source_path: src/aptl/services/misp_suricata_sync/config.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/config.py
+          checksum: e979439d59056afc43f268cc9765dd53dc7cf53af5006b6a9b10ef525da5483e
+          checksum_algorithm: sha256
+        - identifier: service-main
+          source_path: src/aptl/services/misp_suricata_sync/main.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/main.py
+          checksum: eb7ce4548e396efc1f0915d19b2469b9134fbdc7cc20a96eb2a628fa207ea3b2
+          checksum_algorithm: sha256
+        - identifier: service-misp-client
+          source_path: src/aptl/services/misp_suricata_sync/misp_client.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/misp_client.py
+          checksum: 44b93ccca9eb1826801b43f1b053484248986256199518944abf329e8f319c29
+          checksum_algorithm: sha256
+        - identifier: service-models
+          source_path: src/aptl/services/misp_suricata_sync/models.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/models.py
+          checksum: 77e8846a3e88373bfaccd3e13a9d042e40d0cc410ab58ee07a0829701dcf03f5
+          checksum_algorithm: sha256
+        - identifier: service-rule-writer
+          source_path: src/aptl/services/misp_suricata_sync/rule_writer.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/rule_writer.py
+          checksum: ea1907eaf52fbca7f64f940acc7c505a0fcece7d4c9685c2e55716e93003f639
+          checksum_algorithm: sha256
+        - identifier: service-suricata-reloader
+          source_path: src/aptl/services/misp_suricata_sync/suricata_reloader.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/suricata_reloader.py
+          checksum: 1a902b1256a164e633c6f5e57f6cb3b328ccb6adaff59aecee4b253e71fd3f83
+          checksum_algorithm: sha256
+        - identifier: service-translator
+          source_path: src/aptl/services/misp_suricata_sync/translator.py
+          destination_path: /app/src/aptl/services/misp_suricata_sync/translator.py
+          checksum: 86daa821dc24f31b734d3e8ea241b610a3430b22069639d5de9b22ca58ed20ec
+          checksum_algorithm: sha256
     services: []
-    asset_value: null
-    runtime: null
+    runtime:
+      mounts:
+      - target: /var/run/suricata
+        source: aptl_suricata_command_socket
+        source_kind: volume
+        filesystem_type: volume
+        read_only: false
+        options:
+        - rw
+        propagation: rprivate
+        stability: volume_backed
+        backend_generated: false
+        description: Shared suricata_command_socket named volume (the suricata asset's command-socket directory). The sync
+          service connects to suricata-command.socket to trigger rule reloads.
+      - target: /var/lib/suricata/rules/misp
+        source: .aptl/suricata/rules/misp
+        source_kind: bind
+        filesystem_type: bind
+        read_only: false
+        options:
+        - rw
+        propagation: rprivate
+        stability: runtime_created
+        backend_generated: false
+        description: Host bind mount where the service atomically rewrites misp-iocs.rules each sync cycle; the suricata node
+          consumes the same directory.
+      - target: /etc/lab-ca/lab-ca.pem
+        source: config/soc_certs/lab-ca.pem
+        source_kind: bind
+        filesystem_type: bind
+        read_only: true
+        options:
+        - ro
+        propagation: rprivate
+        stability: stable
+        backend_generated: false
+        description: Lab CA trust anchor for verifying the MISP HTTPS endpoint (MISP_VERIFY_SSL=true).
+      filesystem_inventory:
+      - path: /app
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Build-context copy root (pyproject.toml + repo src/ tree).
+      - path: /app/pyproject.toml
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 3181
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: cd2d167ece0a39e192f8c719d19b7d88953499dd226bdec0034eefd53e75bd81
+        digest_algorithm: sha256
+        description: Packaging metadata for the installed aptl distribution.
+      - path: /app/src/aptl/services/misp_suricata_sync/__init__.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 385
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 69a6eb80cc0d3b8301d1e8b03d8eced9738d9ed627ea7025b36b63be429cb6b2
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/config.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 6084
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: e979439d59056afc43f268cc9765dd53dc7cf53af5006b6a9b10ef525da5483e
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/main.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 6082
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 1962fbb3fb659c83ce7d544d3afa719bb86d489ff627618383295e90452ad61a
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/misp_client.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 3842
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 44b93ccca9eb1826801b43f1b053484248986256199518944abf329e8f319c29
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/models.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 1259
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 77e8846a3e88373bfaccd3e13a9d042e40d0cc410ab58ee07a0829701dcf03f5
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/rule_writer.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 1525
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: ea1907eaf52fbca7f64f940acc7c505a0fcece7d4c9685c2e55716e93003f639
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/suricata_reloader.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 3319
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 1a902b1256a164e633c6f5e57f6cb3b328ccb6adaff59aecee4b253e71fd3f83
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /app/src/aptl/services/misp_suricata_sync/translator.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0664'
+        size: 13077
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 86daa821dc24f31b734d3e8ea241b610a3430b22069639d5de9b22ca58ed20ec
+        digest_algorithm: sha256
+        description: Executed sync-service source (build-context copy).
+      - path: /usr/local/bin/aptl-misp-suricata-sync
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 245
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 3108f7f847e95d70fc725b13eec8eecf9ecee65ae779d24afeee6263f9734fec
+        digest_algorithm: sha256
+        description: Console-script entrypoint installed by pip from pyproject [project.scripts].
+      - path: /usr/local/lib/python3.11/site-packages/aptl
+        entry_type: directory
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Installed aptl package root (pip install of the /app copy); per-file checksums for the executed service
+          modules are in filesystem-checksums.txt.xz.
+      - path: /usr/local/lib/python3.11/site-packages/aptl/services/misp_suricata_sync/main.py
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 6082
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: 1962fbb3fb659c83ce7d544d3afa719bb86d489ff627618383295e90452ad61a
+        digest_algorithm: sha256
+        description: Installed copy of the executed sync-service entry module.
+      - path: /etc/lab-ca/lab-ca.pem
+        entry_type: file
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 1000
+        gid: 1000
+        mode: '0644'
+        size: 1850
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        content_digest: b2a4e0a9099d60d221cf169a6f640d2edf28d62f1f7f23df6e2f4650ce5dea58
+        digest_algorithm: sha256
+        description: Lab CA certificate (public trust anchor) bind-mounted read-only from config/soc_certs/lab-ca.pem; used
+          to verify the MISP TLS endpoint.
+      - path: /var/lib/suricata/rules/misp
+        entry_type: directory
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Rules handoff directory (host bind .aptl/suricata/rules/misp) shared with the suricata node.
+      - path: /var/lib/suricata/rules/misp/misp-iocs.rules
+        entry_type: file
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0644'
+        size: 206
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: Generated Suricata alert rules (ADR-019); rewritten atomically each sync cycle. ioc_count=0 at the capture
+          snapshot.
+      - path: /var/lib/suricata/rules/misp/misp-md5.list
+        entry_type: file
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0644'
+        size: 156
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: MISP hash-list sidecar authored for the suricata node (owned uid/gid 998 = suricata service account);
+          inventoried as suricata authored content, visible here via the shared bind.
+      - path: /var/lib/suricata/rules/misp/misp-sha1.list
+        entry_type: file
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0644'
+        size: 157
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: MISP hash-list sidecar authored for the suricata node; see misp-md5.list.
+      - path: /var/lib/suricata/rules/misp/misp-sha256.list
+        entry_type: file
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0644'
+        size: 159
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: MISP hash-list sidecar authored for the suricata node; see misp-md5.list.
+      - path: /var/run/suricata
+        entry_type: directory
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0755'
+        size: 4096
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: Shared suricata_command_socket volume mountpoint (suricata asset's volume).
+      - path: /var/run/suricata/suricata-command.socket
+        entry_type: socket
+        owner_user: UNKNOWN
+        owner_group: UNKNOWN
+        uid: 998
+        gid: 998
+        mode: '0660'
+        size: 0
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: runtime_created
+        sensitivity: plain
+        description: Suricata unix-command socket (owned uid/gid 998, srw-rw----); the sync service triggers rule reloads
+          through it.
+      - path: /etc/os-release
+        entry_type: symlink
+        owner_user: root
+        owner_group: root
+        uid: 0
+        gid: 0
+        mode: '0777'
+        size: 21
+        source_path: ''
+        provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
+        stability: stable
+        sensitivity: plain
+        description: Debian 13 (trixie) identity from the python:3.11-slim base.
+      local_control_interfaces: []
+      processes:
+      - pid: 1
+        user: root
+        group: root
+        command:
+        - /usr/local/bin/python3.11
+        - /usr/local/bin/aptl-misp-suricata-sync
+        working_directory: /app
+        name: aptl-misp-suricata-sync
+        role: primary
+        description: 'Single-process sync loop: every SYNC_INTERVAL_SECONDS (300) pulls aptl:enforce-tagged indicators from
+          the MISP API, rewrites misp-iocs.rules (alert-only per ADR-019), and triggers a Suricata reload over the unix-command
+          socket. Runs as root per the Dockerfile bind-mount ownership rationale.'
+      environment:
+      - name: IOC_TAG_FILTER
+        value: aptl:enforce
+        value_classification: plain
+        provenance: compose
+      - name: SID_BASE
+        value: '99000000'
+        value_classification: plain
+        provenance: compose
+      - name: MISP_VERIFY_SSL
+        value: 'false'
+        value_classification: plain
+        provenance: compose
+      - name: SURICATA_SOCKET_PATH
+        value: /var/run/suricata/suricata-command.socket
+        value_classification: plain
+        provenance: compose
+      - name: SYNC_INTERVAL_SECONDS
+        value: '300'
+        value_classification: plain
+        provenance: compose
+      - name: MISP_CA_CERT_PATH
+        value: /etc/lab-ca/lab-ca.pem
+        value_classification: plain
+        provenance: compose
+      - name: LOG_LEVEL
+        value: INFO
+        value_classification: plain
+        provenance: compose
+      - name: MISP_API_KEY
+        value: JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw
+        value_classification: secret_fixture
+        provenance: compose
+        description: Lab MISP admin API key -- the same secret_fixture value disclosed on nodes.techvault.misp runtime environment
+          (ADMIN_KEY).
+      - name: RULES_OUT_PATH
+        value: /var/lib/suricata/rules/misp/misp-iocs.rules
+        value_classification: plain
+        provenance: compose
+      - name: MISP_URL
+        value: https://misp
+        value_classification: plain
+        provenance: compose
+      - name: PATH
+        value: /usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        value_classification: plain
+        provenance: image
+      - name: LANG
+        value: C.UTF-8
+        value_classification: plain
+        provenance: image
+      - name: GPG_KEY
+        value: A035C8C19219BA821ECEA86B64E628F8D684696D
+        value_classification: secret_fixture
+        provenance: image
+        description: CPython release-signing key fingerprint baked into python:3.11-slim.
+      - name: PYTHON_VERSION
+        value: 3.11.15
+        value_classification: plain
+        provenance: image
+      - name: PYTHON_SHA256
+        value: 272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+        value_classification: plain
+        provenance: image
+      linux_capabilities:
+        required: []
+        effective:
+        - CAP_CHOWN
+        - CAP_DAC_OVERRIDE
+        - CAP_FOWNER
+        - CAP_FSETID
+        - CAP_KILL
+        - CAP_SETGID
+        - CAP_SETUID
+        - CAP_SETPCAP
+        - CAP_NET_BIND_SERVICE
+        - CAP_NET_RAW
+        - CAP_SYS_CHROOT
+        - CAP_MKNOD
+        - CAP_AUDIT_WRITE
+        - CAP_SETFCAP
+        add: []
+        drop: []
+        process_overrides: []
+        description: Compose adds no cap_add; PID 1 effective mask is the default Docker set (00000000a80425fb). The service
+          runs as root for host-bind ownership compatibility (Dockerfile rationale), not for added kernel capabilities.
+      operational_policy:
+        restart: unless_stopped
+        resource_limits:
+          memory: 134217728
+        description: Compose restart policy unless-stopped and 128 MiB memory limit. depends_on misp service_healthy and suricata
+          service_started gate startup ordering.
+      container:
+        entrypoint:
+        - aptl-misp-suricata-sync
+        command: []
+        log_driver: json-file
+        log_options: {}
+        namespaces:
+          cgroup: private
+          ipc: private
+          pid: ''
+          userns: ''
+          uts: ''
+        privileged: false
+        read_only_rootfs: false
+        publish_all_ports: false
+        autoremove: false
+        shm_size: 67108864
+        cgroup_parent: ''
+        runtime_name: runc
+        masked_paths:
+        - /proc/acpi
+        - /proc/asound
+        - /proc/interrupts
+        - /proc/kcore
+        - /proc/keys
+        - /proc/latency_stats
+        - /proc/sched_debug
+        - /proc/scsi
+        - /proc/timer_list
+        - /proc/timer_stats
+        - /sys/devices/virtual/powercap
+        - /sys/firmware
+        read_only_paths:
+        - /proc/bus
+        - /proc/fs
+        - /proc/irq
+        - /proc/sys
+        - /proc/sysrq-trigger
+        devices: []
+        device_cgroup_rules: []
+        security_opt: []
+        extra_hosts: []
+        dns: []
+        dns_options: []
+        dns_search: []
+        group_add: []
+        description: Docker container host/security configuration observed from docker inspect (default runc, no added capabilities,
+          no security_opt).
+      network:
+        hostname: misp-suricata-sync
+        domainname: ''
+        endpoints:
+        - network: techvault.security-net
+          network_id: 42784966d53752a3d576860aee0748dc2cbfaa93f918b3832eddc9852e20aa7f
+          network_id_stability: stable
+          endpoint_id: 1f9c73fd62723bdc27495a37d74155403b91b1b67b891a7a659c564054f8283b
+          endpoint_id_stability: ephemeral
+          backend_generated: true
+          ip_address: 172.20.0.19
+          ip_prefix_length: 24
+          gateway: 172.20.0.1
+          mac_address: 4e:15:5f:aa:9a:0d
+          aliases:
+          - aptl-misp-suricata-sync
+          - misp-suricata-sync
+          dns_names:
+          - aptl-misp-suricata-sync
+          - misp-suricata-sync
+          - 4d56ddfac027
+          generated_dns_names:
+          - 4d56ddfac027
+          backend:
+            driver: bridge
+          description: Docker endpoint for aptl-misp-suricata-sync on aptl_aptl-security. Compose-assigned static IP 172.20.0.19.
+        published_ports: []
+        description: Attached to security-net only; publishes no host ports and exposes no network listener (osquery-listening-ports.json
+          shows only the Docker embedded DNS resolver). Outbound HTTPS to misp:443 is the only network dependency. Kali cannot
+          route to this address (participant-discovery.kali.txt).
+      service_listeners: []
+      software_components:
+      - component_id: aptl-misp-suricata-sync
+        name: APTL MISP-to-Suricata sync service (aptl distribution)
+        version: 0.1.0
+        component_type: application
+        provenance: package_manager
+        package_manager: pip
+        installed_paths:
+        - /usr/local/bin/aptl-misp-suricata-sync
+        - /usr/local/lib/python3.11/site-packages/aptl
+        hashes: []
+        description: aptl 0.1.0 (pip install of the repo package); the executed code path is aptl.services.misp_suricata_sync.
+          62 pip distributions in the dependency closure (language-manifests.txt; SBOM evidence covers the full set).
+      - component_id: python
+        name: CPython
+        version: 3.11.15
+        component_type: platform
+        provenance: image_metadata
+        package_manager: ''
+        installed_paths:
+        - /usr/local/bin/python3.11
+        hashes: []
+        description: Interpreter from the python:3.11-slim base image.
+      forwarding_agents: []
+      packages:
+      - manager: dpkg
+        name: adduser
+        version: '3.152'
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: apt
+        version: 3.0.3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: base-files
+        version: 13.8+deb13u5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: base-passwd
+        version: 3.6.7
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: bash
+        version: 5.2.37-2+b9
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: bsdutils
+        version: 1:2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: ca-certificates
+        version: '20250419'
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: coreutils
+        version: 9.7-3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: curl
+        version: 8.14.1-2+deb13u3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: dash
+        version: 0.5.12-12
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: debconf
+        version: 1.5.91
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: debian-archive-keyring
+        version: '2025.1'
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: debianutils
+        version: 5.23.2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: diffutils
+        version: 1:3.10-4
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: dpkg
+        version: 1.22.22
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: findutils
+        version: 4.10.0-3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: gcc-14-base:amd64
+        version: 14.2.0-19
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: grep
+        version: 3.11-4
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: gzip
+        version: 1.13-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: hostname
+        version: '3.25'
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: init-system-helpers
+        version: 1.69~deb13u1
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libacl1:amd64
+        version: 2.3.2-2+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libapt-pkg7.0:amd64
+        version: 3.0.3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libattr1:amd64
+        version: 1:2.5.2-3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libaudit1:amd64
+        version: 1:4.0.2-2+b2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libaudit-common
+        version: 1:4.0.2-2
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libblkid1:amd64
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libbrotli1:amd64
+        version: 1.1.0-2+b7
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libbsd0:amd64
+        version: 0.12.2-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libbz2-1.0:amd64
+        version: 1.0.8-6
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libc6:amd64
+        version: 2.41-12+deb13u3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libcap2:amd64
+        version: 1:2.75-10+deb13u1+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libcap-ng0:amd64
+        version: 0.8.5-4+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libc-bin
+        version: 2.41-12+deb13u3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libcom-err2:amd64
+        version: 1.47.2-3+b11
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libcrypt1:amd64
+        version: 1:4.4.38-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libcurl4t64:amd64
+        version: 8.14.1-2+deb13u3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libdb5.3t64:amd64
+        version: 5.3.28+dfsg2-9
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libdebconfclient0:amd64
+        version: '0.280'
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libffi8:amd64
+        version: 3.4.8-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libgcc-s1:amd64
+        version: 14.2.0-19
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libgdbm6t64:amd64
+        version: 1.24-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libgmp10:amd64
+        version: 2:6.3.0+dfsg-3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libgnutls30t64:amd64
+        version: 3.8.9-3+deb13u4
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libgssapi-krb5-2:amd64
+        version: 1.21.3-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libhogweed6t64:amd64
+        version: 3.10.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libidn2-0:amd64
+        version: 2.3.8-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libk5crypto3:amd64
+        version: 1.21.3-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libkeyutils1:amd64
+        version: 1.6.3-6
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libkrb5-3:amd64
+        version: 1.21.3-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libkrb5support0:amd64
+        version: 1.21.3-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: liblastlog2-2:amd64
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libldap2:amd64
+        version: 2.6.10+dfsg-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: liblz4-1:amd64
+        version: 1.10.0-4
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: liblzma5:amd64
+        version: 5.8.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libmd0:amd64
+        version: 1.1.0-2+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libmount1:amd64
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libncursesw6:amd64
+        version: 6.5+20250216-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libnettle8t64:amd64
+        version: 3.10.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libnghttp2-14:amd64
+        version: 1.64.0-1.1+deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libnghttp3-9:amd64
+        version: 1.8.0-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libp11-kit0:amd64
+        version: 0.25.5-3
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpam0g:amd64
+        version: 1.7.0-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpam-modules:amd64
+        version: 1.7.0-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpam-modules-bin
+        version: 1.7.0-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpam-runtime
+        version: 1.7.0-5
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpcre2-8-0:amd64
+        version: 10.46-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libpsl5t64:amd64
+        version: 0.21.2-1.1+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libreadline8t64:amd64
+        version: 8.2-6
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: librtmp1:amd64
+        version: 2.4+20151223.gitfa8646d.1-2+b5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsasl2-2:amd64
+        version: 2.1.28+dfsg1-9
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsasl2-modules-db:amd64
+        version: 2.1.28+dfsg1-9
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libseccomp2:amd64
+        version: 2.6.0-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libselinux1:amd64
+        version: 3.8.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsemanage2:amd64
+        version: 3.8.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsemanage-common
+        version: 3.8.1-1
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsepol2:amd64
+        version: 3.8.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsmartcols1:amd64
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsqlite3-0:amd64
+        version: 3.46.1-7+deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libssh2-1t64:amd64
+        version: 1.11.1-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libssl3t64:amd64
+        version: 3.5.6-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libstdc++6:amd64
+        version: 14.2.0-19
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libsystemd0:amd64
+        version: 257.13-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libtasn1-6:amd64
+        version: 4.20.0-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libtinfo6:amd64
+        version: 6.5+20250216-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libudev1:amd64
+        version: 257.13-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libunistring5:amd64
+        version: 1.3-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libuuid1:amd64
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libxxhash0:amd64
+        version: 0.8.3-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: libzstd1:amd64
+        version: 1.5.7+dfsg-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: login
+        version: 1:4.16.0-2+really2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: login.defs
+        version: 1:4.17.4-2
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: mawk
+        version: 1.3.4.20250131-1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: mount
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: ncurses-base
+        version: 6.5+20250216-2
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: ncurses-bin
+        version: 6.5+20250216-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: netbase
+        version: '6.5'
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: openssl
+        version: 3.5.6-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: openssl-provider-legacy
+        version: 3.5.6-1~deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: passwd
+        version: 1:4.17.4-2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: perl
+        version: 5.40.1-6
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: perl-base
+        version: 5.40.1-6
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: readline-common
+        version: 8.2-6
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: sed
+        version: 4.9-2+deb13u1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: sqv
+        version: 1.3.0-3+b2
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: sysvinit-utils
+        version: 3.14-4
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: tar
+        version: 1.35+dfsg-3.1
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: tzdata
+        version: 2026b-0+deb13u1
+        architecture: all
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: util-linux
+        version: 2.41-5
+        architecture: amd64
+        source: ''
+        purl: ''
+      - manager: dpkg
+        name: zlib1g:amd64
+        version: 1:1.3.dfsg+really1.3.1-1+b1
+        architecture: amd64
+        source: ''
+        purl: ''
+      package_vulnerabilities:
+      - id: CVE-2011-3374
+        package_name: apt
+        installed_version: 3.0.3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2011-3374
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: TEMP-0841856-B18BAF
+        package_name: bash
+        installed_version: 5.2.37-2+b9
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: bsdutils
+        installed_version: 1:2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: bsdutils
+        installed_version: 1:2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: bsdutils
+        installed_version: 1:2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: bsdutils
+        installed_version: 1:2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2017-18018
+        package_name: coreutils
+        installed_version: 9.7-3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2017-18018
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-5278
+        package_name: coreutils
+        installed_version: 9.7-3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-5278
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5773
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5773
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6276
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6276
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-1965
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-1965
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3783
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3783
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3784
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3784
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3805
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3805
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-4873
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4873
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5545
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5545
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6253
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6253
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6429
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6429
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7168
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7168
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-10966
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-10966
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14017
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14017
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14524
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14524
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14819
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14819
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-15079
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-15079
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-15224
+        package_name: curl
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-15224
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2011-3374
+        package_name: libapt-pkg7.0
+        installed_version: 3.0.3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2011-3374
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: libblkid1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: libblkid1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: libblkid1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: libblkid1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42250
+        package_name: libbz2-1.0
+        installed_version: 1.0.8-6
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42250
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5435
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5450
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5450
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5928
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5928
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6238
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2010-4756
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2010-4756
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-20796
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-20796
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010022
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010022
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010023
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010023
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010024
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010024
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010025
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010025
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-9192
+        package_name: libc-bin
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-9192
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5435
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5435
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5450
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5450
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5928
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5928
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6238
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6238
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2010-4756
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2010-4756
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-20796
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-20796
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010022
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010022
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010023
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010023
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010024
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010024
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-1010025
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-1010025
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2019-9192
+        package_name: libc6
+        installed_version: 2.41-12+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2019-9192
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5773
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5773
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6276
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6276
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-1965
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-1965
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3783
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3783
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3784
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3784
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3805
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3805
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-4873
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-4873
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5545
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5545
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6253
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6253
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6429
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6429
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7168
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7168
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-10966
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-10966
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14017
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14017
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14524
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14524
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14819
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14819
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-15079
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-15079
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-15224
+        package_name: libcurl4t64
+        installed_version: 8.14.1-2+deb13u3
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-15224
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2011-3389
+        package_name: libgnutls30t64
+        installed_version: 3.8.9-3+deb13u4
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2011-3389
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40355
+        package_name: libgssapi-krb5-2
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40356
+        package_name: libgssapi-krb5-2
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-5709
+        package_name: libgssapi-krb5-2
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26458
+        package_name: libgssapi-krb5-2
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26461
+        package_name: libgssapi-krb5-2
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40355
+        package_name: libk5crypto3
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40356
+        package_name: libk5crypto3
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-5709
+        package_name: libk5crypto3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26458
+        package_name: libk5crypto3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26461
+        package_name: libk5crypto3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40355
+        package_name: libkrb5-3
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40356
+        package_name: libkrb5-3
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-5709
+        package_name: libkrb5-3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26458
+        package_name: libkrb5-3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26461
+        package_name: libkrb5-3
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40355
+        package_name: libkrb5support0
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40355
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40356
+        package_name: libkrb5support0
+        installed_version: 1.21.3-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 1.21.3-5+deb13u1
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40356
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2018-5709
+        package_name: libkrb5support0
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2018-5709
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26458
+        package_name: libkrb5support0
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26458
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-26461
+        package_name: libkrb5support0
+        installed_version: 1.21.3-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-26461
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: liblastlog2-2
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: liblastlog2-2
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: liblastlog2-2
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: liblastlog2-2
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2015-3276
+        package_name: libldap2
+        installed_version: 2.6.10+dfsg-1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2015-3276
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2017-14159
+        package_name: libldap2
+        installed_version: 2.6.10+dfsg-1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2017-14159
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2017-17740
+        package_name: libldap2
+        installed_version: 2.6.10+dfsg-1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2017-17740
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2020-15719
+        package_name: libldap2
+        installed_version: 2.6.10+dfsg-1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2020-15719
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-22185
+        package_name: libldap2
+        installed_version: 2.6.10+dfsg-1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-22185
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34743
+        package_name: liblzma5
+        installed_version: 5.8.1-1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34743
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: libmount1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: libmount1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: libmount1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: libmount1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-69720
+        package_name: libncursesw6
+        installed_version: 6.5+20250216-2
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-6141
+        package_name: libncursesw6
+        installed_version: 6.5+20250216-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: libsmartcols1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: libsmartcols1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: libsmartcols1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: libsmartcols1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2021-45346
+        package_name: libsqlite3-0
+        installed_version: 3.46.1-7+deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2021-45346
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-70873
+        package_name: libsqlite3-0
+        installed_version: 3.46.1-7+deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-70873
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7598
+        package_name: libssh2-1t64
+        installed_version: 1.11.1-1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7598
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34183
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42764
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34181
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42768
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42769
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: libssl3t64
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2013-4392
+        package_name: libsystemd0
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2013-4392
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31437
+        package_name: libsystemd0
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31437
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31438
+        package_name: libsystemd0
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31438
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31439
+        package_name: libsystemd0
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31439
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40228
+        package_name: libsystemd0
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-13151
+        package_name: libtasn1-6
+        installed_version: 4.20.0-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-13151
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-69720
+        package_name: libtinfo6
+        installed_version: 6.5+20250216-2
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-6141
+        package_name: libtinfo6
+        installed_version: 6.5+20250216-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2013-4392
+        package_name: libudev1
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2013-4392
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31437
+        package_name: libudev1
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31437
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31438
+        package_name: libudev1
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31438
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2023-31439
+        package_name: libudev1
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2023-31439
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-40228
+        package_name: libudev1
+        installed_version: 257.13-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-40228
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: libuuid1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: libuuid1
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: libuuid1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: libuuid1
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: login
+        installed_version: 1:4.16.0-2+really2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: login
+        installed_version: 1:4.16.0-2+really2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: login
+        installed_version: 1:4.16.0-2+really2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: login
+        installed_version: 1:4.16.0-2+really2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2007-5686
+        package_name: login.defs
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2007-5686
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-56433
+        package_name: login.defs
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: TEMP-0628843-DBAD28
+        package_name: login.defs
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://security-tracker.debian.org/tracker/TEMP-0628843-DBAD28
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: mount
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: mount
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: mount
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: mount
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-69720
+        package_name: ncurses-base
+        installed_version: 6.5+20250216-2
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-6141
+        package_name: ncurses-base
+        installed_version: 6.5+20250216-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-69720
+        package_name: ncurses-bin
+        installed_version: 6.5+20250216-2
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-69720
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-6141
+        package_name: ncurses-bin
+        installed_version: 6.5+20250216-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-6141
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34183
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42764
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34181
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42768
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42769
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: openssl
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45447
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45447
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34182
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34182
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34183
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34183
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42764
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42764
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45445
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45445
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34180
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34180
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-34181
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-34181
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42766
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42766
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42767
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42767
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42768
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42768
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42769
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42769
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42770
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42770
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-45446
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-45446
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7383
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7383
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-9076
+        package_name: openssl-provider-legacy
+        installed_version: 3.5.6-1~deb13u1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-9076
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2007-5686
+        package_name: passwd
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2007-5686
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2024-56433
+        package_name: passwd
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2024-56433
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: TEMP-0628843-DBAD28
+        package_name: passwd
+        installed_version: 1:4.17.4-2
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://security-tracker.debian.org/tracker/TEMP-0628843-DBAD28
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42496
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: critical
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42496
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-8376
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: critical
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-8376
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-42497
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-42497
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-48959
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-48959
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-48962
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-48962
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-9538
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-9538
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-15649
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-15649
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-7010
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-7010
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2011-4116
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2011-4116
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-48961
+        package_name: perl-base
+        installed_version: 5.40.1-6
+        severity: unknown
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-48961
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: TEMP-0517018-A83CE6
+        package_name: sysvinit-utils
+        installed_version: 3.14-4
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://security-tracker.debian.org/tracker/TEMP-0517018-A83CE6
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-5704
+        package_name: tar
+        installed_version: 1.35+dfsg-3.1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-5704
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2005-2541
+        package_name: tar
+        installed_version: 1.35+dfsg-3.1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2005-2541
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: TEMP-0290435-0B57B5
+        package_name: tar
+        installed_version: 1.35+dfsg-3.1
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://security-tracker.debian.org/tracker/TEMP-0290435-0B57B5
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27456
+        package_name: util-linux
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27456
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3184
+        package_name: util-linux
+        installed_version: 2.41-5
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3184
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2022-0563
+        package_name: util-linux
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2022-0563
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-14104
+        package_name: util-linux
+        installed_version: 2.41-5
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-14104
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-27171
+        package_name: zlib1g
+        installed_version: 1:1.3.dfsg+really1.3.1-1+b1
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: ''
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-27171
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-23949
+        package_name: jaraco.context
+        installed_version: 5.3.0
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 6.1.0
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-23949
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2025-8869
+        package_name: pip
+        installed_version: '24.0'
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: '25.3'
+        advisory_url: https://avd.aquasec.com/nvd/cve-2025-8869
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-3219
+        package_name: pip
+        installed_version: '24.0'
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: '26.1'
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-3219
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-6357
+        package_name: pip
+        installed_version: '24.0'
+        severity: medium
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: '26.1'
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-6357
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-1703
+        package_name: pip
+        installed_version: '24.0'
+        severity: low
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: '26.0'
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-1703
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-24049
+        package_name: wheel
+        installed_version: 0.45.1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 0.46.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-24049
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      - id: CVE-2026-24049
+        package_name: wheel
+        installed_version: 0.45.1
+        severity: high
+        scanner: trivy
+        image_digest: aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb
+        scan_time: '2026-06-10T04:26:25Z'
+        fixed_version: 0.46.2
+        advisory_url: https://avd.aquasec.com/nvd/cve-2026-24049
+        scanner_version: 'Version: 0.70.0'
+        scanner_database: ''
+      local_identity:
+        users:
+        - username: root
+          uid: 0
+          primary_gid: 0
+          primary_group: root
+          gecos: root
+          home: /root
+          shell: /bin/bash
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: daemon
+          uid: 1
+          primary_gid: 1
+          primary_group: daemon
+          gecos: daemon
+          home: /usr/sbin
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: bin
+          uid: 2
+          primary_gid: 2
+          primary_group: bin
+          gecos: bin
+          home: /bin
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: sys
+          uid: 3
+          primary_gid: 3
+          primary_group: sys
+          gecos: sys
+          home: /dev
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: sync
+          uid: 4
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: sync
+          home: /bin
+          shell: /bin/sync
+          supplemental_groups: []
+          disabled: false
+          locked: false
+          no_login: false
+          provenance: image
+          stability: stable
+          description: ''
+        - username: games
+          uid: 5
+          primary_gid: 60
+          primary_group: games
+          gecos: games
+          home: /usr/games
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: man
+          uid: 6
+          primary_gid: 12
+          primary_group: man
+          gecos: man
+          home: /var/cache/man
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: lp
+          uid: 7
+          primary_gid: 7
+          primary_group: lp
+          gecos: lp
+          home: /var/spool/lpd
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: mail
+          uid: 8
+          primary_gid: 8
+          primary_group: mail
+          gecos: mail
+          home: /var/mail
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: news
+          uid: 9
+          primary_gid: 9
+          primary_group: news
+          gecos: news
+          home: /var/spool/news
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: uucp
+          uid: 10
+          primary_gid: 10
+          primary_group: uucp
+          gecos: uucp
+          home: /var/spool/uucp
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: proxy
+          uid: 13
+          primary_gid: 13
+          primary_group: proxy
+          gecos: proxy
+          home: /bin
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: www-data
+          uid: 33
+          primary_gid: 33
+          primary_group: www-data
+          gecos: www-data
+          home: /var/www
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: backup
+          uid: 34
+          primary_gid: 34
+          primary_group: backup
+          gecos: backup
+          home: /var/backups
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: list
+          uid: 38
+          primary_gid: 38
+          primary_group: list
+          gecos: Mailing List Manager
+          home: /var/list
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: irc
+          uid: 39
+          primary_gid: 39
+          primary_group: irc
+          gecos: ircd
+          home: /run/ircd
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: _apt
+          uid: 42
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: ''
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        - username: nobody
+          uid: 65534
+          primary_gid: 65534
+          primary_group: nogroup
+          gecos: nobody
+          home: /nonexistent
+          shell: /usr/sbin/nologin
+          supplemental_groups: []
+          disabled: true
+          locked: false
+          no_login: true
+          provenance: image
+          stability: stable
+          description: ''
+        groups:
+        - name: root
+          gid: 0
+          members: []
+          provenance: image
+          description: ''
+        - name: daemon
+          gid: 1
+          members: []
+          provenance: image
+          description: ''
+        - name: bin
+          gid: 2
+          members: []
+          provenance: image
+          description: ''
+        - name: sys
+          gid: 3
+          members: []
+          provenance: image
+          description: ''
+        - name: adm
+          gid: 4
+          members: []
+          provenance: image
+          description: ''
+        - name: tty
+          gid: 5
+          members: []
+          provenance: image
+          description: ''
+        - name: disk
+          gid: 6
+          members: []
+          provenance: image
+          description: ''
+        - name: lp
+          gid: 7
+          members: []
+          provenance: image
+          description: ''
+        - name: mail
+          gid: 8
+          members: []
+          provenance: image
+          description: ''
+        - name: news
+          gid: 9
+          members: []
+          provenance: image
+          description: ''
+        - name: uucp
+          gid: 10
+          members: []
+          provenance: image
+          description: ''
+        - name: man
+          gid: 12
+          members: []
+          provenance: image
+          description: ''
+        - name: proxy
+          gid: 13
+          members: []
+          provenance: image
+          description: ''
+        - name: kmem
+          gid: 15
+          members: []
+          provenance: image
+          description: ''
+        - name: dialout
+          gid: 20
+          members: []
+          provenance: image
+          description: ''
+        - name: fax
+          gid: 21
+          members: []
+          provenance: image
+          description: ''
+        - name: voice
+          gid: 22
+          members: []
+          provenance: image
+          description: ''
+        - name: cdrom
+          gid: 24
+          members: []
+          provenance: image
+          description: ''
+        - name: floppy
+          gid: 25
+          members: []
+          provenance: image
+          description: ''
+        - name: tape
+          gid: 26
+          members: []
+          provenance: image
+          description: ''
+        - name: sudo
+          gid: 27
+          members: []
+          provenance: image
+          description: ''
+        - name: audio
+          gid: 29
+          members: []
+          provenance: image
+          description: ''
+        - name: dip
+          gid: 30
+          members: []
+          provenance: image
+          description: ''
+        - name: www-data
+          gid: 33
+          members: []
+          provenance: image
+          description: ''
+        - name: backup
+          gid: 34
+          members: []
+          provenance: image
+          description: ''
+        - name: operator
+          gid: 37
+          members: []
+          provenance: image
+          description: ''
+        - name: list
+          gid: 38
+          members: []
+          provenance: image
+          description: ''
+        - name: irc
+          gid: 39
+          members: []
+          provenance: image
+          description: ''
+        - name: src
+          gid: 40
+          members: []
+          provenance: image
+          description: ''
+        - name: shadow
+          gid: 42
+          members: []
+          provenance: image
+          description: ''
+        - name: utmp
+          gid: 43
+          members: []
+          provenance: image
+          description: ''
+        - name: video
+          gid: 44
+          members: []
+          provenance: image
+          description: ''
+        - name: sasl
+          gid: 45
+          members: []
+          provenance: image
+          description: ''
+        - name: plugdev
+          gid: 46
+          members: []
+          provenance: image
+          description: ''
+        - name: staff
+          gid: 50
+          members: []
+          provenance: image
+          description: ''
+        - name: games
+          gid: 60
+          members: []
+          provenance: image
+          description: ''
+        - name: users
+          gid: 100
+          members: []
+          provenance: image
+          description: ''
+        - name: nogroup
+          gid: 65534
+          members: []
+          provenance: image
+          description: ''
+        sudo_rules: []

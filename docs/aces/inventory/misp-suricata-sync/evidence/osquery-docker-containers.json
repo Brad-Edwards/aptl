@@ -1,0 +1,34 @@
+{
+  "table": "docker_containers",
+  "query": "select id, name, image, image_id, command, created, state, status, pid, path, config_entrypoint, started_at, finished_at, privileged, security_options, readonly_rootfs, cgroup_namespace, ipc_namespace, mnt_namespace, net_namespace, pid_namespace, user_namespace, uts_namespace from docker_containers where name=\"/aptl-misp-suricata-sync\";",
+  "tool": "osqueryi version 4.9.0",
+  "vantage": "containerized osquery host-side Docker socket view",
+  "status": "captured",
+  "rows": [
+    {
+      "cgroup_namespace": "",
+      "command": "aptl-misp-suricata-sync",
+      "config_entrypoint": "aptl-misp-suricata-sync",
+      "created": "1781193620",
+      "finished_at": "0001-01-01T00:00:00Z",
+      "id": "4d56ddfac02728f5df55169655664a10b97ffdf803c1a9d08ef5ae44946ac006",
+      "image": "aptl-misp-suricata-sync",
+      "image_id": "71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb",
+      "ipc_namespace": "",
+      "mnt_namespace": "",
+      "name": "/aptl-misp-suricata-sync",
+      "net_namespace": "",
+      "path": "aptl-misp-suricata-sync",
+      "pid": "816601",
+      "pid_namespace": "",
+      "privileged": "0",
+      "readonly_rootfs": "0",
+      "security_options": "",
+      "started_at": "2026-06-11T16:01:13.234913066Z",
+      "state": "running",
+      "status": "Up 23 hours",
+      "user_namespace": "",
+      "uts_namespace": ""
+    }
+  ]
+}

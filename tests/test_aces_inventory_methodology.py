@@ -56,6 +56,11 @@ SECRET_ENV_NAMES = (
     "SHUFFLE_DEFAULT_PASSWORD",
     "SHUFFLE_OPENSEARCH_PASSWORD",
 )
+SECRET_ENV_VALUES = {
+    "SHUFFLE_DEFAULT_APIKEY": "31a211c4-ea5c-4a49-b022-5e2434e758a7",
+    "SHUFFLE_DEFAULT_PASSWORD": "ShuffleAdmin2024!",
+    "SHUFFLE_OPENSEARCH_PASSWORD": "StrongPassword123!",
+}
 # The #360 completion-grade bundle replaced the #353 smoke-test bundle: evidence
 # is compressed (.gz/.xz), the osquery/syft/participant-discovery surfaces were
 # added, and docker-inspect.trivy-image.json was dropped.
@@ -319,7 +324,7 @@ def test_image_identity_is_digest_pinned():
     assert len(image["RootFS"]["Layers"]) == 8
 
 
-def test_container_runtime_state_and_redaction_boundary():
+def test_container_runtime_state_preserves_scenario_secret_values():
     container = _json_file("docker-inspect.container.json")[0]
     env = container["Config"]["Env"]
     joined_env = "\n".join(env)
@@ -339,30 +344,20 @@ def test_container_runtime_state_and_redaction_boundary():
         == "172.20.0.20"
     )
 
-    for name in SECRET_ENV_NAMES:
-        assert re.search(rf"^{name}=<REDACTED-[A-Z0-9-]+>$", joined_env, re.MULTILINE)
-    assert "SHUFFLE_DEFAULT_PASSWORD=<REDACTED-SHUFFLE-DEFAULT-PASSWORD>" in env
-    assert "SHUFFLE_OPENSEARCH_PASSWORD=<REDACTED-SHUFFLE-OPENSEARCH-PASSWORD>" in env
+    for name, value in SECRET_ENV_VALUES.items():
+        assert re.search(rf"^{name}={re.escape(value)}$", joined_env, re.MULTILINE)
 
 
-def test_evidence_bundle_does_not_contain_raw_secret_values():
+def test_evidence_bundle_does_not_contain_suppression_placeholders():
     offenders = {}
-    # A redacted assignment is either the text-stream marker `<REDACTED>` or the
-    # env-jq marker `<REDACTED-NAME>`; anything else after `NAME=` is a raw leak.
-    raw_secret_assignment = re.compile(
-        rf"^({'|'.join(re.escape(name) for name in SECRET_ENV_NAMES)})=(?!<REDACTED).+",
-        re.MULTILINE,
-    )
+    forbidden = re.compile(r"<REDACTED|<OMITTED|HTTP-[A-Z-]+-OMITTED")
     for path in EVIDENCE_DIR.iterdir():
         if not path.is_file():
             continue
         text = _evidence_text(path)
-        leaked = sorted(
-            match.group(1) for match in raw_secret_assignment.finditer(text)
-        )
-        if leaked:
-            offenders[path.name] = leaked
-    assert not offenders, f"Raw secret assignments leaked into evidence: {offenders}"
+        if forbidden.search(text):
+            offenders[path.name] = forbidden.findall(text)
+    assert not offenders, f"Evidence contains suppression placeholders: {offenders}"
 
 
 def test_runtime_baseline_captures_expected_steady_state():
@@ -384,7 +379,10 @@ def test_trivy_sbom_is_cyclonedx_for_the_pinned_image():
     sbom = _json_file("trivy-sbom.cyclonedx.json.gz")
     assert sbom["bomFormat"] == "CycloneDX"
     assert sbom["specVersion"] == "1.6"
-    assert sbom["metadata"]["component"]["name"] == "ghcr.io/shuffle/shuffle-backend:latest"
+    assert (
+        sbom["metadata"]["component"]["name"]
+        == "ghcr.io/shuffle/shuffle-backend:latest"
+    )
 
     tools = sbom["metadata"]["tools"]["components"]
     trivy_tools = [tool for tool in tools if tool.get("name") == "trivy"]

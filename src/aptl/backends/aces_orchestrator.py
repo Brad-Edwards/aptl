@@ -70,6 +70,58 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+def _register_workflow(
+    workflow_address: str,
+    payload: dict[str, object],
+    registered_at: str,
+    results: dict[str, dict[str, object]],
+) -> list[Diagnostic]:
+    """Record the truthful initial (``PENDING``) portable state for a run.
+
+    The workflow is registered with every observable step in the ``pending``
+    lifecycle and no history events. Nothing is reported as executing,
+    succeeding, or failing — RTE-001 drives those transitions out-of-band and
+    reporting them is wired by #514.
+    """
+    result_contract_payload = payload.get("result_contract")
+    if not isinstance(result_contract_payload, dict):
+        return [
+            _orchestration_diagnostic(
+                "aptl.orchestrator.workflow-contract-missing",
+                workflow_address,
+                "ACES workflow resource is missing its compiled result_contract.",
+            )
+        ]
+    try:
+        result_contract = WorkflowResultContract.from_mapping(result_contract_payload)
+    except (TypeError, ValueError) as exc:
+        return [
+            _orchestration_diagnostic(
+                "aptl.orchestrator.workflow-contract-invalid",
+                workflow_address,
+                f"ACES workflow result_contract is invalid: {exc}",
+            )
+        ]
+
+    steps = {
+        step_name: WorkflowStepExecutionState(lifecycle=WorkflowStepLifecycle.PENDING)
+        for step_name in result_contract.observable_steps
+    }
+    # The ACES contract requires a non-empty started_at; it marks when the run
+    # *record* was created. The PENDING status (not RUNNING) is what truthfully
+    # says no step has executed yet.
+    state = WorkflowExecutionState(
+        state_schema_version=result_contract.state_schema_version,
+        workflow_status=WorkflowStatus.PENDING,
+        run_id=uuid4().hex,
+        started_at=registered_at,
+        updated_at=registered_at,
+        steps=steps,
+    )
+    results[workflow_address] = state.to_payload()
+    return []
+
+
 @dataclass
 class AptlOrchestrator(object):
     """``orchestration-capable`` ACES backend adapter for APTL."""
@@ -127,7 +179,7 @@ class AptlOrchestrator(object):
             )
             changed.append(op.address)
             if op.resource_type == _WORKFLOW_RESOURCE_TYPE:
-                workflow_diagnostics = self._register_workflow(op.address, op.payload, registered_at, results)
+                workflow_diagnostics = _register_workflow(op.address, op.payload, registered_at, results)
                 diagnostics.extend(workflow_diagnostics)
 
         if diagnostics:
@@ -148,58 +200,6 @@ class AptlOrchestrator(object):
             ),
             changed_addresses=changed,
         )
-
-    def _register_workflow(
-        self,
-        workflow_address: str,
-        payload: dict[str, object],
-        registered_at: str,
-        results: dict[str, dict[str, object]],
-    ) -> list[Diagnostic]:
-        """Record the truthful initial (``PENDING``) portable state for a run.
-
-        The workflow is registered with every observable step in the ``pending``
-        lifecycle and no history events. Nothing is reported as executing,
-        succeeding, or failing — RTE-001 drives those transitions out-of-band
-        and reporting them is wired by #514.
-        """
-        result_contract_payload = payload.get("result_contract")
-        if not isinstance(result_contract_payload, dict):
-            return [
-                _orchestration_diagnostic(
-                    "aptl.orchestrator.workflow-contract-missing",
-                    workflow_address,
-                    "ACES workflow resource is missing its compiled result_contract.",
-                )
-            ]
-        try:
-            result_contract = WorkflowResultContract.from_mapping(result_contract_payload)
-        except (TypeError, ValueError) as exc:
-            return [
-                _orchestration_diagnostic(
-                    "aptl.orchestrator.workflow-contract-invalid",
-                    workflow_address,
-                    f"ACES workflow result_contract is invalid: {exc}",
-                )
-            ]
-
-        steps = {
-            step_name: WorkflowStepExecutionState(lifecycle=WorkflowStepLifecycle.PENDING)
-            for step_name in result_contract.observable_steps
-        }
-        # The ACES contract requires a non-empty started_at; it marks when the
-        # run *record* was created. The PENDING status (not RUNNING) is what
-        # truthfully says no step has executed yet.
-        state = WorkflowExecutionState(
-            state_schema_version=result_contract.state_schema_version,
-            workflow_status=WorkflowStatus.PENDING,
-            run_id=uuid4().hex,
-            started_at=registered_at,
-            updated_at=registered_at,
-            steps=steps,
-        )
-        results[workflow_address] = state.to_payload()
-        return []
 
     def status(self) -> dict[str, object]:
         """Return current orchestration status (registered, pending-execution runs)."""

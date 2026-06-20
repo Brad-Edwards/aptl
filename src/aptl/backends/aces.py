@@ -44,6 +44,8 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from aces_processor.models import ExecutionPlan
+
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("aces-backend")
@@ -90,62 +92,69 @@ def start_aces_scenario(
             config=config,
             backend=backend,
         )
-        manager = RuntimeManager(target)
-        execution_plan = manager.plan(scenario)
-        # APTL declares no ACES evaluator yet (tracked by #312). A scenario may
-        # still carry evaluation content — notably the `conditions` section,
-        # whose entries are Docker Compose healthchecks realized during
-        # provisioning, not by an ACES evaluator. The planner flags such content
-        # with the evaluation-domain `evaluator.missing` ERROR; tolerate exactly
-        # that one expected diagnostic (evaluation is deferred to #312) and stay
-        # fail-closed for every other planner error (provisioning ordering
-        # cycles, unsupported capabilities, orchestration errors, ...).
-        blocking = [
-            diag
-            for diag in execution_plan.diagnostics
-            if diag.is_error
-            and not (diag.domain == "evaluation" and diag.code == "evaluator.missing")
-        ]
-        if blocking:
-            return LabResult(
-                success=False,
-                error=render_aces_diagnostics(blocking),
-            )
-        # Route provisioning and orchestration through the canonical ACES
-        # runtime control plane rather than calling the provisioner directly.
-        # Now that APTL is orchestration-capable, scenario start no longer
-        # bypasses the orchestration path: provisioning is applied, then (when
-        # the scenario carries workflows) orchestration is started so APTL's
-        # orchestrator records workflow result/history through the portable ACES
-        # contracts. Evaluation stays unsubmitted until #312 adds the evaluator.
-        control_plane = RuntimeControlPlane(
-            target, initial_snapshot=execution_plan.base_snapshot
-        )
-        provisioning_failure = _apply_phase(
-            control_plane,
-            lambda: control_plane.submit_provisioning(execution_plan.provisioning),
-        )
-        if provisioning_failure is not None:
-            return provisioning_failure
-        if execution_plan.orchestration.actionable_operations:
-            orchestration_failure = _apply_phase(
-                control_plane,
-                lambda: control_plane.submit_orchestration(execution_plan.orchestration),
-            )
-            if orchestration_failure is not None:
-                return orchestration_failure
+        execution_plan = RuntimeManager(target).plan(scenario)
+        return _run_execution_plan(target, execution_plan)
     except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
         return LabResult(
             success=False,
             error=redact(f"ACES runtime handoff failed: {exc}"),
         )
 
+
+def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") -> LabResult:
+    """Apply a planned ACES scenario through the runtime control plane.
+
+    APTL declares no ACES evaluator yet (tracked by #312). A scenario may still
+    carry evaluation content — notably the ``conditions`` section, whose entries
+    are Docker Compose healthchecks realized during provisioning, not by an ACES
+    evaluator. The planner flags such content with the evaluation-domain
+    ``evaluator.missing`` ERROR; tolerate exactly that one expected diagnostic
+    and stay fail-closed for every other planner error (provisioning ordering
+    cycles, unsupported capabilities, orchestration errors, ...). Now that APTL
+    is orchestration-capable, scenario start no longer bypasses the orchestration
+    path: provisioning is applied, then — when the scenario carries workflows —
+    orchestration is started so APTL's orchestrator records workflow
+    result/history through the portable ACES contracts.
+    """
+    blocking = [
+        diag
+        for diag in execution_plan.diagnostics
+        if diag.is_error
+        and not (diag.domain == "evaluation" and diag.code == "evaluator.missing")
+    ]
+    if blocking:
+        return LabResult(success=False, error=render_aces_diagnostics(blocking))
+    control_plane = RuntimeControlPlane(target, initial_snapshot=execution_plan.base_snapshot)
+    failure = _apply_provisioning_and_orchestration(control_plane, execution_plan)
+    if failure is not None:
+        return failure
     return LabResult(
         success=True,
-        message=(
-            f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'"
-        ),
+        message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
     )
+
+
+def _apply_provisioning_and_orchestration(
+    control_plane: RuntimeControlPlane,
+    execution_plan: "ExecutionPlan",
+) -> LabResult | None:
+    """Submit provisioning, then orchestration when the plan carries workflows.
+
+    Returns a failed ``LabResult`` for the first phase that fails, else ``None``.
+    Evaluation stays unsubmitted until #312 adds the evaluator.
+    """
+    provisioning_failure = _apply_phase(
+        control_plane,
+        lambda: control_plane.submit_provisioning(execution_plan.provisioning),
+    )
+    if provisioning_failure is not None:
+        return provisioning_failure
+    if execution_plan.orchestration.actionable_operations:
+        return _apply_phase(
+            control_plane,
+            lambda: control_plane.submit_orchestration(execution_plan.orchestration),
+        )
+    return None
 
 
 def _apply_phase(

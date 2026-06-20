@@ -5,6 +5,17 @@ import { LabConfig, getTargetCredentials } from '../config.js';
 import { ShellType } from '../shells.js';
 import { harvestSession } from '../captures.js';
 
+/** Fallback message when a caught value is not an Error (SonarCloud S1192 —
+ * the literal otherwise repeats in every handler's catch block). */
+const UNKNOWN_ERROR = 'Unknown error';
+
+/** Normalize a caught value to a message string for the failure envelope.
+ * Centralizes the `instanceof Error` narrowing so it is defined and covered
+ * once instead of duplicated across every handler's catch block. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : UNKNOWN_ERROR;
+}
+
 /**
  * Reject session ids whose JSON-schema pattern admits them but which
  * still contain the `..` path-traversal token (the schema regex
@@ -24,20 +35,26 @@ function assertSessionIdContract(value: unknown): asserts value is string {
 }
 
 /**
- * OBS-003 / ADR-033: resolve the docker container name that backs
- * the SSH target for this MCP server, so the close_session /
- * close_all_sessions handlers can harvest per-session captures out
- * of the `kali_captures` (or analogous) named volume into
- * `.aptl/runs/<run_id>/kali-side/<session_id>/` on the host.
+ * OBS-003 / ADR-033 / ADR-041: resolve the docker container the
+ * close_session / close_all_sessions handlers harvest per-session captures
+ * from, into `.aptl/runs/<run_id>/kali-side/<session_id>/` on the host.
  *
- * Returns `undefined` when the lab is configured for an API-only
- * target (no container) or when the configKey is missing — those
- * MCP servers don't ship captures and harvest is a no-op.
+ * Per ADR-041 the capture sink may be owned by a dedicated sidecar that the
+ * workload container does not mount (so a sudo-capable agent cannot read or
+ * tamper with evidence). When `capture_container_name` is set, harvest targets
+ * it (e.g. `aptl-kali-capture`); otherwise it falls back to the workload's own
+ * `container_name`.
+ *
+ * Returns `undefined` when the lab is configured for an API-only target (no
+ * container) or when the configKey is missing — those MCP servers don't ship
+ * captures and harvest is a no-op.
  */
-function resolveCaptureContainer(labConfig: LabConfig): string | undefined {
+export function resolveCaptureContainer(labConfig: LabConfig): string | undefined {
   const key = labConfig.server.configKey;
   if (!key || !labConfig.containers) return undefined;
-  return labConfig.containers[key]?.container_name;
+  const container = labConfig.containers[key];
+  if (!container) return undefined;
+  return container.capture_container_name ?? container.container_name;
 }
 
 /**
@@ -232,7 +249,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               command,
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -290,7 +307,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -349,7 +366,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -393,7 +410,7 @@ const baseHandlers: Record<string, ToolHandler> = {
               success: false,
               session_id,
               command,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -434,7 +451,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -493,7 +510,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -535,7 +552,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             text: JSON.stringify({
               success: false,
               session_id,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],
@@ -595,7 +612,7 @@ const baseHandlers: Record<string, ToolHandler> = {
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error',
+              error: errorMessage(error),
             }, null, 2),
           },
         ],

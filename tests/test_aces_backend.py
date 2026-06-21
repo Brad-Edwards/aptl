@@ -130,6 +130,35 @@ def test_public_start_profiles_match_start_lab_backend_call():
     backend.start.assert_called_once_with(public_start_profiles(config))
 
 
+def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": False,
+            "victim": False,
+            "kali": False,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": False,
+            "dns": False,
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_nodes("aptl-otel-collector"),
+        project_dir=tmp_path,
+        config=config,
+    )
+
+    assert realization.profiles == frozenset({"otel"})
+    assert [diag.code for diag in realization.diagnostics] == []
+
+
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 

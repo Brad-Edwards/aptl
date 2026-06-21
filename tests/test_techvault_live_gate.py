@@ -849,6 +849,22 @@ def test_variation_passes_on_distinct_realizations(monkeypatch):
     assert check.passed
 
 
+def test_variation_accepts_core_otel_public_start_profile():
+    config = AptlConfig(
+        lab={"name": "techvault"},
+        containers={"enterprise": True, "wazuh": False, "victim": False, "kali": False},
+    )
+    state = _variation_state(
+        [_node("ad", ["enterprise"]), _node("aptl-grafana-otel", ["otel"])]
+    )
+
+    check = lgc.check_scenario_variation(
+        project_dir=PROJECT_ROOT, config=config, state=state
+    )
+
+    assert check.passed
+
+
 def test_variation_fails_on_collapse(monkeypatch):
     same = _Realization([_node("x", ["p"])], ["p"])
     monkeypatch.setattr(lgc, "interpret_provisioning_plan", lambda **k: same)

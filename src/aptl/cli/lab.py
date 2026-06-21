@@ -248,7 +248,7 @@ def validate_live(
         help="ACES SDL scenario (default: scenarios/techvault.sdl.yaml).",
     ),
     profile: str = typer.Option(
-        "orchestration-capable",
+        "orchestration-evaluation",
         "--profile",
         help="ACES backend capability profile to validate against.",
     ),

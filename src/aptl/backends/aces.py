@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 
 log = get_logger("aces-backend")
 
-DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault.sdl.yaml"
+DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
 
 
 def create_aptl_runtime_target(

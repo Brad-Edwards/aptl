@@ -67,29 +67,31 @@ Specifically:
 - APTL implements one `RuntimeTarget` registered into the ACES runtime
   target registry (final import path pinned during implementation) and
   publishes a `backend-manifest-v2` claiming conformance to the
-  **`provisioning-only`** profile as the initial target. Promotion to
-  `orchestration-capable` and `orchestration-evaluation` is tracked as
-  follow-on GitHub issues (#311, #312) once the corresponding APTL
-  capabilities (workflow execution under the orchestrator contract;
-  objective evaluation under the evaluator contract) are wired through.
+  **`orchestration-capable`** profile. `provisioning-only` was the
+  bootstrap target; `orchestration-evaluation` remains tracked by #312
+  until objective evaluation under the evaluator contract is wired through.
 - APTL's CLI delegates `aptl lab start` and friends through the ACES
   `RuntimeManager` lifecycle (compile → plan → validate → apply → start
   orchestrator/evaluator → stop) instead of the current imperative Python
   lifecycle.
 - APTL's published backend manifest is committed under an APTL-side
   contracts path (final location pinned during implementation) and
-  validated by `aces conformance backend --profile provisioning-only` as
-  a pre-push gate.
+  validated by `aces conformance backend --profile orchestration-capable`
+  as a pre-push gate.
 - The legacy `aptl.core.sdl` parser and `scenarios/*.yaml` Pydantic path
   remain functional throughout the adoption work. The `aces_sdl`
   dependency, the ACES backend target, and the ACES TechVault scenario
   land as a *parallel* path during Phase A.
-- At cutover (Phase B, a single PR), the default scenario flips to the
-  ACES-authored `techvault.sdl.yaml`, `scenarios/*.yaml` moves to
-  `scenarios/archive/` as strictly reference-only material (not loaded by
-  any runtime path), `aptl.core.sdl` is deleted, `aptl.core.scenarios`
-  collapses to a thin loader around `aces_sdl.parse_sdl_file`, and
-  Pydantic `ScenarioDefinition` models are deleted.
+- At cutover (Phase B, a single PR), the public startup path flips to the
+  ACES-authored operational TechVault SDL
+  (`scenarios/techvault-operational.sdl.yaml`). The deeper
+  `scenarios/techvault.sdl.yaml` remains the detailed inventory/parity
+  artifact rather than the runtime boot contract. Legacy `scenarios/*.yaml`
+  moves to `scenarios/archive/` as strictly reference-only material (not
+  loaded by any runtime path), `aptl.core.sdl` is deleted,
+  `aptl.core.scenarios` collapses to a thin loader around
+  `aces_sdl.parse_sdl_file`, and Pydantic `ScenarioDefinition` models are
+  deleted.
 
 ## Backend Profile Choice
 
@@ -209,8 +211,8 @@ the caller is ACES.
   JSON/JSONL redaction boundaries where those artifacts cross APTL
   serialization.
 - Published backend capability stays profile-named and contract-validated:
-  `provisioning-only` is the initial claim, and any profile promotion belongs
-  to the follow-on issues already named here.
+  `orchestration-capable` is the current claim, and any further profile
+  promotion belongs to the follow-on issues already named here.
 
 The extensibility seam is the ACES backend capability profile plus a small
 backend realization map from ACES runtime resource kinds to existing APTL
@@ -232,7 +234,7 @@ in-tree SDL path stays the default until cutover.
    continue to use `aptl.core.sdl`.
 3. Publish APTL's `backend-manifest-v2` under an APTL-side contracts
    path.
-4. Wire `aces conformance backend --profile provisioning-only` as an
+4. Wire `aces conformance backend --profile orchestration-capable` as an
    **advisory** check (non-blocking) so drift is visible during Phase A.
 5. Author `scenarios/techvault.sdl.yaml` in ACES SDL.
 
@@ -244,14 +246,17 @@ See dedicated section above. Hard prerequisite to Phase B.
 
 Lands in one PR:
 
-- Default scenario flips to the ACES TechVault.
+- Default public startup scenario flips to
+  `scenarios/techvault-operational.sdl.yaml`; the detailed
+  `scenarios/techvault.sdl.yaml` remains the inventory/parity evidence
+  artifact.
 - `aptl lab` and CLI entrypoints route through ACES `RuntimeManager`.
 - `scenarios/*.yaml` moves to `scenarios/archive/` with a README marking
   the directory strictly reference-only (not loaded by any runtime path).
 - `aptl.core.sdl` deleted.
 - `aptl.core.scenarios` Pydantic models deleted; loader collapses to a
   thin `aces_sdl.parse_sdl_file` wrapper.
-- `aces conformance backend --profile provisioning-only` switches from
+- `aces conformance backend --profile orchestration-capable` switches from
   advisory to enforced (pre-push gate).
 - Ground Control reconciliation in the same PR:
   - DSL-001 → DEPRECATED

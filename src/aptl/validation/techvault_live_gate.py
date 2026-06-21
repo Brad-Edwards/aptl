@@ -38,7 +38,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from aptl.validation.techvault_gate import DEFAULT_SCENARIO
+from aptl.backends.aces import DEFAULT_ACES_SCENARIO
 
 if TYPE_CHECKING:
     from aces_sdl.scenario import Scenario
@@ -214,7 +214,7 @@ def validate_live_deployment(
     from aptl.validation import _live_gate_checks as checks
 
     opts = options or LiveGateOptions()
-    scenario_path = scenario_path or (project_dir / DEFAULT_SCENARIO)
+    scenario_path = scenario_path or (project_dir / DEFAULT_ACES_SCENARIO)
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []
@@ -228,9 +228,10 @@ def validate_live_deployment(
     static_passed = scenario is not None and static_check.passed
 
     # 2a. Input/boot-path agreement — the public start path is hardwired to the
-    #     default scenario + orchestration-capable profile, so a scenario/profile
-    #     the boot path will not honor must fail loud BEFORE any destructive
-    #     boot, not silently validate one model while booting another.
+    #     operational scenario + orchestration-capable profile, so a
+    #     scenario/profile the boot path will not honor must fail loud BEFORE
+    #     any destructive boot, not silently validate one model while booting
+    #     another.
     inputs_passed = False
     if static_passed:
         inputs_check = checks.check_boot_inputs_match_public_path(

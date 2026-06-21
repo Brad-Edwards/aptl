@@ -145,8 +145,8 @@ def check_boot_inputs_match_public_path(
     mismatch is a hard ``backend_instantiation`` failure raised *before* any
     destructive boot — never a degraded warning. This holds for
     ``skip_clean_boot`` too: the already-running lab was itself booted from the
-    default scenario, so a mismatched ``--scenario`` would validate the wrong
-    model against it.
+    operational scenario, so a mismatched ``--scenario`` would validate the
+    wrong model against it.
     """
     expected_scenario = DEFAULT_ACES_SCENARIO
     if not expected_scenario.is_absolute():

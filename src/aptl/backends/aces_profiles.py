@@ -12,7 +12,7 @@ import yaml
 
 from aptl.core.config import AptlConfig
 
-CORE_PROFILES = frozenset({"otel"})
+CORE_PROFILES = ("otel",)
 IDENTIFIER_SEPARATORS = re.compile(r"[^a-z0-9]+")
 
 
@@ -76,6 +76,15 @@ def configured_profiles(config: AptlConfig) -> list[str]:
     return list(config.containers.enabled_profiles())
 
 
+def public_start_profiles(config: AptlConfig) -> list[str]:
+    """Return the Compose profiles used by the public lab start path."""
+    selected = configured_profiles(config)
+    for profile in CORE_PROFILES:
+        if profile not in selected:
+            selected.append(profile)
+    return selected
+
+
 def select_backend_profiles(
     config: AptlConfig,
     plan_profiles: frozenset[str],
@@ -83,13 +92,23 @@ def select_backend_profiles(
     """Intersect ACES plan profiles with enabled APTL profiles."""
     selected = [
         profile
-        for profile in configured_profiles(config)
-        if profile in plan_profiles
+        for profile in public_start_profiles(config)
+        if profile in plan_profiles or profile in CORE_PROFILES
     ]
-    for profile in CORE_PROFILES:
-        if profile not in selected:
-            selected.append(profile)
     return selected
+
+
+def steady_state_service_aliases_for_profiles(
+    project_dir: Path, selected_profiles: list[str]
+) -> dict[str, tuple[str, ...]]:
+    """Return normalized aliases for steady-state services in selected profiles."""
+    selected = set(selected_profiles)
+    services = _load_compose_services(project_dir)
+    return {
+        str(service_name): _normalized_service_aliases(str(service_name), service_def)
+        for service_name, service_def in services.items()
+        if _service_selected(service_def, selected)
+    }
 
 
 def normalized_identifier_aliases(raw: str) -> set[str]:
@@ -146,6 +165,32 @@ def _service_profiles(service_def: Mapping[str, object]) -> set[str]:
         for profile in (service_def.get("profiles") or [])
         if str(profile).strip()
     }
+
+
+def _service_selected(service_def: object, selected_profiles: set[str]) -> bool:
+    """Return whether a service is steady-state and in a selected profile."""
+    if not isinstance(service_def, Mapping):
+        return False
+    profiles = _service_profiles(service_def)
+    return bool(profiles & selected_profiles) and not _is_one_shot(service_def)
+
+
+def _is_one_shot(service_def: Mapping[str, object]) -> bool:
+    """Return whether Compose marks a service as a non-steady-state task."""
+    return str(service_def.get("restart", "")).lower() in {"no", "false"}
+
+
+def _normalized_service_aliases(
+    service_name: str,
+    service_def: object,
+) -> tuple[str, ...]:
+    """Return sorted normalized aliases for one Compose service."""
+    if not isinstance(service_def, Mapping):
+        return ()
+    aliases: set[str] = set()
+    for alias in _service_aliases(service_name, service_def):
+        aliases.update(normalized_identifier_aliases(alias))
+    return tuple(sorted(aliases))
 
 
 def _service_aliases(

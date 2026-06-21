@@ -36,7 +36,8 @@ from aptl.validation.techvault_live_gate import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
+SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+FULL_INVENTORY_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 
 
 # --------------------------------------------------------------------------- #
@@ -402,6 +403,14 @@ def test_boot_inputs_fail_for_mismatched_scenario():
     assert any("does not match" in d for d in check.diagnostics)
 
 
+def test_boot_inputs_fail_for_full_inventory_scenario():
+    check = lgc.check_boot_inputs_match_public_path(
+        FULL_INVENTORY_SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
+    )
+    assert not check.passed
+    assert any("techvault-operational.sdl.yaml" in d for d in check.diagnostics)
+
+
 def test_boot_inputs_fail_for_mismatched_profile():
     check = lgc.check_boot_inputs_match_public_path(
         SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions(profile="evaluation")
@@ -724,7 +733,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
     assert manifest["evaluator_surfaces_deferred"]["objectives"] == "#312"
-    assert manifest["scenario"]["name"] == "techvault"
+    assert manifest["scenario"]["name"] == "techvault-operational"
 
 
 def test_run_archive_roundtrips_to_local_store(tmp_path):
@@ -887,7 +896,9 @@ def test_variation_fails_on_realization_error(monkeypatch):
     reason="Set APTL_LIVE_GATE=1 to run the destructive live deployment gate",
 )
 def test_live_gate_passes_on_techvault():
-    config = AptlConfig(lab={"name": "techvault"})
+    from aptl.core.config import load_config
+
+    config = load_config(PROJECT_ROOT / "aptl.json")
     report = validate_live_deployment(
         SCENARIO, project_dir=PROJECT_ROOT, config=config
     )
@@ -904,7 +915,7 @@ def _patch_cli(mocker, *, passed=True):
 
     report = LiveGateReport(
         "scn",
-        "provisioning-only",
+        "orchestration-capable",
         "rid",
         (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )

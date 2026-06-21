@@ -3,7 +3,13 @@
 from textwrap import dedent
 
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
-from aces_contracts.workflow import WorkflowExecutionState, WorkflowStatus, WorkflowStepLifecycle
+from aces_contracts.workflow import (
+    WorkflowExecutionState,
+    WorkflowHistoryEventType,
+    WorkflowStatus,
+    WorkflowStepLifecycle,
+    WorkflowStepOutcome,
+)
 from aces_processor.compiler import compile_runtime_model
 from aces_processor.planner import plan
 from aces_runtime.workflow_result_contracts import workflow_result_contract_diagnostics
@@ -85,9 +91,48 @@ def test_results_and_status_reflect_registered_workflows():
     orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
 
     assert orchestrator.results()
-    # No history until real execution-state integration lands.
     assert orchestrator.history() == {}
     assert orchestrator.status()["registered_workflows"] == sorted(orchestrator.results())
+
+
+def test_drive_workflows_reports_real_execution_state():
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+
+    diagnostics = orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        }
+    )
+    assert diagnostics == []
+
+    payload = next(iter(orchestrator.results().values()))
+    state = WorkflowExecutionState.from_payload(payload)
+    assert state.workflow_status == WorkflowStatus.SUCCEEDED
+    history = next(iter(orchestrator.history().values()))
+    assert history[0]["event_type"] == WorkflowHistoryEventType.WORKFLOW_STARTED.value
+    assert any(
+        event["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+        for event in history
+    )
+
+
+def test_drive_workflows_output_is_workflow_contract_clean():
+    orchestrator = AptlOrchestrator()
+    started = orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        }
+    )
+
+    snapshot = started.snapshot.with_entries(
+        started.snapshot.entries,
+        orchestration_results=orchestrator.results(),
+        orchestration_history=orchestrator.history(),
+    )
+    diagnostics = workflow_result_contract_diagnostics(snapshot)
+    assert diagnostics == [], [d.message for d in diagnostics]
 
 
 def test_start_preserves_existing_provisioning_entries():

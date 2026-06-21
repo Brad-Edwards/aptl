@@ -67,11 +67,12 @@ def create_aptl_runtime_target(
         config=config,
         deployment_backend=backend,
     )
+    orchestrator = AptlOrchestrator()
     return RuntimeTarget(
         name=APTL_ACES_TARGET_NAME,
         manifest=create_aptl_manifest(),
         provisioner=provisioner,  # type: ignore[arg-type]
-        orchestrator=AptlOrchestrator(),  # type: ignore[arg-type]
+        orchestrator=orchestrator,  # type: ignore[arg-type]
         evaluator=AptlEvaluator(),  # type: ignore[arg-type]
     )
 
@@ -116,7 +117,7 @@ def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") 
     if blocking:
         return LabResult(success=False, error=render_aces_diagnostics(blocking))
     control_plane = RuntimeControlPlane(target, initial_snapshot=execution_plan.base_snapshot)
-    failure = _apply_provisioning_and_orchestration(control_plane, execution_plan)
+    failure = _apply_provisioning_and_orchestration(control_plane, execution_plan, target)
     if failure is not None:
         return failure
     return LabResult(
@@ -128,6 +129,7 @@ def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") 
 def _apply_provisioning_and_orchestration(
     control_plane: RuntimeControlPlane,
     execution_plan: "ExecutionPlan",
+    target: RuntimeTarget,
 ) -> LabResult | None:
     """Submit provisioning, orchestration, and evaluation control-plane phases.
 
@@ -146,11 +148,26 @@ def _apply_provisioning_and_orchestration(
         )
         if orchestration_failure is not None:
             return orchestration_failure
+    evaluation_results: dict[str, dict[str, object]] = {}
     if execution_plan.evaluation.actionable_operations:
-        return _apply_phase(
+        evaluation_failure = _apply_phase(
             control_plane,
             lambda: control_plane.submit_evaluation(execution_plan.evaluation),
         )
+        if evaluation_failure is not None:
+            return evaluation_failure
+        if target.evaluator is not None:
+            evaluation_results = target.evaluator.results()
+    orchestrator = target.orchestrator
+    if isinstance(orchestrator, AptlOrchestrator) and orchestrator.results():
+        drive_diagnostics = orchestrator.drive_workflows(
+            evaluation_results=evaluation_results,
+        )
+        if drive_diagnostics:
+            return LabResult(
+                success=False,
+                error=render_aces_diagnostics(drive_diagnostics),
+            )
     return None
 
 

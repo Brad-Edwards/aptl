@@ -2,7 +2,7 @@
 
 Promotes APTL's ACES backend from ``provisioning-only`` to
 ``orchestration-capable`` (SCN-010 follow-on #311). APTL's scenario runtime
-engine (RTE-001) already drives scenario steps with state-machine semantics;
+engine (RTE-001) drives scenario steps with state-machine semantics;
 this adapter exposes that drive surface through the *portable* ACES contracts
 ``workflow-result-envelope-v1`` and ``workflow-history-event-stream-v1`` rather
 than APTL-native run-archive shapes.
@@ -13,20 +13,14 @@ state: it registers every orchestration resource as an ACES ``SnapshotEntry``
 and, for each workflow, records a truthful ``WorkflowExecutionState`` — the run
 is ``PENDING`` (registered and awaiting execution) with every observable step in
 the ``pending`` lifecycle and no history events, because no step has executed
-yet. The step lifecycle is *not* fabricated: the adapter never reports a
-workflow as ``RUNNING``/``SUCCEEDED`` or invents step outcomes. Step execution
-and lifecycle progression are driven out-of-band by RTE-001 and the in-range
-agents; when that execution-state integration lands (tracked by #514), the same
-``results()`` / ``history()`` surface will report the real ``RUNNING`` →
-terminal transitions and ``WorkflowHistoryEvent`` streams. ``stop()`` clears
-orchestration state.
+yet. ``drive_workflows()`` advances registered runs through RTE-001 using
+compiled workflow metadata and portable evaluation outcomes, producing real
+``RUNNING`` → terminal transitions and ``WorkflowHistoryEvent`` streams.
+``stop()`` clears orchestration state.
 
-This keeps the orchestration-capable claim honest: APTL publishes the workflow
-result/history *contract* surface and the loaded/registered run state, not a
-synthetic in-memory run that never progresses. The ACES
-``WorkflowExecutionState`` / ``WorkflowHistoryEvent`` dataclasses are the public
-DTOs — APTL's internal ``aptl.core.runtime`` and run-archive models are never
-the published workflow schema. Workflow interpretation is workflow-address
+The ACES ``WorkflowExecutionState`` / ``WorkflowHistoryEvent`` dataclasses are
+the public DTOs — APTL's internal ``aptl.core.runtime`` and run-archive models
+are never the published workflow schema. Workflow interpretation is workflow-address
 driven; nothing here hardcodes TechVault, a profile, a compose profile, or a
 workflow address.
 """
@@ -35,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from uuid import uuid4
+from typing import TYPE_CHECKING
 
 from aces_contracts.diagnostics import Diagnostic, Severity
 from aces_contracts.planning import ChangeAction, OrchestrationPlan, RuntimeDomain
@@ -44,11 +38,14 @@ from aces_contracts.workflow import (
     WorkflowExecutionState,
     WorkflowResultContract,
     WorkflowStatus,
-    WorkflowStepExecutionState,
-    WorkflowStepLifecycle,
+    WorkflowStepOutcome,
 )
 
+from aptl.core.runtime.workflow_engine import WorkflowEngine
 from aptl.utils.redaction import redact
+
+if TYPE_CHECKING:
+    from aptl.core.runstore import RunStorageBackend
 
 ORCHESTRATION_ADDRESS = "runtime.apply.orchestration"
 _WORKFLOW_RESOURCE_TYPE = "workflow"
@@ -74,15 +71,9 @@ def _register_workflow(
     workflow_address: str,
     payload: dict[str, object],
     registered_at: str,
-    results: dict[str, dict[str, object]],
+    engine: WorkflowEngine,
 ) -> list[Diagnostic]:
-    """Record the truthful initial (``PENDING``) portable state for a run.
-
-    The workflow is registered with every observable step in the ``pending``
-    lifecycle and no history events. Nothing is reported as executing,
-    succeeding, or failing — RTE-001 drives those transitions out-of-band and
-    reporting them is wired by #514.
-    """
+    """Record the truthful initial (``PENDING``) portable state for a run."""
     result_contract_payload = payload.get("result_contract")
     if not isinstance(result_contract_payload, dict):
         return [
@@ -93,7 +84,7 @@ def _register_workflow(
             )
         ]
     try:
-        result_contract = WorkflowResultContract.from_mapping(result_contract_payload)
+        WorkflowResultContract.from_mapping(result_contract_payload)
     except (TypeError, ValueError) as exc:
         return [
             _orchestration_diagnostic(
@@ -103,43 +94,39 @@ def _register_workflow(
             )
         ]
 
-    steps = {
-        step_name: WorkflowStepExecutionState(lifecycle=WorkflowStepLifecycle.PENDING)
-        for step_name in result_contract.observable_steps
-    }
-    # The ACES contract requires a non-empty started_at; it marks when the run
-    # *record* was created. The PENDING status (not RUNNING) is what truthfully
-    # says no step has executed yet.
-    state = WorkflowExecutionState(
-        state_schema_version=result_contract.state_schema_version,
-        workflow_status=WorkflowStatus.PENDING,
-        run_id=uuid4().hex,
-        started_at=registered_at,
-        updated_at=registered_at,
-        steps=steps,
-    )
-    results[workflow_address] = state.to_payload()
+    engine.register_pending(workflow_address, payload, registered_at)
     return []
+
+
+def _objective_outcomes_from_evaluation(
+    evaluation_results: dict[str, dict[str, object]],
+) -> dict[str, WorkflowStepOutcome]:
+    """Map portable evaluation envelopes to workflow objective outcomes when present."""
+    outcomes: dict[str, WorkflowStepOutcome] = {}
+    for address, payload in evaluation_results.items():
+        if not isinstance(payload, dict):
+            continue
+        raw_outcome = payload.get("outcome")
+        if raw_outcome == "succeeded":
+            outcomes[address] = WorkflowStepOutcome.SUCCEEDED
+        elif raw_outcome == "failed":
+            outcomes[address] = WorkflowStepOutcome.FAILED
+        elif raw_outcome == "exhausted":
+            outcomes[address] = WorkflowStepOutcome.EXHAUSTED
+    return outcomes
 
 
 @dataclass
 class AptlOrchestrator(object):
     """``orchestration-capable`` ACES backend adapter for APTL."""
 
-    # Last observed portable orchestration state, keyed by workflow address.
-    # Holds the ACES contract payloads so the no-argument ``results()`` /
-    # ``history()`` / ``status()` observation methods report the runtime state
-    # produced by the most recent ``start()``.
+    _engine: WorkflowEngine = field(default_factory=WorkflowEngine, init=False)
+    _workflow_payloads: dict[str, dict[str, object]] = field(default_factory=dict, init=False)
     _results: dict[str, dict[str, object]] = field(default_factory=dict, init=False)
     _history: dict[str, list[dict[str, object]]] = field(default_factory=dict, init=False)
 
     def start(self, plan: object, snapshot: object) -> ApplyResult:
-        """Load an ACES orchestration plan and register its workflows.
-
-        Each workflow is recorded as a ``PENDING`` run (registered, awaiting
-        execution); no step lifecycle or history is fabricated. Returns the
-        snapshot extended with the orchestration entries and result payloads.
-        """
+        """Load an ACES orchestration plan and register its workflows."""
         working_snapshot = snapshot if isinstance(snapshot, RuntimeSnapshot) else RuntimeSnapshot()
         if not isinstance(plan, OrchestrationPlan):
             return ApplyResult(
@@ -155,17 +142,16 @@ class AptlOrchestrator(object):
             )
 
         entries = dict(working_snapshot.entries)
-        results = dict(working_snapshot.orchestration_results)
-        history = {address: list(events) for address, events in working_snapshot.orchestration_history.items()}
         diagnostics: list[Diagnostic] = []
         changed: list[str] = []
         registered_at = _utc_now()
+        self._workflow_payloads = {}
 
         for op in plan.actionable_operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
-                results.pop(op.address, None)
-                history.pop(op.address, None)
+                self._workflow_payloads.pop(op.address, None)
+                self._engine.discard(op.address)
                 changed.append(op.address)
                 continue
             entries[op.address] = SnapshotEntry(
@@ -179,7 +165,14 @@ class AptlOrchestrator(object):
             )
             changed.append(op.address)
             if op.resource_type == _WORKFLOW_RESOURCE_TYPE:
-                workflow_diagnostics = _register_workflow(op.address, op.payload, registered_at, results)
+                if isinstance(op.payload, dict):
+                    self._workflow_payloads[op.address] = dict(op.payload)
+                workflow_diagnostics = _register_workflow(
+                    op.address,
+                    op.payload,
+                    registered_at,
+                    self._engine,
+                )
                 diagnostics.extend(workflow_diagnostics)
 
         if diagnostics:
@@ -189,20 +182,59 @@ class AptlOrchestrator(object):
                 diagnostics=diagnostics,
             )
 
-        self._results = {address: dict(result) for address, result in results.items()}
-        self._history = {address: [dict(event) for event in events] for address, events in history.items()}
+        self._sync_from_engine()
         return ApplyResult(
             success=True,
             snapshot=working_snapshot.with_entries(
                 entries,
-                orchestration_results=results,
-                orchestration_history=history,
+                orchestration_results=self._results,
+                orchestration_history=self._history,
             ),
             changed_addresses=changed,
         )
 
+    def drive_workflows(
+        self,
+        *,
+        evaluation_results: dict[str, dict[str, object]] | None = None,
+        objective_outcomes: dict[str, WorkflowStepOutcome] | None = None,
+        run_store: RunStorageBackend | None = None,
+        run_id: str | None = None,
+    ) -> list[Diagnostic]:
+        """Advance registered workflows through RTE-001 execution."""
+        resolved_outcomes = dict(objective_outcomes or {})
+        resolved_outcomes.update(
+            _objective_outcomes_from_evaluation(evaluation_results or {})
+        )
+        diagnostics: list[Diagnostic] = []
+        for address, payload in self._workflow_payloads.items():
+            current = self._engine.get(address)
+            if current is None:
+                continue
+            state = WorkflowExecutionState.from_payload(current.result)
+            if state.workflow_status != WorkflowStatus.PENDING:
+                continue
+            try:
+                self._engine.drive(address, payload, objective_outcomes=resolved_outcomes)
+            except ValueError as exc:
+                diagnostics.append(
+                    _orchestration_diagnostic(
+                        "aptl.orchestrator.workflow-drive-failed",
+                        address,
+                        str(exc),
+                    )
+                )
+                continue
+            if run_store is not None and run_id is not None:
+                record = self._engine.get(address)
+                if record is not None:
+                    _persist_workflow_run(run_store, run_id, address, record)
+
+        self._sync_from_engine()
+        return diagnostics
+
     def status(self) -> dict[str, object]:
-        """Return current orchestration status (registered, pending-execution runs)."""
+        """Return current orchestration status."""
         return {
             "backend": "aptl",
             "registered_workflows": sorted(self._results),
@@ -214,7 +246,10 @@ class AptlOrchestrator(object):
 
     def history(self) -> dict[str, list[dict[str, object]]]:
         """Return the workflow execution history event streams."""
-        return {address: [dict(event) for event in events] for address, events in self._history.items()}
+        return {
+            address: [dict(event) for event in events]
+            for address, events in self._history.items()
+        }
 
     def stop(self, snapshot: object) -> ApplyResult:
         """Stop orchestration and clear orchestration state."""
@@ -227,6 +262,8 @@ class AptlOrchestrator(object):
         changed = sorted(set(working_snapshot.entries) - set(retained_entries))
         self._results = {}
         self._history = {}
+        self._workflow_payloads = {}
+        self._engine = WorkflowEngine()
         return ApplyResult(
             success=True,
             snapshot=working_snapshot.with_entries(
@@ -235,4 +272,33 @@ class AptlOrchestrator(object):
                 orchestration_history={},
             ),
             changed_addresses=changed,
+        )
+
+    def _sync_from_engine(self) -> None:
+        results, history = self._engine.export()
+        self._results = results
+        self._history = history
+
+
+def _persist_workflow_run(
+    run_store: RunStorageBackend,
+    run_id: str,
+    workflow_address: str,
+    record: object,
+) -> None:
+    from aptl.core.runtime.workflow_engine import WorkflowRunRecord
+
+    if not isinstance(record, WorkflowRunRecord):
+        return
+    safe_address = workflow_address.replace("/", "_")
+    run_store.write_json(
+        run_id,
+        f"orchestration/{safe_address}/result.json",
+        record.result,
+    )
+    for event in record.history:
+        run_store.append_jsonl(
+            run_id,
+            f"orchestration/{safe_address}/history.jsonl",
+            event,
         )

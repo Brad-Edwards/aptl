@@ -98,7 +98,7 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,web]"
-      - name: ACES static validation gate (TechVault, orchestration-capable)
+      - name: ACES static validation gate (TechVault, orchestration-evaluation)
         run: python -m pytest tests/test_techvault_static_gate.py -q -m integration
 
   mcp-tests:

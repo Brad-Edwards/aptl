@@ -726,7 +726,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert path == "live-gate/manifest.json"
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
-    assert manifest["evaluator_surfaces_deferred"]["objectives"] == "#312"
+    assert manifest["evaluator_surfaces"]["profile"] == "orchestration-evaluation"
     assert manifest["scenario"]["name"] == "techvault"
 
 

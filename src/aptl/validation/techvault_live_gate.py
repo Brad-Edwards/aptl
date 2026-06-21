@@ -12,7 +12,7 @@ archive.
 Like the static gate, it is scenario-generic and parameterized by scenario
 path, backend profile, and project directory: TechVault is the proving input,
 never a hardcoded branch (ADR-035). The next scenario in APTL's
-``orchestration-capable`` expressivity class passes through by changing inputs.
+``orchestration-evaluation`` expressivity class passes through by changing inputs.
 
 The gate is inherently integration / live-run work: it requires Docker, the SOC
 stack's resources, real ``.env`` secrets, and minutes-long startup. It is wired
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
 
-DEFAULT_PROFILE = "orchestration-capable"
+DEFAULT_PROFILE = "orchestration-evaluation"
 
 # Stable failure categories (issue #323 acceptance: a failure must identify the
 # layer that broke). These map onto existing ACES diagnostics and APTL startup
@@ -142,7 +142,7 @@ class LiveGateReport(object):
 class LiveGateOptions(object):
     """Tunable inputs for the live validation gate.
 
-    ``profile`` selects the backend capability profile (``orchestration-capable``).
+    ``profile`` selects the backend capability profile (``orchestration-evaluation``).
     ``clean_volumes`` runs the data-destroying ``stop -v`` cleanup before the
     boot; ``skip_clean_boot`` validates against an already-running lab without
     the destructive cleanup (operator opt-in for a non-destructive check). The
@@ -233,7 +233,7 @@ def validate_live_deployment(
     static_passed = scenario is not None and static_check.passed
 
     # 2a. Input/boot-path agreement — the public start path is hardwired to the
-    #     default scenario + orchestration-capable profile, so a scenario/profile
+    #     default scenario + orchestration-evaluation profile, so a scenario/profile
     #     the boot path will not honor must fail loud BEFORE any destructive
     #     boot, not silently validate one model while booting another.
     inputs_passed = False

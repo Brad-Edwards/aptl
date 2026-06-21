@@ -148,9 +148,11 @@ def test_misp_suricata_sync_note_declares_scope_and_realization_caveats():
         "issue #349",
         "aptl-misp-suricata-sync",
         IMAGE_DIGEST,
-        "non-destructive",
-        "did not run\n`aptl lab stop -v && aptl lab start`",
-        "not as clean-lab rebuild proof",
+        # ADR-043 (issue #325) recaptured the runtime/mount evidence on a
+        # clean-rebuilt lab; the image-level evidence is carried forward.
+        "recaptured after ADR-043",
+        "clean-rebuilt lab",
+        "carried forward from the prior capture",
         "No known ACES expressivity gap remains",
         "nodes.techvault.misp-suricata-sync",
         "ADR-019",
@@ -346,7 +348,7 @@ def test_techvault_sdl_encodes_misp_suricata_sync_node(legacy_scenario):
     mounts = {mount["target"]: mount for mount in runtime["mounts"]}
     assert len(mounts) == 3
     assert mounts["/var/run/suricata"]["source"] == "aptl_suricata_command_socket"
-    assert mounts["/var/lib/suricata/rules/misp"]["source"] == ".aptl/suricata/rules/misp"
+    assert mounts["/var/lib/suricata/rules/misp"]["source"] == "aptl_suricata_misp_rules"
     assert mounts["/var/lib/suricata/rules/misp"]["read_only"] is False
     assert mounts["/etc/lab-ca/lab-ca.pem"]["read_only"] is True
 

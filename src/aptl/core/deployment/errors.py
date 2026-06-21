@@ -18,3 +18,14 @@ class BackendTimeoutError(Exception):
     an implementation detail. Pre-existing ``OSError`` semantics for
     other failure modes are unchanged.
     """
+
+
+class BackendSeedError(Exception):
+    """A named-volume seed or legacy-path retire operation failed.
+
+    Raised by :meth:`DeploymentBackend.seed_named_volumes` when a seed
+    container exits non-zero (ADR-043). Carries only the artifact name
+    (volume suffix / legacy path), never raw Docker stderr, so the lab
+    step can surface it through the existing redacted ``LabResult``
+    envelope.
+    """

@@ -325,7 +325,7 @@
       "source": "local:techvault/nodes/misp-redis.sdl.yaml"
     },
     {
-      "content_digest": "sha256:5a68a8f82c825305367c810a5062e96d994112cfea0eed187d1c8c30fa822939",
+      "content_digest": "sha256:ba5abe7bc7c3c28ad69e9539ddf0dd294e4969b50c042eb9ae38fb0ccf6c1f13",
       "export_hash": "0b2aa16ca30c1625eefeed96b36c0a16b8c7b4b6a1f5fa6a3efc51b838d42e85",
       "manifest_digest": "",
       "module_id": "techvault/nodes/misp-suricata-sync.sdl.yaml",
@@ -337,7 +337,7 @@
       "source": "local:techvault/nodes/misp-suricata-sync.sdl.yaml"
     },
     {
-      "content_digest": "sha256:18615a959a14c63dbba213b59d0517d7dac9908e9b97dc0c969f08d33e4db4f4",
+      "content_digest": "sha256:b3ea6a8b919dd024b873f9d986bde9a12460dadbdec238763b9dc86849ce0562",
       "export_hash": "a415f9212e7b9bbf465c5142aafcad2d5e2ec7c636e39d264abfad246dec0b37",
       "manifest_digest": "",
       "module_id": "techvault/nodes/suricata.sdl.yaml",
@@ -445,7 +445,7 @@
       "source": "local:techvault/sections/accounts.sdl.yaml"
     },
     {
-      "content_digest": "sha256:5e2bb102fd15f4a29b5b584db956db5fef364196e5bed9cf0f591133d34ca3fb",
+      "content_digest": "sha256:bcf7ba5247f02a5454778c8f8a165d81877a2aa06cb0498228ba0bc02d8090f7",
       "export_hash": "1008bdfd594bde511fecc353b1cea0ef4e92daad21809ac51448700134cf7f83",
       "manifest_digest": "",
       "module_id": "techvault/sections/relationships.sdl.yaml",

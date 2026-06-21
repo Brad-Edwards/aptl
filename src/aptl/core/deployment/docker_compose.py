@@ -10,13 +10,16 @@ the size budget; they are mixed into ``DockerComposeBackend`` below.
 """
 
 import json
+import re
 import subprocess
-from pathlib import Path
+from collections.abc import Sequence
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
-from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -25,6 +28,18 @@ log = get_logger("deployment.docker_compose")
 # Generous enough for a large stack, short enough that a hung daemon
 # won't block the kill switch indefinitely.
 _DOCKER_TIMEOUT = 30
+
+# Timeout for a single volume-seed / legacy-retire container (ADR-043).
+# The copy itself is a handful of small files, but the first seed on a
+# fresh host may pull the seeder image (already in the lab's supply
+# chain), so the margin is deliberately generous.
+_SEED_TIMEOUT = 600
+
+# Seed file relpaths come from code-defined specs (never operator input),
+# but they are embedded in the seed container's shell command, so they are
+# validated defensively: a strict charset, no leading separator, and no
+# parent-traversal component, so nothing can escape /src or /dest.
+_SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
 class DockerComposeBackend(ComposeQueryMixin):
@@ -327,3 +342,109 @@ class DockerComposeBackend(ComposeQueryMixin):
                 log.warning(msg)
                 warnings.append(msg)
         return warnings
+
+    def seed_named_volumes(
+        self,
+        seeds: Sequence[NamedVolumeSeed],
+        *,
+        seeder_image: str,
+    ) -> None:
+        """Materialize checked-in source into Compose named volumes (ADR-043).
+
+        See :meth:`DeploymentBackend.seed_named_volumes`. Each seed is
+        retired-then-copied by short-lived root containers run through the
+        backend's own ``_run`` so this stays a narrow, typed operation
+        rather than a generic Docker passthrough.
+        """
+        for seed in seeds:
+            self._retire_legacy_seed_path(seed, seeder_image)
+            self._seed_one_named_volume(seed, seeder_image)
+
+    def _seed_one_named_volume(
+        self, seed: NamedVolumeSeed, seeder_image: str
+    ) -> None:
+        """Copy a seed's files into its project-scoped named volume."""
+        # Project scoping (ADR-037): the real volume name is derived from
+        # the configured compose project, never set as an explicit global.
+        volume = f"{self._project_name}_{seed.volume_suffix}"
+        cmd = [
+            "docker", "run", "--rm", "--user", "0:0",
+            "--entrypoint", "/bin/sh",
+            "-v", f"{seed.source_dir}:/src:ro",
+            "-v", f"{volume}:/dest",
+            seeder_image,
+            "-c", self._build_seed_script(seed),
+        ]
+        result = self._run(cmd, timeout=_SEED_TIMEOUT)
+        if result.returncode != 0:
+            # Name only the artifact — raw Docker stderr stays out of the
+            # raised message and is surfaced through the redacted log line.
+            log.error(
+                "Seed of volume %s failed (exit %s)",
+                seed.volume_suffix, result.returncode,
+            )
+            raise BackendSeedError(
+                f"Seeding named volume '{seed.volume_suffix}' failed"
+            )
+
+    def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
+        """Build the fixed-path copy script for one seed.
+
+        Only the fixed container paths ``/src`` and ``/dest`` plus
+        validated, code-defined relpaths appear in the returned string;
+        the host source dir and the volume name travel through argv ``-v``
+        flags, never the shell text (ADR-043 §Security Layers). Root
+        ``cp`` overwrites prior content, so the seed is idempotent
+        regardless of the existing owner.
+        """
+        parts = ["set -e"]
+        for seed_file in seed.files:
+            self._assert_safe_relpath(seed_file.src)
+            self._assert_safe_relpath(seed_file.dest)
+            dest_dir = PurePosixPath(seed_file.dest).parent
+            if dest_dir.name:
+                parts.append(f"mkdir -p /dest/{dest_dir}")
+            parts.append(f"cp -a /src/{seed_file.src} /dest/{seed_file.dest}")
+        return "; ".join(parts)
+
+    def _retire_legacy_seed_path(
+        self, seed: NamedVolumeSeed, seeder_image: str
+    ) -> None:
+        """Remove a seed's pre-ADR-043 legacy host bind dir, if present.
+
+        The directory may be owned by the in-container ``suricata`` UID
+        (991), so the host operator cannot delete it. A root container
+        mounts the host-owned *parent* and removes the single canonical
+        child by name — a narrow, path-contained cleanup (ADR-043), in
+        argv form against fixed container paths.
+        """
+        legacy = seed.legacy_retire_path
+        if legacy is None:
+            return
+        name = legacy.name
+        self._assert_safe_relpath(name)
+        cmd = [
+            "docker", "run", "--rm", "--user", "0:0",
+            "--entrypoint", "rm",
+            "-v", f"{legacy.parent}:/legacy",
+            seeder_image,
+            "-rf", f"/legacy/{name}",
+        ]
+        result = self._run(cmd, timeout=_SEED_TIMEOUT)
+        if result.returncode != 0:
+            log.error(
+                "Retire of legacy seed path %s failed (exit %s)",
+                legacy, result.returncode,
+            )
+            raise BackendSeedError(
+                f"Retiring legacy seed path '{name}' failed"
+            )
+
+    @staticmethod
+    def _assert_safe_relpath(relpath: str) -> None:
+        """Reject a seed relpath that is unsafe to embed in the seed command."""
+        if (
+            ".." in PurePosixPath(relpath).parts
+            or not _SAFE_SEED_RELPATH.match(relpath)
+        ):
+            raise BackendSeedError(f"Unsafe seed relpath rejected: {relpath!r}")

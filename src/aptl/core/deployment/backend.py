@@ -14,10 +14,12 @@ Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
 
 import subprocess
+from collections.abc import Sequence
 from typing import Protocol
 
 from aptl.core.deployment.errors import BackendTimeoutError  # noqa: F401  (re-export)
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
 # ``aptl.core.lab``. Pre-#266 the import landed on lab.py directly,
@@ -92,6 +94,35 @@ class DeploymentBackend(Protocol):
         Returns:
             List of warning messages for images that failed to pull
             (non-fatal).
+        """
+        ...
+
+    def seed_named_volumes(
+        self,
+        seeds: Sequence[NamedVolumeSeed],
+        *,
+        seeder_image: str,
+    ) -> None:
+        """Materialize checked-in source into Compose named volumes (ADR-043).
+
+        For each seed, a root (``--user 0:0``) one-off container copies the
+        spec's files from the read-only source bind into the
+        project-scoped named volume, overwriting any prior content so the
+        operation is idempotent regardless of the existing owner. When a
+        seed carries a ``legacy_retire_path`` that still exists, a narrow
+        root container removes that one canonical path first.
+
+        Implementations route Docker through their own runner — this is a
+        narrow, typed operation, not a generic argv passthrough.
+
+        Args:
+            seeds: The volume seed specs to materialize, in order.
+            seeder_image: Image used to run the copy/cleanup containers
+                (an image already in the lab's supply chain).
+
+        Raises:
+            BackendSeedError: if a seed or retire container exits non-zero.
+            BackendTimeoutError: if a seed container exceeds its timeout.
         """
         ...
 

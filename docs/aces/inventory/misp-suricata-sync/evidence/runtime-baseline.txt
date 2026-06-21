@@ -47,7 +47,7 @@ sh: 16: netstat: not found
 sh: 18: ss: not found
 sh: 18: netstat: not found
 --mounts--
-overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51184/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51086/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51085/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51084/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44938/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44937/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44925/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44924/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44923/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/44922/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51185/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/51185/work,nouserxattr)
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/181444/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/181154/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/181153/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/169296/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106810/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106809/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106763/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106762/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106761/fs:/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/106759/fs,upperdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/181446/fs,workdir=/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/181446/work,nouserxattr)
 proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
 tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755,inode64)
 devpts on /dev/pts type devpts (rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666)
@@ -58,8 +58,8 @@ shm on /dev/shm type tmpfs (rw,nosuid,nodev,noexec,relatime,size=65536k,inode64)
 /dev/md2 on /etc/resolv.conf type ext4 (rw,relatime)
 /dev/md2 on /etc/hostname type ext4 (rw,relatime)
 /dev/md2 on /etc/hosts type ext4 (rw,relatime)
-/dev/md2 on /run/suricata type ext4 (rw,relatime)
 /dev/md2 on /etc/lab-ca/lab-ca.pem type ext4 (ro,relatime)
+/dev/md2 on /run/suricata type ext4 (rw,relatime)
 /dev/md2 on /var/lib/suricata/rules/misp type ext4 (rw,relatime)
 proc on /proc/bus type proc (ro,nosuid,nodev,noexec,relatime)
 proc on /proc/fs type proc (ro,nosuid,nodev,noexec,relatime)
@@ -137,7 +137,7 @@ nogroup:x:65534:
 --process-tree--
 sh: 28: ps: not found
 1 /usr/local/bin/python3.11 /usr/local/bin/aptl-misp-suricata-sync
-10748 sh -lc
+411 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true
@@ -168,7 +168,7 @@ sh: 28: ps: not found
   printf "%s\n" --python-version--
   python3 --version 2>&1 || true
 
-10773 sh -lc
+436 sh -lc
   set -eu
   printf "%s\n" --os-release--
   cat /etc/os-release 2>/dev/null || true

@@ -63,8 +63,20 @@
     {
       "mode": "ro",
       "service": "kali",
-      "source": "./keys",
-      "target": "/host-ssh-keys"
+      "source": "./keys/authorized_keys",
+      "target": "/host-ssh-keys/authorized_keys"
+    },
+    {
+      "mode": "ro",
+      "service": "kali",
+      "source": "./config/lab-ssh/kali_pivot_key",
+      "target": "/host-ssh-keys/kali_pivot_key"
+    },
+    {
+      "mode": "ro",
+      "service": "kali-capture",
+      "source": "./containers/kali/audit/aptl.rules",
+      "target": "/etc/audit/rules.d/aptl.rules"
     },
     {
       "mode": "ro",
@@ -85,12 +97,6 @@
       "target": "/etc/nginx/certs/key.pem"
     },
     {
-      "mode": "rw",
-      "service": "misp-suricata-sync",
-      "source": "./.aptl/suricata/rules/misp",
-      "target": "/var/lib/suricata/rules/misp"
-    },
-    {
       "mode": "ro",
       "service": "misp-suricata-sync",
       "source": "./config/soc_certs/lab-ca.pem",
@@ -105,8 +111,14 @@
     {
       "mode": "ro",
       "service": "reverse",
-      "source": "./keys",
-      "target": "/keys"
+      "source": "./keys/aptl_lab_key.pub",
+      "target": "/keys/aptl_lab_key.pub"
+    },
+    {
+      "mode": "ro",
+      "service": "reverse",
+      "source": "./config/lab-ssh/kali_pivot_key.pub",
+      "target": "/keys/kali_pivot_key.pub"
     },
     {
       "mode": "",
@@ -139,24 +151,6 @@
       "target": "/var/run/docker.sock"
     },
     {
-      "mode": "",
-      "service": "suricata",
-      "source": "./config/suricata/suricata.yaml",
-      "target": "/etc/suricata/suricata.yaml"
-    },
-    {
-      "mode": "",
-      "service": "suricata",
-      "source": "./config/suricata/rules/local.rules",
-      "target": "/etc/suricata/rules/local.rules"
-    },
-    {
-      "mode": "rw",
-      "service": "suricata",
-      "source": "./.aptl/suricata/rules/misp",
-      "target": "/var/lib/suricata/rules/misp"
-    },
-    {
       "mode": "ro",
       "service": "thehive",
       "source": "./config/soc_certs/thehive/keystore.p12",
@@ -183,8 +177,14 @@
     {
       "mode": "ro",
       "service": "victim",
-      "source": "./keys",
-      "target": "/keys"
+      "source": "./keys/aptl_lab_key.pub",
+      "target": "/keys/aptl_lab_key.pub"
+    },
+    {
+      "mode": "ro",
+      "service": "victim",
+      "source": "./config/lab-ssh/kali_pivot_key.pub",
+      "target": "/keys/kali_pivot_key.pub"
     },
     {
       "mode": "",
@@ -351,8 +351,14 @@
     {
       "mode": "ro",
       "service": "workstation",
-      "source": "./keys",
-      "target": "/keys"
+      "source": "./keys/aptl_lab_key.pub",
+      "target": "/keys/aptl_lab_key.pub"
+    },
+    {
+      "mode": "ro",
+      "service": "workstation",
+      "source": "./config/lab-ssh/kali_pivot_key.pub",
+      "target": "/keys/kali_pivot_key.pub"
     }
   ],
   "service_local_volumes": [
@@ -486,13 +492,13 @@
       "mounts": [
         {
           "mode": "",
-          "service": "kali",
+          "service": "kali-capture",
           "source": "kali_captures",
           "target": "/var/log/aptl/captures"
         }
       ],
       "services": [
-        "kali"
+        "kali-capture"
       ],
       "volume": "kali_captures"
     },
@@ -635,6 +641,20 @@
         "shuffle-opensearch"
       ],
       "volume": "shuffle_opensearch_data"
+    },
+    {
+      "mounts": [
+        {
+          "mode": "ro",
+          "service": "suricata",
+          "source": "suricata_config_seed",
+          "target": "/seed"
+        }
+      ],
+      "services": [
+        "suricata"
+      ],
+      "volume": "suricata_config_seed"
     },
     {
       "mounts": [
@@ -980,6 +1000,27 @@
         "wazuh-sidecar-suricata"
       ],
       "volume": "suricata_logs"
+    },
+    {
+      "mounts": [
+        {
+          "mode": "rw",
+          "service": "misp-suricata-sync",
+          "source": "suricata_misp_rules",
+          "target": "/var/lib/suricata/rules/misp"
+        },
+        {
+          "mode": "rw",
+          "service": "suricata",
+          "source": "suricata_misp_rules",
+          "target": "/var/lib/suricata/rules/misp"
+        }
+      ],
+      "services": [
+        "misp-suricata-sync",
+        "suricata"
+      ],
+      "volume": "suricata_misp_rules"
     }
   ],
   "source": "docker-compose.yml"

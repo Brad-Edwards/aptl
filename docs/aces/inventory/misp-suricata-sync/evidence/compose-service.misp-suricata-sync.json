@@ -23,7 +23,7 @@
   ],
   "volumes": [
     "suricata_command_socket:/var/run/suricata",
-    "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw",
+    "suricata_misp_rules:/var/lib/suricata/rules/misp:rw",
     "./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
   ],
   "depends_on": {

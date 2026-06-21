@@ -191,18 +191,36 @@ services:
       - NET_RAW
       - SYS_NICE
     volumes:
-      - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
-      - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
+      # ADR-043: Suricata no longer bind-mounts any checked-in or .aptl host
+      # path onto a directory the upstream image entrypoint chowns (that
+      # rewrote host-side ownership to UID 991). `aptl lab start` seeds these
+      # Compose project-scoped named volumes from config/suricata/ via a root
+      # container; the wrapper entrypoint below copies the seeded config into
+      # the image-owned /etc/suricata before delegating to the upstream
+      # entrypoint, so its chown only ever touches Docker-managed paths.
+      - suricata_config_seed:/seed:ro
       - suricata_logs:/var/log/suricata
       - suricata_command_socket:/var/run/suricata
-      # Generated copy seeded by `aptl lab start` from the checked-in
-      # baselines under config/suricata/rules/misp (ADR-028); mounted under
-      # default-rule-path so misp-iocs.rules and hash-list sidecars resolve
-      # via Suricata's documented relative-path lookup. The Suricata image
-      # entrypoint chowns its rules tree at startup, so this generated mount
-      # must be writable even though the sync service owns rule content.
-      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
-    command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
+      # MISP IOC rules under default-rule-path so misp-iocs.rules and the
+      # hash-list sidecars resolve via Suricata's relative-path lookup;
+      # shared read-write with aptl-misp-suricata-sync, which owns rule
+      # content. Writable because the entrypoint chowns the rules tree —
+      # now harmless, since this is a named volume, not a host bind.
+      - suricata_misp_rules:/var/lib/suricata/rules/misp:rw
+    # Wrapper entrypoint (ADR-043): stage the seeded config into the
+    # image-owned /etc/suricata, then exec the upstream entrypoint with the
+    # original Suricata args baked in. Data-free — only fixed container
+    # paths, no secrets. Args are baked rather than passed via `command:` to
+    # avoid Compose `$`-interpolation of a `$@` passthrough.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /etc/suricata/rules
+        cp /seed/suricata.yaml /etc/suricata/suricata.yaml
+        cp /seed/rules/local.rules /etc/suricata/rules/local.rules
+        exec /docker-entrypoint.sh -c /etc/suricata/suricata.yaml --pcap
     deploy:
       resources:
         limits:
@@ -342,7 +360,10 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - suricata_command_socket:/var/run/suricata
-      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
+      # Shared MISP rules volume (ADR-043). Seeded by `aptl lab start`; this
+      # service writes RULES_OUT_PATH (misp-iocs.rules) into it and triggers
+      # a Suricata reload over the command socket above.
+      - suricata_misp_rules:/var/lib/suricata/rules/misp:rw
       # SEC-006: lab-managed CA bundle for verifying MISP's lab-CA-signed cert.
       - ./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro
     depends_on:
@@ -1527,6 +1548,13 @@ volumes:
   # Suricata
   suricata_logs:
   suricata_command_socket:
+  # ADR-043: seeded from config/suricata/ at `aptl lab start` (config seed
+  # is consumed read-only by the wrapper entrypoint; the MISP rules volume
+  # is shared read-write with aptl-misp-suricata-sync). No explicit `name:`
+  # — Compose project-scoping derives <project>_<key> so worktrees and
+  # custom deployment.project_name values do not collide.
+  suricata_config_seed:
+  suricata_misp_rules:
 
   # MISP
   misp_data:

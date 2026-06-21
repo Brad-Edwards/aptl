@@ -86,30 +86,56 @@ class TestComposeConsistency:
             )
         )
 
-    def test_misp_suricata_rules_mount_generated_state(self, compose_config):
-        """Runtime-written MISP rule artifacts must not mount checked-in config."""
+    def test_misp_suricata_rules_mount_named_volume(self, compose_config):
+        """ADR-043: MISP rules ride a shared named volume, never a host bind.
+
+        Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
+        path the Suricata image entrypoint chowns (that rewrote host-side
+        ownership, issue #325). Both ``suricata`` and ``misp-suricata-sync``
+        share the ``suricata_misp_rules`` named volume instead.
+        """
         services = compose_config["services"]
 
         suricata_volumes = services["suricata"]["volumes"]
         sync_volumes = services["misp-suricata-sync"]["volumes"]
 
-        assert (
-            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
-            in suricata_volumes
-        )
-        assert (
-            "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
-            in sync_volumes
-        )
+        misp_mount = "suricata_misp_rules:/var/lib/suricata/rules/misp:rw"
+        assert misp_mount in suricata_volumes
+        assert misp_mount in sync_volumes
+
+        # No host bind (checked-in or .aptl) onto the chowned rules tree.
+        all_volumes = suricata_volumes + sync_volumes
         assert not any(
-            volume.startswith("./config/suricata/rules/misp:")
-            for volume in suricata_volumes + sync_volumes
+            volume.startswith("./") and "/var/lib/suricata/rules/misp" in volume
+            for volume in all_volumes
         )
+        # The seed volumes are declared at top level (project-scoped, no
+        # explicit global name).
+        top_level = compose_config.get("volumes", {})
+        assert "suricata_misp_rules" in top_level
+        assert "suricata_config_seed" in top_level
 
         assert (
             "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules"
             in services["misp-suricata-sync"]["environment"]
         )
+
+    def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
+        """ADR-043: suricata.yaml / local.rules are seeded via a named volume
+        and staged by the wrapper entrypoint, never bind-mounted from the
+        checked-in tree onto the chowned /etc/suricata path."""
+        suricata = compose_config["services"]["suricata"]
+        volumes = suricata["volumes"]
+
+        assert "suricata_config_seed:/seed:ro" in volumes
+        assert not any(
+            volume.startswith("./config/suricata/") for volume in volumes
+        )
+        # Wrapper entrypoint stages the seed into image-owned /etc/suricata
+        # then delegates to the upstream entrypoint.
+        entrypoint = "\n".join(suricata["entrypoint"])
+        assert "/seed/suricata.yaml" in entrypoint
+        assert "exec /docker-entrypoint.sh" in entrypoint
 
 
 class TestKaliContainerLifecycle:

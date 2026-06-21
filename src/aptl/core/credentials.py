@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 from xml.sax.saxutils import escape as xml_escape
 
+from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
 from aptl.utils.logging import get_logger
 
 log = get_logger("credentials")
@@ -36,6 +37,11 @@ _KEY_PATTERN = re.compile(r"<key>[^<]*</key>")
 # Canonical project-relative source templates (checked in, never written).
 _DASHBOARD_SOURCE_RELPATH = Path("config/wazuh_dashboard/wazuh.yml")
 _MANAGER_SOURCE_RELPATH = Path("config/wazuh_cluster/wazuh_manager.conf")
+# Suricata runtime-input sources (checked in, never written). Under ADR-043
+# these are copied into Compose named volumes by a root seed container at lab
+# start rather than rendered/bind-mounted, so the upstream image entrypoint's
+# chown can never rewrite host-side ownership.
+_SURICATA_CONFIG_SOURCE_RELPATH = Path("config/suricata")
 _SURICATA_MISP_RULES_SOURCE_RELPATH = Path("config/suricata/rules/misp")
 
 # Canonical project-relative rendered outputs (under the ignored .aptl/
@@ -43,16 +49,35 @@ _SURICATA_MISP_RULES_SOURCE_RELPATH = Path("config/suricata/rules/misp")
 # two in sync.
 RENDERED_DASHBOARD_RELPATH = Path(".aptl/config/wazuh_dashboard/wazuh.yml")
 RENDERED_MANAGER_RELPATH = Path(".aptl/config/wazuh_cluster/wazuh_manager.conf")
-RENDERED_SURICATA_MISP_RULES_RELPATH = Path(".aptl/suricata/rules/misp")
 
 # Root of the rendered-config tree.
 _RENDERED_CONFIG_ROOT = Path(".aptl/config")
+
+# Suricata runtime files copied into the seed volumes. The config seed holds
+# the engine config plus the operator-authored local rules; the MISP volume
+# holds the four IOC rule baselines the sync service later overwrites.
+_SURICATA_CONFIG_SEED_FILES = (
+    ("suricata.yaml", "suricata.yaml"),
+    ("rules/local.rules", "rules/local.rules"),
+)
 _SURICATA_MISP_RULE_FILES = (
     "misp-iocs.rules",
     "misp-md5.list",
     "misp-sha1.list",
     "misp-sha256.list",
 )
+
+# Compose volume keys. The deployment backend resolves the real, Compose
+# project-scoped name as ``<project>_<suffix>`` (ADR-043 forbids explicit
+# global volume names). docker-compose.yml must declare these same keys.
+SURICATA_CONFIG_SEED_VOLUME = "suricata_config_seed"
+SURICATA_MISP_RULES_VOLUME = "suricata_misp_rules"
+
+# Pre-ADR-043 host bind directory for the MISP rules. Prior lab runs left it
+# owned by the in-container ``suricata`` UID (991 == ``systemd-network`` on
+# Ubuntu hosts), so the host operator cannot delete it. The seed step retires
+# this one canonical, contained path via a root container.
+_SURICATA_LEGACY_MISP_RELPATH = Path(".aptl/suricata/rules/misp")
 
 # Host-side permissions. The directory is owner-only (``0o700``) — that
 # is the real access control for local users, since nobody but the owner
@@ -67,8 +92,6 @@ _SURICATA_MISP_RULE_FILES = (
 # reason.)
 _DIR_MODE = 0o700
 _FILE_MODE = 0o644
-_GENERATED_RULE_DIR_MODE = 0o755
-_GENERATED_RULE_FILE_MODE = 0o644
 
 
 class PathContainmentError(ValueError):
@@ -253,31 +276,6 @@ def _atomic_write_secure(target: Path, content: str) -> None:
         tmp.unlink(missing_ok=True)
         raise
     _enforce_mode(target, _FILE_MODE, "file")
-
-
-def _atomic_write_generated_bytes(target: Path, content: bytes) -> None:
-    """Atomically write non-secret generated artifact bytes."""
-    parent = target.parent
-    fd, tmp_name = tempfile.mkstemp(
-        dir=parent, prefix=f".{target.name}.", suffix=".tmp"
-    )
-    tmp = Path(tmp_name)
-    if not tmp.resolve().is_relative_to(parent.resolve()):  # pragma: no cover
-        os.close(fd)
-        tmp.unlink(missing_ok=True)
-        raise PathContainmentError(
-            f"Temp render path {tmp} escapes its output directory {parent}"
-        )
-    try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(content)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, target)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-    _enforce_mode(target, _GENERATED_RULE_FILE_MODE, "file")
 
 
 def _render_secure(
@@ -471,44 +469,81 @@ def sync_manager_config(project_dir: Path, cluster_key: str) -> Path:
     )
 
 
-def sync_suricata_misp_rule_baselines(project_dir: Path) -> Path:
-    """Seed MISP Suricata rule baselines into the ignored ``.aptl/`` tree.
+def build_suricata_volume_seeds(project_dir: Path) -> tuple[NamedVolumeSeed, ...]:
+    """Build the ADR-043 named-volume seed specs for Suricata runtime inputs.
 
-    The checked-in files under ``config/suricata/rules/misp/`` are source-owned
-    baselines. The running sync service writes generated IOC rules and hash
-    sidecars to ``.aptl/suricata/rules/misp/``, which Docker Compose mounts at
-    Suricata's existing ``/var/lib/suricata/rules/misp`` path.
+    Returns two :class:`NamedVolumeSeed`\\ s — the config seed
+    (``suricata.yaml`` + ``rules/local.rules``) and the MISP rule volume
+    (the four IOC baselines) — for the deployment backend to materialize
+    into Compose project-scoped named volumes. Replaces the previous
+    ``.aptl/`` host render: under ADR-043 nothing checked-in is bind-mounted
+    onto a path the Suricata image entrypoint chowns, so host ownership is
+    never rewritten.
 
-    Returns:
-        The generated rules directory.
+    Each source path is resolved through the existing containment check, so
+    a symlink escaping the project root is rejected before any seed
+    container runs. No I/O is performed here beyond ``stat``\\ s; the backend
+    runs the seed containers.
+
+    The MISP seed carries the canonical, symlink-checked legacy
+    ``.aptl/suricata/rules/misp`` bind directory as ``legacy_retire_path``
+    when it still exists, so the backend can retire that UID-991-owned tree.
 
     Raises:
-        PathContainmentError: if source or generated paths escape the project
-            root or the generated output path is symlinked.
-        FileNotFoundError: if any required baseline seed file is missing.
-        NotADirectoryError: if the source baseline path is not a directory.
+        PathContainmentError: if a source path escapes the project root, or
+            the legacy retire path resolves through a symlinked component.
+        FileNotFoundError: if a required source file is missing.
+        NotADirectoryError: if a source directory is missing or not a dir.
     """
-    source_dir = _resolve_within_project(
+    config_src = _resolve_within_project(
+        project_dir, _SURICATA_CONFIG_SOURCE_RELPATH
+    )
+    if not config_src.is_dir():
+        raise NotADirectoryError(
+            f"Suricata config source dir not found: {config_src}"
+        )
+    config_files: list[SeedFile] = []
+    for src_rel, dest_rel in _SURICATA_CONFIG_SEED_FILES:
+        source_file = config_src / src_rel
+        if not source_file.is_file():
+            raise FileNotFoundError(
+                f"Suricata config seed source not found: {source_file}"
+            )
+        config_files.append(SeedFile(src=src_rel, dest=dest_rel))
+
+    misp_src = _resolve_within_project(
         project_dir, _SURICATA_MISP_RULES_SOURCE_RELPATH
     )
-    if not source_dir.is_dir():
-        raise NotADirectoryError(f"Suricata MISP rule baseline dir not found: {source_dir}")
-
-    output_dir = _canonical_generated_path(
-        project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    _enforce_mode(output_dir, _GENERATED_RULE_DIR_MODE, "directory")
-    _canonical_generated_path(project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH)
-
-    for filename in _SURICATA_MISP_RULE_FILES:
-        source_file = source_dir / filename
-        if not source_file.is_file():
-            raise FileNotFoundError(f"Suricata MISP rule baseline not found: {source_file}")
-        output_file = _canonical_generated_path(
-            project_dir, RENDERED_SURICATA_MISP_RULES_RELPATH / filename
+    if not misp_src.is_dir():
+        raise NotADirectoryError(
+            f"Suricata MISP rule baseline dir not found: {misp_src}"
         )
-        _atomic_write_generated_bytes(output_file, source_file.read_bytes())
+    misp_files: list[SeedFile] = []
+    for filename in _SURICATA_MISP_RULE_FILES:
+        source_file = misp_src / filename
+        if not source_file.is_file():
+            raise FileNotFoundError(
+                f"Suricata MISP rule baseline not found: {source_file}"
+            )
+        misp_files.append(SeedFile(src=filename, dest=filename))
 
-    log.info("Seeded Suricata MISP rule baselines to %s", output_dir)
-    return output_dir
+    # Canonicalize the legacy bind dir for containment (rejecting a
+    # symlinked chain) even though we only retire it when it exists — a
+    # fresh checkout has nothing to clean up.
+    legacy = _canonical_generated_path(
+        project_dir, _SURICATA_LEGACY_MISP_RELPATH
+    )
+    legacy_retire = legacy if legacy.exists() else None
+
+    config_seed = NamedVolumeSeed(
+        volume_suffix=SURICATA_CONFIG_SEED_VOLUME,
+        source_dir=config_src,
+        files=tuple(config_files),
+    )
+    misp_seed = NamedVolumeSeed(
+        volume_suffix=SURICATA_MISP_RULES_VOLUME,
+        source_dir=misp_src,
+        files=tuple(misp_files),
+        legacy_retire_path=legacy_retire,
+    )
+    return (config_seed, misp_seed)

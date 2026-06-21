@@ -1,12 +1,35 @@
 import type { Handle } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function isCrossOriginMutatingRequest(request: Request, expectedOrigin: string): boolean {
+	if (!MUTATING_METHODS.has(request.method)) {
+		return false;
+	}
+
+	const secFetchSite = request.headers.get('sec-fetch-site');
+	if (secFetchSite === 'cross-site') {
+		return true;
+	}
+
+	const origin = request.headers.get('origin');
+	if (origin !== null && origin !== expectedOrigin) {
+		return true;
+	}
+
+	return false;
+}
+
 /**
  * Server-side proxy for all /api/* requests (ADR-039).
  *
  * The SvelteKit server injects the bearer token so the browser never needs to
  * carry it in request headers or URLs. Streaming responses (SSE) are forwarded
  * unchanged, preserving the EventSource protocol.
+ *
+ * Mutating requests must be same-origin (Origin / Sec-Fetch-Site gate) so a
+ * malicious page cannot trigger blind lab lifecycle changes through the proxy.
  */
 export const handle: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/api/')) {
@@ -16,6 +39,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (!token) {
 			return new Response(JSON.stringify({ detail: 'API token not configured on server' }), {
 				status: 503,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+
+		if (isCrossOriginMutatingRequest(event.request, event.url.origin)) {
+			return new Response(JSON.stringify({ detail: 'Cross-origin API request rejected' }), {
+				status: 403,
 				headers: { 'Content-Type': 'application/json' }
 			});
 		}

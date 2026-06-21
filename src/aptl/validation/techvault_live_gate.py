@@ -219,6 +219,11 @@ def validate_live_deployment(
     state = LiveGateState()
     results: list[LiveGateCheck] = []
 
+    run_id_check = checks.check_run_id_input(opts)
+    results.append(run_id_check)
+    if not run_id_check.passed:
+        return _report(scenario_path, run_id, opts, results)
+
     # 1. Static prerequisite — parse/compile/conformance/parity must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
     scenario, static_check = checks.check_static_prerequisite(

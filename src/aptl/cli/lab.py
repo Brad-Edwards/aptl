@@ -277,12 +277,19 @@ def validate_live(
     fast CI: it needs Docker, the SOC stack's resources, and minutes of startup.
     """
     from aptl.cli._common import resolve_config_for_cli, resolve_run_store
+    from aptl.core.runstore import _validate_id
     from aptl.validation.techvault_live_gate import (
         LiveGateOptions,
         validate_live_deployment,
     )
 
     config, project_root = resolve_config_for_cli(project_dir)
+    if run_id is not None:
+        try:
+            _validate_id(run_id, "run_id")
+        except ValueError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=2)
     if not skip_clean_boot and not yes:
         typer.echo(_LIVE_GATE_WARNING)
         if not typer.confirm("  Continue?", default=False):

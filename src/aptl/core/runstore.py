@@ -16,7 +16,7 @@ callers must not route control-plane secrets through them.
 import json
 import re
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Protocol, TypedDict
 
 from aptl.utils.logging import get_logger
@@ -52,6 +52,20 @@ def _validate_id(value: str, kind: str) -> str:
         # path-traversal segment. Reject defensively.
         raise ValueError(f"invalid {kind} (contains '..'): {value!r}")
     return value
+
+
+def _validate_relative_path(relative_path: str) -> str:
+    """Reject relative paths that could escape a run directory."""
+    if not isinstance(relative_path, str) or not relative_path:
+        raise ValueError(f"invalid relative_path: {relative_path!r}")
+    if Path(relative_path).is_absolute():
+        raise ValueError(f"invalid relative_path (absolute): {relative_path!r}")
+    parts = PurePosixPath(relative_path.replace("\\", "/")).parts
+    if ".." in parts:
+        raise ValueError(
+            f"invalid relative_path (contains '..'): {relative_path!r}"
+        )
+    return relative_path
 
 
 def _safe_default(obj: Any) -> str:
@@ -116,20 +130,36 @@ class LocalRunStore:
     """
 
     def __init__(self, base_dir: Path) -> None:
-        self._base_dir = base_dir
+        self._base_dir = base_dir.resolve()
 
     @property
     def base_dir(self) -> Path:
         return self._base_dir
 
+    def _run_dir(self, run_id: str) -> Path:
+        """Return the resolved run directory after validating ``run_id``."""
+        safe_run_id = _validate_id(run_id, "run_id")
+        return (self._base_dir / safe_run_id).resolve()
+
+    def _resolve_run_target(self, run_id: str, relative_path: str) -> Path:
+        """Resolve a write/read target under ``<base_dir>/<run_id>/``."""
+        run_dir = self._run_dir(run_id)
+        safe_rel = _validate_relative_path(relative_path)
+        target = (run_dir / safe_rel).resolve()
+        if not target.is_relative_to(run_dir):
+            raise ValueError(
+                f"invalid relative_path (escapes run dir): {relative_path!r}"
+            )
+        return target
+
     def create_run(self, run_id: str) -> Path:
-        run_dir = self._base_dir / run_id
+        run_dir = self._run_dir(run_id)
         run_dir.mkdir(parents=True, exist_ok=True)
         log.info("Created run directory: %s", run_dir)
         return run_dir
 
     def write_file(self, run_id: str, relative_path: str, data: bytes) -> None:
-        target = self._base_dir / run_id / relative_path
+        target = self._resolve_run_target(run_id, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
         log.debug("Wrote %d bytes to %s", len(data), target)
@@ -166,7 +196,7 @@ class LocalRunStore:
         """
         if not records:
             return
-        target = self._base_dir / run_id / relative_path
+        target = self._resolve_run_target(run_id, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         # Redact each record at the persistence boundary (ADR-029).
         lines = [
@@ -179,7 +209,7 @@ class LocalRunStore:
         log.debug("Appended %d JSONL records to %s", len(records), target)
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
-        target = self._base_dir / run_id / relative_path
+        target = self._resolve_run_target(run_id, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         log.debug("Copied %s -> %s", source, target)
@@ -194,13 +224,13 @@ class LocalRunStore:
         return runs
 
     def get_run_manifest(self, run_id: str) -> dict:
-        manifest_path = self._base_dir / run_id / "manifest.json"
+        manifest_path = self._resolve_run_target(run_id, "manifest.json")
         if not manifest_path.exists():
             raise FileNotFoundError(f"No manifest for run {run_id}")
         return json.loads(manifest_path.read_text(encoding="utf-8"))
 
     def get_run_path(self, run_id: str) -> Path:
-        return self._base_dir / run_id
+        return self._run_dir(run_id)
 
     # ------------------------------------------------------------------
     # OBS-003: per-session subdirectory contract.
@@ -215,12 +245,11 @@ class LocalRunStore:
     # ------------------------------------------------------------------
 
     def mcp_side_dir(self, run_id: str) -> Path:
-        return self._base_dir / _validate_id(run_id, "run_id") / "mcp-side"
+        return self._run_dir(run_id) / "mcp-side"
 
     def kali_side_session_dir(self, run_id: str, session_id: str) -> Path:
         return (
-            self._base_dir
-            / _validate_id(run_id, "run_id")
+            self._run_dir(run_id)
             / "kali-side"
             / _validate_id(session_id, "session_id")
         )

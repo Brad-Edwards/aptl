@@ -128,6 +128,19 @@ def check_static_prerequisite(
 # --------------------------------------------------------------------------- #
 
 
+def check_run_id_input(options: "LiveGateOptions") -> LiveGateCheck:
+    """Reject caller-supplied run ids that could escape the run archive tree."""
+    from aptl.core.runstore import _validate_id
+
+    if options.run_id is None:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+    try:
+        _validate_id(options.run_id, "run_id")
+    except ValueError as exc:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [str(exc)])
+    return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+
+
 def check_boot_inputs_match_public_path(
     scenario_path: Path,
     *,

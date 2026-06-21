@@ -161,7 +161,11 @@ def test_suricata_inventory_note_declares_scope_and_gap_caveats():
         "content.suricata-*",
         "no `accounts` entries",
         "no remaining blocker",
-        "not as clean-lab rebuild proof",
+        # ADR-043 (issue #325) recaptured the runtime/mount evidence on a
+        # clean-rebuilt lab; the image-level evidence is carried forward.
+        "recaptured after ADR-043",
+        "clean-rebuilt lab",
+        "carried forward from the prior capture",
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Suricata inventory note missing scope markers: {missing}"
@@ -460,7 +464,7 @@ def test_techvault_sdl_encodes_suricata_authored_content_and_no_accounts():
         assert entry.type.value == "file"
         assert entry.source.name.startswith("config/suricata/")
         assert entry.source.version.startswith("sha256:")
-    # the two direct binds and the three verbatim MISP hash-list sidecars are present
+    # the two wrapper-staged config files (ADR-043) and the MISP hash-list sidecars are present
     paths = {e.path for e in content.values()}
     assert "/etc/suricata/suricata.yaml" in paths
     assert "/etc/suricata/rules/local.rules" in paths

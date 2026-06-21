@@ -777,8 +777,17 @@ class TestOrchestrateLabStart:
         # Mock credentials sync
         mocks["dashboard_creds"] = mocker.patch("aptl.core.lab.sync_dashboard_config")
         mocks["manager_creds"] = mocker.patch("aptl.core.lab.sync_manager_config")
-        mocks["suricata_misp_rules"] = mocker.patch(
-            "aptl.core.lab.sync_suricata_misp_rule_baselines"
+        # ADR-043: the suricata step builds typed seed specs then asks the
+        # backend to materialize them into named volumes. Stub the spec
+        # builder (no config/suricata/ source needed) and no-op the backend
+        # Docker call so the orchestration tests never shell out.
+        mocks["suricata_seeds"] = mocker.patch(
+            "aptl.core.lab.build_suricata_volume_seeds",
+            return_value=(),
+        )
+        mocks["suricata_seed_volumes"] = mocker.patch(
+            "aptl.core.deployment.docker_compose."
+            "DockerComposeBackend.seed_named_volumes",
         )
 
         # Mock certs
@@ -955,7 +964,11 @@ class TestOrchestrateLabStart:
         call_args = mocks["manager_creds"].call_args
         assert call_args[0][1] == "clusterkey"
 
-        mocks["suricata_misp_rules"].assert_called_once_with(tmp_path)
+        mocks["suricata_seeds"].assert_called_once_with(tmp_path)
+        from aptl.core.lab import SURICATA_IMAGE
+        mocks["suricata_seed_volumes"].assert_called_once_with(
+            (), seeder_image=SURICATA_IMAGE
+        )
 
     def test_stops_on_cert_generation_failure(self, mocker, tmp_path):
         """Should fail if certificate generation fails."""
@@ -1009,17 +1022,22 @@ class TestOrchestrateLabStart:
         # Containers must not start after a failed render.
         mocks["start"].assert_not_called()
 
-    def test_aborts_when_suricata_misp_rule_seed_fails(self, mocker, tmp_path):
-        """MISP rule baselines are mandatory bind-mount sources under .aptl/."""
+    def test_aborts_when_suricata_volume_seed_fails(self, mocker, tmp_path):
+        """Seeding the Suricata named volumes is mandatory before start (ADR-043)."""
+        from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["suricata_misp_rules"].side_effect = RuntimeError("seed failed")
+        mocks["suricata_seed_volumes"].side_effect = BackendSeedError(
+            "Seeding named volume 'suricata_config_seed' failed"
+        )
 
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is False
-        assert "suricata misp" in (result.error or "").lower()
+        assert "suricata runtime volume seeding failed" in (
+            result.error or ""
+        ).lower()
         mocks["certs"].assert_not_called()
         mocks["start"].assert_not_called()
 
@@ -1274,58 +1292,109 @@ class TestSyncCredentialsStep:
         assert "<key>cluster_key</key>" in rendered_manager.read_text()
 
 
-class TestSyncSuricataMispRuleBaselinesStep:
-    """Direct tests for ADR-028 Suricata MISP rule baseline seeding."""
+def _write_suricata_seed_sources(tmp_path):
+    """Create the checked-in config/suricata/ source tree the seed reads."""
+    config_dir = tmp_path / "config" / "suricata"
+    (config_dir / "rules" / "misp").mkdir(parents=True)
+    (config_dir / "suricata.yaml").write_text("# engine config\n")
+    (config_dir / "rules" / "local.rules").write_text("# local rules\n")
+    for name in (
+        "misp-iocs.rules",
+        "misp-md5.list",
+        "misp-sha1.list",
+        "misp-sha256.list",
+    ):
+        (config_dir / "rules" / "misp" / name).write_text(f"# {name}\n")
+    return config_dir
 
-    def _ctx(self, tmp_path):
+
+class TestSeedSuricataVolumesStep:
+    """Direct tests for ADR-043 Suricata named-volume seeding."""
+
+    def _ctx(self, tmp_path, backend):
         from aptl.core.lab import _LabStartContext
 
-        # `backend` is required by the issue #214 runtime contract on
-        # `_step_sync_suricata_misp_rule_baselines`; supply a stub so
-        # the local-render path under test is reachable.
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
-            backend=MagicMock(),
+            backend=backend,
         )
 
-    def test_seeds_to_aptl_tree_and_leaves_source_untouched(self, tmp_path):
-        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+    def test_builds_seeds_and_delegates_to_backend(self, tmp_path):
+        from aptl.core.lab import SURICATA_IMAGE, _step_seed_suricata_volumes
 
-        source_dir = tmp_path / "config" / "suricata" / "rules" / "misp"
-        source_dir.mkdir(parents=True)
-        baselines = {
-            "misp-iocs.rules": "# baseline rules\n",
-            "misp-md5.list": "# md5 baseline\n",
-            "misp-sha1.list": "# sha1 baseline\n",
-            "misp-sha256.list": "# sha256 baseline\n",
+        config_dir = _write_suricata_seed_sources(tmp_path)
+        before = {
+            p.relative_to(config_dir): p.read_bytes()
+            for p in config_dir.rglob("*")
+            if p.is_file()
         }
-        for name, content in baselines.items():
-            (source_dir / name).write_text(content)
-        before = {path.name: path.read_bytes() for path in source_dir.iterdir()}
+        backend = MagicMock()
 
-        result = _step_sync_suricata_misp_rule_baselines(self._ctx(tmp_path))
+        result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
 
         assert result is None
-        assert {path.name: path.read_bytes() for path in source_dir.iterdir()} == before
-        generated_dir = tmp_path / ".aptl" / "suricata" / "rules" / "misp"
-        for name, content in baselines.items():
-            assert (generated_dir / name).read_text() == content
+        # Source tree is read-only to the seed path — untouched.
+        after = {
+            p.relative_to(config_dir): p.read_bytes()
+            for p in config_dir.rglob("*")
+            if p.is_file()
+        }
+        assert after == before
+        # The backend was handed the two typed seeds plus the seeder image.
+        backend.seed_named_volumes.assert_called_once()
+        call = backend.seed_named_volumes.call_args
+        seeds = call.args[0]
+        assert call.kwargs["seeder_image"] == SURICATA_IMAGE
+        suffixes = {s.volume_suffix for s in seeds}
+        assert suffixes == {"suricata_config_seed", "suricata_misp_rules"}
 
-    def test_seed_error_aborts_lab_start_step(self, mocker, tmp_path):
-        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+    def test_seed_error_aborts_lab_start_step(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+        from aptl.core.lab import _step_seed_suricata_volumes
 
-        ctx = self._ctx(tmp_path)
-        mocker.patch(
-            "aptl.core.lab.sync_suricata_misp_rule_baselines",
-            side_effect=FileNotFoundError("missing baseline"),
+        _write_suricata_seed_sources(tmp_path)
+        backend = MagicMock()
+        backend.seed_named_volumes.side_effect = BackendSeedError(
+            "Seeding named volume 'suricata_config_seed' failed"
         )
 
-        result = _step_sync_suricata_misp_rule_baselines(ctx)
+        result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
 
         assert result is not None
         assert result.success is False
-        assert "suricata misp" in (result.error or "").lower()
+        assert "suricata runtime volume seeding failed" in (
+            result.error or ""
+        ).lower()
+
+    def test_missing_source_aborts_step(self, tmp_path):
+        from aptl.core.lab import _step_seed_suricata_volumes
+
+        # No config/suricata/ tree on disk — the spec builder raises and the
+        # step returns a fatal result without calling the backend.
+        backend = MagicMock()
+
+        result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
+
+        assert result is not None
+        assert result.success is False
+        backend.seed_named_volumes.assert_not_called()
+
+    def test_ssh_remote_backend_refused(self, tmp_path):
+        """The seed reads host source the remote daemon can't see — refuse."""
+        from aptl.core.deployment import SSHComposeBackend
+        from aptl.core.lab import _step_seed_suricata_volumes
+
+        _write_suricata_seed_sources(tmp_path)
+        backend = SSHComposeBackend(
+            tmp_path, host="lab.example.com", user="deploy"
+        )
+
+        result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
+
+        assert result is not None
+        assert result.success is False
+        assert "remote docker daemon" in (result.error or "").lower()
 
 
 class TestStartupClassificationWiring:
@@ -2171,16 +2240,16 @@ class TestLabOrchestrationContracts:
         with pytest.raises(icontract.ViolationError):
             _step_sync_credentials(ctx)
 
-    def test_sync_suricata_baselines_without_backend_raises_violation(self, tmp_path):
-        """Same SSHComposeBackend fall-through as `_step_sync_credentials`."""
+    def test_seed_suricata_volumes_without_backend_raises_violation(self, tmp_path):
+        """Same backend-initialized contract as `_step_sync_credentials`."""
         import icontract
 
-        from aptl.core.lab import _step_sync_suricata_misp_rule_baselines
+        from aptl.core.lab import _step_seed_suricata_volumes
 
         ctx = self._ctx(tmp_path)
         # backend stays None
         with pytest.raises(icontract.ViolationError):
-            _step_sync_suricata_misp_rule_baselines(ctx)
+            _step_seed_suricata_volumes(ctx)
 
     def test_capture_snapshot_without_backend_raises_violation(self, tmp_path):
         """`capture_snapshot(backend=None)` is meaningless; refuse rather
@@ -2625,3 +2694,19 @@ class TestTerminalHostKeyPinningStep:
 
         # A pinning failure must never abort an otherwise-healthy lab start.
         assert _step_pin_terminal_host_keys(ctx) is None
+
+
+class TestSuricataSeederImagePin:
+    """The seeder image (ADR-043) must match the suricata service image."""
+
+    def test_seeder_image_matches_compose(self):
+        import yaml
+
+        from aptl.core.lab import SURICATA_IMAGE
+
+        compose = yaml.safe_load(
+            Path("docker-compose.yml").read_text(encoding="utf-8")
+        )
+        assert (
+            compose["services"]["suricata"]["image"] == SURICATA_IMAGE
+        ), "SURICATA_IMAGE drifted from the suricata service image"

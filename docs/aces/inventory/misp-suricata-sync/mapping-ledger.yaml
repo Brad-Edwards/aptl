@@ -29,9 +29,9 @@ notes:
   for the catalogued misp-suricata-sync steady-state facts.'
 - MISP_API_KEY is the lab MISP admin API key — the same secret_fixture value already disclosed on nodes.techvault.misp (ADMIN_KEY).
   It is retained verbatim in committed evidence and SDL because it is TechVault scenario content.
-- /var/run/suricata is the suricata asset's command-socket volume and /var/lib/suricata/rules/misp is a shared host bind;
-  the socket and the suricata-owned hash-list files are recorded here as path/metadata with cross-references to the suricata
-  asset inventory.
+- /var/run/suricata is the suricata asset's command-socket volume and /var/lib/suricata/rules/misp is the shared
+  aptl_suricata_misp_rules named volume (ADR-043); the socket and the suricata-owned hash-list files are recorded here as
+  path/metadata with cross-references to the suricata asset inventory.
 - Rules generation is alert-only per ADR-019 (Suricata stays IDS); the generated misp-iocs.rules held ioc_count=0 at the capture
   snapshot.
 correspondence_checks:
@@ -171,8 +171,8 @@ facts:
 - id: misp-suricata-sync.compose.service-contract
   category: compose
   summary: Compose declares aptl-misp-suricata-sync, a local build, ten env vars (MISP_API_KEY as an interpolation template),
-    128m memory limit, the socket volume + two binds, depends_on misp healthy / suricata started, and security-net address
-    172.20.0.19.
+    128m memory limit, the socket volume + the shared misp-rules volume + the lab-CA bind, depends_on misp healthy /
+    suricata started, and security-net address 172.20.0.19.
   evidence:
   - path: evidence/compose-service.misp-suricata-sync.json
   - path: evidence/docker-compose-version.json
@@ -224,10 +224,12 @@ facts:
     rationale: Current ACES SDL node network fields carry the realized endpoint and no-published-port facts directly.
 - id: misp-suricata-sync.runtime.mounts-volume
   category: runtime
-  summary: 'Three mounts: the shared suricata_command_socket volume rw at /var/run/suricata, the .aptl/suricata/rules/misp
-    host bind rw at /var/lib/suricata/rules/misp, and the lab CA pem ro at /etc/lab-ca/lab-ca.pem.'
+  summary: 'Three mounts: the shared suricata_command_socket volume rw at /var/run/suricata, the shared
+    aptl_suricata_misp_rules named volume rw at /var/lib/suricata/rules/misp (ADR-043; formerly a .aptl host bind), and the
+    lab CA pem ro at /etc/lab-ca/lab-ca.pem.'
   evidence:
   - path: evidence/docker-volume.suricata_command_socket.json
+  - path: evidence/docker-volume.suricata_misp_rules.json
   - path: evidence/docker-inspect.container.json
   - path: evidence/runtime-baseline.txt
   aces:
@@ -237,7 +239,7 @@ facts:
     - nodes
     fields:
     - nodes.techvault.misp-suricata-sync.runtime.mounts
-    rationale: Current ACES SDL node runtime.mounts carries the volume and bind mounts directly.
+    rationale: Current ACES SDL node runtime.mounts carries the volume mounts directly.
     caveat: ACES models the shared socket volume as a node mount with the volume name as source; there is no typed cross-node
       volume-ownership reference, consistent with the sidecar inventory precedent. The socket itself belongs to the suricata
       asset.
@@ -260,7 +262,7 @@ facts:
     rationale: Current ACES SDL node runtime.filesystem_inventory carries the path/metadata/checksum facts directly.
     caveat: The manifest is scoped to application surfaces; __pycache__ bytecode and third-party site-packages trees are excluded
       (SBOM + pip list evidence the dependency closure). The hash-list sidecar files are the suricata asset's authored content,
-      visible via the shared bind.
+      visible via the shared aptl_suricata_misp_rules volume.
 - id: misp-suricata-sync.runtime.process-tree
   category: runtime
   summary: PID 1 is the single python3.11 aptl-misp-suricata-sync process (root); no supervisor, no worker pool.
@@ -312,8 +314,9 @@ facts:
       fixture already disclosed on nodes.techvault.misp.
 - id: misp-suricata-sync.runtime.linux-capabilities
   category: runtime
-  summary: PID 1 holds the default Docker capability set (00000000a80425fb); no cap_add. The service runs as root for host-bind
-    ownership compatibility, not for added kernel capabilities.
+  summary: PID 1 holds the default Docker capability set (00000000a80425fb); no cap_add. The service runs as root to write
+    misp-iocs.rules into the shared aptl_suricata_misp_rules volume (whose tree the suricata entrypoint chowns), not for added
+    kernel capabilities.
   evidence:
   - path: evidence/runtime-baseline.txt
   - path: evidence/docker-inspect.container.json
@@ -469,7 +472,7 @@ facts:
       verification.
 - id: misp-suricata-sync.relationship.updates-suricata-rules
   category: relationship
-  summary: The service hands rules to the suricata node via the shared rules bind and triggers reloads via the shared unix-command
+  summary: The service hands rules to the suricata node via the shared aptl_suricata_misp_rules volume and triggers reloads via the shared unix-command
     socket (suricata side confirms the same file and socket).
   evidence:
   - path: evidence/sync-service-state.txt

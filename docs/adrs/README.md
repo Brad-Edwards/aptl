@@ -64,3 +64,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [040](adr-040-terminal-ssh-host-key-verification.md) | Terminal SSH Host-Key Verification Boundary | accepted | 2026-06-13 |
 | [041](adr-041-kali-capture-sidecar-ownership-boundary.md) | Kali Capture Sidecar Ownership Boundary (PTY-typescript residual superseded by ADR-042) | accepted (amended) | 2026-06-20 |
 | [042](adr-042-sidecar-owned-pty-master.md) | Sidecar-Owned PTY Master for Kali Transcript Authenticity | accepted | 2026-06-20 |
+| [043](adr-043-suricata-runtime-config-ownership-boundary.md) | Suricata Runtime Config Ownership Boundary | accepted | 2026-06-20 |

@@ -13,10 +13,14 @@ catalogued observable — including the sensor posture and the IDS detection
 engine — is now encoded in `scenarios/techvault.sdl.yaml` to the same depth as
 the other inventories, with no remaining blocker.
 
-This capture is non-destructive. It used the already-running local `aptl`
-project (soc profile) on 2026-05-28 and did not run
-`aptl lab stop -v && aptl lab start`. Treat this bundle as a frozen observation
-of that local steady state, not as clean-lab rebuild proof.
+The runtime/mount evidence in this bundle was recaptured after ADR-043
+(issue #325) on a clean-rebuilt lab: two consecutive
+`aptl lab stop -v && aptl lab start` cycles preceded the capture, so it reflects
+the named-volume-seeded steady state rather than the pre-fix host-bind topology.
+The image-level evidence (SBOM, vulnerability scan, image history) is
+**carried forward from the prior capture** because the `jasonish/suricata:7.0`
+image config ID is byte-identical (`sha256:66cbeff9c0db…`); only a trivy-DB
+refresh would have churned the vuln counts, which is unrelated to this change.
 
 The SDL encoding is authored into the decomposed TechVault module tree
 (`scenarios/techvault/nodes/suricata.sdl.yaml` plus the `sections/*` and the
@@ -74,9 +78,11 @@ surfaces (`network_sensors`, `network_detection_engines`, `forwarding_agents`,
   realized linux/amd64 platform manifest is `sha256:ec2c37d988…` and the local
   image config ID is `sha256:66cbeff9c0db…` (these are distinct identities — the
   config ID is not the upstream registry digest).
-  The APTL repo contributes the Compose service and the bind-mounted
-  `config/suricata/suricata.yaml` + `config/suricata/rules/local.rules`, not the
-  upstream Dockerfile.
+  The APTL repo contributes the Compose service and the authored
+  `config/suricata/suricata.yaml` + `config/suricata/rules/local.rules` — seeded
+  into the `suricata_config_seed` named volume and staged into `/etc/suricata` by
+  the ADR-043 wrapper entrypoint (issue #325), not bind-mounted — not the upstream
+  Dockerfile.
 - PID 1 is `suricata … --pcap`, dropped to the `suricata` user/group. The engine
   runs in **packet-capture (IDS) mode on `interface: any`** and is attached to
   the DMZ, internal, and security networks — it observes the traffic of all three.

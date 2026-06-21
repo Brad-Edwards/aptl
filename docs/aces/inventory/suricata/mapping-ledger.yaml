@@ -86,7 +86,7 @@ facts:
     rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
 - id: suricata.compose.service
   category: runtime-configuration
-  summary: Compose profile soc realizes the service with upstream image, command --pcap, cap_add, bind/volume mounts, memory limit, and three network attachments.
+  summary: Compose profile soc realizes the service with upstream image, a wrapper entrypoint that stages the seeded config then runs suricata --pcap (ADR-043), cap_add, named-volume mounts, memory limit, and three network attachments.
   evidence:
   - path: evidence/compose-service.suricata.json
   - path: evidence/source-checksums.txt
@@ -129,11 +129,13 @@ facts:
     rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
 - id: suricata.runtime.mount-table
   category: runtime-configuration
-  summary: The container mounts the authored suricata.yaml and local.rules binds, the lab-seeded MISP rules bind, named volumes for logs and the command socket, and anonymous image volumes at /etc/suricata and /var/lib/suricata.
+  summary: The container mounts the seeded config volume (read-only at /seed) and the shared MISP rules volume (ADR-043), named volumes for logs and the command socket, and anonymous image volumes at /etc/suricata and /var/lib/suricata; the wrapper entrypoint stages /seed into the image-owned /etc/suricata so no host path is bound onto a chowned directory (issue #325).
   evidence:
   - path: evidence/docker-inspect.container.json
   - path: evidence/docker-volume.suricata-logs.json
   - path: evidence/docker-volume.suricata-command-socket.json
+  - path: evidence/docker-volume.suricata-config-seed.json
+  - path: evidence/docker-volume.suricata-misp-rules.json
   - path: evidence/runtime-baseline.txt
   aces:
     disposition: encoded
@@ -262,7 +264,7 @@ facts:
     rationale: Current ACES SDL has a typed runtime surface for this captured fact; evidence remains provenance, not a substitute for the SDL encoding.
 - id: suricata.content.authored-config
   category: content
-  summary: 'APTL authors six files placed on the node: suricata.yaml and local.rules (bind-mounted), plus four MISP baselines under config/suricata/rules/misp. Five are placed verbatim (on-node checksums match the repo source exactly); misp-iocs.rules is a seeded baseline the misp-suricata-sync service rewrites at runtime.'
+  summary: 'APTL authors six files placed on the node: suricata.yaml and local.rules (seeded into the suricata_config_seed volume and staged into /etc/suricata by the ADR-043 wrapper entrypoint), plus four MISP baselines under config/suricata/rules/misp. Five are placed verbatim (on-node checksums match the repo source exactly); misp-iocs.rules is a seeded baseline the misp-suricata-sync service rewrites at runtime.'
   evidence:
   - path: evidence/source-checksums.txt
   - path: evidence/filesystem-checksums.txt

@@ -258,17 +258,17 @@ nodes:
         description: Shared suricata_command_socket named volume (the suricata asset's command-socket directory). The sync
           service connects to suricata-command.socket to trigger rule reloads.
       - target: /var/lib/suricata/rules/misp
-        source: .aptl/suricata/rules/misp
-        source_kind: bind
-        filesystem_type: bind
+        source: aptl_suricata_misp_rules
+        source_kind: volume
+        filesystem_type: volume
         read_only: false
         options:
         - rw
-        propagation: rprivate
-        stability: runtime_created
-        backend_generated: false
-        description: Host bind mount where the service atomically rewrites misp-iocs.rules each sync cycle; the suricata node
-          consumes the same directory.
+        propagation: unknown
+        stability: volume_backed
+        backend_generated: true
+        description: Shared aptl_suricata_misp_rules named volume (ADR-043; seeded at lab start, formerly a .aptl host bind)
+          where the service atomically rewrites misp-iocs.rules each sync cycle; the suricata node consumes the same volume.
       - target: /etc/lab-ca/lab-ca.pem
         source: config/soc_certs/lab-ca.pem
         source_kind: bind
@@ -501,7 +501,7 @@ nodes:
         provenance: docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz; docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
         stability: stable
         sensitivity: plain
-        description: Rules handoff directory (host bind .aptl/suricata/rules/misp) shared with the suricata node.
+        description: Rules handoff directory (shared aptl_suricata_misp_rules named volume, ADR-043) shared with the suricata node.
       - path: /var/lib/suricata/rules/misp/misp-iocs.rules
         entry_type: file
         owner_user: root

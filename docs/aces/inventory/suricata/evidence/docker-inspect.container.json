@@ -37,9 +37,8 @@
     "HostConfig": {
       "Binds": [
         "aptl_suricata_command_socket:/var/run/suricata:rw",
-        "/home/atomik/src/aptl/.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw",
-        "/home/atomik/src/aptl/config/suricata/suricata.yaml:/etc/suricata/suricata.yaml:rw",
-        "/home/atomik/src/aptl/config/suricata/rules/local.rules:/etc/suricata/rules/local.rules:rw",
+        "aptl_suricata_misp_rules:/var/lib/suricata/rules/misp:rw",
+        "aptl_suricata_config_seed:/seed:ro",
         "aptl_suricata_logs:/var/log/suricata:rw"
       ],
       "ContainerIDFile": "",
@@ -147,6 +146,36 @@
     "Mounts": [
       {
         "Type": "volume",
+        "Name": "aptl_suricata_command_socket",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_command_socket/_data",
+        "Destination": "/var/run/suricata",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_misp_rules",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_misp_rules/_data",
+        "Destination": "/var/lib/suricata/rules/misp",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_config_seed",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_config_seed/_data",
+        "Destination": "/seed",
+        "Driver": "local",
+        "Mode": "ro",
+        "RW": false,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
         "Name": "aptl_suricata_logs",
         "Source": "/var/lib/docker/volumes/aptl_suricata_logs/_data",
         "Destination": "/var/log/suricata",
@@ -157,8 +186,8 @@
       },
       {
         "Type": "volume",
-        "Name": "14a58a4a4a906fc29860af3c524554593e16df93540ce4608e716a95920a26c8",
-        "Source": "/var/lib/docker/volumes/14a58a4a4a906fc29860af3c524554593e16df93540ce4608e716a95920a26c8/_data",
+        "Name": "880d38f9c4f688211ae77566a5a67dd969b917be2c45840e1db1630b4269f54b",
+        "Source": "/var/lib/docker/volumes/880d38f9c4f688211ae77566a5a67dd969b917be2c45840e1db1630b4269f54b/_data",
         "Destination": "/var/lib/suricata",
         "Driver": "local",
         "Mode": "",
@@ -167,47 +196,13 @@
       },
       {
         "Type": "volume",
-        "Name": "2684faf8161eeca969edb69adc0355cd24ad266ed1cb1b12d3fdc44b231d3f62",
-        "Source": "/var/lib/docker/volumes/2684faf8161eeca969edb69adc0355cd24ad266ed1cb1b12d3fdc44b231d3f62/_data",
+        "Name": "494dead9e1cad7edfc2a2fdf30ad514f09445f2e721b68de3084d8442429e365",
+        "Source": "/var/lib/docker/volumes/494dead9e1cad7edfc2a2fdf30ad514f09445f2e721b68de3084d8442429e365/_data",
         "Destination": "/etc/suricata",
         "Driver": "local",
         "Mode": "",
         "RW": true,
         "Propagation": ""
-      },
-      {
-        "Type": "volume",
-        "Name": "aptl_suricata_command_socket",
-        "Source": "/var/lib/docker/volumes/aptl_suricata_command_socket/_data",
-        "Destination": "/var/run/suricata",
-        "Driver": "local",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": ""
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/.aptl/suricata/rules/misp",
-        "Destination": "/var/lib/suricata/rules/misp",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/suricata/suricata.yaml",
-        "Destination": "/etc/suricata/suricata.yaml",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/config/suricata/rules/local.rules",
-        "Destination": "/etc/suricata/rules/local.rules",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
       }
     ],
     "Config": {
@@ -224,11 +219,7 @@
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG=C.utf8"
       ],
-      "Cmd": [
-        "-c",
-        "/etc/suricata/suricata.yaml",
-        "--pcap"
-      ],
+      "Cmd": null,
       "Image": "jasonish/suricata:7.0",
       "Volumes": {
         "/etc/suricata": {},
@@ -238,7 +229,9 @@
       },
       "WorkingDir": "/",
       "Entrypoint": [
-        "/docker-entrypoint.sh"
+        "/bin/sh",
+        "-c",
+        "set -e\nmkdir -p /etc/suricata/rules\ncp /seed/suricata.yaml /etc/suricata/suricata.yaml\ncp /seed/rules/local.rules /etc/suricata/rules/local.rules\nexec /docker-entrypoint.sh -c /etc/suricata/suricata.yaml --pcap\n"
       ],
       "Labels": {
         "com.docker.compose.config-hash": "8022e7992b9cfd5f33eec82f933df50beb679d94ffc6965082b09735ce1f2c0c",

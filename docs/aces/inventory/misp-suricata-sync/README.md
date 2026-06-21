@@ -22,10 +22,14 @@ integration edges are `relationships.misp-suricata-sync-queries-misp-api` and
 **No known ACES expressivity gap remains** for the catalogued steady-state
 facts.
 
-This capture is non-destructive. It used the already-running local `aptl`
-project (soc profile) on 2026-06-10 and **did not run
-`aptl lab stop -v && aptl lab start`**. Treat this bundle as a frozen
-observation of that local steady state, **not as clean-lab rebuild proof**.
+The runtime/mount evidence was recaptured after ADR-043 (issue #325) on a
+clean-rebuilt lab — two consecutive `aptl lab stop -v && aptl lab start` cycles
+preceded the capture — so the `/var/lib/suricata/rules/misp` mount now reflects
+the shared `aptl_suricata_misp_rules` named volume rather than the pre-fix
+`.aptl` host bind. The image-level evidence (SBOM, vulnerability scan, image
+history, OS packages) is carried forward from the prior capture: the locally
+built image and its trivy/package counts drift on every rebuild independently of
+this change, and that drift is out of scope for #325.
 
 ## Asset Summary
 

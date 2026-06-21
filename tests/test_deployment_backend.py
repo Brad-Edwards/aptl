@@ -1242,3 +1242,132 @@ class TestSSHComposeBackendValidation:
             tmp_path, host="example.com", user="deploy", ssh_port=2222,
         )
         assert backend.docker_host == "ssh://deploy@example.com:2222"
+
+
+class TestSeedNamedVolumes:
+    """ADR-043 named-volume seeding via short-lived root containers."""
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def _config_seed(self):
+        from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
+
+        return NamedVolumeSeed(
+            volume_suffix="suricata_config_seed",
+            source_dir=Path("/proj/config/suricata"),
+            files=(
+                SeedFile("suricata.yaml", "suricata.yaml"),
+                SeedFile("rules/local.rules", "rules/local.rules"),
+            ),
+        )
+
+    def _misp_seed_with_legacy(self):
+        from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
+
+        return NamedVolumeSeed(
+            volume_suffix="suricata_misp_rules",
+            source_dir=Path("/proj/config/suricata/rules/misp"),
+            files=(SeedFile("misp-iocs.rules", "misp-iocs.rules"),),
+            legacy_retire_path=Path("/proj/.aptl/suricata/rules/misp"),
+        )
+
+    def test_seed_runs_root_copy_into_project_scoped_volume(self, tmp_path):
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.seed_named_volumes(
+                [self._config_seed()], seeder_image="img:1"
+            )
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:7] == [
+            "docker", "run", "--rm", "--user", "0:0",
+            "--entrypoint", "/bin/sh",
+        ]
+        # Source is read-only (checked-in files can never be chowned),
+        # dest is the Compose project-scoped volume name.
+        assert "/proj/config/suricata:/src:ro" in cmd
+        assert "test_suricata_config_seed:/dest" in cmd
+        assert cmd[-3] == "img:1"
+        assert cmd[-2] == "-c"
+        script = cmd[-1]
+        assert "cp -a /src/suricata.yaml /dest/suricata.yaml" in script
+        assert "mkdir -p /dest/rules" in script
+        assert "cp -a /src/rules/local.rules /dest/rules/local.rules" in script
+
+    def test_legacy_path_retired_before_seed_as_root(self, tmp_path):
+        # The legacy .aptl tree may be UID-991-owned from a prior run, so the
+        # host operator cannot delete it; a root container mounts the
+        # host-owned parent and removes the one canonical child.
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.seed_named_volumes(
+                [self._misp_seed_with_legacy()], seeder_image="img:1"
+            )
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert len(calls) == 2
+        retire, seed = calls
+        assert retire[:5] == ["docker", "run", "--rm", "--user", "0:0"]
+        assert retire[5:7] == ["--entrypoint", "rm"]
+        assert "/proj/.aptl/suricata/rules:/legacy" in retire
+        assert retire[-2:] == ["-rf", "/legacy/misp"]
+        # Seed runs after the retire.
+        assert "test_suricata_misp_rules:/dest" in seed
+
+    def test_no_legacy_retire_when_path_absent(self, tmp_path):
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.seed_named_volumes(
+                [self._config_seed()], seeder_image="img:1"
+            )
+        # Exactly one container: the seed copy, no retire.
+        assert mock_run.call_count == 1
+
+    def test_seed_is_idempotent_across_runs(self, tmp_path):
+        # Root `cp -a` overwrites prior content, so the backend issues the
+        # same command on every start regardless of the volume's state —
+        # repeated `aptl lab start` is idempotent.
+        backend = self._backend(tmp_path)
+        seed = self._config_seed()
+        commands = []
+        for _ in range(2):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(
+                    returncode=0, stdout="", stderr=""
+                )
+                backend.seed_named_volumes([seed], seeder_image="img:1")
+                commands.append(mock_run.call_args[0][0])
+        assert commands[0] == commands[1]
+
+    def test_nonzero_exit_raises_without_leaking_stderr(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="secret docker stderr"
+            )
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.seed_named_volumes(
+                    [self._config_seed()], seeder_image="img:1"
+                )
+        assert "suricata_config_seed" in str(exc_info.value)
+        assert "secret docker stderr" not in str(exc_info.value)
+
+    def test_unsafe_relpath_rejected_before_any_container(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+        from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
+
+        backend = self._backend(tmp_path)
+        evil = NamedVolumeSeed(
+            volume_suffix="x",
+            source_dir=Path("/proj/src"),
+            files=(SeedFile("../../etc/passwd", "ok"),),
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes([evil], seeder_image="img:1")
+        mock_run.assert_not_called()

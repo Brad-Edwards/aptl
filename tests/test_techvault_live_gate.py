@@ -36,7 +36,8 @@ from aptl.validation.techvault_live_gate import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
+SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+FULL_INVENTORY_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 
 
 # --------------------------------------------------------------------------- #
@@ -404,6 +405,14 @@ def test_boot_inputs_fail_for_mismatched_scenario():
     assert any("does not match" in d for d in check.diagnostics)
 
 
+def test_boot_inputs_fail_for_full_inventory_scenario():
+    check = lgc.check_boot_inputs_match_public_path(
+        FULL_INVENTORY_SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
+    )
+    assert not check.passed
+    assert any("techvault-operational.sdl.yaml" in d for d in check.diagnostics)
+
+
 def test_boot_inputs_fail_for_mismatched_profile():
     check = lgc.check_boot_inputs_match_public_path(
         SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions(profile="evaluation")
@@ -727,7 +736,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
     assert manifest["evaluator_surfaces"]["profile"] == "orchestration-evaluation"
-    assert manifest["scenario"]["name"] == "techvault"
+    assert manifest["scenario"]["name"] == "techvault-operational"
 
 
 def test_run_archive_roundtrips_to_local_store(tmp_path):
@@ -843,6 +852,22 @@ def test_variation_passes_on_distinct_realizations(monkeypatch):
     assert check.passed
 
 
+def test_variation_accepts_core_otel_public_start_profile():
+    config = AptlConfig(
+        lab={"name": "techvault"},
+        containers={"enterprise": True, "wazuh": False, "victim": False, "kali": False},
+    )
+    state = _variation_state(
+        [_node("ad", ["enterprise"]), _node("aptl-grafana-otel", ["otel"])]
+    )
+
+    check = lgc.check_scenario_variation(
+        project_dir=PROJECT_ROOT, config=config, state=state
+    )
+
+    assert check.passed
+
+
 def test_variation_fails_on_collapse(monkeypatch):
     same = _Realization([_node("x", ["p"])], ["p"])
     monkeypatch.setattr(lgc, "interpret_provisioning_plan", lambda **k: same)
@@ -890,7 +915,9 @@ def test_variation_fails_on_realization_error(monkeypatch):
     reason="Set APTL_LIVE_GATE=1 to run the destructive live deployment gate",
 )
 def test_live_gate_passes_on_techvault():
-    config = AptlConfig(lab={"name": "techvault"})
+    from aptl.core.config import load_config
+
+    config = load_config(PROJECT_ROOT / "aptl.json")
     report = validate_live_deployment(
         SCENARIO, project_dir=PROJECT_ROOT, config=config
     )
@@ -907,7 +934,7 @@ def _patch_cli(mocker, *, passed=True):
 
     report = LiveGateReport(
         "scn",
-        "provisioning-only",
+        "orchestration-evaluation",
         "rid",
         (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )

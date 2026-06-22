@@ -360,7 +360,7 @@ def parse_sdl(
     # Construct the Pydantic model (structural validation)
     try:
         scenario = Scenario(**data)
-    except ValidationError as e:
+    except (TypeError, ValidationError) as e:
         raise SDLParseError(str(e), path=path) from e
 
     # Semantic validation

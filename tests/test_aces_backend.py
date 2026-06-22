@@ -103,6 +103,62 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
     assert target.manifest.name == "aptl"
 
 
+def test_public_start_profiles_match_start_lab_backend_call():
+    from aptl.backends.aces_profiles import public_start_profiles
+    from aptl.core.lab import start_lab
+
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": True,
+            "victim": False,
+            "kali": True,
+            "reverse": False,
+            "enterprise": True,
+            "soc": False,
+            "mail": False,
+            "fileshare": True,
+            "dns": False,
+        },
+    )
+
+    result = start_lab(config, project_dir=Path("."), backend=backend)
+
+    assert result.success is True
+    backend.start.assert_called_once_with(public_start_profiles(config))
+
+
+def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": False,
+            "victim": False,
+            "kali": False,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": False,
+            "dns": False,
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_nodes("aptl-otel-collector"),
+        project_dir=tmp_path,
+        config=config,
+    )
+
+    assert realization.profiles == frozenset({"otel"})
+    assert [diag.code for diag in realization.diagnostics] == []
+
+
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 
@@ -236,7 +292,9 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
     assert result.success is True
-    parser.assert_called_once_with(tmp_path / "scenarios" / "techvault.sdl.yaml")
+    parser.assert_called_once_with(
+        tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
+    )
     assert calls == {"planned_scenario": scenario}
     backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
 

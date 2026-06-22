@@ -11,17 +11,18 @@ the run archive. It implements requirement SCN-010 (issue #323).
 
 The gate is scenario-generic by construction. `validate_live_deployment()` takes
 a scenario path, a backend profile, the project directory, and a run id, so the
-next scenario in APTL's `provisioning-only` expressivity class passes through by
-changing inputs rather than by editing the gate. TechVault is the proving input,
-never a hardcoded branch (ADR-035).
+next scenario in APTL's `orchestration-capable` expressivity class passes
+through by changing inputs rather than by editing the gate. TechVault is the
+proving input, never a hardcoded branch (ADR-035).
 
 APTL's public start path (`orchestrate_lab_start()`), however, is currently
-hardwired to the default scenario (`scenarios/techvault.sdl.yaml`) and the
-`provisioning-only` capability profile; it does not yet accept a caller-supplied
-scenario or profile. So the gate verifies up front that the scenario and profile
-it was asked to validate are the ones the public start path will actually boot,
-and fails loud before any destructive boot if they diverge, so it never
-validates one model while booting another. When the public start path learns to honor a
+hardwired to the operational startup scenario
+(`scenarios/techvault-operational.sdl.yaml`) and the `orchestration-capable`
+capability profile; it does not yet accept a caller-supplied scenario or
+profile. So the gate verifies up front that the scenario and profile it was
+asked to validate are the ones the public start path will actually boot, and
+fails loud before any destructive boot if they diverge, so it never validates
+one model while booting another. When the public start path learns to honor a
 caller-supplied scenario/profile, this guard relaxes to thread them through
 instead of rejecting them.
 
@@ -37,7 +38,7 @@ layer that broke:
    than degrading to a warning.
 2. **Boot-input agreement** (`backend_instantiation`). The scenario and profile
    under validation must be the ones the public start path will actually boot
-   (the default scenario and the `provisioning-only` profile). A mismatch is a
+   (the operational scenario and the `orchestration-capable` profile). A mismatch is a
    hard failure raised before any destructive boot, so the gate never validates
    one model while booting another.
 3. **ACES-driven boot** (`backend_interpretation` or `backend_instantiation`).
@@ -101,15 +102,14 @@ schema `aptl.live-gate.manifest/v1`. It records:
 
 ## Observable parity
 
-The live gate is validation tooling and a run-archive writer rather than new
-scenario content. The TechVault steady-state observables are already encoded in
-`scenarios/techvault.sdl.yaml` by the inventory passes and proven by the static
-gate. The evaluator surfaces (objectives, scoring, injects, workflows, and the
-evaluator run-archive output) are deferred to issue #312, which promotes APTL
-beyond the `provisioning-only` profile. The gate therefore adds no
-ACES-expressible observable surface, leaves `required_surface_coverage`
-unchanged, and files no ACES expressivity blocker. The run archive is proof of
-what the model realized; it does not substitute for SDL encoding.
+The live gate validates the operational startup contract. The public boot SDL,
+`scenarios/techvault-operational.sdl.yaml`, names the steady-state Compose
+services and networks at range granularity; the deep inventory SDL,
+`scenarios/techvault.sdl.yaml`, remains the detailed asset/parity evidence
+surface proven by the static inventory tests. The evaluator surfaces
+(objectives, scoring, injects, workflows, and the evaluator run-archive output)
+are deferred to issue #312. The run archive is proof of what the operational
+model realized; it does not substitute for SDL encoding.
 
 ## Prerequisites
 
@@ -146,8 +146,9 @@ the prompt in automation, or `--skip-clean-boot` to validate an already-running
 lab without the destructive `stop -v` and reboot. The `--scenario` and
 `--profile` options exist for the scenario-generic seam, but until the public
 start path accepts a caller-supplied scenario/profile they must match what that
-path boots (the default scenario and `provisioning-only`); the gate fails the
-boot-input agreement check otherwise. `--run-id` sets the run-archive id.
+path boots (`scenarios/techvault-operational.sdl.yaml` and
+`orchestration-capable`); the gate fails the boot-input agreement check
+otherwise. `--run-id` sets the run-archive id.
 
 The same boot runs as the explicitly gated integration test:
 

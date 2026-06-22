@@ -25,6 +25,7 @@ from aces_sdl import SDLError, parse_sdl_file
 from aces_sdl.scenario import Scenario
 
 from aptl.backends.aces import create_aptl_runtime_target
+from aptl.backends.aces_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
@@ -189,6 +190,14 @@ def check_provisioning_realization(
         diagnostics.append("realization produced no services on any node")
     if not details.get("networks"):
         diagnostics.append("realization produced no networks")
+    expected_profiles = public_start_profiles(config)
+    selected_profiles = select_backend_profiles(config, realization.profiles)
+    if selected_profiles != expected_profiles:
+        diagnostics.append(
+            "ACES-selected profiles "
+            f"{selected_profiles} do not match public lab start profiles "
+            f"{expected_profiles}; scenario would not instantiate the same range"
+        )
     return details, GateCheck("provisioning_realization", *_outcome(diagnostics))
 
 

@@ -245,7 +245,7 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="ACES SDL scenario (default: scenarios/techvault.sdl.yaml).",
+        help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
     ),
     profile: str = typer.Option(
         "orchestration-evaluation",

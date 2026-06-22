@@ -246,34 +246,37 @@ def _objective_outcomes_ready(
 ) -> bool:
     """Return whether objective outcomes cover the executable control path."""
     control_steps = _load_control_steps(payload)
-    current_step = execution_contract.start_step
+    current_step: str | None = execution_contract.start_step
     visited: set[str] = set()
+    ready = True
 
     while current_step and current_step not in visited:
         visited.add(current_step)
         step_meta = control_steps.get(current_step)
-        if step_meta is None:
-            return False
-
-        step_type = str(step_meta.get("step_type", ""))
+        step_type = "" if step_meta is None else str(step_meta.get("step_type", ""))
         if step_type == "end":
-            return True
-        if step_type != "objective":
-            return False
+            break
 
-        objective_address = str(step_meta.get("objective_address", ""))
-        if objective_address not in objective_outcomes:
-            return False
-
-        next_step = _resolve_outcome_check_successor(
-            step_meta,
-            objective_outcomes[objective_address],
+        objective_address = (
+            "" if step_meta is None else str(step_meta.get("objective_address", ""))
         )
-        if next_step is None:
-            return True
-        current_step = next_step
+        if (
+            step_meta is None
+            or step_type != "objective"
+            or objective_address not in objective_outcomes
+        ):
+            ready = False
+            break
 
-    return True
+        current_step = (
+            _resolve_outcome_check_successor(
+                step_meta,
+                objective_outcomes[objective_address],
+            )
+            or None
+        )
+
+    return ready
 
 
 def _require_step_meta(

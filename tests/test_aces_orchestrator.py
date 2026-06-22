@@ -135,6 +135,80 @@ def test_drive_workflows_output_is_workflow_contract_clean():
     assert diagnostics == [], [d.message for d in diagnostics]
 
 
+def test_drive_workflows_resolves_outcomes_from_evaluation_results():
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+
+    diagnostics = orchestrator.drive_workflows(
+        evaluation_results={
+            "evaluation.objective.validate": {"outcome": "succeeded"},
+        }
+    )
+
+    assert diagnostics == []
+    state = WorkflowExecutionState.from_payload(next(iter(orchestrator.results().values())))
+    assert state.workflow_status == WorkflowStatus.SUCCEEDED
+
+
+def test_drive_workflows_skips_already_terminal_runs():
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        }
+    )
+    first = dict(orchestrator.results())
+
+    diagnostics = orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.FAILED,
+        }
+    )
+
+    assert diagnostics == []
+    assert orchestrator.results() == first
+
+
+def test_drive_workflows_persists_run_archive_artifacts(tmp_path):
+    from aptl.core.runstore import LocalRunStore
+
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    store = LocalRunStore(tmp_path / "runs")
+    run_id = "run-514"
+    store.create_run(run_id)
+
+    orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        },
+        run_store=store,
+        run_id=run_id,
+    )
+
+    address = next(iter(orchestrator.results()))
+    safe_address = address.replace("/", "_")
+    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "result.json").is_file()
+    assert (tmp_path / "runs" / run_id / "orchestration" / safe_address / "history.jsonl").is_file()
+
+
+def test_drive_workflows_reports_drive_failure():
+    orchestrator = AptlOrchestrator()
+    orchestrator.start(_orchestration_plan(), RuntimeSnapshot())
+    address = next(iter(orchestrator._workflow_payloads))
+    orchestrator._workflow_payloads[address] = {"name": "broken"}
+
+    diagnostics = orchestrator.drive_workflows(
+        objective_outcomes={
+            "evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED,
+        }
+    )
+
+    assert len(diagnostics) == 1
+    assert diagnostics[0].code == "aptl.orchestrator.workflow-drive-failed"
+
+
 def test_start_preserves_existing_provisioning_entries():
     from aces_contracts.planning import RuntimeDomain
     from aces_contracts.runtime_state import SnapshotEntry

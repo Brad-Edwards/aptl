@@ -147,3 +147,103 @@ def test_register_pending_starts_truthful():
     state = WorkflowExecutionState.from_payload(record.result)
     assert state.workflow_status == WorkflowStatus.PENDING
     assert record.history == []
+
+
+def test_drive_leaves_pending_when_objective_outcomes_unavailable():
+    address, payload = _workflow_payload()
+    engine = WorkflowEngine()
+    engine.register_pending(address, payload, "2026-06-22T12:00:00Z")
+
+    record = engine.drive(address, payload, objective_outcomes={})
+
+    state = WorkflowExecutionState.from_payload(record.result)
+    assert state.workflow_status == WorkflowStatus.PENDING
+    assert record.history == []
+
+
+def test_drive_returns_existing_state_when_not_pending():
+    address, payload = _workflow_payload()
+    engine = WorkflowEngine()
+    engine.register_pending(address, payload, "2026-06-22T12:00:00Z")
+    driven = engine.drive(
+        address,
+        payload,
+        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
+    )
+
+    again = engine.drive(
+        address,
+        payload,
+        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.FAILED},
+    )
+
+    assert again.result == driven.result
+    assert again.history == driven.history
+
+
+def test_drive_failed_objective_with_on_failure_successor():
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: workflow-on-failure
+            nodes:
+              vm:
+                type: vm
+                os: linux
+                resources: {ram: 1 gib, cpu: 1}
+                conditions: {health: ops}
+                roles: {ops: operator}
+            conditions:
+              health: {command: /bin/true, interval: 15}
+            entities:
+              blue: {role: blue}
+            objectives:
+              validate:
+                entity: blue
+                success: {conditions: [health]}
+            workflows:
+              response:
+                start: run
+                steps:
+                  run:
+                    type: objective
+                    objective: validate
+                    on-success: finish
+                    on-failure: recover
+                  finish: {type: end}
+                  recover: {type: end}
+            """
+        )
+    )
+    execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
+    workflow_op = next(
+        op for op in execution_plan.orchestration.operations if op.resource_type == "workflow"
+    )
+    engine = WorkflowEngine()
+    engine.register_pending(workflow_op.address, workflow_op.payload, "2026-06-22T12:00:00Z")
+
+    record = engine.drive(
+        workflow_op.address,
+        workflow_op.payload,
+        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.FAILED},
+    )
+
+    state = WorkflowExecutionState.from_payload(record.result)
+    assert state.workflow_status == WorkflowStatus.SUCCEEDED
+    assert record.history[-1]["event_type"] == WorkflowHistoryEventType.WORKFLOW_COMPLETED.value
+
+
+def test_drive_exhausted_objective_fails_workflow():
+    address, payload = _workflow_payload()
+    engine = WorkflowEngine()
+    engine.register_pending(address, payload, "2026-06-22T12:00:00Z")
+
+    record = engine.drive(
+        address,
+        payload,
+        objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.EXHAUSTED},
+    )
+
+    state = WorkflowExecutionState.from_payload(record.result)
+    assert state.workflow_status == WorkflowStatus.FAILED
+    assert record.history[-1]["event_type"] == WorkflowHistoryEventType.WORKFLOW_FAILED.value

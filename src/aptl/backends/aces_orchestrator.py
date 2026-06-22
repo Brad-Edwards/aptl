@@ -286,6 +286,7 @@ def _persist_workflow_run(
     workflow_address: str,
     record: object,
 ) -> None:
+    """Write workflow result and history artifacts into the run archive."""
     from aptl.core.runtime.workflow_engine import WorkflowRunRecord
 
     if not isinstance(record, WorkflowRunRecord):

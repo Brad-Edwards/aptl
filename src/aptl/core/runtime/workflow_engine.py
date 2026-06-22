@@ -28,18 +28,23 @@ from aces_contracts.workflow import (
 
 from aptl.utils.redaction import redact
 
+_ISO_UTC_OFFSET = "+00:00"
+_COMPLETED_TERMINAL_REASON = "completed"
+
 
 def _utc_now() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    """Return the current UTC instant as an ISO-8601 ``...Z`` string."""
+    return datetime.now(UTC).isoformat().replace(_ISO_UTC_OFFSET, "Z")
 
 
 def _next_timestamp(previous: str, *, offset_ms: int = 1) -> str:
-    parsed = datetime.fromisoformat(previous.replace("Z", "+00:00"))
-    return (parsed + timedelta(milliseconds=offset_ms)).isoformat().replace("+00:00", "Z")
+    """Return an ISO timestamp strictly after ``previous``."""
+    parsed = datetime.fromisoformat(previous.replace("Z", _ISO_UTC_OFFSET))
+    return (parsed + timedelta(milliseconds=offset_ms)).isoformat().replace(_ISO_UTC_OFFSET, "Z")
 
 
 @dataclass
-class WorkflowRunRecord:
+class WorkflowRunRecord(object):
     """Portable workflow result and history for one workflow address."""
 
     result: dict[str, object]
@@ -47,7 +52,7 @@ class WorkflowRunRecord:
 
 
 @dataclass
-class WorkflowEngine:
+class WorkflowEngine(object):
     """In-memory RTE-001 workflow runtime keyed by workflow address."""
 
     _runs: dict[str, WorkflowRunRecord] = field(default_factory=dict, init=False)
@@ -77,6 +82,7 @@ class WorkflowEngine:
         return record
 
     def get(self, workflow_address: str) -> WorkflowRunRecord | None:
+        """Return a defensive copy of the stored run record, if present."""
         record = self._runs.get(workflow_address)
         if record is None:
             return None
@@ -86,6 +92,7 @@ class WorkflowEngine:
         )
 
     def discard(self, workflow_address: str) -> None:
+        """Drop any stored run record for ``workflow_address``."""
         self._runs.pop(workflow_address, None)
 
     def drive(
@@ -165,6 +172,7 @@ class WorkflowEngine:
         return WorkflowRunRecord(result=dict(driven.result), history=[dict(event) for event in driven.history])
 
     def export(self) -> tuple[dict[str, dict[str, object]], dict[str, list[dict[str, object]]]]:
+        """Return portable orchestration result and history maps."""
         results = {address: dict(record.result) for address, record in self._runs.items()}
         history = {
             address: [dict(event) for event in record.history]
@@ -174,7 +182,17 @@ class WorkflowEngine:
         return results, history
 
 
+@dataclass(frozen=True)
+class _ControlFlowTerminal(object):
+    """Terminal workflow status produced while walking compiled control flow."""
+
+    status: WorkflowStatus
+    event: WorkflowHistoryEventType
+    reason: str | None
+
+
 def _load_result_contract(workflow_address: str, payload: dict[str, object]) -> WorkflowResultContract:
+    """Load and validate the compiled workflow result contract."""
     result_contract_payload = payload.get("result_contract")
     if not isinstance(result_contract_payload, dict):
         raise ValueError(
@@ -189,6 +207,7 @@ def _load_execution_contract(
     workflow_address: str,
     payload: dict[str, object],
 ) -> WorkflowExecutionContract:
+    """Load and validate the compiled workflow execution contract."""
     execution_contract_payload = payload.get("execution_contract")
     if not isinstance(execution_contract_payload, dict):
         raise ValueError(
@@ -200,10 +219,24 @@ def _load_execution_contract(
 
 
 def _load_control_steps(payload: dict[str, object]) -> dict[str, dict[str, Any]]:
+    """Load compiled workflow control-step metadata keyed by step name."""
     control_steps = payload.get("control_steps")
     if not isinstance(control_steps, dict):
         raise ValueError("Workflow payload is missing compiled control_steps.")
     return {str(name): step for name, step in control_steps.items() if isinstance(step, dict)}
+
+
+def _resolve_outcome_check_successor(
+    step_meta: dict[str, Any],
+    outcome: WorkflowStepOutcome,
+) -> str | None:
+    """Return the next step for readiness checks, or ``None`` when complete."""
+    if outcome == WorkflowStepOutcome.SUCCEEDED:
+        return str(step_meta.get("on_success") or "")
+    if outcome == WorkflowStepOutcome.FAILED:
+        on_failure = str(step_meta.get("on_failure") or "")
+        return on_failure if on_failure else None
+    return None
 
 
 def _objective_outcomes_ready(
@@ -211,32 +244,146 @@ def _objective_outcomes_ready(
     payload: dict[str, object],
     objective_outcomes: dict[str, WorkflowStepOutcome],
 ) -> bool:
+    """Return whether objective outcomes cover the executable control path."""
+    ready = True
     control_steps = _load_control_steps(payload)
     current_step = execution_contract.start_step
     visited: set[str] = set()
-    while current_step and current_step not in visited:
+
+    while ready and current_step and current_step not in visited:
         visited.add(current_step)
         step_meta = control_steps.get(current_step)
         if step_meta is None:
-            return False
+            ready = False
+            break
+
         step_type = str(step_meta.get("step_type", ""))
         if step_type == "end":
-            return True
+            break
         if step_type != "objective":
-            return False
+            ready = False
+            break
+
         objective_address = str(step_meta.get("objective_address", ""))
         if objective_address not in objective_outcomes:
-            return False
-        outcome = objective_outcomes[objective_address]
-        if outcome == WorkflowStepOutcome.SUCCEEDED:
-            current_step = str(step_meta.get("on_success") or "")
-        elif outcome == WorkflowStepOutcome.FAILED:
-            current_step = str(step_meta.get("on_failure") or "")
-            if not current_step:
-                return True
+            ready = False
+            break
+
+        next_step = _resolve_outcome_check_successor(
+            step_meta,
+            objective_outcomes[objective_address],
+        )
+        if next_step is None:
+            break
+        current_step = next_step
+
+    return ready
+
+
+def _require_step_meta(
+    control_steps: dict[str, dict[str, Any]],
+    current_step: str,
+) -> dict[str, Any]:
+    """Return compiled metadata for ``current_step`` or raise."""
+    step_meta = control_steps.get(current_step)
+    if step_meta is None:
+        raise ValueError(f"Workflow references unknown step '{current_step}'.")
+    return step_meta
+
+
+def _terminal_for_failed_objective(current_step: str) -> _ControlFlowTerminal:
+    """Build the terminal state for a failed objective with no recovery step."""
+    return _ControlFlowTerminal(
+        status=WorkflowStatus.FAILED,
+        event=WorkflowHistoryEventType.WORKFLOW_FAILED,
+        reason=f"objective step '{current_step}' failed",
+    )
+
+
+def _terminal_for_unsupported_outcome(
+    current_step: str,
+    outcome: WorkflowStepOutcome,
+) -> _ControlFlowTerminal:
+    """Build the terminal state for an unsupported objective outcome."""
+    return _ControlFlowTerminal(
+        status=WorkflowStatus.FAILED,
+        event=WorkflowHistoryEventType.WORKFLOW_FAILED,
+        reason=(
+            f"objective step '{current_step}' returned unsupported outcome "
+            f"'{outcome.value}'"
+        ),
+    )
+
+
+def _terminal_for_missing_successor(step_meta: dict[str, Any], current_step: str) -> _ControlFlowTerminal:
+    """Build the terminal state when an objective step lacks a successor."""
+    step_name = str(step_meta.get("name", current_step))
+    return _ControlFlowTerminal(
+        status=WorkflowStatus.FAILED,
+        event=WorkflowHistoryEventType.WORKFLOW_FAILED,
+        reason=f"objective step '{step_name}' has no successor",
+    )
+
+
+def _execute_objective_step(
+    *,
+    current_step: str,
+    step_meta: dict[str, Any],
+    steps: dict[str, WorkflowStepExecutionState],
+    history: list[dict[str, object]],
+    timestamp: str,
+    objective_outcomes: dict[str, WorkflowStepOutcome],
+) -> tuple[str, str, _ControlFlowTerminal | None]:
+    """Record one objective step and return the next step or a terminal state."""
+    timestamp = _next_timestamp(timestamp)
+    history.append(
+        WorkflowHistoryEvent(
+            event_type=WorkflowHistoryEventType.STEP_STARTED,
+            timestamp=timestamp,
+            step_name=current_step,
+        ).to_payload()
+    )
+    objective_address = str(step_meta.get("objective_address", ""))
+    outcome = objective_outcomes.get(objective_address)
+    if outcome is None:
+        raise ValueError(
+            redact(
+                f"No objective outcome available for workflow step '{current_step}' "
+                f"({objective_address})."
+            )
+        )
+
+    steps[current_step] = WorkflowStepExecutionState(
+        lifecycle=WorkflowStepLifecycle.COMPLETED,
+        outcome=outcome,
+        attempts=1,
+    )
+    timestamp = _next_timestamp(timestamp)
+    history.append(
+        WorkflowHistoryEvent(
+            event_type=WorkflowHistoryEventType.STEP_COMPLETED,
+            timestamp=timestamp,
+            step_name=current_step,
+            outcome=outcome,
+        ).to_payload()
+    )
+
+    if outcome == WorkflowStepOutcome.SUCCEEDED:
+        next_step = str(step_meta.get("on_success") or "")
+        terminal = None
+    elif outcome == WorkflowStepOutcome.FAILED:
+        on_failure = str(step_meta.get("on_failure") or "")
+        if on_failure:
+            next_step = on_failure
+            terminal = None
         else:
-            return True
-    return True
+            next_step = ""
+            terminal = _terminal_for_failed_objective(current_step)
+    else:
+        next_step = ""
+        terminal = _terminal_for_unsupported_outcome(current_step, outcome)
+
+    return next_step, timestamp, terminal
 
 
 def _walk_control_flow(
@@ -248,80 +395,43 @@ def _walk_control_flow(
     timestamp: str,
     objective_outcomes: dict[str, WorkflowStepOutcome],
 ) -> tuple[WorkflowStatus, WorkflowHistoryEventType, str | None]:
+    """Walk compiled workflow control flow and emit step history events."""
+    terminal = _ControlFlowTerminal(
+        status=WorkflowStatus.FAILED,
+        event=WorkflowHistoryEventType.WORKFLOW_FAILED,
+        reason="workflow control flow ended abruptly",
+    )
     current_step = execution_contract.start_step
-    terminal_reason: str | None = None
 
     while current_step:
-        step_meta = control_steps.get(current_step)
-        if step_meta is None:
-            raise ValueError(f"Workflow references unknown step '{current_step}'.")
-
+        step_meta = _require_step_meta(control_steps, current_step)
         step_type = str(step_meta.get("step_type", ""))
         if step_type == "end":
-            return WorkflowStatus.SUCCEEDED, WorkflowHistoryEventType.WORKFLOW_COMPLETED, "completed"
+            terminal = _ControlFlowTerminal(
+                status=WorkflowStatus.SUCCEEDED,
+                event=WorkflowHistoryEventType.WORKFLOW_COMPLETED,
+                reason=_COMPLETED_TERMINAL_REASON,
+            )
+            break
 
         if step_type != "objective":
             raise ValueError(
                 f"RTE-001 workflow engine does not yet drive step type '{step_type}'."
             )
 
-        timestamp = _next_timestamp(timestamp)
-        history.append(
-            WorkflowHistoryEvent(
-                event_type=WorkflowHistoryEventType.STEP_STARTED,
-                timestamp=timestamp,
-                step_name=current_step,
-            ).to_payload()
+        current_step, timestamp, step_terminal = _execute_objective_step(
+            current_step=current_step,
+            step_meta=step_meta,
+            steps=steps,
+            history=history,
+            timestamp=timestamp,
+            objective_outcomes=objective_outcomes,
         )
-        objective_address = str(step_meta.get("objective_address", ""))
-        outcome = objective_outcomes.get(objective_address)
-        if outcome is None:
-            raise ValueError(
-                redact(
-                    f"No objective outcome available for workflow step '{current_step}' "
-                    f"({objective_address})."
-                )
-            )
-
-        steps[current_step] = WorkflowStepExecutionState(
-            lifecycle=WorkflowStepLifecycle.COMPLETED,
-            outcome=outcome,
-            attempts=1,
-        )
-        timestamp = _next_timestamp(timestamp)
-        history.append(
-            WorkflowHistoryEvent(
-                event_type=WorkflowHistoryEventType.STEP_COMPLETED,
-                timestamp=timestamp,
-                step_name=current_step,
-                outcome=outcome,
-            ).to_payload()
-        )
-
-        if outcome == WorkflowStepOutcome.SUCCEEDED:
-            current_step = str(step_meta.get("on_success") or "")
-        elif outcome == WorkflowStepOutcome.FAILED:
-            on_failure = str(step_meta.get("on_failure") or "")
-            if on_failure:
-                current_step = on_failure
-            else:
-                return (
-                    WorkflowStatus.FAILED,
-                    WorkflowHistoryEventType.WORKFLOW_FAILED,
-                    f"objective step '{current_step}' failed",
-                )
-        else:
-            return (
-                WorkflowStatus.FAILED,
-                WorkflowHistoryEventType.WORKFLOW_FAILED,
-                f"objective step '{current_step}' returned unsupported outcome '{outcome.value}'",
-            )
-
+        if step_terminal is not None:
+            terminal = step_terminal
+            break
         if not current_step:
-            return (
-                WorkflowStatus.FAILED,
-                WorkflowHistoryEventType.WORKFLOW_FAILED,
-                f"objective step '{step_meta.get('name', current_step)}' has no successor",
-            )
+            terminal = _terminal_for_missing_successor(step_meta, current_step)
+            break
 
-    return WorkflowStatus.FAILED, WorkflowHistoryEventType.WORKFLOW_FAILED, "workflow control flow ended abruptly"
+    return terminal.status, terminal.event, terminal.reason

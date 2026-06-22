@@ -756,6 +756,21 @@ def _step_seed_suricata_volumes(
             ),
         )
     assert ctx.backend is not None  # runtime guard above
+    from aptl.core.credentials import ensure_suricata_config_source_ownership
+
+    ownership = ensure_suricata_config_source_ownership(ctx.project_dir)
+    if not ownership.success:
+        log.error(
+            "Suricata config source ownership restore failed: %s",
+            ownership.error,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                "Suricata config source ownership restore failed: "
+                f"{ownership.error}"
+            ),
+        )
     try:
         seeds = build_suricata_volume_seeds(ctx.project_dir)
         ctx.backend.seed_named_volumes(seeds, seeder_image=SURICATA_IMAGE)

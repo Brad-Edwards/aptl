@@ -1,13 +1,26 @@
 fail_fast: true
 
-# `local.rules` is operator-authored source and `misp-iocs.rules` is a
-# tracked seed; both belong under normal validation. The Suricata
-# container, however, bind-mounts them and writes back as the remapped
-# `systemd-network` UID 998, which only blocks the two pre-commit hooks
-# that need `rb+` (read-write binary) access on the host. Those two
-# hooks carry a per-hook `exclude:` so other hooks (yaml/json checks,
-# private-key detection, etc.) still inspect the rule sources.
+# Pre-ADR-043 Suricata bind mounts could leave checked-in
+# ``config/suricata/suricata.yaml`` and ``rules/local.rules`` owned by UID
+# 991 (``systemd-network``), which blocks the EOF/trailing-whitespace hooks
+# that open files for write. ADR-043 seeds from named volumes instead; the
+# local ownership-restore hook (first repo below) repairs legacy checkouts
+# before those hooks run. ``local.rules`` keeps a per-hook ``exclude:`` as
+# belt-and-suspenders for hosts that cannot passwordless-sudo chown.
 repos:
+  - repo: local
+    hooks:
+      - id: suricata-config-source-ownership
+        name: Restore Suricata checked-in config ownership (legacy pre-ADR-043)
+        entry: >-
+          bash -c 'if [ -x .venv/bin/python ]; then PY=.venv/bin/python;
+          elif command -v python3 >/dev/null; then PY=python3;
+          else echo "python3 or .venv/bin/python required" >&2; exit 1; fi;
+          exec "$PY" -c "from pathlib import Path; from aptl.core.credentials import ensure_suricata_config_source_ownership; import sys; r=ensure_suricata_config_source_ownership(Path.cwd()); (r.error and print(r.error, file=sys.stderr)); sys.exit(0 if r.success else 1)"'
+        language: system
+        pass_filenames: false
+        files: ^config/suricata/(suricata\.yaml|rules/local\.rules)$
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

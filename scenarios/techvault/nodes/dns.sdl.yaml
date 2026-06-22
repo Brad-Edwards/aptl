@@ -327,7 +327,8 @@ nodes:
     features:
       techvault.techvault-dns-service: dns-root
       techvault.dns-wazuh-agent: dns-root
-    conditions: {}
+    conditions:
+      techvault.dns-soa-ready: dns-root
     injects: {}
     vulnerabilities: []
     roles:

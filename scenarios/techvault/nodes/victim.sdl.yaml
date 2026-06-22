@@ -554,7 +554,8 @@ nodes:
       techvault.victim-rsyslog-forwarding: victim-root
       techvault.victim-wazuh-agent: victim-root
       techvault.victim-falco-agent: victim-root
-    conditions: {}
+    conditions:
+      techvault.victim-ssh-ready: victim-root
     injects: {}
     vulnerabilities:
     - techvault.victim-nopasswd-sudo

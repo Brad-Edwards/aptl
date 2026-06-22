@@ -593,7 +593,8 @@ nodes:
     os_version: Rocky Linux 9.8 (Blue Onyx)
     features:
       techvault.workstation-credential-artifacts: workstation-dev-user
-    conditions: {}
+    conditions:
+      techvault.workstation-ssh-ready: workstation-root
     injects: {}
     vulnerabilities:
     - techvault.workstation-bash-history-credential-disclosure

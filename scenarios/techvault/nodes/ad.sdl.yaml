@@ -382,7 +382,8 @@ nodes:
       techvault.techvault-ad-domain-service: ad-root
       techvault.ad-rsyslog-forwarding: ad-root
       techvault.ad-wazuh-agent: ad-root
-    conditions: {}
+    conditions:
+      techvault.ad-domain-ready: ad-root
     injects: {}
     vulnerabilities:
     - techvault.ad-weak-password-jessica

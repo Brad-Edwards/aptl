@@ -422,7 +422,8 @@ nodes:
     os: linux
     os_version: Kali GNU/Linux Rolling 2026.1
     features: {}
-    conditions: {}
+    conditions:
+      techvault.kali-healthcheck: kali-root
     injects: {}
     vulnerabilities: []
     roles:

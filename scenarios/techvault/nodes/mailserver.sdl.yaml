@@ -986,7 +986,8 @@ nodes:
     os_version: Debian GNU/Linux 12 (bookworm)
     features:
       techvault.techvault-mailserver-service: mailserver-root
-    conditions: {}
+    conditions:
+      techvault.mailserver-smtp-ready: mailserver-root
     injects: {}
     vulnerabilities: []
     roles:

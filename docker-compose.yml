@@ -1426,8 +1426,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.123.0
     restart: unless-stopped
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
     volumes:
       - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     healthcheck:
@@ -1451,7 +1451,7 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     ports:
-      - "3200:3200"
+      - "127.0.0.1:3200:3200"
     volumes:
       - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo

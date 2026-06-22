@@ -351,7 +351,8 @@ nodes:
     os_version: Alpine Linux v3.23
     features:
       techvault.techvault-postgres-service: db-postgres
-    conditions: {}
+    conditions:
+      techvault.db-postgres-ready: db-postgres
     injects: {}
     vulnerabilities: []
     roles:

@@ -518,6 +518,91 @@ def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, t
     assert submit_calls == ["provisioning", "orchestration", "evaluation"]
 
 
+def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_path):
+    """After orchestration registers workflows, lab start invokes drive_workflows."""
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends import aces
+    from aptl.backends.aces_orchestrator import AptlOrchestrator
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+    orchestration = _workflow_orchestration_plan()
+    drive_calls: list[dict[str, object]] = []
+
+    class RecordingOrchestrator(AptlOrchestrator):
+        def drive_workflows(self, **kwargs):
+            drive_calls.append(kwargs)
+            return super().drive_workflows(**kwargs)
+
+    class FakeControlPlane:
+        def __init__(self, target, initial_snapshot=None):
+            self.target = target
+
+        def submit_provisioning(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "prov"
+            receipt.diagnostics = []
+            return receipt
+
+        def submit_orchestration(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "orch"
+            receipt.diagnostics = []
+            if self.target.orchestrator is not None:
+                self.target.orchestrator.start(plan, RuntimeSnapshot())
+            return receipt
+
+        def submit_evaluation(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "eval"
+            receipt.diagnostics = []
+            return receipt
+
+        def get_operation(self, operation_id):
+            status = MagicMock()
+            status.state = OperationState.SUCCEEDED
+            status.diagnostics = []
+            return status
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"),
+                orchestration=orchestration,
+            )
+
+    def fake_create_target(*, project_dir, config, backend):
+        target = aces.RuntimeTarget(
+            name=aces.APTL_ACES_TARGET_NAME,
+            manifest=aces.create_aptl_manifest(),
+            provisioner=aces.AptlProvisioner(
+                project_dir=project_dir,
+                config=config,
+                deployment_backend=backend,
+            ),
+            orchestrator=RecordingOrchestrator(),
+            evaluator=aces.AptlEvaluator(),
+        )
+        return target
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
+    mocker.patch("aptl.backends.aces.create_aptl_runtime_target", fake_create_target)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is True
+    assert drive_calls
+    assert drive_calls[0]["evaluation_results"] == {}
+
+
 def test_start_aces_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):
     """A planner error in the evaluation domain must fail closed."""
     from aces_contracts.diagnostics import Diagnostic, Severity

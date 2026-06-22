@@ -118,15 +118,21 @@ def _aces_dependency_services(
         for dependency in _node_dependency_values(resource, payload):
             if _has_seen_dependency(resource.address, dependency, seen):
                 continue
-            service_name = _resolve_dependency_service(
-                resource.address,
+            is_network, matches = _dependency_service_matches(
                 dependency,
                 network_aliases,
                 profile_index,
+            )
+            if is_network:
+                continue
+            _append_dependency_resolution_diagnostics(
+                resource.address,
+                dependency,
+                matches,
                 diagnostics,
             )
-            if service_name:
-                dependency_services.add(service_name)
+            if len(matches) == 1:
+                dependency_services.add(next(iter(matches)))
     return dependency_services
 
 
@@ -159,36 +165,43 @@ def _has_seen_dependency(
     return False
 
 
-def _resolve_dependency_service(
-    resource_address: str,
+def _dependency_service_matches(
     dependency: str,
     network_aliases: set[str],
     profile_index: ComposeProfileIndex,
-    diagnostics: list[Diagnostic],
-) -> str | None:
-    """Resolve one ACES dependency reference to one Compose service."""
+) -> tuple[bool, set[str]]:
+    """Return whether a dependency is a network and its Compose service matches."""
 
-    service_name = None
-    if not _is_network_dependency(dependency, network_aliases):
+    is_network = _is_network_dependency(dependency, network_aliases)
+    matches: set[str] = set()
+    if not is_network:
         matches = profile_index.service_names_for_aliases(
             _dependency_reference_aliases(dependency)
         )
-        if not matches:
-            _append_dependency_unresolved_diagnostic(
-                resource_address,
-                dependency,
-                diagnostics,
-            )
-        elif len(matches) > 1:
-            _append_dependency_ambiguous_diagnostic(
-                resource_address,
-                dependency,
-                matches,
-                diagnostics,
-            )
-        else:
-            service_name = next(iter(matches))
-    return service_name
+    return is_network, matches
+
+
+def _append_dependency_resolution_diagnostics(
+    resource_address: str,
+    dependency: str,
+    matches: set[str],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Record diagnostics for non-network dependency resolution failures."""
+
+    if not matches:
+        _append_dependency_unresolved_diagnostic(
+            resource_address,
+            dependency,
+            diagnostics,
+        )
+    elif len(matches) > 1:
+        _append_dependency_ambiguous_diagnostic(
+            resource_address,
+            dependency,
+            matches,
+            diagnostics,
+        )
 
 
 def _append_dependency_unresolved_diagnostic(

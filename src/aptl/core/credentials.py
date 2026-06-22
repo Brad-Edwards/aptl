@@ -472,7 +472,7 @@ def sync_manager_config(project_dir: Path, cluster_key: str) -> Path:
 
 
 @dataclass(frozen=True)
-class SuricataSourceOwnershipResult(object):
+class SuricataSourceOwnershipResult:
     """Result of restoring checked-in Suricata seed source ownership."""
 
     success: bool

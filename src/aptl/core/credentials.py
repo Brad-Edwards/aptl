@@ -18,7 +18,9 @@ state tree instead of back over ``config/``).
 
 import os
 import re
+import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from xml.sax.saxutils import escape as xml_escape
@@ -467,6 +469,133 @@ def sync_manager_config(project_dir: Path, cluster_key: str) -> Path:
         RENDERED_MANAGER_RELPATH,
         _manager_transform(cluster_key),
     )
+
+
+@dataclass(frozen=True)
+class SuricataSourceOwnershipResult:
+    """Result of restoring checked-in Suricata seed source ownership."""
+
+    success: bool
+    repaired: tuple[str, ...] = ()
+    error: str = ""
+
+
+def _suricata_config_source_files(project_dir: Path) -> tuple[Path, ...]:
+    """Return the checked-in Suricata config seed sources (containment-checked)."""
+    config_src = _resolve_within_project(
+        project_dir, _SURICATA_CONFIG_SOURCE_RELPATH,
+    )
+    paths: list[Path] = []
+    for src_rel, _dest_rel in _SURICATA_CONFIG_SEED_FILES:
+        paths.append(config_src / src_rel)
+    return tuple(paths)
+
+
+def _foreign_owned_sources(source_files: tuple[Path, ...], uid: int) -> list[Path]:
+    """Return the existing *source_files* not owned by *uid*."""
+    return [
+        path
+        for path in source_files
+        if path.is_file() and path.stat().st_uid != uid
+    ]
+
+
+def _chown_direct(paths: list[Path], uid: int, gid: int) -> list[Path]:
+    """``chown`` each path to *uid*/*gid*; return those still foreign-owned.
+
+    Stops at the first :class:`PermissionError` (an unprivileged process
+    cannot chown any of them) and re-stats to report which remain foreign,
+    so the caller can decide whether to escalate via ``sudo``.
+    """
+    for path in paths:
+        try:
+            os.chown(path, uid, gid)
+        except PermissionError:
+            break
+    return [p for p in paths if p.stat().st_uid != uid]
+
+
+def _sudo_chown_error(stderr: str, paths_arg: list[str], uid: int, gid: int) -> str:
+    """Build the actionable error message for a failed ``sudo chown``."""
+    stderr = stderr.strip()
+    if "a password is required" in stderr or "sudo:" in stderr:
+        hint = f"sudo chown {uid}:{gid} " + " ".join(paths_arg)
+        return (
+            f"Suricata config sources are not writable — run "
+            f"'{hint}' manually or configure passwordless sudo for chown"
+        )
+    return stderr or "Suricata config ownership restore failed"
+
+
+def _restore_via_sudo(
+    still_foreign: list[Path], uid: int, gid: int, project_dir: Path,
+) -> SuricataSourceOwnershipResult:
+    """Escalate the ownership repair through passwordless ``sudo chown``."""
+    paths_arg = [str(p) for p in still_foreign]
+    try:
+        perm_result = subprocess.run(
+            ["sudo", "-n", "chown", f"{uid}:{gid}", *paths_arg],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return SuricataSourceOwnershipResult(
+            success=False,
+            error=(
+                f"Suricata config sources are owned by another user and "
+                f"could not be restored: {exc}"
+            ),
+        )
+
+    if perm_result.returncode != 0:
+        return SuricataSourceOwnershipResult(
+            success=False,
+            error=_sudo_chown_error(perm_result.stderr, paths_arg, uid, gid),
+        )
+
+    repaired = tuple(str(p.relative_to(project_dir)) for p in still_foreign)
+    log.info(
+        "Restored Suricata config source ownership via sudo: %s",
+        ", ".join(repaired),
+    )
+    return SuricataSourceOwnershipResult(success=True, repaired=repaired)
+
+
+def ensure_suricata_config_source_ownership(
+    project_dir: Path,
+) -> SuricataSourceOwnershipResult:
+    """Return checked-in Suricata seed sources to the invoking operator's uid/gid.
+
+    Pre-ADR-043 lab runs bind-mounted ``config/suricata/suricata.yaml`` and
+    ``config/suricata/rules/local.rules``; the Suricata entrypoint left them
+    owned by UID 991 (``systemd-network`` on Ubuntu). ADR-043 seeds from
+    named volumes instead, but an older checkout may still carry foreign
+    ownership, which blocks ``pre-commit`` hooks that open the files for
+    write (EOF fixer). This is a narrow, idempotent repair — it only
+    touches the two canonical seed sources when their owner is not the
+    current uid.
+    """
+    uid = os.getuid()
+    gid = os.getgid()
+    try:
+        source_files = _suricata_config_source_files(project_dir)
+    except PathContainmentError as exc:
+        return SuricataSourceOwnershipResult(success=False, error=str(exc))
+
+    foreign = _foreign_owned_sources(source_files, uid)
+    still_foreign = _chown_direct(foreign, uid, gid) if foreign else []
+    if still_foreign:
+        return _restore_via_sudo(still_foreign, uid, gid, project_dir)
+
+    repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
+    if repaired:
+        log.info(
+            "Restored Suricata config source ownership: %s",
+            ", ".join(repaired),
+        )
+    return SuricataSourceOwnershipResult(success=True, repaired=repaired)
 
 
 def build_suricata_volume_seeds(project_dir: Path) -> tuple[NamedVolumeSeed, ...]:

@@ -434,6 +434,14 @@ def check_run_archive_manifest(
             ],
             "execution_state_integration": "#514",
         },
+        "orchestrator_surfaces": {
+            "profile": "orchestration-capable",
+            "contracts": [
+                "workflow-result-envelope-v1",
+                "workflow-history-event-stream-v1",
+            ],
+            "execution_state_integration": "aptl.core.runtime.workflow_engine",
+        },
     }
 
     diagnostics = _missing_manifest_keys(manifest)

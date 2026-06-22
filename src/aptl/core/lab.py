@@ -739,10 +739,6 @@ def _step_seed_suricata_volumes(
     """
     log.info("Step 5b: Seeding Suricata runtime volumes...")
     from aptl.core.deployment import SSHComposeBackend
-    from aptl.core.deployment.errors import (
-        BackendSeedError,
-        BackendTimeoutError,
-    )
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
@@ -756,6 +752,38 @@ def _step_seed_suricata_volumes(
             ),
         )
     assert ctx.backend is not None  # runtime guard above
+    return _seed_suricata_volumes_local(ctx)
+
+
+def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
+    """Restore checked-in source ownership and seed the Suricata named volumes.
+
+    Split out of :func:`_step_seed_suricata_volumes` (which retains the
+    remote-backend guard) so each function stays within the project's
+    return-count and complexity limits. ``ctx.backend`` is the local
+    Compose backend, asserted non-``None`` by the caller.
+    """
+    from aptl.core.credentials import ensure_suricata_config_source_ownership
+    from aptl.core.deployment.errors import (
+        BackendSeedError,
+        BackendTimeoutError,
+    )
+
+    # ctx.backend is narrowed to the local Compose backend by the caller's guard.
+    assert ctx.backend is not None
+    ownership = ensure_suricata_config_source_ownership(ctx.project_dir)
+    if not ownership.success:
+        log.error(
+            "Suricata config source ownership restore failed: %s",
+            ownership.error,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                "Suricata config source ownership restore failed: "
+                f"{ownership.error}"
+            ),
+        )
     try:
         seeds = build_suricata_volume_seeds(ctx.project_dir)
         ctx.backend.seed_named_volumes(seeds, seeder_image=SURICATA_IMAGE)

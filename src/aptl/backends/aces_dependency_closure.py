@@ -168,27 +168,27 @@ def _resolve_dependency_service(
 ) -> str | None:
     """Resolve one ACES dependency reference to one Compose service."""
 
-    if _is_network_dependency(dependency, network_aliases):
-        return None
-    matches = profile_index.service_names_for_aliases(
-        _dependency_reference_aliases(dependency)
-    )
-    if not matches:
-        _append_dependency_unresolved_diagnostic(
-            resource_address,
-            dependency,
-            diagnostics,
+    service_name = None
+    if not _is_network_dependency(dependency, network_aliases):
+        matches = profile_index.service_names_for_aliases(
+            _dependency_reference_aliases(dependency)
         )
-        return None
-    if len(matches) > 1:
-        _append_dependency_ambiguous_diagnostic(
-            resource_address,
-            dependency,
-            matches,
-            diagnostics,
-        )
-        return None
-    return next(iter(matches))
+        if not matches:
+            _append_dependency_unresolved_diagnostic(
+                resource_address,
+                dependency,
+                diagnostics,
+            )
+        elif len(matches) > 1:
+            _append_dependency_ambiguous_diagnostic(
+                resource_address,
+                dependency,
+                matches,
+                diagnostics,
+            )
+        else:
+            service_name = next(iter(matches))
+    return service_name
 
 
 def _append_dependency_unresolved_diagnostic(

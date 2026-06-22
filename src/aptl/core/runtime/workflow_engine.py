@@ -245,39 +245,35 @@ def _objective_outcomes_ready(
     objective_outcomes: dict[str, WorkflowStepOutcome],
 ) -> bool:
     """Return whether objective outcomes cover the executable control path."""
-    ready = True
     control_steps = _load_control_steps(payload)
     current_step = execution_contract.start_step
     visited: set[str] = set()
 
-    while ready and current_step and current_step not in visited:
+    while current_step and current_step not in visited:
         visited.add(current_step)
         step_meta = control_steps.get(current_step)
         if step_meta is None:
-            ready = False
-            break
+            return False
 
         step_type = str(step_meta.get("step_type", ""))
         if step_type == "end":
-            break
+            return True
         if step_type != "objective":
-            ready = False
-            break
+            return False
 
         objective_address = str(step_meta.get("objective_address", ""))
         if objective_address not in objective_outcomes:
-            ready = False
-            break
+            return False
 
         next_step = _resolve_outcome_check_successor(
             step_meta,
             objective_outcomes[objective_address],
         )
         if next_step is None:
-            break
+            return True
         current_step = next_step
 
-    return ready
+    return True
 
 
 def _require_step_meta(

@@ -103,6 +103,62 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
     assert target.manifest.name == "aptl"
 
 
+def test_public_start_profiles_match_start_lab_backend_call():
+    from aptl.backends.aces_profiles import public_start_profiles
+    from aptl.core.lab import start_lab
+
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": True,
+            "victim": False,
+            "kali": True,
+            "reverse": False,
+            "enterprise": True,
+            "soc": False,
+            "mail": False,
+            "fileshare": True,
+            "dns": False,
+        },
+    )
+
+    result = start_lab(config, project_dir=Path("."), backend=backend)
+
+    assert result.success is True
+    backend.start.assert_called_once_with(public_start_profiles(config))
+
+
+def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": False,
+            "victim": False,
+            "kali": False,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": False,
+            "dns": False,
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_nodes("aptl-otel-collector"),
+        project_dir=tmp_path,
+        config=config,
+    )
+
+    assert realization.profiles == frozenset({"otel"})
+    assert [diag.code for diag in realization.diagnostics] == []
+
+
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 
@@ -236,7 +292,9 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
     assert result.success is True
-    parser.assert_called_once_with(tmp_path / "scenarios" / "techvault.sdl.yaml")
+    parser.assert_called_once_with(
+        tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
+    )
     assert calls == {"planned_scenario": scenario}
     backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
 
@@ -458,6 +516,91 @@ def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, t
 
     assert result.success is True
     assert submit_calls == ["provisioning", "orchestration", "evaluation"]
+
+
+def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_path):
+    """After orchestration registers workflows, lab start invokes drive_workflows."""
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends import aces
+    from aptl.backends.aces_orchestrator import AptlOrchestrator
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+    orchestration = _workflow_orchestration_plan()
+    drive_calls: list[dict[str, object]] = []
+
+    class RecordingOrchestrator(AptlOrchestrator):
+        def drive_workflows(self, **kwargs):
+            drive_calls.append(kwargs)
+            return super().drive_workflows(**kwargs)
+
+    class FakeControlPlane:
+        def __init__(self, target, initial_snapshot=None):
+            self.target = target
+
+        def submit_provisioning(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "prov"
+            receipt.diagnostics = []
+            return receipt
+
+        def submit_orchestration(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "orch"
+            receipt.diagnostics = []
+            if self.target.orchestrator is not None:
+                self.target.orchestrator.start(plan, RuntimeSnapshot())
+            return receipt
+
+        def submit_evaluation(self, plan):
+            receipt = MagicMock()
+            receipt.operation_id = "eval"
+            receipt.diagnostics = []
+            return receipt
+
+        def get_operation(self, operation_id):
+            status = MagicMock()
+            status.state = OperationState.SUCCEEDED
+            status.diagnostics = []
+            return status
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"),
+                orchestration=orchestration,
+            )
+
+    def fake_create_target(*, project_dir, config, backend):
+        target = aces.RuntimeTarget(
+            name=aces.APTL_ACES_TARGET_NAME,
+            manifest=aces.create_aptl_manifest(),
+            provisioner=aces.AptlProvisioner(
+                project_dir=project_dir,
+                config=config,
+                deployment_backend=backend,
+            ),
+            orchestrator=RecordingOrchestrator(),
+            evaluator=aces.AptlEvaluator(),
+        )
+        return target
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
+    mocker.patch("aptl.backends.aces.create_aptl_runtime_target", fake_create_target)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is True
+    assert drive_calls
+    assert drive_calls[0]["evaluation_results"] == {}
 
 
 def test_start_aces_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):

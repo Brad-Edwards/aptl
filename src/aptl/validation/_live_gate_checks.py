@@ -158,8 +158,8 @@ def check_boot_inputs_match_public_path(
     mismatch is a hard ``backend_instantiation`` failure raised *before* any
     destructive boot — never a degraded warning. This holds for
     ``skip_clean_boot`` too: the already-running lab was itself booted from the
-    default scenario, so a mismatched ``--scenario`` would validate the wrong
-    model against it.
+    operational scenario, so a mismatched ``--scenario`` would validate the
+    wrong model against it.
     """
     expected_scenario = DEFAULT_ACES_SCENARIO
     if not expected_scenario.is_absolute():
@@ -433,6 +433,14 @@ def check_run_archive_manifest(
                 "evaluation-history-event-stream-v1",
             ],
             "execution_state_integration": "#514",
+        },
+        "orchestrator_surfaces": {
+            "profile": "orchestration-capable",
+            "contracts": [
+                "workflow-result-envelope-v1",
+                "workflow-history-event-stream-v1",
+            ],
+            "execution_state_integration": "aptl.core.runtime.workflow_engine",
         },
     }
 

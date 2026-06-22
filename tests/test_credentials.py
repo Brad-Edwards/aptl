@@ -11,8 +11,10 @@ unchanged.
 
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -734,6 +736,89 @@ def _write_suricata_sources(project_dir):
         "misp-iocs.rules", "misp-md5.list", "misp-sha1.list", "misp-sha256.list",
     ):
         (misp / name).write_text(f"# {name}\n")
+
+
+class TestEnsureSuricataConfigSourceOwnership:
+    """Legacy pre-ADR-043 bind mounts could leave seed sources unwritable."""
+
+    def test_no_op_when_sources_owned_by_current_user(self, tmp_path):
+        from aptl.core.credentials import ensure_suricata_config_source_ownership
+
+        _write_suricata_sources(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path)
+        assert result.success is True
+        assert result.repaired == ()
+
+    def test_restores_foreign_owned_sources_with_sudo(self, tmp_path, monkeypatch):
+        from aptl.core.credentials import ensure_suricata_config_source_ownership
+
+        _write_suricata_sources(tmp_path)
+        yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
+        rules_path = tmp_path / "config" / "suricata" / "rules" / "local.rules"
+
+        original_stat = Path.stat
+
+        def selective_stat(self, *args, **kwargs):
+            if self in (yaml_path, rules_path):
+                return SimpleNamespace(st_uid=998, st_mode=0o100644)
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", selective_stat)
+
+        real_chown = os.chown
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            for path in (yaml_path, rules_path):
+                real_chown(path, os.getuid(), os.getgid())
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(
+            os,
+            "chown",
+            lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()),
+        )
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = ensure_suricata_config_source_ownership(tmp_path)
+        assert result.success is True
+        assert set(result.repaired) == {
+            "config/suricata/suricata.yaml",
+            "config/suricata/rules/local.rules",
+        }
+        assert calls[0][:4] == ["sudo", "-n", "chown", f"{os.getuid()}:{os.getgid()}"]
+
+    def test_reports_actionable_error_when_sudo_unavailable(self, tmp_path, monkeypatch):
+        from aptl.core.credentials import ensure_suricata_config_source_ownership
+
+        _write_suricata_sources(tmp_path)
+        yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
+
+        original_stat = Path.stat
+
+        def selective_stat(self, *args, **kwargs):
+            if self == yaml_path:
+                return SimpleNamespace(st_uid=998, st_mode=0o100644)
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", selective_stat)
+        monkeypatch.setattr(
+            os,
+            "chown",
+            lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()),
+        )
+
+        def fake_run(cmd, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 1, "", "sudo: a password is required",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = ensure_suricata_config_source_ownership(tmp_path)
+        assert result.success is False
+        assert "passwordless sudo" in result.error
 
 
 class TestBuildSuricataVolumeSeeds:

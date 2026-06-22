@@ -146,6 +146,17 @@ rows:
     blocking_followup: n/a
     notes: "SCN-010 issue #329 composition inventory; SDL encodes network topology, dependency/relationship graph, DNS, trust/account/content placement, observation chains, and defensive integration chains with No known remaining ACES expressivity blocker. The bundle cites per-asset inventories and records snapshot-only/non-destructive capture limits."
 
+  - id: scen.techvault-operational.startup-contract
+    surface: scenarios_yaml
+    legacy_source: scenarios/techvault-operational.sdl.yaml
+    legacy_field: operational startup nodes, profiles, public services, and health gate contract
+    category: validation_gate
+    aces_target: ACES operational subset startup validation gate for TechVault
+    runtime_owner: src/aptl/backends/aces.py::DEFAULT_ACES_SCENARIO
+    validation_evidence: "scenarios/techvault-operational.sdl.yaml + tests/test_techvault_static_gate.py::test_operational_scenario_matches_public_start_profiles_and_services + docs/aces/techvault-static-validation-gate.md"
+    blocking_followup: n/a
+    notes: Operational subset scenario used by the TechVault ACES backend gate; it constrains the public startup profile set and health-gated readiness surface rather than cataloguing a separate node inventory.
+
   - id: scen.techvault.webapp-inventory
     surface: scenarios_yaml
     legacy_source: scenarios/techvault.sdl.yaml

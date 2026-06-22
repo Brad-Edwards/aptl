@@ -32,6 +32,33 @@ def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
     (project_dir / "docker-compose.yml").write_text("\n".join(lines))
 
 
+def _write_compose_graph(
+    project_dir: Path,
+    services: dict[str, tuple[list[str], list[str]]],
+    networks: dict[str, list[str]] | None = None,
+) -> None:
+    lines = ["services:"]
+    for service_name, (profiles, dependencies) in services.items():
+        rendered = ", ".join(f'"{profile}"' for profile in profiles)
+        lines.extend(
+            [
+                f"  {service_name}:",
+                f"    profiles: [{rendered}]",
+                "    image: example:latest",
+            ]
+        )
+        if dependencies:
+            lines.append("    depends_on:")
+            for dependency in dependencies:
+                lines.extend([f"      {dependency}:", "        condition: service_started"])
+        service_networks = (networks or {}).get(service_name, [])
+        if service_networks:
+            lines.append("    networks:")
+            for network in service_networks:
+                lines.append(f"      - {network}")
+    (project_dir / "docker-compose.yml").write_text("\n".join(lines))
+
+
 def _node_resource(node_name: str) -> PlannedResource:
     address = f"provision.node.{node_name}"
     payload = {
@@ -47,6 +74,15 @@ def _node_resource(node_name: str) -> PlannedResource:
         resource_type="node",
         payload=payload,
     )
+
+
+def _node_resource_with_dependencies(
+    node_name: str,
+    *dependencies: str,
+) -> PlannedResource:
+    resource = _node_resource(node_name)
+    resource.payload["spec"]["infrastructure"]["dependencies"] = list(dependencies)
+    return resource
 
 
 def _plan_for_resources(*resources: PlannedResource) -> ProvisioningPlan:
@@ -711,6 +747,212 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
     assert second.success is True
     assert backend.start.call_args_list[0].args == (["kali", "otel"],)
     assert backend.start.call_args_list[1].args == (["victim", "otel"],)
+
+
+def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], []),
+            "db": (["soc"], ["wazuh.manager"]),
+            "wazuh.manager": (["wazuh"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "soc": True, "wazuh": True},
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource_with_dependencies("techvault.webapp", "db")),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is True
+    backend.start.assert_called_once_with(["wazuh", "enterprise", "soc", "otel"])
+    assert result.details["realization"]["profiles"] == ["enterprise", "soc", "wazuh"]
+
+
+def test_provisioner_treats_compose_network_dependency_as_network_support(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+        networks={"webapp": ["internal-net"]},
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(
+            _node_resource_with_dependencies("techvault.webapp", "internal-net")
+        ),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is True
+    assert all(
+        diagnostic.code != "aptl.provisioner.dependency-unresolved"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_called_once_with(["enterprise", "otel"])
+
+
+def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], ["db"]),
+            "db": (["wazuh"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "wazuh": False},
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource_with_dependencies("techvault.webapp", "db")),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.dependency-profile-disabled"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_not_called()
+
+
+def test_provisioner_rejects_missing_declared_dependency(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource_with_dependencies("techvault.webapp", "db")),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.dependency-unresolved"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_not_called()
+
+
+def test_provisioner_rejects_missing_compose_dependency(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], ["missing-db"]),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource("techvault.webapp")),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.compose-dependency-unresolved"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_not_called()
+
+
+def test_provisioner_rejects_ambiguous_declared_dependency(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], []),
+            "db": (["soc"], []),
+            "aptl-db": (["wazuh"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "soc": True, "wazuh": True},
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource_with_dependencies("techvault.webapp", "db")),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.dependency-ambiguous"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_not_called()
 
 
 def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):

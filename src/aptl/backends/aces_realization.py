@@ -17,6 +17,7 @@ from aptl.backends.aces_diagnostics import (
     diagnostic,
     unsupported_resource_diagnostics,
 )
+from aptl.backends.aces_dependency_closure import append_dependency_closure
 from aptl.backends.aces_profiles import (
     ComposeProfileIndex,
     explicit_compose_profile_hints,
@@ -71,6 +72,15 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
+        diagnostics,
+    )
+    append_dependency_closure(
+        payload_resources,
+        nodes,
+        networks,
+        profile_index,
+        config,
+        profiles,
         diagnostics,
     )
     placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)

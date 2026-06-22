@@ -197,12 +197,14 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         "runtime-snapshot-v1",
         "workflow-result-envelope-v1",
         "workflow-history-event-stream-v1",
+        "evaluation-result-envelope-v1",
+        "evaluation-history-event-stream-v1",
     }
     assert required <= set(payload["supported_contract_versions"])
-    # orchestration-capable: orchestrator declared; evaluator / participant
-    # runtime remain out of scope (#312).
+    # orchestration-evaluation: orchestrator + evaluator declared; participant
+    # runtime remains out of scope.
     assert manifest.has_orchestrator is True
-    assert manifest.has_evaluator is False
+    assert manifest.has_evaluator is True
     assert manifest.has_participant_runtime is False
 
 
@@ -226,7 +228,7 @@ def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
     assert report.unsupported_capability_gaps == ()
 
 
-def test_aptl_target_passes_orchestration_capable_conformance(tmp_path):
+def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
     from aces_conformance.conformance import run_target_conformance
 
     from aptl.backends.aces import create_aptl_runtime_target
@@ -239,14 +241,11 @@ def test_aptl_target_passes_orchestration_capable_conformance(tmp_path):
         backend=backend,
     )
 
-    report = run_target_conformance(target, profile="orchestration-capable")
+    report = run_target_conformance(target, profile="orchestration-evaluation")
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
-    # The live probe submits a workflow scenario through the control plane and
-    # validates the resulting orchestration snapshot; assert APTL's orchestrator
-    # produced a contract-clean run-archive surface.
     assert all(case.passed for case in report.cases), [
         (case.name, [d.message for d in case.diagnostics])
         for case in report.cases
@@ -439,11 +438,88 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     assert result.error
 
 
-def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_path):
-    """A scenario carrying evaluation content (e.g. the `conditions` healthcheck
-    section) must still provision. APTL declares no ACES evaluator yet (#312), so
-    the planner's `evaluator.missing` error and the resulting invalid plan must
-    not block lab standup."""
+def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, tmp_path):
+    """A scenario carrying objectives routes through the control plane's
+    evaluation submission after provisioning and orchestration."""
+    from aces_contracts.planning import ChangeAction, EvaluationOp, EvaluationPlan
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
+    orchestration = _workflow_orchestration_plan()
+    evaluation = EvaluationPlan(
+        resources={},
+        operations=[
+            EvaluationOp(
+                action=ChangeAction.CREATE,
+                address="evaluation.objective.validate",
+                resource_type="objective",
+                payload={"name": "validate"},
+            )
+        ],
+        startup_order=(),
+    )
+
+    submit_calls: list[str] = []
+
+    class FakeControlPlane:
+        def __init__(self, target, initial_snapshot=None):
+            del target, initial_snapshot
+
+        def submit_provisioning(self, plan):
+            submit_calls.append("provisioning")
+            receipt = MagicMock()
+            receipt.operation_id = "prov"
+            receipt.diagnostics = []
+            return receipt
+
+        def submit_orchestration(self, plan):
+            submit_calls.append("orchestration")
+            receipt = MagicMock()
+            receipt.operation_id = "orch"
+            receipt.diagnostics = []
+            return receipt
+
+        def submit_evaluation(self, plan):
+            submit_calls.append("evaluation")
+            receipt = MagicMock()
+            receipt.operation_id = "eval"
+            receipt.diagnostics = []
+            return receipt
+
+        def get_operation(self, operation_id):
+            status = MagicMock()
+            status.state = OperationState.SUCCEEDED
+            status.diagnostics = []
+            return status
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            return _FakeExecutionPlan(
+                _plan_for_nodes("techvault.victim"),
+                orchestration=orchestration,
+                evaluation=evaluation,
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.success is True
+    assert submit_calls == ["provisioning", "orchestration", "evaluation"]
+
+
+def test_start_aces_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_path):
+    """A planner error in the evaluation domain must fail closed."""
     from aces_contracts.diagnostics import Diagnostic, Severity
 
     from aptl.backends import aces
@@ -451,11 +527,11 @@ def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_p
     _write_compose(tmp_path, {"victim": ["victim"]})
     mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
 
-    evaluator_missing = Diagnostic(
-        code="evaluator.missing",
+    evaluator_error = Diagnostic(
+        code="evaluator.unsupported-section",
         domain="evaluation",
-        address="evaluation",
-        message="Scenario requires evaluation support, but no evaluator is configured.",
+        address="evaluation.metrics.score",
+        message="Scenario requires unsupported evaluation section.",
         severity=Severity.ERROR,
     )
 
@@ -467,25 +543,22 @@ def test_start_aces_scenario_provisions_despite_evaluation_content(mocker, tmp_p
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 is_valid=False,
-                diagnostics=[evaluator_missing],
+                diagnostics=[evaluator_error],
             )
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is True
-    backend.start.assert_called_once_with(["victim", "otel"])
+    assert result.success is False
+    assert result.error
+    backend.start.assert_not_called()
 
 
-def test_start_aces_scenario_fails_closed_on_non_evaluator_plan_error(mocker, tmp_path):
-    """A planner error that is NOT the expected evaluation-domain
-    `evaluator.missing` (e.g. a provisioning ordering cycle) must fail closed:
-    the ACES handoff must refuse to start Compose on an otherwise invalid
-    execution plan rather than bypass the gate for every plan."""
+def test_start_aces_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp_path):
+    """A provisioning planner error must fail closed before lab standup."""
     from aces_contracts.diagnostics import Diagnostic, Severity
 
     from aptl.backends import aces

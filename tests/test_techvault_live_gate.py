@@ -223,6 +223,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     )
     assert report.passed
     assert {c.name for c in report.checks} == {
+        "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
         "aces_driven_boot",
@@ -249,7 +250,7 @@ def test_validate_live_deployment_short_circuits_on_static_failure(monkeypatch):
         SCENARIO, project_dir=PROJECT_ROOT, config=_config()
     )
     assert not report.passed
-    assert [c.name for c in report.checks] == ["static_prerequisite"]
+    assert [c.name for c in report.checks] == ["run_id_input", "static_prerequisite"]
 
 
 def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
@@ -275,6 +276,7 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
     )
     assert not report.passed
     assert [c.name for c in report.checks] == [
+        "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
         "aces_driven_boot",
@@ -441,6 +443,7 @@ def test_validate_live_deployment_short_circuits_on_input_mismatch(monkeypatch):
     )
     assert not report.passed
     assert [c.name for c in report.checks] == [
+        "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
     ]
@@ -732,7 +735,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert path == "live-gate/manifest.json"
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
-    assert manifest["evaluator_surfaces_deferred"]["objectives"] == "#312"
+    assert manifest["evaluator_surfaces"]["profile"] == "orchestration-evaluation"
     assert manifest["scenario"]["name"] == "techvault-operational"
 
 
@@ -931,7 +934,7 @@ def _patch_cli(mocker, *, passed=True):
 
     report = LiveGateReport(
         "scn",
-        "orchestration-capable",
+        "orchestration-evaluation",
         "rid",
         (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )
@@ -945,6 +948,28 @@ def _patch_cli(mocker, *, passed=True):
         return_value=report,
     )
     return CliRunner(), run
+
+
+def test_validate_live_deployment_rejects_unsafe_run_id():
+    report = validate_live_deployment(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(run_id="../escape"),
+    )
+    assert not report.passed
+    assert any("run_id" in d for check in report.checks for d in check.diagnostics)
+
+
+def test_cli_validate_live_rejects_traversal_run_id(mocker):
+    from aptl.cli.main import app
+
+    runner, run = _patch_cli(mocker, passed=True)
+    result = runner.invoke(
+        app,
+        ["lab", "validate-live", "--skip-clean-boot", "--run-id", "../escape"],
+    )
+    assert result.exit_code != 0
+    run.assert_not_called()
 
 
 def test_cli_validate_live_help():

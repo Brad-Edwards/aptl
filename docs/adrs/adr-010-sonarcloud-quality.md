@@ -55,17 +55,32 @@ Integrate SonarCloud via GitHub Actions for continuous code quality analysis acr
 - SonarCloud free tier limits may be reached as the codebase grows (currently well within limits for open-source projects)
 - Coverage thresholds are not yet enforced as quality gates—currently informational only
 
-## Update (2026-05-10): SonarCloud gate stays advisory; a hard in-repo complexity gate is added
+## Update (2026-06-21): SonarCloud gate is required again (issue #502)
 
-The SonarCloud analysis now lives in `.github/workflows/checks.yml` (the
-former `sonarcloud.yml` was folded in), and the quality-gate job is run
+The SonarCloud job in `.github/workflows/checks.yml` is a **required** merge
+gate again: it runs with `-Dsonar.qualitygate.wait=true` and invokes
+`tools/sonar/assert_no_new_issues.py` so any open issue in the new-code leak
+period fails CI. Advisory vulnerability scanners (Trivy, OSV-scanner,
+dependency-audit) stay non-blocking per ADR-026.
+
+Branch protection on `main` and `dev` uses strict required status checks
+(documented in `.github/branch-protection-baseline.json`): pre-commit, docs,
+Python/MCP/web test jobs, and SonarCloud. Admin bypass is retained
+(`enforce_admins: false`).
+
+The hard in-repo per-function complexity gates (`ruff` `C901`, ESLint
+`complexity`) remain unchanged and continue to gate through the required
+Pre-commit hooks job.
+
+## Update (2026-05-10): SonarCloud gate stayed advisory; hard complexity gate added
+
+The SonarCloud analysis lived in `.github/workflows/checks.yml` (the
+former `sonarcloud.yml` was folded in), and the quality-gate job was run
 **advisory** (`continue-on-error`, no `-Dsonar.qualitygate.wait`): the
 "Sonar way" gate's *Coverage on New Code ≥ 80%* condition would otherwise
 block infra-only commits (Dockerfiles, compose, workflows, scripts) that add
-no covered code. The scan still runs on every PR/push and the dashboard
-reflects current state; SonarCloud's PR analysis is also new-code-scoped, so
-it only surfaces issues on the lines a PR changes—pre-existing complexity
-debt in a lightly touched file is invisible to it.
+no covered code. Issue #502 reverts that posture now that the repo also
+carries the new-code issue gate script.
 
 To keep god-methods / non-modular code out of the tree without the coverage
 trap and without the new-code-only blind spot, a dedicated, **hard**,

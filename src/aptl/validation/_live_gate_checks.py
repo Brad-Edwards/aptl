@@ -128,6 +128,19 @@ def check_static_prerequisite(
 # --------------------------------------------------------------------------- #
 
 
+def check_run_id_input(options: "LiveGateOptions") -> LiveGateCheck:
+    """Reject caller-supplied run ids that could escape the run archive tree."""
+    from aptl.core.runstore import _validate_id
+
+    if options.run_id is None:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+    try:
+        _validate_id(options.run_id, "run_id")
+    except ValueError as exc:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [str(exc)])
+    return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+
+
 def check_boot_inputs_match_public_path(
     scenario_path: Path,
     *,
@@ -139,7 +152,7 @@ def check_boot_inputs_match_public_path(
     The gate computes the expected realization from ``scenario_path`` and
     ``options.profile``, but the public boot path it exercises
     (``orchestrate_lab_start`` → ``start_aces_scenario``) is hardwired to
-    ``DEFAULT_ACES_SCENARIO`` and the ``orchestration-capable`` capability profile;
+    ``DEFAULT_ACES_SCENARIO`` and the ``orchestration-evaluation`` capability profile;
     it ignores any caller-supplied scenario/profile. Booting one model while
     validating another would silently produce false pass/fail results, so a
     mismatch is a hard ``backend_instantiation`` failure raised *before* any
@@ -387,9 +400,9 @@ def check_run_archive_manifest(
 ) -> LiveGateCheck:
     """Persist scenario identity + ACES provenance + validation evidence.
 
-    Writes through ``LocalRunStore``'s redacting boundary (ADR-029). Objective /
-    scoring run surfaces are the evaluator-profile output deferred to #312; they
-    are recorded as deferred, never faked.
+    Writes through ``LocalRunStore``'s redacting boundary (ADR-029).     Objective / scoring run surfaces are published through the portable ACES
+    evaluation contracts at the backend boundary; live outcome progression from
+    RTE-001 remains follow-on work tracked by #514.
     """
     realization = state.realization_details or {}
     manifest = {
@@ -413,10 +426,13 @@ def check_run_archive_manifest(
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,
-        "evaluator_surfaces_deferred": {
-            "objectives": "#312",
-            "scoring": "#312",
-            "run_archive_evaluator_output": "#312",
+        "evaluator_surfaces": {
+            "profile": "orchestration-evaluation",
+            "contracts": [
+                "evaluation-result-envelope-v1",
+                "evaluation-history-event-stream-v1",
+            ],
+            "execution_state_integration": "#514",
         },
     }
 

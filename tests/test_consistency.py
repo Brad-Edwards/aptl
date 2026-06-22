@@ -137,6 +137,39 @@ class TestComposeConsistency:
         assert "/seed/suricata.yaml" in entrypoint
         assert "exec /docker-entrypoint.sh" in entrypoint
 
+    def test_otel_collector_healthcheck_uses_image_binary(self, compose_config):
+        """The OTEL collector image is distroless, so the healthcheck cannot
+        depend on shell utilities such as wget or curl."""
+        collector = compose_config["services"]["aptl-otel-collector"]
+        test = collector.get("healthcheck", {}).get("test")
+
+        assert test == [
+            "CMD",
+            "/otelcol-contrib",
+            "validate",
+            "--config",
+            "/etc/otelcol-contrib/config.yaml",
+        ]
+
+    def test_web_api_token_does_not_block_inactive_profiles(self, compose_config):
+        """Compose expands environment substitutions for inactive profiles, so
+        the optional web token must be validated by the web runtime instead of
+        by `${VAR:?}` interpolation in docker-compose.yml."""
+        services = compose_config["services"]
+        env_lines = (
+            services["aptl-web-api"]["environment"]
+            + services["aptl-web-ui"]["environment"]
+        )
+        token_lines = [
+            line for line in env_lines if line.startswith("APTL_API_TOKEN=")
+        ]
+
+        assert token_lines == [
+            "APTL_API_TOKEN=${APTL_API_TOKEN:-}",
+            "APTL_API_TOKEN=${APTL_API_TOKEN:-}",
+        ]
+        assert not any(":?" in line for line in token_lines)
+
 
 class TestKaliContainerLifecycle:
     """Issue #293 / ADR-033 §2: the kali container must reap children and

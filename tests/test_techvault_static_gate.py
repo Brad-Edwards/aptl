@@ -23,8 +23,13 @@ from aces_contracts.planning import (
     RuntimeDomain,
 )
 
+from aptl.backends.aces_profiles import (
+    public_start_profiles,
+    select_backend_profiles,
+    steady_state_service_aliases_for_profiles,
+)
 from aptl.backends.aces_realization import interpret_provisioning_plan
-from aptl.core.config import AptlConfig
+from aptl.core.config import AptlConfig, load_config
 from aptl.validation import _gate_checks as gc
 from aptl.validation._gate_checks import (
     _NoStartBackend,
@@ -57,6 +62,7 @@ from aptl.validation.techvault_gate import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
+OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -98,6 +104,36 @@ def test_gate_runs_every_fast_stage(techvault_report):
 
 def test_committed_lockfile_exists():
     assert (SCENARIO.with_name("aces.lock.json")).exists()
+
+
+def test_operational_scenario_matches_public_start_profiles_and_services():
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert scenario is not None
+    assert parse_check.passed, parse_check.diagnostics
+
+    details, check = check_provisioning_realization(
+        scenario=scenario, project_dir=PROJECT_ROOT, config=config
+    )
+    assert details is not None
+    assert check.passed, check.diagnostics
+
+    expected_profiles = public_start_profiles(config)
+    selected_profiles = select_backend_profiles(
+        config, frozenset(details.get("profiles", []))
+    )
+    assert selected_profiles == expected_profiles
+
+    expected_services = steady_state_service_aliases_for_profiles(
+        PROJECT_ROOT, expected_profiles
+    )
+    realized_aliases = _realized_aliases(details)
+    missing = {
+        service: aliases
+        for service, aliases in expected_services.items()
+        if not set(aliases) & realized_aliases
+    }
+    assert missing == {}
 
 
 @pytest.mark.integration
@@ -523,6 +559,55 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
     assert details is None and not check.passed
 
 
+def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
+    from textwrap import dedent
+
+    from aces_sdl.parser import parse_sdl
+
+    _write_compose(tmp_path, {"kali": ["kali"], "victim": ["victim"]})
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: partial-range
+            nodes:
+              internal-net:
+                type: switch
+              kali:
+                type: vm
+                services:
+                  - {name: ssh, port: 22, protocol: tcp}
+            infrastructure:
+              internal-net:
+                properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+              kali:
+                links: [internal-net]
+            """
+        )
+    )
+    config = AptlConfig(
+        lab={"name": "t"},
+        containers={
+            "wazuh": False,
+            "victim": True,
+            "kali": True,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": False,
+            "dns": False,
+        },
+    )
+
+    details, check = check_provisioning_realization(
+        scenario=scenario, project_dir=tmp_path, config=config
+    )
+
+    assert details is not None
+    assert not check.passed
+    assert any("public lab start profiles" in d for d in check.diagnostics)
+
+
 def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(gc, "check_parse", lambda p: ("scn", GateCheck("parse", True)))
     monkeypatch.setattr(gc, "check_import_lock", lambda p: GateCheck("import_lock", True))
@@ -576,3 +661,10 @@ def test_no_start_backend_refuses_everything():
         backend.stop()
     with pytest.raises(RuntimeError):
         backend.status()
+
+
+def _realized_aliases(details):
+    aliases = set()
+    for node in details.get("nodes", []):
+        aliases.update(node.get("aliases", []))
+    return aliases

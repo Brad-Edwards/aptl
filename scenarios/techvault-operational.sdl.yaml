@@ -1,0 +1,294 @@
+name: techvault
+description: >
+  Operational ACES projection for the TechVault range. This SDL is the public
+  startup contract: it names the steady-state Compose services and networks
+  that `aptl lab start` realizes without carrying the deep per-asset inventory
+  encoded in scenarios/techvault.sdl.yaml.
+
+nodes:
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+  dmz-net:
+    type: switch
+    description: TechVault DMZ network.
+  internal-net:
+    type: switch
+    description: Internal enterprise target network.
+  redteam-net:
+    type: switch
+    description: Red-team operations network.
+
+  wazuh-manager:
+    type: vm
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      health:
+        status: healthy
+        description: Compose healthcheck must pass before public startup is ready.
+  wazuh-indexer:
+    type: vm
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+  wazuh-dashboard:
+    type: vm
+    os: linux
+    services:
+      - {name: dashboard, port: 5601, protocol: tcp}
+
+  suricata:
+    type: vm
+    os: linux
+    services: []
+  misp:
+    type: vm
+    os: linux
+    services:
+      - {name: https, port: 443, protocol: tcp}
+  misp-db:
+    type: vm
+    os: linux
+    services:
+      - {name: mysql, port: 3306, protocol: tcp}
+  misp-redis:
+    type: vm
+    os: linux
+    services:
+      - {name: redis, port: 6379, protocol: tcp}
+  misp-suricata-sync:
+    type: vm
+    os: linux
+    services: []
+  thehive:
+    type: vm
+    os: linux
+    services:
+      - {name: thehive-api, port: 9000, protocol: tcp}
+  thehive-cassandra:
+    type: vm
+    os: linux
+    services:
+      - {name: cassandra, port: 9042, protocol: tcp}
+  thehive-es:
+    type: vm
+    os: linux
+    services:
+      - {name: elasticsearch, port: 9200, protocol: tcp}
+  cortex:
+    type: vm
+    os: linux
+    services:
+      - {name: cortex-api, port: 9001, protocol: tcp}
+  shuffle-backend:
+    type: vm
+    os: linux
+    services:
+      - {name: shuffle-api, port: 5001, protocol: tcp}
+  shuffle-frontend:
+    type: vm
+    os: linux
+    services:
+      - {name: https, port: 443, protocol: tcp}
+      - {name: http, port: 80, protocol: tcp}
+  shuffle-orborus:
+    type: vm
+    os: linux
+    services: []
+  shuffle-opensearch:
+    type: vm
+    os: linux
+    services:
+      - {name: opensearch-rest, port: 9200, protocol: tcp}
+      - {name: opensearch-transport, port: 9300, protocol: tcp}
+  wazuh-sidecar-db:
+    type: vm
+    os: linux
+    services: []
+  wazuh-sidecar-suricata:
+    type: vm
+    os: linux
+    services: []
+
+  webapp:
+    type: vm
+    os: linux
+    services:
+      - {name: http, port: 8080, protocol: tcp}
+  ad:
+    type: vm
+    os: linux
+    services:
+      - {name: ldap, port: 389, protocol: tcp}
+      - {name: kerberos, port: 88, protocol: tcp}
+      - {name: smb, port: 445, protocol: tcp}
+  db:
+    type: vm
+    os: linux
+    services:
+      - {name: postgres, port: 5432, protocol: tcp}
+  workstation:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+  fileshare:
+    type: vm
+    os: linux
+    services:
+      - {name: smb, port: 445, protocol: tcp}
+  dns:
+    type: vm
+    os: linux
+    services:
+      - {name: dns, port: 53, protocol: udp}
+  victim:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+
+  kali:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+  kali-capture:
+    type: vm
+    os: linux
+    services: []
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+  dmz-net:
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1, internal: true}
+  internal-net:
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  redteam-net:
+    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
+
+  wazuh-manager:
+    links: [security-net, dmz-net, internal-net]
+  wazuh-indexer:
+    links: [security-net]
+    dependencies: [wazuh-manager]
+  wazuh-dashboard:
+    links: [security-net]
+    dependencies: [wazuh-indexer, wazuh-manager]
+
+  suricata:
+    links: [security-net, dmz-net, internal-net]
+  misp:
+    links: [security-net]
+    dependencies: [misp-db, misp-redis]
+  misp-db:
+    links: [security-net]
+  misp-redis:
+    links: [security-net]
+  misp-suricata-sync:
+    links: [security-net]
+    dependencies: [misp, suricata]
+  thehive:
+    links: [security-net]
+    dependencies: [thehive-cassandra, thehive-es, cortex]
+  thehive-cassandra:
+    links: [security-net]
+  thehive-es:
+    links: [security-net]
+  cortex:
+    links: [security-net]
+    dependencies: [thehive-es]
+  shuffle-backend:
+    links: [security-net]
+    dependencies: [shuffle-opensearch]
+  shuffle-frontend:
+    links: [security-net]
+    dependencies: [shuffle-backend]
+  shuffle-orborus:
+    links: [security-net]
+    dependencies: [shuffle-backend]
+  shuffle-opensearch:
+    links: [security-net]
+  wazuh-sidecar-db:
+    links: [security-net]
+    dependencies: [wazuh-manager, db]
+  wazuh-sidecar-suricata:
+    links: [security-net]
+    dependencies: [wazuh-manager, suricata]
+
+  webapp:
+    links: [dmz-net, internal-net]
+    dependencies: [db, wazuh-manager]
+  ad:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+  db:
+    links: [internal-net]
+  workstation:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+  fileshare:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+  dns:
+    links: [security-net, dmz-net, internal-net]
+    dependencies: [wazuh-manager]
+  victim:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+
+  kali:
+    links: [redteam-net, dmz-net, internal-net]
+  kali-capture:
+    dependencies: [kali]
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]
+
+features:
+  techvault-webapp-service:
+    type: service
+    source:
+      name: aptl-webapp
+      version: local
+    description: TechVault vulnerable customer portal service.
+  techvault-defensive-stack:
+    type: service
+    source:
+      name: aptl-soc-stack
+      version: local
+    description: Wazuh, Suricata, MISP, TheHive, Cortex, and Shuffle services.
+
+vulnerabilities:
+  webapp-sqli-login:
+    name: SQL injection in login
+    description: Login form accepts intentionally vulnerable SQL input.
+    technical: true
+    class: CWE-89

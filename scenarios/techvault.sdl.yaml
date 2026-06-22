@@ -143,8 +143,6 @@ imports:
   namespace: techvault
 - source: local:techvault/nodes/reverse.sdl.yaml
   namespace: techvault
-- source: local:techvault/sections/conditions.sdl.yaml
-  namespace: techvault
 - source: local:techvault/sections/infrastructure.sdl.yaml
   namespace: techvault
 - source: local:techvault/sections/features.sdl.yaml

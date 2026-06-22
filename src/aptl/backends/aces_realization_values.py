@@ -88,6 +88,14 @@ def network_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
     return string_values(infra_spec.get("links"))
 
 
+def dependency_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
+    """Extract declared node dependency names from infrastructure details."""
+
+    if infra_spec is None:
+        return set()
+    return string_values(infra_spec.get("dependencies"))
+
+
 def static_addresses(infra_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract static host addresses from infrastructure details."""
 

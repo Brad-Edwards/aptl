@@ -45,9 +45,13 @@ layer that broke:
    The gate computes the realization matrix from `RuntimeManager.plan()` and
    `interpret_provisioning_plan()`, the same interpretation `AptlProvisioner`
    performs, so the expected node, service, network, and profile surface is
-   keyed by ACES resource addresses. It then runs `stop_lab(remove_volumes)`
-   cleanup and `orchestrate_lab_start()`, whose only container-start path is the
-   ACES handoff in `_step_start_containers()`. A realization with errors fails as
+   keyed by ACES resource addresses. Realization expands selected-node
+   dependencies through ACES provisioning edges and Compose `depends_on`
+   metadata before the backend starts; missing, ambiguous, or config-disabled
+   support services fail as `backend_interpretation` instead of booting an
+   incomplete range. It then runs `stop_lab(remove_volumes)` cleanup and
+   `orchestrate_lab_start()`, whose only container-start path is the ACES
+   handoff in `_step_start_containers()`. A realization with errors fails as
    `backend_interpretation`; a failed boot fails as `backend_instantiation`.
 4. **Defensive-stack readiness** (`defensive_stack_readiness`). Every
    ACES-realized node maps to a running, healthy container in the post-boot

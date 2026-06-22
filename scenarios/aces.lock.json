@@ -49,8 +49,8 @@
       "source": "local:techvault/nodes/security-net.sdl.yaml"
     },
     {
-      "content_digest": "sha256:492a37b8b1a461eb4baf168a1bd765496f72b6741855d4e1a9a562e74cb7742e",
-      "export_hash": "6530e1e2f4c6a562e0cd20b6c68e0004a9bca5a960cb0a4dbfb316a5e81ea8dc",
+      "content_digest": "sha256:6ca1748a867c5224b7bdc357f77808988a67a3864aa4c9f7ed822e2e373ba56e",
+      "export_hash": "aaa7b39bc42420f747a2c2f153d2a28f3cb5e20ed2d26758c969d359aae0ad9c",
       "manifest_digest": "",
       "module_id": "techvault/nodes/db.sdl.yaml",
       "module_version": "*",
@@ -109,8 +109,8 @@
       "source": "local:techvault/nodes/shuffle-orborus.sdl.yaml"
     },
     {
-      "content_digest": "sha256:24bc49552aa9da25eb4bd0d778ea7e56cc0bbfbb306be9c932cbc2130693ac29",
-      "export_hash": "a44ac6efa4c891896de45992d649d496358ac45755c0a30362545b859534211b",
+      "content_digest": "sha256:d42f69711e1f65792faf0b70fc6536b8538319bcf14abc75edc08709c17f0351",
+      "export_hash": "4f6ef35603cef43ce62d7574bcd6ac4b528b25a157992f254b67f8ac8388ce3b",
       "manifest_digest": "",
       "module_id": "techvault/nodes/wazuh-manager.sdl.yaml",
       "module_version": "*",
@@ -193,7 +193,7 @@
       "source": "local:techvault/nodes/wazuh-dashboard.sdl.yaml"
     },
     {
-      "content_digest": "sha256:db39c6f0edae49450453b0e5684a017aadc60e9ee266160b9b4c2c28bd9eed21",
+      "content_digest": "sha256:3b6a102dc56da54866c526a54c1b973c09e64f560e76cb0419890cd4e912ca48",
       "export_hash": "dc86cfcc733b0bb788352a77f73448e131a7d970da38a4ec7321b5363f1162a5",
       "manifest_digest": "",
       "module_id": "techvault/nodes/webapp.sdl.yaml",
@@ -205,7 +205,7 @@
       "source": "local:techvault/nodes/webapp.sdl.yaml"
     },
     {
-      "content_digest": "sha256:de6f1f561a533e094b2d9d0146148874eaf3e5b2bd68f3027739311bdf077868",
+      "content_digest": "sha256:94160121d35bb4fd46d29c82dc969af53da814b211c6b3b505e6687ab92c5a55",
       "export_hash": "0a7d7cc5a70562bcafdb7a1dfc1872fdd484713f6f732b32b53471efeeb2deca",
       "manifest_digest": "",
       "module_id": "techvault/nodes/fileshare.sdl.yaml",
@@ -217,8 +217,8 @@
       "source": "local:techvault/nodes/fileshare.sdl.yaml"
     },
     {
-      "content_digest": "sha256:838e4021ecd9e3f5ddca75802ce5edcbde01d782857e1cecdf849e6a5d49b6a8",
-      "export_hash": "0b9d25e7a2768428ec938743fa46217ee3df60628d03208bf7e64528a676df47",
+      "content_digest": "sha256:202cc0faccce37838a1f3921d65d575a763a966c4560576f71dbb26e16c092f9",
+      "export_hash": "75479a91dd9e05c295723edb26a0180c87647c163dc3b815ff388e108b00044d",
       "manifest_digest": "",
       "module_id": "techvault/nodes/kali.sdl.yaml",
       "module_version": "*",
@@ -229,7 +229,7 @@
       "source": "local:techvault/nodes/kali.sdl.yaml"
     },
     {
-      "content_digest": "sha256:2e5f6940684a6459c2662289b82df517350a5c708b5e1fb2f49f43ba426e7205",
+      "content_digest": "sha256:c08a57a186c46c7b519fbbf4ec5517eda5d72a957900bd2de7940de1b1aa2145",
       "export_hash": "6e805e8b4c7d932d90e682e1d85664280f0b2b38550f4123cfa8bdcb5d97e996",
       "manifest_digest": "",
       "module_id": "techvault/nodes/ad.sdl.yaml",
@@ -241,7 +241,7 @@
       "source": "local:techvault/nodes/ad.sdl.yaml"
     },
     {
-      "content_digest": "sha256:1efac972f0cac386a4775cfb003fdc5887f0dac479a3dbd35ed3b56d3b46f712",
+      "content_digest": "sha256:49182abc5a968fbf42f8b7237a48041f4b3440d845e662eed1f89a153cff5356",
       "export_hash": "30e70ea81c1cb48c2c1fb3473c9c32d47254a92897dd2d174b2f94b0188aa3e5",
       "manifest_digest": "",
       "module_id": "techvault/nodes/mailserver.sdl.yaml",
@@ -253,7 +253,7 @@
       "source": "local:techvault/nodes/mailserver.sdl.yaml"
     },
     {
-      "content_digest": "sha256:77272670a4f3a0ba4194505469f7ff861191c1dea8f888dcc1bd189412059e45",
+      "content_digest": "sha256:2d9fea67d10d11dfa44f3db1439099f8fd8ead3e45fb5ea3f8b9034e880401b0",
       "export_hash": "d1564b8e6ae102206edd7ce1737c90775a35866e033c951f220dca759e890598",
       "manifest_digest": "",
       "module_id": "techvault/nodes/workstation.sdl.yaml",
@@ -265,7 +265,7 @@
       "source": "local:techvault/nodes/workstation.sdl.yaml"
     },
     {
-      "content_digest": "sha256:6532436333c9ad63115f301dacb35440e98a0136058f0afb93fa89b6f2c64f70",
+      "content_digest": "sha256:b09abef8d9d5083f424bc619d49f230530321b5a788aa7fa6a1caae9021d16ad",
       "export_hash": "d7f0c266663f2f6ed131502df1fe7d20a6d5675cddbe19295497192cba31f059",
       "manifest_digest": "",
       "module_id": "techvault/nodes/victim.sdl.yaml",
@@ -277,7 +277,7 @@
       "source": "local:techvault/nodes/victim.sdl.yaml"
     },
     {
-      "content_digest": "sha256:d213d6e0ebb8e53d0eae82e205812f0652937d9259a65a2091eba95ffced71dc",
+      "content_digest": "sha256:9c587e43795491e6f192dbe93248d03ab17d869761c28e93526a2e0b094d18fc",
       "export_hash": "ac621692d7d086985baf77c7faa7de99f3a88ad8c1a9383528f49e048f16cba3",
       "manifest_digest": "",
       "module_id": "techvault/nodes/dns.sdl.yaml",
@@ -289,7 +289,7 @@
       "source": "local:techvault/nodes/dns.sdl.yaml"
     },
     {
-      "content_digest": "sha256:c0516b3a68dd5243c6cc1e419fad10cae837c47386cf8a79c521968fbcfb7608",
+      "content_digest": "sha256:50a8a193b13e5dbd40e96e9d4080e6f9a3d4fe565a569439b2a3a2baf96d1ef4",
       "export_hash": "3e04bdf68f0838d179ce931874dcc11bb03e69fee75c703f0d015d6cac8fe98d",
       "manifest_digest": "",
       "module_id": "techvault/nodes/misp.sdl.yaml",
@@ -383,18 +383,6 @@
       "resolved_source": "techvault/nodes/reverse.sdl.yaml",
       "signer_id": "",
       "source": "local:techvault/nodes/reverse.sdl.yaml"
-    },
-    {
-      "content_digest": "sha256:1ea6e1d406a364eaf92facb97fff1ddb6f17e08cf3342b4ec29044b3c5a490ca",
-      "export_hash": "25b94262eb5c562b712b8e350df93f37e0f5f40ca378367862115fb47df10aa8",
-      "manifest_digest": "",
-      "module_id": "techvault/sections/conditions.sdl.yaml",
-      "module_version": "*",
-      "namespace": "techvault",
-      "requested_version": "*",
-      "resolved_source": "techvault/sections/conditions.sdl.yaml",
-      "signer_id": "",
-      "source": "local:techvault/sections/conditions.sdl.yaml"
     },
     {
       "content_digest": "sha256:329fc1cb00075c09e3c11df8d64ef60eed47c03db5b6ed3ef16207731706dd53",

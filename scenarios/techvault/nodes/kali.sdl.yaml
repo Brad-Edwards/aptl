@@ -1,4 +1,11 @@
 name: techvault-node-kali
+conditions:
+  kali-healthcheck:
+    command: "/usr/local/bin/aptl-healthcheck.sh"
+    interval: 15
+    timeout: 5
+    retries: 5
+    start_period: 30
 nodes:
   kali:
     type: vm
@@ -422,7 +429,8 @@ nodes:
     os: linux
     os_version: Kali GNU/Linux Rolling 2026.1
     features: {}
-    conditions: {}
+    conditions:
+      kali-healthcheck: kali-root
     injects: {}
     vulnerabilities: []
     roles:

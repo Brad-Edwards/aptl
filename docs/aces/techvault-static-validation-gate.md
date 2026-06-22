@@ -35,10 +35,14 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
    a downgraded warning and never a reason to accept an APTL-local manifest
    approximation.
 5. **Provisioning realization.** The interpreter realizes the provisioning plan
-   with no errors and produces nodes, services, and networks. The selected
-   Compose profiles must match the public lab-start profile set, so a scenario
-   that would instantiate a partial range fails the gate. The realization is
-   driven by declared content, not by the scenario identifier.
+   with no errors and produces nodes, services, and networks. It computes the
+   dependency closure for selected nodes from ACES provisioning dependencies
+   and Compose `depends_on` metadata before selecting backend profiles, so a
+   subset scenario pulls in required support profiles or fails with ACES
+   diagnostics for missing, ambiguous, or disabled support services. The
+   selected Compose profiles must match the public lab-start profile set, so a
+   scenario that would instantiate a partial range fails the gate. The
+   realization is driven by declared content, not by the scenario identifier.
 6. **Parity manifest.** Every required observable surface in
    `docs/aces/parity-inventory.yaml` under `required_surface_coverage` is either
    represented (proven by real compiled evidence) or deferred with a linked

@@ -472,7 +472,7 @@ def sync_manager_config(project_dir: Path, cluster_key: str) -> Path:
 
 
 @dataclass(frozen=True)
-class SuricataSourceOwnershipResult:
+class SuricataSourceOwnershipResult(object):
     """Result of restoring checked-in Suricata seed source ownership."""
 
     success: bool
@@ -489,6 +489,78 @@ def _suricata_config_source_files(project_dir: Path) -> tuple[Path, ...]:
     for src_rel, _dest_rel in _SURICATA_CONFIG_SEED_FILES:
         paths.append(config_src / src_rel)
     return tuple(paths)
+
+
+def _foreign_owned_sources(source_files: tuple[Path, ...], uid: int) -> list[Path]:
+    """Return the existing *source_files* not owned by *uid*."""
+    return [
+        path
+        for path in source_files
+        if path.is_file() and path.stat().st_uid != uid
+    ]
+
+
+def _chown_direct(paths: list[Path], uid: int, gid: int) -> list[Path]:
+    """``chown`` each path to *uid*/*gid*; return those still foreign-owned.
+
+    Stops at the first :class:`PermissionError` (an unprivileged process
+    cannot chown any of them) and re-stats to report which remain foreign,
+    so the caller can decide whether to escalate via ``sudo``.
+    """
+    for path in paths:
+        try:
+            os.chown(path, uid, gid)
+        except PermissionError:
+            break
+    return [p for p in paths if p.stat().st_uid != uid]
+
+
+def _sudo_chown_error(stderr: str, paths_arg: list[str], uid: int, gid: int) -> str:
+    """Build the actionable error message for a failed ``sudo chown``."""
+    stderr = stderr.strip()
+    if "a password is required" in stderr or "sudo:" in stderr:
+        hint = f"sudo chown {uid}:{gid} " + " ".join(paths_arg)
+        return (
+            f"Suricata config sources are not writable — run "
+            f"'{hint}' manually or configure passwordless sudo for chown"
+        )
+    return stderr or "Suricata config ownership restore failed"
+
+
+def _restore_via_sudo(
+    still_foreign: list[Path], uid: int, gid: int, project_dir: Path,
+) -> SuricataSourceOwnershipResult:
+    """Escalate the ownership repair through passwordless ``sudo chown``."""
+    paths_arg = [str(p) for p in still_foreign]
+    try:
+        perm_result = subprocess.run(
+            ["sudo", "-n", "chown", f"{uid}:{gid}", *paths_arg],
+            capture_output=True,
+            text=True,
+            cwd=project_dir,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return SuricataSourceOwnershipResult(
+            success=False,
+            error=(
+                f"Suricata config sources are owned by another user and "
+                f"could not be restored: {exc}"
+            ),
+        )
+
+    if perm_result.returncode != 0:
+        return SuricataSourceOwnershipResult(
+            success=False,
+            error=_sudo_chown_error(perm_result.stderr, paths_arg, uid, gid),
+        )
+
+    repaired = tuple(str(p.relative_to(project_dir)) for p in still_foreign)
+    log.info(
+        "Restored Suricata config source ownership via sudo: %s",
+        ", ".join(repaired),
+    )
+    return SuricataSourceOwnershipResult(success=True, repaired=repaired)
 
 
 def ensure_suricata_config_source_ownership(
@@ -512,72 +584,17 @@ def ensure_suricata_config_source_ownership(
     except PathContainmentError as exc:
         return SuricataSourceOwnershipResult(success=False, error=str(exc))
 
-    foreign: list[Path] = []
-    for path in source_files:
-        if not path.is_file():
-            continue
-        if path.stat().st_uid != uid:
-            foreign.append(path)
+    foreign = _foreign_owned_sources(source_files, uid)
+    still_foreign = _chown_direct(foreign, uid, gid) if foreign else []
+    if still_foreign:
+        return _restore_via_sudo(still_foreign, uid, gid, project_dir)
 
-    if not foreign:
-        return SuricataSourceOwnershipResult(success=True)
-
-    for path in foreign:
-        try:
-            os.chown(path, uid, gid)
-        except PermissionError:
-            break
-    else:
-        repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
+    repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
+    if repaired:
         log.info(
             "Restored Suricata config source ownership: %s",
             ", ".join(repaired),
         )
-        return SuricataSourceOwnershipResult(success=True, repaired=repaired)
-
-    still_foreign = [p for p in foreign if p.stat().st_uid != uid]
-    if not still_foreign:
-        repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
-        return SuricataSourceOwnershipResult(success=True, repaired=repaired)
-
-    paths_arg = [str(p) for p in still_foreign]
-    try:
-        perm_result = subprocess.run(
-            ["sudo", "-n", "chown", f"{uid}:{gid}", *paths_arg],
-            capture_output=True,
-            text=True,
-            cwd=project_dir,
-            timeout=30,
-        )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
-        return SuricataSourceOwnershipResult(
-            success=False,
-            error=(
-                f"Suricata config sources are owned by another user and "
-                f"could not be restored: {exc}"
-            ),
-        )
-
-    if perm_result.returncode != 0:
-        stderr = perm_result.stderr.strip()
-        hint = (
-            f"sudo chown {uid}:{gid} "
-            + " ".join(paths_arg)
-        )
-        if "a password is required" in stderr or "sudo:" in stderr:
-            error_msg = (
-                f"Suricata config sources are not writable — run "
-                f"'{hint}' manually or configure passwordless sudo for chown"
-            )
-        else:
-            error_msg = stderr or "Suricata config ownership restore failed"
-        return SuricataSourceOwnershipResult(success=False, error=error_msg)
-
-    repaired = tuple(str(p.relative_to(project_dir)) for p in still_foreign)
-    log.info(
-        "Restored Suricata config source ownership via sudo: %s",
-        ", ".join(repaired),
-    )
     return SuricataSourceOwnershipResult(success=True, repaired=repaired)
 
 

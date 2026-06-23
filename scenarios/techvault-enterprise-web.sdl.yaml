@@ -1,0 +1,84 @@
+name: techvault-enterprise-web
+description: >
+  Curated TechVault enterprise-web slice. Declares the vulnerable customer
+  portal (webapp) and its backing database (db) plus the OTEL core observability
+  stack. Includes the enterprise web tier and core observability; omits the SOC
+  defensive stack (Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle) and the
+  red-team apparatus. Proves APTL realizes the `enterprise` profile from declared
+  app/db node content with no defensive surface.
+
+nodes:
+  dmz-net:
+    type: switch
+    description: TechVault DMZ network.
+  internal-net:
+    type: switch
+    description: Internal enterprise target network.
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  webapp:
+    type: vm
+    os: linux
+    services:
+      - {name: http, port: 8080, protocol: tcp}
+  db:
+    type: vm
+    os: linux
+    services:
+      - {name: postgres, port: 5432, protocol: tcp}
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  dmz-net:
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1, internal: true}
+  internal-net:
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  webapp:
+    links: [dmz-net, internal-net]
+    dependencies: [db]
+  db:
+    links: [internal-net]
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]
+
+features:
+  techvault-webapp-service:
+    type: service
+    source:
+      name: aptl-webapp
+      version: local
+    description: TechVault vulnerable customer portal service.
+
+vulnerabilities:
+  webapp-sqli-login:
+    name: SQL injection in login
+    description: Login form accepts intentionally vulnerable SQL input.
+    technical: true
+    class: CWE-89

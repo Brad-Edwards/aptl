@@ -99,7 +99,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,web]"
       - name: ACES static validation gate (TechVault, orchestration-evaluation)
-        run: python -m pytest tests/test_techvault_static_gate.py -q -m integration
+        # -n auto runs the heavy parse / verify-imports / conformance checks in
+        # parallel via pytest-xdist. No coverage is collected here, so xdist
+        # worker measurement is not a concern.
+        run: python -m pytest tests/test_techvault_static_gate.py -q -m integration -n auto
 
   mcp-tests:
     name: MCP TypeScript tests + coverage

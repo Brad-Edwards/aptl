@@ -139,7 +139,10 @@ repos:
         # the import lockfile, and the parity inventory are included so an edit
         # to those runs the fast ACES validation-gate logic tests (the slow
         # full-scenario gate is the manual `aces-scenario-gate` hook below).
-        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration"; else exec pytest tests/ -q -k "not integration"; fi'
+        # -n auto parallelizes across cores via pytest-xdist (no coverage here,
+        # so xdist worker measurement is not a concern — that constraint only
+        # applies to the CI `coverage run` job).
+        entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration" -n auto; else exec pytest tests/ -q -k "not integration" -n auto; fi'
         language: system
         pass_filenames: false
         files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|docs/aces/parity-inventory\.yaml)$

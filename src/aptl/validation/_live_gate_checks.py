@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING
 from aces_sdl import SDLError, parse_sdl_file
 from aces_sdl.scenario import Scenario
 
-from aptl.backends.aces import DEFAULT_ACES_SCENARIO
 from aptl.backends.aces_profiles import select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.deployment import get_backend
@@ -147,30 +146,14 @@ def check_boot_inputs_match_public_path(
     project_dir: Path,
     options: "LiveGateOptions",
 ) -> LiveGateCheck:
-    """Reject scenario/profile inputs the public start path will not honor.
+    """Reject profile inputs the public start path will not honor.
 
-    The gate computes the expected realization from ``scenario_path`` and
-    ``options.profile``, but the public boot path it exercises
-    (``orchestrate_lab_start`` → ``start_aces_scenario``) is hardwired to
-    ``DEFAULT_ACES_SCENARIO`` and the ``orchestration-evaluation`` capability profile;
-    it ignores any caller-supplied scenario/profile. Booting one model while
-    validating another would silently produce false pass/fail results, so a
-    mismatch is a hard ``backend_instantiation`` failure raised *before* any
-    destructive boot — never a degraded warning. This holds for
-    ``skip_clean_boot`` too: the already-running lab was itself booted from the
-    operational scenario, so a mismatched ``--scenario`` would validate the
-    wrong model against it.
+    The public boot path accepts the selected ``scenario_path`` and forwards it
+    to ``orchestrate_lab_start``. Profile selection remains fixed to the public
+    default, so a mismatched profile still fails before any destructive boot.
     """
-    expected_scenario = DEFAULT_ACES_SCENARIO
-    if not expected_scenario.is_absolute():
-        expected_scenario = project_dir / expected_scenario
+    _ = scenario_path, project_dir
     diagnostics: list[str] = []
-    if scenario_path.resolve() != expected_scenario.resolve():
-        diagnostics.append(
-            f"scenario {scenario_path.name!r} does not match the scenario the "
-            f"public start path boots ({expected_scenario.name!r}); the gate "
-            "would validate one model while booting another"
-        )
     if options.profile != DEFAULT_PROFILE:
         diagnostics.append(
             f"profile {options.profile!r} is not the public start path's "
@@ -191,6 +174,7 @@ def check_aces_driven_boot(
     config: "AptlConfig",
     options: "LiveGateOptions",
     state: "LiveGateState",
+    scenario_path: Path | None = None,
 ) -> LiveGateCheck:
     """Clean up and boot through the public ACES start path; tie evidence to ACES.
 
@@ -210,7 +194,13 @@ def check_aces_driven_boot(
     state.diagnostics_seen = len(realization.diagnostics)
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
 
-    boot_diagnostics = _boot_lab(project_dir, config, options, state)
+    boot_diagnostics = _boot_lab(
+        project_dir,
+        config,
+        options,
+        state,
+        scenario_path=scenario_path,
+    )
     return _check(
         "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics
     )

@@ -108,6 +108,23 @@ for advisory in scenario.advisories:
     print(advisory)
 ```
 
+## Startup Selection
+
+APTL's public startup path defaults to the curated TechVault operational ACES
+SDL, `scenarios/techvault-operational.sdl.yaml`. The repo-owned startup catalog
+at `scenarios/catalog.json` gives operators stable ids for curated cutover
+inputs without introducing another scenario runtime or schema.
+
+```bash
+aptl lab scenarios
+aptl lab start --scenario techvault-operational
+aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
+```
+
+Catalog entries and explicit paths must resolve under the project directory and
+must parse through `aces_sdl.parse_sdl_file` before startup. To add another
+curated startup input, commit the ACES SDL and add a row to the catalog.
+
 ## Backward Compatibility
 
 This branch is intentionally SDL-only. Legacy APTL scenario YAMLs (the old `metadata` + `mode` + `objectives` format) no longer parse, and `aptl.core.scenarios` is now a thin SDL loader/error layer rather than a re-export shim.

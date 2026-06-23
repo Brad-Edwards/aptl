@@ -848,6 +848,19 @@ class TestOrchestrateLabStart:
         mocks["start"].assert_called_once()
         mocks["capture_snapshot"].assert_called_once()
 
+    def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
+        """Selected ACES SDL paths should reach the startup handoff."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+
+        result = orchestrate_lab_start(tmp_path, scenario_path=selected)
+
+        assert result.success is True
+        mocks["start"].assert_called_once()
+        assert mocks["start"].call_args.kwargs["scenario_path"] == selected
+
     def test_stops_on_env_loading_failure(self, mocker, tmp_path):
         """Should fail early if .env loading fails."""
         from aptl.core.lab import orchestrate_lab_start
@@ -2209,7 +2222,37 @@ class TestLabOrchestrationContracts:
         result = _step_start_containers(ctx)
 
         assert result is None
-        start_aces.assert_called_once_with(tmp_path, ctx.config, ctx.backend)
+        start_aces.assert_called_once_with(
+            tmp_path,
+            ctx.config,
+            ctx.backend,
+            scenario_path=None,
+        )
+
+    def test_start_containers_preserves_scenario_path_on_soc_retry(self, mocker, tmp_path):
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        ctx.backend = MagicMock()
+        selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+        ctx.scenario_path = selected
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        assert [call.kwargs["scenario_path"] for call in start_aces.call_args_list] == [
+            selected,
+            selected,
+        ]
 
     # -- ssh_key_is_ready --------------------------------------------
 

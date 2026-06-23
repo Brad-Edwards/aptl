@@ -335,6 +335,33 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
 
 
+def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"wazuh.manager": ["wazuh"]})
+    scenario = object()
+    parser = mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+
+    class FakeRuntimeManager:
+        def __init__(self, target):
+            self.target = target
+
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("techvault.wazuh-manager"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"wazuh": True})
+    selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+
+    result = aces.start_aces_scenario(tmp_path, config, backend, scenario_path=selected)
+
+    assert result.success is True
+    parser.assert_called_once_with(selected)
+
+
 def _workflow_orchestration_plan():
     """Compile a minimal workflow scenario into its ACES orchestration plan."""
     from textwrap import dedent

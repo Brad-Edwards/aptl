@@ -120,6 +120,7 @@ def _boot_lab(
     config: "AptlConfig",
     options: "LiveGateOptions",
     state: "LiveGateState",
+    scenario_path: Path | None = None,
 ) -> list[str]:
     """Run the destructive cleanup + public boot; return failure diagnostics.
 
@@ -140,7 +141,7 @@ def _boot_lab(
     if not stop_result.success:
         diagnostics.append(redact(f"pre-boot cleanup failed: {stop_result.error}"))
 
-    start_result = orchestrate_lab_start(project_dir)
+    start_result = orchestrate_lab_start(project_dir, scenario_path=scenario_path)
     if start_result.outcome is StartupOutcome.FAILED:
         diagnostics.append(
             redact(f"public lab start failed: {start_result.error or 'unknown'}")

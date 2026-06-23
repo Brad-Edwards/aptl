@@ -15,16 +15,11 @@ next scenario in APTL's `orchestration-capable` expressivity class passes
 through by changing inputs rather than by editing the gate. TechVault is the
 proving input, never a hardcoded branch (ADR-035).
 
-APTL's public start path (`orchestrate_lab_start()`), however, is currently
-hardwired to the operational startup scenario
-(`scenarios/techvault-operational.sdl.yaml`) and the `orchestration-capable`
-capability profile; it does not yet accept a caller-supplied scenario or
-profile. So the gate verifies up front that the scenario and profile it was
-asked to validate are the ones the public start path will actually boot, and
-fails loud before any destructive boot if they diverge, so it never validates
-one model while booting another. When the public start path learns to honor a
-caller-supplied scenario/profile, this guard relaxes to thread them through
-instead of rejecting them.
+APTL's public start path (`orchestrate_lab_start()`) accepts the selected ACES
+scenario path and passes it through the same `_step_start_containers()` handoff
+used by the default boot. The backend capability profile remains the public
+default, so the gate still fails loud before destructive boot when a caller
+requests a profile the public start path will not realize.
 
 ## What the gate checks
 
@@ -36,11 +31,11 @@ layer that broke:
 1. **Static prerequisite** (`aces_specification`). The static gate runs first. A
    parse, compile, conformance, or parity failure blocks the live boot rather
    than degrading to a warning.
-2. **Boot-input agreement** (`backend_instantiation`). The scenario and profile
-   under validation must be the ones the public start path will actually boot
-   (the operational scenario and the `orchestration-capable` profile). A mismatch is a
-   hard failure raised before any destructive boot, so the gate never validates
-   one model while booting another.
+2. **Boot-input agreement** (`backend_instantiation`). The selected scenario is
+   passed through to public startup. The profile under validation must still be
+   the public start path's capability profile (`orchestration-capable`). A
+   profile mismatch is a hard failure raised before any destructive boot, so the
+   gate never validates a profile the boot path will not realize.
 3. **ACES-driven boot** (`backend_interpretation` or `backend_instantiation`).
    The gate computes the realization matrix from `RuntimeManager.plan()` and
    `interpret_provisioning_plan()`, the same interpretation `AptlProvisioner`
@@ -147,12 +142,11 @@ aptl lab validate-live
 
 The command warns and prompts before destroying lab data. Pass `--yes` to skip
 the prompt in automation, or `--skip-clean-boot` to validate an already-running
-lab without the destructive `stop -v` and reboot. The `--scenario` and
-`--profile` options exist for the scenario-generic seam, but until the public
-start path accepts a caller-supplied scenario/profile they must match what that
-path boots (`scenarios/techvault-operational.sdl.yaml` and
-`orchestration-capable`); the gate fails the boot-input agreement check
-otherwise. `--run-id` sets the run-archive id.
+lab without the destructive `stop -v` and reboot. `--scenario` accepts an
+explicit ACES SDL path for the live gate and is passed through to public lab
+startup. `--profile` must remain the public startup capability profile
+(`orchestration-capable`); profile mismatches fail the boot-input agreement
+check before boot. `--run-id` sets the run-archive id.
 
 The same boot runs as the explicitly gated integration test:
 

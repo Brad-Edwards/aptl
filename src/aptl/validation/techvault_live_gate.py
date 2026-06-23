@@ -232,10 +232,9 @@ def validate_live_deployment(
     results.append(static_check)
     static_passed = scenario is not None and static_check.passed
 
-    # 2a. Input/boot-path agreement — the public start path is hardwired to the
-    #     default scenario + orchestration-evaluation profile, so a scenario/profile
-    #     the boot path will not honor must fail loud BEFORE any destructive
-    #     boot, not silently validate one model while booting another.
+    # 2a. Input/boot-path agreement — the public start path honors the selected
+    #     scenario, but still uses the default orchestration/evaluation profile.
+    #     Reject profile mismatches before any destructive boot.
     inputs_passed = False
     if static_passed:
         inputs_check = checks.check_boot_inputs_match_public_path(
@@ -283,6 +282,7 @@ def _run_live_checks(
         config=ctx.config,
         options=ctx.options,
         state=state,
+        scenario_path=ctx.scenario_path,
     )
     results.append(boot_check)
     if not boot_check.passed:

@@ -134,7 +134,9 @@ def _wire_boot(monkeypatch, *, outcome=StartupOutcome.READY, realization=None, s
     )
     monkeypatch.setattr(lgp, "stop_lab", lambda **k: LabResult(success=True))
     monkeypatch.setattr(
-        lgp, "orchestrate_lab_start", lambda p: LabResult(success=True, outcome=outcome)
+        lgp,
+        "orchestrate_lab_start",
+        lambda p, scenario_path=None: LabResult(success=True, outcome=outcome),
     )
     monkeypatch.setattr(
         lgp, "capture_snapshot", lambda config_dir, backend: _Snapshot(snapshot)
@@ -192,7 +194,8 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     def inputs(scenario_path, *, project_dir, options):
         return LiveGateCheck("boot_inputs_match_public_path", CATEGORY_BACKEND_INSTANTIATION, True)
 
-    def boot(scenario, *, project_dir, config, options, state):
+    def boot(scenario, *, project_dir, config, options, state, scenario_path):
+        assert scenario_path == SCENARIO
         return LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
     def readiness(*, state):
@@ -366,7 +369,8 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     monkeypatch.setattr(
         lgp,
         "orchestrate_lab_start",
-        lambda p: boots.append(1) or LabResult(success=True, outcome=StartupOutcome.READY),
+        lambda p, scenario_path=None: boots.append(1)
+        or LabResult(success=True, outcome=StartupOutcome.READY),
     )
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
@@ -382,6 +386,31 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     assert check.passed and state.snapshot["containers"]
 
 
+def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
+    _wire_boot(monkeypatch)
+    boots = []
+    monkeypatch.setattr(
+        lgp,
+        "orchestrate_lab_start",
+        lambda p, scenario_path=None: boots.append((p, scenario_path))
+        or LabResult(success=True, outcome=StartupOutcome.READY),
+    )
+    state = LiveGateState()
+    selected = PROJECT_ROOT / "scenarios" / "custom.sdl.yaml"
+
+    check = lgc.check_aces_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
+        scenario_path=selected,
+    )
+
+    assert check.passed
+    assert boots == [(PROJECT_ROOT, selected)]
+
+
 # --------------------------------------------------------------------------- #
 # 2a. Boot-input / public-start-path agreement (F1 regression).
 # --------------------------------------------------------------------------- #
@@ -394,23 +423,19 @@ def test_boot_inputs_pass_for_default_scenario_and_profile():
     assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
 
 
-def test_boot_inputs_fail_for_mismatched_scenario():
-    # A scenario other than the one the public start path boots would validate
-    # one model while booting another — a hard failure before any boot.
+def test_boot_inputs_pass_for_custom_scenario_when_profile_matches():
     other = PROJECT_ROOT / "scenarios" / "other.sdl.yaml"
     check = lgc.check_boot_inputs_match_public_path(
         other, project_dir=PROJECT_ROOT, options=LiveGateOptions()
     )
-    assert not check.passed
-    assert any("does not match" in d for d in check.diagnostics)
+    assert check.passed
 
 
-def test_boot_inputs_fail_for_full_inventory_scenario():
+def test_boot_inputs_pass_for_full_inventory_scenario_when_profile_matches():
     check = lgc.check_boot_inputs_match_public_path(
         FULL_INVENTORY_SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
     )
-    assert not check.passed
-    assert any("techvault-operational.sdl.yaml" in d for d in check.diagnostics)
+    assert check.passed
 
 
 def test_boot_inputs_fail_for_mismatched_profile():
@@ -421,9 +446,9 @@ def test_boot_inputs_fail_for_mismatched_profile():
     assert any("capability profile" in d for d in check.diagnostics)
 
 
-def test_validate_live_deployment_short_circuits_on_input_mismatch(monkeypatch):
-    # F1: a mismatched scenario/profile must fail loud BEFORE the destructive
-    # boot is attempted — boot/readiness/etc. checks never run.
+def test_validate_live_deployment_short_circuits_on_profile_mismatch(monkeypatch):
+    # Profile mismatch still fails loud before destructive boot; scenario
+    # mismatch does not, because public start now accepts a selected scenario.
     monkeypatch.setattr(
         lgc,
         "check_static_prerequisite",
@@ -440,6 +465,7 @@ def test_validate_live_deployment_short_circuits_on_input_mismatch(monkeypatch):
         PROJECT_ROOT / "scenarios" / "other.sdl.yaml",
         project_dir=PROJECT_ROOT,
         config=_config(),
+        options=LiveGateOptions(profile="evaluation"),
     )
     assert not report.passed
     assert [c.name for c in report.checks] == [

@@ -68,6 +68,14 @@ The OTel stack is always-on lab infrastructure (not optional):
 All services run under the `otel` Docker Compose profile, automatically
 included by `aptl lab start`.
 
+Host-published observability surfaces are operator/control-plane infrastructure,
+not target attack surface. Per ADR-034 and ADR-039, the default Compose host
+publishes for the Collector OTLP receivers, Tempo HTTP API, and Grafana UI bind
+to `127.0.0.1`. Container-side listeners may remain wildcard-bound for
+Docker-network peers; remote OTLP ingestion or Tempo access requires an explicit
+documented deployment mode with authentication or network controls rather than
+scattered `0.0.0.0` host publishes.
+
 ### GenAI SIG Conventions
 
 MCP tool spans follow the [OpenTelemetry GenAI SIG](https://github.com/open-telemetry/semantic-conventions/tree/main/docs/gen-ai)

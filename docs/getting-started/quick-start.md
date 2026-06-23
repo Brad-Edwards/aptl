@@ -14,6 +14,20 @@ aptl lab start
 `aptl lab start` refuses to run while `.env` still contains the
 `.env.example` placeholder values.
 
+`aptl lab start` defaults to the curated TechVault operational ACES SDL. List
+the curated startup inputs with:
+
+```bash
+aptl lab scenarios
+```
+
+Start from a catalog id or an explicit project-local SDL path with:
+
+```bash
+aptl lab start --scenario techvault-operational
+aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
+```
+
 ## Manage Lab
 
 ```bash

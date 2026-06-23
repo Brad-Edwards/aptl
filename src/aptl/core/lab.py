@@ -83,6 +83,7 @@ def start_aces_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
 ) -> LabResult:
     """Lazy ACES handoff import for the public lab-start path."""
     try:
@@ -92,7 +93,12 @@ def start_aces_scenario(
         log.error(error)
         return LabResult(success=False, error=error)
 
-    return _start_aces_scenario(project_dir, config, backend)
+    return _start_aces_scenario(
+        project_dir,
+        config,
+        backend,
+        scenario_path=scenario_path,
+    )
 
 
 def _runtime_require(
@@ -440,6 +446,7 @@ class _LabStartContext(object):
 
     project_dir: Path
     skip_seed: bool
+    scenario_path: Path | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
     env: "EnvVars | None" = None
     config: "AptlConfig | None" = None
@@ -944,7 +951,12 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
-    start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
+    start_result = start_aces_scenario(
+        ctx.project_dir,
+        ctx.config,
+        ctx.backend,
+        scenario_path=ctx.scenario_path,
+    )
     if not start_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -952,7 +964,12 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         )
         import time
         time.sleep(60)
-        start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
+        start_result = start_aces_scenario(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=ctx.scenario_path,
+        )
     if start_result.success:
         return None
     log.error("Lab start failed: %s", start_result.error)
@@ -1437,6 +1454,7 @@ _LAB_START_STEPS = (
 def orchestrate_lab_start(
     project_dir: Path,
     skip_seed: bool = False,
+    scenario_path: Path | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -1449,12 +1467,17 @@ def orchestrate_lab_start(
     Args:
         project_dir: Root directory of the APTL project.
         skip_seed: If True, skip SOC tool seeding (Step 13).
+        scenario_path: Optional selected ACES SDL scenario path.
 
     Returns:
         LabResult indicating overall success or failure.
     """
     log.info("Starting APTL lab from %s", project_dir)
-    ctx = _LabStartContext(project_dir=project_dir, skip_seed=skip_seed)
+    ctx = _LabStartContext(
+        project_dir=project_dir,
+        skip_seed=skip_seed,
+        scenario_path=scenario_path,
+    )
 
     for step in _LAB_START_STEPS:
         try:

@@ -6,6 +6,7 @@ We test our CLI wiring, not typer internals.
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -76,6 +77,13 @@ class TestLabCommands:
         from aptl.cli.main import app
 
         result = runner.invoke(app, ["lab", "continuity-audit", "--help"])
+        assert result.exit_code == 0
+
+    def test_lab_scenarios_exists(self, runner):
+        """aptl lab scenarios should list curated startup scenarios."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["lab", "scenarios", "--help"])
         assert result.exit_code == 0
 
 
@@ -171,7 +179,134 @@ class TestLabStartCommand:
         result = runner.invoke(app, ["lab", "start", "--project-dir", str(tmp_path)])
 
         assert result.exit_code == 0
-        mock_orchestrate.assert_called_once_with(tmp_path, skip_seed=False)
+        mock_orchestrate.assert_called_once_with(
+            tmp_path,
+            skip_seed=False,
+            scenario_path=None,
+        )
+
+    def test_start_accepts_catalog_scenario_id(self, runner, mocker, tmp_path):
+        """--scenario should resolve a catalog id and pass its SDL path."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+        resolver = mocker.patch(
+            "aptl.cli.lab.resolve_scenario_selection",
+            return_value=selected,
+        )
+        mock_orchestrate = mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=True, message="Lab started"),
+        )
+
+        result = runner.invoke(
+            app,
+            ["lab", "start", "--project-dir", str(tmp_path), "--scenario", "custom"],
+        )
+
+        assert result.exit_code == 0
+        resolver.assert_called_once_with(
+            tmp_path,
+            scenario_id="custom",
+            scenario_path=None,
+        )
+        mock_orchestrate.assert_called_once_with(
+            tmp_path,
+            skip_seed=False,
+            scenario_path=selected,
+        )
+
+    def test_start_accepts_explicit_scenario_path(self, runner, mocker, tmp_path):
+        """--scenario-path should resolve and pass an explicit ACES SDL path."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+        resolver = mocker.patch(
+            "aptl.cli.lab.resolve_scenario_selection",
+            return_value=selected,
+        )
+        mock_orchestrate = mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=True, message="Lab started"),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "lab",
+                "start",
+                "--project-dir",
+                str(tmp_path),
+                "--scenario-path",
+                "scenarios/custom.sdl.yaml",
+            ],
+        )
+
+        assert result.exit_code == 0
+        resolver.assert_called_once_with(
+            tmp_path,
+            scenario_id=None,
+            scenario_path=Path("scenarios/custom.sdl.yaml"),
+        )
+        mock_orchestrate.assert_called_once_with(
+            tmp_path,
+            skip_seed=False,
+            scenario_path=selected,
+        )
+
+    def test_start_rejects_both_scenario_selectors(self, runner, mocker, tmp_path):
+        """Catalog id and explicit path selectors are mutually exclusive."""
+        from aptl.cli.main import app
+
+        mocker.patch(
+            "aptl.cli.lab.resolve_scenario_selection",
+            side_effect=ValueError("scenario selectors are mutually exclusive"),
+        )
+        result = runner.invoke(
+            app,
+            [
+                "lab",
+                "start",
+                "--project-dir",
+                str(tmp_path),
+                "--scenario",
+                "custom",
+                "--scenario-path",
+                "scenarios/custom.sdl.yaml",
+            ],
+        )
+
+        assert result.exit_code == 2
+        assert "mutually exclusive" in result.stderr
+
+    def test_lab_scenarios_lists_catalog_entries(self, runner, mocker, tmp_path):
+        """The list command should read catalog rows dynamically."""
+        from aptl.cli.main import app
+
+        mocker.patch(
+            "aptl.cli.lab.load_scenario_catalog",
+            return_value=SimpleNamespace(
+                scenarios=[
+                    SimpleNamespace(
+                        id="techvault-operational",
+                        name="TechVault Operational",
+                        path="scenarios/techvault-operational.sdl.yaml",
+                        description="Default public startup scenario.",
+                    )
+                ]
+            ),
+        )
+
+        result = runner.invoke(
+            app,
+            ["lab", "scenarios", "--project-dir", str(tmp_path)],
+        )
+
+        assert result.exit_code == 0
+        assert "techvault-operational" in result.stdout
+        assert "scenarios/techvault-operational.sdl.yaml" in result.stdout
 
     def test_start_ready_outcome_prints_ready(self, runner, mocker):
         """A clean start prints the ready outcome (ADR-030)."""

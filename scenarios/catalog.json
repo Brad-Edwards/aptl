@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "techvault-operational",
+      "name": "TechVault Operational",
+      "description": "Default public APTL startup scenario backed by ACES SDL.",
+      "path": "scenarios/techvault-operational.sdl.yaml"
+    }
+  ]
+}

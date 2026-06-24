@@ -68,7 +68,7 @@ def _validate_relative_path(relative_path: str) -> str:
     return relative_path
 
 
-def _safe_default(obj: Any) -> str:
+def _safe_default(obj: object) -> str:
     """``json.dumps`` ``default`` hook that stringifies AND redacts.
 
     Plain ``default=str`` would let any non-JSON-serializable value
@@ -91,7 +91,7 @@ class RunManifest(TypedDict):
     finished_at: str
     duration_seconds: float
     trace_id: str
-    config_snapshot: dict
+    config_snapshot: dict[str, Any]
     containers: list[str]
     flags_captured: int
 
@@ -103,21 +103,21 @@ class RunStorageBackend(Protocol):
 
     def write_file(self, run_id: str, relative_path: str, data: bytes) -> None: ...
 
-    def write_json(self, run_id: str, relative_path: str, obj: Any) -> None: ...
+    def write_json(self, run_id: str, relative_path: str, obj: object) -> None: ...
 
     def write_jsonl(
-        self, run_id: str, relative_path: str, records: list[dict]
+        self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None: ...
 
     def append_jsonl(
-        self, run_id: str, relative_path: str, records: list[dict]
+        self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None: ...
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None: ...
 
     def list_runs(self) -> list[str]: ...
 
-    def get_run_manifest(self, run_id: str) -> dict: ...
+    def get_run_manifest(self, run_id: str) -> dict[str, Any]: ...
 
     def get_run_path(self, run_id: str) -> Path: ...
 
@@ -164,7 +164,7 @@ class LocalRunStore:
         target.write_bytes(data)
         log.debug("Wrote %d bytes to %s", len(data), target)
 
-    def write_json(self, run_id: str, relative_path: str, obj: Any) -> None:
+    def write_json(self, run_id: str, relative_path: str, obj: object) -> None:
         # Redact at the persistence boundary (ADR-029) so individual
         # callers do not own the policy and run-archive contents are
         # control-plane-secret-safe by construction. ``default`` runs
@@ -174,7 +174,7 @@ class LocalRunStore:
         self.write_file(run_id, relative_path, data)
 
     def write_jsonl(
-        self, run_id: str, relative_path: str, records: list[dict]
+        self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None:
         # Redact each record at the persistence boundary (ADR-029).
         lines = [
@@ -185,7 +185,7 @@ class LocalRunStore:
         self.write_file(run_id, relative_path, data)
 
     def append_jsonl(
-        self, run_id: str, relative_path: str, records: list[dict]
+        self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None:
         """Append ``records`` to a JSONL file, creating it if missing.
 
@@ -223,7 +223,7 @@ class LocalRunStore:
                 runs.append(child.name)
         return runs
 
-    def get_run_manifest(self, run_id: str) -> dict:
+    def get_run_manifest(self, run_id: str) -> dict[str, Any]:
         manifest_path = self._resolve_run_target(run_id, "manifest.json")
         if not manifest_path.exists():
             raise FileNotFoundError(f"No manifest for run {run_id}")

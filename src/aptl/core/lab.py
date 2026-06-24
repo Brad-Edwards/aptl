@@ -28,10 +28,10 @@ from aptl.core.contracts import (
 )
 from aptl.core.credentials import (
     PathContainmentError,
-    build_suricata_volume_seeds,
     sync_dashboard_config,
     sync_manager_config,
 )
+from aptl.core.suricata_seed import build_suricata_volume_seeds
 from aptl.core.env import (
     EnvVars,
     env_vars_from_dict,
@@ -789,7 +789,8 @@ def _step_seed_suricata_volumes(
                 "to the local Docker Compose backend."
             ),
         )
-    assert ctx.backend is not None  # runtime guard above
+    # runtime guard above
+    assert ctx.backend is not None
     return _seed_suricata_volumes_local(ctx)
 
 
@@ -801,7 +802,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     return-count and complexity limits. ``ctx.backend`` is the local
     Compose backend, asserted non-``None`` by the caller.
     """
-    from aptl.core.credentials import ensure_suricata_config_source_ownership
+    from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
     from aptl.core.deployment.errors import (
         BackendSeedError,
         BackendTimeoutError,
@@ -829,8 +830,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
         PathContainmentError,
         BackendSeedError,
         BackendTimeoutError,
-        FileNotFoundError,
-        NotADirectoryError,
+        # ``OSError`` subsumes ``FileNotFoundError`` / ``NotADirectoryError``.
         OSError,
     ) as exc:
         # Narrow, redacted failure (ADR-043): name the artifact/exception

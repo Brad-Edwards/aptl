@@ -93,6 +93,14 @@ source = ["aptl"]
 
 [tool.coverage.report]
 show_missing = true
+# Non-POSIX branches (file modes are advisory off POSIX) cannot be exercised
+# on the Linux CI runner. Excluding the guard clause keeps these
+# platform-specific paths out of coverage without inline trailing
+# ``# pragma: no cover`` comments (SonarCloud S139). ``exclude_also`` extends
+# — not replaces — coverage's defaults, so ``# pragma: no cover`` still works.
+exclude_also = [
+    "if os.name != \"posix\":",
+]
 
 [tool.coverage.xml]
 output = "coverage.xml"

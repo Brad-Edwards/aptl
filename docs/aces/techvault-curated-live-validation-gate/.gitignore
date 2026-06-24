@@ -1,0 +1,5 @@
+# Transient per-run artifacts written by run-curated-live-proof.sh.
+# The committed evidence is snapshot.json + result.json only.
+*/boot.log
+*/stop.log
+*/snapshot.raw.json

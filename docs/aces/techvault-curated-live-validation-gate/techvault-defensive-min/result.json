@@ -1,0 +1,50 @@
+{
+  "catalog_id": "techvault-defensive-min",
+  "scenario": "techvault-defensive-min.sdl.yaml",
+  "matched_config_containers": [
+    "wazuh"
+  ],
+  "command": "aptl lab start --scenario techvault-defensive-min --skip-seed",
+  "readiness_outcome": "Lab is ready.",
+  "boot_elapsed_seconds": 90,
+  "selected_profiles": [
+    "wazuh",
+    "otel"
+  ],
+  "realized_nodes": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "wazuh-dashboard",
+    "wazuh-indexer",
+    "wazuh-manager"
+  ],
+  "expected_services": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "wazuh.dashboard",
+    "wazuh.indexer",
+    "wazuh.manager"
+  ],
+  "expected_networks": [
+    "aptl-dmz",
+    "aptl-internal",
+    "aptl-security"
+  ],
+  "actual_containers": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "aptl-wazuh-dashboard",
+    "aptl-wazuh-indexer",
+    "aptl-wazuh-manager"
+  ],
+  "actual_networks": [
+    "aptl_aptl-dmz",
+    "aptl_aptl-internal",
+    "aptl_aptl-security"
+  ],
+  "verdict": "PASS",
+  "diagnostics": []
+}

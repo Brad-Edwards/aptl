@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-06-24T05:00:05.262465+00:00",
+  "containers": [
+    {
+      "name": "aptl-wazuh-dashboard",
+      "image": "wazuh/wazuh-dashboard:4.12.0",
+      "status": "Up 43 seconds (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.11"
+      },
+      "ports": [
+        "443/tcp",
+        "127.0.0.1:443->5601/tcp"
+      ]
+    },
+    {
+      "name": "aptl-wazuh-manager",
+      "image": "wazuh/wazuh-manager:4.12.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-dmz": "172.20.1.10",
+        "aptl_aptl-internal": "172.20.2.30",
+        "aptl_aptl-security": "172.20.0.10"
+      },
+      "ports": [
+        "127.0.0.1:1514-1515->1514-1515/tcp",
+        "127.0.0.1:514->514/udp",
+        "127.0.0.1:55000->55000/tcp",
+        "1516/tcp"
+      ]
+    },
+    {
+      "name": "aptl-otel-collector",
+      "image": "otel/opentelemetry-collector-contrib:0.123.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.53"
+      },
+      "ports": [
+        "127.0.0.1:4317-4318->4317-4318/tcp",
+        "55678-55679/tcp"
+      ]
+    },
+    {
+      "name": "aptl-wazuh-indexer",
+      "image": "wazuh/wazuh-indexer:4.12.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.12"
+      },
+      "ports": [
+        "127.0.0.1:9200->9200/tcp"
+      ]
+    },
+    {
+      "name": "aptl-tempo",
+      "image": "grafana/tempo:2.7.2",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.51"
+      },
+      "ports": [
+        "127.0.0.1:3200->3200/tcp"
+      ]
+    },
+    {
+      "name": "aptl-grafana-otel",
+      "image": "grafana/grafana:11.6.0",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.52"
+      },
+      "ports": [
+        "127.0.0.1:3100->3000/tcp"
+      ]
+    }
+  ],
+  "networks": [
+    {
+      "name": "aptl_aptl-dmz",
+      "subnet": "172.20.1.0/24",
+      "gateway": "172.20.1.1",
+      "containers": [
+        "aptl-wazuh-manager"
+      ]
+    },
+    {
+      "name": "aptl_aptl-internal",
+      "subnet": "172.20.2.0/24",
+      "gateway": "172.20.2.1",
+      "containers": [
+        "aptl-wazuh-manager"
+      ]
+    },
+    {
+      "name": "aptl_aptl-security",
+      "subnet": "172.20.0.0/24",
+      "gateway": "172.20.0.1",
+      "containers": [
+        "aptl-grafana-otel",
+        "aptl-otel-collector",
+        "aptl-tempo",
+        "aptl-wazuh-dashboard",
+        "aptl-wazuh-indexer",
+        "aptl-wazuh-manager"
+      ]
+    }
+  ]
+}

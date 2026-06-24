@@ -105,6 +105,35 @@ def start_aces_scenario(
         )
 
 
+def selected_profiles_for_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> list[str]:
+    """Return the Compose profiles a scenario selects for the backend start.
+
+    Mirrors ``start_aces_scenario``'s selection path (parse -> plan -> interpret
+    -> select_backend_profiles) without side effects, so post-start readiness
+    checks can scope to the profiles the scenario actually started rather than
+    the global ``config.containers`` flags. A bounded curated scenario starts a
+    subset of the enabled profiles, so a config-flag gate would wait on services
+    the scenario never launched.
+    """
+    resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
+    if not resolved_scenario.is_absolute():
+        resolved_scenario = project_dir / resolved_scenario
+    scenario = parse_sdl_file(resolved_scenario)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir, config=config, backend=backend
+    )
+    execution_plan = RuntimeManager(target).plan(scenario)
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning, project_dir=project_dir, config=config
+    )
+    return select_backend_profiles(config, realization.profiles)
+
+
 def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") -> LabResult:
     """Apply a planned ACES scenario through the runtime control plane.
 

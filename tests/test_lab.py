@@ -803,6 +803,14 @@ class TestOrchestrateLabStart:
             "aptl.core.lab.start_aces_scenario",
             return_value=LabResult(success=True, message="Lab started"),
         )
+        # Mock the post-start profile resolution so _step_start_containers does
+        # not re-parse a scenario file the test fixture does not provide. The
+        # config above enables wazuh/victim/kali, so the default operational
+        # scenario selects exactly those (+ otel).
+        mocks["selected_profiles"] = mocker.patch(
+            "aptl.core.lab.selected_profiles_for_scenario",
+            return_value={"wazuh", "victim", "kali", "otel"},
+        )
 
         # Mock service waiting
         from aptl.core.services import ServiceResult
@@ -1446,15 +1454,24 @@ class TestStartupClassificationWiring:
             },
         )
 
-    def _ctx(self, tmp_path, *, config=None):
+    def _ctx(self, tmp_path, *, config=None, selected_profiles=None):
         from aptl.core.lab import _LabStartContext
+
+        cfg = config or self._make_config()
+        # Default the selected profiles to the config-enabled set + otel, which
+        # is what the default operational scenario selects (config and selection
+        # coincide there). Tests that exercise a bounded scenario pass an
+        # explicit subset.
+        if selected_profiles is None:
+            selected_profiles = set(cfg.containers.enabled_profiles()) | {"otel"}
 
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
             env=self._make_env_vars(),
-            config=config or self._make_config(),
+            config=cfg,
             ssh_key_path=Path("/tmp/aptl_lab_key"),
+            selected_profiles=selected_profiles,
             backend=MagicMock(),
         )
 
@@ -1612,6 +1629,27 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
         wait_mock.assert_not_called()
 
+    def test_wait_for_services_skipped_when_wazuh_not_in_selected_profiles(
+        self, tmp_path, mocker
+    ):
+        """A bounded scenario may omit Wazuh even when the container is enabled
+        in config. The readiness wait must gate on the scenario's selected
+        profiles, not the config flag, so it does not falsely wait on (and warn
+        about) a Wazuh the scenario never started."""
+        from aptl.core.lab import _step_wait_for_services
+
+        ctx = self._ctx(
+            tmp_path,
+            config=self._make_config(wazuh=True),
+            selected_profiles={"otel"},
+        )
+        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
+
+        _step_wait_for_services(ctx)
+
+        wait_mock.assert_not_called()
+        assert ctx.diagnostics == []
+
     # -- test_ssh (readiness) ------------------------------------------
 
     def test_test_ssh_per_target_timeout_emits_readiness_warning(
@@ -1713,6 +1751,26 @@ class TestStartupClassificationWiring:
 
         _step_test_ssh(ctx)
 
+        assert ctx.diagnostics == []
+
+    def test_test_ssh_skips_targets_not_in_selected_profiles(self, tmp_path, mocker):
+        """A bounded scenario may omit victim/kali even when enabled in config.
+        SSH probing must gate on the scenario's selected profiles, not the config
+        flags, so it does not warn about interactive targets it never started."""
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(
+            tmp_path,
+            config=self._make_config(victim=True, kali=True, reverse=True),
+            selected_profiles={"otel"},
+        )
+        networks = mocker.patch("aptl.core.lab.container_networks")
+        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
+
+        _step_test_ssh(ctx)
+
+        networks.assert_not_called()
+        wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
     # -- build_mcps (capability) ---------------------------------------

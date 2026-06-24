@@ -150,6 +150,22 @@ def test_variant_selected_profiles_form_valid_compose_project(variant: _Variant)
     assert gaps == {}, f"{variant.catalog_id} selects an invalid compose project: {gaps}"
 
 
+@pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
+def test_selected_profiles_for_scenario_matches_variant(variant: _Variant):
+    """The lab-start path's profile resolver returns each variant's bounded set.
+
+    This is the source of truth the post-start readiness checks scope to, so it
+    must equal the variant's expected (content-derived) profile set.
+    """
+    from aptl.backends.aces import selected_profiles_for_scenario
+    from aptl.validation._gate_checks import _NoStartBackend
+
+    selected = selected_profiles_for_scenario(
+        PROJECT_ROOT, variant.config, _NoStartBackend(), scenario_path=variant.path
+    )
+    assert set(selected) == variant.expected_profiles
+
+
 def test_variants_yield_distinct_realizations():
     """Anti-collapse: different declared content must not collapse to one set."""
     profile_sets = []

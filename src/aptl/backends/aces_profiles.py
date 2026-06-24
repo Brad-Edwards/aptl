@@ -93,6 +93,46 @@ class ComposeProfileIndex(object):
             },
         )
 
+    def _service_active(self, service_name: str, selected_profiles: set[str]) -> bool:
+        """Return whether a Compose service runs under the selected profiles."""
+        service = self.services.get(service_name)
+        if service is None:
+            return False
+        # A service with no profiles is always active; otherwise it runs when
+        # it shares at least one profile with the selection. This mirrors
+        # `docker compose --profile` activation semantics.
+        return (not service.profiles) or bool(service.profiles & selected_profiles)
+
+    def cross_profile_dependency_gaps(
+        self, selected_profiles: set[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """Return active services whose ``depends_on`` targets are inactive.
+
+        ``docker compose --profile`` activates every service in a selected
+        profile, not just the ACES nodes a scenario declares. When an activated
+        service depends on a known service that the profile selection excludes,
+        Compose rejects the project ("depends on undefined service"). This is
+        invisible to node-level realization, so it is checked here against the
+        full Compose service graph for the selected profiles.
+        """
+        selected = set(selected_profiles)
+        gaps: dict[str, set[str]] = {}
+        for service_name, service in self.services.items():
+            if not self._service_active(service_name, selected):
+                continue
+            for dependency in service.dependencies:
+                # Unknown dependencies are reported by the dependency-closure
+                # pass; here we only flag known services excluded by the
+                # profile selection.
+                if dependency not in self.services:
+                    continue
+                if not self._service_active(dependency, selected):
+                    gaps.setdefault(service_name, set()).add(dependency)
+        return {
+            service_name: tuple(sorted(dependencies))
+            for service_name, dependencies in gaps.items()
+        }
+
 
 def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     """Load Compose service/profile aliases from ``docker-compose.yml``."""

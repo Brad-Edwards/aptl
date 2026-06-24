@@ -1,11 +1,15 @@
 name: techvault-enterprise-web
 description: >
-  Curated TechVault enterprise-web slice. Declares the vulnerable customer
-  portal (webapp) and its backing database (db) plus the OTEL core observability
-  stack. Includes the enterprise web tier and core observability; omits the SOC
-  defensive stack (Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle) and the
-  red-team apparatus. Proves APTL realizes the `enterprise` profile from declared
-  app/db node content with no defensive surface.
+  Curated TechVault enterprise-web slice. Declares the full enterprise tier
+  (vulnerable customer portal, database, Active Directory, and workstation) plus
+  the Wazuh monitoring core the enterprise hosts report to, and the OTEL core
+  observability stack. The Wazuh core is required, not optional: APTL realizes at
+  Compose-profile granularity, and the enterprise profile's workstation host
+  depends on wazuh-manager, so selecting the enterprise tier without Wazuh is an
+  invalid Compose project. Includes the enterprise tier, the Wazuh core, and core
+  observability; omits the wider SOC stack (Suricata, MISP, TheHive, Cortex,
+  Shuffle) and the red-team apparatus. Proves APTL realizes the enterprise plus
+  wazuh profiles from declared node content with no SOC surface.
 
 nodes:
   dmz-net:
@@ -28,6 +32,35 @@ nodes:
     os: linux
     services:
       - {name: postgres, port: 5432, protocol: tcp}
+  ad:
+    type: vm
+    os: linux
+    services:
+      - {name: ldap, port: 389, protocol: tcp}
+      - {name: kerberos, port: 88, protocol: tcp}
+      - {name: smb, port: 445, protocol: tcp}
+  workstation:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+
+  wazuh-manager:
+    type: vm
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      health:
+        status: healthy
+        description: Compose healthcheck must pass before public startup is ready.
+  wazuh-indexer:
+    type: vm
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
 
   aptl-otel-collector:
     type: vm
@@ -56,9 +89,21 @@ infrastructure:
 
   webapp:
     links: [dmz-net, internal-net]
-    dependencies: [db]
+    dependencies: [db, wazuh-manager]
   db:
     links: [internal-net]
+  ad:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+  workstation:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+
+  wazuh-manager:
+    links: [security-net, internal-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]
 
   aptl-otel-collector:
     links: [security-net]

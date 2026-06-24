@@ -26,7 +26,11 @@ import pytest
 from aces_sdl.parser import parse_sdl
 
 from aptl.backends.aces import DEFAULT_ACES_SCENARIO
-from aptl.backends.aces_profiles import public_start_profiles, select_backend_profiles
+from aptl.backends.aces_profiles import (
+    load_compose_profile_index,
+    public_start_profiles,
+    select_backend_profiles,
+)
 from aptl.core.config import AptlConfig
 from aptl.core.scenario_catalog import load_scenario_catalog, resolve_scenario_selection
 from aptl.validation._gate_checks import check_parse, check_provisioning_realization
@@ -76,8 +80,8 @@ VARIANTS = (
     _Variant(
         catalog_id="techvault-enterprise-web",
         filename="techvault-enterprise-web.sdl.yaml",
-        config=_config("enterprise"),
-        expected_profiles=frozenset({"enterprise", "otel"}),
+        config=_config("enterprise", "wazuh"),
+        expected_profiles=frozenset({"enterprise", "wazuh", "otel"}),
     ),
     _Variant(
         catalog_id="techvault-defensive-min",
@@ -124,6 +128,26 @@ def test_variant_realizes_clean_with_expected_profiles(variant: _Variant):
         variant.config, frozenset(details.get("profiles", []))
     )
     assert set(selected) == set(public_start_profiles(variant.config))
+
+
+@pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.catalog_id)
+def test_variant_selected_profiles_form_valid_compose_project(variant: _Variant):
+    """The profiles `aptl lab start` launches must be a valid Compose project.
+
+    `docker compose --profile <selected>` activates every service in a selected
+    profile, so an activated service whose depends_on target is excluded by the
+    selection makes Compose reject the project at `up` time. This guards that
+    class of defect (which node-level realization alone does not catch) for each
+    variant; it is verified to match `docker compose config`'s verdict.
+    """
+    details, _ = _realization_details(variant)
+    assert details is not None
+    index = load_compose_profile_index(PROJECT_ROOT)
+    selected = set(
+        select_backend_profiles(variant.config, frozenset(details.get("profiles", [])))
+    )
+    gaps = index.cross_profile_dependency_gaps(selected)
+    assert gaps == {}, f"{variant.catalog_id} selects an invalid compose project: {gaps}"
 
 
 def test_variants_yield_distinct_realizations():

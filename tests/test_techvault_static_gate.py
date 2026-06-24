@@ -24,6 +24,7 @@ from aces_contracts.planning import (
 )
 
 from aptl.backends.aces_profiles import (
+    load_compose_profile_index,
     public_start_profiles,
     select_backend_profiles,
     steady_state_service_aliases_for_profiles,
@@ -375,6 +376,38 @@ def test_realization_rejects_unrealizable_node_even_named_techvault(tmp_path):
 def _is_error(diagnostic):
     severity = getattr(diagnostic, "severity", None)
     return getattr(severity, "value", str(severity)).lower() == "error"
+
+
+# --------------------------------------------------------------------------- #
+# Compose-project validity: `docker compose --profile` activates every service
+# in a selected profile, so an activated service that depends on a service the
+# selection excludes is an invalid project. Node-level realization alone misses
+# this, so interpret_provisioning_plan checks the full Compose graph.
+# --------------------------------------------------------------------------- #
+
+
+def _cross_profile_compose(project_dir):
+    # webapp (enterprise) depends on wazuh-manager (wazuh): selecting enterprise
+    # without wazuh excludes the dependency.
+    (project_dir / "docker-compose.yml").write_text(
+        "services:\n"
+        "  webapp:\n"
+        '    profiles: ["enterprise"]\n'
+        "    image: x:latest\n"
+        '    depends_on: ["wazuh-manager"]\n'
+        "  wazuh-manager:\n"
+        '    profiles: ["wazuh"]\n'
+        "    image: x:latest\n"
+    )
+
+
+def test_cross_profile_dependency_gaps_detects_excluded_dependency(tmp_path):
+    _cross_profile_compose(tmp_path)
+    index = load_compose_profile_index(tmp_path)
+    assert index.cross_profile_dependency_gaps({"enterprise"}) == {
+        "webapp": ("wazuh-manager",)
+    }
+    assert index.cross_profile_dependency_gaps({"enterprise", "wazuh"}) == {}
 
 
 # --------------------------------------------------------------------------- #

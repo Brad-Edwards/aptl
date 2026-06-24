@@ -43,7 +43,7 @@ the OTEL core observability nodes.
 | Catalog id | Includes | Omits | Selected profiles | Proves |
 |---|---|---|---|---|
 | `techvault-attacker-target` | Kali host and capture sidecar, one monitored victim, Wazuh manager and indexer, OTEL core | Enterprise web tier, the wider SOC stack | `kali`, `victim`, `wazuh`, `otel` | A red-team host against a monitored target; the victim pulls Wazuh through declared dependency content, not through the scenario name |
-| `techvault-enterprise-web` | Vulnerable webapp, database, OTEL core | The SOC defensive stack, the red-team apparatus | `enterprise`, `otel` | The enterprise web tier realizes with no defensive surface |
+| `techvault-enterprise-web` | The enterprise tier (vulnerable webapp, database, AD, workstation), the Wazuh monitoring core, OTEL core | The wider SOC stack (Suricata, MISP, TheHive, Cortex, Shuffle), the red-team apparatus | `enterprise`, `wazuh`, `otel` | The enterprise tier realizes with the Wazuh core it requires and no SOC surface |
 | `techvault-defensive-min` | Wazuh manager, indexer, dashboard, OTEL core | The wider SOC stack, attacker and enterprise components | `wazuh`, `otel` | Wazuh monitoring realizes without pulling the full `soc` profile |
 | `techvault-observability-core` | OTEL collector, Tempo, Grafana | Every attacker, target, enterprise, and defensive component | `otel` | The smallest bounded startup surface APTL realizes from SDL |
 
@@ -60,6 +60,16 @@ each variant through `interpret_provisioning_plan` with no error-severity
 `aptl.provisioner.*` diagnostics, asserts the selected Compose profile set for a
 configuration that enables exactly the variant profiles, and proves the result is
 content-driven through anti-collapse and rename checks.
+
+Because `aptl lab start` boots with `docker compose --profile <selected>`, which
+activates every service in a selected profile rather than only the declared ACES
+nodes, the provisioner validates that the selected profile set is a valid Compose
+project before starting the backend. When an activated service has a `depends_on`
+target that the selection excludes, the provisioner refuses with an
+`aptl.provisioner.compose-project-invalid` diagnostic instead of failing later
+with a raw Compose error. This is why `techvault-enterprise-web` includes the
+`wazuh` profile: the enterprise `workstation` host depends on `wazuh-manager`, so
+the enterprise tier cannot boot without the Wazuh core.
 
 ## Security And Runtime Boundaries
 

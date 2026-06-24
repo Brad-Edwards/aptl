@@ -37,6 +37,7 @@ from aptl.backends.aces_realization import (
     interpret_provisioning_plan,
 )
 from aptl.backends.aces_profiles import (
+    load_compose_profile_index,
     select_backend_profiles,
 )
 from aptl.core.config import AptlConfig
@@ -250,6 +251,18 @@ class AptlProvisioner(object):
     ) -> ApplyResult:
         """Apply a validated ACES plan to the deployment backend."""
         selected_profiles = select_backend_profiles(self.config, realization.profiles)
+        validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
+        if validity_diagnostics:
+            diagnostics.extend(validity_diagnostics)
+            return ApplyResult(
+                success=False,
+                snapshot=snapshot,
+                diagnostics=diagnostics,
+                details={
+                    "profiles": selected_profiles,
+                    "realization": realization.details(),
+                },
+            )
         start_result = self.deployment_backend.start(selected_profiles)
         if not start_result.success:
             diagnostics.append(
@@ -278,6 +291,44 @@ class AptlProvisioner(object):
                 "realization": realization.details(),
             },
         )
+
+    def _compose_validity_diagnostics(
+        self, selected_profiles: list[str]
+    ) -> list[Diagnostic]:
+        """Refuse to start when the selected profiles form an invalid project.
+
+        ``deployment_backend.start`` boots with ``docker compose --profile
+        <selected>``, which activates every service in each selected profile,
+        not just the declared ACES nodes. If an activated service depends on a
+        service the selection excludes, Compose rejects the project at ``up``
+        time. Catch that here so ``aptl lab start`` fails fast with an APTL
+        diagnostic instead of a raw Compose "undefined service" error.
+        """
+        try:
+            profile_index = load_compose_profile_index(self.project_dir)
+        except (OSError, ValueError) as exc:
+            return [
+                diagnostic(
+                    "aptl.provisioner.compose-profile-index-failed",
+                    PROVISIONING_ADDRESS,
+                    redact(str(exc)),
+                )
+            ]
+        gaps = profile_index.cross_profile_dependency_gaps(set(selected_profiles))
+        return [
+            diagnostic(
+                "aptl.provisioner.compose-project-invalid",
+                PROVISIONING_ADDRESS,
+                (
+                    "Selected APTL compose profiles form an invalid project: "
+                    f"service '{service_name}' depends on "
+                    f"{', '.join(dependencies)}, which the profile selection "
+                    "excludes. Declare the dependency's node or enable its "
+                    "profile."
+                ),
+            )
+            for service_name, dependencies in sorted(gaps.items())
+        ]
 
     def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
         """Interpret an ACES plan against APTL's supported contract."""

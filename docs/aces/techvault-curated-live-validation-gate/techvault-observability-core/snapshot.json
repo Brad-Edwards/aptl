@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-06-24T05:18:03.804170+00:00",
+  "containers": [
+    {
+      "name": "aptl-grafana-otel",
+      "image": "grafana/grafana:11.6.0",
+      "status": "Up 46 seconds",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.52"
+      },
+      "ports": [
+        "127.0.0.1:3100->3000/tcp"
+      ]
+    },
+    {
+      "name": "aptl-tempo",
+      "image": "grafana/tempo:2.7.2",
+      "status": "Up 46 seconds",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.51"
+      },
+      "ports": [
+        "127.0.0.1:3200->3200/tcp"
+      ]
+    },
+    {
+      "name": "aptl-otel-collector",
+      "image": "otel/opentelemetry-collector-contrib:0.123.0",
+      "status": "Up 46 seconds (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.53"
+      },
+      "ports": [
+        "127.0.0.1:4317-4318->4317-4318/tcp",
+        "55678-55679/tcp"
+      ]
+    }
+  ],
+  "networks": [
+    {
+      "name": "aptl_aptl-security",
+      "subnet": "172.20.0.0/24",
+      "gateway": "172.20.0.1",
+      "containers": [
+        "aptl-grafana-otel",
+        "aptl-otel-collector",
+        "aptl-tempo"
+      ]
+    }
+  ]
+}

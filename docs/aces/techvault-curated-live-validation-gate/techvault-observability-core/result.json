@@ -1,0 +1,34 @@
+{
+  "catalog_id": "techvault-observability-core",
+  "scenario": "techvault-observability-core.sdl.yaml",
+  "matched_config_containers": [],
+  "command": "aptl lab start --scenario techvault-observability-core --skip-seed",
+  "readiness_outcome": "Lab is ready.",
+  "boot_elapsed_seconds": 55,
+  "selected_profiles": [
+    "otel"
+  ],
+  "realized_nodes": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo"
+  ],
+  "expected_services": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo"
+  ],
+  "expected_networks": [
+    "aptl-security"
+  ],
+  "actual_containers": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo"
+  ],
+  "actual_networks": [
+    "aptl_aptl-security"
+  ],
+  "verdict": "PASS",
+  "diagnostics": []
+}

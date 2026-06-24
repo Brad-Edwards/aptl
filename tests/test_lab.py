@@ -2763,7 +2763,10 @@ class TestTerminalHostKeyPinningStep:
         from aptl.core.host_keys import HostKeyPinResult
         from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
 
-        mock_list.return_value = []
+        from aptl.core.endpoints import build_ssh_endpoints
+
+        snapshots = []
+        mock_list.return_value = snapshots
         mock_pin.return_value = HostKeyPinResult(
             path=tmp_path / ".aptl" / "known_hosts", pinned=["Victim"], failed=[]
         )
@@ -2772,7 +2775,13 @@ class TestTerminalHostKeyPinningStep:
         ctx.ssh_key_path = tmp_path / "key"
 
         assert _step_pin_terminal_host_keys(ctx) is None
-        mock_pin.assert_called_once()
+        # Assert the routing, not just the call count: the step must forward the
+        # project dir, the endpoints derived from the container snapshots, and
+        # the operator ssh key path. A transposed/empty argument (which would
+        # break the ADR-040 TOFU pinning) must fail this test.
+        mock_pin.assert_called_once_with(
+            tmp_path, build_ssh_endpoints(snapshots), ctx.ssh_key_path
+        )
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     def test_step_noop_without_backend(self, mock_pin, tmp_path):

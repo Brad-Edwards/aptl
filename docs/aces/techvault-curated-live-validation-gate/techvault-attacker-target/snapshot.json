@@ -1,0 +1,161 @@
+{
+  "timestamp": "2026-06-24T05:04:24.004920+00:00",
+  "containers": [
+    {
+      "name": "aptl-victim",
+      "image": "aptl-victim",
+      "status": "Up 47 seconds (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-internal": "172.20.2.20"
+      },
+      "ports": [
+        "22/tcp",
+        "514/tcp"
+      ]
+    },
+    {
+      "name": "aptl-wazuh-dashboard",
+      "image": "wazuh/wazuh-dashboard:4.12.0",
+      "status": "Up 47 seconds (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.11"
+      },
+      "ports": [
+        "443/tcp",
+        "127.0.0.1:443->5601/tcp"
+      ]
+    },
+    {
+      "name": "aptl-kali-capture",
+      "image": "aptl-kali-capture",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {},
+      "ports": []
+    },
+    {
+      "name": "aptl-wazuh-manager",
+      "image": "wazuh/wazuh-manager:4.12.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-dmz": "172.20.1.10",
+        "aptl_aptl-internal": "172.20.2.30",
+        "aptl_aptl-security": "172.20.0.10"
+      },
+      "ports": [
+        "127.0.0.1:1514-1515->1514-1515/tcp",
+        "127.0.0.1:514->514/udp",
+        "127.0.0.1:55000->55000/tcp",
+        "1516/tcp"
+      ]
+    },
+    {
+      "name": "aptl-kali",
+      "image": "aptl-kali",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-dmz": "172.20.1.30",
+        "aptl_aptl-internal": "172.20.2.35",
+        "aptl_aptl-redteam": "172.20.4.30"
+      },
+      "ports": [
+        "22/tcp"
+      ]
+    },
+    {
+      "name": "aptl-grafana-otel",
+      "image": "grafana/grafana:11.6.0",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.52"
+      },
+      "ports": [
+        "127.0.0.1:3100->3000/tcp"
+      ]
+    },
+    {
+      "name": "aptl-wazuh-indexer",
+      "image": "wazuh/wazuh-indexer:4.12.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.12"
+      },
+      "ports": [
+        "127.0.0.1:9200->9200/tcp"
+      ]
+    },
+    {
+      "name": "aptl-otel-collector",
+      "image": "otel/opentelemetry-collector-contrib:0.123.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.53"
+      },
+      "ports": [
+        "127.0.0.1:4317-4318->4317-4318/tcp",
+        "55678-55679/tcp"
+      ]
+    },
+    {
+      "name": "aptl-tempo",
+      "image": "grafana/tempo:2.7.2",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.51"
+      },
+      "ports": [
+        "127.0.0.1:3200->3200/tcp"
+      ]
+    }
+  ],
+  "networks": [
+    {
+      "name": "aptl_aptl-dmz",
+      "subnet": "172.20.1.0/24",
+      "gateway": "172.20.1.1",
+      "containers": [
+        "aptl-kali",
+        "aptl-wazuh-manager"
+      ]
+    },
+    {
+      "name": "aptl_aptl-internal",
+      "subnet": "172.20.2.0/24",
+      "gateway": "172.20.2.1",
+      "containers": [
+        "aptl-kali",
+        "aptl-victim",
+        "aptl-wazuh-manager"
+      ]
+    },
+    {
+      "name": "aptl_aptl-redteam",
+      "subnet": "172.20.4.0/24",
+      "gateway": "172.20.4.1",
+      "containers": [
+        "aptl-kali"
+      ]
+    },
+    {
+      "name": "aptl_aptl-security",
+      "subnet": "172.20.0.0/24",
+      "gateway": "172.20.0.1",
+      "containers": [
+        "aptl-grafana-otel",
+        "aptl-otel-collector",
+        "aptl-tempo",
+        "aptl-wazuh-dashboard",
+        "aptl-wazuh-indexer",
+        "aptl-wazuh-manager"
+      ]
+    }
+  ]
+}

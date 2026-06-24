@@ -12,7 +12,7 @@ telemetry probes without a live lab.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -206,7 +206,9 @@ def _node_readiness_diagnostics(
             continue
         matched_names.add(container.get("name", ""))
         diagnostics.extend(
-            _container_health_diagnostics(node.get("name", "?"), container)
+            _container_health_diagnostics(
+                node.get("name", "?"), container, node.get("declared_health")
+            )
         )
     return diagnostics, matched_names
 
@@ -225,15 +227,29 @@ def _warn_unhealthy_infra(
 
 
 def _container_health_diagnostics(
-    node_name: str, container: Mapping[str, Any]
+    node_name: str,
+    container: Mapping[str, Any],
+    declared_health: str | None = None,
 ) -> list[str]:
-    """Return hard-failure diagnostics for one realized node's container."""
+    """Return hard-failure diagnostics for one realized node's container.
+
+    ``declared_health`` is the node's realized ``runtime.health.status``
+    expectation (``None`` when the scenario declares no health). When a node
+    declares ``healthy``, the running container's health must actually report
+    ``healthy`` — an empty/``starting``/``unhealthy`` health is a conformance
+    failure, not silently tolerated as it is for nodes with no declaration.
+    """
     status = str(container.get("status", ""))
     health = str(container.get("health", ""))
     if not status.startswith("Up"):
         return [f"node {node_name!r} container not running (status={status!r})"]
     if health == "unhealthy":
         return [f"node {node_name!r} container unhealthy"]
+    if declared_health == "healthy" and health != "healthy":
+        return [
+            f"node {node_name!r} declares health {declared_health!r} but container "
+            f"health is {health or 'unreported'!r}"
+        ]
     return []
 
 
@@ -289,19 +305,23 @@ def _ping_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
 
 
 def _collect_until_evidence(
-    backend: "DeploymentBackend", start_iso: str, window_seconds: int
+    backend: "DeploymentBackend",
+    start_iso: str,
+    window_seconds: int,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Poll for defensive-stack evidence until found or the window elapses.
 
     Both Suricata flow flushing and Wazuh ingest have latency, so the gate polls
     rather than sleeping a fixed interval; it returns as soon as a traffic-derived
-    Suricata event or a Wazuh alert appears.
+    Suricata event or a Wazuh alert appears. ``sleep_fn`` is injectable so tests
+    can skip the real poll wait without patching ``time.sleep`` on the module.
     """
     steps = max(1, window_seconds // _POLL_STEP_SECONDS)
     eve: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
     for _ in range(steps):
-        time.sleep(_POLL_STEP_SECONDS)
+        sleep_fn(_POLL_STEP_SECONDS)
         now = _now_iso()
         eve = collect_suricata_eve(start_iso, now, backend)
         alerts = collect_wazuh_alerts(start_iso, now)

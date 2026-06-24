@@ -80,6 +80,27 @@ def service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
     return names
 
 
+def health_status(node_spec: Mapping[str, Any] | None) -> str | None:
+    """Extract the declared health status from a node's runtime block.
+
+    ACES carries the SDL ``runtime.health`` declaration into the compiled node
+    payload at ``spec.node.runtime.health.status``. The ``status`` is the
+    realizable expectation (e.g. ``healthy``) compared against live container
+    health; the sibling ``description`` is prose and is not realized.
+    """
+
+    if node_spec is None:
+        return None
+    runtime = node_spec.get("runtime")
+    if not isinstance(runtime, Mapping):
+        return None
+    health = runtime.get("health")
+    if not isinstance(health, Mapping):
+        return None
+    status = health.get("status")
+    return status if isinstance(status, str) and status.strip() else None
+
+
 def network_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract linked network names from infrastructure details."""
 

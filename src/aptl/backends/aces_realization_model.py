@@ -21,6 +21,7 @@ class NodeRealization(object):
     telemetry_paths: tuple[str, ...]
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
+    declared_health: str | None = None
 
     def details(self) -> dict[str, object]:
         return {
@@ -34,6 +35,7 @@ class NodeRealization(object):
             "telemetry_paths": list(self.telemetry_paths),
             "networks": list(self.networks),
             "static_addresses": list(self.static_addresses),
+            "declared_health": self.declared_health,
         }
 
 

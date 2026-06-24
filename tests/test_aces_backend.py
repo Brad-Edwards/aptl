@@ -195,6 +195,70 @@ def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
     assert [diag.code for diag in realization.diagnostics] == []
 
 
+def _otel_only_config() -> AptlConfig:
+    return AptlConfig(
+        lab={"name": "test"},
+        containers={
+            "wazuh": False,
+            "victim": False,
+            "kali": False,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": False,
+            "dns": False,
+        },
+    )
+
+
+def _node_resource_with_health(node_name: str, status: str) -> PlannedResource:
+    # ACES carries the SDL ``runtime.health`` declaration into the compiled node
+    # payload at ``spec.node.runtime.health`` (verified against a real compile).
+    resource = _node_resource(node_name)
+    resource.payload["spec"]["node"]["runtime"] = {
+        "health": {
+            "status": status,
+            "description": "Compose healthcheck must pass before startup is ready.",
+        }
+    }
+    return resource
+
+
+def test_realization_extracts_declared_node_health(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(
+            _node_resource_with_health("aptl-otel-collector", "healthy")
+        ),
+        project_dir=tmp_path,
+        config=_otel_only_config(),
+    )
+
+    node = realization.nodes[0]
+    assert node.declared_health == "healthy"
+    assert node.details()["declared_health"] == "healthy"
+
+
+def test_realization_declared_health_absent_when_undeclared(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_nodes("aptl-otel-collector"),
+        project_dir=tmp_path,
+        config=_otel_only_config(),
+    )
+
+    node = realization.nodes[0]
+    assert node.declared_health is None
+    assert node.details()["declared_health"] is None
+
+
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 

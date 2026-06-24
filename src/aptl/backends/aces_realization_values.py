@@ -89,15 +89,9 @@ def health_status(node_spec: Mapping[str, Any] | None) -> str | None:
     health; the sibling ``description`` is prose and is not realized.
     """
 
-    if node_spec is None:
-        return None
-    runtime = node_spec.get("runtime")
-    if not isinstance(runtime, Mapping):
-        return None
-    health = runtime.get("health")
-    if not isinstance(health, Mapping):
-        return None
-    status = health.get("status")
+    runtime = node_spec.get("runtime") if isinstance(node_spec, Mapping) else None
+    health = runtime.get("health") if isinstance(runtime, Mapping) else None
+    status = health.get("status") if isinstance(health, Mapping) else None
     return status if isinstance(status, str) and status.strip() else None
 
 

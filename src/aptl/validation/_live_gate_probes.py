@@ -28,7 +28,6 @@ from aces_runtime.manager import RuntimeManager
 from aces_sdl.scenario import Scenario
 
 from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_profiles import normalize_identifier
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
@@ -182,93 +181,6 @@ def _startup_diag_lines(result: "LabResult") -> list[str]:
             )
         )
     return lines
-
-
-def _node_readiness_diagnostics(
-    nodes: Sequence[Mapping[str, Any]],
-    containers: Sequence[Mapping[str, Any]],
-    selected: set[str],
-) -> tuple[list[str], set[str]]:
-    """Return (hard-failure diagnostics, matched container names) for realized nodes."""
-    diagnostics: list[str] = []
-    matched_names: set[str] = set()
-    for node in nodes:
-        # Only nodes whose profile is in the started subset get a container; a
-        # declared node in a non-selected profile (e.g. mail/reverse when those
-        # profiles are disabled) is correctly absent and not a readiness gap.
-        if selected and not (set(node.get("profiles", ())) & selected):
-            continue
-        container = _live_container_for_node(node, containers)
-        if container is None:
-            diagnostics.append(
-                f"realized node {node.get('name', '?')!r} has no live container"
-            )
-            continue
-        matched_names.add(container.get("name", ""))
-        diagnostics.extend(
-            _container_health_diagnostics(
-                node.get("name", "?"), container, node.get("declared_health")
-            )
-        )
-    return diagnostics, matched_names
-
-
-def _warn_unhealthy_infra(
-    containers: Sequence[Mapping[str, Any]], matched_names: set[str]
-) -> None:
-    """Log unhealthy non-node infra containers as informational notes only."""
-    for container in containers:
-        if container.get("name", "") in matched_names:
-            continue
-        if container.get("health") == "unhealthy":
-            log.warning(
-                "non-node infra container unhealthy: %s", container.get("name", "?")
-            )
-
-
-def _container_health_diagnostics(
-    node_name: str,
-    container: Mapping[str, Any],
-    declared_health: str | None = None,
-) -> list[str]:
-    """Return hard-failure diagnostics for one realized node's container.
-
-    ``declared_health`` is the node's realized ``runtime.health.status``
-    expectation (``None`` when the scenario declares no health). When a node
-    declares ``healthy``, the running container's health must actually report
-    ``healthy`` — an empty/``starting``/``unhealthy`` health is a conformance
-    failure, not silently tolerated as it is for nodes with no declaration.
-    """
-    status = str(container.get("status", ""))
-    health = str(container.get("health", ""))
-    if not status.startswith("Up"):
-        return [f"node {node_name!r} container not running (status={status!r})"]
-    if health == "unhealthy":
-        return [f"node {node_name!r} container unhealthy"]
-    if declared_health == "healthy" and health != "healthy":
-        return [
-            f"node {node_name!r} declares health {declared_health!r} but container "
-            f"health is {health or 'unreported'!r}"
-        ]
-    return []
-
-
-def _live_container_for_node(
-    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
-) -> Mapping[str, Any] | None:
-    """Match a realized node to a live container by normalized alias."""
-    node_keys: set[str] = set()
-    raw_values = [node.get("name", ""), *node.get("aliases", ())]
-    for raw in raw_values:
-        norm = normalize_identifier(str(raw))
-        if norm:
-            node_keys.add(norm)
-            node_keys.add(norm.removeprefix("aptl-"))
-    for container in containers:
-        cname = normalize_identifier(str(container.get("name", "")))
-        if cname in node_keys or cname.removeprefix("aptl-") in node_keys:
-            return container
-    return None
 
 
 def _shared_network_targets(

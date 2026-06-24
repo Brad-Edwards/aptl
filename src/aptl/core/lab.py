@@ -101,6 +101,36 @@ def start_aces_scenario(
     )
 
 
+def selected_profiles_for_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> set[str]:
+    """Lazy ACES import for the scenario's selected Compose profiles.
+
+    Returns the profile set the scenario actually starts, so post-start
+    readiness checks scope to it instead of the global config flags. On import
+    failure returns an empty set (the readiness steps then skip rather than
+    falsely waiting on services).
+    """
+    try:
+        from aptl.backends.aces import (
+            selected_profiles_for_scenario as _selected_profiles,
+        )
+
+        return set(
+            _selected_profiles(project_dir, config, backend, scenario_path=scenario_path)
+        )
+    # broad-except: resolving selected profiles is best-effort enrichment for
+    # the readiness steps. The lab already started; any failure (import,
+    # missing/invalid SDL, ACES planning error) must degrade to an empty set so
+    # the readiness steps skip rather than crash the start or falsely wait.
+    except Exception as exc:
+        log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
+        return set()
+
+
 def _runtime_require(
     condition: Callable[..., bool],
     description: str,
@@ -452,6 +482,7 @@ class _LabStartContext(object):
     config: "AptlConfig | None" = None
     backend: "DeploymentBackend | None" = None
     ssh_key_path: Path | None = None
+    selected_profiles: set[str] = field(default_factory=set)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
 
 
@@ -971,6 +1002,16 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             scenario_path=ctx.scenario_path,
         )
     if start_result.success:
+        # Scope the post-start readiness checks to the profiles this scenario
+        # actually started, not the global config flags. A curated bounded
+        # scenario starts a subset, so a config-flag gate would wait on (and
+        # fail) services it never launched.
+        ctx.selected_profiles = selected_profiles_for_scenario(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=ctx.scenario_path,
+        )
         return None
     log.error("Lab start failed: %s", start_result.error)
     return LabResult(
@@ -992,7 +1033,9 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 9: Waiting for services...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.env is not None
-    if not ctx.config.containers.wazuh:
+    # Gate on the profiles the scenario actually started, not the config flag:
+    # a bounded scenario may omit Wazuh even when the container is enabled.
+    if "wazuh" not in ctx.selected_profiles:
         return None
 
     indexer_result = wait_for_service(
@@ -1071,12 +1114,15 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         and ctx.ssh_key_path is not None
         and ctx.backend is not None
     )
+    # Probe only the interactive targets the scenario actually started. Gating
+    # on the selected profiles (not config flags) keeps a bounded scenario from
+    # warning about targets it intentionally omitted.
     ssh_tests: list[tuple[str, str]] = []
-    if ctx.config.containers.victim:
+    if "victim" in ctx.selected_profiles:
         ssh_tests.append(("victim", "labadmin"))
-    if ctx.config.containers.kali:
+    if "kali" in ctx.selected_profiles:
         ssh_tests.append(("kali", "kali"))
-    if ctx.config.containers.reverse:
+    if "reverse" in ctx.selected_profiles:
         ssh_tests.append(("reverse", "labadmin"))
 
     for name, user in ssh_tests:

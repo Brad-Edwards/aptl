@@ -1,0 +1,129 @@
+name: techvault-enterprise-web
+description: >
+  Curated TechVault enterprise-web slice. Declares the full enterprise tier
+  (vulnerable customer portal, database, Active Directory, and workstation) plus
+  the Wazuh monitoring core the enterprise hosts report to, and the OTEL core
+  observability stack. The Wazuh core is required, not optional: APTL realizes at
+  Compose-profile granularity, and the enterprise profile's workstation host
+  depends on wazuh-manager, so selecting the enterprise tier without Wazuh is an
+  invalid Compose project. Includes the enterprise tier, the Wazuh core, and core
+  observability; omits the wider SOC stack (Suricata, MISP, TheHive, Cortex,
+  Shuffle) and the red-team apparatus. Proves APTL realizes the enterprise plus
+  wazuh profiles from declared node content with no SOC surface.
+
+nodes:
+  dmz-net:
+    type: switch
+    description: TechVault DMZ network.
+  internal-net:
+    type: switch
+    description: Internal enterprise target network.
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  webapp:
+    type: vm
+    os: linux
+    services:
+      - {name: http, port: 8080, protocol: tcp}
+  db:
+    type: vm
+    os: linux
+    services:
+      - {name: postgres, port: 5432, protocol: tcp}
+  ad:
+    type: vm
+    os: linux
+    services:
+      - {name: ldap, port: 389, protocol: tcp}
+      - {name: kerberos, port: 88, protocol: tcp}
+      - {name: smb, port: 445, protocol: tcp}
+  workstation:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+
+  wazuh-manager:
+    type: vm
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      health:
+        status: healthy
+        description: Compose healthcheck must pass before public startup is ready.
+  wazuh-indexer:
+    type: vm
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  dmz-net:
+    properties: {cidr: 172.20.1.0/24, gateway: 172.20.1.1, internal: true}
+  internal-net:
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  webapp:
+    links: [dmz-net, internal-net]
+    dependencies: [db, wazuh-manager]
+  db:
+    links: [internal-net]
+  ad:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+  workstation:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+
+  wazuh-manager:
+    links: [security-net, internal-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]
+
+features:
+  techvault-webapp-service:
+    type: service
+    source:
+      name: aptl-webapp
+      version: local
+    description: TechVault vulnerable customer portal service.
+
+vulnerabilities:
+  webapp-sqli-login:
+    name: SQL injection in login
+    description: Login form accepts intentionally vulnerable SQL input.
+    technical: true
+    class: CWE-89

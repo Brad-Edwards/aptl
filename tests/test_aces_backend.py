@@ -406,12 +406,40 @@ def _workflow_orchestration_plan():
 def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker, tmp_path):
     """A scenario carrying workflows routes through the control plane's
     orchestration submission (not just provisioning), and the lab still starts."""
+    from aces_contracts.runtime_state import OperationState
+
     from aptl.backends import aces
 
     _write_compose(tmp_path, {"victim": ["victim"]})
     mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
     orchestration = _workflow_orchestration_plan()
     assert orchestration.actionable_operations  # guard: the plan really carries workflows
+
+    submit_calls: list[str] = []
+
+    class FakeControlPlane:
+        def __init__(self, target, initial_snapshot=None):
+            del target, initial_snapshot
+
+        def submit_provisioning(self, plan):
+            submit_calls.append("provisioning")
+            receipt = MagicMock()
+            receipt.operation_id = "prov"
+            receipt.diagnostics = []
+            return receipt
+
+        def submit_orchestration(self, plan):
+            submit_calls.append("orchestration")
+            receipt = MagicMock()
+            receipt.operation_id = "orch"
+            receipt.diagnostics = []
+            return receipt
+
+        def get_operation(self, operation_id):
+            status = MagicMock()
+            status.state = OperationState.SUCCEEDED
+            status.diagnostics = []
+            return status
 
     class FakeRuntimeManager:
         def __init__(self, target):
@@ -423,6 +451,7 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker,
             )
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
     backend = MagicMock()
     backend.start.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
@@ -430,7 +459,11 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker,
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
     assert result.success is True
-    backend.start.assert_called_once_with(["victim", "otel"])
+    # The orchestration block actually ran: without it, submit_calls would omit
+    # "orchestration" even though provisioning still succeeds. (Profile selection
+    # for backend.start is covered by the provisioning-focused tests above; here
+    # the control plane is faked to observe submission routing.)
+    assert submit_calls == ["provisioning", "orchestration"]
 
 
 def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_path):
@@ -876,6 +909,51 @@ def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
     assert result.success is False
     assert any(
         diagnostic.code == "aptl.provisioner.dependency-profile-disabled"
+        for diagnostic in result.diagnostics
+    )
+    backend.start.assert_not_called()
+
+
+def test_provisioner_rejects_invalid_compose_project(tmp_path):
+    """An activated profile service with an excluded depends_on must fail fast.
+
+    workstation (enterprise) depends on wazuh-manager (wazuh). Selecting
+    enterprise without wazuh hands `docker compose --profile` an invalid project
+    even though only webapp is declared, because the profile activates every
+    enterprise service. The provisioner refuses before calling backend.start,
+    and node-level dependency closure (which only walks declared nodes) does not
+    catch it.
+    """
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose_graph(
+        tmp_path,
+        {
+            "webapp": (["enterprise"], []),
+            "workstation": (["enterprise"], ["wazuh-manager"]),
+            "wazuh-manager": (["wazuh"], []),
+            "aptl-otel-collector": (["otel"], []),
+        },
+    )
+    backend = MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "wazuh": False},
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource("techvault.webapp")), RuntimeSnapshot()
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.compose-project-invalid"
         for diagnostic in result.diagnostics
     )
     backend.start.assert_not_called()

@@ -124,6 +124,8 @@ aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
 Catalog entries and explicit paths must resolve under the project directory and
 must parse through `aces_sdl.parse_sdl_file` before startup. To add another
 curated startup input, commit the ACES SDL and add a row to the catalog.
+Curated TechVault startup variants must also follow the guardrails in
+[TechVault Curated ACES Startup Variants](techvault-curated-variants.md).
 
 ## Backward Compatibility
 

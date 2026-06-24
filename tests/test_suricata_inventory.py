@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 
+import pytest
 import yaml
 
 from aptl.core.aces_inventory import (
@@ -19,6 +20,12 @@ from aptl.core.aces_inventory import (
     validate_mapping_ledger,
 )
 
+# Module-level integration marker, matching every other tests/test_*_inventory.py
+# module. These checks parse the full TechVault SDL tree (and one compiles it),
+# which is integration-weight filesystem work — without this marker the three
+# full-tree parses leaked into the fast `-k "not integration"` suite and made it
+# the slowest part of the inner-loop gate (~7.5 min of redundant parsing).
+pytestmark = pytest.mark.integration
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SURICATA_DIR = PROJECT_ROOT / "docs" / "aces" / "inventory" / "suricata"

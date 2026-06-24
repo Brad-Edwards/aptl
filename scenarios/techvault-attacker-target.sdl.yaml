@@ -1,0 +1,101 @@
+name: techvault-attacker-target
+description: >
+  Curated TechVault attacker-target slice. Declares the Kali red-team host and
+  capture sidecar, a single reachable monitored victim, the Wazuh manager and
+  indexer the victim reports to, and the OTEL core observability stack. Includes
+  the red-team apparatus, one target, the Wazuh dependency the target pulls in by
+  declared content, and core observability; omits the enterprise web tier and the
+  wider SOC stack. Proves APTL realizes `kali`, `victim`, and `wazuh` from
+  declared node content and dependency closure, not from the scenario name.
+
+nodes:
+  redteam-net:
+    type: switch
+    description: Red-team operations network.
+  internal-net:
+    type: switch
+    description: Internal enterprise target network.
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  kali:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+  kali-capture:
+    type: vm
+    os: linux
+    services: []
+
+  victim:
+    type: vm
+    os: linux
+    services:
+      - {name: ssh, port: 22, protocol: tcp}
+
+  wazuh-manager:
+    type: vm
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      health:
+        status: healthy
+        description: Compose healthcheck must pass before public startup is ready.
+  wazuh-indexer:
+    type: vm
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  redteam-net:
+    properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
+  internal-net:
+    properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  kali:
+    links: [redteam-net, internal-net]
+  kali-capture:
+    dependencies: [kali]
+
+  victim:
+    links: [internal-net]
+    dependencies: [wazuh-manager]
+
+  wazuh-manager:
+    links: [security-net, internal-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]

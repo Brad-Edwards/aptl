@@ -98,6 +98,7 @@ nav:
     - Runtime Architecture: sdl/runtime-architecture.md
     - Complex Scenarios: sdl/complex-scenarios.md
     - Complex Scenario Authoring Notes: sdl/complex-scenario-authoring-notes.md
+    - Curated Variants: sdl/techvault-curated-variants.md
     - Precedents: sdl/precedents.md
     - Testing: sdl/testing.md
     - Limitations: sdl/limitations.md

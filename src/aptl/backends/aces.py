@@ -165,29 +165,24 @@ def _apply_provisioning_and_orchestration(
 
     Returns a failed ``LabResult`` for the first phase that fails, else ``None``.
     """
-    provisioning_failure = _apply_phase(
-        control_plane,
+    phases = [
         lambda: control_plane.submit_provisioning(execution_plan.provisioning),
-    )
-    if provisioning_failure is not None:
-        return provisioning_failure
+    ]
     if execution_plan.orchestration.actionable_operations:
-        orchestration_failure = _apply_phase(
-            control_plane,
+        phases.append(
             lambda: control_plane.submit_orchestration(execution_plan.orchestration),
         )
-        if orchestration_failure is not None:
-            return orchestration_failure
-    evaluation_results: dict[str, dict[str, object]] = {}
     if execution_plan.evaluation.actionable_operations:
-        evaluation_failure = _apply_phase(
-            control_plane,
+        phases.append(
             lambda: control_plane.submit_evaluation(execution_plan.evaluation),
         )
-        if evaluation_failure is not None:
-            return evaluation_failure
-        if target.evaluator is not None:
-            evaluation_results = target.evaluator.results()
+    for submit in phases:
+        failure = _apply_phase(control_plane, submit)
+        if failure is not None:
+            return failure
+    evaluation_results: dict[str, dict[str, object]] = {}
+    if execution_plan.evaluation.actionable_operations and target.evaluator is not None:
+        evaluation_results = target.evaluator.results()
     orchestrator = target.orchestrator
     if isinstance(orchestrator, AptlOrchestrator) and orchestrator.results():
         drive_diagnostics = orchestrator.drive_workflows(

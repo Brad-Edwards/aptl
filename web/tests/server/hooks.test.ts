@@ -21,10 +21,15 @@ vi.mock('$env/dynamic/private', () => ({ env: mockEnv }));
 // Import AFTER vi.mock so vitest's hoisting applies the mock first.
 import { handle } from '../../src/hooks.server';
 
-function makeEvent(pathname: string, method = 'GET') {
+function makeEvent(
+	pathname: string,
+	method = 'GET',
+	headers: Record<string, string> = {}
+) {
+	const url = `http://localhost${pathname}`;
 	return {
-		url: new URL(`http://localhost${pathname}`),
-		request: new Request(`http://localhost${pathname}`, { method })
+		url: new URL(url),
+		request: new Request(url, { method, headers })
 	};
 }
 
@@ -96,5 +101,58 @@ describe('handle', () => {
 
 		expect(resolve).toHaveBeenCalledWith(event);
 		expect(response.status).toBe(200);
+	});
+
+	it.each([
+		['/api/lab/start'],
+		['/api/lab/stop'],
+		['/api/lab/kill?containers=true']
+	])('rejects cross-origin POST %s without upstream fetch', async (pathname) => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		const event = makeEvent(pathname, 'POST', {
+			Origin: 'https://attacker.example'
+		});
+		const response = await handle({ event, resolve: vi.fn() } as Parameters<typeof handle>[0]);
+
+		expect(response.status).toBe(403);
+		expect(fetchMock).not.toHaveBeenCalled();
+		const body = await response.json();
+		expect(body.detail).toMatch(/cross-origin/i);
+	});
+
+	it('rejects mutating requests with Sec-Fetch-Site: cross-site', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		const event = makeEvent('/api/lab/start', 'POST', {
+			'Sec-Fetch-Site': 'cross-site'
+		});
+		const response = await handle({ event, resolve: vi.fn() } as Parameters<typeof handle>[0]);
+
+		expect(response.status).toBe(403);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('allows same-origin POST with matching Origin', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response('{"status":"ok"}', {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const event = makeEvent('/api/lab/start', 'POST', {
+			Origin: 'http://localhost',
+			'Sec-Fetch-Site': 'same-origin'
+		});
+		const response = await handle({ event, resolve: vi.fn() } as Parameters<typeof handle>[0]);
+
+		expect(response.status).toBe(200);
+		expect(fetchMock).toHaveBeenCalledOnce();
+		const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect((opts.headers as Headers).get('authorization')).toBe('Bearer test-hook-token');
 	});
 });

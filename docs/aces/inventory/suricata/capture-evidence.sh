@@ -65,12 +65,18 @@ docker network inspect aptl_aptl-internal | jq . > "$OUT/docker-network.aptl-int
 docker network inspect aptl_aptl-security | jq . > "$OUT/docker-network.aptl-security.json"
 docker volume inspect aptl_suricata_logs | jq . > "$OUT/docker-volume.suricata-logs.json"
 docker volume inspect aptl_suricata_command_socket | jq . > "$OUT/docker-volume.suricata-command-socket.json"
+# ADR-043: the suricata runtime config and MISP rules now ride Compose
+# project-scoped named volumes (seeded from config/suricata/ by a root
+# container at lab start) instead of host bind mounts, so the upstream image
+# entrypoint's chown can never rewrite host-side ownership (issue #325).
+docker volume inspect aptl_suricata_config_seed | jq . > "$OUT/docker-volume.suricata-config-seed.json"
+docker volume inspect aptl_suricata_misp_rules | jq . > "$OUT/docker-volume.suricata-misp-rules.json"
 docker top "$CONTAINER" > "$OUT/docker-top.txt"
 # Container logs are bounded to the tail; suricata is verbose at startup but
 # the operational tail characterizes steady state without copying telemetry.
 docker logs --tail 400 "$CONTAINER" 2>&1 > "$OUT/docker-logs.suricata.txt"
 
-record_limit "Capture used the already-running aptl lab (soc profile up) and did not run aptl lab stop -v && aptl lab start; this is a frozen observation of local steady state, not a clean-lab rebuild proof"
+record_limit "Recaptured after ADR-043 (issue #325) on a clean-rebuilt lab: two consecutive 'aptl lab stop -v && aptl lab start' cycles preceded this capture, so the bundle reflects the named-volume-seeded steady state, not the pre-fix host-bind topology"
 
 sha256sum \
   "$ROOT/docker-compose.yml" \

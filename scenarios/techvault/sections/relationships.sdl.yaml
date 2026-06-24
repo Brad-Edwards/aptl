@@ -508,7 +508,7 @@ relationships:
     target: techvault.suricata
     description: 'Realized IOC-enforcement handoff edge (SCN-010 issue #349): every SYNC_INTERVAL_SECONDS (300) the sync
       service atomically rewrites /var/lib/suricata/rules/misp/misp-iocs.rules (alert-only rules per ADR-019, sid_base
-      99000000, tag filter aptl:enforce) on the shared host bind (.aptl/suricata/rules/misp) and triggers a Suricata rule
+      99000000, tag filter aptl:enforce) in the shared aptl_suricata_misp_rules named volume (ADR-043) and triggers a Suricata rule
       reload over the shared suricata_command_socket unix socket (/var/run/suricata/suricata-command.socket, owned by the
       suricata service account uid/gid 998). The suricata node consumes the same directory as authored content; the rules
       file held ioc_count=0 at the capture snapshot. Evidenced by sync-service-state.txt and

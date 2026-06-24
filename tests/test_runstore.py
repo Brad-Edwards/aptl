@@ -271,6 +271,81 @@ class TestLocalRunStoreRedactionArgvShape:
         assert "alice" in text  # bare username preserved
 
 
+class TestLocalRunStorePathContainment:
+    """Core archive methods must stay inside ``<base_dir>/<run_id>/``.
+
+    OBS-003 helpers already validate ``run_id``; the write/read surface
+    (``create_run``, ``write_*``, ``copy_file``, ``get_run_path``) must
+    enforce the same contract (issue #522).
+    """
+
+    def test_create_run_rejects_traversal_run_id(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        with pytest.raises(ValueError, match="run_id"):
+            store.create_run("../outside")
+
+    def test_write_json_rejects_traversal_run_id(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        store.create_run("safe")
+        with pytest.raises(ValueError, match="run_id"):
+            store.write_json("../outside", "pwn.json", {"ok": True})
+
+    def test_write_json_rejects_traversal_relative_path(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        store.create_run("safe")
+        with pytest.raises(ValueError, match="relative_path"):
+            store.write_json("safe", "../escape.json", {"ok": True})
+
+    def test_append_jsonl_rejects_traversal_relative_path(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        store.create_run("safe")
+        with pytest.raises(ValueError, match="relative_path"):
+            store.append_jsonl("safe", "../../escape.jsonl", [{"a": 1}])
+
+    def test_copy_file_rejects_traversal_relative_path(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        store.create_run("safe")
+        source = tmp_path / "source.txt"
+        source.write_text("data")
+        with pytest.raises(ValueError, match="relative_path"):
+            store.copy_file("safe", "../escape.txt", source)
+
+    def test_traversal_attempts_do_not_escape_base(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        with pytest.raises(ValueError):
+            store.create_run("../outside")
+        with pytest.raises(ValueError):
+            store.write_json("safe", "../escape.json", {"ok": True})
+        assert not (tmp_path / "outside").exists()
+        assert not (tmp_path / "escape.json").exists()
+
+    def test_get_run_path_rejects_traversal_run_id(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        with pytest.raises(ValueError, match="run_id"):
+            store.get_run_path("../outside")
+
+    def test_get_run_manifest_rejects_traversal_run_id(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        import pytest
+
+        with pytest.raises(ValueError, match="run_id"):
+            store.get_run_manifest("../outside")
+
+
 class TestSessionScopedHelpers:
     """OBS-003: per-session subdirectories under a run.
 

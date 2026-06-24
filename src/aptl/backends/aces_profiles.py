@@ -12,15 +12,28 @@ import yaml
 
 from aptl.core.config import AptlConfig
 
-CORE_PROFILES = frozenset({"otel"})
+CORE_PROFILES = ("otel",)
 IDENTIFIER_SEPARATORS = re.compile(r"[^a-z0-9]+")
 
 
 @dataclass(frozen=True)
+class ComposeServiceInfo(object):
+    """APTL-relevant metadata for one Compose service."""
+
+    name: str
+    aliases: frozenset[str]
+    profiles: frozenset[str]
+    dependencies: frozenset[str]
+    networks: frozenset[str]
+
+
+@dataclass(frozen=True)
 class ComposeProfileIndex(object):
-    """Compose service aliases indexed to profile names."""
+    """Compose service aliases indexed to profile names and dependencies."""
 
     alias_to_profiles: dict[str, frozenset[str]]
+    alias_to_services: dict[str, frozenset[str]]
+    services: dict[str, ComposeServiceInfo]
 
     def profiles_for_aliases(self, aliases: set[str]) -> frozenset[str]:
         """Return all profiles associated with any normalized alias."""
@@ -29,18 +42,122 @@ class ComposeProfileIndex(object):
             profiles.update(self.alias_to_profiles.get(alias, frozenset()))
         return frozenset(profiles)
 
+    def service_names_for_aliases(self, aliases: set[str]) -> frozenset[str]:
+        """Return Compose service names associated with normalized aliases."""
+        services: set[str] = set()
+        for alias in aliases:
+            services.update(self.alias_to_services.get(alias, frozenset()))
+        return frozenset(services)
+
+    def profiles_for_services(self, service_names: set[str]) -> frozenset[str]:
+        """Return all profiles for the named Compose services."""
+        profiles: set[str] = set()
+        for service_name in service_names:
+            service = self.services.get(service_name)
+            if service is not None:
+                profiles.update(service.profiles)
+        return frozenset(profiles)
+
+    def network_aliases(self) -> frozenset[str]:
+        """Return normalized Compose network aliases used by indexed services."""
+        aliases: set[str] = set()
+        for service in self.services.values():
+            for network_name in service.networks:
+                aliases.update(normalized_identifier_aliases(network_name))
+        return frozenset(aliases)
+
+    def dependency_closure_for_services(
+        self, service_names: set[str]
+    ) -> tuple[frozenset[str], dict[str, tuple[str, ...]]]:
+        """Return transitive Compose ``depends_on`` closure and missing edges."""
+        closure = set(service_names)
+        pending = list(service_names)
+        missing: dict[str, set[str]] = {}
+        while pending:
+            service_name = pending.pop()
+            service = self.services.get(service_name)
+            if service is None:
+                continue
+            for dependency in service.dependencies:
+                if dependency not in self.services:
+                    missing.setdefault(service_name, set()).add(dependency)
+                    continue
+                if dependency not in closure:
+                    closure.add(dependency)
+                    pending.append(dependency)
+        return (
+            frozenset(closure),
+            {
+                service_name: tuple(sorted(dependencies))
+                for service_name, dependencies in missing.items()
+            },
+        )
+
+    def _service_active(self, service_name: str, selected_profiles: set[str]) -> bool:
+        """Return whether a Compose service runs under the selected profiles."""
+        service = self.services.get(service_name)
+        if service is None:
+            return False
+        # A service with no profiles is always active; otherwise it runs when
+        # it shares at least one profile with the selection. This mirrors
+        # `docker compose --profile` activation semantics.
+        return (not service.profiles) or bool(service.profiles & selected_profiles)
+
+    def cross_profile_dependency_gaps(
+        self, selected_profiles: set[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """Return active services whose ``depends_on`` targets are inactive.
+
+        ``docker compose --profile`` activates every service in a selected
+        profile, not just the ACES nodes a scenario declares. When an activated
+        service depends on a known service that the profile selection excludes,
+        Compose rejects the project ("depends on undefined service"). This is
+        invisible to node-level realization, so it is checked here against the
+        full Compose service graph for the selected profiles.
+        """
+        selected = set(selected_profiles)
+        gaps: dict[str, set[str]] = {}
+        for service_name, service in self.services.items():
+            if not self._service_active(service_name, selected):
+                continue
+            for dependency in service.dependencies:
+                # Unknown dependencies are reported by the dependency-closure
+                # pass; here we only flag known services excluded by the
+                # profile selection.
+                if dependency not in self.services:
+                    continue
+                if not self._service_active(dependency, selected):
+                    gaps.setdefault(service_name, set()).add(dependency)
+        return {
+            service_name: tuple(sorted(dependencies))
+            for service_name, dependencies in gaps.items()
+        }
+
 
 def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     """Load Compose service/profile aliases from ``docker-compose.yml``."""
     services = _load_compose_services(project_dir)
     alias_to_profiles: dict[str, set[str]] = {}
+    alias_to_services: dict[str, set[str]] = {}
+    service_infos: dict[str, ComposeServiceInfo] = {}
     for service_name, service_def in services.items():
-        _register_service_profiles(alias_to_profiles, str(service_name), service_def)
+        info = _service_info(str(service_name), service_def)
+        if info is None:
+            continue
+        service_infos[info.name] = info
+        for alias in info.aliases:
+            alias_to_services.setdefault(alias, set()).add(info.name)
+            alias_to_profiles.setdefault(alias, set()).update(info.profiles)
     return ComposeProfileIndex(
-        {
+        alias_to_profiles={
             alias: frozenset(profiles)
             for alias, profiles in alias_to_profiles.items()
-        }
+        },
+        alias_to_services={
+            alias: frozenset(service_names)
+            for alias, service_names in alias_to_services.items()
+        },
+        services=service_infos,
     )
 
 
@@ -76,6 +193,15 @@ def configured_profiles(config: AptlConfig) -> list[str]:
     return list(config.containers.enabled_profiles())
 
 
+def public_start_profiles(config: AptlConfig) -> list[str]:
+    """Return the Compose profiles used by the public lab start path."""
+    selected = configured_profiles(config)
+    for profile in CORE_PROFILES:
+        if profile not in selected:
+            selected.append(profile)
+    return selected
+
+
 def select_backend_profiles(
     config: AptlConfig,
     plan_profiles: frozenset[str],
@@ -83,13 +209,23 @@ def select_backend_profiles(
     """Intersect ACES plan profiles with enabled APTL profiles."""
     selected = [
         profile
-        for profile in configured_profiles(config)
-        if profile in plan_profiles
+        for profile in public_start_profiles(config)
+        if profile in plan_profiles or profile in CORE_PROFILES
     ]
-    for profile in CORE_PROFILES:
-        if profile not in selected:
-            selected.append(profile)
     return selected
+
+
+def steady_state_service_aliases_for_profiles(
+    project_dir: Path, selected_profiles: list[str]
+) -> dict[str, tuple[str, ...]]:
+    """Return normalized aliases for steady-state services in selected profiles."""
+    selected = set(selected_profiles)
+    services = _load_compose_services(project_dir)
+    return {
+        str(service_name): _normalized_service_aliases(str(service_name), service_def)
+        for service_name, service_def in services.items()
+        if _service_selected(service_def, selected)
+    }
 
 
 def normalized_identifier_aliases(raw: str) -> set[str]:
@@ -123,20 +259,20 @@ def _load_compose_services(project_dir: Path) -> Mapping[str, object]:
     return services
 
 
-def _register_service_profiles(
-    alias_to_profiles: dict[str, set[str]],
+def _service_info(
     service_name: str,
     service_def: object,
-) -> None:
-    """Add one Compose service's aliases to the profile index."""
+) -> ComposeServiceInfo | None:
+    """Return indexed metadata for one Compose service."""
     if not isinstance(service_def, Mapping):
-        return
-    profiles = _service_profiles(service_def)
-    if not profiles:
-        return
-    for alias in _service_aliases(service_name, service_def):
-        for normalized in normalized_identifier_aliases(alias):
-            alias_to_profiles.setdefault(normalized, set()).update(profiles)
+        return None
+    return ComposeServiceInfo(
+        name=service_name,
+        aliases=frozenset(_normalized_service_aliases(service_name, service_def)),
+        profiles=frozenset(_service_profiles(service_def)),
+        dependencies=frozenset(_service_dependencies(service_def)),
+        networks=frozenset(_service_networks(service_def)),
+    )
 
 
 def _service_profiles(service_def: Mapping[str, object]) -> set[str]:
@@ -146,6 +282,52 @@ def _service_profiles(service_def: Mapping[str, object]) -> set[str]:
         for profile in (service_def.get("profiles") or [])
         if str(profile).strip()
     }
+
+
+def _service_dependencies(service_def: Mapping[str, object]) -> set[str]:
+    """Return service names from a Compose ``depends_on`` declaration."""
+    depends_on = service_def.get("depends_on")
+    if isinstance(depends_on, Mapping):
+        return {str(service_name) for service_name in depends_on if str(service_name)}
+    if isinstance(depends_on, list | tuple | set | frozenset):
+        return {str(service_name) for service_name in depends_on if str(service_name)}
+    return set()
+
+
+def _service_networks(service_def: Mapping[str, object]) -> set[str]:
+    """Return network names selected by a Compose service."""
+    networks = service_def.get("networks")
+    if isinstance(networks, Mapping):
+        return {str(network_name) for network_name in networks if str(network_name)}
+    if isinstance(networks, list | tuple | set | frozenset):
+        return {str(network_name) for network_name in networks if str(network_name)}
+    return set()
+
+
+def _service_selected(service_def: object, selected_profiles: set[str]) -> bool:
+    """Return whether a service is steady-state and in a selected profile."""
+    if not isinstance(service_def, Mapping):
+        return False
+    profiles = _service_profiles(service_def)
+    return bool(profiles & selected_profiles) and not _is_one_shot(service_def)
+
+
+def _is_one_shot(service_def: Mapping[str, object]) -> bool:
+    """Return whether Compose marks a service as a non-steady-state task."""
+    return str(service_def.get("restart", "")).lower() in {"no", "false"}
+
+
+def _normalized_service_aliases(
+    service_name: str,
+    service_def: object,
+) -> tuple[str, ...]:
+    """Return sorted normalized aliases for one Compose service."""
+    if not isinstance(service_def, Mapping):
+        return ()
+    aliases: set[str] = set()
+    for alias in _service_aliases(service_name, service_def):
+        aliases.update(normalized_identifier_aliases(alias))
+    return tuple(sorted(aliases))
 
 
 def _service_aliases(

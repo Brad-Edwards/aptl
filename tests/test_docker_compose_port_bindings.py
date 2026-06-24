@@ -34,6 +34,9 @@ MANAGEMENT_SURFACES = [
     ("shuffle-frontend", 3443),
     ("shuffle-frontend", 3001),
     ("cortex", 9001),
+    ("aptl-otel-collector", 4317),
+    ("aptl-otel-collector", 4318),
+    ("aptl-tempo", 3200),
 ]
 
 # Deliberate victim / attack-surface targets that MUST remain reachable on all
@@ -102,7 +105,9 @@ def test_victim_target_stays_publicly_reachable(compose, service, host_port):
     matches = _published_for(compose, service, host_port)
     assert matches, f"{service} no longer publishes host port {host_port}"
     for host_ip, entry in matches:
-        assert host_ip != "127.0.0.1", (
+        assert host_ip in (None, "0.0.0.0", "::"), (
             f"{service} host port {host_port} is a deliberate attack-surface "
-            f"target and must stay reachable on all interfaces, got {entry!r}"
+            f"target and must stay reachable on all interfaces (no host-IP "
+            f"prefix, or an explicit all-interfaces bind); a specific host IP "
+            f"would break red-team reachability, got {entry!r}"
         )

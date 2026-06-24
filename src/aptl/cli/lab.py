@@ -14,6 +14,10 @@ from aptl.core.lab import (
     stop_lab,
 )
 from aptl.core.lab_types import LabStatus, StartupDiagnostic, StartupOutcome
+from aptl.core.scenario_catalog import (
+    load_scenario_catalog,
+    resolve_scenario_selection,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("cli.lab")
@@ -91,15 +95,60 @@ def start(
         "--skip-seed",
         help="Skip SOC tool seeding after startup.",
     ),
+    scenario: Optional[str] = typer.Option(
+        None,
+        "--scenario",
+        help="Curated ACES startup scenario id from the catalog.",
+    ),
+    scenario_path: Optional[Path] = typer.Option(
+        None,
+        "--scenario-path",
+        help="Explicit ACES SDL scenario path under the project directory.",
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s", project_dir)
 
-    result = orchestrate_lab_start(project_dir, skip_seed=skip_seed)
+    try:
+        selected_scenario = resolve_scenario_selection(
+            project_dir,
+            scenario_id=scenario,
+            scenario_path=scenario_path,
+        )
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2)
+
+    result = orchestrate_lab_start(
+        project_dir,
+        skip_seed=skip_seed,
+        scenario_path=selected_scenario,
+    )
 
     _render_start_result(result)
     if not result.success:
         raise typer.Exit(code=1)
+
+
+@app.command("scenarios")
+def scenarios(
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+) -> None:
+    """List curated ACES startup scenarios."""
+    try:
+        catalog = load_scenario_catalog(project_dir)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2)
+
+    for entry in catalog.scenarios:
+        description = f" - {entry.description}" if entry.description else ""
+        typer.echo(f"{entry.id}\t{entry.path}\t{entry.name}{description}")
 
 
 @app.command()
@@ -245,10 +294,10 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="ACES SDL scenario (default: scenarios/techvault.sdl.yaml).",
+        help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
     ),
     profile: str = typer.Option(
-        "provisioning-only",
+        "orchestration-evaluation",
         "--profile",
         help="ACES backend capability profile to validate against.",
     ),
@@ -277,12 +326,19 @@ def validate_live(
     fast CI: it needs Docker, the SOC stack's resources, and minutes of startup.
     """
     from aptl.cli._common import resolve_config_for_cli, resolve_run_store
+    from aptl.core.runstore import _validate_id
     from aptl.validation.techvault_live_gate import (
         LiveGateOptions,
         validate_live_deployment,
     )
 
     config, project_root = resolve_config_for_cli(project_dir)
+    if run_id is not None:
+        try:
+            _validate_id(run_id, "run_id")
+        except ValueError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=2)
     if not skip_clean_boot and not yes:
         typer.echo(_LIVE_GATE_WARNING)
         if not typer.confirm("  Continue?", default=False):

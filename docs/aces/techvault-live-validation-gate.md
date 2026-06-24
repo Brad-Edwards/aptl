@@ -11,19 +11,15 @@ the run archive. It implements requirement SCN-010 (issue #323).
 
 The gate is scenario-generic by construction. `validate_live_deployment()` takes
 a scenario path, a backend profile, the project directory, and a run id, so the
-next scenario in APTL's `provisioning-only` expressivity class passes through by
-changing inputs rather than by editing the gate. TechVault is the proving input,
-never a hardcoded branch (ADR-035).
+next scenario in APTL's `orchestration-capable` expressivity class passes
+through by changing inputs rather than by editing the gate. TechVault is the
+proving input, never a hardcoded branch (ADR-035).
 
-APTL's public start path (`orchestrate_lab_start()`), however, is currently
-hardwired to the default scenario (`scenarios/techvault.sdl.yaml`) and the
-`provisioning-only` capability profile; it does not yet accept a caller-supplied
-scenario or profile. So the gate verifies up front that the scenario and profile
-it was asked to validate are the ones the public start path will actually boot,
-and fails loud before any destructive boot if they diverge, so it never
-validates one model while booting another. When the public start path learns to honor a
-caller-supplied scenario/profile, this guard relaxes to thread them through
-instead of rejecting them.
+APTL's public start path (`orchestrate_lab_start()`) accepts the selected ACES
+scenario path and passes it through the same `_step_start_containers()` handoff
+used by the default boot. The backend capability profile remains the public
+default, so the gate still fails loud before destructive boot when a caller
+requests a profile the public start path will not realize.
 
 ## What the gate checks
 
@@ -35,18 +31,22 @@ layer that broke:
 1. **Static prerequisite** (`aces_specification`). The static gate runs first. A
    parse, compile, conformance, or parity failure blocks the live boot rather
    than degrading to a warning.
-2. **Boot-input agreement** (`backend_instantiation`). The scenario and profile
-   under validation must be the ones the public start path will actually boot
-   (the default scenario and the `provisioning-only` profile). A mismatch is a
-   hard failure raised before any destructive boot, so the gate never validates
-   one model while booting another.
+2. **Boot-input agreement** (`backend_instantiation`). The selected scenario is
+   passed through to public startup. The profile under validation must still be
+   the public start path's capability profile (`orchestration-capable`). A
+   profile mismatch is a hard failure raised before any destructive boot, so the
+   gate never validates a profile the boot path will not realize.
 3. **ACES-driven boot** (`backend_interpretation` or `backend_instantiation`).
    The gate computes the realization matrix from `RuntimeManager.plan()` and
    `interpret_provisioning_plan()`, the same interpretation `AptlProvisioner`
    performs, so the expected node, service, network, and profile surface is
-   keyed by ACES resource addresses. It then runs `stop_lab(remove_volumes)`
-   cleanup and `orchestrate_lab_start()`, whose only container-start path is the
-   ACES handoff in `_step_start_containers()`. A realization with errors fails as
+   keyed by ACES resource addresses. Realization expands selected-node
+   dependencies through ACES provisioning edges and Compose `depends_on`
+   metadata before the backend starts; missing, ambiguous, or config-disabled
+   support services fail as `backend_interpretation` instead of booting an
+   incomplete range. It then runs `stop_lab(remove_volumes)` cleanup and
+   `orchestrate_lab_start()`, whose only container-start path is the ACES
+   handoff in `_step_start_containers()`. A realization with errors fails as
    `backend_interpretation`; a failed boot fails as `backend_instantiation`.
 4. **Defensive-stack readiness** (`defensive_stack_readiness`). Every
    ACES-realized node maps to a running, healthy container in the post-boot
@@ -101,15 +101,14 @@ schema `aptl.live-gate.manifest/v1`. It records:
 
 ## Observable parity
 
-The live gate is validation tooling and a run-archive writer rather than new
-scenario content. The TechVault steady-state observables are already encoded in
-`scenarios/techvault.sdl.yaml` by the inventory passes and proven by the static
-gate. The evaluator surfaces (objectives, scoring, injects, workflows, and the
-evaluator run-archive output) are deferred to issue #312, which promotes APTL
-beyond the `provisioning-only` profile. The gate therefore adds no
-ACES-expressible observable surface, leaves `required_surface_coverage`
-unchanged, and files no ACES expressivity blocker. The run archive is proof of
-what the model realized; it does not substitute for SDL encoding.
+The live gate validates the operational startup contract. The public boot SDL,
+`scenarios/techvault-operational.sdl.yaml`, names the steady-state Compose
+services and networks at range granularity; the deep inventory SDL,
+`scenarios/techvault.sdl.yaml`, remains the detailed asset/parity evidence
+surface proven by the static inventory tests. The evaluator surfaces
+(objectives, scoring, injects, workflows, and the evaluator run-archive output)
+are deferred to issue #312. The run archive is proof of what the operational
+model realized; it does not substitute for SDL encoding.
 
 ## Prerequisites
 
@@ -143,11 +142,11 @@ aptl lab validate-live
 
 The command warns and prompts before destroying lab data. Pass `--yes` to skip
 the prompt in automation, or `--skip-clean-boot` to validate an already-running
-lab without the destructive `stop -v` and reboot. The `--scenario` and
-`--profile` options exist for the scenario-generic seam, but until the public
-start path accepts a caller-supplied scenario/profile they must match what that
-path boots (the default scenario and `provisioning-only`); the gate fails the
-boot-input agreement check otherwise. `--run-id` sets the run-archive id.
+lab without the destructive `stop -v` and reboot. `--scenario` accepts an
+explicit ACES SDL path for the live gate and is passed through to public lab
+startup. `--profile` must remain the public startup capability profile
+(`orchestration-capable`); profile mismatches fail the boot-input agreement
+check before boot. `--run-id` sets the run-archive id.
 
 The same boot runs as the explicitly gated integration test:
 

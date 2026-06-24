@@ -28,9 +28,9 @@ from aptl.core.contracts import (
 )
 from aptl.core.credentials import (
     PathContainmentError,
+    build_suricata_volume_seeds,
     sync_dashboard_config,
     sync_manager_config,
-    sync_suricata_misp_rule_baselines,
 )
 from aptl.core.env import (
     EnvVars,
@@ -83,6 +83,7 @@ def start_aces_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
 ) -> LabResult:
     """Lazy ACES handoff import for the public lab-start path."""
     try:
@@ -92,7 +93,42 @@ def start_aces_scenario(
         log.error(error)
         return LabResult(success=False, error=error)
 
-    return _start_aces_scenario(project_dir, config, backend)
+    return _start_aces_scenario(
+        project_dir,
+        config,
+        backend,
+        scenario_path=scenario_path,
+    )
+
+
+def selected_profiles_for_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> set[str]:
+    """Lazy ACES import for the scenario's selected Compose profiles.
+
+    Returns the profile set the scenario actually starts, so post-start
+    readiness checks scope to it instead of the global config flags. On import
+    failure returns an empty set (the readiness steps then skip rather than
+    falsely waiting on services).
+    """
+    try:
+        from aptl.backends.aces import (
+            selected_profiles_for_scenario as _selected_profiles,
+        )
+
+        return set(
+            _selected_profiles(project_dir, config, backend, scenario_path=scenario_path)
+        )
+    # broad-except: resolving selected profiles is best-effort enrichment for
+    # the readiness steps. The lab already started; any failure (import,
+    # missing/invalid SDL, ACES planning error) must degrade to an empty set so
+    # the readiness steps skip rather than crash the start or falsely wait.
+    except Exception as exc:
+        log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
+        return set()
 
 
 def _runtime_require(
@@ -140,6 +176,13 @@ def _runtime_require(
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
+
+# Image used to seed Suricata's named volumes at lab start (ADR-043). The
+# Suricata service's own image is reused so the seed step adds no new
+# supply-chain surface; it is already pulled for the `suricata` service.
+# A test pins this to the `suricata` service's `image:` in
+# docker-compose.yml so the two cannot drift.
+SURICATA_IMAGE = "jasonish/suricata:7.0"
 
 # All known Docker Compose profiles. Used as fallback when config is
 # unavailable (e.g. stop_lab, kill switch).  Keep in sync with
@@ -433,11 +476,13 @@ class _LabStartContext(object):
 
     project_dir: Path
     skip_seed: bool
+    scenario_path: Path | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
     env: "EnvVars | None" = None
     config: "AptlConfig | None" = None
     backend: "DeploymentBackend | None" = None
     ssh_key_path: Path | None = None
+    selected_profiles: set[str] = field(default_factory=set)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
 
 
@@ -719,29 +764,83 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     lambda ctx: backend_is_initialized(ctx.backend),
     description="backend_is_initialized(ctx.backend)",
 )
-def _step_sync_suricata_misp_rule_baselines(
+def _step_seed_suricata_volumes(
     ctx: _LabStartContext,
 ) -> LabResult | None:
-    """Render writable Suricata MISP rule baseline files."""
-    log.info("Step 5b: Seeding Suricata MISP rule baselines...")
+    """Seed Suricata config + MISP rules into Compose named volumes (ADR-043).
+
+    Replaces the former ``.aptl/`` host render: nothing checked-in is
+    bind-mounted onto a path the Suricata image entrypoint chowns, so host
+    ownership is never rewritten. A root seed container copies the
+    checked-in baselines into project-scoped named volumes and retires the
+    legacy UID-991-owned ``.aptl/suricata/rules/misp`` bind dir.
+    """
+    log.info("Step 5b: Seeding Suricata runtime volumes...")
     from aptl.core.deployment import SSHComposeBackend
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
             error=(
-                "Suricata MISP rule baselines are rendered to .aptl/suricata/ "
+                "Suricata runtime volumes are seeded from checked-in source "
                 "on the host running `aptl lab start`, but the configured "
                 "deployment backend targets a remote Docker daemon, so the "
-                "remote bind mounts would not see them. Run `aptl lab start` "
+                "host source would not be visible to it. Run `aptl lab start` "
                 "on the deployment host instead, or switch deployment.provider "
                 "to the local Docker Compose backend."
             ),
         )
-    return _run_credential_sync(
-        "Suricata MISP rule baselines",
-        sync_suricata_misp_rule_baselines,
-        ctx.project_dir,
+    assert ctx.backend is not None  # runtime guard above
+    return _seed_suricata_volumes_local(ctx)
+
+
+def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
+    """Restore checked-in source ownership and seed the Suricata named volumes.
+
+    Split out of :func:`_step_seed_suricata_volumes` (which retains the
+    remote-backend guard) so each function stays within the project's
+    return-count and complexity limits. ``ctx.backend`` is the local
+    Compose backend, asserted non-``None`` by the caller.
+    """
+    from aptl.core.credentials import ensure_suricata_config_source_ownership
+    from aptl.core.deployment.errors import (
+        BackendSeedError,
+        BackendTimeoutError,
     )
+
+    # ctx.backend is narrowed to the local Compose backend by the caller's guard.
+    assert ctx.backend is not None
+    ownership = ensure_suricata_config_source_ownership(ctx.project_dir)
+    if not ownership.success:
+        log.error(
+            "Suricata config source ownership restore failed: %s",
+            ownership.error,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                "Suricata config source ownership restore failed: "
+                f"{ownership.error}"
+            ),
+        )
+    try:
+        seeds = build_suricata_volume_seeds(ctx.project_dir)
+        ctx.backend.seed_named_volumes(seeds, seeder_image=SURICATA_IMAGE)
+    except (
+        PathContainmentError,
+        BackendSeedError,
+        BackendTimeoutError,
+        FileNotFoundError,
+        NotADirectoryError,
+        OSError,
+    ) as exc:
+        # Narrow, redacted failure (ADR-043): name the artifact/exception
+        # type, not raw Docker stderr.
+        log.error("Suricata volume seed failed: %s", type(exc).__name__)
+        return LabResult(
+            success=False,
+            error=f"Suricata runtime volume seeding failed: {exc}",
+        )
+    return None
 
 
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
@@ -883,7 +982,12 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
-    start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
+    start_result = start_aces_scenario(
+        ctx.project_dir,
+        ctx.config,
+        ctx.backend,
+        scenario_path=ctx.scenario_path,
+    )
     if not start_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
@@ -891,8 +995,23 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         )
         import time
         time.sleep(60)
-        start_result = start_aces_scenario(ctx.project_dir, ctx.config, ctx.backend)
+        start_result = start_aces_scenario(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=ctx.scenario_path,
+        )
     if start_result.success:
+        # Scope the post-start readiness checks to the profiles this scenario
+        # actually started, not the global config flags. A curated bounded
+        # scenario starts a subset, so a config-flag gate would wait on (and
+        # fail) services it never launched.
+        ctx.selected_profiles = selected_profiles_for_scenario(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=ctx.scenario_path,
+        )
         return None
     log.error("Lab start failed: %s", start_result.error)
     return LabResult(
@@ -914,7 +1033,9 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 9: Waiting for services...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.env is not None
-    if not ctx.config.containers.wazuh:
+    # Gate on the profiles the scenario actually started, not the config flag:
+    # a bounded scenario may omit Wazuh even when the container is enabled.
+    if "wazuh" not in ctx.selected_profiles:
         return None
 
     indexer_result = wait_for_service(
@@ -993,12 +1114,15 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         and ctx.ssh_key_path is not None
         and ctx.backend is not None
     )
+    # Probe only the interactive targets the scenario actually started. Gating
+    # on the selected profiles (not config flags) keeps a bounded scenario from
+    # warning about targets it intentionally omitted.
     ssh_tests: list[tuple[str, str]] = []
-    if ctx.config.containers.victim:
+    if "victim" in ctx.selected_profiles:
         ssh_tests.append(("victim", "labadmin"))
-    if ctx.config.containers.kali:
+    if "kali" in ctx.selected_profiles:
         ssh_tests.append(("kali", "kali"))
-    if ctx.config.containers.reverse:
+    if "reverse" in ctx.selected_profiles:
         ssh_tests.append(("reverse", "labadmin"))
 
     for name, user in ssh_tests:
@@ -1357,7 +1481,7 @@ _LAB_START_STEPS = (
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
     _step_sync_credentials,
-    _step_sync_suricata_misp_rule_baselines,
+    _step_seed_suricata_volumes,
     _step_generate_certs,
     _step_generate_soc_certs,
     _step_check_bind_mounts,
@@ -1376,6 +1500,7 @@ _LAB_START_STEPS = (
 def orchestrate_lab_start(
     project_dir: Path,
     skip_seed: bool = False,
+    scenario_path: Path | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -1388,12 +1513,17 @@ def orchestrate_lab_start(
     Args:
         project_dir: Root directory of the APTL project.
         skip_seed: If True, skip SOC tool seeding (Step 13).
+        scenario_path: Optional selected ACES SDL scenario path.
 
     Returns:
         LabResult indicating overall success or failure.
     """
     log.info("Starting APTL lab from %s", project_dir)
-    ctx = _LabStartContext(project_dir=project_dir, skip_seed=skip_seed)
+    ctx = _LabStartContext(
+        project_dir=project_dir,
+        skip_seed=skip_seed,
+        scenario_path=scenario_path,
+    )
 
     for step in _LAB_START_STEPS:
         try:

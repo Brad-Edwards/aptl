@@ -12,7 +12,7 @@ archive.
 Like the static gate, it is scenario-generic and parameterized by scenario
 path, backend profile, and project directory: TechVault is the proving input,
 never a hardcoded branch (ADR-035). The next scenario in APTL's
-``provisioning-only`` expressivity class passes through by changing inputs.
+``orchestration-evaluation`` expressivity class passes through by changing inputs.
 
 The gate is inherently integration / live-run work: it requires Docker, the SOC
 stack's resources, real ``.env`` secrets, and minutes-long startup. It is wired
@@ -38,7 +38,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from aptl.validation.techvault_gate import DEFAULT_SCENARIO
+from aptl.backends.aces import DEFAULT_ACES_SCENARIO
 
 if TYPE_CHECKING:
     from aces_sdl.scenario import Scenario
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
 
-DEFAULT_PROFILE = "provisioning-only"
+DEFAULT_PROFILE = "orchestration-evaluation"
 
 # Stable failure categories (issue #323 acceptance: a failure must identify the
 # layer that broke). These map onto existing ACES diagnostics and APTL startup
@@ -142,7 +142,7 @@ class LiveGateReport(object):
 class LiveGateOptions(object):
     """Tunable inputs for the live validation gate.
 
-    ``profile`` selects the backend capability profile (``provisioning-only``).
+    ``profile`` selects the backend capability profile (``orchestration-evaluation``).
     ``clean_volumes`` runs the data-destroying ``stop -v`` cleanup before the
     boot; ``skip_clean_boot`` validates against an already-running lab without
     the destructive cleanup (operator opt-in for a non-destructive check). The
@@ -214,10 +214,15 @@ def validate_live_deployment(
     from aptl.validation import _live_gate_checks as checks
 
     opts = options or LiveGateOptions()
-    scenario_path = scenario_path or (project_dir / DEFAULT_SCENARIO)
+    scenario_path = scenario_path or (project_dir / DEFAULT_ACES_SCENARIO)
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []
+
+    run_id_check = checks.check_run_id_input(opts)
+    results.append(run_id_check)
+    if not run_id_check.passed:
+        return _report(scenario_path, run_id, opts, results)
 
     # 1. Static prerequisite — parse/compile/conformance/parity must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
@@ -227,10 +232,9 @@ def validate_live_deployment(
     results.append(static_check)
     static_passed = scenario is not None and static_check.passed
 
-    # 2a. Input/boot-path agreement — the public start path is hardwired to the
-    #     default scenario + provisioning-only profile, so a scenario/profile
-    #     the boot path will not honor must fail loud BEFORE any destructive
-    #     boot, not silently validate one model while booting another.
+    # 2a. Input/boot-path agreement — the public start path honors the selected
+    #     scenario, but still uses the default orchestration/evaluation profile.
+    #     Reject profile mismatches before any destructive boot.
     inputs_passed = False
     if static_passed:
         inputs_check = checks.check_boot_inputs_match_public_path(
@@ -278,6 +282,7 @@ def _run_live_checks(
         config=ctx.config,
         options=ctx.options,
         state=state,
+        scenario_path=ctx.scenario_path,
     )
     results.append(boot_check)
     if not boot_check.passed:

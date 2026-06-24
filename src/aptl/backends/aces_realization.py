@@ -17,13 +17,14 @@ from aptl.backends.aces_diagnostics import (
     diagnostic,
     unsupported_resource_diagnostics,
 )
+from aptl.backends.aces_dependency_closure import append_dependency_closure
 from aptl.backends.aces_profiles import (
     ComposeProfileIndex,
-    configured_profiles,
     explicit_compose_profile_hints,
     load_compose_profile_index,
     node_aliases,
     normalize_identifier,
+    public_start_profiles,
 )
 from aptl.backends.aces_realization_model import (
     AptlRealization,
@@ -71,6 +72,15 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
+        diagnostics,
+    )
+    append_dependency_closure(
+        payload_resources,
+        nodes,
+        networks,
+        profile_index,
+        config,
+        profiles,
         diagnostics,
     )
     placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
@@ -198,15 +208,15 @@ def _append_profile_diagnostics(
             )
         )
 
-    enabled_profiles = configured_profiles(config)
-    if enabled_profiles and not (set(enabled_profiles) & profiles):
+    start_profiles = public_start_profiles(config)
+    if start_profiles and not (set(start_profiles) & profiles):
         diagnostics.append(
             diagnostic(
                 "aptl.provisioner.no-configured-profile-matches",
                 PROVISIONING_ADDRESS,
                 (
                     "ACES provisioning plan did not declare any node "
-                    "that maps to an enabled APTL compose profile."
+                    "that maps to a public-start APTL compose profile."
                 ),
             )
         )

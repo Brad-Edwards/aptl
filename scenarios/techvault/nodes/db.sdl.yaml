@@ -1,4 +1,11 @@
 name: techvault-node-db
+conditions:
+  db-postgres-ready:
+    command: "pg_isready -U techvault -d techvault"
+    interval: 10
+    timeout: 5
+    retries: 5
+    start_period: 15
 nodes:
   db:
     type: vm
@@ -351,7 +358,8 @@ nodes:
     os_version: Alpine Linux v3.23
     features:
       techvault.techvault-postgres-service: db-postgres
-    conditions: {}
+    conditions:
+      db-postgres-ready: db-postgres
     injects: {}
     vulnerabilities: []
     roles:

@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING
 from aces_sdl import SDLError, parse_sdl_file
 from aces_sdl.scenario import Scenario
 
-from aptl.backends.aces import DEFAULT_ACES_SCENARIO
 from aptl.backends.aces_profiles import select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.deployment import get_backend
@@ -128,36 +127,33 @@ def check_static_prerequisite(
 # --------------------------------------------------------------------------- #
 
 
+def check_run_id_input(options: "LiveGateOptions") -> LiveGateCheck:
+    """Reject caller-supplied run ids that could escape the run archive tree."""
+    from aptl.core.runstore import _validate_id
+
+    if options.run_id is None:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+    try:
+        _validate_id(options.run_id, "run_id")
+    except ValueError as exc:
+        return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [str(exc)])
+    return _check("run_id_input", CATEGORY_EVIDENCE_CAPTURE, [])
+
+
 def check_boot_inputs_match_public_path(
     scenario_path: Path,
     *,
     project_dir: Path,
     options: "LiveGateOptions",
 ) -> LiveGateCheck:
-    """Reject scenario/profile inputs the public start path will not honor.
+    """Reject profile inputs the public start path will not honor.
 
-    The gate computes the expected realization from ``scenario_path`` and
-    ``options.profile``, but the public boot path it exercises
-    (``orchestrate_lab_start`` → ``start_aces_scenario``) is hardwired to
-    ``DEFAULT_ACES_SCENARIO`` and the ``provisioning-only`` capability profile;
-    it ignores any caller-supplied scenario/profile. Booting one model while
-    validating another would silently produce false pass/fail results, so a
-    mismatch is a hard ``backend_instantiation`` failure raised *before* any
-    destructive boot — never a degraded warning. This holds for
-    ``skip_clean_boot`` too: the already-running lab was itself booted from the
-    default scenario, so a mismatched ``--scenario`` would validate the wrong
-    model against it.
+    The public boot path accepts the selected ``scenario_path`` and forwards it
+    to ``orchestrate_lab_start``. Profile selection remains fixed to the public
+    default, so a mismatched profile still fails before any destructive boot.
     """
-    expected_scenario = DEFAULT_ACES_SCENARIO
-    if not expected_scenario.is_absolute():
-        expected_scenario = project_dir / expected_scenario
+    _ = scenario_path, project_dir
     diagnostics: list[str] = []
-    if scenario_path.resolve() != expected_scenario.resolve():
-        diagnostics.append(
-            f"scenario {scenario_path.name!r} does not match the scenario the "
-            f"public start path boots ({expected_scenario.name!r}); the gate "
-            "would validate one model while booting another"
-        )
     if options.profile != DEFAULT_PROFILE:
         diagnostics.append(
             f"profile {options.profile!r} is not the public start path's "
@@ -178,6 +174,7 @@ def check_aces_driven_boot(
     config: "AptlConfig",
     options: "LiveGateOptions",
     state: "LiveGateState",
+    scenario_path: Path | None = None,
 ) -> LiveGateCheck:
     """Clean up and boot through the public ACES start path; tie evidence to ACES.
 
@@ -197,7 +194,13 @@ def check_aces_driven_boot(
     state.diagnostics_seen = len(realization.diagnostics)
     state.selected_profiles = select_backend_profiles(config, realization.profiles)
 
-    boot_diagnostics = _boot_lab(project_dir, config, options, state)
+    boot_diagnostics = _boot_lab(
+        project_dir,
+        config,
+        options,
+        state,
+        scenario_path=scenario_path,
+    )
     return _check(
         "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics
     )
@@ -387,9 +390,9 @@ def check_run_archive_manifest(
 ) -> LiveGateCheck:
     """Persist scenario identity + ACES provenance + validation evidence.
 
-    Writes through ``LocalRunStore``'s redacting boundary (ADR-029). Objective /
-    scoring run surfaces are the evaluator-profile output deferred to #312; they
-    are recorded as deferred, never faked.
+    Writes through ``LocalRunStore``'s redacting boundary (ADR-029).     Objective / scoring run surfaces are published through the portable ACES
+    evaluation contracts at the backend boundary; live outcome progression from
+    RTE-001 remains follow-on work tracked by #514.
     """
     realization = state.realization_details or {}
     manifest = {
@@ -413,10 +416,21 @@ def check_run_archive_manifest(
         },
         "snapshot": state.snapshot,
         "evidence": state.evidence,
-        "evaluator_surfaces_deferred": {
-            "objectives": "#312",
-            "scoring": "#312",
-            "run_archive_evaluator_output": "#312",
+        "evaluator_surfaces": {
+            "profile": "orchestration-evaluation",
+            "contracts": [
+                "evaluation-result-envelope-v1",
+                "evaluation-history-event-stream-v1",
+            ],
+            "execution_state_integration": "#514",
+        },
+        "orchestrator_surfaces": {
+            "profile": "orchestration-capable",
+            "contracts": [
+                "workflow-result-envelope-v1",
+                "workflow-history-event-stream-v1",
+            ],
+            "execution_state_integration": "aptl.core.runtime.workflow_engine",
         },
     }
 

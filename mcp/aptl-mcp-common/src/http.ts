@@ -2,6 +2,7 @@ import https from 'node:https';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { LabConfig } from './config.js';
+import { resolveApiRequestUrl } from './endpoint-url.js';
 
 export interface HTTPError extends Error {
   statusCode?: number;
@@ -247,10 +248,10 @@ export class HTTPClient {
       responseType?: 'json' | 'text';
     } = {}
   ): Promise<HTTPResponse> {
-    const { baseUrl, timeout = 30000, verify_ssl = true, default_headers = {} } = this.config!;
+    const { baseUrl = '', timeout = 30000, verify_ssl = true, default_headers = {} } = this.config!;
 
-    // Build URL with params - handle both full URLs and endpoint paths
-    const baseFullUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+    // Resolve against configured baseUrl and reject cross-origin destinations before auth.
+    const baseFullUrl = resolveApiRequestUrl(endpoint, baseUrl);
     const url = this.appendParams(baseFullUrl, options.params);
 
     // Build headers (await for wazuh-jwt path, no-op for others)

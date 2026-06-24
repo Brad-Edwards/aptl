@@ -28,15 +28,21 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
    semantic validation against the concept-authority corpus and produces the
    runtime model.
 4. **Backend conformance.** APTL's canonical `backend-manifest-v2` target passes
-   `run_target_conformance()` for the `provisioning-only` profile, and the
-   published `aces conformance backend --profile provisioning-only` command runs
-   against the bundled contract corpus. A missing corpus, profile artifact, or
-   conformance command is a gate failure with an actionable diagnostic, never a
-   downgraded warning and never a reason to accept an APTL-local manifest
+   `run_target_conformance()` for the `orchestration-capable` profile, and the
+   published `aces conformance backend --profile orchestration-capable` command
+   runs against the bundled contract corpus. A missing corpus, profile artifact,
+   or conformance command is a gate failure with an actionable diagnostic, never
+   a downgraded warning and never a reason to accept an APTL-local manifest
    approximation.
 5. **Provisioning realization.** The interpreter realizes the provisioning plan
-   with no errors and produces nodes, services, and networks. The realization is
-   driven by declared content, not by the scenario identifier.
+   with no errors and produces nodes, services, and networks. It computes the
+   dependency closure for selected nodes from ACES provisioning dependencies
+   and Compose `depends_on` metadata before selecting backend profiles, so a
+   subset scenario pulls in required support profiles or fails with ACES
+   diagnostics for missing, ambiguous, or disabled support services. The
+   selected Compose profiles must match the public lab-start profile set, so a
+   scenario that would instantiate a partial range fails the gate. The
+   realization is driven by declared content, not by the scenario identifier.
 6. **Parity manifest.** Every required observable surface in
    `docs/aces/parity-inventory.yaml` under `required_surface_coverage` is either
    represented (proven by real compiled evidence) or deferred with a linked
@@ -52,12 +58,12 @@ local dataclass approximation is not accepted as conformance evidence.
 ## Required surface coverage
 
 The parity inventory records, for each required surface, whether TechVault
-represents it today or defers it to a follow-up. Provisioning-only surfaces
-(nodes, services, vulnerabilities, features, Kali apparatus, defensive-stack
-configs, and health) are represented. Evaluation-profile surfaces (injects,
-workflows, objectives, scoring, and run-archive evidence) are deferred to issue
-#312, which promotes APTL beyond the provisioning-only profile. A surface that
-is neither represented with evidence nor deferred with an issue fails the gate.
+represents it today or defers it to a follow-up. Startup surfaces (nodes,
+services, vulnerabilities, features, Kali apparatus, defensive-stack configs,
+and health) are represented. Remaining evaluator and scenario-flow surfaces
+(injects, workflows, objectives, scoring, and evaluator run-archive evidence)
+are deferred to issue #312. A surface that is neither represented with evidence
+nor deferred with an issue fails the gate.
 
 ## Advisory in Phase A, blocking at cutover
 

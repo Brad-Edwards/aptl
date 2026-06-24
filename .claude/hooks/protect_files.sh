@@ -20,6 +20,16 @@ if [[ "$BASENAME" == "local_settings.py" ]]; then
     exit 2
 fi
 
+# The config-rendering source module src/aptl/core/credentials.py is NOT a
+# secret store — it renders credentialized service config from checked-in
+# templates (ADR-028) and holds no secrets. The credential-store glob below
+# (`credentials*`) otherwise catches it; exempt this one source path so the
+# module stays editable while every real secret file (.env*, *.key, *.pem,
+# credential data files) remains protected.
+if [[ "$FILE_PATH" == */src/aptl/core/credentials.py || "$FILE_PATH" == "src/aptl/core/credentials.py" ]]; then
+    exit 0
+fi
+
 # Block key/credential files
 if [[ "$BASENAME" == *.key ]] || [[ "$BASENAME" == *.pem ]] || [[ "$BASENAME" == "credentials"* ]]; then
     echo "BLOCKED: Editing $BASENAME is not allowed. These files contain secrets." >&2

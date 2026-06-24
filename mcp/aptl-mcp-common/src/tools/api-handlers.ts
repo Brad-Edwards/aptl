@@ -1,5 +1,6 @@
 import { HTTPClient } from '../http.js';
 import { LabConfig } from '../config.js';
+import { assertPathOnlyEndpoint } from '../endpoint-url.js';
 
 export interface APIToolContext {
   httpClient: HTTPClient;
@@ -117,6 +118,7 @@ const baseAPIHandlers = {
     } = args;
 
     try {
+      assertPathOnlyEndpoint(endpoint);
       const result = await httpClient.makeRequest(endpoint, method, {
         params,
         body,

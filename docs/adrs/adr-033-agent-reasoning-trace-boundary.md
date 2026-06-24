@@ -261,34 +261,36 @@ agent CLI ships.
   entrypoint that stays PID 1 and waits on the children it starts. A
   keepalive process that only sleeps is not a lifecycle boundary and
   must not be used to hide failed boot work.
-- **Capture integrity from a sudo-capable kali user** (residual
-  risk, codex pre-push cycle 2 finding-9; tracked in
+- **Capture integrity from a sudo-capable kali user** (superseded by
+  [ADR-041](adr-041-kali-capture-sidecar-ownership-boundary.md) for
   [issue #305](https://github.com/Brad-Edwards/aptl/issues/305)):
-  the kali user has passwordless sudo (required for legitimate
-  red-team tooling). Per-session capture files are owned by kali
-  and writable by kali; the agent can `rm -rf` its own session
-  subtree before close, or `sudo` to root and modify the global
-  `_audit` / `_proc-acct` files. The `CAP_AUDIT_CONTROL` drop
-  prevents `auditctl -D` (the most surgical attack), but file
-  deletion remains. Mitigations in place:
-  - The MCP-side PTY tee writes to `.aptl/runs/<run>/mcp-side/sessions/`
-    in a process the kali user cannot touch—this is the
-    authoritative tamper-resistant record for keystrokes and output.
-  - `harvestSession()` reports failure (not silent success) when the
-    per-session source directory is missing on the container side,
-    so deletion is observable rather than invisible.
-  - Per-session captures use 0700 dirs / 0600 files inside the
-    container so cross-session snooping by *other* sessions is
-    blocked even when the originating session's own files are
-    rewriteable.
+  the original ADR-033 implementation left the capture volume writable
+  from inside the Kali workload container. Because the `kali` user has
+  passwordless sudo for legitimate red-team tooling, root-owned files,
+  ACLs, setuid helpers, or a dedicated in-container capture user are not
+  sufficient tamper-resistance boundaries inside the same writable mount
+  namespace.
 
-  Closing this fully requires a privileged in-container daemon or
-  capture sidecar that owns capture writes outside the kali user's
-  reach. Tracked as
-  [#305 "Privileged capture writer: take Kali captures out of the
-  kali user's reach"](https://github.com/Brad-Edwards/aptl/issues/305)
-—a separate ADR will record the writer-ownership design
-  decision when that issue lands.
+  ADR-041 selects a capture sidecar as the ownership boundary: the
+  sidecar shares ONLY Kali's network namespace (not its PID namespace,
+  which would expose `/proc/<pid>/root` traversal), mounts
+  `kali_captures` read-write, and owns per-session PTY, pcap, auditd,
+  and process-accounting writes. Kali does NOT mount `kali_captures`
+  at all (not even read-only, since a read-only mount still lets a
+  sudo-root shell `cat` sibling sessions' evidence). With the sink
+  absent from Kali's mount namespace, `sudo` read/list/rm/truncate/
+  chmod/chown/rewrite attempts from Kali have no path to it. The
+  wrapper's role narrows to validated session metadata RPC and
+  best-effort shell continuation. (PTY transcript bytes are still
+  supplied by the workload, so the Kali-side typescript is not
+  tamper-resistant for the workload's own session; the authoritative
+  keystroke/output record remains the MCP-side PTY tee.)
+
+  Until the ADR-041 implementation lands, the current code still carries
+  the residual risk described above. The implementation must preserve the
+  existing mitigations that remain valid: MCP-side PTY tee outside the
+  container, fail-loud `harvestSession()` missing-source reporting, and
+  restrictive harvested host-side modes.
 - **Harvest race window** (closed by
   [issue #304](https://github.com/Brad-Edwards/aptl/issues/304)):
   `PersistentSession.close()` now resolves only after the SSH stream's

@@ -87,8 +87,9 @@ blue graduates IOCs).
 - `misp/misp-iocs.rules` ships **empty** (header `ioc_count=0`).
   Hash-list sidecars `misp-md5.list`, `misp-sha1.list`,
   `misp-sha256.list` ship empty too. These checked-in files are baseline
-  seeds; `aptl lab start` copies them to `.aptl/suricata/rules/misp/`, and the
-  sync service writes generated runtime state there.
+  seeds; `aptl lab start` seeds them into the `aptl_suricata_misp_rules` named
+  volume (ADR-043, mounted at `/var/lib/suricata/rules/misp`), and the sync
+  service writes generated runtime state there.
 
 **Why it ships this way**
 
@@ -119,8 +120,8 @@ contract*, not a misconfiguration.
 | Rule file load order | [`config/suricata/suricata.yaml:97-104`](https://github.com/Brad-Edwards/aptl/blob/main/config/suricata/suricata.yaml) |
 | Local alert rules | [`config/suricata/rules/local.rules`](https://github.com/Brad-Edwards/aptl/blob/main/config/suricata/rules/local.rules) |
 | MISP baseline seeds | [`config/suricata/rules/misp/`](https://github.com/Brad-Edwards/aptl/tree/main/config/suricata/rules/misp) |
-| MISP generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
-| Hash-list sidecars | `.aptl/suricata/rules/misp/` |
+| MISP generated rule output | `aptl_suricata_misp_rules` volume → `/var/lib/suricata/rules/misp/misp-iocs.rules` |
+| Hash-list sidecars | `aptl_suricata_misp_rules` volume → `/var/lib/suricata/rules/misp/` |
 
 ---
 
@@ -336,7 +337,7 @@ has zero graduated indicators on purpose.
 | Sync service config | [`src/aptl/services/misp_suricata_sync/config.py`](https://github.com/Brad-Edwards/aptl/blob/main/src/aptl/services/misp_suricata_sync/config.py) |
 | Sync service main loop | [`src/aptl/services/misp_suricata_sync/main.py`](https://github.com/Brad-Edwards/aptl/blob/main/src/aptl/services/misp_suricata_sync/main.py) |
 | Baseline rule seed | [`config/suricata/rules/misp/misp-iocs.rules`](https://github.com/Brad-Edwards/aptl/blob/main/config/suricata/rules/misp/misp-iocs.rules) |
-| Generated rule output | `.aptl/suricata/rules/misp/misp-iocs.rules` |
+| Generated rule output | `aptl_suricata_misp_rules` volume → `/var/lib/suricata/rules/misp/misp-iocs.rules` |
 | ADR | [ADR-022](../adrs/adr-022-misp-driven-suricata-rules.md) |
 
 ---

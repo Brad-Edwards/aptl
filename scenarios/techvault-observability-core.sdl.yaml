@@ -1,0 +1,42 @@
+name: techvault-observability-core
+description: >
+  Curated TechVault observability-core slice. Declares only the OTEL core
+  observability stack to prove APTL realizes the always-on `otel` profile from
+  declared node content with no other range surface. Includes the OTEL
+  collector, Tempo, and Grafana; omits every attacker, target, enterprise, and
+  defensive component. Proves the smallest bounded startup surface APTL can
+  realize from SDL.
+
+nodes:
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]

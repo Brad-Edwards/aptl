@@ -21,10 +21,11 @@ RUN pip install --no-cache-dir . \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Run as root: the service writes to a bind-mounted host directory
-# (./config/suricata/rules/misp), and dropping to an unprivileged UID would
-# mismatch the host operator's ownership and break atomic file replacement.
-# The lab follows this pattern broadly (see ADR-020 for the in-process Wazuh
+# Run as root: the service writes misp-iocs.rules into the shared
+# suricata_misp_rules named volume (ADR-043), whose tree the Suricata image
+# entrypoint chowns to its own UID; running as root keeps the write and the
+# atomic file replacement working regardless of that ownership. The lab
+# follows this pattern broadly (see ADR-020 for the in-process Wazuh
 # agents); the sync container's only inputs are MISP HTTPS responses and its
 # own env config.
 

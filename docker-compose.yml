@@ -191,18 +191,36 @@ services:
       - NET_RAW
       - SYS_NICE
     volumes:
-      - ./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml
-      - ./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules
+      # ADR-043: Suricata no longer bind-mounts any checked-in or .aptl host
+      # path onto a directory the upstream image entrypoint chowns (that
+      # rewrote host-side ownership to UID 991). `aptl lab start` seeds these
+      # Compose project-scoped named volumes from config/suricata/ via a root
+      # container; the wrapper entrypoint below copies the seeded config into
+      # the image-owned /etc/suricata before delegating to the upstream
+      # entrypoint, so its chown only ever touches Docker-managed paths.
+      - suricata_config_seed:/seed:ro
       - suricata_logs:/var/log/suricata
       - suricata_command_socket:/var/run/suricata
-      # Generated copy seeded by `aptl lab start` from the checked-in
-      # baselines under config/suricata/rules/misp (ADR-028); mounted under
-      # default-rule-path so misp-iocs.rules and hash-list sidecars resolve
-      # via Suricata's documented relative-path lookup. The Suricata image
-      # entrypoint chowns its rules tree at startup, so this generated mount
-      # must be writable even though the sync service owns rule content.
-      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
-    command: ["-c", "/etc/suricata/suricata.yaml", "--pcap"]
+      # MISP IOC rules under default-rule-path so misp-iocs.rules and the
+      # hash-list sidecars resolve via Suricata's relative-path lookup;
+      # shared read-write with aptl-misp-suricata-sync, which owns rule
+      # content. Writable because the entrypoint chowns the rules tree —
+      # now harmless, since this is a named volume, not a host bind.
+      - suricata_misp_rules:/var/lib/suricata/rules/misp:rw
+    # Wrapper entrypoint (ADR-043): stage the seeded config into the
+    # image-owned /etc/suricata, then exec the upstream entrypoint with the
+    # original Suricata args baked in. Data-free — only fixed container
+    # paths, no secrets. Args are baked rather than passed via `command:` to
+    # avoid Compose `$`-interpolation of a `$@` passthrough.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mkdir -p /etc/suricata/rules
+        cp /seed/suricata.yaml /etc/suricata/suricata.yaml
+        cp /seed/rules/local.rules /etc/suricata/rules/local.rules
+        exec /docker-entrypoint.sh -c /etc/suricata/suricata.yaml --pcap
     deploy:
       resources:
         limits:
@@ -342,7 +360,10 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - suricata_command_socket:/var/run/suricata
-      - ./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw
+      # Shared MISP rules volume (ADR-043). Seeded by `aptl lab start`; this
+      # service writes RULES_OUT_PATH (misp-iocs.rules) into it and triggers
+      # a Suricata reload over the command socket above.
+      - suricata_misp_rules:/var/lib/suricata/rules/misp:rw
       # SEC-006: lab-managed CA bundle for verifying MISP's lab-CA-signed cert.
       - ./config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro
     depends_on:
@@ -1198,35 +1219,21 @@ services:
       - ./keys/authorized_keys:/host-ssh-keys/authorized_keys:ro
       - ./config/lab-ssh/kali_pivot_key:/host-ssh-keys/kali_pivot_key:ro
       - kali_operations:/home/kali/operations
-      # OBS-003 / ADR-033: per-session captures land in a docker
-      # NAMED VOLUME (not a host bind mount). The named volume is
-      # not visible on the host filesystem to other containers or
-      # to the kali workload's snooping, and an attacker who escalates
-      # to container root cannot read or tamper with prior runs'
-      # MCP-side records (codex pre-push cycle 1 finding-10). The
-      # MCP-red server harvests captures out via `docker cp` on
-      # session close into `.aptl/runs/<run_id>/kali-side/<session_id>/`
-      # on the host with 0600 perms — see `captures.ts` in
-      # aptl-mcp-common.
-      - kali_captures:/var/log/aptl/captures
+      # ADR-041 / issue #305: the kali_captures volume is NOT mounted in this
+      # container at all — not even read-only. A read-only mount would still
+      # let a `sudo`-capable agent READ sibling sessions' evidence (ro blocks
+      # writes, not reads); the only way to deny read/list/modify to a
+      # sudo-root shell is to keep the capture sink out of this container's
+      # mount namespace entirely. All capture writes and the harvest source
+      # live in the aptl-kali-capture sidecar; this workload reaches the
+      # sidecar only over the abstract Unix socket (shared netns).
     cap_add:
-      - NET_RAW       # tcpdump / packet capture
-      - NET_ADMIN     # network manipulation tools
-      # OBS-003: AUDIT_CONTROL and AUDIT_WRITE are granted to the
-      # container so entrypoint.sh (running as root, before sshd is
-      # exposed) can load the APTL audit ruleset. The entrypoint
-      # then drops CAP_AUDIT_CONTROL from the sshd-spawning process
-      # via `capsh --drop=cap_audit_control` so the kali user
-      # (passwordless sudo) cannot run `auditctl -D` to disable
-      # the audit trail mid-scenario (codex cycle 1 finding-12).
-      - AUDIT_CONTROL
-      - AUDIT_WRITE
-      # OBS-003 / codex cycle 3 finding-1: SYS_PACCT is required for
-      # `accton` to enable kernel process accounting. Docker's default
-      # cap set excludes it, so without this the entrypoint's
-      # `accton /var/log/aptl/captures/_proc-acct/pacct` silently
-      # fails and the advertised pacct capture is empty.
-      - SYS_PACCT
+      - NET_RAW       # tcpdump / packet capture (red-team tooling)
+      - NET_ADMIN     # network manipulation tools (red-team tooling)
+      # ADR-041: AUDIT_CONTROL, AUDIT_WRITE, and SYS_PACCT have moved
+      # to the kali-capture sidecar.  The Kali workload no longer needs
+      # them — capture-only capabilities must not be on the workload
+      # service.
     security_opt:
       - seccomp:unconfined  # Required for some red team tools
     # ADR-033 §2 / issue #293: the healthcheck verifies the usable
@@ -1244,6 +1251,62 @@ services:
       resources:
         limits:
           memory: 1g
+
+  # ---------------------------------------------------------------------------
+  # ADR-041 / issue #305: Kali Capture Sidecar
+  #
+  # The SOLE owner of the kali_captures volume (read-write). The Kali workload
+  # does not mount the volume at all, so a sudo-capable agent cannot read,
+  # list, delete, or modify any session's evidence. The sidecar receives PTY
+  # bytes over an abstract Unix socket, runs the per-session tcpdump, and hosts
+  # auditd + process accounting. The MCP-red server harvests captures via
+  # `docker cp aptl-kali-capture:...` (see capture_container_name in
+  # mcp/mcp-red/docker-lab-config.json).
+  #
+  # Shares ONLY the Kali network namespace, so tcpdump observes Kali's traffic
+  # and the abstract Unix socket is mutually reachable. It must NOT share the
+  # PID namespace: with a shared PID namespace a sudo-root Kali shell can see
+  # the sidecar's PIDs and traverse `/proc/<sidecar-pid>/root/var/log/aptl/
+  # captures` into the sidecar's mount namespace, reading or deleting the
+  # evidence the sidecar owns — defeating the whole boundary (codex pre-push
+  # cycle 1 finding F2). auditd and process accounting are kernel-wide and do
+  # not need PID sharing to observe Kali's processes. NOTE: `network_mode:
+  # service:kali` forbids hostname/ports/networks/extra_hosts on this service —
+  # Docker rejects the combination at `up` time. Do not re-add a `hostname:`.
+  # ---------------------------------------------------------------------------
+  kali-capture:
+    profiles: ["kali"]
+    build:
+      context: ./containers/kali-capture
+      dockerfile: Dockerfile
+    container_name: aptl-kali-capture
+    restart: unless-stopped
+    # ADR-033 §2 pattern: run under Docker's bundled init so the per-session
+    # tcpdump / auditd / accton children are reaped rather than zombified.
+    init: true
+    # Share ONLY Kali's network namespace (abstract socket + tcpdump). PID
+    # namespace is deliberately NOT shared (codex F2 — /proc traversal).
+    network_mode: "service:kali"
+    depends_on:
+      - kali
+    volumes:
+      # Read-write owner of the captures volume (ADR-041 security boundary).
+      - kali_captures:/var/log/aptl/captures
+      # Bind-mount the canonical APTL audit ruleset from the kali image's
+      # build context so rule text is never duplicated (ADR-041 §Maintainability).
+      - ./containers/kali/audit/aptl.rules:/etc/audit/rules.d/aptl.rules:ro
+    cap_add:
+      # ADR-041: capture-only capabilities live here, never on the kali workload.
+      - AUDIT_CONTROL  # auditctl — load rules, start/stop auditd
+      - AUDIT_WRITE    # write audit events
+      - SYS_PACCT      # accton — enable process accounting
+      - NET_RAW        # tcpdump on the shared (Kali) network namespace
+    # No host ports: the only new control surface is the abstract Unix socket
+    # which is local to the shared PID/network namespace (ADR-041 §Security).
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   # Reverse Engineering Container
   reverse:
@@ -1308,8 +1371,10 @@ services:
       - "127.0.0.1:8400:8400"
     environment:
       - APTL_PROJECT_DIR=/project
-      # Required: generate with python3 -c 'import secrets; print(secrets.token_hex(32))'
-      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
+      # Validated by the API at runtime. Do not use `${VAR:?}` here: Compose
+      # expands inactive-profile services too, which would make the default lab
+      # start require the optional web control-plane token.
+      - APTL_API_TOKEN=${APTL_API_TOKEN:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
@@ -1334,7 +1399,9 @@ services:
     environment:
       - ORIGIN=http://localhost:3000
       # Same token as aptl-web-api — SvelteKit server injects it as Bearer header.
-      - APTL_API_TOKEN=${APTL_API_TOKEN:?APTL_API_TOKEN must be set to a secure token}
+      # The API rejects empty/placeholder values at runtime; keep Compose
+      # interpolation non-fatal while the web profile is inactive.
+      - APTL_API_TOKEN=${APTL_API_TOKEN:-}
       # Internal Docker hostname the SvelteKit server uses to reach the API.
       - APTL_API_URL=http://aptl-web-api:8400
       # Hostname:port the browser uses for direct WebSocket connections.
@@ -1359,12 +1426,12 @@ services:
     image: otel/opentelemetry-collector-contrib:0.123.0
     restart: unless-stopped
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
     volumes:
       - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      test: ["CMD", "/otelcol-contrib", "validate", "--config", "/etc/otelcol-contrib/config.yaml"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -1384,7 +1451,7 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     ports:
-      - "3200:3200"
+      - "127.0.0.1:3200:3200"
     volumes:
       - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
@@ -1485,6 +1552,13 @@ volumes:
   # Suricata
   suricata_logs:
   suricata_command_socket:
+  # ADR-043: seeded from config/suricata/ at `aptl lab start` (config seed
+  # is consumed read-only by the wrapper entrypoint; the MISP rules volume
+  # is shared read-write with aptl-misp-suricata-sync). No explicit `name:`
+  # — Compose project-scoping derives <project>_<key> so worktrees and
+  # custom deployment.project_name values do not collide.
+  suricata_config_seed:
+  suricata_misp_rules:
 
   # MISP
   misp_data:

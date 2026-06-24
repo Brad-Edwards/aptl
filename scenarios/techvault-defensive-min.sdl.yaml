@@ -1,0 +1,81 @@
+name: techvault-defensive-min
+description: >
+  Curated TechVault defensive-minimum slice. Declares the Wazuh manager, indexer,
+  and dashboard plus the OTEL core observability stack. Includes the Wazuh
+  monitoring core and core observability; omits the wider SOC stack (Suricata,
+  MISP, TheHive, Cortex, Shuffle, Wazuh sidecars) and every attacker, target, and
+  enterprise component. Proves APTL realizes the `wazuh` profile from declared
+  defensive node content without pulling the full `soc` profile.
+
+nodes:
+  security-net:
+    type: switch
+    description: SOC and security tooling network.
+
+  wazuh-manager:
+    type: vm
+    os: linux
+    services:
+      - {name: wazuh-api, port: 55000, protocol: tcp}
+      - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      health:
+        status: healthy
+        description: Compose healthcheck must pass before public startup is ready.
+  wazuh-indexer:
+    type: vm
+    os: linux
+    services:
+      - {name: indexer-api, port: 9200, protocol: tcp}
+  wazuh-dashboard:
+    type: vm
+    os: linux
+    services:
+      - {name: dashboard, port: 5601, protocol: tcp}
+
+  aptl-otel-collector:
+    type: vm
+    os: linux
+    services:
+      - {name: otlp-grpc, port: 4317, protocol: tcp}
+      - {name: otlp-http, port: 4318, protocol: tcp}
+  aptl-tempo:
+    type: vm
+    os: linux
+    services:
+      - {name: tempo-http, port: 3200, protocol: tcp}
+  aptl-grafana-otel:
+    type: vm
+    os: linux
+    services:
+      - {name: grafana, port: 3000, protocol: tcp}
+
+infrastructure:
+  security-net:
+    properties: {cidr: 172.20.0.0/24, gateway: 172.20.0.1, internal: false}
+
+  wazuh-manager:
+    links: [security-net]
+    dependencies: [wazuh-indexer]
+  wazuh-indexer:
+    links: [security-net]
+  wazuh-dashboard:
+    links: [security-net]
+    dependencies: [wazuh-indexer, wazuh-manager]
+
+  aptl-otel-collector:
+    links: [security-net]
+  aptl-tempo:
+    links: [security-net]
+  aptl-grafana-otel:
+    links: [security-net]
+    dependencies: [aptl-tempo]
+
+features:
+  techvault-defensive-stack:
+    type: service
+    source:
+      name: aptl-soc-stack
+      version: local
+    description: Wazuh manager, indexer, and dashboard monitoring core.

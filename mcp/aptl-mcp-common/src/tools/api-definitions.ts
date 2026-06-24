@@ -19,7 +19,8 @@ export function generateAPIToolDefinitions(
         properties: {
           endpoint: {
             type: 'string',
-            description: 'API endpoint path (e.g., /api/alerts)',
+            description: 'API endpoint path only (must start with /, e.g. /api/alerts)',
+            pattern: '^/',
           },
           method: {
             type: 'string',

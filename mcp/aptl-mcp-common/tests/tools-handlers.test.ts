@@ -1,5 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
-import { generateToolHandlers } from '../src/tools/handlers.js';
+import { generateToolHandlers, resolveCaptureContainer, errorMessage } from '../src/tools/handlers.js';
+
+describe('errorMessage', () => {
+  it('returns the message of an Error', () => {
+    expect(errorMessage(new Error('boom'))).toBe('boom');
+  });
+
+  it('falls back to "Unknown error" for a non-Error value', () => {
+    // Covers the false branch of the instanceof narrowing — the catch blocks
+    // only ever throw Errors, so this is the only place the fallback runs.
+    expect(errorMessage('a thrown string')).toBe('Unknown error');
+    expect(errorMessage(undefined)).toBe('Unknown error');
+  });
+});
 
 // Partial mock: keep SSHError as a real Error subclass so
 // `assertSessionIdContract` in handlers.ts throws an object whose `.message`
@@ -169,7 +182,15 @@ describe('assertSessionIdContract — canonical session_id at MCP ingress', () =
       { session_id: '', command: 'whoami' },
       ctx,
     );
-    expect(result.content[0].text.toLowerCase()).toContain('session_id');
+    // Assert on the assertSessionIdContract message specifically, NOT just the
+    // presence of "session_id" — the JSON envelope always carries a
+    // `"session_id"` key, so a mere `toContain('session_id')` would also pass
+    // if the contract were removed and a downstream TypeError were caught
+    // instead (test-quality review cycle 1). The "must be a non-empty string"
+    // phrasing only appears in the SSHError the contract throws.
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('must be a non-empty string');
   });
 
   it.each([
@@ -193,6 +214,102 @@ describe('assertSessionIdContract — canonical session_id at MCP ingress', () =
       ctx,
     );
     expect(result.content[0].text.toLowerCase()).toContain("'..'");
+  });
+});
+
+describe('handler error paths return a failure envelope', () => {
+  // Every session/command handler wraps its body in try/catch and returns
+  // `{ success: false, error: <message | UNKNOWN_ERROR> }`. Drive each handler
+  // through its catch with an sshManager that throws on any call, so the
+  // failure-envelope line is exercised (and the UNKNOWN_ERROR fallback line is
+  // not dead code). Args use a VALID session id so the handler passes ingress
+  // validation and reaches the throwing dependency.
+  const handlers = generateToolHandlers({
+    toolPrefix: 'test',
+    targetName: 'Test',
+    configKey: 'test-container',
+  });
+  const throwingCtx = {
+    sshManager: new Proxy(
+      {},
+      { get: () => () => { throw new Error('boom'); } },
+    ) as any,
+    labConfig: {
+      server: { configKey: 'test-container', targetName: 'Test' },
+      lab: { name: 'test-lab', network_subnet: '172.20.0.0/16' },
+      containers: {
+        'test-container': {
+          container_name: 'aptl-test',
+          container_ip: '172.20.0.50',
+          ssh_key: '/tmp/nonexistent-key',
+          ssh_user: 'testuser',
+          ssh_port: 2022,
+          enabled: true,
+        },
+      },
+    } as any,
+  };
+
+  it.each([
+    ['run_command', 'test_run_command', { command: 'whoami' }],
+    ['interactive_session', 'test_interactive_session', { session_id: 'sess-1' }],
+    ['background_session', 'test_background_session', { session_id: 'sess-1' }],
+    ['session_command', 'test_session_command', { session_id: 'sess-1', command: 'whoami' }],
+    ['list_sessions', 'test_list_sessions', {}],
+    ['close_session', 'test_close_session', { session_id: 'sess-1' }],
+    ['get_session_output', 'test_get_session_output', { session_id: 'sess-1' }],
+    ['close_all_sessions', 'test_close_all_sessions', {}],
+  ])('%s returns a failure envelope when its dependency throws', async (_label, handlerName, args) => {
+    const result = await handlers[handlerName](args as any, throwingCtx);
+    const body = JSON.parse(result.content[0].text);
+    expect(body.success).toBe(false);
+    expect(typeof body.error).toBe('string');
+    expect(body.error.length).toBeGreaterThan(0);
+  });
+});
+
+describe('resolveCaptureContainer (ADR-041 harvest target)', () => {
+  const base = {
+    server: { configKey: 'kali', targetName: 'Kali' },
+    lab: { name: 'aptl-local', network_subnet: '172.20.0.0/16' },
+  };
+
+  it('harvests from capture_container_name when set (sidecar)', () => {
+    const labConfig = {
+      ...base,
+      containers: {
+        kali: {
+          container_name: 'aptl-kali',
+          capture_container_name: 'aptl-kali-capture',
+        },
+      },
+    } as any;
+    // ADR-041: captures live in the sidecar, not the workload container, so a
+    // sudo-capable agent cannot read or tamper with them.
+    expect(resolveCaptureContainer(labConfig)).toBe('aptl-kali-capture');
+  });
+
+  it('falls back to container_name when capture_container_name is unset', () => {
+    const labConfig = {
+      ...base,
+      containers: { kali: { container_name: 'aptl-kali' } },
+    } as any;
+    expect(resolveCaptureContainer(labConfig)).toBe('aptl-kali');
+  });
+
+  it('returns undefined for an API-only target (no containers)', () => {
+    const labConfig = { ...base, server: { configKey: '' } } as any;
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
+  });
+
+  it('returns undefined when configKey is set but containers is absent', () => {
+    const labConfig = { ...base } as any; // no `containers` key
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
+  });
+
+  it('returns undefined when the configKey container is missing', () => {
+    const labConfig = { ...base, containers: { other: { container_name: 'x' } } } as any;
+    expect(resolveCaptureContainer(labConfig)).toBeUndefined();
   });
 });
 

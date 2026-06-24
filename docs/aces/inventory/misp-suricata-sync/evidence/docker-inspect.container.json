@@ -32,9 +32,9 @@
     "ExecIDs": null,
     "HostConfig": {
       "Binds": [
-        "aptl_suricata_command_socket:/var/run/suricata:rw",
-        "/home/atomik/src/aptl/.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw",
-        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro"
+        "aptl_suricata_misp_rules:/var/lib/suricata/rules/misp:rw",
+        "/home/atomik/src/aptl/config/soc_certs/lab-ca.pem:/etc/lab-ca/lab-ca.pem:ro",
+        "aptl_suricata_command_socket:/var/run/suricata:rw"
       ],
       "ContainerIDFile": "",
       "LogConfig": {
@@ -137,21 +137,13 @@
     "Mounts": [
       {
         "Type": "volume",
-        "Name": "aptl_suricata_command_socket",
-        "Source": "/var/lib/docker/volumes/aptl_suricata_command_socket/_data",
-        "Destination": "/var/run/suricata",
+        "Name": "aptl_suricata_misp_rules",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_misp_rules/_data",
+        "Destination": "/var/lib/suricata/rules/misp",
         "Driver": "local",
         "Mode": "rw",
         "RW": true,
         "Propagation": ""
-      },
-      {
-        "Type": "bind",
-        "Source": "/home/atomik/src/aptl/.aptl/suricata/rules/misp",
-        "Destination": "/var/lib/suricata/rules/misp",
-        "Mode": "rw",
-        "RW": true,
-        "Propagation": "rprivate"
       },
       {
         "Type": "bind",
@@ -160,6 +152,16 @@
         "Mode": "ro",
         "RW": false,
         "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "aptl_suricata_command_socket",
+        "Source": "/var/lib/docker/volumes/aptl_suricata_command_socket/_data",
+        "Destination": "/var/run/suricata",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
       }
     ],
     "Config": {

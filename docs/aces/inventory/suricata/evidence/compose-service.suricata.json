@@ -12,16 +12,15 @@
     "SYS_NICE"
   ],
   "volumes": [
-    "./config/suricata/suricata.yaml:/etc/suricata/suricata.yaml",
-    "./config/suricata/rules/local.rules:/etc/suricata/rules/local.rules",
+    "suricata_config_seed:/seed:ro",
     "suricata_logs:/var/log/suricata",
     "suricata_command_socket:/var/run/suricata",
-    "./.aptl/suricata/rules/misp:/var/lib/suricata/rules/misp:rw"
+    "suricata_misp_rules:/var/lib/suricata/rules/misp:rw"
   ],
-  "command": [
+  "entrypoint": [
+    "/bin/sh",
     "-c",
-    "/etc/suricata/suricata.yaml",
-    "--pcap"
+    "set -e\nmkdir -p /etc/suricata/rules\ncp /seed/suricata.yaml /etc/suricata/suricata.yaml\ncp /seed/rules/local.rules /etc/suricata/rules/local.rules\nexec /docker-entrypoint.sh -c /etc/suricata/suricata.yaml --pcap\n"
   ],
   "deploy": {
     "resources": {

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
-DEFAULT_PROFILE = "provisioning-only"
+DEFAULT_PROFILE = "orchestration-evaluation"
 DEFAULT_SCENARIO = Path("scenarios") / "techvault.sdl.yaml"
 DEFAULT_PARITY_INVENTORY = Path("docs") / "aces" / "parity-inventory.yaml"
 

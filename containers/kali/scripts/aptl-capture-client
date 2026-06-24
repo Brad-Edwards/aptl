@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""APTL kali-side capture client (ADR-041 / issue #305).
+
+Talks to the aptl-kali-capture sidecar writer daemon over an abstract Unix
+socket.  Installed at /usr/local/bin/aptl-capture-client inside the Kali
+container.
+
+Subcommands:
+  aptl-capture-client ping
+      Reachability probe. Connects, sends a no-op ping frame, exits 0 if the
+      sidecar is up, 1 otherwise. The wrapper uses this to decide wrapped vs.
+      unwrapped before committing to capture.
+
+  aptl-capture-client stream RUN_ID SESSION_ID
+      Open ONE connection that owns the whole session: send session_start,
+      read stdin in chunks and forward as pty_chunk frames, then send
+      session_end on EOF and close. Because session_start, every pty_chunk,
+      and session_end all travel over this single connection, the sidecar
+      treats it as the session's owner — no other process can inject bytes
+      into or end this session, and the byte order is preserved with no race
+      against a separate "end" call (codex pre-push F1/F3).
+
+On connection failure the client prints a one-line warning to stderr and exits
+non-zero so the wrapper can detect sidecar unavailability and continue
+unwrapped.
+"""
+from __future__ import annotations
+
+import base64
+import json
+import os
+import socket
+import sys
+import time
+from typing import NoReturn
+
+_SOCKET_NAME = os.environ.get("APTL_CAPTURE_SOCKET", "\x00aptl-capture-ctrl")
+_CONNECT_TIMEOUT = 2.0  # seconds
+# Bound per-send blocking so a stuck/overwhelmed sidecar cannot hang the
+# wrapper's `wait` (and thus SSH session close) indefinitely. Best-effort: on
+# timeout the client gives up streaming for this session.
+_STREAM_TIMEOUT = 10.0  # seconds
+_CHUNK_SIZE = 4096
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _send_frame(sock: socket.socket, frame: dict) -> None:
+    data = json.dumps(frame, separators=(",", ":")).encode("utf-8") + b"\n"
+    sock.sendall(data)
+
+
+def _connect() -> socket.socket:
+    """Connect to the sidecar abstract socket.
+
+    Raises OSError on failure (caller handles with a warning + non-zero exit).
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(_CONNECT_TIMEOUT)
+    sock.connect(_SOCKET_NAME)
+    sock.settimeout(None)
+    return sock
+
+
+def _warn_unavailable(detail: str) -> None:
+    print(
+        f"[aptl-capture-client] WARNING: sidecar unavailable ({detail}); "
+        "capture disabled for this session",
+        file=sys.stderr,
+    )
+
+
+def cmd_ping() -> None:
+    """Reachability probe: exit 0 if the sidecar accepts a connection."""
+    try:
+        sock = _connect()
+    except OSError as exc:
+        _warn_unavailable(str(exc))
+        sys.exit(1)
+    try:
+        _send_frame(sock, {"type": "ping", "ts": _now_ms()})
+    except OSError:
+        # Connected but could not write — treat as unavailable.
+        sys.exit(1)
+    finally:
+        sock.close()
+
+
+def cmd_stream(run_id: str, session_id: str) -> None:
+    """Own the session on one connection: session_start, pty_chunks, session_end.
+
+    CRITICAL (codex cycle 2 F1): this process is the ONLY reader of the FIFO
+    that `script(1)` writes to. It must drain stdin to EOF no matter what — even
+    if the sidecar is unreachable or dies mid-stream — or `script` blocks on a
+    full pipe and the user's command/session hangs. A dead sidecar must degrade
+    capture, never break the shell. So a connect/send failure sets `failed` and
+    we keep reading stdin (discarding) until EOF rather than exiting early.
+    """
+    sock = None
+    failed = False
+    try:
+        sock = _connect()
+        sock.settimeout(_STREAM_TIMEOUT)
+        _send_frame(sock, {
+            "type": "session_start",
+            "run_id": run_id,
+            "session_id": session_id,
+            "ts": _now_ms(),
+        })
+    except OSError as exc:
+        _warn_stream(exc)
+        failed = True
+
+    stdin_fd = sys.stdin.buffer
+    while True:
+        chunk = stdin_fd.read(_CHUNK_SIZE)
+        if not chunk:
+            break
+        if failed:
+            continue  # drain only: keep `script` unblocked
+        try:
+            _send_frame(sock, {
+                "type": "pty_chunk",
+                "session_id": session_id,
+                "ts": _now_ms(),
+                "b64": base64.b64encode(chunk).decode("ascii"),
+            })
+        except OSError as exc:
+            _warn_stream(exc)
+            failed = True
+
+    # session_end travels on the SAME connection after every pty_chunk, so the
+    # sidecar finalizes only once the full transcript is in (no tail loss). Even
+    # if this frame is lost, the writer finalizes on connection close.
+    if sock is not None:
+        if not failed:
+            try:
+                _send_frame(sock, {
+                    "type": "session_end",
+                    "session_id": session_id,
+                    "ts": _now_ms(),
+                })
+            except OSError:
+                pass
+        sock.close()
+
+
+def _warn_stream(exc: Exception) -> None:
+    print(
+        f"[aptl-capture-client] WARNING: stream interrupted ({exc}); "
+        "capture may be partial (shell session continues)",
+        file=sys.stderr,
+    )
+
+
+def _usage() -> NoReturn:
+    print(
+        "Usage:\n"
+        "  aptl-capture-client ping\n"
+        "  aptl-capture-client stream RUN_ID SESSION_ID",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
+def main() -> None:
+    argv = sys.argv[1:]
+    if not argv:
+        _usage()
+    subcommand = argv[0]
+    if subcommand == "ping":
+        if len(argv) != 1:
+            _usage()
+        cmd_ping()
+    elif subcommand == "stream":
+        if len(argv) != 3:
+            _usage()
+        cmd_stream(argv[1], argv[2])
+    else:
+        _usage()
+
+
+if __name__ == "__main__":
+    main()

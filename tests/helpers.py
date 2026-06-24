@@ -411,6 +411,15 @@ def kali_exec(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
     return docker_exec("aptl-kali", cmd, timeout=timeout)
 
 
+def kali_capture_exec(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess:
+    """Run a command inside the Kali capture sidecar (ADR-041).
+
+    The sidecar owns the kali_captures volume read-write; the Kali workload
+    does not mount it, so capture-evidence assertions must run here.
+    """
+    return docker_exec("aptl-kali-capture", cmd, timeout=timeout)
+
+
 def workstation_exec(
     cmd: str, timeout: int = 60,
 ) -> subprocess.CompletedProcess:

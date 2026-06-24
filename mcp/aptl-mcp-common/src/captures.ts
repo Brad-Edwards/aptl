@@ -1,19 +1,21 @@
 /**
- * Per-session capture harvest from the Kali container.
+ * Per-session capture harvest from the Kali capture sidecar.
  *
- * OBS-003 / ADR-033 design: the Kali container writes per-session
- * captures (PTY typescript+timing, pcap, audit/proc-acct snapshots)
- * into a docker named volume at `/var/log/aptl/captures/<run_id>/<session_id>/`.
- * The volume is invisible to the host filesystem to prevent cross-
- * scenario tampering by the kali user (codex pre-push cycle 1
- * finding-10).
+ * OBS-003 / ADR-033 / ADR-041 design: the `aptl-kali-capture` sidecar (not the
+ * Kali workload) writes per-session captures (PTY typescript, pcap,
+ * audit/proc-acct snapshots) into a docker named volume at
+ * `/var/log/aptl/captures/<run_id>/<session_id>/`. The Kali workload does not
+ * mount the volume at all, so a sudo-capable agent cannot read or tamper with
+ * evidence (ADR-041). The volume is invisible to the host filesystem to
+ * prevent cross-scenario tampering (codex pre-push cycle 1 finding-10).
  *
- * When an SSH session closes, the MCP server invokes
- * `harvestSession()` which runs `docker cp` to copy the per-session
- * subtree out into `.aptl/runs/<run_id>/kali-side/<session_id>/`
- * on the host, then sets 0600 permissions on every file. The
- * harvest is best-effort — a missing container / docker / missing
- * subdir logs to stderr but does not throw out of the close path.
+ * When an SSH session closes, the MCP server invokes `harvestSession()` which
+ * runs `docker cp` against the capture container (the sidecar — see
+ * `resolveCaptureContainer` / `capture_container_name`) to copy the
+ * per-session subtree out into `.aptl/runs/<run_id>/kali-side/<session_id>/`
+ * on the host, then sets 0600 permissions on every file. The harvest is
+ * best-effort — a missing container / docker / missing subdir logs to stderr
+ * but does not throw out of the close path.
  */
 
 import { spawn } from 'node:child_process';
@@ -23,7 +25,8 @@ import { join } from 'node:path';
 import { kaliSideSessionDir, loadActiveTraceId } from './runs.js';
 
 export interface HarvestOptions {
-  /** Docker container to harvest from (e.g. `aptl-kali`). */
+  /** Docker container to harvest from. Per ADR-041 this is the capture
+   * sidecar (e.g. `aptl-kali-capture`), which owns the captures volume. */
   containerName: string;
   /** Path inside the container that holds per-run capture subdirs.
    * Defaults to `/var/log/aptl/captures` to match the wrapper. */

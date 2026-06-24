@@ -616,6 +616,10 @@ class TestErrorHandling:
         with pytest.raises(SDLParseError, match="mapping"):
             parse_sdl("- just\n- a\n- list")
 
+    def test_non_string_top_level_mapping_key(self):
+        with pytest.raises(SDLParseError):
+            parse_sdl("?")
+
     def test_no_identity(self):
         with pytest.raises(SDLParseError):
             parse_sdl("description: no name or metadata")

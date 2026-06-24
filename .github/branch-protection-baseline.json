@@ -1,0 +1,35 @@
+{
+  "source": "APTL required merge checks (issue #502); advisory scanners per ADR-026 stay optional",
+  "branches": {
+    "main": {
+      "admin_bypass_allowed": true,
+      "changes_land_via_pull_request": true,
+      "required_status_checks": {
+        "strict": true,
+        "contexts": [
+          "Pre-commit hooks",
+          "Docs (Vale prose lint + mkdocs strict build)",
+          "Python tests + coverage",
+          "MCP TypeScript tests + coverage",
+          "Web frontend tests + coverage",
+          "SonarCloud quality gate"
+        ]
+      }
+    },
+    "dev": {
+      "admin_bypass_allowed": true,
+      "changes_land_via_pull_request": true,
+      "required_status_checks": {
+        "strict": true,
+        "contexts": [
+          "Pre-commit hooks",
+          "Docs (Vale prose lint + mkdocs strict build)",
+          "Python tests + coverage",
+          "MCP TypeScript tests + coverage",
+          "Web frontend tests + coverage",
+          "SonarCloud quality gate"
+        ]
+      }
+    }
+  }
+}

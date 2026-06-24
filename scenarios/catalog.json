@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "scenarios": [
+    {
+      "id": "techvault-operational",
+      "name": "TechVault Operational",
+      "description": "Default public APTL startup scenario backed by ACES SDL.",
+      "path": "scenarios/techvault-operational.sdl.yaml"
+    },
+    {
+      "id": "techvault-attacker-target",
+      "name": "TechVault Attacker/Target",
+      "description": "Kali red-team host plus a single monitored victim and core observability.",
+      "path": "scenarios/techvault-attacker-target.sdl.yaml"
+    },
+    {
+      "id": "techvault-enterprise-web",
+      "name": "TechVault Enterprise Web",
+      "description": "Vulnerable webapp plus database and core observability, with no SOC stack.",
+      "path": "scenarios/techvault-enterprise-web.sdl.yaml"
+    },
+    {
+      "id": "techvault-defensive-min",
+      "name": "TechVault Defensive Minimum",
+      "description": "Wazuh manager, indexer, and dashboard plus core observability, with no full SOC stack.",
+      "path": "scenarios/techvault-defensive-min.sdl.yaml"
+    },
+    {
+      "id": "techvault-observability-core",
+      "name": "TechVault Observability Core",
+      "description": "OTEL collector, Tempo, and Grafana only: the smallest bounded startup surface.",
+      "path": "scenarios/techvault-observability-core.sdl.yaml"
+    }
+  ]
+}

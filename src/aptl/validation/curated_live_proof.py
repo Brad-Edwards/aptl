@@ -22,7 +22,7 @@ or a name would over-start) and no less (a missing dependency would under-start)
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -209,6 +209,28 @@ def _bind(actual: str, expected_aliases: Mapping[str, frozenset[str]]) -> str | 
     return None
 
 
+def _diff_surface(
+    actual_names: list[str],
+    expected_keys: tuple[str, ...],
+    expected_aliases: Mapping[str, frozenset[str]],
+    missing_diag: Callable[[str], str],
+    unexpected_diag: Callable[[str], str],
+) -> list[str]:
+    """Diagnose one surface (containers or networks) against the expected set.
+
+    Binds each actual name to an expected key by normalized alias, then reports
+    every expected key with no live match (``missing_diag``) and every actual
+    name that binds to nothing expected (``unexpected_diag``).
+    """
+    bound = {name: _bind(name, expected_aliases) for name in actual_names}
+    matched = {key for key in bound.values() if key is not None}
+    diagnostics = [missing_diag(key) for key in expected_keys if key not in matched]
+    diagnostics.extend(
+        unexpected_diag(name) for name, key in bound.items() if key is None
+    )
+    return diagnostics
+
+
 def compare_to_snapshot(
     matrix: ExpectedMatrix,
     snapshot: Mapping[str, object],
@@ -221,42 +243,33 @@ def compare_to_snapshot(
     network set matches. Returns ``(ok, diagnostics)`` with one structured,
     layer-named diagnostic per gap (never raw Docker / CLI text).
     """
-    diagnostics: list[str] = []
-
-    running = _running_container_names(snapshot)
-    bound_services = {name: _bind(name, matrix.service_aliases) for name in running}
-    matched_services = {svc for svc in bound_services.values() if svc is not None}
-
-    for service in matrix.expected_services:
-        if service not in matched_services:
-            diagnostics.append(
-                f"defensive_stack_readiness: expected service '{service}' "
-                f"(profiles {list(matrix.selected_profiles)}) has no running container"
-            )
-    for name, service in bound_services.items():
-        if service is None:
-            diagnostics.append(
-                f"backend_interpretation: unexpected steady-state container "
-                f"'{name}' is not in the selected reduced surface "
-                f"{list(matrix.selected_profiles)}"
-            )
-
-    snapshot_networks = _snapshot_network_names(snapshot)
-    bound_networks = {
-        name: _bind(name, matrix.network_aliases) for name in snapshot_networks
-    }
-    matched_networks = {net for net in bound_networks.values() if net is not None}
-    for network in matrix.expected_networks:
-        if network not in matched_networks:
-            diagnostics.append(
+    profiles = list(matrix.selected_profiles)
+    diagnostics = _diff_surface(
+        _running_container_names(snapshot),
+        matrix.expected_services,
+        matrix.service_aliases,
+        lambda service: (
+            f"defensive_stack_readiness: expected service '{service}' "
+            f"(profiles {profiles}) has no running container"
+        ),
+        lambda name: (
+            f"backend_interpretation: unexpected steady-state container '{name}' "
+            f"is not in the selected reduced surface {profiles}"
+        ),
+    )
+    diagnostics.extend(
+        _diff_surface(
+            _snapshot_network_names(snapshot),
+            matrix.expected_networks,
+            matrix.network_aliases,
+            lambda network: (
                 f"defensive_stack_readiness: expected network '{network}' "
                 "is absent from the booted range"
-            )
-    for name, network in bound_networks.items():
-        if network is None:
-            diagnostics.append(
+            ),
+            lambda name: (
                 f"backend_interpretation: unexpected network '{name}' "
-                f"is not in the selected reduced surface {list(matrix.selected_profiles)}"
-            )
-
+                f"is not in the selected reduced surface {profiles}"
+            ),
+        )
+    )
     return (not diagnostics, diagnostics)

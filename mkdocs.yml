@@ -109,6 +109,8 @@ nav:
     - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
     - TechVault Live Validation Preflight: aces/techvault-live-validation-preflight.md
     - TechVault Live Validation Gate: aces/techvault-live-validation-gate.md
+    - TechVault Curated Live Validation Preflight: aces/techvault-curated-live-validation-preflight.md
+    - TechVault Curated Live Validation Gate: aces/techvault-curated-live-validation-gate.md
     - TechVault SDL Classification Audit: aces/techvault-sdl-classification-audit.md
     - Asset Inventory:
       - Methodology: aces/inventory/asset-inventory-methodology.md

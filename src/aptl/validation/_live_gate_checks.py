@@ -390,9 +390,10 @@ def check_run_archive_manifest(
 ) -> LiveGateCheck:
     """Persist scenario identity + ACES provenance + validation evidence.
 
-    Writes through ``LocalRunStore``'s redacting boundary (ADR-029).     Objective / scoring run surfaces are published through the portable ACES
-    evaluation contracts at the backend boundary; live outcome progression from
-    RTE-001 remains follow-on work tracked by #514.
+    Writes through ``LocalRunStore``'s redacting boundary (ADR-029).
+    Objective / scoring run surfaces are published through the portable
+    ACES evaluation contracts at the backend boundary; live outcome
+    progression from RTE-001 remains follow-on work tracked by #514.
     """
     realization = state.realization_details or {}
     manifest = {

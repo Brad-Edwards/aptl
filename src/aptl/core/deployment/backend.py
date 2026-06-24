@@ -15,9 +15,8 @@ Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 
 import subprocess
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
-from aptl.core.deployment.errors import BackendTimeoutError  # noqa: F401  (re-export)
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
 
@@ -130,7 +129,7 @@ class DeploymentBackend(Protocol):
 
     def container_list(
         self, *, all_containers: bool = True
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """List containers managed by this deployment.
 
         Args:
@@ -222,7 +221,7 @@ class DeploymentBackend(Protocol):
         """
         ...
 
-    def container_inspect(self, name: str) -> dict:
+    def container_inspect(self, name: str) -> dict[str, Any]:
         """Return parsed ``docker inspect`` output for a single container.
 
         Args:
@@ -263,7 +262,7 @@ class DeploymentBackend(Protocol):
         """
         ...
 
-    def host_list_lab_containers(self) -> list[dict]:
+    def host_list_lab_containers(self) -> list[dict[str, Any]]:
         """Enumerate ``aptl-*`` containers visible to the daemon.
 
         Each row carries ``name``, ``image``, ``id``, ``status``,
@@ -277,7 +276,7 @@ class DeploymentBackend(Protocol):
         """List network names whose names start with ``name_prefix``."""
         ...
 
-    def host_inspect_network(self, name: str) -> dict:
+    def host_inspect_network(self, name: str) -> dict[str, Any]:
         """Return parsed network metadata.
 
         Returns:

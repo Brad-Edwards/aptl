@@ -1,0 +1,64 @@
+{
+  "catalog_id": "techvault-attacker-target",
+  "scenario": "techvault-attacker-target.sdl.yaml",
+  "matched_config_containers": [
+    "kali",
+    "victim",
+    "wazuh"
+  ],
+  "command": "aptl lab start --scenario techvault-attacker-target --skip-seed",
+  "readiness_outcome": "Lab is ready.",
+  "boot_elapsed_seconds": 97,
+  "selected_profiles": [
+    "wazuh",
+    "victim",
+    "kali",
+    "otel"
+  ],
+  "realized_nodes": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "kali",
+    "kali-capture",
+    "victim",
+    "wazuh-indexer",
+    "wazuh-manager"
+  ],
+  "expected_services": [
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "kali",
+    "kali-capture",
+    "victim",
+    "wazuh.dashboard",
+    "wazuh.indexer",
+    "wazuh.manager"
+  ],
+  "expected_networks": [
+    "aptl-dmz",
+    "aptl-internal",
+    "aptl-redteam",
+    "aptl-security"
+  ],
+  "actual_containers": [
+    "aptl-grafana-otel",
+    "aptl-kali",
+    "aptl-kali-capture",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "aptl-victim",
+    "aptl-wazuh-dashboard",
+    "aptl-wazuh-indexer",
+    "aptl-wazuh-manager"
+  ],
+  "actual_networks": [
+    "aptl_aptl-dmz",
+    "aptl_aptl-internal",
+    "aptl_aptl-redteam",
+    "aptl_aptl-security"
+  ],
+  "verdict": "PASS",
+  "diagnostics": []
+}

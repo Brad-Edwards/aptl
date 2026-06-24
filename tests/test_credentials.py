@@ -262,6 +262,22 @@ class TestSyncManagerConfig:
         assert not _rendered_manager(tmp_path).exists()
         assert source.read_bytes() == before
 
+    def test_unterminated_cluster_block_aborts_render(self, tmp_path):
+        """A ``<cluster>`` with no closing tag matches no key → render error."""
+        from aptl.core.credentials import CredentialRenderError, sync_manager_config
+
+        source = _layout_manager(
+            tmp_path,
+            "<ossec_config>\n  <cluster>\n    <key>orphan</key>\n",
+        )
+        before = source.read_bytes()
+
+        with pytest.raises(CredentialRenderError):
+            sync_manager_config(tmp_path, "new_key")
+
+        assert not _rendered_manager(tmp_path).exists()
+        assert source.read_bytes() == before
+
     def test_replaces_cluster_key_only(self, tmp_path):
         from aptl.core.credentials import sync_manager_config
 
@@ -742,7 +758,7 @@ class TestEnsureSuricataConfigSourceOwnership:
     """Legacy pre-ADR-043 bind mounts could leave seed sources unwritable."""
 
     def test_no_op_when_sources_owned_by_current_user(self, tmp_path):
-        from aptl.core.credentials import ensure_suricata_config_source_ownership
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
         _write_suricata_sources(tmp_path)
         result = ensure_suricata_config_source_ownership(tmp_path)
@@ -750,7 +766,7 @@ class TestEnsureSuricataConfigSourceOwnership:
         assert result.repaired == ()
 
     def test_restores_foreign_owned_sources_with_sudo(self, tmp_path, monkeypatch):
-        from aptl.core.credentials import ensure_suricata_config_source_ownership
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
@@ -790,7 +806,7 @@ class TestEnsureSuricataConfigSourceOwnership:
         assert calls[0][:4] == ["sudo", "-n", "chown", f"{os.getuid()}:{os.getgid()}"]
 
     def test_reports_actionable_error_when_sudo_unavailable(self, tmp_path, monkeypatch):
-        from aptl.core.credentials import ensure_suricata_config_source_ownership
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
@@ -825,7 +841,7 @@ class TestBuildSuricataVolumeSeeds:
     """ADR-043: build typed named-volume seed specs from checked-in source."""
 
     def test_builds_config_and_misp_seeds(self, tmp_path):
-        from aptl.core.credentials import (
+        from aptl.core.suricata_seed import (
             SURICATA_CONFIG_SEED_VOLUME,
             SURICATA_MISP_RULES_VOLUME,
             build_suricata_volume_seeds,
@@ -848,7 +864,7 @@ class TestBuildSuricataVolumeSeeds:
         assert len(misp.files) == 4
 
     def test_no_legacy_retire_on_fresh_checkout(self, tmp_path):
-        from aptl.core.credentials import (
+        from aptl.core.suricata_seed import (
             SURICATA_MISP_RULES_VOLUME,
             build_suricata_volume_seeds,
         )
@@ -861,7 +877,7 @@ class TestBuildSuricataVolumeSeeds:
         assert misp.legacy_retire_path is None
 
     def test_legacy_retire_path_set_when_present(self, tmp_path):
-        from aptl.core.credentials import (
+        from aptl.core.suricata_seed import (
             SURICATA_MISP_RULES_VOLUME,
             build_suricata_volume_seeds,
         )
@@ -878,7 +894,7 @@ class TestBuildSuricataVolumeSeeds:
         assert misp.legacy_retire_path == legacy.resolve()
 
     def test_rejects_source_symlink_escape(self, tmp_path):
-        from aptl.core.credentials import build_suricata_volume_seeds
+        from aptl.core.suricata_seed import build_suricata_volume_seeds
 
         outside = tmp_path / "outside"
         outside.mkdir()
@@ -894,7 +910,7 @@ class TestBuildSuricataVolumeSeeds:
             build_suricata_volume_seeds(project_dir)
 
     def test_missing_misp_baseline_raises(self, tmp_path):
-        from aptl.core.credentials import build_suricata_volume_seeds
+        from aptl.core.suricata_seed import build_suricata_volume_seeds
 
         _write_suricata_sources(tmp_path)
         (tmp_path / "config" / "suricata" / "rules" / "misp"
@@ -902,3 +918,76 @@ class TestBuildSuricataVolumeSeeds:
 
         with pytest.raises(FileNotFoundError):
             build_suricata_volume_seeds(tmp_path)
+
+
+class TestAtomicWriteSecure:
+    """Defensive guards in :func:`_atomic_write_secure`."""
+
+    def test_rejects_temp_path_outside_parent(self, tmp_path, monkeypatch):
+        """A temp file resolving outside the parent dir aborts the write."""
+        import tempfile as _tempfile
+
+        from aptl.core import credentials
+
+        target = tmp_path / "out" / "file.txt"
+        target.parent.mkdir()
+        outside = tmp_path / "elsewhere"
+        outside.mkdir()
+
+        real_mkstemp = _tempfile.mkstemp
+
+        def fake_mkstemp(*_args, **_kwargs):
+            # Ignore the requested ``dir`` so the temp file lands outside the
+            # containment-checked parent, tripping the defensive guard.
+            return real_mkstemp(dir=outside, prefix="x", suffix=".tmp")
+
+        monkeypatch.setattr(credentials.tempfile, "mkstemp", fake_mkstemp)
+
+        with pytest.raises(
+            credentials.PathContainmentError,
+            match="escapes its output directory",
+        ):
+            credentials._atomic_write_secure(target, "secret-data")
+
+        # The guard closes the fd and removes the stray temp file.
+        assert list(outside.iterdir()) == []
+
+
+class TestEnforceMode:
+    """The ``_enforce_mode`` POSIX permission contract."""
+
+    @_skip_no_posix_modes
+    def test_chmod_failure_raises(self, tmp_path, monkeypatch):
+        """A failed ``chmod`` aborts the render on POSIX."""
+        from aptl.core import credentials
+
+        target = tmp_path / "f.txt"
+        target.write_text("x")
+
+        def boom(*_args, **_kwargs):
+            raise OSError("chmod denied")
+
+        monkeypatch.setattr(credentials.Path, "chmod", boom)
+
+        with pytest.raises(
+            credentials.CredentialRenderError,
+            match="Could not set required mode",
+        ):
+            credentials._enforce_mode(target, 0o644, "file")
+
+    @_skip_no_posix_modes
+    def test_mode_not_honoured_raises(self, tmp_path, monkeypatch):
+        """A silently-ignored ``chmod`` (wrong effective mode) aborts."""
+        from aptl.core import credentials
+
+        target = tmp_path / "f.txt"
+        target.write_text("x")
+        # chmod "succeeds" but the filesystem keeps a different mode.
+        target.chmod(0o600)
+        monkeypatch.setattr(credentials.Path, "chmod", lambda *a, **k: None)
+
+        with pytest.raises(
+            credentials.CredentialRenderError,
+            match="retained mode",
+        ):
+            credentials._enforce_mode(target, 0o644, "file")

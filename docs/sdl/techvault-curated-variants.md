@@ -61,6 +61,14 @@ each variant through `interpret_provisioning_plan` with no error-severity
 configuration that enables exactly the variant profiles, and proves the result is
 content-driven through anti-collapse and rename checks.
 
+Live proof for these variants is a separate concern from the static authoring
+proof. Before implementing or recording that evidence, use
+[`docs/aces/techvault-curated-live-validation-preflight.md`](../aces/techvault-curated-live-validation-preflight.md)
+as the boundary guide: compare each booted range to its ACES-realized reduced
+profile set, not to the full TechVault live gate. The recorded live-boot evidence
+and reproduction commands live in the
+[curated live validation gate](../aces/techvault-curated-live-validation-gate.md).
+
 Because `aptl lab start` boots with `docker compose --profile <selected>`, which
 activates every service in a selected profile rather than only the declared ACES
 nodes, the provisioner validates that the selected profile set is a valid Compose

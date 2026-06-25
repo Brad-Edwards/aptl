@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class _StrictModel(BaseModel):
+    """Pydantic base model that rejects unknown attack fields."""
+
     model_config = ConfigDict(extra="forbid")
 
 

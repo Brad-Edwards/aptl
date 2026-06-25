@@ -74,6 +74,7 @@ from aptl.utils.redaction import redact
 if TYPE_CHECKING:
     from docker.client import DockerClient
 
+    from aptl.backends.aces import AcesStartOutcome
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -95,7 +96,7 @@ def start_aces_scenario(
     artifacts under the same run directory the run record is written to.
     """
     try:
-        from aptl.backends.aces import AcesStartOutcome, start_aces_scenario as _start_aces_scenario
+        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
     except ImportError as exc:
         error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
         log.error(error)
@@ -1302,11 +1303,61 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
     return LocalRunStore(state_dir / "runs"), run_id
 
 
+def _resolve_aces_snapshot(outcome: object) -> object:
+    """Return a valid RuntimeSnapshot from the ACES outcome, or a blank default."""
+    from aces_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
+
+    final_snapshot = getattr(outcome, "final_snapshot", None)
+    if final_snapshot is None or not isinstance(final_snapshot, _RuntimeSnapshot):
+        return _RuntimeSnapshot()
+    return final_snapshot
+
+
+def _assemble_container_image_digests(snapshot: object) -> dict[str, str]:
+    """Build the container-name → image-digest mapping from a RangeSnapshot."""
+    return {
+        c.name: c.image_digest
+        for c in snapshot.containers  # type: ignore[attr-defined]
+        if c.image_digest
+    }
+
+
+def _assemble_tool_versions(snapshot: object) -> dict[str, str]:
+    """Build the tool-name → version mapping from a RangeSnapshot.software."""
+    sw = snapshot.software  # type: ignore[attr-defined]
+    return {
+        k: v
+        for k, v in (
+            ("python", sw.python_version),
+            ("docker", sw.docker_version),
+            ("compose", sw.compose_version),
+            ("aptl", sw.aptl_version),
+            ("aces_sdl", sw.aces_sdl_version),
+        )
+        if v
+    }
+
+
+def _safe_dict(value: object) -> dict[str, Any]:
+    """Return value if it is a dict, else an empty dict."""
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value: object) -> list[str]:
+    """Return list(value) if value is truthy, else an empty list."""
+    return list(value) if value else []  # type: ignore[arg-type]
+
+
+def _scenario_display_name(scenario_path: Path | None) -> str:
+    """Return the scenario file name, or 'unknown' when path is absent."""
+    return str(scenario_path.name) if scenario_path else "unknown"
+
+
 def _write_run_record(ctx: _LabStartContext) -> None:
     """Internal helper: build and persist the reproducibility record."""
     from datetime import datetime, timezone
 
-    from aptl.backends.aces_repro import build_reproducibility_record
+    from aptl.backends.aces_repro import RunRecordInputs, build_reproducibility_record
     from aptl.core.snapshot import RangeSnapshot, detection_content_digest
 
     outcome = ctx.aces_outcome
@@ -1326,51 +1377,28 @@ def _write_run_record(ctx: _LabStartContext) -> None:
 
     store.create_run(run_id)
 
-    final_snapshot = getattr(outcome, "final_snapshot", None)
-    realization_details = getattr(outcome, "realization_details", {})
-    selected_profiles = getattr(outcome, "selected_profiles", [])
-    scenario_path = getattr(outcome, "scenario_path", None)
-
-    from aces_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
-    if final_snapshot is None or not isinstance(final_snapshot, _RuntimeSnapshot):
-        final_snapshot = _RuntimeSnapshot()
-
+    final_snapshot = _resolve_aces_snapshot(outcome)
     now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    container_image_digests = {
-        c.name: c.image_digest
-        for c in snapshot.containers
-        if c.image_digest
-    }
-    tool_versions = {
-        k: v
-        for k, v in (
-            ("python", snapshot.software.python_version),
-            ("docker", snapshot.software.docker_version),
-            ("compose", snapshot.software.compose_version),
-            ("aptl", snapshot.software.aptl_version),
-            ("aces_sdl", snapshot.software.aces_sdl_version),
-        )
-        if v
-    }
 
-    record = build_reproducibility_record(
+    inputs = RunRecordInputs(
         run_id=run_id,
         backend_name="aptl",
         started_at=snapshot.timestamp,
         finished_at=now_str,
         outcome="success",
         final_snapshot=final_snapshot,
-        realization_details=realization_details if isinstance(realization_details, dict) else {},
-        selected_profiles=list(selected_profiles) if selected_profiles else [],
-        scenario_path=scenario_path,
-        scenario_display_name=str(scenario_path.name) if scenario_path else "unknown",
+        realization_details=_safe_dict(getattr(outcome, "realization_details", {})),
+        selected_profiles=_safe_list(getattr(outcome, "selected_profiles", [])),
+        scenario_path=getattr(outcome, "scenario_path", None),
+        scenario_display_name=_scenario_display_name(getattr(outcome, "scenario_path", None)),
         range_snapshot_dict=snapshot.to_dict(),
         config_digests=snapshot.config_hashes,
-        container_image_digests=container_image_digests,
+        container_image_digests=_assemble_container_image_digests(snapshot),
         detection_content_digest=detection_content_digest(ctx.project_dir),
-        tool_versions=tool_versions,
+        tool_versions=_assemble_tool_versions(snapshot),
         evidence_references=_collect_evidence_references(store, run_id),
     )
+    record = build_reproducibility_record(inputs)
     store.write_json(run_id, "manifest.json", record)
     log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
 

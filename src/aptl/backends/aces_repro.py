@@ -8,6 +8,7 @@ No Docker/curl/ssh calls. All inputs are already-captured objects/dicts.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,25 +28,35 @@ _SEEDS_ABSENT_NOTE = (
 )
 
 
-def build_reproducibility_record(
-    *,
-    run_id: str,
-    backend_name: str,
-    started_at: str,
-    finished_at: str,
-    outcome: str,
-    final_snapshot: "RuntimeSnapshot",
-    realization_details: dict[str, Any],
-    selected_profiles: list[str],
-    scenario_path: Path | None,
-    scenario_display_name: str,
-    range_snapshot_dict: dict[str, Any],
-    config_digests: dict[str, str],
-    container_image_digests: dict[str, str],
-    detection_content_digest: str,
-    tool_versions: dict[str, str],
-    evidence_references: list[dict[str, str]],
-) -> dict[str, Any]:
+@dataclass(frozen=True)
+class RunRecordInputs:
+    """Builder-input holder for build_reproducibility_record (REP-001 / ADR-044).
+
+    Carries already-prepared primitives and ACES objects through to the record
+    builder.  This is NOT a local mirror of any ACES task/run/apparatus/
+    evidence/provenance/manifest/snapshot contract — it is a value-transport
+    struct whose fields are resolved by the caller before construction.
+    """
+
+    run_id: str
+    backend_name: str
+    started_at: str
+    finished_at: str
+    outcome: str
+    final_snapshot: RuntimeSnapshot
+    realization_details: dict[str, Any]
+    selected_profiles: list[str]
+    scenario_path: Path | None
+    scenario_display_name: str
+    range_snapshot_dict: dict[str, Any]
+    config_digests: dict[str, str]
+    container_image_digests: dict[str, str]
+    detection_content_digest: str
+    tool_versions: dict[str, str]
+    evidence_references: list[dict[str, str]]
+
+
+def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
     """Build a REP-001 run reproducibility record dict.
 
     Anchors ACES-contract identity at record["aces"] and carries
@@ -53,39 +64,39 @@ def build_reproducibility_record(
     """
     manifest = create_aptl_manifest()
     manifest_payload = backend_manifest_payload(manifest)
-    runtime_snapshot_payload = _snapshot_payload(final_snapshot)
-    aces_lock_digest = _aces_lock_digest(scenario_path)
+    runtime_snapshot_payload = _snapshot_payload(inputs.final_snapshot)
+    aces_lock_digest = _aces_lock_digest(inputs.scenario_path)
 
     scenario_section: dict[str, Any] = {
-        "sdl_path": str(scenario_path) if scenario_path else None,
-        "display_name": scenario_display_name,
+        "sdl_path": str(inputs.scenario_path) if inputs.scenario_path else None,
+        "display_name": inputs.scenario_display_name,
         "aces_lock_digest": aces_lock_digest,
     }
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
-        "backend_name": backend_name,
+        "run_id": inputs.run_id,
+        "backend_name": inputs.backend_name,
         "backend_manifest_version": manifest_payload.get("schema_version", ""),
-        "started_at": started_at,
-        "finished_at": finished_at,
-        "outcome": outcome,
+        "started_at": inputs.started_at,
+        "finished_at": inputs.finished_at,
+        "outcome": inputs.outcome,
         "aces": {
             "backend_manifest": manifest_payload,
             "runtime_snapshot": runtime_snapshot_payload,
             "scenario": scenario_section,
             "scenario_parameters": None,
             "scenario_parameters_note": _SEEDS_ABSENT_NOTE,
-            "realization": realization_details,
+            "realization": inputs.realization_details,
         },
         "backend_evidence": {
-            "selected_profiles": selected_profiles,
-            "range_snapshot": range_snapshot_dict,
-            "config_digests": config_digests,
-            "container_image_digests": container_image_digests,
-            "detection_content_digest": detection_content_digest,
-            "tool_versions": tool_versions,
-            "evidence_references": evidence_references,
+            "selected_profiles": inputs.selected_profiles,
+            "range_snapshot": inputs.range_snapshot_dict,
+            "config_digests": inputs.config_digests,
+            "container_image_digests": inputs.container_image_digests,
+            "detection_content_digest": inputs.detection_content_digest,
+            "tool_versions": inputs.tool_versions,
+            "evidence_references": inputs.evidence_references,
         },
     }
 

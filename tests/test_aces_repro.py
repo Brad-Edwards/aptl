@@ -7,31 +7,33 @@ import pytest
 
 from aces_contracts.runtime_state import RuntimeSnapshot
 
-from aptl.backends.aces_repro import build_reproducibility_record
+from aptl.backends.aces_repro import RunRecordInputs, build_reproducibility_record
+
+_DEFAULTS: dict = dict(
+    run_id="run_20260101T000000Z",
+    backend_name="aptl",
+    started_at="2026-01-01T00:00:00Z",
+    finished_at="2026-01-01T00:01:00Z",
+    outcome="success",
+    final_snapshot=None,  # replaced in _dummy_record to allow module-level dict
+    realization_details={"profiles": ["wazuh"]},
+    selected_profiles=["wazuh"],
+    scenario_path=None,
+    scenario_display_name="techvault-operational",
+    range_snapshot_dict={"timestamp": "2026-01-01T00:00:00Z", "containers": []},
+    config_digests={"aptl.json": "abc123"},
+    container_image_digests={},
+    detection_content_digest="",
+    tool_versions={"python": "3.11"},
+    evidence_references=[],
+)
 
 
 def _dummy_record(**overrides):
     """Build a minimal reproducibility record with monkeypatched ACES calls."""
-    defaults = dict(
-        run_id="run_20260101T000000Z",
-        backend_name="aptl",
-        started_at="2026-01-01T00:00:00Z",
-        finished_at="2026-01-01T00:01:00Z",
-        outcome="success",
-        final_snapshot=RuntimeSnapshot(),
-        realization_details={"profiles": ["wazuh"]},
-        selected_profiles=["wazuh"],
-        scenario_path=None,
-        scenario_display_name="techvault-operational",
-        range_snapshot_dict={"timestamp": "2026-01-01T00:00:00Z", "containers": []},
-        config_digests={"aptl.json": "abc123"},
-        container_image_digests={},
-        detection_content_digest="",
-        tool_versions={"python": "3.11"},
-        evidence_references=[],
-    )
-    defaults.update(overrides)
-    return build_reproducibility_record(**defaults)
+    fields = {**_DEFAULTS, "final_snapshot": RuntimeSnapshot()}
+    fields.update(overrides)
+    return build_reproducibility_record(RunRecordInputs(**fields))
 
 
 class TestReproRecord:

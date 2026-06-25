@@ -102,7 +102,7 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: "RunStorageBackend | None" = None,
+    run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
 ) -> AcesStartOutcome:
     """Start an APTL lab by compiling and applying an ACES SDL scenario.
@@ -178,7 +178,7 @@ def _run_execution_plan(
     execution_plan: "ExecutionPlan",
     scenario_path: Path | None = None,
     *,
-    run_store: "RunStorageBackend | None" = None,
+    run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
 ) -> AcesStartOutcome:
     """Apply a planned ACES scenario through the runtime control plane.
@@ -229,7 +229,7 @@ def _apply_provisioning_and_orchestration(
     execution_plan: "ExecutionPlan",
     target: RuntimeTarget,
     *,
-    run_store: "RunStorageBackend | None" = None,
+    run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
 ) -> tuple[LabResult | None, dict[str, Any], list[str]]:
     """Submit provisioning, orchestration, and evaluation control-plane phases.

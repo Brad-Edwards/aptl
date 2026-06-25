@@ -10,21 +10,12 @@ the lifecycle without requiring a live lab.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from aces_contracts.diagnostics import Diagnostic, Severity
-from aces_contracts.participant_behavior import (
-    ParticipantBehaviorHistoryEventType,
-    ParticipantLifecycleOperationState,
-    ParticipantObservationStatus,
-    ParticipantPhaseRealization,
-    ParticipantRuntimeLifecyclePhase,
-)
 from aces_contracts.participant_episode import (
     ParticipantEpisodeControlAction,
     ParticipantEpisodeExecutionState,
@@ -37,52 +28,18 @@ from aces_contracts.participant_episode import (
     ParticipantEpisodeTerminalReason,
     ParticipantEpisodeTerminateRequest,
 )
-from aces_contracts.planning import RuntimeDomain
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
 
-from aptl.utils.redaction import redact
+from aptl.backends.aces_participant_actions import (
+    DEFAULT_PARTICIPANT_ACTIONS,
+    PARTICIPANT_ACTION_ADDRESS,
+    ParticipantActionSpec,
+    drive_participant_action,
+    participant_action_diagnostic,
+)
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
-
-PARTICIPANT_ACTION_ADDRESS = "participant.behavior.techvault.kali-victim-ssh-probe"
-PARTICIPANT_ACTION_CONTRACT_ADDRESS = (
-    "participant.action-contract.aptl.kali-victim-ssh-probe"
-)
-PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
-    "participant.observation-boundary.aptl.kali-victim-ssh-probe"
-)
-PARTICIPANT_BEHAVIOR_ADDRESS = PARTICIPANT_ACTION_ADDRESS
-
-
-@dataclass(frozen=True)
-class ParticipantActionSpec:
-    """A bounded participant action that can be driven through the backend."""
-
-    source_container: str
-    command: tuple[str, ...]
-    success_markers: tuple[str, ...]
-    action_contract_address: str
-    observation_boundary_address: str
-    actor_provenance: str = "codex-cli"
-    target_refs: tuple[str, ...] = ()
-    timeout_seconds: int = 120
-
-
-DEFAULT_PARTICIPANT_ACTIONS = {
-    PARTICIPANT_ACTION_ADDRESS: ParticipantActionSpec(
-        source_container="aptl-kali",
-        command=("nmap", "-p", "22", "-Pn", "--open", "172.20.2.20", "-oG", "-"),
-        success_markers=("22/open",),
-        action_contract_address=PARTICIPANT_ACTION_CONTRACT_ADDRESS,
-        observation_boundary_address=PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS,
-        target_refs=(
-            "container:aptl-kali",
-            "container:aptl-victim",
-            "tcp:172.20.2.20:22",
-        ),
-    )
-}
 
 
 def _utc_now() -> str:
@@ -91,21 +48,11 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _diagnostic(code: str, address: str, message: str) -> Diagnostic:
-    """Build a redacted participant-runtime error diagnostic."""
-
-    return Diagnostic(
-        code=code,
-        domain=RuntimeDomain.PARTICIPANT.value,
-        address=address,
-        message=redact(message),
-        severity=Severity.ERROR,
-    )
-
-
 def _terminal_event(
     reason: ParticipantEpisodeTerminalReason,
 ) -> ParticipantEpisodeHistoryEventType:
+    """Map a terminal reason to the participant episode history event type."""
+
     return {
         ParticipantEpisodeTerminalReason.COMPLETED: (
             ParticipantEpisodeHistoryEventType.EPISODE_COMPLETED
@@ -131,6 +78,8 @@ def _snapshot(
     shared_state_records: Mapping[str, dict[str, object]] | None = None,
     shared_state_history: Mapping[str, list[dict[str, object]]] | None = None,
 ) -> RuntimeSnapshot:
+    """Return a snapshot with participant state dictionaries replaced."""
+
     updates: dict[str, object] = {
         "participant_episode_results": {
             address: dict(result) for address, result in results.items()
@@ -212,28 +161,27 @@ class AptlParticipantRuntime:
             ),
         ]
         next_snapshot, changed = self._store_episode(snapshot, state, events)
-        action_result = self._drive_configured_action(participant_address, state)
+        action_result = drive_participant_action(
+            self.deployment_backend,
+            self.action_specs,
+            participant_address,
+            state,
+            timestamp_factory=_utc_now,
+        )
         if action_result is not None:
-            (
-                success,
-                action_events,
-                diagnostics,
-                action_entries,
-                shared_state_records,
-            ) = action_result
             self._behavior_history.setdefault(participant_address, []).extend(
-                action_events
+                action_result.behavior_events
             )
-            self._shared_state_records.update(shared_state_records)
+            self._shared_state_records.update(action_result.shared_state_records)
             self._shared_state_history.update(
                 {
                     address: [dict(record)]
-                    for address, record in shared_state_records.items()
+                    for address, record in action_result.shared_state_records.items()
                 }
             )
             next_snapshot = _snapshot(
                 next_snapshot,
-                {**next_snapshot.entries, **action_entries},
+                {**next_snapshot.entries, **action_result.snapshot_entries},
                 self._results,
                 self._history,
                 self._behavior_history,
@@ -243,16 +191,16 @@ class AptlParticipantRuntime:
             changed.append(
                 f"runtime.snapshot.participant-behavior-history.{participant_address}"
             )
-            changed.extend(action_entries)
+            changed.extend(action_result.snapshot_entries)
             if hasattr(next_snapshot, "shared_state_records"):
                 changed.extend(
                     f"runtime.snapshot.shared-state-records.{address}"
-                    for address in shared_state_records
+                    for address in action_result.shared_state_records
                 )
             return ApplyResult(
-                success=success,
+                success=action_result.success,
                 snapshot=next_snapshot,
-                diagnostics=diagnostics,
+                diagnostics=action_result.diagnostics,
                 changed_addresses=changed,
             )
         return ApplyResult(
@@ -400,6 +348,8 @@ class AptlParticipantRuntime:
         action: ParticipantEpisodeControlAction,
         event_type: ParticipantEpisodeHistoryEventType,
     ) -> ApplyResult:
+        """Advance an initialized episode to a replacement running episode."""
+
         now = _utc_now()
         state = ParticipantEpisodeExecutionState(
             participant_address=current.participant_address,
@@ -431,6 +381,8 @@ class AptlParticipantRuntime:
         state: ParticipantEpisodeExecutionState,
         events: list[dict[str, object]],
     ) -> tuple[RuntimeSnapshot, list[str]]:
+        """Persist participant episode state and history in a new snapshot."""
+
         participant_address = state.participant_address
         self._results[participant_address] = state.to_payload()
         self._history.setdefault(participant_address, []).extend(events)
@@ -453,6 +405,8 @@ class AptlParticipantRuntime:
         participant_address: str,
         snapshot: RuntimeSnapshot,
     ) -> ParticipantEpisodeExecutionState | None:
+        """Return the in-memory or snapshot-backed participant episode state."""
+
         payload = self._results.get(
             participant_address
         ) or snapshot.participant_episode_results.get(participant_address)
@@ -460,8 +414,8 @@ class AptlParticipantRuntime:
             return None
         return ParticipantEpisodeExecutionState.from_payload(payload)
 
+    @staticmethod
     def _episode_event(
-        self,
         event_type: ParticipantEpisodeHistoryEventType,
         timestamp: str,
         state: ParticipantEpisodeExecutionState,
@@ -470,6 +424,8 @@ class AptlParticipantRuntime:
         terminal_reason: ParticipantEpisodeTerminalReason | None = None,
         details: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        """Build a participant episode history event payload."""
+
         return ParticipantEpisodeHistoryEvent(
             event_type=event_type,
             timestamp=timestamp,
@@ -481,276 +437,22 @@ class AptlParticipantRuntime:
             details=dict(details or {}),
         ).to_payload()
 
-    def _drive_configured_action(
-        self,
-        participant_address: str,
-        state: ParticipantEpisodeExecutionState,
-    ) -> (
-        tuple[
-            bool,
-            list[dict[str, object]],
-            list[Diagnostic],
-            dict[str, SnapshotEntry],
-            dict[str, dict[str, object]],
-        ]
-        | None
-    ):
-        spec = self.action_specs.get(participant_address)
-        if spec is None:
-            return None
-        action_instance_id = f"{participant_address}.{uuid4().hex}"
-        started_at = _utc_now()
-        attempted = _action_attempted_event(spec, state, action_instance_id, started_at)
-        diagnostics = []
-        stdout = ""
-        stderr = ""
-        returncode = 1
-        try:
-            result = self.deployment_backend.container_exec(
-                spec.source_container,
-                list(spec.command),
-                timeout=spec.timeout_seconds,
-            )
-            stdout = redact(str(getattr(result, "stdout", "")))
-            stderr = redact(str(getattr(result, "stderr", "")))
-            returncode = int(getattr(result, "returncode", 1))
-        except Exception as exc:  # noqa: BLE001 - backend boundary failure -> Diagnostic.
-            stderr = redact(f"{type(exc).__name__}: {exc}")
-            diagnostics.append(
-                _diagnostic(
-                    "aptl.participant-runtime.action-backend-failed",
-                    participant_address,
-                    "Participant action backend call failed: " + stderr,
-                )
-            )
-        finished_at = _utc_now()
-        combined = f"{stdout}\n{stderr}"
-        marker_ok = all(marker in combined for marker in spec.success_markers)
-        success = returncode == 0 and marker_ok
-        observed = _observation_event(
-            spec,
-            state,
-            action_instance_id,
-            finished_at,
-            returncode=returncode,
-            stdout=stdout,
-            stderr=stderr,
-            success=success,
-        )
-        if not success:
-            diagnostics.append(
-                _diagnostic(
-                    "aptl.participant-runtime.action-failed",
-                    participant_address,
-                    (
-                        "Participant action did not observe the expected lab result "
-                        f"(returncode={returncode}, markers={spec.success_markers})."
-                    ),
-                )
-            )
-        return (
-            success,
-            [attempted, observed],
-            diagnostics,
-            _action_snapshot_entries(spec, action_instance_id, success),
-            _shared_state_records(spec, action_instance_id, success),
-        )
-
+    @staticmethod
     def _failed(
-        self,
         snapshot: RuntimeSnapshot,
         participant_address: str,
         message: str,
     ) -> ApplyResult:
+        """Return a failed participant transition result."""
+
         return ApplyResult(
             success=False,
             snapshot=snapshot,
             diagnostics=[
-                _diagnostic(
+                participant_action_diagnostic(
                     "aptl.participant-runtime.invalid-transition",
                     participant_address,
                     message,
                 )
             ],
         )
-
-
-def _action_attempted_event(
-    spec: ParticipantActionSpec,
-    state: ParticipantEpisodeExecutionState,
-    action_instance_id: str,
-    timestamp: str,
-) -> dict[str, object]:
-    return {
-        "event_type": ParticipantBehaviorHistoryEventType.ACTION_ATTEMPTED.value,
-        "timestamp": timestamp,
-        "participant_address": state.participant_address,
-        "episode_id": state.episode_id,
-        "action_instance_id": action_instance_id,
-        "action_contract_address": spec.action_contract_address,
-        "observation_boundary_address": None,
-        "observation_status": None,
-        "actor_provenance": spec.actor_provenance,
-        "lifecycle_phase": ParticipantRuntimeLifecyclePhase.EXECUTION_ATTEMPT.value,
-        "phase_realization": ParticipantPhaseRealization.RUNTIME_MEDIATED.value,
-        "admission_disposition": None,
-        "operation_ref": f"container_exec:{spec.source_container}",
-        "operation_state": ParticipantLifecycleOperationState.RUNNING.value,
-        "state_transition_kind": None,
-        "post_state_digest": None,
-        "joint_action_set_id": None,
-        "realized_order": None,
-        "interaction_ref": None,
-        "interaction_class": "shared_state_change",
-        "shared_state_refs": list(spec.target_refs),
-        "details": {
-            "source_container": spec.source_container,
-            "command": list(spec.command),
-            "target_refs": list(spec.target_refs),
-        },
-    }
-
-
-def _observation_event(
-    spec: ParticipantActionSpec,
-    state: ParticipantEpisodeExecutionState,
-    action_instance_id: str,
-    timestamp: str,
-    *,
-    returncode: int,
-    stdout: str,
-    stderr: str,
-    success: bool,
-) -> dict[str, object]:
-    digest = hashlib.sha256(f"{stdout}\n{stderr}".encode("utf-8")).hexdigest()
-    return {
-        "event_type": ParticipantBehaviorHistoryEventType.OBSERVATION_EMITTED.value,
-        "timestamp": timestamp,
-        "participant_address": state.participant_address,
-        "episode_id": state.episode_id,
-        "action_instance_id": action_instance_id,
-        "action_contract_address": spec.action_contract_address,
-        "observation_boundary_address": spec.observation_boundary_address,
-        "observation_status": ParticipantObservationStatus.TERMINAL.value,
-        "actor_provenance": spec.actor_provenance,
-        "lifecycle_phase": ParticipantRuntimeLifecyclePhase.OBSERVATION_EMISSION.value,
-        "phase_realization": ParticipantPhaseRealization.OBSERVED.value,
-        "admission_disposition": None,
-        "operation_ref": None,
-        "operation_state": None,
-        "state_transition_kind": None,
-        "post_state_digest": f"sha256:{digest}",
-        "joint_action_set_id": None,
-        "realized_order": None,
-        "interaction_ref": None,
-        "interaction_class": "shared_state_change",
-        "shared_state_refs": list(spec.target_refs),
-        "details": {
-            "returncode": returncode,
-            "success": success,
-            "stdout_excerpt": stdout[:2000],
-            "stderr_excerpt": stderr[:2000],
-            "success_markers": list(spec.success_markers),
-        },
-    }
-
-
-def _action_snapshot_entries(
-    spec: ParticipantActionSpec,
-    action_instance_id: str,
-    success: bool,
-) -> dict[str, SnapshotEntry]:
-    return {
-        PARTICIPANT_BEHAVIOR_ADDRESS: SnapshotEntry(
-            address=PARTICIPANT_BEHAVIOR_ADDRESS,
-            domain=RuntimeDomain.PARTICIPANT,
-            resource_type="participant-behavior",
-            payload={
-                "action_contract_addresses": [spec.action_contract_address],
-                "observation_boundary_addresses": [
-                    spec.observation_boundary_address
-                ],
-                "shared_state_refs": list(spec.target_refs),
-            },
-        ),
-        spec.action_contract_address: SnapshotEntry(
-            address=spec.action_contract_address,
-            domain=RuntimeDomain.PARTICIPANT,
-            resource_type="participant-action-contract",
-            payload={
-                "name": "APTL Kali victim SSH probe",
-                "action_name": "kali-victim-ssh-probe",
-                "semantic_version": "1.0.0",
-                "lifecycle_state": "active",
-                "behavioral_granularity": "single-command",
-                "interaction_classes": ["shared_state_change"],
-                "shared_state_refs": list(spec.target_refs),
-                "source_container": spec.source_container,
-                "command": list(spec.command),
-                "success_markers": list(spec.success_markers),
-                "target_refs": list(spec.target_refs),
-            },
-        ),
-        spec.observation_boundary_address: SnapshotEntry(
-            address=spec.observation_boundary_address,
-            domain=RuntimeDomain.PARTICIPANT,
-            resource_type="participant-observation-boundary",
-            payload={
-                "name": "APTL Kali victim SSH observation boundary",
-                "boundary_name": "kali-victim-ssh-probe-output",
-                "projection_basis": "nmap grepable output excerpt",
-                "observable_refs": list(spec.target_refs),
-                "evidence_refs": [action_instance_id],
-                "disclosed_refs": list(spec.target_refs),
-                "realized_view_disclosure": "terminal-observation",
-                "source_container": spec.source_container,
-                "target_refs": list(spec.target_refs),
-            },
-        ),
-        action_instance_id: SnapshotEntry(
-            address=action_instance_id,
-            domain=RuntimeDomain.PARTICIPANT,
-            resource_type="participant-action-instance",
-            payload={
-                "action_contract_address": spec.action_contract_address,
-                "observation_boundary_address": spec.observation_boundary_address,
-                "actor_provenance": spec.actor_provenance,
-                "success": success,
-            },
-            ordering_dependencies=(spec.action_contract_address,),
-            refresh_dependencies=(spec.observation_boundary_address,),
-            status="ready" if success else "failed",
-        ),
-    }
-
-
-def _shared_state_records(
-    spec: ParticipantActionSpec,
-    action_instance_id: str,
-    success: bool,
-) -> dict[str, dict[str, object]]:
-    records: dict[str, dict[str, object]] = {}
-    for ref in spec.target_refs:
-        state_kind = "network-service" if ref.startswith("tcp:") else "container"
-        digest = hashlib.sha256(
-            f"{ref}:{action_instance_id}:{success}".encode("utf-8")
-        ).hexdigest()
-        records[ref] = {
-            "state_address": ref,
-            "state_scope": "aptl-techvault-live-range",
-            "state_kind": state_kind,
-            "ordering_basis": "participant-action-observation",
-            "conflict_policy": "single-writer-observation",
-            "provenance": spec.actor_provenance,
-            "digest": f"sha256:{digest}",
-            "accesses": [
-                {
-                    "state_address": ref,
-                    "access_kind": "read",
-                    "read_digest": f"sha256:{digest}",
-                    "operation_ref": f"container_exec:{spec.source_container}",
-                }
-            ],
-            "evidence_refs": [action_instance_id],
-        }
-    return records

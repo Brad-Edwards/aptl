@@ -8,15 +8,15 @@
     "operation_id": "operation-id-redacted",
     "domain": "participant",
     "accepted": true,
-    "submitted_at": "2026-06-25T16:35:18.161985Z",
+    "submitted_at": "2026-06-25T17:01:58.677436Z",
     "diagnostics": []
   },
   "operation_status": {
     "operation_id": "operation-id-redacted",
     "domain": "participant",
     "state": "succeeded",
-    "submitted_at": "2026-06-25T16:35:18.161985Z",
-    "updated_at": "2026-06-25T16:35:18.351833Z",
+    "submitted_at": "2026-06-25T17:01:58.677436Z",
+    "updated_at": "2026-06-25T17:01:58.891076Z",
     "diagnostics": [],
     "changed_addresses": [
       "runtime.snapshot.participant-episode-results.participant.behavior.techvault.kali-victim-ssh-probe",
@@ -45,8 +45,8 @@
       "sequence_number": 0,
       "status": "running",
       "terminal_reason": null,
-      "initialized_at": "2026-06-25T16:35:18.162077Z",
-      "updated_at": "2026-06-25T16:35:18.162077Z",
+      "initialized_at": "2026-06-25T17:01:58.677519Z",
+      "updated_at": "2026-06-25T17:01:58.677519Z",
       "terminated_at": null,
       "last_control_action": "initialize",
       "previous_episode_id": null
@@ -56,7 +56,7 @@
     "participant.behavior.techvault.kali-victim-ssh-probe": [
       {
         "event_type": "episode_initialized",
-        "timestamp": "2026-06-25T16:35:18.162077Z",
+        "timestamp": "2026-06-25T17:01:58.677519Z",
         "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
         "episode_id": "episode-id-redacted",
         "sequence_number": 0,
@@ -66,7 +66,7 @@
       },
       {
         "event_type": "episode_running",
-        "timestamp": "2026-06-25T16:35:18.162077Z",
+        "timestamp": "2026-06-25T17:01:58.677519Z",
         "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
         "episode_id": "episode-id-redacted",
         "sequence_number": 0,
@@ -80,7 +80,7 @@
     "participant.behavior.techvault.kali-victim-ssh-probe": [
       {
         "event_type": "action_attempted",
-        "timestamp": "2026-06-25T16:35:18.162178Z",
+        "timestamp": "2026-06-25T17:01:58.677598Z",
         "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
         "episode_id": "episode-id-redacted",
         "action_instance_id": "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted",
@@ -125,7 +125,7 @@
       },
       {
         "event_type": "observation_emitted",
-        "timestamp": "2026-06-25T16:35:18.351105Z",
+        "timestamp": "2026-06-25T17:01:58.890527Z",
         "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
         "episode_id": "episode-id-redacted",
         "action_instance_id": "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted",
@@ -152,7 +152,7 @@
         "details": {
           "returncode": 0,
           "success": true,
-          "stdout_excerpt": "# Nmap 7.99 scan initiated Thu Jun 25 16:35:18 2026 as: /usr/lib/nmap/nmap -p 22 -Pn --open -oG - 172.20.2.20\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tStatus: Up\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tPorts: 22/open/tcp//ssh///\n# Nmap done at Thu Jun 25 16:35:18 2026 -- 1 IP address (1 host up) scanned in 0.11 seconds\n",
+          "stdout_excerpt": "# Nmap 7.99 scan initiated Thu Jun 25 17:01:58 2026 as: /usr/lib/nmap/nmap -p 22 -Pn --open -oG - 172.20.2.20\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tStatus: Up\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tPorts: 22/open/tcp//ssh///\n# Nmap done at Thu Jun 25 17:01:58 2026 -- 1 IP address (1 host up) scanned in 0.11 seconds\n",
           "stderr_excerpt": "",
           "success_markers": [
             "22/open"
@@ -266,12 +266,12 @@
     }
   },
   "post_action_range_snapshot": {
-    "timestamp": "2026-06-25T16:35:18.617454+00:00",
+    "timestamp": "2026-06-25T17:01:59.183577+00:00",
     "containers": [
       {
         "name": "aptl-victim",
         "image": "aptl-victim",
-        "status": "Up 52 seconds (healthy)",
+        "status": "Up 54 seconds (healthy)",
         "health": "healthy",
         "networks": {
           "aptl_aptl-internal": "172.20.2.20"
@@ -284,7 +284,7 @@
       {
         "name": "aptl-wazuh-dashboard",
         "image": "wazuh/wazuh-dashboard:4.12.0",
-        "status": "Up 52 seconds (healthy)",
+        "status": "Up 54 seconds (healthy)",
         "health": "healthy",
         "networks": {
           "aptl_aptl-security": "172.20.0.11"
@@ -334,18 +334,6 @@
         ]
       },
       {
-        "name": "aptl-grafana-otel",
-        "image": "grafana/grafana:11.6.0",
-        "status": "Up About a minute",
-        "health": "",
-        "networks": {
-          "aptl_aptl-security": "172.20.0.52"
-        },
-        "ports": [
-          "127.0.0.1:3100->3000/tcp"
-        ]
-      },
-      {
         "name": "aptl-otel-collector",
         "image": "otel/opentelemetry-collector-contrib:0.123.0",
         "status": "Up About a minute (healthy)",
@@ -356,6 +344,18 @@
         "ports": [
           "127.0.0.1:4317-4318->4317-4318/tcp",
           "55678-55679/tcp"
+        ]
+      },
+      {
+        "name": "aptl-grafana-otel",
+        "image": "grafana/grafana:11.6.0",
+        "status": "Up About a minute",
+        "health": "",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.52"
+        },
+        "ports": [
+          "127.0.0.1:3100->3000/tcp"
         ]
       },
       {

@@ -206,11 +206,7 @@ def _run_execution_plan(
     control_plane = RuntimeControlPlane(
         target, initial_snapshot=execution_plan.base_snapshot
     )
-    (
-        failure,
-        realization_details,
-        selected_profiles,
-    ) = _apply_provisioning_and_orchestration(
+    failure, realization_details, selected_profiles = _apply_provisioning_and_orchestration(
         control_plane,
         execution_plan,
         target,

@@ -8,7 +8,7 @@
   ],
   "command": "uv run aptl lab start --scenario techvault-attacker-target",
   "readiness_outcome": "Lab is ready.",
-  "boot_elapsed_seconds": 103,
+  "boot_elapsed_seconds": 120,
   "selected_profiles": [
     "wazuh",
     "victim",

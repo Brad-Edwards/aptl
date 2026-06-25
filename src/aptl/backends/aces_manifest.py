@@ -39,7 +39,8 @@ from aces_contracts.vocabulary import WorkflowFeature, WorkflowStatePredicateFea
 
 try:
     from aces_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
-except ImportError:  # pragma: no cover - older ACES packages still expose validation.
+except ImportError:
+    # Older ACES packages still expose validation without manifest authority.
     BACKEND_SUPPORTED_CONTRACT_IDS = ()
 
 from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS

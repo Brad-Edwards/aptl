@@ -5,8 +5,8 @@ of the SDL specification. They define how objectives are validated
 against live infrastructure (Wazuh alerts, command output, file
 existence).
 
-For the SDL specification's scoring model, see ``aptl.core.sdl.scoring``
-(OCR's conditions → metrics → evaluations → TLOs → goals pipeline).
+ACES owns scenario scoring semantics after the SDL cutover. These local models
+remain support types for APTL-side validation and operator-facing helpers.
 """
 
 import re

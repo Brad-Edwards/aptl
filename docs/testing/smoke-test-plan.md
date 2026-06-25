@@ -328,13 +328,13 @@ Set `"mail": true` in `aptl.json`, restart.
 | CFG-02 | All new profiles listed | enterprise, soc in list | Check output includes `enterprise`, `soc` |
 | CFG-03 | Unknown profile rejected | Validation error | `python -c "from aptl.core.config import ContainerSettings; ContainerSettings(bogus=True)"` should raise |
 
-### 6c. Scenario Definitions
+### 6c. ACES Scenario Selection
 
 | ID | Test | Expected | How |
 |----|------|----------|-----|
-| SCEN-01 | All scenarios parse cleanly | No validation errors | `python -c "from aptl.core.scenarios import find_scenarios, load_scenario; from pathlib import Path; paths = find_scenarios(Path('scenarios')); [load_scenario(p) for p in paths]; print(f'{len(paths)} scenarios loaded')"` |
-| SCEN-02 | webapp-compromise has 6 steps | 6 AttackStep objects | `python -c "from aptl.core.scenarios import load_scenario; from pathlib import Path; s = load_scenario(Path('scenarios/webapp-compromise.yaml')); print(f'{len(s.steps)} steps')"` |
-| SCEN-03 | prime-enterprise has 13 steps | 13 AttackStep objects with vulnerability descriptions | `python -c "from aptl.core.scenarios import load_scenario; from pathlib import Path; s = load_scenario(Path('scenarios/prime-enterprise.yaml')); print(f'{len(s.steps)} steps'); assert all(st.vulnerability for st in s.steps)"` |
+| SCEN-01 | Curated catalog lists ACES SDL inputs | Catalog rows resolve under the project and end in `.sdl.yaml` | `aptl lab scenarios` |
+| SCEN-02 | Default TechVault startup input parses through ACES | No ACES parser errors | `python -c "from aces_sdl import parse_sdl_file; from pathlib import Path; parse_sdl_file(Path('scenarios/techvault-operational.sdl.yaml'))"` |
+| SCEN-03 | Archived legacy YAML is reference-only | Archived files are not catalog rows | `python -c "from aptl.core.scenario_catalog import load_scenario_catalog; from pathlib import Path; c = load_scenario_catalog(Path('.')); assert all('/archive/' not in e.path for e in c.scenarios)"` |
 
 ---
 

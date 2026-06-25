@@ -91,18 +91,9 @@ nav:
     - Reverse Engineering Container: components/reverse-engineering-container.md
     - MCP Integration: components/mcp-integration.md
     - MCP Smoke-Test Protocol: components/mcp-smoke-test-protocol.md
-  - Scenarios (SDL):
-    - Overview: sdl/index.md
-    - Sections: sdl/sections.md
-    - Parser: sdl/parser.md
-    - Validation: sdl/validation.md
-    - Runtime Architecture: sdl/runtime-architecture.md
-    - Complex Scenarios: sdl/complex-scenarios.md
-    - Complex Scenario Authoring Notes: sdl/complex-scenario-authoring-notes.md
-    - Curated Variants: sdl/techvault-curated-variants.md
-    - Precedents: sdl/precedents.md
-    - Testing: sdl/testing.md
-    - Limitations: sdl/limitations.md
+  - Scenarios:
+    - Authoring Boundary: sdl/index.md
+    - Curated ACES Variants: sdl/techvault-curated-variants.md
   - ACES:
     - Parity Inventory: aces/parity-inventory.md
     - TechVault SDL Authoring Preflight: aces/techvault-sdl-authoring-preflight.md

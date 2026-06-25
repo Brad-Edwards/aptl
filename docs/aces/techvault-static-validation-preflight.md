@@ -138,8 +138,9 @@ checks by changing inputs, not by editing a TechVault-only validator.
 - Do not implement the gate, manifest replacement, conformance wiring, parity
   assertions, live validation, cutover, requirement transitions, or default
   scenario flip in this preflight.
-- Do not delete `aptl.core.sdl`, Pydantic scenario models, or legacy
-  `scenarios/*.yaml` paths before the single Phase B cutover PR.
+- This preflight did not perform the later ADR-035 cleanup. The local parser
+  and legacy scenario paths are now removed or archived by the post-cutover
+  reconciliation work.
 - Do not broaden the backend profile beyond `provisioning-only`; #311 and #312
   own profile promotion.
 - Do not redesign Docker Compose, generated service config, endpoint registry,

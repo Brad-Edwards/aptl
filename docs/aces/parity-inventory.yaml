@@ -130,7 +130,7 @@ required_surface_coverage:
 
 rows:
   # ---- surface: scenarios_yaml ------------------------------------------
-  # One row per top-level key in each scenarios/*.yaml file. Six legacy
+  # One row per top-level key in each scenarios/archive/*.yaml file. Six legacy
   # scenarios: ad-domain-compromise, detect-brute-force,
   # lateral-movement-data-theft, prime-enterprise, recon-nmap-scan,
   # webapp-compromise.
@@ -345,7 +345,7 @@ rows:
 
   - id: scen.ad-domain-compromise.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header (id, name, description, tags)
@@ -356,7 +356,7 @@ rows:
 
   - id: scen.ad-domain-compromise.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -367,7 +367,7 @@ rows:
 
   - id: scen.ad-domain-compromise.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes (lab realization side)
@@ -378,7 +378,7 @@ rows:
 
   - id: scen.ad-domain-compromise.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile (orchestration-evaluation)
@@ -389,7 +389,7 @@ rows:
 
   - id: scen.ad-domain-compromise.attack_chain
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: attack_chain
     category: aces_sdl
     aces_target: ACES injects / scenario flow
@@ -400,7 +400,7 @@ rows:
 
   - id: scen.ad-domain-compromise.steps
     surface: scenarios_yaml
-    legacy_source: scenarios/ad-domain-compromise.yaml
+    legacy_source: scenarios/archive/ad-domain-compromise.yaml
     legacy_field: steps
     category: aces_sdl
     aces_target: ACES scenario steps / workflow
@@ -411,7 +411,7 @@ rows:
 
   - id: scen.detect-brute-force.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header
@@ -422,7 +422,7 @@ rows:
 
   - id: scen.detect-brute-force.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -433,7 +433,7 @@ rows:
 
   - id: scen.detect-brute-force.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes (lab realization side)
@@ -444,7 +444,7 @@ rows:
 
   - id: scen.detect-brute-force.preconditions
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: preconditions
     category: aces_sdl
     aces_target: ACES conditions (pre-conditions)
@@ -455,7 +455,7 @@ rows:
 
   - id: scen.detect-brute-force.objectives
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: objectives
     category: aces_schema_profile_gap
     aces_target: ACES objectives (evaluator profile)
@@ -466,7 +466,7 @@ rows:
 
   - id: scen.detect-brute-force.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/detect-brute-force.yaml
+    legacy_source: scenarios/archive/detect-brute-force.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile
@@ -477,7 +477,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header
@@ -488,7 +488,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -499,7 +499,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes (lab realization side)
@@ -510,7 +510,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile
@@ -521,7 +521,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.attack_chain
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: attack_chain
     category: aces_sdl
     aces_target: ACES injects / scenario flow
@@ -532,7 +532,7 @@ rows:
 
   - id: scen.lateral-movement-data-theft.steps
     surface: scenarios_yaml
-    legacy_source: scenarios/lateral-movement-data-theft.yaml
+    legacy_source: scenarios/archive/lateral-movement-data-theft.yaml
     legacy_field: steps
     category: aces_sdl
     aces_target: ACES scenario steps / workflow
@@ -543,7 +543,7 @@ rows:
 
   - id: scen.prime-enterprise.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header
@@ -554,7 +554,7 @@ rows:
 
   - id: scen.prime-enterprise.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -565,7 +565,7 @@ rows:
 
   - id: scen.prime-enterprise.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes
@@ -576,7 +576,7 @@ rows:
 
   - id: scen.prime-enterprise.defenses
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: defenses
     category: aptl_backend_responsibility
     aces_target: APTL backend defensive-stack provisioning (no ACES SDL equivalent yet)
@@ -587,7 +587,7 @@ rows:
 
   - id: scen.prime-enterprise.objectives
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: objectives
     category: aces_schema_profile_gap
     aces_target: ACES objectives (evaluator profile)
@@ -598,7 +598,7 @@ rows:
 
   - id: scen.prime-enterprise.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile
@@ -609,7 +609,7 @@ rows:
 
   - id: scen.prime-enterprise.attack_chain
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: attack_chain
     category: aces_sdl
     aces_target: ACES injects / scenario flow
@@ -620,7 +620,7 @@ rows:
 
   - id: scen.prime-enterprise.steps
     surface: scenarios_yaml
-    legacy_source: scenarios/prime-enterprise.yaml
+    legacy_source: scenarios/archive/prime-enterprise.yaml
     legacy_field: steps
     category: aces_sdl
     aces_target: ACES scenario steps / workflow
@@ -631,7 +631,7 @@ rows:
 
   - id: scen.recon-nmap-scan.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header
@@ -642,7 +642,7 @@ rows:
 
   - id: scen.recon-nmap-scan.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -653,7 +653,7 @@ rows:
 
   - id: scen.recon-nmap-scan.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes
@@ -664,7 +664,7 @@ rows:
 
   - id: scen.recon-nmap-scan.preconditions
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: preconditions
     category: aces_sdl
     aces_target: ACES conditions (pre-conditions)
@@ -675,7 +675,7 @@ rows:
 
   - id: scen.recon-nmap-scan.objectives
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: objectives
     category: aces_schema_profile_gap
     aces_target: ACES objectives (evaluator profile)
@@ -686,7 +686,7 @@ rows:
 
   - id: scen.recon-nmap-scan.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/recon-nmap-scan.yaml
+    legacy_source: scenarios/archive/recon-nmap-scan.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile
@@ -697,7 +697,7 @@ rows:
 
   - id: scen.webapp-compromise.metadata
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: metadata
     category: aces_sdl
     aces_target: ACES scenario header
@@ -708,7 +708,7 @@ rows:
 
   - id: scen.webapp-compromise.mode
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: mode
     category: cutover_only_archive
     aces_target: n/a
@@ -719,7 +719,7 @@ rows:
 
   - id: scen.webapp-compromise.containers
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: containers
     category: aptl_backend_responsibility
     aces_target: ACES infrastructure / nodes
@@ -730,7 +730,7 @@ rows:
 
   - id: scen.webapp-compromise.scoring
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: scoring
     category: aces_schema_profile_gap
     aces_target: ACES evaluator profile
@@ -741,7 +741,7 @@ rows:
 
   - id: scen.webapp-compromise.attack_chain
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: attack_chain
     category: aces_sdl
     aces_target: ACES injects / scenario flow
@@ -752,7 +752,7 @@ rows:
 
   - id: scen.webapp-compromise.steps
     surface: scenarios_yaml
-    legacy_source: scenarios/webapp-compromise.yaml
+    legacy_source: scenarios/archive/webapp-compromise.yaml
     legacy_field: steps
     category: aces_sdl
     aces_target: ACES scenario steps / workflow

@@ -153,9 +153,8 @@ separate profile surfaces.
 
 - Do not implement the orchestrator, manifest promotion, tests, CI changes,
   run archive writes, or public start-path changes in this preflight.
-- Do not perform Phase B cutover, flip the default scenario, archive legacy
-  `scenarios/*.yaml`, delete `aptl.core.sdl`, or delete Pydantic
-  `ScenarioDefinition` models.
+- This preflight did not perform the later Phase B cutover cleanup, default
+  scenario flip, legacy scenario archival, or local parser/model removal.
 - Do not promote to orchestration-evaluation, implement objective scoring,
   publish evaluator contracts, or claim participant-runtime support; those are
   #312 or later.

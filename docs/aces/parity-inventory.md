@@ -1,10 +1,10 @@
 # ACES SDL Parity Inventory (SCN-010)
 
-This directory holds the authoritative parity inventory that the
-SCN-010 specification issues (#319—#324) and the eventual ACES-SDL
-cutover PR must cite when claiming TechVault parity. It is scoped by
-ADR-035, sections **Parity Inventory Boundary** and **ACES Backend
-Integration Guardrails**.
+This directory holds the authoritative parity inventory that the SCN-010
+specification issues (#319-#324), the ACES-SDL cutover, and post-cutover
+cleanup work cite when claiming TechVault parity. It is scoped by ADR-035,
+sections **Parity Inventory Boundary** and **ACES Backend Integration
+Guardrails**.
 
 The canonical artifact is the machine-readable YAML:
 
@@ -19,18 +19,19 @@ a row.
 
 This inventory is an **audit surface**. It is:
 
-- a row-per-legacy-field map from APTL's current scenario / lab /
+- a row-per-legacy-field map from historical APTL scenario / lab /
   defensive-stack surfaces to the post-cutover owner;
 - the document SCN-010 implementation issues cite to prove they have
   not silently dropped a legacy capability;
-- the gate the Phase B cutover PR uses to demonstrate parity.
+- an audit record proving the Phase B cutover and legacy cleanup did not drop
+  covered TechVault behavior.
 
 It is **not**:
 
 - a runtime schema (the runtime side is ACES SDL + the APTL backend
   manifest);
-- a second `ScenarioDefinition` (Pydantic models stay in
-  `aptl.core.sdl` until cutover, then are deleted, per ADR-035);
+- a second scenario schema or parser; the APTL-local SDL models were removed
+  after cutover per ADR-035;
 - a duplicate `docker-compose.yml` parser (the canonical compose
   inventory is the file itself, queried by `tests/test_consistency.py`);
 - a parallel secret taxonomy, readiness taxonomy, or exception
@@ -47,7 +48,7 @@ five buckets ADR-035 enumerates:
 | `aces_schema_profile_gap` | The concept belongs in ACES rather than APTL but is not yet covered. Row MUST cite an upstream ACES follow-up or an APTL issue blocked on one. |
 | `aptl_backend_responsibility` | Backend realization detail: Docker Compose profiles, generated config, lab-managed TLS, SOC seed material, deployment inventory, readiness classification, snapshots, run archive persistence, or host/container interaction. |
 | `validation_gate` | The surface is not authored but must be proven by conformance, static parity tests, live lab validation, snapshots, or run-archive assertions. |
-| `cutover_only_archive` | The legacy field is retained only as reference material after the Phase B move to `scenarios/archive/`. |
+| `cutover_only_archive` | The legacy field is retained only as reference material after the move to `scenarios/archive/`. |
 
 Adding a category is a deliberate change to ADR-035 *and*
 `tests/test_parity_inventory.py` *and* `parity-inventory.yaml`'s
@@ -59,7 +60,7 @@ Every row also belongs to one of these legacy-surface buckets. The
 schema test asserts that every bucket carries at least one row, so the
 inventory cannot silently drop a surface area:
 
-- `scenarios_yaml`: top-level keys of files under `scenarios/*.yaml`
+- `scenarios_yaml`: top-level keys of archived legacy files under `scenarios/archive/`
 - `docker_compose_topology`: profiles, networks, named volumes
 - `aptl_config`: `AptlConfig` / `ContainerSettings` / `LabSettings`
 - `env_vars_and_secrets`: `EnvVars` fields and the placeholder gate

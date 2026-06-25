@@ -665,35 +665,21 @@ Read it as design intent, not as documentation of today's behavior.
 in Ground Control describes a `mode (red/blue/purple)` field on each
 scenario YAML that would gate which posture defaults apply per run.
 
-**Today's reality is split:**
+**Today's reality is ACES-only for supported startup:**
 
-- Multiple scenario YAML files **do carry a `mode:` field** at the
-  top level—for example
-  [`scenarios/prime-enterprise.yaml:50`](https://github.com/Brad-Edwards/aptl/blob/main/scenarios/prime-enterprise.yaml)
-  declares `mode: purple`, and similar declarations exist in
-  `ad-domain-compromise.yaml`, `detect-brute-force.yaml`,
-  `lateral-movement-data-theft.yaml`, `webapp-compromise.yaml`, and
-  `recon-nmap-scan.yaml`. These were authored against the
-  pre-refactor scenario format.
-- The current post-refactor Scenario SDL
-  ([`src/aptl/core/sdl/scenario.py`](https://github.com/Brad-Edwards/aptl/blob/main/src/aptl/core/sdl/scenario.py))
-  has **no `mode` field**. The SDL post-refactor (ADRs
-  [014](../adrs/adr-014-scenario-description-language.md),
-  [015](../adrs/adr-015-declarative-sdl-objectives.md),
-  [017](../adrs/adr-017-sdl-runtime-layer.md)) defines `name`,
-  `description`, and 21 OCR/extended sections—none named `mode`.
-  Combined with `extra="forbid"` on `SDLModel`
-  ([`src/aptl/core/sdl/_base.py:14`](https://github.com/Brad-Edwards/aptl/blob/main/src/aptl/core/sdl/_base.py)),
-  these scenarios will fail Pydantic structural validation if loaded
-  through `parse_sdl`. They are effectively pre-refactor fixtures.
+- Historical APTL-local scenario YAML files now live under
+  `scenarios/archive/` and are reference-only. They are not catalog rows,
+  startup inputs, or runtime schema examples.
+- Current startup selection uses `scenarios/catalog.json`,
+  `aptl.core.scenario_catalog.resolve_scenario_selection()`, and ACES SDL
+  parsing. The curated TechVault ACES SDL files do not define a local
+  per-run posture mode field.
 
 **No runtime mode-gating exists.** Even when a scenario YAML's `mode:`
-is read, no code branches on the value to apply per-mode posture
-defaults. The split is being reconciled in
-[issue #263](https://github.com/Brad-Edwards/aptl/issues/263)—the
-options there are to update SCN-001's vocabulary to match the current
-SDL, restore the missing fields, or split SCN-001 into a current-state
-piece plus a forward-looking mode-gating requirement.
+appears in archived reference fixtures, supported startup code does not read it
+and no code branches on the value to apply per-mode posture defaults. Any
+future posture-mode feature must be designed against ACES SDL and the catalog
+handoff, not by reviving the archived YAML format.
 
 When mode lands as a real SDL feature, the intended contract is:
 

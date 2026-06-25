@@ -109,7 +109,9 @@ def _node(name, profiles, aliases=None, declared_health=None):
     }
 
 
-def _container(name, *, status="Up 2 minutes (healthy)", health="healthy", networks=None):
+def _container(
+    name, *, status="Up 2 minutes (healthy)", health="healthy", networks=None
+):
     return {
         "name": name,
         "status": status,
@@ -118,7 +120,9 @@ def _container(name, *, status="Up 2 minutes (healthy)", health="healthy", netwo
     }
 
 
-def _wire_boot(monkeypatch, *, outcome=StartupOutcome.READY, realization=None, snapshot=None):
+def _wire_boot(
+    monkeypatch, *, outcome=StartupOutcome.READY, realization=None, snapshot=None
+):
     """Monkeypatch the boot path's leaf dependencies for the happy path."""
     realization = realization or _Realization(
         [_node("webapp", ["dmz"])], ["dmz", "soc"]
@@ -196,17 +200,23 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     # (the `*a, **k` shape would silently mask a missing kwarg — the live smoke
     # run caught exactly that for `check_scenario_variation(state=...)`).
     def static(scenario_path, *, project_dir, config, options):
-        return object(), LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True)
+        return object(), LiveGateCheck(
+            "static_prerequisite", CATEGORY_ACES_SPECIFICATION, True
+        )
 
     def inputs(scenario_path, *, project_dir, options):
-        return LiveGateCheck("boot_inputs_match_public_path", CATEGORY_BACKEND_INSTANTIATION, True)
+        return LiveGateCheck(
+            "boot_inputs_match_public_path", CATEGORY_BACKEND_INSTANTIATION, True
+        )
 
     def boot(scenario, *, project_dir, config, options, state, scenario_path):
         assert scenario_path == SCENARIO
         return LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
     def readiness(*, state):
-        return LiveGateCheck("defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, True)
+        return LiveGateCheck(
+            "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, True
+        )
 
     def reachability(*, project_dir, config, state):
         return LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True)
@@ -214,11 +224,15 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     def telemetry(*, project_dir, config, options, state):
         return LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True)
 
-    def archive(scenario_path, *, project_dir, config, run_store, run_id, state, prior_checks):
+    def archive(
+        scenario_path, *, project_dir, config, run_store, run_id, state, prior_checks
+    ):
         return LiveGateCheck("run_archive_manifest", CATEGORY_EVIDENCE_CAPTURE, True)
 
     def variation(*, project_dir, config, state):
-        return LiveGateCheck("scenario_variation", CATEGORY_BACKEND_INTERPRETATION, True)
+        return LiveGateCheck(
+            "scenario_variation", CATEGORY_BACKEND_INTERPRETATION, True
+        )
 
     monkeypatch.setattr(lgc, "check_static_prerequisite", static)
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
@@ -254,7 +268,12 @@ def test_validate_live_deployment_short_circuits_on_static_failure(monkeypatch):
     monkeypatch.setattr(
         lgc,
         "check_static_prerequisite",
-        lambda *a, **k: (None, LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, False, ("bad",))),
+        lambda *a, **k: (
+            None,
+            LiveGateCheck(
+                "static_prerequisite", CATEGORY_ACES_SPECIFICATION, False, ("bad",)
+            ),
+        ),
     )
     report = validate_live_deployment(
         SCENARIO, project_dir=PROJECT_ROOT, config=_config()
@@ -267,19 +286,26 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
     monkeypatch.setattr(
         lgc,
         "check_static_prerequisite",
-        lambda *a, **k: (object(), LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True)),
+        lambda *a, **k: (
+            object(),
+            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+        ),
     )
     monkeypatch.setattr(
         lgc,
         "check_aces_driven_boot",
-        lambda *a, **k: LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)),
+        lambda *a, **k: LiveGateCheck(
+            "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)
+        ),
     )
     archive_calls = []
     monkeypatch.setattr(
         lgc,
         "check_run_archive_manifest",
-        lambda *a, **k: archive_calls.append(1)
-        or LiveGateCheck("run_archive_manifest", CATEGORY_EVIDENCE_CAPTURE, True),
+        lambda *a, **k: (
+            archive_calls.append(1)
+            or LiveGateCheck("run_archive_manifest", CATEGORY_EVIDENCE_CAPTURE, True)
+        ),
     )
     report = validate_live_deployment(
         SCENARIO, project_dir=PROJECT_ROOT, config=_config()
@@ -331,7 +357,11 @@ def test_check_aces_driven_boot_happy_populates_state(monkeypatch):
     _wire_boot(monkeypatch)
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
-        object(), project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions(), state=state
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
     )
     assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
     assert state.realization_details["nodes"]
@@ -340,11 +370,17 @@ def test_check_aces_driven_boot_happy_populates_state(monkeypatch):
 
 
 def test_check_aces_driven_boot_fails_on_interpretation_error(monkeypatch):
-    bad = _Realization([_node("webapp", ["dmz"])], ["dmz"], diagnostics=(_Diag("error"),))
+    bad = _Realization(
+        [_node("webapp", ["dmz"])], ["dmz"], diagnostics=(_Diag("error"),)
+    )
     _wire_boot(monkeypatch, realization=bad)
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
-        object(), project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions(), state=state
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
     )
     assert not check.passed and check.category == CATEGORY_BACKEND_INTERPRETATION
 
@@ -353,7 +389,11 @@ def test_check_aces_driven_boot_fails_on_empty_realization(monkeypatch):
     _wire_boot(monkeypatch, realization=_Realization([], []))
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
-        object(), project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions(), state=state
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
     )
     assert not check.passed
     assert any("no ACES nodes" in d for d in check.diagnostics)
@@ -363,7 +403,11 @@ def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
     _wire_boot(monkeypatch, outcome=StartupOutcome.FAILED)
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
-        object(), project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions(), state=state
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
     )
     assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
     assert any("public lab start failed" in d for d in check.diagnostics)
@@ -375,8 +419,9 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     monkeypatch.setattr(
         lgp,
         "clean_boot_lab",
-        lambda *a, **k: boots.append(1)
-        or LabResult(success=True, outcome=StartupOutcome.READY),
+        lambda *a, **k: (
+            boots.append(1) or LabResult(success=True, outcome=StartupOutcome.READY)
+        ),
     )
     state = LiveGateState()
     check = lgc.check_aces_driven_boot(
@@ -422,10 +467,10 @@ def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeyp
     monkeypatch.setattr(
         lgp,
         "clean_boot_lab",
-        lambda p, *, remove_volumes=True, scenario_path=None: boots.append(
-            (p, scenario_path)
-        )
-        or LabResult(success=True, outcome=StartupOutcome.READY),
+        lambda p, *, remove_volumes=True, scenario_path=None: (
+            boots.append((p, scenario_path))
+            or LabResult(success=True, outcome=StartupOutcome.READY)
+        ),
     )
     state = LiveGateState()
     selected = PROJECT_ROOT / "scenarios" / "custom.sdl.yaml"
@@ -472,7 +517,9 @@ def test_boot_inputs_pass_for_full_inventory_scenario_when_profile_matches():
 
 def test_boot_inputs_fail_for_mismatched_profile():
     check = lgc.check_boot_inputs_match_public_path(
-        SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions(profile="evaluation")
+        SCENARIO,
+        project_dir=PROJECT_ROOT,
+        options=LiveGateOptions(profile="evaluation"),
     )
     assert not check.passed
     assert any("capability profile" in d for d in check.diagnostics)
@@ -484,14 +531,19 @@ def test_validate_live_deployment_short_circuits_on_profile_mismatch(monkeypatch
     monkeypatch.setattr(
         lgc,
         "check_static_prerequisite",
-        lambda *a, **k: (object(), LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True)),
+        lambda *a, **k: (
+            object(),
+            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+        ),
     )
     booted = []
     monkeypatch.setattr(
         lgc,
         "check_aces_driven_boot",
-        lambda *a, **k: booted.append(1)
-        or LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),
+        lambda *a, **k: (
+            booted.append(1)
+            or LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+        ),
     )
     report = validate_live_deployment(
         PROJECT_ROOT / "scenarios" / "other.sdl.yaml",
@@ -562,7 +614,9 @@ def test_readiness_tolerates_unhealthy_non_node_infra():
         [_node("webapp", ["dmz"])],
         [
             _container("aptl-webapp"),
-            _container("aptl-otel-collector", status="Up 1m (unhealthy)", health="unhealthy"),
+            _container(
+                "aptl-otel-collector", status="Up 1m (unhealthy)", health="unhealthy"
+            ),
         ],
     )
     check = lgc.check_defensive_stack_readiness(state=state)
@@ -623,7 +677,11 @@ def test_readiness_fails_when_declared_healthy_but_health_unreported():
 def test_readiness_fails_when_declared_healthy_but_still_starting():
     state = _readiness_state(
         [_node("webapp", ["dmz"], declared_health="healthy")],
-        [_container("aptl-webapp", status="Up 5s (health: starting)", health="starting")],
+        [
+            _container(
+                "aptl-webapp", status="Up 5s (health: starting)", health="starting"
+            )
+        ],
     )
     check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
@@ -739,7 +797,9 @@ def test_telemetry_passes_when_traffic_evidence_collected(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
-        lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}]
+        lgp,
+        "collect_suricata_eve",
+        lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}],
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
@@ -761,7 +821,9 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
-        lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}]
+        lgp,
+        "collect_suricata_eve",
+        lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}],
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
@@ -794,9 +856,14 @@ def test_telemetry_fails_when_no_evidence(monkeypatch):
 
 def test_telemetry_fails_without_target(monkeypatch):
     state = LiveGateState()
-    state.snapshot = {"containers": [_container("aptl-kali", networks={"n": "1.1.1.1"})]}
+    state.snapshot = {
+        "containers": [_container("aptl-kali", networks={"n": "1.1.1.1"})]
+    }
     check = lgc.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions(), state=state
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
     )
     assert not check.passed
 
@@ -850,7 +917,12 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert path == "live-gate/manifest.json"
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
-    assert manifest["evaluator_surfaces"]["profile"] == "orchestration-evaluation"
+    assert manifest["evaluator_surfaces"]["profile"] == "full-remote-control-plane"
+    assert manifest["participant_runtime_surfaces"]["contracts"] == [
+        "participant-episode-state-envelope-v1",
+        "participant-episode-history-event-stream-v1",
+        "participant-behavior-history-event-stream-v1",
+    ]
     assert manifest["scenario"]["name"] == "techvault-operational"
 
 
@@ -1027,7 +1099,9 @@ def test_variation_fails_without_two_distinct_nodes():
 def test_variation_fails_on_realization_error(monkeypatch):
     results = iter(
         [
-            _Realization([_node("kali", ["kali"])], ["kali"], diagnostics=(_Diag("error"),)),
+            _Realization(
+                [_node("kali", ["kali"])], ["kali"], diagnostics=(_Diag("error"),)
+            ),
             _Realization([_node("webapp", ["dmz"])], ["dmz"]),
         ]
     )
@@ -1054,9 +1128,7 @@ def test_live_gate_passes_on_techvault():
     from aptl.core.config import load_config
 
     config = load_config(PROJECT_ROOT / "aptl.json")
-    report = validate_live_deployment(
-        SCENARIO, project_dir=PROJECT_ROOT, config=config
-    )
+    report = validate_live_deployment(SCENARIO, project_dir=PROJECT_ROOT, config=config)
     assert report.passed, report.render()
 
 
@@ -1070,7 +1142,7 @@ def _patch_cli(mocker, *, passed=True):
 
     report = LiveGateReport(
         "scn",
-        "orchestration-evaluation",
+        "full-remote-control-plane",
         "rid",
         (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )

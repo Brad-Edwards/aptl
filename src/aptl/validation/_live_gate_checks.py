@@ -203,9 +203,7 @@ def check_aces_driven_boot(
         state,
         scenario_path=scenario_path,
     )
-    return _check(
-        "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics
-    )
+    return _check("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
 
 
 # --------------------------------------------------------------------------- #
@@ -420,7 +418,7 @@ def check_run_archive_manifest(
         "snapshot": state.snapshot,
         "evidence": state.evidence,
         "evaluator_surfaces": {
-            "profile": "orchestration-evaluation",
+            "profile": "full-remote-control-plane",
             "contracts": [
                 "evaluation-result-envelope-v1",
                 "evaluation-history-event-stream-v1",
@@ -434,6 +432,15 @@ def check_run_archive_manifest(
                 "workflow-history-event-stream-v1",
             ],
             "execution_state_integration": "aptl.core.runtime.workflow_engine",
+        },
+        "participant_runtime_surfaces": {
+            "profile": "full-remote-control-plane",
+            "contracts": [
+                "participant-episode-state-envelope-v1",
+                "participant-episode-history-event-stream-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "execution_state_integration": "aptl.backends.aces_participant_runtime",
         },
     }
 

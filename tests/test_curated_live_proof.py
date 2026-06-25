@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -20,6 +21,7 @@ from aptl.core.config import AptlConfig
 from aptl.validation.curated_live_proof import (
     compare_to_snapshot,
     expected_reduced_matrix,
+    run_participant_action_proof,
     summarize_snapshot,
 )
 
@@ -246,3 +248,90 @@ def test_variants_yield_distinct_reduced_surfaces():
         for v in VARIANTS
     }
     assert len(profile_sets) == len(VARIANTS)
+
+
+def test_participant_action_proof_uses_control_plane_and_records_behavior(
+    monkeypatch,
+    tmp_path,
+):
+    from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+    from aptl.validation import curated_live_proof
+
+    class FakeBackend:
+        def container_exec(self, name, cmd, *, timeout=None):
+            self.call = (name, cmd, timeout)
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout="Host: 172.20.2.20 () Ports: 22/open/tcp//ssh///",
+                stderr="",
+            )
+
+    class FakeRangeSnapshot:
+        def to_dict(self):
+            return {
+                "timestamp": "2026-06-25T00:00:00+00:00",
+                "containers": [
+                    {
+                        "name": "aptl-kali",
+                        "image": "kalilinux/kali-rolling",
+                        "status": "Up 1m",
+                        "health": None,
+                        "networks": {"aptl_aptl-redteam": "172.20.4.10"},
+                        "ports": [],
+                    },
+                    {
+                        "name": "aptl-victim",
+                        "image": "aptl/victim",
+                        "status": "Up 1m",
+                        "health": "healthy",
+                        "networks": {"aptl_aptl-internal": "172.20.2.20"},
+                        "ports": [],
+                    },
+                ],
+                "networks": [
+                    {
+                        "name": "aptl_aptl-redteam",
+                        "subnet": "172.20.4.0/24",
+                        "gateway": "172.20.4.1",
+                        "containers": ["aptl-kali"],
+                    }
+                ],
+            }
+
+    backend = FakeBackend()
+    monkeypatch.setattr(curated_live_proof, "get_backend", lambda config, root: backend)
+    monkeypatch.setattr(
+        curated_live_proof,
+        "capture_snapshot",
+        lambda config_dir, backend: FakeRangeSnapshot(),
+    )
+
+    proof = run_participant_action_proof(
+        tmp_path,
+        AptlConfig(
+            lab={"name": "techvault"}, containers={"kali": True, "victim": True}
+        ),
+    )
+
+    assert proof["verdict"] == "PASS", proof["validation"]
+    assert proof["operation_status"]["state"] == "succeeded"
+    assert proof["operation_receipt_contract"] == "operation-receipt-v1"
+    assert proof["runtime_snapshot_contract"] == "runtime-snapshot-v1"
+    assert backend.call == (
+        "aptl-kali",
+        ["nmap", "-p", "22", "-Pn", "--open", "172.20.2.20", "-oG", "-"],
+        120,
+    )
+    assert PARTICIPANT_ACTION_ADDRESS in proof["participant_episode_results"]
+    behavior = proof["participant_behavior_history"][PARTICIPANT_ACTION_ADDRESS]
+    assert [event["event_type"] for event in behavior] == [
+        "action_attempted",
+        "observation_emitted",
+    ]
+    assert behavior[-1]["actor_provenance"] == "codex-cli"
+    assert any(
+        address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
+        for address in proof["participant_snapshot_entries"]
+    )
+    assert proof["post_action_range_snapshot"]["containers"][0]["name"] == "aptl-kali"

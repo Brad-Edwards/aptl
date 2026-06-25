@@ -165,7 +165,10 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
         project_dir=PROJECT_ROOT, config=config, backend=_NoStartBackend()
     )
     report = run_target_conformance(
-        target, profile="orchestration-evaluation", root=tmp_path, profiles_root=tmp_path
+        target,
+        profile="full-remote-control-plane",
+        root=tmp_path,
+        profiles_root=tmp_path,
     )
     assert not report.passed
 
@@ -178,7 +181,7 @@ def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     check = check_backend_conformance(
         project_dir=PROJECT_ROOT,
         config=config,
-        profile="orchestration-evaluation",
+        profile="full-remote-control-plane",
         profiles_root=tmp_path,  # empty corpus root -> profile artifact not found
         fixtures_root=tmp_path,
     )
@@ -287,7 +290,9 @@ def test_parity_fails_closed_when_surface_entry_is_not_a_mapping(tmp_path):
 
 
 def test_parity_fails_when_deferred_without_issue(tmp_path):
-    coverage = _full_coverage(objectives={"status": "deferred", "blocking_followup": "n/a"})
+    coverage = _full_coverage(
+        objectives={"status": "deferred", "blocking_followup": "n/a"}
+    )
     check = _parity(tmp_path, coverage)
     assert not check.passed
     assert any("without a tracking issue" in d for d in check.diagnostics)
@@ -568,7 +573,9 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     scenario = tmp_path / "techvault.sdl.yaml"
     scenario.write_text("name: t\n")
     check = check_import_lock(scenario)
-    assert not check.passed and any("missing import lockfile" in d for d in check.diagnostics)
+    assert not check.passed and any(
+        "missing import lockfile" in d for d in check.diagnostics
+    )
 
     (tmp_path / "aces.lock.json").write_text("{}")
     monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
@@ -587,7 +594,9 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
 
     monkeypatch.setattr(gc, "create_aptl_runtime_target", _boom)
     details, check = check_provisioning_realization(
-        scenario=object(), project_dir=PROJECT_ROOT, config=AptlConfig(lab={"name": "t"})
+        scenario=object(),
+        project_dir=PROJECT_ROOT,
+        config=AptlConfig(lab={"name": "t"}),
     )
     assert details is None and not check.passed
 
@@ -643,10 +652,14 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
 
 def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(gc, "check_parse", lambda p: ("scn", GateCheck("parse", True)))
-    monkeypatch.setattr(gc, "check_import_lock", lambda p: GateCheck("import_lock", True))
+    monkeypatch.setattr(
+        gc, "check_import_lock", lambda p: GateCheck("import_lock", True)
+    )
     monkeypatch.setattr(gc, "check_compile", lambda s: GateCheck("compile", True))
     monkeypatch.setattr(
-        gc, "check_backend_conformance", lambda **k: GateCheck("backend_conformance", True)
+        gc,
+        "check_backend_conformance",
+        lambda **k: GateCheck("backend_conformance", True),
     )
     monkeypatch.setattr(
         gc,

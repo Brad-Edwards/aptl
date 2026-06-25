@@ -32,6 +32,7 @@ from aptl.backends.aces_diagnostics import (
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.aces_evaluator import AptlEvaluator
 from aptl.backends.aces_orchestrator import AptlOrchestrator
+from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 from aptl.backends.aces_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -87,12 +88,14 @@ def create_aptl_runtime_target(
         deployment_backend=backend,
     )
     orchestrator = AptlOrchestrator()
+    participant_runtime = AptlParticipantRuntime(deployment_backend=backend)
     return RuntimeTarget(
         name=APTL_ACES_TARGET_NAME,
         manifest=create_aptl_manifest(),
         provisioner=provisioner,  # type: ignore[arg-type]
         orchestrator=orchestrator,  # type: ignore[arg-type]
         evaluator=AptlEvaluator(),  # type: ignore[arg-type]
+        participant_runtime=participant_runtime,  # type: ignore[arg-type]
     )
 
 
@@ -200,9 +203,15 @@ def _run_execution_plan(
             selected_profiles=[],
             scenario_path=scenario_path,
         )
-    control_plane = RuntimeControlPlane(target, initial_snapshot=execution_plan.base_snapshot)
+    control_plane = RuntimeControlPlane(
+        target, initial_snapshot=execution_plan.base_snapshot
+    )
     failure, realization_details, selected_profiles = _apply_provisioning_and_orchestration(
-        control_plane, execution_plan, target, run_store=run_store, run_id=run_id
+        control_plane,
+        execution_plan,
+        target,
+        run_store=run_store,
+        run_id=run_id,
     )
     if failure is not None:
         return AcesStartOutcome(
@@ -316,7 +325,9 @@ def _apply_phase(
     status = control_plane.get_operation(receipt.operation_id)
     if status is not None and status.state == OperationState.SUCCEEDED:
         return None
-    diagnostics = list(status.diagnostics) if status is not None else list(receipt.diagnostics)
+    diagnostics = (
+        list(status.diagnostics) if status is not None else list(receipt.diagnostics)
+    )
     return LabResult(success=False, error=render_aces_diagnostics(diagnostics))
 
 

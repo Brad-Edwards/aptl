@@ -30,6 +30,7 @@ from aces_runtime.manager import RuntimeManager
 from aces_sdl import parse_sdl_file
 
 from aptl.backends.aces import create_aptl_runtime_target
+from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.backends.aces_profiles import (
     load_compose_profile_index,
     normalized_identifier_aliases,
@@ -38,7 +39,15 @@ from aptl.backends.aces_profiles import (
 )
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
+from aptl.core.deployment import get_backend
+from aptl.core.snapshot import capture_snapshot
 from aptl.validation._gate_checks import _NoStartBackend
+from aptl.validation.participant_live_proof import (
+    run_participant_action_proof as _run_participant_action_proof,
+)
+from aptl.validation.range_snapshot_summary import (
+    summarize_snapshot as _summarize_snapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -146,40 +155,9 @@ def _running_container_names(snapshot: Mapping[str, object]) -> list[str]:
 
 
 def summarize_snapshot(snapshot: Mapping[str, object]) -> dict[str, object]:
-    """Return an evidence-sized view of a range snapshot.
+    """Return an evidence-sized view of a range snapshot."""
 
-    Keeps the operationally meaningful container and network fields (identity,
-    health, attachments, published ports) and drops the verbose Compose label
-    block, so a committed proof artifact stays reviewable. The source snapshot is
-    already redacted by ``capture_snapshot`` (ADR-029); this only trims noise.
-    """
-    containers = [
-        {
-            "name": container.get("name"),
-            "image": container.get("image"),
-            "status": container.get("status"),
-            "health": container.get("health"),
-            "networks": container.get("networks"),
-            "ports": container.get("ports"),
-        }
-        for container in _as_sequence(snapshot.get("containers"))
-        if isinstance(container, Mapping)
-    ]
-    networks = [
-        {
-            "name": network.get("name"),
-            "subnet": network.get("subnet"),
-            "gateway": network.get("gateway"),
-            "containers": network.get("containers"),
-        }
-        for network in _as_sequence(snapshot.get("networks"))
-        if isinstance(network, Mapping)
-    ]
-    return {
-        "timestamp": snapshot.get("timestamp"),
-        "containers": containers,
-        "networks": networks,
-    }
+    return _summarize_snapshot(snapshot)
 
 
 def _snapshot_network_names(snapshot: Mapping[str, object]) -> list[str]:
@@ -273,3 +251,19 @@ def compare_to_snapshot(
         )
     )
     return (not diagnostics, diagnostics)
+
+
+def run_participant_action_proof(
+    project_dir: Path,
+    config: AptlConfig,
+    participant_address: str = PARTICIPANT_ACTION_ADDRESS,
+) -> dict[str, object]:
+    """Drive a participant action through the stable curated-proof entrypoint."""
+
+    return _run_participant_action_proof(
+        project_dir=project_dir,
+        config=config,
+        participant_address=participant_address,
+        backend_factory=get_backend,
+        snapshot_capture=capture_snapshot,
+    )

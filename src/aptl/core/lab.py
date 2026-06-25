@@ -6,6 +6,8 @@ Compose as the default backend.  Includes the full orchestration of lab
 startup.
 """
 
+from __future__ import annotations
+
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -88,7 +90,7 @@ def start_aces_scenario(
     *,
     run_store: object = None,
     run_id: str | None = None,
-) -> "AcesStartOutcome | LabResult":
+) -> AcesStartOutcome | LabResult:
     """Lazy ACES handoff import for the public lab-start path.
 
     ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)

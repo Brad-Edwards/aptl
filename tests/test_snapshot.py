@@ -533,3 +533,60 @@ class TestCaptureSnapshot:
         assert loaded["containers"] == []
         assert loaded["services"] == []
         assert loaded["ssh"] == []
+
+    def test_container_snapshot_has_image_digest_field(self):
+        cs = ContainerSnapshot()
+        assert hasattr(cs, "image_digest")
+        assert cs.image_digest == ""
+
+    def test_container_snapshot_image_digest_set(self):
+        cs = ContainerSnapshot(image_digest="sha256:abc123")
+        assert cs.image_digest == "sha256:abc123"
+
+    def test_software_versions_has_aces_sdl_version(self):
+        sv = SoftwareVersions()
+        assert hasattr(sv, "aces_sdl_version")
+        assert sv.aces_sdl_version == ""
+
+    def test_get_software_versions_populates_aces_sdl_version(self):
+        backend = MagicMock()
+        backend.host_versions.return_value = {}
+        backend.container_inspect.return_value = {}
+        backend.container_exec.return_value = MagicMock(returncode=1, stdout="", stderr="")
+        versions = _get_software_versions(backend)
+        # aces-sdl is installed in the test environment
+        assert isinstance(versions.aces_sdl_version, str)
+        assert len(versions.aces_sdl_version) > 0
+
+
+class TestDetectionContentDigest:
+    """Tests for detection_content_digest helper."""
+
+    def test_detection_content_digest_helper_exists(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+        result = detection_content_digest(tmp_path)
+        assert isinstance(result, str)
+
+    def test_detection_content_digest_empty_when_no_files(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+        result = detection_content_digest(tmp_path)
+        assert result == ""
+
+    def test_detection_content_digest_non_empty_when_rules_present(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+        rules_dir = tmp_path / "config" / "suricata" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "custom.rules").write_text('alert tcp any any -> any any (msg:"test"; sid:1;)')
+        result = detection_content_digest(tmp_path)
+        assert len(result) == 64  # sha256 hex
+
+    def test_detection_content_digest_changes_with_content(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+        rules_dir = tmp_path / "config" / "suricata" / "rules"
+        rules_dir.mkdir(parents=True)
+        rule_file = rules_dir / "custom.rules"
+        rule_file.write_text('alert tcp any any -> any any (msg:"v1"; sid:1;)')
+        digest1 = detection_content_digest(tmp_path)
+        rule_file.write_text('alert tcp any any -> any any (msg:"v2"; sid:1;)')
+        digest2 = detection_content_digest(tmp_path)
+        assert digest1 != digest2

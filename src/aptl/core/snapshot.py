@@ -38,6 +38,7 @@ class SoftwareVersions(object):
     wazuh_manager_version: str = ""
     wazuh_indexer_version: str = ""
     aptl_version: str = ""
+    aces_sdl_version: str = ""
 
 
 @dataclass
@@ -52,6 +53,7 @@ class ContainerSnapshot(object):
     labels: dict[str, str] = field(default_factory=dict)
     networks: dict[str, str] = field(default_factory=dict)
     ports: list[str] = field(default_factory=list)
+    image_digest: str = ""
 
 
 @dataclass
@@ -183,6 +185,14 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
         versions.aptl_version = version("aptl")
     except PackageNotFoundError:
         versions.aptl_version = "dev"
+
+    # ACES SDL version from package metadata
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        versions.aces_sdl_version = version("aces-sdl")
+    except PackageNotFoundError:
+        versions.aces_sdl_version = ""
 
     return versions
 
@@ -371,6 +381,30 @@ def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
                 hashes[f.name] = digest
 
     return hashes
+
+
+def detection_content_digest(project_dir: Path) -> str:
+    """Compute a combined sha256 digest of detection content under project_dir.
+
+    Hashes Suricata custom rules and Wazuh custom rules found under the
+    project directory. Returns an empty string when no detection files are
+    found (empty-safe). Reuses the same file-glob/hash pattern as
+    :func:`_hash_config_files`.
+    """
+    patterns = [
+        "config/suricata/rules/*.rules",
+        "config/suricata/rules/*.conf",
+        "config/wazuh/etc/rules/*.xml",
+        "config/wazuh/etc/decoders/*.xml",
+    ]
+    combined = hashlib.sha256()
+    found_any = False
+    for pattern in patterns:
+        for f in sorted(project_dir.glob(pattern)):
+            if f.is_file():
+                combined.update(f.read_bytes())
+                found_any = True
+    return combined.hexdigest() if found_any else ""
 
 
 def capture_snapshot(

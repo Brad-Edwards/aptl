@@ -428,7 +428,7 @@ def check_run_archive_manifest(
             "execution_state_integration": "#514",
         },
         "orchestrator_surfaces": {
-            "profile": "orchestration-capable",
+            "profile": "orchestration-evaluation",
             "contracts": [
                 "workflow-result-envelope-v1",
                 "workflow-history-event-stream-v1",

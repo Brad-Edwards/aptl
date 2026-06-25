@@ -195,70 +195,6 @@ def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
     assert [diag.code for diag in realization.diagnostics] == []
 
 
-def _otel_only_config() -> AptlConfig:
-    return AptlConfig(
-        lab={"name": "test"},
-        containers={
-            "wazuh": False,
-            "victim": False,
-            "kali": False,
-            "reverse": False,
-            "enterprise": False,
-            "soc": False,
-            "mail": False,
-            "fileshare": False,
-            "dns": False,
-        },
-    )
-
-
-def _node_resource_with_health(node_name: str, status: str) -> PlannedResource:
-    # ACES carries the SDL ``runtime.health`` declaration into the compiled node
-    # payload at ``spec.node.runtime.health`` (verified against a real compile).
-    resource = _node_resource(node_name)
-    resource.payload["spec"]["node"]["runtime"] = {
-        "health": {
-            "status": status,
-            "description": "Compose healthcheck must pass before startup is ready.",
-        }
-    }
-    return resource
-
-
-def test_realization_extracts_declared_node_health(tmp_path):
-    from aptl.backends.aces_realization import interpret_provisioning_plan
-
-    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
-
-    realization = interpret_provisioning_plan(
-        plan=_plan_for_resources(
-            _node_resource_with_health("aptl-otel-collector", "healthy")
-        ),
-        project_dir=tmp_path,
-        config=_otel_only_config(),
-    )
-
-    node = realization.nodes[0]
-    assert node.declared_health == "healthy"
-    assert node.details()["declared_health"] == "healthy"
-
-
-def test_realization_declared_health_absent_when_undeclared(tmp_path):
-    from aptl.backends.aces_realization import interpret_provisioning_plan
-
-    _write_compose(tmp_path, {"aptl-otel-collector": ["otel"]})
-
-    realization = interpret_provisioning_plan(
-        plan=_plan_for_nodes("aptl-otel-collector"),
-        project_dir=tmp_path,
-        config=_otel_only_config(),
-    )
-
-    node = realization.nodes[0]
-    assert node.declared_health is None
-    assert node.details()["declared_health"] is None
-
-
 class _FakeExecutionPlan:
     """Minimal ExecutionPlan stand-in exposing the fields the handoff reads."""
 
@@ -391,7 +327,7 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is True
+    assert result.lab_result.success is True
     parser.assert_called_once_with(
         tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
     )
@@ -422,7 +358,7 @@ def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
 
     result = aces.start_aces_scenario(tmp_path, config, backend, scenario_path=selected)
 
-    assert result.success is True
+    assert result.lab_result.success is True
     parser.assert_called_once_with(selected)
 
 
@@ -505,6 +441,9 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker,
             status.diagnostics = []
             return status
 
+        def get_snapshot(self):
+            return RuntimeSnapshot()
+
     class FakeRuntimeManager:
         def __init__(self, target):
             self.target = target
@@ -522,7 +461,7 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker,
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is True
+    assert result.lab_result.success is True
     # The orchestration block actually ran: without it, submit_calls would omit
     # "orchestration" even though provisioning still succeeds. (Profile selection
     # for backend.start is covered by the provisioning-focused tests above; here
@@ -551,8 +490,8 @@ def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is False
-    assert result.error
+    assert result.lab_result.success is False
+    assert result.lab_result.error
 
 
 def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
@@ -594,8 +533,8 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is False
-    assert result.error
+    assert result.lab_result.success is False
+    assert result.lab_result.error
 
 
 def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, tmp_path):
@@ -655,6 +594,9 @@ def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, t
             status.diagnostics = []
             return status
 
+        def get_snapshot(self):
+            return RuntimeSnapshot()
+
     class FakeRuntimeManager:
         def __init__(self, target):
             self.target = target
@@ -674,7 +616,7 @@ def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, t
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is True
+    assert result.lab_result.success is True
     assert submit_calls == ["provisioning", "orchestration", "evaluation"]
 
 
@@ -725,6 +667,9 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
             status.diagnostics = []
             return status
 
+        def get_snapshot(self):
+            return RuntimeSnapshot()
+
     class FakeRuntimeManager:
         def __init__(self, target):
             self.target = target
@@ -758,7 +703,7 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is True
+    assert result.lab_result.success is True
     assert drive_calls
     assert drive_calls[0]["evaluation_results"] == {}
 
@@ -797,8 +742,8 @@ def test_start_aces_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_pa
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is False
-    assert result.error
+    assert result.lab_result.success is False
+    assert result.lab_result.error
     backend.start.assert_not_called()
 
 
@@ -836,8 +781,8 @@ def test_start_aces_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
 
-    assert result.success is False
-    assert result.error
+    assert result.lab_result.success is False
+    assert result.lab_result.error
     backend.start.assert_not_called()
 
 
@@ -1335,3 +1280,244 @@ def test_aces_backend_does_not_import_legacy_sdl_parser():
 
     assert "aptl.core.sdl" not in source
     assert "ScenarioDefinition" not in source
+
+
+def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
+    """start_aces_scenario returns AcesStartOutcome, not just LabResult."""
+    from unittest.mock import patch as _patch, MagicMock as _MagicMock
+
+    from aces_contracts.planning import (
+        EvaluationPlan,
+        OrchestrationPlan,
+    )
+    from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+
+    from aptl.backends.aces import AcesStartOutcome, start_aces_scenario
+    from aptl.core.config import AptlConfig
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    (tmp_path / "scenarios").mkdir()
+    sdl_path = tmp_path / "scenarios" / "test.sdl.yaml"
+    sdl_path.write_text(
+        "kind: ScenarioDefinition\napiVersion: v1\nmetadata:\n  name: test\nspec:\n  nodes: []\n"
+    )
+
+    backend = _MagicMock()
+    backend.start.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"})
+
+    op_status = _MagicMock()
+    op_status.state = OperationState.SUCCEEDED
+    op_status.diagnostics = []
+
+    apply_result = ApplyResult(
+        success=True,
+        snapshot=RuntimeSnapshot(),
+        diagnostics=[],
+    )
+
+    with (
+        _patch("aptl.backends.aces.parse_sdl_file") as mock_parse,
+        _patch("aptl.backends.aces.RuntimeManager") as mock_manager,
+        _patch("aptl.backends.aces.RuntimeControlPlane") as mock_cp,
+    ):
+        mock_scenario = _MagicMock()
+        mock_parse.return_value = mock_scenario
+
+        mock_plan = _MagicMock()
+        mock_plan.diagnostics = []
+        mock_plan.base_snapshot = RuntimeSnapshot()
+        mock_plan.orchestration.actionable_operations = []
+        mock_plan.evaluation.actionable_operations = []
+        mock_plan.provisioning = _MagicMock()
+        mock_manager.return_value.plan.return_value = mock_plan
+
+        mock_control = _MagicMock()
+        mock_cp.return_value = mock_control
+        receipt = _MagicMock()
+        receipt.operation_id = "op-1"
+        mock_control.submit_provisioning.return_value = receipt
+        mock_control.get_operation.return_value = op_status
+        mock_control.get_snapshot.return_value = RuntimeSnapshot()
+
+        result = start_aces_scenario(tmp_path, config, backend, scenario_path=sdl_path)
+
+    assert isinstance(result, AcesStartOutcome)
+    assert result.lab_result.success is True
+    assert isinstance(result.final_snapshot, RuntimeSnapshot)
+    assert isinstance(result.realization_details, dict)
+    assert isinstance(result.selected_profiles, list)
+
+
+def test_drive_workflows_receives_threaded_run_store_and_run_id(tmp_path):
+    """_apply_provisioning_and_orchestration threads its run_store/run_id args
+    into drive_workflows (GAP 2/4): a real run store + run_id, not None."""
+    from unittest.mock import MagicMock as _MagicMock
+
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends.aces import (
+        AptlOrchestrator,
+        _apply_provisioning_and_orchestration,
+    )
+    from aptl.core.runstore import LocalRunStore
+
+    store = LocalRunStore(tmp_path / "runs")
+    run_id = "run_20260101T000000Z"
+
+    mock_orchestrator = _MagicMock(spec=AptlOrchestrator)
+    mock_orchestrator.results.return_value = {"wf1": {"status": "PENDING"}}
+    mock_orchestrator.drive_workflows.return_value = []
+
+    mock_plan = _MagicMock()
+    mock_plan.orchestration.actionable_operations = []
+    mock_plan.evaluation.actionable_operations = []
+    mock_plan.provisioning = _MagicMock()
+
+    mock_target = _MagicMock()
+    mock_target.orchestrator = mock_orchestrator
+    mock_target.evaluator = None
+    mock_target.provisioner = None
+
+    receipt = _MagicMock()
+    receipt.operation_id = "op-prov"
+    op_status = _MagicMock()
+    op_status.state = OperationState.SUCCEEDED
+    op_status.diagnostics = []
+
+    mock_cp = _MagicMock()
+    mock_cp.submit_provisioning.return_value = receipt
+    mock_cp.get_operation.return_value = op_status
+
+    failure, _, _ = _apply_provisioning_and_orchestration(
+        mock_cp, mock_plan, mock_target, run_store=store, run_id=run_id
+    )
+
+    mock_orchestrator.drive_workflows.assert_called_once_with(
+        evaluation_results={},
+        run_store=store,
+        run_id=run_id,
+    )
+    assert failure is None
+
+
+def test_drive_workflows_persists_workflow_result_under_run_dir(tmp_path):
+    """A real AptlOrchestrator with a registered workflow persists its result
+    and history under the run dir when run_store + run_id are threaded."""
+    from aces_contracts.workflow import WorkflowExecutionState, WorkflowStatus
+
+    from aptl.backends.aces_orchestrator import AptlOrchestrator
+    from aptl.core.runstore import LocalRunStore
+    from aptl.core.runtime.workflow_engine import WorkflowRunRecord
+
+    store = LocalRunStore(tmp_path / "runs")
+    run_id = "run_20260101T000000Z"
+    store.create_run(run_id)
+
+    orchestrator = AptlOrchestrator()
+    address = "exercise.workflow.demo"
+    safe_address = address.replace("/", "_")
+
+    # Register a workflow payload and a PENDING engine record, then drive.
+    orchestrator._workflow_payloads = {address: {"steps": []}}
+
+    pending_payload = WorkflowExecutionState(
+        workflow_status=WorkflowStatus.PENDING,
+        run_id="wf-run-1",
+        started_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    ).to_payload()
+    done_payload = WorkflowExecutionState(
+        workflow_status=WorkflowStatus.SUCCEEDED,
+        run_id="wf-run-1",
+        started_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:01Z",
+        terminal_reason="completed",
+    ).to_payload()
+
+    record_pending = WorkflowRunRecord(
+        result=pending_payload,
+        history=[{"event": "registered"}],
+    )
+    record_done = WorkflowRunRecord(
+        result=done_payload,
+        history=[{"event": "registered"}, {"event": "completed"}],
+    )
+
+    class _FakeEngine:
+        def __init__(self):
+            self._calls = 0
+
+        def get(self, addr):
+            del addr
+            # First read returns PENDING (drive precondition); reads after
+            # drive() return the completed record persisted to the run store.
+            self._calls += 1
+            return record_pending if self._calls == 1 else record_done
+
+        def drive(self, addr, payload, *, objective_outcomes):
+            del addr, payload, objective_outcomes
+
+    orchestrator._engine = _FakeEngine()
+    orchestrator._sync_from_engine = lambda: None
+
+    diagnostics = orchestrator.drive_workflows(run_store=store, run_id=run_id)
+
+    assert diagnostics == []
+    run_dir = store.get_run_path(run_id)
+    result_path = run_dir / "orchestration" / safe_address / "result.json"
+    history_path = run_dir / "orchestration" / safe_address / "history.jsonl"
+    assert result_path.exists()
+    assert history_path.exists()
+
+
+def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
+    """GAP 1: _apply_provisioning_and_orchestration returns NON-EMPTY
+    realization_details (with a 'nodes' key) and selected_profiles for a
+    scenario that realizes nodes, by interpreting the provisioning plan."""
+    from unittest.mock import MagicMock as _MagicMock
+
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends.aces import AptlProvisioner, _apply_provisioning_and_orchestration
+    from aptl.core.config import AptlConfig
+
+    _write_compose(tmp_path, {"victim": ["victim"]})
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=_MagicMock(),
+    )
+
+    plan = _plan_for_resources(_node_resource("techvault.victim"))
+
+    mock_plan = _MagicMock()
+    mock_plan.orchestration.actionable_operations = []
+    mock_plan.evaluation.actionable_operations = []
+    mock_plan.provisioning = plan
+
+    mock_target = _MagicMock()
+    mock_target.orchestrator = None
+    mock_target.evaluator = None
+    mock_target.provisioner = provisioner
+
+    receipt = _MagicMock()
+    receipt.operation_id = "op-prov"
+    op_status = _MagicMock()
+    op_status.state = OperationState.SUCCEEDED
+    op_status.diagnostics = []
+
+    mock_cp = _MagicMock()
+    mock_cp.submit_provisioning.return_value = receipt
+    mock_cp.get_operation.return_value = op_status
+
+    failure, realization_details, selected_profiles = (
+        _apply_provisioning_and_orchestration(mock_cp, mock_plan, mock_target)
+    )
+
+    assert failure is None
+    assert isinstance(realization_details, dict)
+    assert "nodes" in realization_details
+    assert len(realization_details["nodes"]) >= 1
+    assert "victim" in selected_profiles

@@ -44,24 +44,6 @@ def resource_name(address: str, payload: Mapping[str, Any]) -> str:
     return first_nonempty_string(payload_string_values(payload, ("name",))) or address
 
 
-def runtime_spec(
-    payload: Mapping[str, Any],
-    spec: Mapping[str, Any] | None,
-) -> Mapping[str, Any] | None:
-    """Return the runtime-specific payload block when present."""
-
-    for container in (payload, spec):
-        if container is None:
-            continue
-        runtime = container.get("runtime")
-        if isinstance(runtime, Mapping):
-            return runtime
-        aptl = container.get("aptl")
-        if isinstance(aptl, Mapping):
-            return aptl
-    return None
-
-
 def service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract named services from a node specification."""
 
@@ -128,17 +110,6 @@ def static_addresses(infra_spec: Mapping[str, Any] | None) -> set[str]:
             if isinstance(value, str) and value.strip():
                 addresses.add(value)
     return addresses
-
-
-def string_list(
-    payload: Mapping[str, Any] | None,
-    key: str,
-) -> set[str]:
-    """Extract a string set from an optional mapping key."""
-
-    if payload is None:
-        return set()
-    return string_values(payload.get(key))
 
 
 def string_values(raw: object) -> set[str]:

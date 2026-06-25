@@ -16,9 +16,6 @@ class NodeRealization(object):
     aliases: tuple[str, ...]
     profiles: tuple[str, ...]
     services: tuple[str, ...]
-    rendered_configs: tuple[str, ...]
-    evidence_paths: tuple[str, ...]
-    telemetry_paths: tuple[str, ...]
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
     declared_health: str | None = None
@@ -30,9 +27,6 @@ class NodeRealization(object):
             "aliases": list(self.aliases),
             "profiles": list(self.profiles),
             "services": list(self.services),
-            "rendered_configs": list(self.rendered_configs),
-            "evidence_paths": list(self.evidence_paths),
-            "telemetry_paths": list(self.telemetry_paths),
             "networks": list(self.networks),
             "static_addresses": list(self.static_addresses),
             "declared_health": self.declared_health,

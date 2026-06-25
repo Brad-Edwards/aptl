@@ -2,6 +2,24 @@
 
 The experiment run system captures data from each scenario execution for reproducibility and post-run analysis.
 
+## Clean State Between Runs
+
+Persistent containers accumulate state across runs: service databases, indexes, logs, generated in-container credentials, and files written during a prior exercise. That state contaminates the next run and undermines reliable batch execution and benchmarking.
+
+The clean-boot lifecycle mode guarantees a fresh environment. It tears down the project-scoped deployment, removes the Compose-managed volumes, and then boots the lab again through the standard start path, so certificates, seeds, and the SOC stack come up fresh:
+
+```bash
+# Ephemeral clean boot: destroy lab state, then start fresh.
+aptl lab start --clean
+
+# Skip the confirmation prompt (for scripted batch runs).
+aptl lab start --clean --yes
+```
+
+A clean boot removes only Docker Compose state for the configured project. It does not delete `.env`, the `keys/` directory, `.mcp.json`, checked-in configuration, or archived run directories. A failed cleanup is fatal: the lab does not start, because a contaminated environment must never be reused as clean.
+
+The same capability backs `aptl lab validate-live`, which clean-boots the lab before snapshotting it (pass `--skip-clean-boot` to validate the running lab without destroying it).
+
 ## Run Directory Structure
 
 Each run is stored under `<project_dir>/runs/<run_id>/` with:

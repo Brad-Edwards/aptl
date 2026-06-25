@@ -321,6 +321,70 @@ def stop_lab(
     return backend.stop(profiles, remove_volumes=remove_volumes)
 
 
+def clean_boot_lab(
+    project_dir: Path,
+    *,
+    remove_volumes: bool = True,
+    skip_seed: bool = False,
+    scenario_path: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
+) -> LabResult:
+    """Boot the lab into a guaranteed clean state (RNG-001).
+
+    The single reusable destructive clean-state lifecycle mode: tear down
+    the project-scoped deployment removing Compose-managed volumes (the
+    first cleanup policy), then boot through the public start path so the
+    range comes up free of contamination (files, processes, service
+    databases/logs, generated in-container credentials) from a prior run.
+
+    Cleanup and boot reuse :func:`stop_lab` and
+    :func:`orchestrate_lab_start`; both are project-scoped through the
+    deployment backend (``-p <project_name>`` + compose-project labels),
+    so this never enumerates or removes unrelated Docker objects on a
+    shared daemon. It removes only Compose-managed state — never ``.env``,
+    ``keys/``, ``.mcp.json``, checked-in config, or run archives.
+
+    A failed cleanup is a fatal lifecycle failure, not a partial-readiness
+    state: a contaminated environment must never be reused as "clean", so
+    a stop failure short-circuits before the boot. Raw Docker stderr is
+    redacted before it crosses this boundary.
+
+    Args:
+        project_dir: Root directory of the APTL project.
+        remove_volumes: Cleanup policy. When ``True`` (default) the
+            teardown removes Compose-managed volumes; the knob lets future
+            cleanup variations extend this one mode.
+        skip_seed: Forwarded to the start path (skip SOC tool seeding).
+        scenario_path: Optional selected ACES SDL scenario path.
+        backend: Optional pre-created deployment backend, forwarded to the
+            teardown so callers that already resolved one avoid a re-create.
+
+    Returns:
+        LabResult — the boot outcome on success, or a fatal ``FAILED``
+        result carrying the redacted cleanup error when teardown fails.
+    """
+    stop_result = stop_lab(
+        remove_volumes=remove_volumes,
+        project_dir=project_dir,
+        backend=backend,
+    )
+    if not stop_result.success:
+        return LabResult(
+            success=False,
+            error=redact(
+                "clean-state cleanup failed; lab not booted: "
+                f"{stop_result.error}"
+            ),
+            outcome=StartupOutcome.FAILED,
+        )
+
+    return orchestrate_lab_start(
+        project_dir,
+        skip_seed=skip_seed,
+        scenario_path=scenario_path,
+    )
+
+
 def lab_status(
     project_dir: Optional[Path] = None,
     backend: Optional["DeploymentBackend"] = None,

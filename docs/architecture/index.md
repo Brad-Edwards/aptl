@@ -153,3 +153,7 @@ The victim and kali containers publish no host ports; use
 - Victim: Rocky Linux, SSH, Wazuh agent, Falco eBPF monitoring
 - Kali: Attack tools, MCP integration
 - Reverse Engineering: Binary analysis tools, MCP integration
+
+## Preflights
+
+- [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)

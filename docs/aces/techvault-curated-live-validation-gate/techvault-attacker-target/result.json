@@ -6,9 +6,9 @@
     "victim",
     "wazuh"
   ],
-  "command": "aptl lab start --scenario techvault-attacker-target --skip-seed",
+  "command": "uv run aptl lab start --scenario techvault-attacker-target",
   "readiness_outcome": "Lab is ready.",
-  "boot_elapsed_seconds": 97,
+  "boot_elapsed_seconds": 154,
   "selected_profiles": [
     "wazuh",
     "victim",
@@ -59,6 +59,14 @@
     "aptl_aptl-redteam",
     "aptl_aptl-security"
   ],
+  "participant_action": {
+    "verdict": "PASS",
+    "artifact": "participant-action.json",
+    "participant_address": "participant.techvault.kali-victim-ssh-probe",
+    "operation_id": "operation-id-redacted",
+    "operation_state": "succeeded",
+    "behavior_event_count": 2
+  },
   "verdict": "PASS",
   "diagnostics": []
 }

@@ -43,8 +43,7 @@ _OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
         "should still run."
     ),
     StartupOutcome.DEGRADED_UNUSABLE: (
-        "Lab is degraded_unusable — some capabilities or SSH targets "
-        "are not reachable."
+        "Lab is degraded_unusable — some capabilities or SSH targets are not reachable."
     ),
     StartupOutcome.FAILED: "Lab start failed.",
 }
@@ -343,7 +342,7 @@ def validate_live(
         help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
     ),
     profile: str = typer.Option(
-        "orchestration-evaluation",
+        "full-remote-control-plane",
         "--profile",
         help="ACES backend capability profile to validate against.",
     ),

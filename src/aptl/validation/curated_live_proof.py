@@ -26,10 +26,19 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from aces_contracts.participant_behavior import (
+    iter_participant_behavior_snapshot_violations,
+)
+from aces_contracts.participant_episode import (
+    iter_participant_episode_snapshot_violations,
+)
+from aces_contracts.runtime_state import OperationState
+from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_sdl import parse_sdl_file
 
 from aptl.backends.aces import create_aptl_runtime_target
+from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.backends.aces_profiles import (
     load_compose_profile_index,
     normalized_identifier_aliases,
@@ -38,6 +47,9 @@ from aptl.backends.aces_profiles import (
 )
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
+from aptl.core.deployment import get_backend
+from aptl.core.snapshot import capture_snapshot
+from aptl.utils.redaction import redact
 from aptl.validation._gate_checks import _NoStartBackend
 
 
@@ -273,3 +285,218 @@ def compare_to_snapshot(
         )
     )
     return (not diagnostics, diagnostics)
+
+
+def run_participant_action_proof(
+    project_dir: Path,
+    config: AptlConfig,
+    participant_address: str = PARTICIPANT_ACTION_ADDRESS,
+) -> dict[str, object]:
+    """Drive a participant action through the ACES control plane.
+
+    The lab must already be realized by the public start path. This proof uses
+    the configured deployment backend, calls
+    ``RuntimeControlPlane.initialize_participant_episode()``, validates the
+    participant episode/behavior snapshot surfaces, captures a post-action range
+    snapshot, and returns a JSON-serializable evidence object.
+    """
+
+    backend = get_backend(config, project_dir)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+    )
+    control_plane = RuntimeControlPlane(target)
+    receipt = control_plane.initialize_participant_episode(participant_address)
+    status = control_plane.get_operation(receipt.operation_id)
+    snapshot = control_plane.snapshot
+
+    episode_violations = list(
+        iter_participant_episode_snapshot_violations(
+            snapshot.participant_episode_results,
+            snapshot.participant_episode_history,
+        )
+    )
+    behavior_violations = list(
+        iter_participant_behavior_snapshot_violations(
+            snapshot.participant_behavior_history,
+            participant_episode_results=snapshot.participant_episode_results,
+            participant_episode_history=snapshot.participant_episode_history,
+            metadata=snapshot.metadata,
+        )
+    )
+    capture_diagnostics: list[str] = []
+    range_snapshot_summary: dict[str, object] | None = None
+    try:
+        range_snapshot_summary = summarize_snapshot(
+            capture_snapshot(config_dir=project_dir, backend=backend).to_dict()
+        )
+    except Exception as exc:  # noqa: BLE001 - evidence-capture failure -> proof diagnostic.
+        capture_diagnostics.append(
+            redact(f"post-action range snapshot capture failed: {exc}")
+        )
+
+    operation_succeeded = (
+        status is not None and status.state == OperationState.SUCCEEDED
+    )
+    has_episode = participant_address in snapshot.participant_episode_results
+    has_episode_history = bool(
+        snapshot.participant_episode_history.get(participant_address)
+    )
+    has_behavior_history = bool(
+        snapshot.participant_behavior_history.get(participant_address)
+    )
+    passed = (
+        operation_succeeded
+        and has_episode
+        and has_episode_history
+        and has_behavior_history
+        and not episode_violations
+        and not behavior_violations
+        and not capture_diagnostics
+    )
+
+    proof = {
+        "schema": "aptl.participant-action-proof/v1",
+        "participant_address": participant_address,
+        "operation_receipt_contract": "operation-receipt-v1",
+        "operation_status_contract": "operation-status-v1",
+        "runtime_snapshot_contract": "runtime-snapshot-v1",
+        "operation_receipt": {
+            "operation_id": receipt.operation_id,
+            "domain": receipt.domain.value,
+            "accepted": receipt.accepted,
+            "submitted_at": receipt.submitted_at,
+            "diagnostics": _diagnostics_to_dicts(receipt.diagnostics),
+        },
+        "operation_status": (
+            None
+            if status is None
+            else {
+                "operation_id": status.operation_id,
+                "domain": status.domain.value,
+                "state": status.state.value,
+                "submitted_at": status.submitted_at,
+                "updated_at": status.updated_at,
+                "diagnostics": _diagnostics_to_dicts(status.diagnostics),
+                "changed_addresses": list(status.changed_addresses),
+            }
+        ),
+        "participant_runtime_status": target.participant_runtime.status()
+        if target.participant_runtime is not None
+        else None,
+        "participant_episode_results": dict(snapshot.participant_episode_results),
+        "participant_episode_history": {
+            address: list(events)
+            for address, events in snapshot.participant_episode_history.items()
+        },
+        "participant_behavior_history": {
+            address: list(events)
+            for address, events in snapshot.participant_behavior_history.items()
+        },
+        "participant_snapshot_entries": {
+            address: {
+                "domain": entry.domain.value,
+                "resource_type": entry.resource_type,
+                "status": entry.status,
+                "payload": dict(entry.payload),
+            }
+            for address, entry in snapshot.entries.items()
+            if entry.domain.value == "participant"
+        },
+        "post_action_range_snapshot": range_snapshot_summary,
+        "validation": {
+            "episode_violations": [
+                {"path": path, "message": message}
+                for path, message in episode_violations
+            ],
+            "behavior_violations": [
+                {"path": path, "message": message}
+                for path, message in behavior_violations
+            ],
+            "capture_diagnostics": capture_diagnostics,
+        },
+        "verdict": "PASS" if passed else "FAIL",
+    }
+    return _redact_volatile_proof_identifiers(proof, participant_address)
+
+
+def _diagnostics_to_dicts(diagnostics: Sequence[object]) -> list[dict[str, object]]:
+    """Return ACES diagnostics as JSON-serializable redacted dictionaries."""
+
+    result: list[dict[str, object]] = []
+    for diagnostic in diagnostics:
+        severity = getattr(diagnostic, "severity", "")
+        result.append(
+            {
+                "code": getattr(diagnostic, "code", ""),
+                "domain": getattr(diagnostic, "domain", ""),
+                "address": getattr(diagnostic, "address", ""),
+                "severity": getattr(severity, "value", severity),
+                "message": redact(str(getattr(diagnostic, "message", ""))),
+            }
+        )
+    return result
+
+
+def _redact_volatile_proof_identifiers(
+    proof: dict[str, object],
+    participant_address: str,
+) -> dict[str, object]:
+    """Normalize per-run IDs before evidence is committed.
+
+    Operation ids, episode ids, action-instance ids, and output digests prove
+    nothing by their raw value and look like secrets to external scanners. Keep
+    the references internally consistent while removing the high-entropy values.
+    """
+
+    replacements: dict[str, str] = {}
+    receipt = proof.get("operation_receipt")
+    if isinstance(receipt, Mapping):
+        operation_id = receipt.get("operation_id")
+        if isinstance(operation_id, str) and operation_id:
+            replacements[operation_id] = "operation-id-redacted"
+
+    results = proof.get("participant_episode_results")
+    if isinstance(results, Mapping):
+        for result in results.values():
+            if isinstance(result, Mapping):
+                episode_id = result.get("episode_id")
+                if isinstance(episode_id, str) and episode_id:
+                    replacements[episode_id] = "episode-id-redacted"
+
+    behavior_history = proof.get("participant_behavior_history")
+    if isinstance(behavior_history, Mapping):
+        for events in behavior_history.values():
+            if not isinstance(events, list):
+                continue
+            for event in events:
+                if isinstance(event, Mapping):
+                    action_instance_id = event.get("action_instance_id")
+                    if isinstance(action_instance_id, str) and action_instance_id:
+                        replacements[action_instance_id] = (
+                            f"{participant_address}.action-instance-redacted"
+                        )
+
+    return _replace_proof_strings(proof, replacements)
+
+
+def _replace_proof_strings(value: object, replacements: Mapping[str, str]) -> object:
+    if isinstance(value, str):
+        if value.startswith("sha256:") and len(value) > len("sha256:") + 16:
+            return "sha256:redacted-proof-digest"
+        result = value
+        for old, new in replacements.items():
+            result = result.replace(old, new)
+        return result
+    if isinstance(value, list):
+        return [_replace_proof_strings(item, replacements) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(_replace_proof_strings(key, replacements)): _replace_proof_strings(
+                item, replacements
+            )
+            for key, item in value.items()
+        }
+    return value

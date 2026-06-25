@@ -50,7 +50,9 @@ def _write_compose_graph(
         if dependencies:
             lines.append("    depends_on:")
             for dependency in dependencies:
-                lines.extend([f"      {dependency}:", "        condition: service_started"])
+                lines.extend(
+                    [f"      {dependency}:", "        condition: service_started"]
+                )
         service_networks = (networks or {}).get(service_name, [])
         if service_networks:
             lines.append("    networks:")
@@ -137,6 +139,7 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
 
     assert target.name == "aptl"
     assert target.manifest.name == "aptl"
+    assert target.participant_runtime is not None
 
 
 def test_public_start_profiles_match_start_lab_backend_call():
@@ -228,6 +231,9 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert payload["schema_version"] == "backend-manifest/v2"
     required = {
         "backend-manifest-v2",
+        "provisioning-plan-v1",
+        "orchestration-plan-v1",
+        "evaluation-plan-v1",
         "operation-receipt-v1",
         "operation-status-v1",
         "runtime-snapshot-v1",
@@ -235,13 +241,19 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         "workflow-history-event-stream-v1",
         "evaluation-result-envelope-v1",
         "evaluation-history-event-stream-v1",
+        "participant-episode-state-envelope-v1",
+        "participant-episode-history-event-stream-v1",
+        "participant-behavior-history-event-stream-v1",
     }
     assert required <= set(payload["supported_contract_versions"])
-    # orchestration-evaluation: orchestrator + evaluator declared; participant
-    # runtime remains out of scope.
     assert manifest.has_orchestrator is True
     assert manifest.has_evaluator is True
-    assert manifest.has_participant_runtime is False
+    assert manifest.has_participant_runtime is True
+    assert manifest.participant_runtime is not None
+    assert manifest.participant_runtime.supported_participant_roles == frozenset(
+        {"red"}
+    )
+    assert payload["capabilities"]["participant_runtime"] is not None
 
 
 def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
@@ -287,6 +299,140 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
         for case in report.cases
         if not case.passed
     ]
+
+
+def test_aptl_target_passes_full_remote_control_plane_conformance(tmp_path):
+    from aces_conformance.conformance import run_target_conformance
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    backend = MagicMock()
+    config = AptlConfig(lab={"name": "test"})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+    )
+
+    report = run_target_conformance(target, profile="full-remote-control-plane")
+
+    assert report.passed is True, [d.code for d in report.diagnostics]
+    assert report.unsupported_contract_gaps == ()
+    assert report.unsupported_capability_gaps == ()
+    assert all(case.passed for case in report.cases), [
+        (case.name, [d.message for d in case.diagnostics])
+        for case in report.cases
+        if not case.passed
+    ]
+
+
+def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):
+    from aces_contracts.participant_episode import (
+        ParticipantEpisodeTerminalReason,
+        iter_participant_episode_snapshot_violations,
+    )
+    from aces_contracts.runtime_state import OperationState
+    from aces_runtime.control_plane import RuntimeControlPlane
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    backend = MagicMock()
+    config = AptlConfig(lab={"name": "test"})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+    )
+    control_plane = RuntimeControlPlane(target)
+    participant = "participant.conformance"
+
+    init = control_plane.initialize_participant_episode(participant)
+    reset = control_plane.reset_participant_episode(participant)
+    terminate = control_plane.terminate_participant_episode(
+        participant,
+        terminal_reason=ParticipantEpisodeTerminalReason.COMPLETED,
+    )
+    restart = control_plane.restart_participant_episode(participant)
+
+    for receipt in (init, reset, terminate, restart):
+        status = control_plane.get_operation(receipt.operation_id)
+        assert status is not None
+        assert status.state == OperationState.SUCCEEDED, status.diagnostics
+
+    snapshot = control_plane.snapshot
+    assert participant in snapshot.participant_episode_results
+    assert len(snapshot.participant_episode_history[participant]) >= 6
+    assert (
+        list(
+            iter_participant_episode_snapshot_violations(
+                snapshot.participant_episode_results,
+                snapshot.participant_episode_history,
+            )
+        )
+        == []
+    )
+
+
+def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path):
+    import subprocess
+
+    from aces_contracts.participant_behavior import (
+        iter_participant_behavior_snapshot_violations,
+    )
+    from aces_contracts.runtime_state import OperationState
+    from aces_runtime.control_plane import RuntimeControlPlane
+
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+
+    backend = MagicMock()
+    backend.container_exec.return_value = subprocess.CompletedProcess(
+        args=["nmap"],
+        returncode=0,
+        stdout="Host: 172.20.2.20 () Ports: 22/open/tcp//ssh///",
+        stderr="",
+    )
+    config = AptlConfig(lab={"name": "test"})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+    )
+    control_plane = RuntimeControlPlane(target)
+
+    receipt = control_plane.initialize_participant_episode(PARTICIPANT_ACTION_ADDRESS)
+    status = control_plane.get_operation(receipt.operation_id)
+
+    assert status is not None
+    assert status.state == OperationState.SUCCEEDED, status.diagnostics
+    backend.container_exec.assert_called_once_with(
+        "aptl-kali",
+        ["nmap", "-p", "22", "-Pn", "--open", "172.20.2.20", "-oG", "-"],
+        timeout=120,
+    )
+    snapshot = control_plane.snapshot
+    behavior = snapshot.participant_behavior_history[PARTICIPANT_ACTION_ADDRESS]
+    assert [event["event_type"] for event in behavior] == [
+        "action_attempted",
+        "observation_emitted",
+    ]
+    assert behavior[-1]["actor_provenance"] == "codex-cli"
+    assert "22/open" in behavior[-1]["details"]["stdout_excerpt"]
+    assert any(
+        entry.resource_type == "participant-action-instance"
+        for entry in snapshot.entries.values()
+    )
+    assert (
+        list(
+            iter_participant_behavior_snapshot_violations(
+                snapshot.participant_behavior_history,
+                participant_episode_results=snapshot.participant_episode_results,
+                participant_episode_history=snapshot.participant_episode_history,
+                metadata=snapshot.metadata,
+            )
+        )
+        == []
+    )
 
 
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
@@ -400,10 +546,14 @@ def _workflow_orchestration_plan():
             """
         )
     )
-    return aces_plan(compile_runtime_model(scenario), create_aptl_manifest()).orchestration
+    return aces_plan(
+        compile_runtime_model(scenario), create_aptl_manifest()
+    ).orchestration
 
 
-def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker, tmp_path):
+def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(
+    mocker, tmp_path
+):
     """A scenario carrying workflows routes through the control plane's
     orchestration submission (not just provisioning), and the lab still starts."""
     from aces_contracts.runtime_state import OperationState
@@ -413,7 +563,9 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(mocker,
     _write_compose(tmp_path, {"victim": ["victim"]})
     mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=object())
     orchestration = _workflow_orchestration_plan()
-    assert orchestration.actionable_operations  # guard: the plan really carries workflows
+    assert (
+        orchestration.actionable_operations
+    )  # guard: the plan really carries workflows
 
     submit_calls: list[str] = []
 
@@ -537,7 +689,9 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     assert result.lab_result.error
 
 
-def test_start_aces_scenario_submits_evaluation_for_objective_scenario(mocker, tmp_path):
+def test_start_aces_scenario_submits_evaluation_for_objective_scenario(
+    mocker, tmp_path
+):
     """A scenario carrying objectives routes through the control plane's
     evaluation submission after provisioning and orchestration."""
     from aces_contracts.planning import ChangeAction, EvaluationOp, EvaluationPlan
@@ -681,6 +835,8 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
             )
 
     def fake_create_target(*, project_dir, config, backend):
+        from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
+
         target = aces.RuntimeTarget(
             name=aces.APTL_ACES_TARGET_NAME,
             manifest=aces.create_aptl_manifest(),
@@ -691,6 +847,7 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
             ),
             orchestrator=RecordingOrchestrator(),
             evaluator=aces.AptlEvaluator(),
+            participant_runtime=AptlParticipantRuntime(deployment_backend=backend),
         )
         return target
 

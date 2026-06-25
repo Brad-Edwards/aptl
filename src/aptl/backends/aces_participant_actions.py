@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -117,7 +117,7 @@ def drive_participant_action(
     participant_address: str,
     state: ParticipantEpisodeExecutionState,
     *,
-    timestamp_factory,
+    timestamp_factory: Callable[[], str],
 ) -> ParticipantActionExecution | None:
     """Drive the configured participant action and emit ACES evidence surfaces."""
 

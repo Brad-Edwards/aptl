@@ -45,7 +45,9 @@ from aptl.validation._gate_checks import _NoStartBackend
 from aptl.validation.participant_live_proof import (
     run_participant_action_proof as _run_participant_action_proof,
 )
-from aptl.validation.range_snapshot_summary import summarize_snapshot
+from aptl.validation.range_snapshot_summary import (
+    summarize_snapshot as _summarize_snapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,12 @@ def _running_container_names(snapshot: Mapping[str, object]) -> list[str]:
         if isinstance(name, str) and name and status.startswith("Up"):
             names.append(name)
     return names
+
+
+def summarize_snapshot(snapshot: Mapping[str, object]) -> dict[str, object]:
+    """Return an evidence-sized view of a range snapshot."""
+
+    return _summarize_snapshot(snapshot)
 
 
 def _snapshot_network_names(snapshot: Mapping[str, object]) -> list[str]:

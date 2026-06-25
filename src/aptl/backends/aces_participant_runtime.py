@@ -32,7 +32,7 @@ from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotE
 
 from aptl.backends.aces_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
-    PARTICIPANT_ACTION_ADDRESS,
+    PARTICIPANT_ACTION_ADDRESS as _PARTICIPANT_ACTION_ADDRESS,
     ParticipantActionSpec,
     drive_participant_action,
     participant_action_diagnostic,
@@ -40,6 +40,8 @@ from aptl.backends.aces_participant_actions import (
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
+
+PARTICIPANT_ACTION_ADDRESS = _PARTICIPANT_ACTION_ADDRESS
 
 
 def _utc_now() -> str:

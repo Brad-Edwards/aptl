@@ -138,11 +138,12 @@ def _wire_boot(monkeypatch, *, outcome=StartupOutcome.READY, realization=None, s
     monkeypatch.setattr(
         lgc, "select_backend_profiles", lambda config, profiles: ["dmz", "soc"]
     )
-    monkeypatch.setattr(lgp, "stop_lab", lambda **k: LabResult(success=True))
     monkeypatch.setattr(
         lgp,
-        "orchestrate_lab_start",
-        lambda p, scenario_path=None: LabResult(success=True, outcome=outcome),
+        "clean_boot_lab",
+        lambda p, *, remove_volumes=True, scenario_path=None: LabResult(
+            success=True, outcome=outcome
+        ),
     )
     monkeypatch.setattr(
         lgp, "capture_snapshot", lambda config_dir, backend: _Snapshot(snapshot)
@@ -369,13 +370,12 @@ def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
 
 
 def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
-    stops, boots = [], []
+    boots = []
     _wire_boot(monkeypatch)
-    monkeypatch.setattr(lgp, "stop_lab", lambda **k: stops.append(1) or LabResult(success=True))
     monkeypatch.setattr(
         lgp,
-        "orchestrate_lab_start",
-        lambda p, scenario_path=None: boots.append(1)
+        "clean_boot_lab",
+        lambda *a, **k: boots.append(1)
         or LabResult(success=True, outcome=StartupOutcome.READY),
     )
     state = LiveGateState()
@@ -386,10 +386,34 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
         options=LiveGateOptions(skip_clean_boot=True),
         state=state,
     )
-    # Non-destructive: neither cleanup nor reboot, but the running lab is still
-    # snapshotted and the realization matrix is still computed.
-    assert stops == [] and boots == []
+    # Non-destructive: no clean boot (cleanup+reboot), but the running lab is
+    # still snapshotted and the realization matrix is still computed.
+    assert boots == []
     assert check.passed and state.snapshot["containers"]
+
+
+def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
+    """A failed clean boot (e.g. fatal cleanup) fails the gate, no snapshot."""
+    _wire_boot(monkeypatch)
+    monkeypatch.setattr(
+        lgp,
+        "clean_boot_lab",
+        lambda *a, **k: LabResult(
+            success=False,
+            error="clean-state cleanup failed; lab not booted",
+            outcome=StartupOutcome.FAILED,
+        ),
+    )
+    state = LiveGateState()
+    check = lgc.check_aces_driven_boot(
+        object(),
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(),
+        state=state,
+    )
+    assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert any("public lab start failed" in d for d in check.diagnostics)
 
 
 def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
@@ -397,8 +421,10 @@ def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeyp
     boots = []
     monkeypatch.setattr(
         lgp,
-        "orchestrate_lab_start",
-        lambda p, scenario_path=None: boots.append((p, scenario_path))
+        "clean_boot_lab",
+        lambda p, *, remove_volumes=True, scenario_path=None: boots.append(
+            (p, scenario_path)
+        )
         or LabResult(success=True, outcome=StartupOutcome.READY),
     )
     state = LiveGateState()

@@ -281,6 +281,83 @@ class TestLabStartCommand:
         assert result.exit_code == 2
         assert "mutually exclusive" in result.stderr
 
+    def test_start_clean_calls_clean_boot_lab(self, runner, mocker, tmp_path):
+        """--clean routes through clean_boot_lab, not the plain start path."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mock_clean = mocker.patch(
+            "aptl.cli.lab.clean_boot_lab",
+            return_value=LabResult(success=True, message="Lab started"),
+        )
+        mock_orchestrate = mocker.patch("aptl.cli.lab.orchestrate_lab_start")
+
+        result = runner.invoke(
+            app,
+            ["lab", "start", "--project-dir", str(tmp_path), "--clean", "--yes"],
+        )
+
+        assert result.exit_code == 0
+        mock_orchestrate.assert_not_called()
+        mock_clean.assert_called_once_with(
+            tmp_path,
+            remove_volumes=True,
+            skip_seed=False,
+            scenario_path=None,
+        )
+
+    def test_start_clean_aborts_without_confirmation(self, runner, mocker, tmp_path):
+        """--clean is destructive: declining the prompt aborts before any boot."""
+        from aptl.cli.main import app
+
+        mock_clean = mocker.patch("aptl.cli.lab.clean_boot_lab")
+
+        result = runner.invoke(
+            app,
+            ["lab", "start", "--project-dir", str(tmp_path), "--clean"],
+            input="n\n",
+        )
+
+        assert result.exit_code == 0
+        mock_clean.assert_not_called()
+        assert "Aborted" in result.stdout
+
+    def test_start_clean_yes_bypasses_prompt(self, runner, mocker, tmp_path):
+        """--yes skips the destructive confirmation prompt."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mock_clean = mocker.patch(
+            "aptl.cli.lab.clean_boot_lab",
+            return_value=LabResult(success=True, message="Lab started"),
+        )
+
+        result = runner.invoke(
+            app,
+            ["lab", "start", "--project-dir", str(tmp_path), "--clean", "--yes"],
+        )
+
+        assert result.exit_code == 0
+        mock_clean.assert_called_once()
+
+    def test_start_clean_flag_listed_in_help(self, runner):
+        """The --clean flag is discoverable from start --help.
+
+        Strip ANSI escapes first: when color is forced on (CI sets
+        ``FORCE_COLOR``), Rich styles the option name and injects escape
+        sequences inside the ``--clean`` token, so the raw stdout has no
+        literal ``--clean`` substring even though the flag is rendered.
+        """
+        import re
+
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["lab", "start", "--help"])
+
+        assert result.exit_code == 0
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+        assert "--clean" in plain
+
     def test_lab_scenarios_lists_catalog_entries(self, runner, mocker, tmp_path):
         """The list command should read catalog rows dynamically."""
         from aptl.cli.main import app

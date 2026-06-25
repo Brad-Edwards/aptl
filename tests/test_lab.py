@@ -259,6 +259,161 @@ class TestLabStop:
         assert "wazuh" in cmd_args
 
 
+class TestCleanBootLab:
+    """Tests for the RNG-001 clean-boot lifecycle mode.
+
+    ``clean_boot_lab`` is the single reusable destructive clean-state seam:
+    stop the project-scoped deployment with volume removal, then boot
+    through the public start path. A failed cleanup is fatal — a
+    contaminated environment must never be reused as ``clean``.
+    """
+
+    def test_clean_boot_stops_with_volumes_then_starts(self, monkeypatch, tmp_path):
+        """Clean boot tears down (volumes removed) before booting, in order."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        order: list[str] = []
+
+        def fake_stop(**kwargs):
+            order.append("stop")
+            assert kwargs["remove_volumes"] is True
+            return LabResult(success=True, message="stopped")
+
+        def fake_start(project_dir, **kwargs):
+            order.append("start")
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is True
+        assert result.outcome is StartupOutcome.READY
+        assert order == ["stop", "start"]
+
+    def test_clean_boot_stop_failure_is_fatal_and_skips_start(
+        self, monkeypatch, tmp_path
+    ):
+        """A failed cleanup is fatal: do not start a contaminated lab."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        started = []
+
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **k: LabResult(success=False, error="down failed"),
+        )
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: started.append(1)
+            or LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is False
+        assert result.outcome is StartupOutcome.FAILED
+        assert started == [], "start must not run after a failed cleanup"
+
+    def test_clean_boot_redacts_stop_error(self, monkeypatch, tmp_path):
+        """Raw Docker stderr from a failed cleanup is redacted in the envelope."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult
+
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **k: LabResult(success=False, error="raw docker stderr"),
+        )
+        monkeypatch.setattr(lab, "redact", lambda s: f"REDACTED::{s}")
+        monkeypatch.setattr(
+            lab, "orchestrate_lab_start", lambda *a, **k: pytest.fail("unreachable")
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert "REDACTED::" in result.error
+
+    def test_clean_boot_threads_skip_seed_and_scenario_path(
+        self, monkeypatch, tmp_path
+    ):
+        """Seed behavior and scenario selection flow through to the start path."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        captured = {}
+
+        monkeypatch.setattr(lab, "stop_lab", lambda **k: LabResult(success=True))
+
+        def fake_start(project_dir, *, skip_seed=False, scenario_path=None):
+            captured["skip_seed"] = skip_seed
+            captured["scenario_path"] = scenario_path
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
+
+        scenario = tmp_path / "scenario.yaml"
+        clean_boot_lab(tmp_path, skip_seed=True, scenario_path=scenario)
+
+        assert captured == {"skip_seed": True, "scenario_path": scenario}
+
+    def test_clean_boot_remove_volumes_false_honored(self, monkeypatch, tmp_path):
+        """The cleanup policy is a knob: remove_volumes=False is forwarded."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        captured = {}
+
+        def fake_stop(**kwargs):
+            captured["remove_volumes"] = kwargs["remove_volumes"]
+            return LabResult(success=True)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        clean_boot_lab(tmp_path, remove_volumes=False)
+
+        assert captured["remove_volumes"] is False
+
+    def test_clean_boot_forwards_backend_to_stop(self, monkeypatch, tmp_path):
+        """An explicit backend is forwarded to the project-scoped stop."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        sentinel_backend = MagicMock()
+        captured = {}
+
+        def fake_stop(**kwargs):
+            captured["backend"] = kwargs.get("backend")
+            return LabResult(success=True)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        clean_boot_lab(tmp_path, backend=sentinel_backend)
+
+        assert captured["backend"] is sentinel_backend
+
+
 class TestLabStatus:
     """Tests for lab status checking."""
 

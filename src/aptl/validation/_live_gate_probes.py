@@ -31,7 +31,7 @@ from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
-from aptl.core.lab import orchestrate_lab_start, stop_lab
+from aptl.core.lab import clean_boot_lab
 from aptl.core.lab_types import StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.core.snapshot import capture_snapshot
@@ -134,23 +134,26 @@ def _boot_lab(
             diagnostics.append("snapshot capture returned no data for running lab")
         return diagnostics
 
-    stop_result = stop_lab(
-        remove_volumes=options.clean_volumes, project_dir=project_dir
+    # Reuse the RNG-001 clean-boot lifecycle capability rather than open-coding
+    # the destructive stop+start here: the gate is a proof point, not the only
+    # implementation home. A failed cleanup is fatal inside ``clean_boot_lab``
+    # (a contaminated environment must not be snapshotted as proof), so a
+    # ``FAILED`` outcome covers both cleanup and start failures.
+    boot_result = clean_boot_lab(
+        project_dir,
+        remove_volumes=options.clean_volumes,
+        scenario_path=scenario_path,
     )
-    if not stop_result.success:
-        diagnostics.append(redact(f"pre-boot cleanup failed: {stop_result.error}"))
-
-    start_result = orchestrate_lab_start(project_dir, scenario_path=scenario_path)
-    if start_result.outcome is StartupOutcome.FAILED:
+    if boot_result.outcome is StartupOutcome.FAILED:
         diagnostics.append(
-            redact(f"public lab start failed: {start_result.error or 'unknown'}")
+            redact(f"public lab start failed: {boot_result.error or 'unknown'}")
         )
-        diagnostics.extend(_startup_diag_lines(start_result))
+        diagnostics.extend(_startup_diag_lines(boot_result))
         return diagnostics
-    if start_result.outcome is not StartupOutcome.READY:
+    if boot_result.outcome is not StartupOutcome.READY:
         # Degraded-but-usable still boots the range; record the degradation but
         # let later readiness checks decide pass/fail on concrete components.
-        diagnostics_note = _startup_diag_lines(start_result)
+        diagnostics_note = _startup_diag_lines(boot_result)
         log.warning("lab booted degraded: %s", "; ".join(diagnostics_note) or "")
 
     state.snapshot = _capture(project_dir, config)

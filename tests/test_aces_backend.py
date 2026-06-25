@@ -1150,18 +1150,10 @@ def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):
     attacker.payload["spec"]["node"]["services"] = [
         {"name": "ssh-control", "port": 22, "protocol": "tcp"}
     ]
-    attacker.payload["spec"]["runtime"] = {
-        "rendered_configs": ["kali-operator.conf"],
-        "evidence_paths": ["runs/exercise-a/kali"],
-    }
     target = _node_resource("exercise-b.victim")
     target.payload["spec"]["node"]["services"] = [
         {"name": "web-target", "port": 8080, "protocol": "tcp"}
     ]
-    target.payload["spec"]["runtime"] = {
-        "rendered_configs": ["victim-web.conf"],
-        "evidence_paths": ["runs/exercise-b/victim"],
-    }
 
     first = provisioner.apply(_plan_for_resources(attacker), RuntimeSnapshot())
     second = provisioner.apply(_plan_for_resources(target), RuntimeSnapshot())
@@ -1173,12 +1165,6 @@ def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):
     )
     assert first.details["realization"]["nodes"][0]["services"] == ["ssh-control"]
     assert second.details["realization"]["nodes"][0]["services"] == ["web-target"]
-    assert first.details["realization"]["nodes"][0]["rendered_configs"] == [
-        "kali-operator.conf"
-    ]
-    assert second.details["realization"]["nodes"][0]["rendered_configs"] == [
-        "victim-web.conf"
-    ]
 
 
 def test_provisioner_rejects_missing_node_realization_even_with_techvault_metadata(

@@ -42,10 +42,8 @@ from aptl.backends.aces_realization_values import (
     placement_target_values as _placement_target_values,
     resolve_target_address as _resolve_target_address,
     resource_name as _resource_name,
-    runtime_spec as _runtime_spec,
     service_names as _service_names,
     static_addresses as _static_addresses,
-    string_list as _string_list,
 )
 from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
@@ -288,16 +286,12 @@ def _realize_node(
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
-    runtime_spec = _runtime_spec(payload, spec)
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
         aliases=tuple(sorted(aliases)),
         profiles=tuple(sorted(profiles)),
         services=tuple(sorted(_service_names(node_spec))),
-        rendered_configs=tuple(sorted(_string_list(runtime_spec, "rendered_configs"))),
-        evidence_paths=tuple(sorted(_string_list(runtime_spec, "evidence_paths"))),
-        telemetry_paths=tuple(sorted(_string_list(runtime_spec, "telemetry_paths"))),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         declared_health=_health_status(node_spec),

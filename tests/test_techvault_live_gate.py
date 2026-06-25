@@ -7,6 +7,7 @@ lifecycle / snapshot / collector entry points. The destructive end-to-end live
 boot is the integration-marked, ``APTL_LIVE_GATE``-gated test at the bottom.
 """
 
+import functools
 import json
 import os
 import types
@@ -99,8 +100,13 @@ def _config():
     return AptlConfig(lab={"name": "techvault"})
 
 
-def _node(name, profiles, aliases=None):
-    return {"name": name, "aliases": aliases or [name], "profiles": list(profiles)}
+def _node(name, profiles, aliases=None, declared_health=None):
+    return {
+        "name": name,
+        "aliases": aliases or [name],
+        "profiles": list(profiles),
+        "declared_health": declared_health,
+    }
 
 
 def _container(name, *, status="Up 2 minutes (healthy)", health="healthy", networks=None):
@@ -566,6 +572,49 @@ def test_readiness_fails_on_empty_snapshot():
     assert not check.passed
 
 
+def test_readiness_passes_when_declared_health_met():
+    state = _readiness_state(
+        [_node("webapp", ["dmz"], declared_health="healthy")],
+        [_container("aptl-webapp")],  # default container health == "healthy"
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert check.passed
+
+
+def test_readiness_fails_when_declared_healthy_but_health_unreported():
+    # A node declaring health "healthy" whose container has no Compose
+    # healthcheck (health == "") must now fail — today's behavior silently
+    # tolerated this because only "unhealthy" was a hard failure.
+    state = _readiness_state(
+        [_node("webapp", ["dmz"], declared_health="healthy")],
+        [_container("aptl-webapp", status="Up 2 minutes", health="")],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert not check.passed
+    assert any("declares health" in d for d in check.diagnostics)
+
+
+def test_readiness_fails_when_declared_healthy_but_still_starting():
+    state = _readiness_state(
+        [_node("webapp", ["dmz"], declared_health="healthy")],
+        [_container("aptl-webapp", status="Up 5s (health: starting)", health="starting")],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert not check.passed
+    assert any("declares health" in d for d in check.diagnostics)
+
+
+def test_readiness_tolerates_unreported_health_when_node_declares_none():
+    # No declared health → an empty container health stays tolerated, preserving
+    # behavior for nodes that declare no health expectation.
+    state = _readiness_state(
+        [_node("webapp", ["dmz"])],
+        [_container("aptl-webapp", status="Up 2 minutes", health="")],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+    assert check.passed
+
+
 # --------------------------------------------------------------------------- #
 # 4. Kali reachability.
 # --------------------------------------------------------------------------- #
@@ -646,9 +695,23 @@ def _telemetry_state():
     return state
 
 
+def _patch_collect_no_sleep(monkeypatch):
+    """Drive the evidence poll loop with an injected no-op sleep.
+
+    Binds the real ``_collect_until_evidence`` with ``sleep_fn`` set to a no-op
+    via its explicit dependency boundary, rather than patching ``time.sleep`` on
+    the module. The poll loop still runs its iterations and collector calls.
+    """
+    monkeypatch.setattr(
+        lgc,
+        "_collect_until_evidence",
+        functools.partial(lgp._collect_until_evidence, sleep_fn=lambda _: None),
+    )
+
+
 def test_telemetry_passes_when_traffic_evidence_collected(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
+    _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}]
     )
@@ -670,7 +733,7 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
     # Suricata emits `stats` regardless of traffic; the check must not pass on
     # them alone (otherwise it would pass on any quiet lab).
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
+    _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp, "collect_suricata_eve", lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}]
     )
@@ -689,7 +752,7 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
 
 def test_telemetry_fails_when_no_evidence(monkeypatch):
     monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
-    monkeypatch.setattr(lgp.time, "sleep", lambda s: None)
+    _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
     state = _telemetry_state()
@@ -863,6 +926,26 @@ def _variation_state(nodes):
     return state
 
 
+def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
+    """Write a minimal compose file mapping service names to profiles.
+
+    Mirrors the helper in ``test_aces_backend.py``; lets variation tests drive
+    the real ``interpret_provisioning_plan`` compose-profile resolution against a
+    hermetic ``tmp_path`` instead of the repo's live ``docker-compose.yml``.
+    """
+    lines = ["services:"]
+    for service_name, profiles in services.items():
+        rendered = ", ".join(f'"{profile}"' for profile in profiles)
+        lines.extend(
+            [
+                f"  {service_name}:",
+                f"    profiles: [{rendered}]",
+                "    image: example:latest",
+            ]
+        )
+    (project_dir / "docker-compose.yml").write_text("\n".join(lines))
+
+
 def test_variation_passes_on_distinct_realizations(monkeypatch):
     results = iter(
         [
@@ -878,17 +961,18 @@ def test_variation_passes_on_distinct_realizations(monkeypatch):
     assert check.passed
 
 
-def test_variation_accepts_core_otel_public_start_profile():
+def test_variation_accepts_core_otel_public_start_profile(tmp_path):
     config = AptlConfig(
         lab={"name": "techvault"},
         containers={"enterprise": True, "wazuh": False, "victim": False, "kali": False},
     )
+    _write_compose(tmp_path, {"ad": ["enterprise"], "aptl-grafana-otel": ["otel"]})
     state = _variation_state(
         [_node("ad", ["enterprise"]), _node("aptl-grafana-otel", ["otel"])]
     )
 
     check = lgc.check_scenario_variation(
-        project_dir=PROJECT_ROOT, config=config, state=state
+        project_dir=tmp_path, config=config, state=state
     )
 
     assert check.passed

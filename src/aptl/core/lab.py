@@ -84,10 +84,18 @@ def start_aces_scenario(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
-) -> LabResult:
-    """Lazy ACES handoff import for the public lab-start path."""
+    *,
+    run_store: object = None,
+    run_id: str | None = None,
+) -> "AcesStartOutcome | LabResult":
+    """Lazy ACES handoff import for the public lab-start path.
+
+    ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
+    are threaded into the ACES handoff so orchestration persists workflow
+    artifacts under the same run directory the run record is written to.
+    """
     try:
-        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+        from aptl.backends.aces import AcesStartOutcome, start_aces_scenario as _start_aces_scenario
     except ImportError as exc:
         error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
         log.error(error)
@@ -98,6 +106,8 @@ def start_aces_scenario(
         config,
         backend,
         scenario_path=scenario_path,
+        run_store=run_store,
+        run_id=run_id,
     )
 
 
@@ -484,6 +494,15 @@ class _LabStartContext(object):
     ssh_key_path: Path | None = None
     selected_profiles: set[str] = field(default_factory=set)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
+    # REP-001: ACES start outcome and range snapshot for run record writing.
+    # Use object to avoid circular imports; typed at use sites.
+    aces_outcome: object = None
+    snapshot: object = None
+    # REP-001 / GAP 4: one run store + run_id resolved once per lab-start run,
+    # threaded through orchestration and reused by the run-record step so
+    # workflow artifacts and the record share a single run directory.
+    run_store: object = None
+    run_id: str | None = None
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -982,26 +1001,38 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
-    start_result = start_aces_scenario(
+    # GAP 4: resolve the single run target ONCE, before the ACES handoff, so
+    # orchestration persists workflow artifacts and the later run-record step
+    # write to the same run directory / run_id.
+    ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    outcome = start_aces_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
+        run_store=ctx.run_store,
+        run_id=ctx.run_id,
     )
-    if not start_result.success and ctx.config.containers.soc:
+    lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
+    if not lab_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
             "initializing). Waiting 60s and retrying..."
         )
         import time
         time.sleep(60)
-        start_result = start_aces_scenario(
+        outcome = start_aces_scenario(
             ctx.project_dir,
             ctx.config,
             ctx.backend,
             scenario_path=ctx.scenario_path,
+            run_store=ctx.run_store,
+            run_id=ctx.run_id,
         )
-    if start_result.success:
+        lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
+    if lab_result.success:
+        # Store the ACES start outcome for the run record step (REP-001).
+        ctx.aces_outcome = outcome
         # Scope the post-start readiness checks to the profiles this scenario
         # actually started, not the global config flags. A curated bounded
         # scenario starts a subset, so a config-flag gate would wait on (and
@@ -1013,10 +1044,10 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             scenario_path=ctx.scenario_path,
         )
         return None
-    log.error("Lab start failed: %s", start_result.error)
+    log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
         success=False,
-        error=f"Lab start failed: {start_result.error}",
+        error=f"Lab start failed: {lab_result.error}",
     )
 
 
@@ -1208,6 +1239,8 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
             ),
         )
         return None
+    # Store snapshot for run record step (REP-001).
+    ctx.snapshot = snapshot
     log.info(
         "Range: %d containers, %d networks, %d services, %d SSH endpoints",
         len(snapshot.containers),
@@ -1216,6 +1249,163 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
         len(snapshot.ssh),
     )
     return None
+
+
+def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
+    """Write an ACES-aligned reproducibility record into the run archive (REP-001).
+
+    Non-fatal: a failure to write the record emits a WARNING diagnostic but
+    does not abort the lab start. The lab is already running at this point.
+    """
+    log.info("Step 11c: Writing run reproducibility record...")
+    if ctx.aces_outcome is None or ctx.snapshot is None:
+        log.warning(
+            "REP-001: Skipping run record — ACES outcome or range snapshot unavailable"
+        )
+        return None
+    try:
+        _write_run_record(ctx)
+    except Exception:
+        log.exception("REP-001: Run record write failed (non-fatal)")
+        _emit_diagnostic(
+            ctx,
+            step="write_run_record",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message="Run reproducibility record could not be written; run archive will lack REP-001 record",
+            operator_action=(
+                "Inspect lab logs; the lab is running but the run archive "
+                "will be missing its reproducibility record"
+            ),
+        )
+    return None
+
+
+def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
+    """Resolve the single (run_store, run_id) for this lab-start run (GAP 4).
+
+    Prefers the active scenario's trace-scoped run dir (``resolve_active_run_dir``)
+    so MCP-side and lab-side artifacts share one directory; otherwise mints a
+    filesystem-safe ``run_<UTC timestamp>`` id under the default run store base
+    dir. The minted id is shaped to pass ``runstore._validate_id``. Resolved
+    once and cached on ctx so orchestration and the run record agree.
+    """
+    from datetime import datetime, timezone
+
+    from aptl.core.runstore import LocalRunStore, resolve_active_run_dir
+
+    state_dir = ctx.project_dir / ".aptl"
+    active_run_dir = resolve_active_run_dir(state_dir)
+    if active_run_dir is not None:
+        return LocalRunStore(active_run_dir.parent), active_run_dir.name
+    run_id = datetime.now(timezone.utc).strftime("run_%Y%m%dT%H%M%SZ")
+    return LocalRunStore(state_dir / "runs"), run_id
+
+
+def _write_run_record(ctx: _LabStartContext) -> None:
+    """Internal helper: build and persist the reproducibility record."""
+    from datetime import datetime, timezone
+
+    from aptl.backends.aces_repro import build_reproducibility_record
+    from aptl.core.snapshot import RangeSnapshot, detection_content_digest
+
+    outcome = ctx.aces_outcome
+    snapshot = ctx.snapshot
+    if not isinstance(snapshot, RangeSnapshot):
+        log.warning("REP-001: ctx.snapshot is not a RangeSnapshot; skipping")
+        return
+
+    # GAP 4: reuse the run target resolved in _step_start_containers so the
+    # record and orchestration artifacts share one run_id; fall back to a
+    # fresh resolution only if the start step did not run (defensive).
+    if ctx.run_store is not None and ctx.run_id:
+        store: object = ctx.run_store
+        run_id = ctx.run_id
+    else:
+        store, run_id = _resolve_run_target(ctx)
+
+    store.create_run(run_id)
+
+    final_snapshot = getattr(outcome, "final_snapshot", None)
+    realization_details = getattr(outcome, "realization_details", {})
+    selected_profiles = getattr(outcome, "selected_profiles", [])
+    scenario_path = getattr(outcome, "scenario_path", None)
+
+    from aces_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
+    if final_snapshot is None or not isinstance(final_snapshot, _RuntimeSnapshot):
+        final_snapshot = _RuntimeSnapshot()
+
+    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    container_image_digests = {
+        c.name: c.image_digest
+        for c in snapshot.containers
+        if c.image_digest
+    }
+    tool_versions = {
+        k: v
+        for k, v in (
+            ("python", snapshot.software.python_version),
+            ("docker", snapshot.software.docker_version),
+            ("compose", snapshot.software.compose_version),
+            ("aptl", snapshot.software.aptl_version),
+            ("aces_sdl", snapshot.software.aces_sdl_version),
+        )
+        if v
+    }
+
+    record = build_reproducibility_record(
+        run_id=run_id,
+        backend_name="aptl",
+        started_at=snapshot.timestamp,
+        finished_at=now_str,
+        outcome="success",
+        final_snapshot=final_snapshot,
+        realization_details=realization_details if isinstance(realization_details, dict) else {},
+        selected_profiles=list(selected_profiles) if selected_profiles else [],
+        scenario_path=scenario_path,
+        scenario_display_name=str(scenario_path.name) if scenario_path else "unknown",
+        range_snapshot_dict=snapshot.to_dict(),
+        config_digests=snapshot.config_hashes,
+        container_image_digests=container_image_digests,
+        detection_content_digest=detection_content_digest(ctx.project_dir),
+        tool_versions=tool_versions,
+        evidence_references=_collect_evidence_references(store, run_id),
+    )
+    store.write_json(run_id, "manifest.json", record)
+    log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
+
+
+# Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each
+# existing file under these directories is referenced by its relative path;
+# bytes are never inlined into the record.
+_EVIDENCE_KINDS = ("orchestration", "mcp-side", "kali-side")
+
+
+def _collect_evidence_references(store: object, run_id: str) -> list[dict[str, str]]:
+    """Enumerate evidence artifacts that EXIST under the run dir (GAP 3).
+
+    References are RELATIVE to the run directory (never absolute) and the
+    manifest never inlines file bytes. On a bare lab start this may be just
+    orchestration artifacts (or empty), which is fine.
+    """
+    try:
+        run_dir = store.get_run_path(run_id)
+    except Exception:
+        return []
+    references: list[dict[str, str]] = []
+    for kind in _EVIDENCE_KINDS:
+        subtree = run_dir / kind
+        if not subtree.is_dir():
+            continue
+        for path in sorted(subtree.rglob("*")):
+            if path.is_file():
+                references.append(
+                    {
+                        "path": path.relative_to(run_dir).as_posix(),
+                        "kind": kind,
+                    }
+                )
+    return references
 
 
 def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
@@ -1490,6 +1680,7 @@ _LAB_START_STEPS = (
     _step_wait_for_services,
     _step_test_ssh,
     _step_capture_snapshot,
+    _step_write_run_record,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,

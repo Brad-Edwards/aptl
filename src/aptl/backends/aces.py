@@ -10,9 +10,9 @@ start.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
@@ -49,10 +49,28 @@ if TYPE_CHECKING:
     from aces_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.runstore import RunStorageBackend
 
 log = get_logger("aces-backend")
 
 DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
+
+
+@dataclass
+class AcesStartOutcome:
+    """Reference-holder for start_aces_scenario outputs (REP-001 / ADR-044).
+
+    Carries the lab result alongside ACES runtime facts captured during
+    _run_execution_plan so downstream steps can build a reproducibility
+    record without re-running ACES planning or calling Docker.
+    """
+
+    lab_result: LabResult
+    final_snapshot: RuntimeSnapshot
+    realization_details: dict[str, Any]
+    selected_profiles: list[str]
+    scenario_path: Path | None
+    manifest_payload: dict[str, Any] = field(default_factory=dict)
 
 
 def create_aptl_runtime_target(
@@ -83,8 +101,17 @@ def start_aces_scenario(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
-) -> LabResult:
-    """Start an APTL lab by compiling and applying an ACES SDL scenario."""
+    *,
+    run_store: "RunStorageBackend | None" = None,
+    run_id: str | None = None,
+) -> AcesStartOutcome:
+    """Start an APTL lab by compiling and applying an ACES SDL scenario.
+
+    ``run_store`` and ``run_id`` (resolved once for the whole lab-start run,
+    REP-001 / GAP 4) are threaded into orchestration so workflow result and
+    history artifacts persist under the same run directory the reproducibility
+    record is written to.
+    """
 
     resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
     if not resolved_scenario.is_absolute():
@@ -97,11 +124,23 @@ def start_aces_scenario(
             backend=backend,
         )
         execution_plan = RuntimeManager(target).plan(scenario)
-        return _run_execution_plan(target, execution_plan)
+        return _run_execution_plan(
+            target,
+            execution_plan,
+            resolved_scenario,
+            run_store=run_store,
+            run_id=run_id,
+        )
     except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
-        return LabResult(
-            success=False,
-            error=redact(f"ACES runtime handoff failed: {exc}"),
+        return AcesStartOutcome(
+            lab_result=LabResult(
+                success=False,
+                error=redact(f"ACES runtime handoff failed: {exc}"),
+            ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=resolved_scenario,
         )
 
 
@@ -134,7 +173,14 @@ def selected_profiles_for_scenario(
     return select_backend_profiles(config, realization.profiles)
 
 
-def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") -> LabResult:
+def _run_execution_plan(
+    target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
+    scenario_path: Path | None = None,
+    *,
+    run_store: "RunStorageBackend | None" = None,
+    run_id: str | None = None,
+) -> AcesStartOutcome:
     """Apply a planned ACES scenario through the runtime control plane.
 
     Fail closed on every planner error. Scenario start routes provisioning,
@@ -145,14 +191,36 @@ def _run_execution_plan(target: RuntimeTarget, execution_plan: "ExecutionPlan") 
     """
     blocking = [diag for diag in execution_plan.diagnostics if diag.is_error]
     if blocking:
-        return LabResult(success=False, error=render_aces_diagnostics(blocking))
+        return AcesStartOutcome(
+            lab_result=LabResult(
+                success=False, error=render_aces_diagnostics(blocking)
+            ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=scenario_path,
+        )
     control_plane = RuntimeControlPlane(target, initial_snapshot=execution_plan.base_snapshot)
-    failure = _apply_provisioning_and_orchestration(control_plane, execution_plan, target)
+    failure, realization_details, selected_profiles = _apply_provisioning_and_orchestration(
+        control_plane, execution_plan, target, run_store=run_store, run_id=run_id
+    )
     if failure is not None:
-        return failure
-    return LabResult(
-        success=True,
-        message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
+        return AcesStartOutcome(
+            lab_result=failure,
+            final_snapshot=control_plane.get_snapshot(),
+            realization_details=realization_details,
+            selected_profiles=selected_profiles,
+            scenario_path=scenario_path,
+        )
+    return AcesStartOutcome(
+        lab_result=LabResult(
+            success=True,
+            message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
+        ),
+        final_snapshot=control_plane.get_snapshot(),
+        realization_details=realization_details,
+        selected_profiles=selected_profiles,
+        scenario_path=scenario_path,
     )
 
 
@@ -160,12 +228,22 @@ def _apply_provisioning_and_orchestration(
     control_plane: RuntimeControlPlane,
     execution_plan: "ExecutionPlan",
     target: RuntimeTarget,
-) -> LabResult | None:
+    *,
+    run_store: "RunStorageBackend | None" = None,
+    run_id: str | None = None,
+) -> tuple[LabResult | None, dict[str, Any], list[str]]:
     """Submit provisioning, orchestration, and evaluation control-plane phases.
 
-    Returns a failed ``LabResult`` for the first phase that fails, else ``None``.
+    Returns a triple of (failure | None, realization_details, selected_profiles).
+    Failure is a failed LabResult for the first phase that fails, else None.
+
+    ``realization_details`` and ``selected_profiles`` are populated (REP-001 /
+    GAP 1) by interpreting the provisioning plan through the same public path
+    the provisioner uses, so the reproducibility record carries real
+    realization evidence rather than empty placeholders.
     """
-    phases = [
+    realization_details, selected_profiles = _interpret_realization(target, execution_plan)
+    phases: list[Callable[[], object]] = [
         lambda: control_plane.submit_provisioning(execution_plan.provisioning),
     ]
     if execution_plan.orchestration.actionable_operations:
@@ -179,7 +257,7 @@ def _apply_provisioning_and_orchestration(
     for submit in phases:
         failure = _apply_phase(control_plane, submit)
         if failure is not None:
-            return failure
+            return failure, realization_details, selected_profiles
     evaluation_results: dict[str, dict[str, object]] = {}
     if execution_plan.evaluation.actionable_operations and target.evaluator is not None:
         evaluation_results = target.evaluator.results()
@@ -187,13 +265,42 @@ def _apply_provisioning_and_orchestration(
     if isinstance(orchestrator, AptlOrchestrator) and orchestrator.results():
         drive_diagnostics = orchestrator.drive_workflows(
             evaluation_results=evaluation_results,
+            run_store=run_store,
+            run_id=run_id,
         )
         if drive_diagnostics:
-            return LabResult(
-                success=False,
-                error=render_aces_diagnostics(drive_diagnostics),
+            return (
+                LabResult(
+                    success=False,
+                    error=render_aces_diagnostics(drive_diagnostics),
+                ),
+                realization_details,
+                selected_profiles,
             )
-    return None
+    return None, realization_details, selected_profiles
+
+
+def _interpret_realization(
+    target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
+) -> tuple[dict[str, Any], list[str]]:
+    """Interpret the provisioning plan into realization details + profiles.
+
+    Reuses the ``AptlProvisioner``'s ``project_dir``/``config`` (REP-001 /
+    GAP 1) so the realization is computed exactly once with the real backend
+    context. Returns empty placeholders when the provisioner is unavailable.
+    """
+    provisioner = target.provisioner
+    if not isinstance(provisioner, AptlProvisioner):
+        return {}, []
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning,
+        project_dir=provisioner.project_dir,
+        config=provisioner.config,
+    )
+    return realization.details(), select_backend_profiles(
+        provisioner.config, realization.profiles
+    )
 
 
 def _apply_phase(

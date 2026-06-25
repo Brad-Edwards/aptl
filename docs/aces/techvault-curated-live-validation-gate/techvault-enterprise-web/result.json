@@ -1,0 +1,63 @@
+{
+  "catalog_id": "techvault-enterprise-web",
+  "scenario": "techvault-enterprise-web.sdl.yaml",
+  "matched_config_containers": [
+    "enterprise",
+    "wazuh"
+  ],
+  "command": "aptl lab start --scenario techvault-enterprise-web --skip-seed",
+  "readiness_outcome": "Lab is ready.",
+  "boot_elapsed_seconds": 99,
+  "selected_profiles": [
+    "wazuh",
+    "enterprise",
+    "otel"
+  ],
+  "realized_nodes": [
+    "ad",
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "db",
+    "wazuh-indexer",
+    "wazuh-manager",
+    "webapp",
+    "workstation"
+  ],
+  "expected_services": [
+    "ad",
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "db",
+    "wazuh.dashboard",
+    "wazuh.indexer",
+    "wazuh.manager",
+    "webapp",
+    "workstation"
+  ],
+  "expected_networks": [
+    "aptl-dmz",
+    "aptl-internal",
+    "aptl-security"
+  ],
+  "actual_containers": [
+    "aptl-ad",
+    "aptl-db",
+    "aptl-grafana-otel",
+    "aptl-otel-collector",
+    "aptl-tempo",
+    "aptl-wazuh-dashboard",
+    "aptl-wazuh-indexer",
+    "aptl-wazuh-manager",
+    "aptl-webapp",
+    "aptl-workstation"
+  ],
+  "actual_networks": [
+    "aptl_aptl-dmz",
+    "aptl_aptl-internal",
+    "aptl_aptl-security"
+  ],
+  "verdict": "PASS",
+  "diagnostics": []
+}

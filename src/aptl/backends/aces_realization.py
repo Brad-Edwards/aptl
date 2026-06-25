@@ -34,6 +34,7 @@ from aptl.backends.aces_realization_model import (
 )
 from aptl.backends.aces_realization_values import (
     first_nonempty_string as _first_nonempty_string,
+    health_status as _health_status,
     mapping as _mapping,
     network_names as _network_names,
     optional_bool as _optional_bool,
@@ -299,6 +300,7 @@ def _realize_node(
         telemetry_paths=tuple(sorted(_string_list(runtime_spec, "telemetry_paths"))),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
+        declared_health=_health_status(node_spec),
     )
 
 

@@ -46,13 +46,15 @@ from aptl.validation._live_gate_probes import (
     _generate_event,
     _is_traffic_event,
     _missing_manifest_keys,
-    _node_readiness_diagnostics,
     _now_iso,
     _ping_from_kali,
     _scenario_name,
     _shared_network_targets,
     _single_node_plan,
     _variation_diagnostics,
+)
+from aptl.validation._live_gate_readiness import (
+    _node_readiness_diagnostics,
     _warn_unhealthy_infra,
 )
 from aptl.validation.techvault_gate import GateOptions, validate_scenario

@@ -341,13 +341,22 @@ class TestLabStartCommand:
         mock_clean.assert_called_once()
 
     def test_start_clean_flag_listed_in_help(self, runner):
-        """The --clean flag is discoverable from start --help."""
+        """The --clean flag is discoverable from start --help.
+
+        Strip ANSI escapes first: when color is forced on (CI sets
+        ``FORCE_COLOR``), Rich styles the option name and injects escape
+        sequences inside the ``--clean`` token, so the raw stdout has no
+        literal ``--clean`` substring even though the flag is rendered.
+        """
+        import re
+
         from aptl.cli.main import app
 
         result = runner.invoke(app, ["lab", "start", "--help"])
 
         assert result.exit_code == 0
-        assert "--clean" in result.stdout
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+        assert "--clean" in plain
 
     def test_lab_scenarios_lists_catalog_entries(self, runner, mocker, tmp_path):
         """The list command should read catalog rows dynamically."""

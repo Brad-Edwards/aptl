@@ -37,6 +37,11 @@ from aces_contracts.apparatus import (
 )
 from aces_contracts.vocabulary import WorkflowFeature, WorkflowStatePredicateFeature
 
+try:
+    from aces_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
+except ImportError:  # pragma: no cover - older ACES packages still expose validation.
+    BACKEND_SUPPORTED_CONTRACT_IDS = ()
+
 from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 
 APTL_ACES_TARGET_NAME = "aptl"
@@ -49,7 +54,7 @@ _COMPATIBLE_PROCESSORS = frozenset({"aces-reference-processor"})
 # operation/status, runtime-snapshot, workflow, evaluation, and participant
 # episode/behavior contracts. APTL consumes the plan contracts and emits the
 # result/history contracts through its adapters.
-_SUPPORTED_CONTRACT_VERSIONS = frozenset(
+_BASE_SUPPORTED_CONTRACT_VERSIONS = frozenset(
     {
         "backend-manifest-v2",
         "provisioning-plan-v1",
@@ -66,6 +71,21 @@ _SUPPORTED_CONTRACT_VERSIONS = frozenset(
         "participant-episode-history-event-stream-v1",
         "participant-behavior-history-event-stream-v1",
     }
+)
+
+_CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
+    {
+        "participant-lifecycle-event-v1",
+        "participant-observation-envelope-v1",
+        "participant-shared-state-record-v1",
+        "participant-joint-action-record-v1",
+        "participant-time-management-context-v1",
+    }
+)
+
+_SUPPORTED_CONTRACT_VERSIONS = _BASE_SUPPORTED_CONTRACT_VERSIONS | (
+    _CURRENT_PARTICIPANT_CONTRACT_VERSIONS
+    & frozenset(BACKEND_SUPPORTED_CONTRACT_IDS)
 )
 
 # Orchestrator capability declaration. APTL's RTE-001 runtime engine drives

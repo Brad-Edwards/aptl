@@ -45,7 +45,7 @@ from aptl.utils.redaction import redact
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
-PARTICIPANT_ACTION_ADDRESS = "participant.techvault.kali-victim-ssh-probe"
+PARTICIPANT_ACTION_ADDRESS = "participant.behavior.techvault.kali-victim-ssh-probe"
 PARTICIPANT_ACTION_CONTRACT_ADDRESS = (
     "participant.action-contract.aptl.kali-victim-ssh-probe"
 )
@@ -128,21 +128,32 @@ def _snapshot(
     results: Mapping[str, dict[str, object]],
     history: Mapping[str, list[dict[str, object]]],
     behavior_history: Mapping[str, list[dict[str, object]]],
+    shared_state_records: Mapping[str, dict[str, object]] | None = None,
+    shared_state_history: Mapping[str, list[dict[str, object]]] | None = None,
 ) -> RuntimeSnapshot:
-    return baseline.with_entries(
-        dict(entries),
-        participant_episode_results={
+    updates: dict[str, object] = {
+        "participant_episode_results": {
             address: dict(result) for address, result in results.items()
         },
-        participant_episode_history={
+        "participant_episode_history": {
             address: [dict(event) for event in events]
             for address, events in history.items()
         },
-        participant_behavior_history={
+        "participant_behavior_history": {
             address: [dict(event) for event in events]
             for address, events in behavior_history.items()
         },
-    )
+    }
+    if shared_state_records is not None and hasattr(baseline, "shared_state_records"):
+        updates["shared_state_records"] = {
+            address: dict(record) for address, record in shared_state_records.items()
+        }
+    if shared_state_history is not None and hasattr(baseline, "shared_state_history"):
+        updates["shared_state_history"] = {
+            address: [dict(record) for record in records]
+            for address, records in shared_state_history.items()
+        }
+    return baseline.with_entries(dict(entries), **updates)
 
 
 @dataclass
@@ -158,6 +169,12 @@ class AptlParticipantRuntime:
         default_factory=dict, init=False
     )
     _behavior_history: dict[str, list[dict[str, object]]] = field(
+        default_factory=dict, init=False
+    )
+    _shared_state_records: dict[str, dict[str, object]] = field(
+        default_factory=dict, init=False
+    )
+    _shared_state_history: dict[str, list[dict[str, object]]] = field(
         default_factory=dict, init=False
     )
 
@@ -197,9 +214,22 @@ class AptlParticipantRuntime:
         next_snapshot, changed = self._store_episode(snapshot, state, events)
         action_result = self._drive_configured_action(participant_address, state)
         if action_result is not None:
-            success, action_events, diagnostics, action_entries = action_result
+            (
+                success,
+                action_events,
+                diagnostics,
+                action_entries,
+                shared_state_records,
+            ) = action_result
             self._behavior_history.setdefault(participant_address, []).extend(
                 action_events
+            )
+            self._shared_state_records.update(shared_state_records)
+            self._shared_state_history.update(
+                {
+                    address: [dict(record)]
+                    for address, record in shared_state_records.items()
+                }
             )
             next_snapshot = _snapshot(
                 next_snapshot,
@@ -207,11 +237,18 @@ class AptlParticipantRuntime:
                 self._results,
                 self._history,
                 self._behavior_history,
+                self._shared_state_records,
+                self._shared_state_history,
             )
             changed.append(
                 f"runtime.snapshot.participant-behavior-history.{participant_address}"
             )
             changed.extend(action_entries)
+            if hasattr(next_snapshot, "shared_state_records"):
+                changed.extend(
+                    f"runtime.snapshot.shared-state-records.{address}"
+                    for address in shared_state_records
+                )
             return ApplyResult(
                 success=success,
                 snapshot=next_snapshot,
@@ -403,6 +440,8 @@ class AptlParticipantRuntime:
             self._results,
             self._history,
             self._behavior_history,
+            self._shared_state_records,
+            self._shared_state_history,
         )
         return next_snapshot, [
             f"runtime.snapshot.participant-episode-results.{participant_address}",
@@ -452,6 +491,7 @@ class AptlParticipantRuntime:
             list[dict[str, object]],
             list[Diagnostic],
             dict[str, SnapshotEntry],
+            dict[str, dict[str, object]],
         ]
         | None
     ):
@@ -513,6 +553,7 @@ class AptlParticipantRuntime:
             [attempted, observed],
             diagnostics,
             _action_snapshot_entries(spec, action_instance_id, success),
+            _shared_state_records(spec, action_instance_id, success),
         )
 
     def _failed(
@@ -560,6 +601,7 @@ def _action_attempted_event(
         "joint_action_set_id": None,
         "realized_order": None,
         "interaction_ref": None,
+        "interaction_class": "shared_state_change",
         "shared_state_refs": list(spec.target_refs),
         "details": {
             "source_container": spec.source_container,
@@ -601,6 +643,7 @@ def _observation_event(
         "joint_action_set_id": None,
         "realized_order": None,
         "interaction_ref": None,
+        "interaction_class": "shared_state_change",
         "shared_state_refs": list(spec.target_refs),
         "details": {
             "returncode": returncode,
@@ -618,11 +661,30 @@ def _action_snapshot_entries(
     success: bool,
 ) -> dict[str, SnapshotEntry]:
     return {
+        PARTICIPANT_BEHAVIOR_ADDRESS: SnapshotEntry(
+            address=PARTICIPANT_BEHAVIOR_ADDRESS,
+            domain=RuntimeDomain.PARTICIPANT,
+            resource_type="participant-behavior",
+            payload={
+                "action_contract_addresses": [spec.action_contract_address],
+                "observation_boundary_addresses": [
+                    spec.observation_boundary_address
+                ],
+                "shared_state_refs": list(spec.target_refs),
+            },
+        ),
         spec.action_contract_address: SnapshotEntry(
             address=spec.action_contract_address,
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-action-contract",
             payload={
+                "name": "APTL Kali victim SSH probe",
+                "action_name": "kali-victim-ssh-probe",
+                "semantic_version": "1.0.0",
+                "lifecycle_state": "active",
+                "behavioral_granularity": "single-command",
+                "interaction_classes": ["shared_state_change"],
+                "shared_state_refs": list(spec.target_refs),
                 "source_container": spec.source_container,
                 "command": list(spec.command),
                 "success_markers": list(spec.success_markers),
@@ -634,6 +696,13 @@ def _action_snapshot_entries(
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-observation-boundary",
             payload={
+                "name": "APTL Kali victim SSH observation boundary",
+                "boundary_name": "kali-victim-ssh-probe-output",
+                "projection_basis": "nmap grepable output excerpt",
+                "observable_refs": list(spec.target_refs),
+                "evidence_refs": [action_instance_id],
+                "disclosed_refs": list(spec.target_refs),
+                "realized_view_disclosure": "terminal-observation",
                 "source_container": spec.source_container,
                 "target_refs": list(spec.target_refs),
             },
@@ -653,3 +722,35 @@ def _action_snapshot_entries(
             status="ready" if success else "failed",
         ),
     }
+
+
+def _shared_state_records(
+    spec: ParticipantActionSpec,
+    action_instance_id: str,
+    success: bool,
+) -> dict[str, dict[str, object]]:
+    records: dict[str, dict[str, object]] = {}
+    for ref in spec.target_refs:
+        state_kind = "network-service" if ref.startswith("tcp:") else "container"
+        digest = hashlib.sha256(
+            f"{ref}:{action_instance_id}:{success}".encode("utf-8")
+        ).hexdigest()
+        records[ref] = {
+            "state_address": ref,
+            "state_scope": "aptl-techvault-live-range",
+            "state_kind": state_kind,
+            "ordering_basis": "participant-action-observation",
+            "conflict_policy": "single-writer-observation",
+            "provenance": spec.actor_provenance,
+            "digest": f"sha256:{digest}",
+            "accesses": [
+                {
+                    "state_address": ref,
+                    "access_kind": "read",
+                    "read_digest": f"sha256:{digest}",
+                    "operation_ref": f"container_exec:{spec.source_container}",
+                }
+            ],
+            "evidence_refs": [action_instance_id],
+        }
+    return records

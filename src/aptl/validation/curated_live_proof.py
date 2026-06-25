@@ -37,6 +37,20 @@ from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_sdl import parse_sdl_file
 
+try:
+    from aces_contracts.participant_concurrency import (
+        iter_participant_concurrency_snapshot_violations,
+    )
+except ImportError:  # pragma: no cover - compatibility with older ACES locks.
+    iter_participant_concurrency_snapshot_violations = None
+
+try:
+    from aces_contracts.participant_shared_state import (
+        iter_participant_shared_state_snapshot_violations,
+    )
+except ImportError:  # pragma: no cover - compatibility with older ACES locks.
+    iter_participant_shared_state_snapshot_violations = None
+
 from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
 from aptl.backends.aces_profiles import (
@@ -326,6 +340,40 @@ def run_participant_action_proof(
             metadata=snapshot.metadata,
         )
     )
+    shared_state_records = dict(getattr(snapshot, "shared_state_records", {}))
+    shared_state_history = {
+        address: list(records)
+        for address, records in getattr(snapshot, "shared_state_history", {}).items()
+    }
+    joint_action_records = dict(getattr(snapshot, "joint_action_records", {}))
+    time_management_contexts = dict(
+        getattr(snapshot, "time_management_contexts", {})
+    )
+    shared_state_violations = (
+        []
+        if iter_participant_shared_state_snapshot_violations is None
+        else list(
+            iter_participant_shared_state_snapshot_violations(
+                shared_state_records,
+                shared_state_history,
+                participant_behavior_history=snapshot.participant_behavior_history,
+                metadata=snapshot.metadata,
+            )
+        )
+    )
+    concurrency_violations = (
+        []
+        if iter_participant_concurrency_snapshot_violations is None
+        else list(
+            iter_participant_concurrency_snapshot_violations(
+                joint_action_records,
+                time_management_contexts,
+                participant_behavior_history=snapshot.participant_behavior_history,
+                shared_state_records=shared_state_records,
+                shared_state_history=shared_state_history,
+            )
+        )
+    )
     capture_diagnostics: list[str] = []
     range_snapshot_summary: dict[str, object] | None = None
     try:
@@ -354,6 +402,8 @@ def run_participant_action_proof(
         and has_behavior_history
         and not episode_violations
         and not behavior_violations
+        and not shared_state_violations
+        and not concurrency_violations
         and not capture_diagnostics
     )
 
@@ -395,6 +445,10 @@ def run_participant_action_proof(
             address: list(events)
             for address, events in snapshot.participant_behavior_history.items()
         },
+        "participant_shared_state_records": shared_state_records,
+        "participant_shared_state_history": shared_state_history,
+        "participant_joint_action_records": joint_action_records,
+        "participant_time_management_contexts": time_management_contexts,
         "participant_snapshot_entries": {
             address: {
                 "domain": entry.domain.value,
@@ -414,6 +468,14 @@ def run_participant_action_proof(
             "behavior_violations": [
                 {"path": path, "message": message}
                 for path, message in behavior_violations
+            ],
+            "shared_state_violations": [
+                {"path": path, "message": message}
+                for path, message in shared_state_violations
+            ],
+            "concurrency_violations": [
+                {"path": path, "message": message}
+                for path, message in concurrency_violations
             ],
             "capture_diagnostics": capture_diagnostics,
         },

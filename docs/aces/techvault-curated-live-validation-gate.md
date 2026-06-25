@@ -38,7 +38,7 @@ the existing canonical authorities rather than re-modelling them:
   broke, never raw Docker or CLI text.
 - `run_participant_action_proof()` uses the configured deployment backend and
   `RuntimeControlPlane.initialize_participant_episode()` to drive the
-  `participant.techvault.kali-victim-ssh-probe` action. The action runs from
+  `participant.behavior.techvault.kali-victim-ssh-probe` action. The action runs from
   `aptl-kali` against the realized victim SSH endpoint through
   `DeploymentBackend.container_exec()`, then validates the standard
   `operation-receipt-v1`, `operation-status-v1`, `runtime-snapshot-v1`,

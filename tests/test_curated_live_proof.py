@@ -331,7 +331,7 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     ]
     assert behavior[-1]["actor_provenance"] == "codex-cli"
     assert any(
-        address.startswith("participant.techvault.kali-victim-ssh-probe.")
+        address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
         for address in proof["participant_snapshot_entries"]
     )
     assert proof["post_action_range_snapshot"]["containers"][0]["name"] == "aptl-kali"

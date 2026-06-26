@@ -4,6 +4,10 @@
 **Date:** 2026-03-29
 **Deciders:** Brad Edwards
 
+> Historical note: ADR-035 supersedes this ADR as current scenario-authoring
+> authority. The APTL-local SDL parser and models described here were removed
+> after the ACES SDL cutover; this record remains historical context.
+
 ## Context
 
 APTL's scenario format was an ad-hoc YAML schema validated only by Pydantic structural checks. The DSL-001 requirement called for a formal specification language with a documented grammar, parser, and semantic validation. Research across 12 cybersecurity SDLs, 10 adjacent DSLs, 6 security standards, and 6 agent evaluation frameworks (documented in `Kepler/research/dsl/`) identified the Open Cyber Range (OCR) SDL as the closest existing precedent.
@@ -85,12 +89,12 @@ attack steps, hints, and expected detections) predates the SDL-only boundary.
 Any future work that reopens those concepts must reconcile them through the
 current SDL surface rather than restoring a second scenario schema.
 
-The authoritative schema remains `aptl.core.sdl.Scenario` plus the normal
-`parse_sdl()` structural and semantic validation path. New scenario-level
-fields such as `mode`, stable IDs, versions, difficulty, or estimates must be
-explicit Pydantic fields with SDL docs and tests; they must not be read from raw
-YAML side channels, inferred from filenames, or reintroduced through a legacy
-`ScenarioDefinition` in `aptl.core.scenarios`.
+The historical authoring schema for this ADR was the local SDL model and parser.
+After ADR-035, those local parser/model APIs are no longer authoritative. Any
+future scenario-level fields such as `mode`, stable IDs, versions, difficulty,
+or estimates must be designed through ACES SDL and the APTL catalog/runtime
+handoff; they must not be read from raw YAML side channels, inferred from
+filenames, or reintroduced through a legacy local scenario schema.
 
 Backend/runtime concerns stay out of the specification layer. Container
 requirements should flow through `nodes`, `infrastructure`, backend capability
@@ -102,8 +106,8 @@ not become a second objective-validation schema embedded in SDL.
 ### Backward Compatibility
 
 None by design. This branch establishes an SDL-only boundary:
-- Legacy APTL scenario YAMLs no longer parse through the SDL
-- `aptl.core.scenarios` remains only as a thin loader/error module
+- Legacy APTL scenario YAMLs are archived as reference-only fixtures
+- `aptl.core.scenarios` remains only as shared scenario/session exceptions
 - The old scenario CLI/API/runtime entrypoints were removed rather than left as partial shims
 
 ## Consequences

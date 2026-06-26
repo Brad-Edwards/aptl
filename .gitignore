@@ -404,6 +404,8 @@ infrastructure/lab_config.json
 *.log
 
 archive/
+!scenarios/archive/
+!scenarios/archive/README.md
 
 keys/*
 

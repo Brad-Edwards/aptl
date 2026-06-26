@@ -1,10 +1,17 @@
 # APTL Prime Scenario: TechVault Enterprise Compromise
 
+> Historical reference only: this document describes the retired APTL-local
+> scenario YAML era. It is not current authoring guidance, not a startup input,
+> and not a runtime schema authority. Current TechVault scenario authority lives
+> in ACES SDL files referenced by `scenarios/catalog.json`.
+
 ## Purpose
 
 This is the **prime scenario** for APTL research. It defines a single, fixed enterprise environment with known vulnerabilities, intended to be run hundreds of times by different agents, models, tool configurations, and guidance levels. The goal is to collect behavioral data about how AI agents navigate multi-step enterprise attack chains, with enough structure for statistical analysis across runs.
 
-This document is the authoritative specification. Everything an agent or researcher needs to understand the environment, its vulnerabilities, and the attack surface is here.
+This document is retained for historical context. Current environment,
+vulnerability, and attack-surface facts must come from ACES SDL and the ACES
+inventory evidence.
 
 ## Why This Scenario
 
@@ -332,16 +339,20 @@ The workstation container does not yet exist. It must be built to complete the p
 
 **Docker resource limit**: 256MB RAM
 
-## Scenario YAML Integration
+## Historical Scenario YAML Reference
 
-This scenario uses the existing `aptl scenario` CLI (defined in `src/aptl/cli/scenario.py`). The scenario YAML file at `scenarios/prime-enterprise.yaml` defines:
+Historically, this scenario used the retired `aptl scenario` CLI and the
+archived scenario YAML file at `scenarios/archive/prime-enterprise.yaml`.
+That reference-only fixture defines:
 
 - **Mode**: `purple` (both offensive and defensive perspectives)
 - **Containers required**: wazuh, kali, webapp, db, ad, fileshare, victim, workstation
 - **Steps**: All three attack paths with vulnerability descriptions, happy-path commands, and expected detections at each step
 - **Vulnerability descriptions**: Each step documents the exploitable condition (what's weak and why), not just which tools to run
 
-The YAML file follows the `ScenarioDefinition` schema (see `src/aptl/core/scenarios.py`). There is no automated scoring—the run archive (telemetry, alerts, logs, traces) is the product, and analysis is a separate research step.
+The YAML file followed the retired `ScenarioDefinition` schema. There was no
+automated scoring in that historical flow; the run archive (telemetry, alerts,
+logs, traces) was the product, and analysis was a separate research step.
 
 ## What This Scenario Does NOT Cover
 

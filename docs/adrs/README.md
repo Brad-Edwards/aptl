@@ -56,7 +56,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [032](adr-032-conversation-surface-hardening.md) | Conversation Surface Hardening | accepted | 2026-05-17 |
 | [033](adr-033-agent-reasoning-trace-boundary.md) | Red-Side Behavioural Capture and Non-Contamination Boundary | accepted | 2026-05-17 |
 | [034](adr-034-lab-managed-soc-tls-ca.md) | Lab-Managed CA for Verified SOC Stack TLS | accepted | 2026-05-18 |
-| [035](adr-035-aces-sdl-adoption.md) | Adopt ACES SDL as APTL's Scenario Authoring Surface | proposed | 2026-05-18 |
+| [035](adr-035-aces-sdl-adoption.md) | Adopt ACES SDL as APTL's Scenario Authoring Surface | accepted | 2026-05-18 |
 | [036](adr-036-snapshot-endpoint-registry.md) | Snapshot Endpoint Registry Boundary | accepted | 2026-05-18 |
 | [037](adr-037-docker-compose-backend-cohesion.md) | Docker Compose Backend Cohesion | accepted | 2026-05-18 |
 | [038](adr-038-docs-style-lint-and-published-site.md) | Documentation Style Lint and Published Docs Site | accepted | 2026-06-11 |

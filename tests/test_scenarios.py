@@ -1,194 +1,17 @@
-"""Tests for the SDL scenario loading boundary."""
+"""Regression tests for the ADR-035 scenario boundary."""
 
+from __future__ import annotations
+
+import importlib
 from pathlib import Path
 
 import pytest
 
-
-VALID_SDL = """
-name: test-scenario
-description: Minimal SDL scenario
-"""
-
-EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
-EXAMPLE_SCENARIOS = sorted(EXAMPLES_DIR.glob("*.sdl.yaml"))
-COMPLEX_EXAMPLES = [
-    EXAMPLES_DIR / "hospital-ransomware-surgery-day.sdl.yaml",
-    EXAMPLES_DIR / "satcom-release-poisoning.sdl.yaml",
-    EXAMPLES_DIR / "port-authority-surge-response.sdl.yaml",
-]
-
-
-class TestLoadScenario:
-    """Tests for loading SDL scenarios from YAML files."""
-
-    def test_load_valid_sdl(self, tmp_path):
-        from aptl.core.scenarios import load_scenario
-
-        path = tmp_path / "scenario.yaml"
-        path.write_text(VALID_SDL, encoding="utf-8")
-
-        scenario = load_scenario(path)
-        assert scenario.name == "test-scenario"
-        assert scenario.description == "Minimal SDL scenario"
-
-    def test_load_nonexistent_file_raises(self, tmp_path):
-        from aptl.core.scenarios import load_scenario
-
-        with pytest.raises(FileNotFoundError):
-            load_scenario(tmp_path / "missing.yaml")
-
-    def test_load_empty_file_raises_validation_error(self, tmp_path):
-        from aptl.core.scenarios import ScenarioValidationError, load_scenario
-
-        path = tmp_path / "empty.yaml"
-        path.write_text("", encoding="utf-8")
-
-        with pytest.raises(ScenarioValidationError, match="empty"):
-            load_scenario(path)
-
-    def test_load_invalid_yaml_raises_validation_error(self, tmp_path):
-        from aptl.core.scenarios import ScenarioValidationError, load_scenario
-
-        path = tmp_path / "broken.yaml"
-        path.write_text("{{not: valid: yaml: [}", encoding="utf-8")
-
-        with pytest.raises(ScenarioValidationError, match="Invalid YAML"):
-            load_scenario(path)
-
-    def test_load_legacy_yaml_is_rejected(self, tmp_path):
-        from aptl.core.scenarios import ScenarioValidationError, load_scenario
-
-        path = tmp_path / "legacy.yaml"
-        path.write_text(
-            """
-metadata:
-  id: old-scenario
-  name: Old Scenario
-mode: red
-            """.strip(),
-            encoding="utf-8",
-        )
-
-        with pytest.raises(ScenarioValidationError):
-            load_scenario(path)
-
-    def test_validation_error_includes_path(self, tmp_path):
-        from aptl.core.scenarios import ScenarioValidationError, load_scenario
-
-        path = tmp_path / "empty.yaml"
-        path.write_text("", encoding="utf-8")
-
-        with pytest.raises(ScenarioValidationError) as exc_info:
-            load_scenario(path)
-
-        assert exc_info.value.path == path
-        assert str(path) in str(exc_info.value)
-
-
-class TestFindScenarios:
-    """Tests for SDL scenario discovery."""
-
-    def test_finds_yaml_files(self, tmp_path):
-        from aptl.core.scenarios import find_scenarios
-
-        (tmp_path / "a.yaml").write_text(VALID_SDL, encoding="utf-8")
-        (tmp_path / "b.yaml").write_text(VALID_SDL, encoding="utf-8")
-
-        paths = find_scenarios(tmp_path)
-        assert [path.name for path in paths] == ["a.yaml", "b.yaml"]
-
-    def test_ignores_non_yaml_files(self, tmp_path):
-        from aptl.core.scenarios import find_scenarios
-
-        (tmp_path / "a.yml").write_text(VALID_SDL, encoding="utf-8")
-        (tmp_path / "notes.txt").write_text("hello", encoding="utf-8")
-
-        assert find_scenarios(tmp_path) == []
-
-    def test_returns_empty_for_missing_directory(self, tmp_path):
-        from aptl.core.scenarios import find_scenarios
-
-        assert find_scenarios(tmp_path / "missing") == []
-
-
-@pytest.mark.parametrize("path", EXAMPLE_SCENARIOS, ids=lambda path: path.name)
-def test_example_scenarios_load(path):
-    """Every example SDL should load successfully from disk."""
-    from aptl.core.scenarios import load_scenario
-
-    scenario = load_scenario(path)
-
-    assert scenario.name
-    assert scenario.advisories == []
-
-
-@pytest.mark.parametrize("path", COMPLEX_EXAMPLES, ids=lambda path: path.name)
-def test_complex_examples_have_experiment_semantics(path):
-    """Curated complex examples should exercise the full experiment surface."""
-    from aptl.core.scenarios import load_scenario
-
-    scenario = load_scenario(path)
-
-    assert scenario.objectives
-    assert scenario.agents
-    assert scenario.relationships
-    assert scenario.content
-    assert scenario.stories
-    assert scenario.metrics
-
-
-def test_complex_examples_cover_new_sdl_surfaces():
-    """Complex examples should exercise workflows, enum vars, and direct refs."""
-    from aptl.core.scenarios import load_scenario
-
-    satcom = load_scenario(EXAMPLES_DIR / "satcom-release-poisoning.sdl.yaml")
-    assert satcom.workflows
-    assert any(
-        step.type.value == "parallel"
-        for workflow in satcom.workflows.values()
-        for step in workflow.steps.values()
-    )
-    assert any(
-        acct.password_strength == "${release_engineer_password_strength}"
-        for acct in satcom.accounts.values()
-    )
-
-    hospital = load_scenario(
-        EXAMPLES_DIR / "hospital-ransomware-surgery-day.sdl.yaml"
-    )
-    assert any(
-        target.startswith("nodes.")
-        for objective in hospital.objectives.values()
-        for target in objective.targets
-    )
-    assert any(
-        target.startswith("infrastructure.")
-        for objective in hospital.objectives.values()
-        for target in objective.targets
-    )
-
-    port = load_scenario(EXAMPLES_DIR / "port-authority-surge-response.sdl.yaml")
-    assert port.workflows
-    assert any(
-        step.type.value == "parallel"
-        for workflow in port.workflows.values()
-        for step in workflow.steps.values()
-    )
-    assert any(
-        target.startswith("nodes.")
-        for objective in port.objectives.values()
-        for target in objective.targets
-    )
-    assert any(
-        target.startswith("infrastructure.")
-        for objective in port.objectives.values()
-        for target in objective.targets
-    )
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestScenarioExceptions:
-    """Tests for shared scenario exception types."""
+    """Shared exception types remain for session and continuity code."""
 
     def test_scenario_not_found_error(self):
         from aptl.core.scenarios import ScenarioError, ScenarioNotFoundError
@@ -204,3 +27,48 @@ class TestScenarioExceptions:
         assert error.path is None
         assert error.details == "bad field"
         assert isinstance(error, ScenarioError)
+
+
+def test_local_scenario_loader_api_is_removed():
+    """The deleted APTL-local loader must not survive as a runtime fallback."""
+    import aptl.core.scenarios as scenarios
+
+    assert not hasattr(scenarios, "load_scenario")
+    assert not hasattr(scenarios, "find_scenarios")
+
+
+def test_local_sdl_package_is_removed():
+    """APTL must not expose its retired in-tree SDL parser package."""
+    assert not list((PROJECT_ROOT / "src" / "aptl" / "core" / "sdl").glob("*.py"))
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("aptl.core.sdl.parser")
+
+
+def test_startup_catalog_contains_only_aces_sdl_paths():
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    catalog = load_scenario_catalog(PROJECT_ROOT)
+
+    assert catalog.scenarios
+    assert all(entry.path.endswith(".sdl.yaml") for entry in catalog.scenarios)
+    assert all("/archive/" not in entry.path for entry in catalog.scenarios)
+
+
+def test_archived_legacy_yaml_is_reference_only():
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    archive = PROJECT_ROOT / "scenarios" / "archive"
+    catalog_paths = {entry.path for entry in load_scenario_catalog(PROJECT_ROOT).scenarios}
+
+    assert (archive / "README.md").is_file()
+    assert sorted(path.name for path in archive.glob("*.yaml")) == [
+        "ad-domain-compromise.yaml",
+        "detect-brute-force.yaml",
+        "lateral-movement-data-theft.yaml",
+        "prime-enterprise.yaml",
+        "recon-nmap-scan.yaml",
+        "webapp-compromise.yaml",
+    ]
+    assert catalog_paths.isdisjoint(
+        {path.relative_to(PROJECT_ROOT).as_posix() for path in archive.glob("*.yaml")}
+    )

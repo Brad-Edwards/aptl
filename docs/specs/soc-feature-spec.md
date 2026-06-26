@@ -117,9 +117,13 @@ runs/<uuid>/
 
 ## 3. Scenario Schema
 
+Historical note: this section documents the retired pre-ACES APTL-local
+scenario schema. Supported startup now uses ACES SDL via the curated catalog;
+archived legacy YAML files are reference-only.
+
 ### 3.1 ScenarioDefinition
 
-Top-level Pydantic model for scenario YAML files.
+Top-level Pydantic model for historical scenario YAML files.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -154,11 +158,8 @@ Each step maps to a MITRE ATT&CK technique:
 ### 3.3 Loading and Discovery
 
 ```python
-# Load and validate a specific file
-scenario = load_scenario(Path("scenarios/prime-enterprise.yaml"))
-
-# Discover all scenarios in a directory
-paths = find_scenarios(Path("scenarios/"))  # Returns list[Path]
+# Current code does not expose historical load/discovery helpers.
+# See scenarios/archive/README.md for the reference-only fixture boundary.
 ```
 
 ---

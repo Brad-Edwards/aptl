@@ -63,7 +63,7 @@
 ## Issue 2: `defenses` field not in ScenarioDefinition model
 - **Symptom**: `aptl scenario start prime-enterprise` failed with Pydantic validation error: `Extra inputs are not permitted` for `defenses` field
 - **Fix applied**: Added `defenses: dict | None = None` to `ScenarioDefinition` in `scenarios.py`
-- **Status**: FIXED (this session)
+- **Status**: HISTORICAL — superseded by ADR-035; the APTL-local scenario schema is archived reference material, not the current runtime path.
 
 ## Issue 3: Webapp curl timeout from Kali
 - **Symptom**: `curl -sk https://172.20.1.20:8080/` from Kali timed out after 30s

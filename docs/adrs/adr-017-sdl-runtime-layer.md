@@ -4,6 +4,11 @@
 **Date:** 2026-03-30
 **Deciders:** Brad Edwards
 
+> Historical note: ADR-035 supersedes this proposed runtime direction. The
+> local parser, compiler, planner, and target registry described here were
+> removed after the ACES SDL cutover. The current runtime handoff uses ACES SDL
+> and ACES runtime planning.
+
 ## Context
 
 The SDL is now the authoritative scenario specification surface. The next layer
@@ -16,12 +21,12 @@ steps. That collapsed reusable definitions and bound runtime instances into the
 same concept, made reconciliation incomplete, and pushed too much meaning into a
 single cross-domain interface.
 
-The runtime needs to be built greenfield inside the new package boundary:
+The historical local runtime was planned inside this package boundary:
 
 ```text
-aptl.core.sdl      -> specification and validation
-aptl.core.runtime  -> compile, plan, execute contracts
-aptl.backends.*    -> target-specific implementations
+local SDL parser      -> specification and validation
+local runtime package -> compile, plan, execute contracts
+aptl.backends.*       -> target-specific implementations
 ```
 
 ## Decision

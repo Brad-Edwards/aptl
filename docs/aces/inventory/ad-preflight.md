@@ -21,9 +21,10 @@ the issue phase marker, but the tool did not create a repo-local note file.
   Kerberos/Samba databases, Wazuh client keys, and private key files are still
   captured through live paths, metadata, and checksums unless their bytes are
   explicitly captured by the asset bundle.
-- Keep legacy `aptl.core.sdl` and `scenarios/*.yaml` functional until the
-  ADR-035 cutover PR. This issue does not change backend runtime behavior or
-  flip default scenario selection.
+- This inventory issue did not change backend runtime behavior or default
+  scenario selection. After the ADR-035 cutover, legacy YAML fixtures are
+  reference-only under `scenarios/archive/`; current AD facts belong in ACES
+  SDL and inventory evidence.
 
 ## Applied Scope
 

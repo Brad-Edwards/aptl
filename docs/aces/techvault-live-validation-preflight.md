@@ -188,9 +188,9 @@ distinct realization details through the same interpreter path.
 
 - Do not implement the live gate, probes, run archive writers, CI wiring, or
   documentation of operator commands in this preflight.
-- Do not perform Phase B cutover, flip the default scenario, move legacy
-  `scenarios/*.yaml` to `scenarios/archive/`, delete `aptl.core.sdl`, or delete
-  Pydantic scenario models.
+- This preflight did not perform the later Phase B cutover cleanup. The
+  post-cutover repository now archives legacy YAML under `scenarios/archive/`
+  and removes the local parser/model surface.
 - Do not promote APTL beyond `provisioning-only`; #311 and #312 own
   orchestration/evaluation profile upgrades.
 - Do not redesign Docker Compose, generated service config, endpoint registry,

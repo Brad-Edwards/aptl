@@ -2,8 +2,8 @@
 
 This note captures the repo-level guardrails for property-based tests that
 exercise parser-style boundaries such as credentials rendering, `.env`
-loading, strict first-party config validation, redaction, and SDL parsing.
-It complements the SDL-specific fuzz suite in `tests/test_sdl_fuzz.py`.
+loading, strict first-party config validation, and redaction. The former
+APTL-local SDL parser fuzz suite was removed after the ADR-035 ACES cutover.
 
 ## Scope
 
@@ -16,7 +16,7 @@ or renders them. Current canonical candidates include:
 - `aptl.core.env.load_dotenv()` and `env_vars_from_dict()`
 - `aptl.core.config.load_config()` / `AptlConfig`
 - `aptl.utils.redaction.redact()`
-- SDL parser and scalar parser helpers under `aptl.core.sdl`
+- ACES scenario-path resolution in `aptl.core.scenario_catalog`
 
 ## Guardrails
 
@@ -51,8 +51,8 @@ or renders them. Current canonical candidates include:
   of the contract.
 - Serialization-boundary secret handling belongs to `aptl.utils.redaction`
   and ADR-029. New parser tests must not introduce a parallel secret taxonomy.
-- SDL parse failures must stay inside `SDLParseError` /
-  `SDLValidationError`.
+- ACES SDL parse failures must stay inside ACES-owned public error types and
+  must be redacted before APTL surfaces them in CLI diagnostics.
 
 ## Non-Goals
 

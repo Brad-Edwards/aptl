@@ -153,8 +153,9 @@ shortcut around that protocol.
 ## Non-Goals
 
 - Do not implement DSL-008 in this preflight.
-- Do not delete `aptl.core.sdl`, move legacy scenarios, perform Phase B
-  cleanup, or change the public default scenario as part of this requirement.
+- This preflight did not perform the later ADR-035 cutover cleanup; legacy
+  parser removal, scenario archival, and public default selection were handled
+  by follow-on work.
 - Do not redesign Docker Compose, `DeploymentBackend`, lab startup ordering,
   generated config, SOC TLS, endpoint registry, API/web schemas, terminal
   relay, run archive layout, or collector transport.

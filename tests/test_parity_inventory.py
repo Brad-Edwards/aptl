@@ -202,9 +202,9 @@ def test_gap_rows_cite_a_followup(inventory):
 
 
 def test_every_legacy_scenario_yaml_is_covered(inventory):
-    """Every existing scenarios/*.yaml file must appear in legacy_source
+    """Every archived legacy scenario YAML must appear in legacy_source
     of at least one row in the ``scenarios_yaml`` surface bucket."""
-    scenarios_dir = PROJECT_ROOT / "scenarios"
+    scenarios_dir = PROJECT_ROOT / "scenarios" / "archive"
     on_disk = {p.name for p in scenarios_dir.glob("*.yaml")}
     cited = {
         Path(row["legacy_source"]).name

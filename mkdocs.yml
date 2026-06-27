@@ -152,6 +152,8 @@ nav:
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
     - Experiment Runs: reference/experiment-runs.md
     - SOC Feature Spec: specs/soc-feature-spec.md
+    - Web GUI Design Specification: specs/web-gui-design.md
+    - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
   - Troubleshooting: troubleshooting/index.md
   - Records:
     - CI/CD Remote Deployment (removed): deployment/ci-cd-deploy.md

@@ -68,10 +68,18 @@ The design specification must name how each in-scope page passes these layers.
 - Keep the ADR-011 notebook/workbench paradigm. Do not drift into an enterprise
   SOC dashboard: no mission-control tile wall, icon-only sidebar, status-dot
   matrix, or dense product-console chrome.
+- Keep the visual language specific to a local purple-team lab workbench. Do
+  not use marketing heroes, purple gradients, decorative glow, glassmorphism,
+  bento grids, nested card walls, fake analytics charts, or oversized rounded
+  icon tiles.
 - Reuse the current component families before inventing new ones:
   `NavBar`, `LabStatusBadge`, `ContainerGrid`, `LabStartNotice`, `Terminal`,
   and workbench blocks. If a new recurring UI primitive is needed, document
   which existing component pattern it extends.
+- Use Tailwind v4 tokens and a small APTL component kit as the design-system
+  base. External component primitives may be used for accessible behavior such
+  as dialogs, menus, popovers, tabs, and tooltips, but they must not replace
+  APTL's route structure, palette, density, or security copy.
 - Keep API DTOs server-owned. Add or change Python response models in
   `src/aptl/api/schemas.py` first, then mirror the stable wire shape in
   `web/src/lib/types.ts`; do not let the Svelte layer infer core state from
@@ -89,6 +97,18 @@ The design specification must name how each in-scope page passes these layers.
 - Keep page-local logic thin. Shared fetch behavior belongs in
   `web/src/lib/api.ts`, shared lab status in `web/src/lib/stores/lab.ts`, and
   scenario workbench shaping in `web/src/lib/workbench.ts`.
+- Target WCAG 2.2 AA for shipped routes. Keyboard access, visible focus,
+  target sizing, contrast, non-color status cues, accessible dialogs, and
+  screen-reader-safe live updates are implementation requirements, not polish.
+- Keep UI copy localization-ready even while v1 ships English-only. Centralize
+  user-facing strings, use shared date/time/count formatters, avoid sentence
+  concatenation, and avoid layouts that depend on English-length labels.
+- Treat persistent settings as browser-local non-secret preferences only. Do
+  not persist tokens, terminal input/output, copied commands, raw SIEM custom
+  queries, scenario answers, or investigation notes in v1.
+- Include a local-use and privacy notice before controlled actions. Do not add
+  cookie-consent or terms-wall patterns unless non-essential analytics,
+  third-party embeds, or legally approved terms text are introduced.
 
 ## Extensibility Seams
 

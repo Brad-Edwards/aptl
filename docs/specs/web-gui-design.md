@@ -48,6 +48,23 @@ MCP loop:
   investigation needs direct shell access.
 - Review current non-secret configuration and service access facts.
 
+### Representative User Stories
+
+The GUI must be designed from operator tasks rather than from generic dashboard
+widgets. UI-008 should use these stories as its first usability checklist:
+
+| User | Story | Design implication |
+| --- | --- | --- |
+| Learner | As a learner, I want to know whether the lab is usable before I start a scenario. | Lab Home must lead with readiness, startup diagnostics, and next action, not a chart wall. |
+| Learner | As a learner, I want scenario steps, terminal entry points, hints, and expected detections in one place. | Scenario Workbench stays document-first with lazy tools inside the flow. |
+| Instructor | As an instructor, I want to see which prerequisites and containers a scenario needs before recommending it. | Scenario cards and detail headers show required containers, mode, difficulty, duration, and validation state. |
+| Evaluator | As an evaluator, I want evidence that detections fired without switching among several products. | SIEM Explorer provides curated query packs, bounded live execution, and expandable alert details. |
+| Developer | As a developer, I want to debug a failed lab start from structured diagnostics. | Startup diagnostics preserve ADR-030 severity, component, and remediation detail. |
+| Operator | As an operator, I want destructive actions to be obvious and reversible only where the backend supports it. | Stop and kill are visually distinct, require confirmation, and name their blast radius. |
+| Keyboard user | As a keyboard-only user, I want every route and modal to work without pointer input. | Navigation, dialogs, tables, terminals, and disclosure controls must pass keyboard checks. |
+| Low-vision user | As a low-vision user, I want readable contrast, visible focus, and adjustable terminal text. | Theme tokens, focus rings, status labels, and terminal preferences are first-class requirements. |
+| Non-English future user | As a future localized user, I want UI copy, dates, numbers, and text direction to be adaptable. | Copy must be centralized and layout must avoid fixed text widths and direction-specific assumptions. |
+
 ### V1 Capabilities
 
 V1 includes these capabilities:
@@ -99,6 +116,205 @@ If static asset mounting removes the current SvelteKit server hook, UI-008 must
 replace it with an equivalent same-origin backend-for-frontend boundary in
 FastAPI rather than pushing bearer-token handling into page code.
 
+## Design Inputs and Visual Direction
+
+The visual target is a quiet operational workbench: readable, dense enough for
+repeated use, and specific to APTL's purple-team lab context. It should feel
+closer to a restrained developer/security tool than a marketing SaaS page.
+
+Use Tailwind v4 as the design-system foundation because the repo already ships
+Tailwind tokens in `web/src/app.css`. UI-008 should formalize those tokens into
+an APTL component kit rather than importing a wholesale admin template. Tailwind
+UI application-shell patterns are acceptable references for spacing, tables,
+forms, menus, dialogs, and responsive behavior, but the implementation must
+adapt them to APTL's content model and existing Svelte components.
+
+If UI-008 adds a component primitive library, choose one for accessible
+headless behavior only, such as dialogs, menus, popovers, tabs, and tooltips.
+Do not let a library replace APTL's route structure, palette, density, or
+security copy. Any new icon package should be small and purposeful; icons must
+support scannability and have text labels or accessible names.
+
+Design anti-patterns to avoid:
+
+- no full-screen hero, marketing headline, testimonial, pricing, or "unlock
+  the power" copy;
+- no purple gradient background, gradient text, decorative blobs, glow, neon,
+  glassmorphism, or fake depth;
+- no bento grid, nested cards, or "everything is a card" layout;
+- no oversized rounded tiles with giant icons above short headings;
+- no one-note purple/violet palette. Purple may remain an APTL accent, but
+  status and hierarchy must use semantic colors, spacing, and labels;
+- no fake analytics charts, mocked activity feeds, or decorative sparklines;
+- no low-contrast gray text on dark panels;
+- no icon-only sidebar or mystery controls;
+- no animations that imply progress when the backend has not reported it.
+
+Layout rules:
+
+- use a top app shell with constrained content width on document routes and
+  full-width utility regions only when the data needs it;
+- keep page sections unframed unless they are repeated records, dialogs, or
+  tool panes;
+- use tables for alert and config facts where comparison matters;
+- use compact cards only for scenario summaries, container summaries, and
+  repeated workbench blocks;
+- keep typography restrained: route headings are page-sized, panel headings are
+  compact, terminal and command text use the mono stack only where appropriate.
+
+Reference set for UI-008:
+
+- Tailwind UI application-shell and component patterns for practical Tailwind
+  layout references: <https://tailwindcss.com/plus>.
+- Nielsen Norman Group complex-application guidance for keeping expert tools
+  workflow-led: <https://www.nngroup.com/articles/complex-application-design/>.
+- W3C WCAG 2.2 for accessibility requirements:
+  <https://www.w3.org/TR/WCAG22/>.
+- WAI-ARIA modal dialog pattern for confirmation, settings, and notice dialogs:
+  <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>.
+- W3C internationalization guidance for language and direction metadata:
+  <https://www.w3.org/TR/international-specs/>.
+- Current AI-generated design anti-pattern discussions as a smell checklist,
+  not as product authority:
+  <https://uxplanet.org/how-to-spot-ai-generated-design-697aaabe76c8> and
+  <https://prg.sh/ramblings/Why-Your-AI-Keeps-Building-the-Same-Purple-Gradient-Website>.
+
+## Interaction Affordances
+
+The GUI should expose useful controls without turning into a command console.
+
+Required affordances:
+
+- global top navigation with current-route state and lab status summary;
+- breadcrumb or back link on scenario and terminal routes;
+- scenario search, tag filters, mode filter, difficulty filter, and clear
+  filter reset;
+- sort controls where lists can exceed one screen: scenario name, difficulty,
+  duration, and validation status;
+- copy buttons for command snippets with success/error feedback, but no
+  auto-run behavior;
+- inline refresh controls for status and SIEM results, with live updates when
+  SSE is active;
+- expandable raw JSON for SIEM alerts, hidden by default;
+- loading, empty, partial, offline, unauthorized, and stale-data states for
+  every data region;
+- clear destructive-action confirm dialogs for Stop and Kill;
+- persistent settings access from a small labeled control in `NavBar`, not a
+  primary top-level work route.
+
+Keyboard shortcuts may be added only after the visible controls exist. They
+must be discoverable from a Help or Shortcuts dialog and must not shadow
+terminal input while focus is inside `Terminal`.
+
+## Settings and Persistence
+
+Persistent settings make sense for local operator preferences, not for lab
+state. The app is accountless in v1, so settings should be browser-local and
+resettable.
+
+Add a settings dialog or drawer reachable from `NavBar`. Do not make Settings
+a primary route unless UI-008 finds that mobile layout or future settings volume
+requires it.
+
+Persist only non-secret UI preferences in a versioned browser key such as
+`aptl.web.preferences.v1`:
+
+| Setting | Values | Persistence rule |
+| --- | --- | --- |
+| Color mode | system, dark, light, high contrast | Local preference only; default to system. |
+| Density | comfortable, compact | Affects tables, lists, cards, and workbench blocks. |
+| Motion | system, reduced | Must honor `prefers-reduced-motion` even without a stored setting. |
+| Locale | browser default, explicit locale | Stores a locale tag only, not translated content. |
+| Time display | browser local time, UTC | Applies to SIEM alerts, run status, and diagnostics timestamps. |
+| SIEM default time range | bounded choices such as 15m, 1h, 24h | Backend still enforces maximums. |
+| SIEM row limit | bounded choices within backend cap | Backend remains authoritative. |
+| Terminal font size | bounded numeric range | Applies to xterm rendering only. |
+| Terminal scrollback | bounded choices | Must not persist terminal output. |
+| Legal notice acknowledgement | notice version and timestamp | Stores only that a local notice was acknowledged. |
+
+Do not persist API tokens, bearer headers, service credentials, terminal input,
+terminal output, raw SIEM custom queries, copied command history, scenario
+answers, hints viewed, or user notes in v1. If UI-008 introduces server-side
+preferences later, that is a new product and security scope decision.
+
+The settings store must be schema-versioned. Unknown keys are ignored or reset,
+and a visible "Reset preferences" action returns to defaults.
+
+## Accessibility
+
+UI-008 should target WCAG 2.2 AA for the shipped routes. The design work must
+make that practical:
+
+- all interactive targets meet WCAG 2.2 target-size guidance, with larger
+  targets for destructive and high-frequency controls;
+- every button, icon button, link, menu item, tab, disclosure, and terminal
+  control has an accessible name;
+- focus is visible, never hidden behind sticky headers or dialogs, and returns
+  to the invoking control after a modal closes;
+- modal dialogs trap focus while open, close through Escape where safe, and
+  expose title and description semantics;
+- color is never the only status cue. ADR-030 states, SIEM severity, and
+  terminal errors need text labels;
+- contrast is checked for normal text, muted text, borders used as state, focus
+  outlines, charts, and terminal themes;
+- live lab/SIEM updates use polite `aria-live` regions where useful, without
+  flooding screen readers during rapid event streams;
+- tables have captions or headings, column headers, and row expansion controls
+  with announced state;
+- terminal routes provide keyboard focus management, visible connection state,
+  and an accessible non-terminal error/log summary for connection failures;
+- copy-to-clipboard controls announce success and failure;
+- layouts must reflow at narrow widths without overlapping controls or hiding
+  essential state.
+
+Accessibility acceptance for UI-008 should include keyboard-only route walks,
+automated accessibility checks in web tests where practical, and manual review
+of the terminal, modal, and SIEM table flows.
+
+## Language and Locale Readiness
+
+The first implementation can ship English-only text, but it must not block
+localization.
+
+Rules for UI-008:
+
+- keep user-facing copy in a small message catalog or translation-ready module
+  rather than scattering strings through route components;
+- never concatenate translated sentence fragments around variables;
+- format dates, times, durations, counts, and severities through shared helpers;
+- store locale as a BCP 47 language tag preference when the user overrides the
+  browser default;
+- avoid fixed-width text containers for labels and buttons. German-length
+  labels and long scenario titles must wrap or truncate intentionally;
+- avoid layout assumptions that break right-to-left direction later. Direction
+  does not need to ship in v1, but spacing and icon placement should use
+  logical properties where practical;
+- keep operator-auth and security error copy short and translatable.
+
+## Legal and Privacy UX
+
+APTL is a local lab operator tool, not a public SaaS service. Do not add a
+marketing-style cookie banner or blocking terms wall by default.
+
+V1 should include a concise local-use notice and privacy notice:
+
+- a first-run "Authorized local lab use" acknowledgement before the first
+  mutating lab action or terminal launch, with the acknowledged notice version
+  stored as a non-secret preference;
+- a persistent Privacy link in Help or the footer area of the app shell;
+- notice text that states the browser stores local UI preferences, does not
+  store API tokens, and does not persist terminal input/output in v1;
+- notice text that explains local API/server logs may record route names,
+  timestamps, status codes, and redacted error categories;
+- no non-essential analytics, tracking pixels, or third-party scripts in v1.
+
+If future builds add analytics, crash reporting, third-party embeds, or
+non-essential cookies/local storage, then UI-008 or a follow-up issue must add a
+real consent manager with Accept, Reject, and Manage choices before collection
+starts. A consent banner is not required for strictly essential local storage
+such as the preference key above, but the privacy notice still has to disclose
+it.
+
 ## Information Architecture
 
 The v1 nav is deliberately small:
@@ -110,6 +326,8 @@ The v1 nav is deliberately small:
 - **Config**: non-secret lab and web settings.
 - **Terminal**: not a global nav tab; opened from container cards or scenario
   steps.
+- **Settings**: a dialog or drawer, not a primary route in v1.
+- **Help/Privacy**: a small secondary menu area, not a primary route.
 
 No icon-only sidebar. Keep the top navigation pattern from `NavBar.svelte`.
 
@@ -133,7 +351,7 @@ Low-fidelity layout:
 
 ```text
 +--------------------------------------------------------------+
-| APTL                  Lab | Scenarios | SIEM | Config  status |
+| APTL          Lab | Scenarios | SIEM | Config   Help Settings |
 +--------------------------------------------------------------+
 | Lab Home                                                     |
 | ready/degraded/stopped headline       [Start] [Stop] [Kill]  |
@@ -265,6 +483,22 @@ States:
 
 Goal: give controlled shell access for human investigation.
 
+Low-fidelity layout:
+
+```text
++--------------------------------------------------------------+
+| <- Scenario or Lab        Terminal: workstation     connected |
++--------------------------------------------------------------+
+| Target facts: container, role, lab state, host-key state      |
+| connection status / error reason                             |
+| +----------------------------------------------------------+ |
+| | terminal viewport                                        | |
+| |                                                          | |
+| +----------------------------------------------------------+ |
+| [Reconnect] [Copy selected text] [Settings: font/scrollback] |
++--------------------------------------------------------------+
+```
+
 Interaction details:
 
 - Entry points are container cards and scenario steps, not a global list of
@@ -287,6 +521,26 @@ States:
 
 Goal: expose enough non-secret configuration for orientation.
 
+Low-fidelity layout:
+
+```text
++--------------------------------------------------------------+
+| Config                                                       |
++--------------------------------------------------------------+
+| Lab profile                                                  |
+| name | subnet | run storage | enabled families               |
+|                                                              |
+| Web serve                                                    |
+| bind mode | allowed origins | build version | API origin      |
+|                                                              |
+| Service links                                                |
+| service | local URL | status | notes                         |
+|                                                              |
+| Secrets                                                      |
+| tokens and credentials are intentionally hidden              |
++--------------------------------------------------------------+
+```
+
 Interaction details:
 
 - Show lab name, network subnet, enabled container families, run storage
@@ -295,6 +549,79 @@ Interaction details:
 - Do not show `APTL_API_TOKEN`, private key paths with sensitive context,
   service passwords, cookies, generated secrets, or raw `.env` content.
 - This page is read-only in v1.
+
+### Settings Dialog
+
+Goal: let a local operator adapt the workbench without changing the lab.
+
+Low-fidelity layout:
+
+```text
++---------------- Settings ----------------+
+| Appearance                               |
+| color mode      [system v]              |
+| density         [comfortable v]         |
+| motion          [system v]              |
+|                                          |
+| Locale and time                          |
+| language        [browser default v]     |
+| time display    [local time v]          |
+|                                          |
+| SIEM defaults                            |
+| time range      [1 hour v]              |
+| row limit       [100 v]                 |
+|                                          |
+| Terminal                                 |
+| font size       [-] 14 [+]              |
+| scrollback      [1000 lines v]          |
+|                                          |
+| [Reset preferences]              [Done] |
++------------------------------------------+
+```
+
+Interaction details:
+
+- Settings open from `NavBar` and return focus to the triggering control when
+  closed.
+- The dialog is not a substitute for configuration. It changes local UI
+  presentation only.
+- Controls use selects, segmented controls, toggles, or steppers. Avoid free
+  text except where the value is naturally textual.
+- Preference writes are immediate, local, schema-versioned, and reversible
+  through Reset.
+- Invalid stored preferences fall back to defaults with no blocking error.
+
+### Local Use and Privacy Notice
+
+Goal: make local-lab privacy and authorized-use boundaries explicit without
+adding a SaaS consent pattern.
+
+Low-fidelity layout:
+
+```text
++---------- Authorized local lab use ----------+
+| APTL controls a local security lab. Use this |
+| surface only for authorized lab activity.    |
+|                                              |
+| This browser stores local UI preferences. It |
+| does not store API tokens or terminal output |
+| in v1. Server logs may contain redacted route |
+| and status metadata.                         |
+|                                              |
+| [Privacy details]             [Acknowledge] |
++----------------------------------------------+
+```
+
+Interaction details:
+
+- Show this notice before the first mutating lab action, terminal launch, or
+  SIEM query execution, not on every page load.
+- Acknowledgement stores only the notice version and timestamp in local
+  preferences.
+- Privacy details can be a help panel or static route. They must be reachable
+  after acknowledgement.
+- If the user resets preferences, the notice can appear again before the next
+  controlled action.
 
 ## Component Inventory
 
@@ -325,11 +652,16 @@ New or expanded components for UI-008:
 | `SiemQueryExplorer` | Query pack list, editor, run control, and results shell. | `SiemQueryBlock`. |
 | `SiemResultsTable` | Bounded alert rows with expandable details. | Existing table/card density from workbench blocks. |
 | `ConfigSummaryList` | Read-only config facts with secret-safe omission states. | `ContainerCard` density and `LabStartNotice` severity language. |
+| `SettingsDialog` | Local preferences for appearance, density, locale, time display, SIEM defaults, and terminal rendering. | `NavBar` action plus accessible dialog primitive. |
+| `LocalUseNoticeDialog` | First-run acknowledgement for authorized local lab use and privacy summary. | Accessible dialog primitive and existing notice severity language. |
+| `PrivacyDetailsPanel` | Persistent help/privacy disclosure for local storage and redacted server logging facts. | Help menu or secondary app-shell panel. |
 
 Do not introduce a component library reset or a new theme. Continue the current
 Tailwind v4 token names in `web/src/app.css`. The current palette is acceptable
 because it is already the repo's ADR-011 workbench identity; avoid expanding it
-into a one-color purple dashboard.
+into a one-color purple dashboard. UI-008 should also audit `web/src/app.css`
+for system-font fallback, contrast, semantic status colors, reduced-motion
+behavior, and high-contrast overrides before adding new visual tokens.
 
 ## API and Data Contracts
 
@@ -362,6 +694,8 @@ Rules:
 - API routes call existing core helpers and typed deployment/backend owners.
 - No route accepts raw Docker args, raw shell args, or unbounded OpenSearch
   query bodies.
+- Local preference settings do not need an API in v1. Keep them browser-local
+  unless a later issue explicitly scopes synchronized preferences.
 - All new Python routes get pytest coverage in `tests/`.
 - All new Svelte behavior gets vitest coverage in `web/tests/`.
 
@@ -405,7 +739,17 @@ The implementation issue can use this checklist:
 - `/terminal/[container]` and inline terminal blocks preserve ADR-039 and
   ADR-040 gates.
 - `/config` shows non-secret configuration only.
+- `SettingsDialog` persists only non-secret local UI preferences and offers a
+  reset control.
+- Local-use and privacy notice appears before the first controlled action and
+  remains reachable after acknowledgement.
 - Destructive actions require confirmation.
+- UI satisfies the accessibility requirements above, including keyboard route
+  walks, focus management, non-color status cues, contrast, target sizing, and
+  accessible modal behavior.
+- UI copy is translation-ready and date/time/count formatting goes through
+  shared helpers.
+- Visual implementation avoids the documented generic AI-design anti-patterns.
 - Every new API DTO has a Svelte mirror and tests.
 - Every new source path has pytest or vitest coverage as required by
   `.gc/plan-rules.md`.
@@ -422,5 +766,9 @@ The implementation issue can use this checklist:
 | Component inventory | Component Inventory section. |
 | Existing Svelte alignment | Component Inventory and API/Data Contracts reuse existing `web/src/lib` owners. |
 | Auth and security UX | Authentication and Security UX section. |
+| Accessibility and localization groundwork | Accessibility and Language/Locale Readiness sections. |
+| Persistent local settings | Settings and Persistence plus Settings Dialog sections. |
+| Terms/privacy UX | Legal and Privacy UX plus Local Use and Privacy Notice sections. |
+| Professional visual direction | Design Inputs and Visual Direction section. |
 | Derived from UI-006 | Product Scope section records the scope baseline. |
 | Build specification for UI-008 | UI-008 Acceptance Checklist and API/Data Contracts sections. |

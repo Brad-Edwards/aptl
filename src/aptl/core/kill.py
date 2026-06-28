@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -158,7 +159,12 @@ def _verify_mcp_process(pid: int) -> bool:
     return any(f"{name}/build/index.js" in cmdline for name in MCP_SERVER_NAMES)
 
 
-def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
+def kill_mcp_processes(
+    timeout: float = 5.0,
+    *,
+    time_source: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> tuple[int, list[str]]:
     """Terminate all running MCP server processes.
 
     Sends SIGTERM first, waits up to *timeout* seconds for graceful
@@ -167,6 +173,9 @@ def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
 
     Args:
         timeout: Seconds to wait after SIGTERM before sending SIGKILL.
+        time_source: Monotonic clock, injectable so tests drive the deadline
+            with an explicit value sequence instead of patching the module.
+        sleep: Sleep function, injectable so tests don't actually block.
 
     Returns:
         Tuple of (number of processes killed, list of error messages).
@@ -196,11 +205,11 @@ def kill_mcp_processes(timeout: float = 5.0) -> tuple[int, list[str]]:
             log.warning("Permission denied sending SIGTERM to pid=%d", pid)
 
     # Phase 2: Wait for graceful shutdown
-    deadline = time.monotonic() + timeout
-    while pids_to_track and time.monotonic() < deadline:
+    deadline = time_source() + timeout
+    while pids_to_track and time_source() < deadline:
         pids_to_track = [pid for pid in pids_to_track if not _process_exited(pid)]
         if pids_to_track:
-            time.sleep(0.25)
+            sleep(0.25)
 
     # Phase 3: SIGKILL survivors (re-verify PID still belongs to MCP)
     for pid in pids_to_track:

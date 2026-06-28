@@ -106,6 +106,74 @@ class DeploymentConfig(BaseModel):
         return v
 
 
+_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+class LifecycleScheduleEntry(BaseModel):
+    """One scheduled-provisioning window (DEP-003).
+
+    ``at`` is a 24-hour ``HH:MM`` wall-clock time interpreted in **UTC**
+    (the platform stamps lifecycle timestamps as timezone-aware UTC, so
+    the schedule shares that frame). ``days`` is an optional weekday
+    filter (empty means every day). ``scenario`` optionally names a
+    curated ACES startup scenario id to boot with.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    at: str
+    days: list[str] = []
+    scenario: str | None = None
+
+    @field_validator("at")
+    @classmethod
+    def validate_at(cls, v: str) -> str:
+        if not _TIME_PATTERN.match(v):
+            raise ValueError(
+                f"Schedule 'at' must be a 24-hour HH:MM UTC time, got '{v}'."
+            )
+        return v
+
+    @field_validator("days")
+    @classmethod
+    def validate_days(cls, v: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for day in v:
+            lowered = day.lower()
+            if lowered not in _WEEKDAYS:
+                raise ValueError(
+                    f"Invalid weekday '{day}'. Use any of: {', '.join(_WEEKDAYS)}."
+                )
+            normalized.append(lowered)
+        return normalized
+
+
+class LabLifecyclePolicyConfig(BaseModel):
+    """Ephemeral lifecycle policy for the range (DEP-003).
+
+    Declarative policy consumed by ``aptl lab enforce`` / ``monitor`` to
+    auto-teardown an idle or expired range and to provision on a
+    schedule. Enforcement is a separate single-owner control-plane tick;
+    this model is just the strict, first-party policy shape (ADR-025).
+    All durations are bounded positive integers in minutes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ttl_minutes: int | None = None
+    idle_timeout_minutes: int | None = None
+    teardown_remove_volumes: bool = True
+    schedule: list[LifecycleScheduleEntry] = []
+
+    @field_validator("ttl_minutes", "idle_timeout_minutes")
+    @classmethod
+    def validate_positive_minutes(cls, v: int | None) -> int | None:
+        if v is not None and v <= 0:
+            raise ValueError("must be a positive number of minutes")
+        return v
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration.
 
@@ -121,6 +189,7 @@ class AptlConfig(BaseModel):
     containers: ContainerSettings = ContainerSettings()
     deployment: DeploymentConfig = DeploymentConfig()
     run_storage: RunStorageConfig = RunStorageConfig()
+    lifecycle_policy: LabLifecyclePolicyConfig | None = None
 
 
 def load_config(path: Path) -> AptlConfig:

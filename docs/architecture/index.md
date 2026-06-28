@@ -157,3 +157,4 @@ The victim and kali containers publish no host ports; use
 ## Preflights
 
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)
+- [DEP-003 Ephemeral Lifecycle Policy](dep-003-ephemeral-lifecycle-preflight.md)

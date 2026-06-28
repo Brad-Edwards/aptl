@@ -11,7 +11,7 @@ import pytest
 from typer.testing import CliRunner
 
 from aptl.cli.main import app
-from aptl.core import lifecycle_policy as lp
+from aptl.core import lifecycle_enforce as le
 from aptl.core.lab_types import LabResult, StartupOutcome
 
 
@@ -35,7 +35,7 @@ class TestEnforceCommand:
 
     def test_success_prints_message(self, runner, monkeypatch):
         monkeypatch.setattr(
-            lp, "enforce_once",
+            le, "enforce_once",
             lambda *a, **k: LabResult(success=True, message="lifecycle: no action (x)"),
         )
         result = runner.invoke(app, ["lab", "enforce"])
@@ -49,14 +49,14 @@ class TestEnforceCommand:
             seen.update(kwargs)
             return LabResult(success=True, message="ok")
 
-        monkeypatch.setattr(lp, "enforce_once", fake)
+        monkeypatch.setattr(le, "enforce_once", fake)
         result = runner.invoke(app, ["lab", "enforce", "--grace-minutes", "15"])
         assert result.exit_code == 0
         assert seen["grace_minutes"] == 15
 
     def test_failure_exits_nonzero(self, runner, monkeypatch):
         monkeypatch.setattr(
-            lp, "enforce_once",
+            le, "enforce_once",
             lambda *a, **k: LabResult(
                 success=False, message="lifecycle: teardown (ttl_exceeded)", error="boom"
             ),
@@ -66,9 +66,9 @@ class TestEnforceCommand:
 
     def test_busy_exits_nonzero(self, runner, monkeypatch):
         def raise_busy(*a, **k):
-            raise lp.LifecycleBusyError("locked")
+            raise le.LifecycleBusyError("locked")
 
-        monkeypatch.setattr(lp, "enforce_once", raise_busy)
+        monkeypatch.setattr(le, "enforce_once", raise_busy)
         result = runner.invoke(app, ["lab", "enforce"])
         assert result.exit_code == 1
         assert "locked" in result.stdout + result.stderr
@@ -86,7 +86,7 @@ class TestMonitorCommand:
             seen.update(kwargs)
             return [LabResult(success=True, message="tick")]
 
-        monkeypatch.setattr(lp, "run_monitor", fake)
+        monkeypatch.setattr(le, "run_monitor", fake)
         result = runner.invoke(
             app, ["lab", "monitor", "--interval", "30", "--max-ticks", "2"]
         )

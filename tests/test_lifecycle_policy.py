@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from aptl.core import lifecycle_enforce as le
 from aptl.core import lifecycle_policy as lp
 from aptl.core.config import (
     AptlConfig,
@@ -273,19 +274,19 @@ def _write_policy_config(tmp_path, policy_dict):
 class TestEnforceOnce:
     def test_no_policy_is_noop(self, tmp_path):
         (tmp_path / "aptl.json").write_text(json.dumps({"lab": {"name": "aptl"}}))
-        result = lp.enforce_once(tmp_path)
+        result = le.enforce_once(tmp_path)
         assert result.success is True
 
     def test_no_config_is_noop(self, tmp_path):
-        result = lp.enforce_once(tmp_path)
+        result = le.enforce_once(tmp_path)
         assert result.success is True
 
     def test_running_within_policy_takes_no_action(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"ttl_minutes": 240})
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=True))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=True))
         calls = []
-        monkeypatch.setattr(lp, "stop_lab", lambda **k: calls.append("stop") or LabResult(success=True))
-        result = lp.enforce_once(tmp_path, now=_now())
+        monkeypatch.setattr(le, "stop_lab", lambda **k: calls.append("stop") or LabResult(success=True))
+        result = le.enforce_once(tmp_path, now=_now())
         assert calls == []
         assert result.success is True
         # first observation of a running lab stamps provisioned_at
@@ -295,13 +296,13 @@ class TestEnforceOnce:
         _write_policy_config(tmp_path, {"ttl_minutes": 60, "teardown_remove_volumes": True})
         # seed state with an old provisioned_at so TTL is already exceeded
         lp.save_state(tmp_path, lp.LifecycleState(provisioned_at=_now(hour=10).isoformat()))
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=True))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=True))
         seen = {}
         def fake_stop(**kwargs):
             seen.update(kwargs)
             return LabResult(success=True)
-        monkeypatch.setattr(lp, "stop_lab", fake_stop)
-        result = lp.enforce_once(tmp_path, now=_now(hour=12))
+        monkeypatch.setattr(le, "stop_lab", fake_stop)
+        result = le.enforce_once(tmp_path, now=_now(hour=12))
         assert seen.get("remove_volumes") is True
         assert result.success is True
         state = lp.load_state(tmp_path)
@@ -311,10 +312,10 @@ class TestEnforceOnce:
     def test_idle_expired_calls_stop_lab(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"idle_timeout_minutes": 30})
         lp.save_state(tmp_path, lp.LifecycleState(provisioned_at=_now(hour=10).isoformat()))
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=True))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=True))
         called = []
-        monkeypatch.setattr(lp, "stop_lab", lambda **k: called.append(True) or LabResult(success=True))
-        result = lp.enforce_once(tmp_path, now=_now(hour=12))
+        monkeypatch.setattr(le, "stop_lab", lambda **k: called.append(True) or LabResult(success=True))
+        result = le.enforce_once(tmp_path, now=_now(hour=12))
         assert called == [True]
         assert result.success is True
         state = lp.load_state(tmp_path)
@@ -323,13 +324,13 @@ class TestEnforceOnce:
 
     def test_scheduled_provision_calls_clean_boot(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"schedule": [{"at": "08:00"}]})
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=False))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))
         booted = []
         monkeypatch.setattr(
-            lp, "clean_boot_lab",
+            le, "clean_boot_lab",
             lambda *a, **k: booted.append(True) or LabResult(success=True, outcome=StartupOutcome.READY),
         )
-        result = lp.enforce_once(tmp_path, now=_now(hour=8, minute=5))
+        result = le.enforce_once(tmp_path, now=_now(hour=8, minute=5))
         assert booted == [True]
         assert result.success is True
         state = lp.load_state(tmp_path)
@@ -342,14 +343,14 @@ class TestEnforceOnce:
         # A failed provision must NOT consume the day's fire marker, so a
         # later tick inside the grace window retries it.
         _write_policy_config(tmp_path, {"schedule": [{"at": "08:00"}]})
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=False))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))
         monkeypatch.setattr(
-            lp, "clean_boot_lab",
+            le, "clean_boot_lab",
             lambda *a, **k: LabResult(
                 success=False, error="boom", outcome=StartupOutcome.FAILED
             ),
         )
-        result = lp.enforce_once(tmp_path, now=_now(hour=8, minute=5))
+        result = le.enforce_once(tmp_path, now=_now(hour=8, minute=5))
         assert result.success is False
         state = lp.load_state(tmp_path)
         assert state.fired_schedules == {}
@@ -361,7 +362,7 @@ class TestEnforceOnce:
         (tmp_path / "aptl.json").write_text(
             json.dumps({"lab": {"name": "aptl"}, "lifecycle_policy": {"ttl_minutes": 0}})
         )
-        result = lp.enforce_once(tmp_path, now=_now())
+        result = le.enforce_once(tmp_path, now=_now())
         assert result.success is False
         assert result.outcome is StartupOutcome.FAILED
 
@@ -369,23 +370,23 @@ class TestEnforceOnce:
         _write_policy_config(tmp_path, {"ttl_minutes": 60})
         # Seed a stale provisioned_at from a range that has since gone down.
         lp.save_state(tmp_path, lp.LifecycleState(provisioned_at=_now(hour=1).isoformat()))
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=False))
-        monkeypatch.setattr(lp, "clean_boot_lab", lambda *a, **k: pytest.fail("should not boot"))
-        result = lp.enforce_once(tmp_path, now=_now())
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))
+        monkeypatch.setattr(le, "clean_boot_lab", lambda *a, **k: pytest.fail("should not boot"))
+        result = le.enforce_once(tmp_path, now=_now())
         assert result.success is True
         # stale provisioned_at is cleared when the lab is observed down
         assert lp.load_state(tmp_path).provisioned_at is None
 
     def test_raises_busy_when_lock_held(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"ttl_minutes": 60})
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=False))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))
         lock_path = lp.state_path(tmp_path).parent / ".lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         holder = open(lock_path, "w")
         try:
             fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with pytest.raises(lp.LifecycleBusyError):
-                lp.enforce_once(tmp_path, now=_now())
+                le.enforce_once(tmp_path, now=_now())
         finally:
             fcntl.flock(holder, fcntl.LOCK_UN)
             holder.close()
@@ -402,9 +403,9 @@ class TestLatestActivity:
         recent = _now(hour=12).timestamp()
         import os
         os.utime(marker, (recent, recent))
-        monkeypatch.setattr(lp, "resolve_active_run_dir", lambda state_dir: active)
+        monkeypatch.setattr(le, "resolve_active_run_dir", lambda state_dir: active)
         state = lp.LifecycleState(provisioned_at=_now(hour=1).isoformat())
-        latest = lp._latest_activity_at(tmp_path, state)
+        latest = le._latest_activity_at(tmp_path, state)
         assert latest is not None
         assert abs((latest - _now(hour=12)).total_seconds()) < 2
 
@@ -412,9 +413,9 @@ class TestLatestActivity:
 class TestRunMonitor:
     def test_runs_bounded_ticks_without_sleeping_after_last(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"ttl_minutes": 60})
-        monkeypatch.setattr(lp, "lab_status", lambda **k: LabStatus(running=False))
+        monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))
         sleeps = []
-        results = lp.run_monitor(
+        results = le.run_monitor(
             tmp_path, interval_seconds=5, max_ticks=3, sleep=lambda s: sleeps.append(s)
         )
         assert len(results) == 3
@@ -423,12 +424,12 @@ class TestRunMonitor:
 
     def test_no_policy_returns_empty(self, tmp_path):
         (tmp_path / "aptl.json").write_text(json.dumps({"lab": {"name": "aptl"}}))
-        assert lp.run_monitor(tmp_path, interval_seconds=5, max_ticks=2) == []
+        assert le.run_monitor(tmp_path, interval_seconds=5, max_ticks=2) == []
 
     def test_invalid_config_yields_failed_result(self, tmp_path):
         (tmp_path / "aptl.json").write_text(
             json.dumps({"lab": {"name": "aptl"}, "lifecycle_policy": {"ttl_minutes": 0}})
         )
-        results = lp.run_monitor(tmp_path, interval_seconds=1, max_ticks=3)
+        results = le.run_monitor(tmp_path, interval_seconds=1, max_ticks=3)
         assert len(results) == 1
         assert results[0].success is False

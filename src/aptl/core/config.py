@@ -68,10 +68,14 @@ class RunStorageConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    backend: str = "local"          # "local" or "s3" (s3 deferred)
-    local_path: str = "./runs"      # Relative to project dir
-    s3_bucket: str | None = None    # Future
-    s3_prefix: str = "runs/"        # Future
+    # "local" or "s3" (s3 deferred)
+    backend: str = "local"
+    # Relative to project dir
+    local_path: str = "./runs"
+    # Future
+    s3_bucket: str | None = None
+    # Future
+    s3_prefix: str = "runs/"
 
 
 class DeploymentConfig(BaseModel):
@@ -84,7 +88,8 @@ class DeploymentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    provider: str = "docker-compose"    # "docker-compose" or "ssh-compose"
+    # "docker-compose" or "ssh-compose"
+    provider: str = "docker-compose"
     project_name: str = "aptl"
 
     # SSH-specific fields (only used when provider == "ssh-compose")

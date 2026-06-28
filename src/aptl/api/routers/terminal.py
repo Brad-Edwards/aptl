@@ -4,6 +4,7 @@ import asyncio
 import json
 import secrets
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -44,16 +45,23 @@ class _TicketStore:
     and consumed tickets are pruned on every access.
     """
 
-    def __init__(self, ttl: float = _TICKET_TTL) -> None:
+    def __init__(
+        self,
+        ttl: float = _TICKET_TTL,
+        time_source: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._ttl: float = ttl
-        # ticket → expiry timestamp (time.monotonic())
+        # Injectable monotonic clock so tests drive TTL with an explicit value
+        # sequence instead of patching the module and counting calls.
+        self._now: Callable[[], float] = time_source
+        # ticket → expiry timestamp (monotonic seconds)
         self._tickets: dict[str, float] = {}
 
     def issue(self) -> str:
         """Issue a new single-use ticket and return its opaque value."""
         self._prune()
         ticket = secrets.token_urlsafe(32)
-        self._tickets[ticket] = time.monotonic() + self._ttl
+        self._tickets[ticket] = self._now() + self._ttl
         return ticket
 
     def consume(self, ticket: str) -> bool:
@@ -70,7 +78,7 @@ class _TicketStore:
 
     def _prune(self) -> None:
         """Remove all expired tickets from the store."""
-        now = time.monotonic()
+        now = self._now()
         expired = [t for t, exp in self._tickets.items() if exp <= now]
         for t in expired:
             del self._tickets[t]

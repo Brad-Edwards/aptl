@@ -512,30 +512,26 @@ class TestTerminalTicketStore:
         from aptl.api.routers.terminal import consume_ticket
         assert consume_ticket("not-a-real-ticket") is False
 
-    def test_expired_ticket_returns_false(self, monkeypatch):
-        """Tickets past their TTL are treated as non-existent."""
-        import time
-        from aptl.api.routers import terminal as _term
+    def test_expired_ticket_returns_false(self):
+        """Tickets past their TTL are treated as non-existent.
 
-        base_time = time.monotonic()
-        call_count = 0
+        The clock is injected as an explicit value sequence rather than patched
+        on the module: issue() reads it twice (prune + expiry stamp) at ``base``,
+        then consume()'s prune reads it once at ``base + 61`` — past the 30 s TTL.
+        Using a finite iterator means any extra clock call in the implementation
+        raises StopIteration and fails the test loudly, instead of silently
+        feeding the wrong value (the call-count-branching fake's blind spot).
+        """
+        from aptl.api.routers.terminal import _TicketStore
 
-        def fake_monotonic():
-            nonlocal call_count
-            call_count += 1
-            # Calls 1-2: issue phase (prune check + expiry timestamp) → base
-            # Call 3+: consume phase (prune check) → 60 s in the future so
-            # the ticket is expired and pruned before consume sees it.
-            if call_count <= 2:
-                return base_time
-            return base_time + 60.0
+        base = 1000.0
+        store = _TicketStore(
+            ttl=30.0,
+            time_source=iter([base, base, base + 61.0]).__next__,
+        )
 
-        monkeypatch.setattr(_term.time, "monotonic", fake_monotonic)
-        _term._ticket_store._ttl = 30.0
-
-        t = _term.issue_ticket()
-        result = _term.consume_ticket(t)
-        assert result is False
+        ticket = store.issue()
+        assert store.consume(ticket) is False
 
 
 class TestVerifyWsTicket:

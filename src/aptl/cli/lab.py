@@ -6,6 +6,7 @@ from typing import Optional
 
 import typer
 
+from aptl.cli import lifecycle
 from aptl.cli.continuity import continuity_audit
 from aptl.core.lab import (
     LabResult,
@@ -29,6 +30,11 @@ app = typer.Typer(help="Lab lifecycle management.")
 # module stays focused on lifecycle commands. Register it under `lab`
 # so the command stays at `aptl lab continuity-audit` (no UX change).
 app.command("continuity-audit")(continuity_audit)
+
+# Ephemeral lifecycle policy commands (DEP-003) live in aptl.cli.lifecycle so
+# this module stays focused; register them under `lab` (no UX change:
+# `aptl lab enforce` / `monitor` / `policy show`).
+lifecycle.register(app)
 
 
 # Headline phrasing per outcome — kept beside the renderer so the CLI's

@@ -15,6 +15,12 @@ workflow:
   completion_command: 'pytest -n auto -k "not integration" && pytest -n auto tests/test_techvault_static_gate.py -m integration'
   lint_command: pre-commit run --all-files
   format_command: pre-commit run --all-files
+  review_disposition:
+    enabled: true
+    mode: shadow
+    max_auto_overrides: 1
+    judge:
+      enabled: true
 sonarcloud:
   project_key: Brad-Edwards_aptl
   organization: brad-edwards

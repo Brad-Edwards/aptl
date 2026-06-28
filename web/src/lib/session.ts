@@ -27,7 +27,7 @@ export const SESSION_HEADER = 'X-APTL-Session';
  * the fragment (e.g. an ordinary navigation). Safe to call on every load.
  */
 export function captureSessionFromHash(): void {
-	if (typeof globalThis.window === 'undefined') return;
+	if (globalThis.window === undefined) return;
 	const hash = globalThis.location.hash;
 	if (hash.length < 2) return;
 	const params = new URLSearchParams(hash.slice(1));
@@ -55,7 +55,7 @@ export function captureSessionFromHash(): void {
 
 /** Return the stored session header token, or null when none is present. */
 export function getSessionToken(): string | null {
-	if (typeof globalThis.window === 'undefined') return null;
+	if (globalThis.window === undefined) return null;
 	try {
 		return sessionStorage.getItem(STORAGE_KEY);
 	} catch {

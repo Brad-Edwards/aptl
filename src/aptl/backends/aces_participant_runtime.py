@@ -29,6 +29,7 @@ from aces_contracts.participant_episode import (
     ParticipantEpisodeResetRequest,
     ParticipantEpisodeRestartRequest,
     ParticipantEpisodeStatus,
+    ParticipantEpisodeTerminalReason,
     ParticipantEpisodeTerminateRequest,
 )
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot

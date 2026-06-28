@@ -106,43 +106,173 @@ async function runHookWithTimeout(
   }
 }
 
-export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOptions = {}) {
-  const { postToolHook } = options;
-  const hookTimeoutMs = options.postToolHookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
-  // Initialize clients and OTel tracing based on config
-  const sshManager = labConfig.containers ? new SSHConnectionManager() : null;
-  const httpClient = labConfig.api ? new HTTPClient(labConfig.api) : null;
-  initTracing(labConfig.server.name);
+interface ServerClients {
+  sshManager: SSHConnectionManager | null;
+  httpClient: HTTPClient | null;
+}
 
-  // Pre-generate tools and handlers based on available capabilities
-  let cachedTools: Tool[] = [];
-  let cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler> = {};
+interface ToolRegistry {
+  cachedTools: Tool[];
+  cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler>;
+  compositeKinds: Record<string, CompositeContextKind>;
+}
 
-  if (sshManager) {
+interface ContextDeps {
+  labConfig: LabConfig;
+  clients: ServerClients;
+  compositeKinds: Record<string, CompositeContextKind>;
+}
+
+interface CallToolDeps extends ContextDeps {
+  cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler>;
+  postToolHook?: PostToolHook;
+  hookTimeoutMs: number;
+}
+
+/** Pre-generate tool definitions + handlers for every configured capability. */
+function buildToolRegistry(
+  labConfig: LabConfig,
+  clients: ServerClients,
+  composites: CompositeTool[],
+): ToolRegistry {
+  const cachedTools: Tool[] = [];
+  const cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler> = {};
+  let compositeKinds: Record<string, CompositeContextKind> = {};
+
+  if (clients.sshManager) {
     cachedTools.push(...generateToolDefinitions(labConfig.server));
     Object.assign(cachedHandlers, generateToolHandlers(labConfig.server));
   }
-
-  if (httpClient) {
+  if (clients.httpClient) {
     // Only include generic tools if no predefined queries exist
     const includeGeneric = !labConfig.queries || Object.keys(labConfig.queries).length === 0;
     cachedTools.push(...generateAPIToolDefinitions(labConfig.server, labConfig.queries, includeGeneric));
     Object.assign(cachedHandlers, generateAPIToolHandlers(labConfig.server, labConfig.queries, includeGeneric));
   }
-
-  // Composite tools (ORC-003 / ADR-045) register through the typed common
-  // seam. Their context kind is tracked explicitly so dispatch routes SSH /
-  // HTTP context by declaration, never by tool-name substring.
-  const composites = options.composites ?? [];
-  let compositeKinds: Record<string, CompositeContextKind> = {};
+  // Composite tools (ORC-003 / ADR-045) register through the typed common seam.
+  // Their context kind is tracked explicitly so dispatch routes SSH / HTTP
+  // context by declaration, never by tool-name substring.
   if (composites.length > 0) {
     cachedTools.push(...generateCompositeToolDefinitions(labConfig.server, composites));
     Object.assign(cachedHandlers, generateCompositeToolHandlers(labConfig.server, composites));
     compositeKinds = compositeContextKinds(labConfig.server, composites);
   }
 
+  return { cachedTools, cachedHandlers, compositeKinds };
+}
+
+/**
+ * Build the composite context from the declared kind (ADR-045): routing is by
+ * declaration, never by tool-name substrings. A declared client that is
+ * unconfigured is a hard error before the handler runs.
+ */
+function buildCompositeContext(kind: CompositeContextKind, deps: ContextDeps): CompositeContext {
+  const { labConfig, clients } = deps;
+  const compositeContext: CompositeContext = { labConfig };
+  if (kind === 'ssh' || kind === 'both') {
+    if (!clients.sshManager) {
+      throw new Error('Composite tool requires SSH but SSH manager not configured');
+    }
+    compositeContext.sshManager = clients.sshManager;
+  }
+  if (kind === 'api' || kind === 'both') {
+    if (!clients.httpClient) {
+      throw new Error('Composite tool requires API but HTTP client not configured');
+    }
+    compositeContext.httpClient = clients.httpClient;
+  }
+  return compositeContext;
+}
+
+/** Determine context type based on tool kind and available clients. */
+function resolveToolContext(name: string, deps: ContextDeps): ToolContext | APIToolContext | CompositeContext {
+  const { labConfig, clients, compositeKinds } = deps;
+  const compositeKind = compositeKinds[name];
+  if (compositeKind) {
+    return buildCompositeContext(compositeKind, deps);
+  }
+  if (name.includes('_api_') || (labConfig.queries && Object.keys(labConfig.queries).some(q => name.endsWith(`_${q}`)))) {
+    if (!clients.httpClient) {
+      throw new Error('API tool requested but HTTP client not configured');
+    }
+    return { httpClient: clients.httpClient, labConfig };
+  }
+  if (!clients.sshManager) {
+    throw new Error('SSH tool requested but SSH manager not configured');
+  }
+  return { sshManager: clients.sshManager, labConfig };
+}
+
+/** Build the CallTool request handler, including the best-effort post-tool hook. */
+function makeCallToolHandler(deps: CallToolDeps) {
+  return async (request: CallToolRequest) => {
+    const { name, arguments: args } = request.params;
+
+    const handler = deps.cachedHandlers[name];
+    if (!handler) {
+      throw new Error(`Unknown tool: ${name}`);
+    }
+
+    const context = resolveToolContext(name, deps);
+    const safeArgs: Record<string, unknown> = args ?? {};
+    const t0 = Date.now();
+    try {
+      const result = await traceToolCall<{ content: { type: string; text: string }[] }>(
+        name,
+        deps.labConfig.server.name,
+        safeArgs,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- handler union narrowed by resolveToolContext
+        () => (handler as any)(safeArgs, context),
+      );
+      if (deps.postToolHook) {
+        // Fire-and-forget: telemetry must NEVER add latency to the tool
+        // response. Errors and timeouts are logged to stderr so a bad hook is
+        // observable without blocking. The hook timeout still applies to the
+        // lifetime of the in-flight task — we don't await it on the response path.
+        void runHookWithTimeout(
+          deps.postToolHook,
+          { toolName: name, args: safeArgs, result, durationMs: Date.now() - t0 },
+          deps.hookTimeoutMs,
+        ).catch((hookErr) => {
+          console.error('[MCP] postToolHook error:', hookErr);
+        });
+      }
+      return result;
+    } catch (err) {
+      if (deps.postToolHook) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        void runHookWithTimeout(
+          deps.postToolHook,
+          { toolName: name, args: safeArgs, durationMs: Date.now() - t0, error },
+          deps.hookTimeoutMs,
+        ).catch((hookErr) => {
+          console.error('[MCP] postToolHook error:', hookErr);
+        });
+      }
+      throw err;
+    }
+  };
+}
+
+export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOptions = {}) {
+  const { postToolHook } = options;
+  const hookTimeoutMs = options.postToolHookTimeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
+  // Initialize clients and OTel tracing based on config
+  const clients: ServerClients = {
+    sshManager: labConfig.containers ? new SSHConnectionManager() : null,
+    httpClient: labConfig.api ? new HTTPClient(labConfig.api) : null,
+  };
+  const { sshManager } = clients;
+  initTracing(labConfig.server.name);
+
+  const { cachedTools, cachedHandlers, compositeKinds } = buildToolRegistry(
+    labConfig,
+    clients,
+    options.composites ?? [],
+  );
+
   console.error(`[MCP] Initialized ${labConfig.server.name} with lab: ${labConfig.lab.name}`);
-  console.error(`[MCP] Available capabilities: ${sshManager ? 'SSH' : ''}${sshManager && httpClient ? ' + ' : ''}${httpClient ? 'HTTP API' : ''}`);
+  console.error(`[MCP] Available capabilities: ${clients.sshManager ? 'SSH' : ''}${clients.sshManager && clients.httpClient ? ' + ' : ''}${clients.httpClient ? 'HTTP API' : ''}`);
 
   // Create MCP server
   const server = new Server(
@@ -157,44 +287,6 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
     }
   );
 
-  // Build the composite context from the declared kind (ADR-045): routing is
-  // by declaration, never by tool-name substrings. A declared client that is
-  // unconfigured is a hard error before the handler runs.
-  const buildCompositeContext = (kind: CompositeContextKind): CompositeContext => {
-    const compositeContext: CompositeContext = { labConfig };
-    if (kind === 'ssh' || kind === 'both') {
-      if (!sshManager) {
-        throw new Error('Composite tool requires SSH but SSH manager not configured');
-      }
-      compositeContext.sshManager = sshManager;
-    }
-    if (kind === 'api' || kind === 'both') {
-      if (!httpClient) {
-        throw new Error('Composite tool requires API but HTTP client not configured');
-      }
-      compositeContext.httpClient = httpClient;
-    }
-    return compositeContext;
-  };
-
-  // Determine context type based on tool kind and available clients.
-  const resolveToolContext = (name: string): ToolContext | APIToolContext | CompositeContext => {
-    const compositeKind = compositeKinds[name];
-    if (compositeKind) {
-      return buildCompositeContext(compositeKind);
-    }
-    if (name.includes('_api_') || (labConfig.queries && Object.keys(labConfig.queries).some(q => name.endsWith(`_${q}`)))) {
-      if (!httpClient) {
-        throw new Error('API tool requested but HTTP client not configured');
-      }
-      return { httpClient, labConfig };
-    }
-    if (!sshManager) {
-      throw new Error('SSH tool requested but SSH manager not configured');
-    }
-    return { sshManager, labConfig };
-  };
-
   // Setup request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
@@ -202,57 +294,10 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
     };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
-    const { name, arguments: args } = request.params;
-
-    const handler = cachedHandlers[name];
-    if (!handler) {
-      throw new Error(`Unknown tool: ${name}`);
-    }
-
-    // Context type is resolved by tool kind (composite/API/SSH) in a helper so
-    // the dispatch path stays within the repo's complexity budget.
-    const context = resolveToolContext(name);
-
-    const safeArgs: Record<string, unknown> = args ?? {};
-    const t0 = Date.now();
-    try {
-      // Context is narrowed to the correct type above based on tool name
-      const result = await traceToolCall<{ content: { type: string; text: string }[] }>(
-        name,
-        labConfig.server.name,
-        safeArgs,
-        () => (handler as any)(safeArgs, context),
-      );
-      if (postToolHook) {
-        // Fire-and-forget: telemetry must NEVER add latency to the tool
-        // response. Errors and timeouts are logged to stderr so a bad
-        // hook is observable without blocking. The hook timeout still
-        // applies to the lifetime of the in-flight task — we don't
-        // await it on the response path.
-        void runHookWithTimeout(
-          postToolHook,
-          { toolName: name, args: safeArgs, result, durationMs: Date.now() - t0 },
-          hookTimeoutMs,
-        ).catch((hookErr) => {
-          console.error('[MCP] postToolHook error:', hookErr);
-        });
-      }
-      return result;
-    } catch (err) {
-      if (postToolHook) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        void runHookWithTimeout(
-          postToolHook,
-          { toolName: name, args: safeArgs, durationMs: Date.now() - t0, error },
-          hookTimeoutMs,
-        ).catch((hookErr) => {
-          console.error('[MCP] postToolHook error:', hookErr);
-        });
-      }
-      throw err;
-    }
-  });
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    makeCallToolHandler({ labConfig, clients, compositeKinds, cachedHandlers, postToolHook, hookTimeoutMs }),
+  );
 
   // Setup graceful shutdown handlers (once per process)
   let handlersSetup = false;

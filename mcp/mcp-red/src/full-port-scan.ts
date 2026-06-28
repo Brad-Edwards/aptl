@@ -175,7 +175,7 @@ export function validatePortSpec(ports: unknown): string {
     return '-p-';
   }
   if (typeof ports !== 'string') {
-    throw new Error(`invalid port spec (expected string): ${JSON.stringify(ports)}`);
+    throw new TypeError(`invalid port spec (expected string): ${JSON.stringify(ports)}`);
   }
   if (!PORT_SPEC_RE.test(ports)) {
     throw new Error(`invalid port spec: ${JSON.stringify(ports)}`);

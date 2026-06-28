@@ -13,9 +13,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from aces_contracts.participant_binding import (
+    ParticipantActionAdmissionRequest,
+    participant_action_binding_events,
+    participant_behavior_event_payload,
+)
 from aces_contracts.participant_episode import (
     ParticipantEpisodeControlAction,
     ParticipantEpisodeExecutionState,
@@ -48,6 +54,25 @@ def _utc_now() -> str:
     """Return the current UTC instant as an ISO-8601 ``...Z`` string."""
 
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _binding_post_state_digest(request: ParticipantActionAdmissionRequest) -> str:
+    """Derive a deterministic post-state digest for an admission request.
+
+    Mirrors the ACES reference contract: when the caller does not supply a
+    ``post_state_digest``, derive a stable one from the admission's identity
+    fields so the recorded behavior events carry a content-addressable digest.
+    """
+
+    digest_input = "|".join(
+        (
+            request.participant_address,
+            request.action_contract_address,
+            request.observation_boundary_address,
+            request.action_instance_id,
+        )
+    )
+    return "sha256:" + sha256(digest_input.encode("utf-8")).hexdigest()
 
 
 def _terminal_event(
@@ -309,6 +334,66 @@ class AptlParticipantRuntime:
         next_snapshot, changed = self._store_episode(snapshot, state, [event])
         return ApplyResult(
             success=True, snapshot=next_snapshot, changed_addresses=changed
+        )
+
+    def admit_action(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Admit one implementation-bound participant action attempt.
+
+        Records the portable behavior-history events for an admitted action
+        (action attempted, state-transition recorded, observation emitted)
+        against the participant's live episode, per the ACES participant
+        implementation-binding contract. The action itself is compiled and
+        executed by the caller; this surface binds its result into the runtime's
+        behavior history. Fails closed when there is no live, non-terminal
+        episode to bind the action to.
+        """
+
+        address = request.participant_address
+        current = self._current_state(address, snapshot)
+        if current is None:
+            return self._failed(
+                snapshot,
+                address,
+                "cannot admit participant action: no initialized episode",
+            )
+        if current.status == ParticipantEpisodeStatus.TERMINATED:
+            return self._failed(
+                snapshot,
+                address,
+                "cannot admit participant action for a terminated participant",
+            )
+        now = _utc_now()
+        post_state_digest = request.post_state_digest or _binding_post_state_digest(
+            request
+        )
+        events = participant_action_binding_events(
+            request,
+            episode_id=current.episode_id,
+            timestamp=now,
+            post_state_digest=post_state_digest,
+        )
+        self._behavior_history.setdefault(address, []).extend(
+            participant_behavior_event_payload(event) for event in events
+        )
+        next_snapshot = _snapshot(
+            snapshot,
+            snapshot.entries,
+            self._results,
+            self._history,
+            self._behavior_history,
+            self._shared_state_records,
+            self._shared_state_history,
+        )
+        return ApplyResult(
+            success=True,
+            snapshot=next_snapshot,
+            changed_addresses=[
+                f"runtime.snapshot.participant-behavior-history.{address}"
+            ],
         )
 
     def status(self) -> dict[str, object]:

@@ -435,6 +435,156 @@ def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path
     )
 
 
+def _participant_admission_request(participant_address: str):
+    """Build a valid ParticipantActionAdmissionRequest for *participant_address*.
+
+    Mirrors the ACES participant implementation-binding contract shape (manifest
+    + selection + addresses) so admit_action can be exercised end-to-end.
+    """
+    from aces_contracts.contracts import (
+        ParticipantImplementationManifestModel,
+        ParticipantImplementationSelectionModel,
+    )
+    from aces_contracts.participant_binding import ParticipantActionAdmissionRequest
+
+    manifest = ParticipantImplementationManifestModel.model_validate(
+        {
+            "schema_version": "participant-implementation-manifest/v1",
+            "identity": {"name": "aptl-admit-probe", "version": "1.0.0"},
+            "implementation_kind": "agent",
+            "supported_contract_versions": [
+                "participant-implementation-manifest-v1",
+                "participant-implementation-provenance-v1",
+                "participant-episode-state-envelope-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "compatibility": {
+                "participant_runtimes": ["aptl"],
+                "processors": [],
+                "backends": [],
+            },
+            "concept_bindings": [
+                {"scope": "implementation_kind", "family": "apparatus-declarations"},
+                {
+                    "scope": "capabilities.supported_participant_contracts",
+                    "family": "apparatus-declarations",
+                },
+                {
+                    "scope": "capabilities.supported_decision_surface_modes",
+                    "family": "apparatus-declarations",
+                },
+                {
+                    "scope": "capabilities.tool_affordance_expectations",
+                    "family": "tools-and-artifacts",
+                },
+                {
+                    "scope": "capabilities.exposure_policy_kinds",
+                    "family": "provenance-and-evidence",
+                },
+            ],
+            "capabilities": {
+                "supported_participant_contracts": [
+                    "participant-episode-state-envelope-v1",
+                    "participant-behavior-history-event-stream-v1",
+                ],
+                "supported_decision_surface_modes": ["policy-directed"],
+                "tool_affordance_expectations": ["shell"],
+                "exposure_policy_kinds": ["task-statement"],
+            },
+        }
+    )
+    selection = ParticipantImplementationSelectionModel.model_validate(
+        {
+            "participant_address": participant_address,
+            "implementation_identity": {"name": "aptl-admit-probe", "version": "1.0.0"},
+            "manifest_ref": "registry://aptl-participant-implementation-manifest",
+            "manifest_digest": "sha256:" + "2" * 64,
+            "selected_decision_surface_mode": "policy-directed",
+            "participant_contract_versions": [
+                "participant-episode-state-envelope-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "exposure_policy": {
+                "policy_id": "aptl-admit-probe-policy",
+                "exposure_policy_kinds": ["task-statement"],
+                "disclosed_refs": ["scenario.aptl-admit-probe"],
+            },
+        }
+    )
+    return ParticipantActionAdmissionRequest(
+        participant_address=participant_address,
+        action_contract_address="participant.action-contract.aptl-admit-probe",
+        observation_boundary_address="participant.observation-boundary.aptl-admit-probe",
+        action_instance_id="aptl-admit-probe-action",
+        implementation_manifest=manifest,
+        implementation_selection=selection,
+    )
+
+
+def _aptl_runtime_and_control_plane(tmp_path):
+    """Return (participant_runtime, control_plane) for an APTL runtime target."""
+    from aces_runtime.control_plane import RuntimeControlPlane
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        backend=MagicMock(),
+    )
+    return target.participant_runtime, RuntimeControlPlane(target)
+
+
+def test_admit_action_records_binding_events_on_live_episode(tmp_path):
+    """admit_action records the three binding events against a live episode."""
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+    control_plane.initialize_participant_episode(participant)
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is True
+    events = runtime.behavior_history()[participant]
+    assert [event["event_type"] for event in events] == [
+        "action_attempted",
+        "state_transition_recorded",
+        "observation_emitted",
+    ]
+
+
+def test_admit_action_fails_without_live_episode(tmp_path):
+    """admit_action fails closed when there is no initialized episode."""
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is False
+    assert participant not in runtime.behavior_history()
+
+
+def test_admit_action_fails_after_terminate(tmp_path):
+    """admit_action fails closed once the participant episode is terminated."""
+    from aces_contracts.participant_episode import ParticipantEpisodeTerminalReason
+
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+    control_plane.initialize_participant_episode(participant)
+    control_plane.terminate_participant_episode(
+        participant, terminal_reason=ParticipantEpisodeTerminalReason.COMPLETED
+    )
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is False
+
+
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     mocker,
     tmp_path,

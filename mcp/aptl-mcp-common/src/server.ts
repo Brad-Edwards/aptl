@@ -106,6 +106,9 @@ async function runHookWithTimeout(
   }
 }
 
+/** Any handler a server can dispatch: plain SSH, API-backed, or composite. */
+type AnyToolHandler = ToolHandler | APIToolHandler | CompositeHandler;
+
 interface ServerClients {
   sshManager: SSHConnectionManager | null;
   httpClient: HTTPClient | null;
@@ -113,7 +116,7 @@ interface ServerClients {
 
 interface ToolRegistry {
   cachedTools: Tool[];
-  cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler>;
+  cachedHandlers: Record<string, AnyToolHandler>;
   compositeKinds: Record<string, CompositeContextKind>;
 }
 
@@ -124,7 +127,7 @@ interface ContextDeps {
 }
 
 interface CallToolDeps extends ContextDeps {
-  cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler>;
+  cachedHandlers: Record<string, AnyToolHandler>;
   postToolHook?: PostToolHook;
   hookTimeoutMs: number;
 }
@@ -136,7 +139,7 @@ function buildToolRegistry(
   composites: CompositeTool[],
 ): ToolRegistry {
   const cachedTools: Tool[] = [];
-  const cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler> = {};
+  const cachedHandlers: Record<string, AnyToolHandler> = {};
   let compositeKinds: Record<string, CompositeContextKind> = {};
 
   if (clients.sshManager) {

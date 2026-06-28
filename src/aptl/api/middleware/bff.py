@@ -71,7 +71,8 @@ def _hostname(host_header: str) -> str:
     """Extract the hostname (no port) from a ``Host`` header value."""
     if not host_header:
         return ""
-    if host_header.startswith("["):  # bracketed IPv6, e.g. [::1]:8400
+    if host_header.startswith("["):
+        # bracketed IPv6, e.g. [::1]:8400
         end = host_header.find("]")
         return host_header[1:end] if end != -1 else host_header
     return host_header.split(":", 1)[0]

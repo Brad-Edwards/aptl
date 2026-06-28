@@ -70,17 +70,26 @@ class TestWebServe:
         os.environ.pop("APTL_PROJECT_DIR", None)
 
     @patch("uvicorn.run")
-    def test_serve_clamps_workers_to_one(self, mock_run, runner):
-        """--workers > 1 is clamped to 1 with a warning: the in-process session,
-        one-time launch token, and ticket stores are not shared across workers."""
+    def test_serve_rejects_workers_option(self, mock_run, runner):
+        """There is deliberately no --workers flag: the in-process session,
+        one-time launch token, and ticket stores are not shared across workers,
+        so the server is always single-worker and the flag would be a footgun."""
         from aptl.cli.web import app
 
         result = runner.invoke(app, ["--workers", "4"])
 
+        assert result.exit_code != 0
+        mock_run.assert_not_called()
+
+    @patch("uvicorn.run")
+    def test_serve_is_always_single_worker(self, mock_run, runner):
+        """uvicorn is always launched with a single worker."""
+        from aptl.cli.web import app
+
+        result = runner.invoke(app, [])
+
         assert result.exit_code == 0
-        assert "not supported" in result.output
-        call_kwargs = mock_run.call_args[1]
-        assert call_kwargs["workers"] == 1
+        assert mock_run.call_args[1]["workers"] == 1
 
     @patch("uvicorn.run")
     def test_serve_with_reload(self, mock_run, runner):

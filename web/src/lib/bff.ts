@@ -11,12 +11,12 @@ import { sessionHeaders } from './session';
 /**
  * Build the same-origin WebSocket URL for the given container terminal.
  *
- * Derives scheme and host exclusively from window.location so the URL always
+ * Derives scheme and host exclusively from globalThis.location so the URL always
  * matches the page origin — never a hardcoded host or port.
  */
 export function terminalWsUrl(container: string): string {
-	const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-	return `${scheme}//${window.location.host}/api/terminal/ws/${container}`;
+	const scheme = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+	return `${scheme}//${globalThis.location.host}/api/terminal/ws/${container}`;
 }
 
 /**

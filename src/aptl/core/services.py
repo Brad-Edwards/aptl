@@ -6,9 +6,9 @@ Wazuh Indexer, Manager API, and SSH services.
 
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from aptl.utils.logging import get_logger
 

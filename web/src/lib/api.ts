@@ -117,7 +117,7 @@ export function subscribeLabEvents(
 				if (done) break;
 				// Strip CR so events split cleanly on a blank line regardless of
 				// CRLF vs LF line endings.
-				buffer += decoder.decode(value, { stream: true }).replace(/\r/g, '');
+				buffer += decoder.decode(value, { stream: true }).replaceAll('\r', '');
 				let idx: number;
 				while ((idx = buffer.indexOf('\n\n')) !== -1) {
 					dispatchSseEvent(buffer.slice(0, idx), onMessage);

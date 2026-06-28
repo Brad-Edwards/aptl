@@ -83,7 +83,11 @@ def create_app() -> FastAPI:
     # (so it cannot leak to logs, the Referer header, or a sibling loopback port
     # the way a cookie does) and is readable only by same-origin page JS. The SPA
     # moves it into port-scoped sessionStorage and scrubs the fragment.
-    @app.get("/api/auth/login", include_in_schema=False)
+    @app.get(
+        "/api/auth/login",
+        include_in_schema=False,
+        responses={401: {"description": "Invalid or missing one-time launch token."}},
+    )
     async def login(token: str = "") -> Response:
         """Exchange a valid launch token for the two-factor session, then redirect."""
         if not verify_launch_token(token):
@@ -96,10 +100,16 @@ def create_app() -> FastAPI:
             url=f"/#{SESSION_HEADER_PARAM}={session_header_value()}",
             status_code=303,
         )
+        # secure=True is correct for both delivery models: loopback origins
+        # (127.0.0.1) are "potentially trustworthy" secure contexts, so browsers
+        # set and return Secure cookies over the default loopback-http `aptl web
+        # serve`; and when the API is fronted by TLS (the split aptl-web-ui Caddy
+        # profile via --public-origin https://...) the flag is mandatory.
         resp.set_cookie(
             SESSION_COOKIE,
             session_cookie_value(),
             httponly=True,
+            secure=True,
             samesite="strict",
             path="/",
         )
@@ -124,7 +134,8 @@ def create_app() -> FastAPI:
     web_root = get_web_asset_root()
     if web_root is not None:
         log.info("Serving GUI from %s", web_root)
-        _captured_root = web_root  # close over resolved path
+        # close over resolved path
+        _captured_root = web_root
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def _spa_fallback(full_path: str) -> FileResponse:

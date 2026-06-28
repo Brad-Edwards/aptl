@@ -19,7 +19,6 @@ def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address."),
     port: int = typer.Option(8400, help="Bind port."),
     reload: bool = typer.Option(False, help="Enable auto-reload for development."),
-    workers: int = typer.Option(1, help="Number of uvicorn workers."),
     project_dir: Optional[str] = typer.Option(
         None,
         help="Project directory (default: current directory).",
@@ -102,16 +101,6 @@ def serve(
         )
         raise typer.Exit(1)
 
-    if workers > 1:
-        typer.echo(
-            "WARNING: --workers > 1 is not supported — the browser-session "
-            "secrets, one-time launch token, and terminal-ticket store are "
-            "in-process and not shared across workers, so login and terminals "
-            "would be flaky. Falling back to a single worker.",
-            err=True,
-        )
-        workers = 1
-
     if not os.environ.get("APTL_API_TOKEN"):
         typer.echo(
             "WARNING: APTL_API_TOKEN is not set — all API requests will return "
@@ -149,12 +138,16 @@ def serve(
     typer.echo("To open the GUI, visit this one-time login URL (keep it secret):")
     typer.echo(f"  {login_base}/api/auth/login?token={launch_token}")
     typer.echo("")
+    # Always single-worker: the browser-session secrets, one-time launch token,
+    # and terminal-ticket store are in-process and not shared across workers, so
+    # multiple workers would reject each other's sessions and tickets. There is
+    # deliberately no --workers flag.
     uvicorn.run(
         "aptl.api.main:app",
         host=host,
         port=port,
         reload=reload,
-        workers=workers,
+        workers=1,
         log_level="info",
         timeout_keep_alive=65,
         access_log=True,

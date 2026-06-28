@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TypedDict
 
 from aptl.core.deployment.docker_compose import (
     _DOCKER_TIMEOUT,
@@ -27,6 +27,14 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("kill")
+
+
+class McpProcess(TypedDict):
+    """A discovered MCP server process."""
+
+    pid: int
+    cmdline: str
+    name: str
 
 MCP_SERVER_NAMES = [
     "mcp-wazuh",
@@ -54,7 +62,7 @@ class KillResult:
     errors: list[str] = field(default_factory=list)
 
 
-def find_mcp_processes() -> list[dict]:
+def find_mcp_processes() -> list[McpProcess]:
     """Discover running MCP server Node.js processes.
 
     Scans ``/proc/*/cmdline`` on Linux for processes whose command line
@@ -70,14 +78,14 @@ def find_mcp_processes() -> list[dict]:
     return _find_via_pgrep()
 
 
-def _find_via_proc() -> list[dict]:
+def _find_via_proc() -> list[McpProcess]:
     """Scan /proc for MCP server processes.
 
     Skips the current process to avoid false-positive matches when the
     kill switch's own command line happens to contain an MCP server name
     (e.g. in log messages or grep patterns).
     """
-    found: list[dict] = []
+    found: list[McpProcess] = []
     own_pid = os.getpid()
     try:
         entries = os.listdir("/proc")
@@ -95,7 +103,7 @@ def _find_via_proc() -> list[dict]:
         try:
             with open(cmdline_path, "rb") as f:
                 raw = f.read()
-        except (OSError, PermissionError):
+        except OSError:
             continue
 
         cmdline = raw.replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
@@ -107,9 +115,9 @@ def _find_via_proc() -> list[dict]:
     return found
 
 
-def _find_via_pgrep() -> list[dict]:
+def _find_via_pgrep() -> list[McpProcess]:
     """Discover MCP processes using pgrep (non-Linux fallback)."""
-    found: list[dict] = []
+    found: list[McpProcess] = []
     for name in MCP_SERVER_NAMES:
         pattern = f"{name}/build/index.js"
         try:
@@ -122,7 +130,7 @@ def _find_via_pgrep() -> list[dict]:
                 for line in result.stdout.strip().splitlines():
                     pid = int(line.strip())
                     found.append({"pid": pid, "cmdline": pattern, "name": name})
-        except (FileNotFoundError, OSError, ValueError):
+        except (OSError, ValueError):
             continue
     return found
 
@@ -153,10 +161,61 @@ def _verify_mcp_process(pid: int) -> bool:
     try:
         with open(f"/proc/{pid}/cmdline", "rb") as f:
             raw = f.read()
-    except (OSError, PermissionError):
+    except OSError:
         return False
     cmdline = raw.replace(b"\x00", b" ").decode("utf-8", errors="replace")
     return any(f"{name}/build/index.js" in cmdline for name in MCP_SERVER_NAMES)
+
+
+def _sigterm_processes(processes: list[McpProcess]) -> tuple[list[int], list[str]]:
+    """Send SIGTERM to each process; return (tracked pids, error messages)."""
+    pids_to_track: list[int] = []
+    errors: list[str] = []
+    for proc in processes:
+        pid = proc["pid"]
+        try:
+            os.kill(pid, signal.SIGTERM)
+            pids_to_track.append(pid)
+            log.info("Sent SIGTERM to %s (pid=%d)", proc["name"], pid)
+        except ProcessLookupError:
+            log.debug("Process %d already dead", pid)
+        except PermissionError:
+            errors.append(f"Permission denied killing {proc['name']} (pid={pid})")
+            log.warning("Permission denied sending SIGTERM to pid=%d", pid)
+    return pids_to_track, errors
+
+
+def _await_graceful_exit(
+    pids: list[int],
+    timeout: float,
+    time_source: Callable[[], float],
+    sleep: Callable[[float], None],
+) -> list[int]:
+    """Wait up to *timeout* seconds for *pids* to exit; return the survivors."""
+    deadline = time_source() + timeout
+    remaining = list(pids)
+    while remaining and time_source() < deadline:
+        remaining = [pid for pid in remaining if not _process_exited(pid)]
+        if remaining:
+            sleep(0.25)
+    return remaining
+
+
+def _sigkill_survivors(pids: list[int]) -> list[str]:
+    """SIGKILL each survivor (re-verifying PID identity on Linux); return errors."""
+    errors: list[str] = []
+    for pid in pids:
+        if sys.platform == "linux" and not _verify_mcp_process(pid):
+            log.warning("PID %d is no longer an MCP process, skipping SIGKILL", pid)
+            continue
+        try:
+            os.kill(pid, signal.SIGKILL)
+            log.warning("Sent SIGKILL to pid=%d (did not exit after SIGTERM)", pid)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            errors.append(f"Permission denied force-killing pid={pid}")
+    return errors
 
 
 def kill_mcp_processes(
@@ -188,43 +247,9 @@ def kill_mcp_processes(
     log.info("Found %d MCP server process(es): %s", len(processes),
              ", ".join(f"{p['name']}(pid={p['pid']})" for p in processes))
 
-    errors: list[str] = []
-    pids_to_track: list[int] = []
-
-    # Phase 1: SIGTERM
-    for proc in processes:
-        pid = proc["pid"]
-        try:
-            os.kill(pid, signal.SIGTERM)
-            pids_to_track.append(pid)
-            log.info("Sent SIGTERM to %s (pid=%d)", proc["name"], pid)
-        except ProcessLookupError:
-            log.debug("Process %d already dead", pid)
-        except PermissionError:
-            errors.append(f"Permission denied killing {proc['name']} (pid={pid})")
-            log.warning("Permission denied sending SIGTERM to pid=%d", pid)
-
-    # Phase 2: Wait for graceful shutdown
-    deadline = time_source() + timeout
-    while pids_to_track and time_source() < deadline:
-        pids_to_track = [pid for pid in pids_to_track if not _process_exited(pid)]
-        if pids_to_track:
-            sleep(0.25)
-
-    # Phase 3: SIGKILL survivors (re-verify PID still belongs to MCP)
-    for pid in pids_to_track:
-        if sys.platform == "linux" and not _verify_mcp_process(pid):
-            log.warning(
-                "PID %d is no longer an MCP process, skipping SIGKILL", pid
-            )
-            continue
-        try:
-            os.kill(pid, signal.SIGKILL)
-            log.warning("Sent SIGKILL to pid=%d (did not exit after SIGTERM)", pid)
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            errors.append(f"Permission denied force-killing pid={pid}")
+    pids_to_track, errors = _sigterm_processes(processes)
+    survivors = _await_graceful_exit(pids_to_track, timeout, time_source, sleep)
+    errors.extend(_sigkill_survivors(survivors))
 
     killed = len(processes) - len(errors)
     log.info("Killed %d MCP server process(es)", killed)
@@ -255,7 +280,19 @@ def kill_lab_containers(
 
     # Fallback: direct Docker Compose calls (for backward compat and
     # cases where config is unavailable)
-    kwargs: dict = {"capture_output": True, "text": True, "timeout": _DOCKER_TIMEOUT}
+    return _kill_via_compose(project_dir, profiles)
+
+
+def _kill_via_compose(
+    project_dir: Optional[Path],
+    profiles: list[str],
+) -> tuple[bool, str]:
+    """Emergency-stop lab containers via direct ``docker compose`` calls."""
+    kwargs: dict[str, object] = {
+        "capture_output": True,
+        "text": True,
+        "timeout": _DOCKER_TIMEOUT,
+    }
     if project_dir is not None:
         kwargs["cwd"] = project_dir
 
@@ -274,7 +311,7 @@ def kill_lab_containers(
             log.warning("docker compose kill stderr: %s", result.stderr.strip())
     except subprocess.TimeoutExpired:
         log.warning("docker compose kill timed out after %ds", _DOCKER_TIMEOUT)
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         msg = f"docker compose kill failed: {exc}"
         log.error(msg)
         return False, msg
@@ -289,7 +326,7 @@ def kill_lab_containers(
             log.warning("docker compose down stderr: %s", result.stderr.strip())
     except subprocess.TimeoutExpired:
         log.warning("docker compose down timed out after %ds", _DOCKER_TIMEOUT)
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         log.warning("docker compose down failed: %s", exc)
 
     if not kill_ok:

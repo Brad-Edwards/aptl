@@ -185,8 +185,10 @@ describe('lab store', () => {
 	it('destroyLabStore is safe to call when no stream exists', async () => {
 		const { destroyLabStore } = await import('../../src/lib/stores/lab');
 
-		// Should not throw
-		destroyLabStore();
-		destroyLabStore();
+		// Tearing down with no active stream (and again, idempotently) must not throw.
+		expect(() => {
+			destroyLabStore();
+			destroyLabStore();
+		}).not.toThrow();
 	});
 });

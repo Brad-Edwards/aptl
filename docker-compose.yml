@@ -1375,6 +1375,10 @@ services:
       # expands inactive-profile services too, which would make the default lab
       # start require the optional web control-plane token.
       - APTL_API_TOKEN=${APTL_API_TOKEN:-}
+      # The browser reaches the GUI on the aptl-web-ui (Caddy) origin, not this
+      # API bind address. Print the one-time login URL for that origin so the
+      # session header token is stored for the origin the SPA actually runs on.
+      - APTL_WEB_PUBLIC_ORIGIN=http://127.0.0.1:3000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
@@ -1396,16 +1400,11 @@ services:
     ports:
       # Loopback-only: only the operator's machine can reach the UI (ADR-039).
       - "127.0.0.1:3000:3000"
-    environment:
-      - ORIGIN=http://localhost:3000
-      # Same token as aptl-web-api — SvelteKit server injects it as Bearer header.
-      # The API rejects empty/placeholder values at runtime; keep Compose
-      # interpolation non-fatal while the web profile is inactive.
-      - APTL_API_TOKEN=${APTL_API_TOKEN:-}
-      # Internal Docker hostname the SvelteKit server uses to reach the API.
-      - APTL_API_URL=http://aptl-web-api:8400
-      # Hostname:port the browser uses for direct WebSocket connections.
-      - APTL_API_HOST=localhost:8400
+    # UI-008a: serves the built static SPA and reverse-proxies /api/* (incl. the
+    # terminal WebSocket) to aptl-web-api, which owns the entire auth/CSRF
+    # boundary (the FastAPI BFF). The control-plane token is NOT present in this
+    # container — it lives only in aptl-web-api. Same-origin to the browser, so
+    # no token reaches page code and no cross-origin boundary exists in the UI.
     depends_on:
       - aptl-web-api
     networks:

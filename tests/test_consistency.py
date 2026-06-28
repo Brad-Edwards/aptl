@@ -155,20 +155,23 @@ class TestComposeConsistency:
         """Compose expands environment substitutions for inactive profiles, so
         the optional web token must be validated by the web runtime instead of
         by `${VAR:?}` interpolation in docker-compose.yml."""
-        services = compose_config["services"]
-        env_lines = (
-            services["aptl-web-api"]["environment"]
-            + services["aptl-web-ui"]["environment"]
-        )
+        api_env = compose_config["services"]["aptl-web-api"]["environment"]
         token_lines = [
-            line for line in env_lines if line.startswith("APTL_API_TOKEN=")
+            line for line in api_env if line.startswith("APTL_API_TOKEN=")
         ]
 
-        assert token_lines == [
-            "APTL_API_TOKEN=${APTL_API_TOKEN:-}",
-            "APTL_API_TOKEN=${APTL_API_TOKEN:-}",
-        ]
+        assert token_lines == ["APTL_API_TOKEN=${APTL_API_TOKEN:-}"]
         assert not any(":?" in line for line in token_lines)
+
+    def test_web_ui_does_not_carry_control_plane_token(self, compose_config):
+        """UI-008a: the control-plane token is custodied only by the FastAPI BFF
+        (aptl-web-api). The static-SPA + reverse-proxy UI container must not
+        receive APTL_API_TOKEN — it holds no secret and enforces no auth."""
+        ui = compose_config["services"]["aptl-web-ui"]
+        env_lines = ui.get("environment", []) or []
+        assert not any(
+            "APTL_API_TOKEN" in line for line in env_lines
+        ), "aptl-web-ui must not carry the control-plane token (UI-008a)"
 
 
 class TestKaliContainerLifecycle:

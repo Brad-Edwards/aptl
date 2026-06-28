@@ -1,69 +1,87 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 
-// Mock fetch globally
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+// The lab store now drives SSE through `fetch` streaming (not EventSource), so
+// the X-APTL-Session auth header can ride the request. This harness serves
+// /api/lab/status as JSON and /api/lab/events as a controllable SSE stream,
+// recording each events connection's AbortSignal + push/end handles.
 
-// Track MockEventSource instances for test access
-const esInstances: MockEventSource[] = [];
-
-// Mock EventSource
-class MockEventSource {
-	static CONNECTING = 0;
-	static OPEN = 1;
-	static CLOSED = 2;
-
-	url: string;
-	readyState = MockEventSource.OPEN;
-	onerror: ((event: Event) => void) | null = null;
-	private listeners: Record<string, ((event: MessageEvent) => void)[]> = {};
-
-	constructor(url: string) {
-		this.url = url;
-		esInstances.push(this);
-	}
-
-	addEventListener(type: string, listener: (event: MessageEvent) => void) {
-		if (!this.listeners[type]) this.listeners[type] = [];
-		this.listeners[type].push(listener);
-	}
-
-	close() {
-		this.readyState = MockEventSource.CLOSED;
-	}
-
-	// Test helper: simulate an SSE event
-	emit(type: string, data: string) {
-		for (const listener of this.listeners[type] || []) {
-			listener(new MessageEvent(type, { data }));
-		}
-	}
-
-	// Test helper: simulate an error event
-	triggerError() {
-		if (this.onerror) {
-			const event = new Event('error');
-			Object.defineProperty(event, 'target', { value: this });
-			this.onerror(event);
-		}
-	}
+interface EventsConn {
+	signal?: AbortSignal;
+	push(chunk: string): void;
+	end(): void;
 }
 
-vi.stubGlobal('EventSource', MockEventSource);
+let eventsConns: EventsConn[];
+let statusResponder: () => Promise<unknown>;
+
+function buildEventsResponse(init: RequestInit | undefined): { conn: EventsConn; res: unknown } {
+	const queue: string[] = [];
+	let notify: (() => void) | null = null;
+	let ended = false;
+	const encoder = new TextEncoder();
+
+	const wake = () => {
+		const n = notify;
+		notify = null;
+		n?.();
+	};
+	const conn: EventsConn = {
+		signal: init?.signal ?? undefined,
+		push(chunk) {
+			queue.push(chunk);
+			wake();
+		},
+		end() {
+			ended = true;
+			wake();
+		}
+	};
+	const reader = {
+		read(): Promise<{ value?: Uint8Array; done: boolean }> {
+			if (queue.length) return Promise.resolve({ value: encoder.encode(queue.shift()!), done: false });
+			if (ended) return Promise.resolve({ done: true });
+			return new Promise((resolve) => {
+				notify = () => {
+					if (queue.length) resolve({ value: encoder.encode(queue.shift()!), done: false });
+					else resolve({ done: true });
+				};
+			});
+		},
+		cancel() {
+			ended = true;
+		}
+	};
+	return { conn, res: { ok: true, body: { getReader: () => reader } } };
+}
+
+const mockFetch = vi.fn((url: string, init?: RequestInit) => {
+	if (typeof url === 'string' && url.includes('/lab/events')) {
+		const { conn, res } = buildEventsResponse(init);
+		eventsConns.push(conn);
+		return Promise.resolve(res);
+	}
+	return statusResponder();
+});
+vi.stubGlobal('fetch', mockFetch);
 
 describe('lab store', () => {
 	beforeEach(() => {
-		mockFetch.mockReset();
-		esInstances.length = 0;
+		mockFetch.mockClear();
+		eventsConns = [];
+		statusResponder = () =>
+			Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({ running: false, containers: [], error: null })
+			});
 	});
 
 	it('initLabStore fetches status and sets store', async () => {
-		const statusData = { running: true, containers: [], error: null };
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			json: () => Promise.resolve(statusData)
-		});
+		statusResponder = () =>
+			Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({ running: true, containers: [], error: null })
+			});
 
 		const { labStatus, labLoading, initLabStore, destroyLabStore } = await import(
 			'../../src/lib/stores/lab'
@@ -81,7 +99,7 @@ describe('lab store', () => {
 	});
 
 	it('initLabStore handles fetch error', async () => {
-		mockFetch.mockRejectedValueOnce(new Error('Network error'));
+		statusResponder = () => Promise.reject(new Error('Network error'));
 
 		const { labStatus, labLoading, initLabStore, destroyLabStore } = await import(
 			'../../src/lib/stores/lab'
@@ -98,106 +116,73 @@ describe('lab store', () => {
 		destroyLabStore();
 	});
 
-	it('destroyLabStore closes EventSource', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			json: () => Promise.resolve({ running: false, containers: [], error: null })
-		});
-
+	it('destroyLabStore aborts the SSE stream', async () => {
 		const { initLabStore, destroyLabStore } = await import('../../src/lib/stores/lab');
 
 		initLabStore();
+		await vi.waitFor(() => expect(eventsConns.length).toBe(1));
+
 		destroyLabStore();
+		expect(eventsConns[0].signal?.aborted).toBe(true);
 	});
 
 	it('SSE message updates lab status store', async () => {
-		const initialData = { running: false, containers: [], error: null };
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			json: () => Promise.resolve(initialData)
-		});
-
 		const { labStatus, initLabStore, destroyLabStore } = await import(
 			'../../src/lib/stores/lab'
 		);
 
 		initLabStore();
+		await vi.waitFor(() => expect(eventsConns.length).toBe(1));
 
-		await vi.waitFor(() => {
-			expect(get(labStatus).error).toBeNull();
-		});
-
-		// Get the MockEventSource created by subscribeLabEvents
-		const es = esInstances[esInstances.length - 1];
-		expect(es).toBeDefined();
-
-		// Simulate an SSE lab_status event
 		const sseData = {
 			running: true,
-			containers: [{ name: 'kali', state: 'running', status: '', health: '', image: '', ports: [] }],
+			containers: [
+				{ name: 'kali', state: 'running', status: '', health: '', image: '', ports: [] }
+			],
 			error: null
 		};
-		es.emit('lab_status', JSON.stringify(sseData));
+		eventsConns[0].push(`event: lab_status\ndata: ${JSON.stringify(sseData)}\n\n`);
 
-		expect(get(labStatus).running).toBe(true);
+		await vi.waitFor(() => expect(get(labStatus).running).toBe(true));
 		expect(get(labStatus).containers).toHaveLength(1);
 
 		destroyLabStore();
 	});
 
-	it('SSE error with CLOSED readyState schedules reconnect', async () => {
+	it('schedules a reconnect when the stream ends', async () => {
+		const { initLabStore, destroyLabStore } = await import('../../src/lib/stores/lab');
+
+		initLabStore();
+		await vi.waitFor(() => expect(eventsConns.length).toBe(1));
+
 		vi.useFakeTimers();
-
-		mockFetch.mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ running: false, containers: [], error: null })
-		});
-
-		const { initLabStore, destroyLabStore } = await import('../../src/lib/stores/lab');
-
-		initLabStore();
-
-		await vi.waitFor(() => {
-			expect(esInstances.length).toBeGreaterThan(0);
-		});
-
-		const es = esInstances[esInstances.length - 1];
-		// Simulate connection closed then error
-		es.readyState = MockEventSource.CLOSED;
-		es.triggerError();
-
-		const countBefore = esInstances.length;
-
-		// Advance past the reconnect delay (5000ms)
-		await vi.advanceTimersByTimeAsync(5500);
-
-		// A new EventSource should have been created by the reconnect
-		expect(esInstances.length).toBeGreaterThan(countBefore);
-
-		destroyLabStore();
-		vi.useRealTimers();
-	});
-
-	it('reinitializing closes previous EventSource', async () => {
-		mockFetch.mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ running: false, containers: [], error: null })
-		});
-
-		const { initLabStore, destroyLabStore } = await import('../../src/lib/stores/lab');
-
-		initLabStore();
-		const firstEs = esInstances[esInstances.length - 1];
-
-		initLabStore();
-
-		// First EventSource should have been closed
-		expect(firstEs.readyState).toBe(MockEventSource.CLOSED);
+		try {
+			eventsConns[0].end(); // stream end → onError → setTimeout(reconnect)
+			await vi.advanceTimersByTimeAsync(5500);
+			// Reconnect re-ran initLabStore, opening a second events connection.
+			expect(eventsConns.length).toBeGreaterThan(1);
+		} finally {
+			vi.useRealTimers();
+		}
 
 		destroyLabStore();
 	});
 
-	it('destroyLabStore is safe to call when no EventSource exists', async () => {
+	it('reinitializing aborts the previous stream', async () => {
+		const { initLabStore, destroyLabStore } = await import('../../src/lib/stores/lab');
+
+		initLabStore();
+		await vi.waitFor(() => expect(eventsConns.length).toBe(1));
+
+		initLabStore();
+		await vi.waitFor(() => expect(eventsConns.length).toBe(2));
+
+		expect(eventsConns[0].signal?.aborted).toBe(true);
+
+		destroyLabStore();
+	});
+
+	it('destroyLabStore is safe to call when no stream exists', async () => {
 		const { destroyLabStore } = await import('../../src/lib/stores/lab');
 
 		// Should not throw

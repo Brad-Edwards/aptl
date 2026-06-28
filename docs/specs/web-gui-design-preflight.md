@@ -2,11 +2,12 @@
 
 ## Scope
 
-This note is the architecture preflight for UI-007. It is not the UI-007 design
-specification and does not define the final information architecture, route map,
-or page wireframes. The UI-007 design specification must derive those details
-from the approved UI-006 product scope and must leave a direct handoff target
-for UI-008 implementation.
+This note is the architecture preflight for UI-007 and the binding guardrail
+set for UI-008 implementation slices. It is not the UI-007 design
+specification and does not define the final information architecture, route
+map, or page wireframes. The UI-007 design specification must derive those
+details from the approved UI-006 product scope and must leave a direct handoff
+target for UI-008 implementation.
 
 The design work must treat the current Svelte pages as an MVP surface, not as
 binding product authority. Existing architecture decisions and code boundaries
@@ -20,13 +21,16 @@ type, route contract, or workflow concept.
 | Concern | Canonical owner |
 | --- | --- |
 | Web product paradigm | `docs/adrs/adr-011-web-ui.md` |
-| API assembly, CORS, route mounting | `src/aptl/api/main.py` |
+| API assembly, CORS, route mounting, and shipped asset mounting | `src/aptl/api/main.py` |
 | Web auth, auth env binding, project-dir binding | `src/aptl/api/deps.py` |
 | API response DTOs | `src/aptl/api/schemas.py` |
 | Svelte API fetch boundary and SSE subscription | `web/src/lib/api.ts` |
 | Svelte wire-type mirror | `web/src/lib/types.ts` |
-| Svelte server-side bearer-token proxy | `web/src/hooks.server.ts` |
-| WebSocket terminal token carrier data | `web/src/routes/+layout.server.ts` |
+| Legacy split-profile Svelte server-side bearer-token proxy | `web/src/hooks.server.ts` |
+| Legacy split-profile WebSocket token carrier data | `web/src/routes/+layout.server.ts` |
+| `aptl web serve` bind/runtime contract | `src/aptl/cli/web.py` |
+| Split web Compose profile | `docker-compose.yml` services `aptl-web-api` and `aptl-web-ui` |
+| Web build artifact contract | `web/package.json`, `web/svelte.config.js`, `web/vite.config.ts` |
 | Lab lifecycle and startup diagnostics | `src/aptl/core/lab.py`, `src/aptl/core/lab_types.py`, ADR-030 |
 | Endpoint display and terminal target metadata | `src/aptl/core/endpoints.py`, ADR-036, ADR-040 |
 | Docker and Docker Compose access | `src/aptl/core/deployment/`, ADR-023, ADR-037 |
@@ -47,12 +51,13 @@ The design specification must name how each in-scope page passes these layers.
 
 | Layer | Required fit |
 | --- | --- |
-| Auth surface | All `/api/*` HTTP and SSE traffic stays behind `verify_token` through `src/aptl/api/main.py`. Browser REST/SSE calls go through the SvelteKit proxy in `web/src/hooks.server.ts`; the browser must not place the API token in fetch headers or URLs. |
-| WebSocket terminal auth | Terminal access uses ADR-039's `Sec-WebSocket-Protocol` token convention from `web/src/routes/+layout.server.ts` and `verify_ws_token(...)`. `Origin` remains an extra browser defense, not a credential. |
+| Auth surface | All `/api/*` HTTP and SSE traffic stays behind the canonical FastAPI auth boundary in `src/aptl/api/main.py` / `src/aptl/api/deps.py` before route logic. In the shipped `aptl web serve` model, the FastAPI BFF owns server-side control-plane authority. In the split dev/preview profile, the SvelteKit hook may remain the compatibility proxy. In both modes, browser REST/SSE calls must not place the API token in fetch headers or URLs. |
+| CSRF/origin gate | Mutating browser requests (`POST`, `PUT`, `PATCH`, `DELETE`) must pass a same-origin gate before any server path adds or accepts control-plane authority. Preserve the existing `Origin` plus `Sec-Fetch-Site` semantics from `web/src/hooks.server.ts`, but move the shipped boundary into FastAPI instead of duplicating it in each router. |
+| WebSocket terminal auth | Terminal access uses either ADR-039's non-URL `Sec-WebSocket-Protocol` token convention plus `verify_ws_token(...)`, or an equivalent same-origin FastAPI terminal carrier that keeps the token server-side. `Origin` remains an extra browser defense, not a credential, and the token must not be rendered into static page code in the shipped model. |
 | Secret handling | API tokens, cookies, private keys, generated config secrets, and replayable session identifiers remain ADR-029 control-plane secrets. Designs must not show secret values in examples, error states, logs, screenshots, run artifacts, OpenAPI examples, or route URLs. |
-| Env binding | Web control-plane settings stay runtime-env owned. `APTL_API_TOKEN`, `APTL_API_URL`, `APTL_API_HOST`, and `APTL_ALLOWED_ORIGINS` are not `aptl.json` fields. Durable non-secret config goes through `AptlConfig`. |
+| Env binding | Web control-plane settings stay runtime-env owned. `APTL_API_TOKEN`, `APTL_API_URL`, `APTL_API_HOST`, and `APTL_ALLOWED_HOSTS` are not `aptl.json` fields. `APTL_API_URL` and `APTL_API_HOST` are split-profile compatibility knobs, not the shipped `aptl web serve` API contract. (UI-008a removed the `APTL_ALLOWED_ORIGINS` allow-list: cross-origin is now a strict same-origin check, and `APTL_ALLOWED_HOSTS` extends the loopback Host allow-list for DNS-rebinding defence.) Durable non-secret config goes through `AptlConfig`. |
 | Config validation | Any first-party config surfaced in the UI must come from `load_config()` / `AptlConfig` projections. Unknown first-party fields are errors under ADR-025; do not add pass-through config dictionaries for UI convenience. |
-| OS/process exposure | Tokens, passwords, cookies, private keys, and generated secret content must not appear in process argv, query strings, shell strings, access-log-visible paths, or terminal prefill text. Docker actions stay typed backend calls, not raw command submission. |
+| OS/process exposure | Tokens, passwords, cookies, private keys, and generated secret content must not appear in process argv, query strings, shell strings, access-log-visible paths, generated static bundles, rendered page data, or terminal prefill text. Docker actions stay typed backend calls, not raw command submission. |
 | Error envelopes | HTTP auth failures use the generic FastAPI `401` envelope with `WWW-Authenticate: Bearer`; proxy errors stay narrow; terminal errors use the existing WebSocket error message shape; lab actions use `LabActionResponse`. |
 | Terminal trust | Interactive terminals must satisfy ADR-040: container allow-list, lab-running check, endpoint projection from `ENDPOINT_REGISTRY`, and pinned `known_hosts` before `asyncssh.connect`. |
 | Redaction and observability | Logs may name route, component, step, and validation layer, but not secret values or raw secret-bearing payloads. New persistence or export paths must use the existing redaction/runstore boundaries. |
@@ -60,6 +65,28 @@ The design specification must name how each in-scope page passes these layers.
 
 ## Design Guardrails
 
+- For UI-008a, `aptl web serve` is the shipped delivery contract: one FastAPI
+  process, default loopback bind, built UI assets, and `/api/*` on one origin.
+  The split `aptl-web-api` plus `aptl-web-ui` Compose profile remains a
+  dev/preview path and must not become the only path that preserves auth or
+  CSRF behavior.
+- Mount API routes before any static-asset or SPA fallback route. Unknown
+  `/api/*` paths must still pass the API auth boundary before returning a
+  route-specific result, not fall through to static asset handling.
+- Keep the BFF authority server-side. Page code should use relative same-origin
+  API paths and a same-origin terminal connection contract; it must not receive
+  `APTL_API_TOKEN`, synthesize `Authorization` headers, or move the bearer
+  token into URLs, local storage, stores, route data, or TypeScript types.
+- Put the shipped CSRF/origin gate in one FastAPI-owned cross-cutting layer
+  before router logic and before any control-plane authority is added or
+  accepted. Do not copy the gate into each mutating route.
+- Define the web build artifact root once at the FastAPI app/serve boundary so
+  packaging, editable installs, tests, and future relocation do not grow
+  separate path guesses. A missing build artifact should fail with a narrow
+  operator/developer diagnostic, not change API auth behavior.
+- The current SvelteKit build uses the Node adapter. UI-008a must make the
+  FastAPI-mountable asset contract explicit before mounting files; do not
+  assume a server bundle is a static asset directory.
 - Distinguish human-investigation surfaces from read-only status surfaces in
   the spec. Terminals, SIEM exploration, command execution, lab start/stop, and
   kill flows are control or investigation surfaces; lab status badges,
@@ -120,7 +147,8 @@ route. Each row should state:
   terminal;
 - API data source and DTO owner;
 - mutation capability, if any;
-- auth carrier: proxy HTTP/SSE or terminal WebSocket subprotocol;
+- auth carrier: FastAPI BFF HTTP/SSE, split-profile proxy HTTP/SSE, or
+  terminal WebSocket/same-origin carrier;
 - primary component family; and
 - future variation parameter.
 
@@ -132,9 +160,13 @@ Use existing extension points for obvious follow-up changes:
 - new workbench content extends the `WorkbenchBlock` discriminated union and
   block renderer;
 - new scenario browsing data uses a narrow ACES/catalog projection rather than
-  a local scenario parser; and
+  a local scenario parser;
 - new runtime web settings extend the typed env settings boundary, not
-  `aptl.json`.
+  `aptl.json`; and
+- the web asset root, bind host, and allowed origins are parameterized at the
+  app/serve/runtime-settings boundary; future remote/shared modes must change
+  that boundary deliberately instead of scattering path, host, or origin
+  literals through routers, Svelte clients, Compose, and tests.
 
 ## Anti-Patterns
 
@@ -144,6 +176,15 @@ Use existing extension points for obvious follow-up changes:
   shell snippets, process argv, logs, screenshots, or stored design fixtures.
 - Adding per-router auth snippets, duplicate bearer parsing, a new auth error
   schema, or a second web-auth settings object.
+- Adding per-router CSRF snippets, frontend-only CSRF checks, or a second
+  origin parser when the FastAPI BFF can own the shipped gate centrally.
+- Rendering `APTL_API_TOKEN` or a derived bearer credential into static HTML,
+  Svelte route data, browser stores, local storage, WebSocket URLs, or generated
+  client bundles.
+- Mounting a SPA catch-all before `/api/*`, or letting `/api/*` misses return
+  static assets without first satisfying the API auth boundary.
+- Running a hidden Node/SvelteKit server as the real shipped `aptl web serve`
+  delivery path instead of making FastAPI the BFF and asset owner.
 - Creating a duplicate route map in Svelte that disagrees with mounted FastAPI
   routers or tests.
 - Reintroducing removed `/api/scenarios` behavior without an explicit ACES
@@ -160,9 +201,15 @@ Use existing extension points for obvious follow-up changes:
 ## Non-Goals
 
 - Do not implement UI-007 or UI-008 in this preflight.
+- Do not choose a remote/shared deployment auth model for UI-008a.
 - Do not choose the final UI-007 route map, wireframes, or per-page copy here.
-- Do not add multi-user accounts, RBAC, OAuth/OIDC, password login, or browser
-  sessions.
+- Do not add multi-user accounts, RBAC, OAuth/OIDC, or password login. (Amended
+  for UI-008a: a single-user, server-issued two-factor session credential (an
+  HttpOnly cookie plus a port-scoped `sessionStorage` header token) bootstrapped
+  from a one-time launch token IS in scope and required, because
+  loopback binding and forgeable Fetch-Metadata/Origin headers are not
+  authentication, and a host-scoped cookie alone leaks across loopback ports. See
+  the shipped-implementation note in `web-gui-design.md`.)
 - Do not redesign the deployment backend, Docker socket model, ACES SDL,
   scenario startup, run archive layout, or endpoint registry.
 - Do not make the web GUI the source of truth for lab topology, scenario

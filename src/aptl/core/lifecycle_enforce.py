@@ -65,6 +65,11 @@ def _newest_mtime(directory: Optional[Path]) -> Optional[datetime]:
         return None
     newest: Optional[float] = None
     for child in directory.rglob("*"):
+        # The activity signal is when MCP servers last wrote evidence files;
+        # directory mtimes track structural changes (entries added/removed) and
+        # would otherwise report the run-dir creation time as fresh activity.
+        if not child.is_file():
+            continue
         try:
             mtime = child.stat().st_mtime
         except OSError:

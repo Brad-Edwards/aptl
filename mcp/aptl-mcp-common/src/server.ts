@@ -22,6 +22,15 @@ import { generateToolDefinitions } from './tools/definitions.js';
 import { generateToolHandlers, type ToolHandler, type ToolContext } from './tools/handlers.js';
 import { generateAPIToolDefinitions } from './tools/api-definitions.js';
 import { generateAPIToolHandlers, type APIToolHandler, type APIToolContext } from './tools/api-handlers.js';
+import {
+  generateCompositeToolDefinitions,
+  generateCompositeToolHandlers,
+  compositeContextKinds,
+  type CompositeTool,
+  type CompositeHandler,
+  type CompositeContext,
+  type CompositeContextKind,
+} from './tools/composites.js';
 
 /**
  * Information passed to a `postToolHook` after a tool call resolves or rejects.
@@ -53,6 +62,14 @@ export interface CreateMCPServerOptions {
    * Defaults to 2000 ms; set to 0 to disable the timeout.
    */
   postToolHookTimeoutMs?: number;
+  /**
+   * Composite MCP tools (ORC-003 / ADR-045) this server opts into. A
+   * composite is a single MCP tool that orchestrates several internal SSH/API
+   * steps over the existing primitives. Domain composites live in the server
+   * package and are registered here through the typed common seam; common
+   * itself ships no domain composites.
+   */
+  composites?: CompositeTool[];
 }
 
 /**
@@ -99,7 +116,7 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
 
   // Pre-generate tools and handlers based on available capabilities
   let cachedTools: Tool[] = [];
-  let cachedHandlers: Record<string, ToolHandler | APIToolHandler> = {};
+  let cachedHandlers: Record<string, ToolHandler | APIToolHandler | CompositeHandler> = {};
 
   if (sshManager) {
     cachedTools.push(...generateToolDefinitions(labConfig.server));
@@ -111,6 +128,17 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
     const includeGeneric = !labConfig.queries || Object.keys(labConfig.queries).length === 0;
     cachedTools.push(...generateAPIToolDefinitions(labConfig.server, labConfig.queries, includeGeneric));
     Object.assign(cachedHandlers, generateAPIToolHandlers(labConfig.server, labConfig.queries, includeGeneric));
+  }
+
+  // Composite tools (ORC-003 / ADR-045) register through the typed common
+  // seam. Their context kind is tracked explicitly so dispatch routes SSH /
+  // HTTP context by declaration, never by tool-name substring.
+  const composites = options.composites ?? [];
+  let compositeKinds: Record<string, CompositeContextKind> = {};
+  if (composites.length > 0) {
+    cachedTools.push(...generateCompositeToolDefinitions(labConfig.server, composites));
+    Object.assign(cachedHandlers, generateCompositeToolHandlers(labConfig.server, composites));
+    compositeKinds = compositeContextKinds(labConfig.server, composites);
   }
 
   console.error(`[MCP] Initialized ${labConfig.server.name} with lab: ${labConfig.lab.name}`);
@@ -129,6 +157,44 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
     }
   );
 
+  // Build the composite context from the declared kind (ADR-045): routing is
+  // by declaration, never by tool-name substrings. A declared client that is
+  // unconfigured is a hard error before the handler runs.
+  const buildCompositeContext = (kind: CompositeContextKind): CompositeContext => {
+    const compositeContext: CompositeContext = { labConfig };
+    if (kind === 'ssh' || kind === 'both') {
+      if (!sshManager) {
+        throw new Error('Composite tool requires SSH but SSH manager not configured');
+      }
+      compositeContext.sshManager = sshManager;
+    }
+    if (kind === 'api' || kind === 'both') {
+      if (!httpClient) {
+        throw new Error('Composite tool requires API but HTTP client not configured');
+      }
+      compositeContext.httpClient = httpClient;
+    }
+    return compositeContext;
+  };
+
+  // Determine context type based on tool kind and available clients.
+  const resolveToolContext = (name: string): ToolContext | APIToolContext | CompositeContext => {
+    const compositeKind = compositeKinds[name];
+    if (compositeKind) {
+      return buildCompositeContext(compositeKind);
+    }
+    if (name.includes('_api_') || (labConfig.queries && Object.keys(labConfig.queries).some(q => name.endsWith(`_${q}`)))) {
+      if (!httpClient) {
+        throw new Error('API tool requested but HTTP client not configured');
+      }
+      return { httpClient, labConfig };
+    }
+    if (!sshManager) {
+      throw new Error('SSH tool requested but SSH manager not configured');
+    }
+    return { sshManager, labConfig };
+  };
+
   // Setup request handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
@@ -144,28 +210,9 @@ export function createMCPServer(labConfig: LabConfig, options: CreateMCPServerOp
       throw new Error(`Unknown tool: ${name}`);
     }
 
-    // Determine context type based on tool name and available clients
-    let context: ToolContext | APIToolContext;
-
-    if (name.includes('_api_') || (labConfig.queries && Object.keys(labConfig.queries).some(q => name.endsWith(`_${q}`)))) {
-      // API tool context
-      if (!httpClient) {
-        throw new Error('API tool requested but HTTP client not configured');
-      }
-      context = {
-        httpClient,
-        labConfig,
-      };
-    } else {
-      // SSH tool context
-      if (!sshManager) {
-        throw new Error('SSH tool requested but SSH manager not configured');
-      }
-      context = {
-        sshManager,
-        labConfig,
-      };
-    }
+    // Context type is resolved by tool kind (composite/API/SSH) in a helper so
+    // the dispatch path stays within the repo's complexity budget.
+    const context = resolveToolContext(name);
 
     const safeArgs: Record<string, unknown> = args ?? {};
     const t0 = Date.now();

@@ -14,6 +14,12 @@
 import { startServer, type PostToolHookInfo } from 'aptl-mcp-common';
 import { captureToolCall, type CaptureContext } from './capture.js';
 import { topLevelSegments } from './classifier.js';
+import {
+  isCompositeTool,
+  extractCompositeSteps,
+  ocsfTasksForCompositeSteps,
+} from './composite-ocsf.js';
+import { fullPortScanComposite } from './full-port-scan.js';
 import { isEffectiveRawCall, isOutcomeKnown } from './effective-mode.js';
 import {
   defaultRedTeamSinks,
@@ -155,6 +161,13 @@ async function postToolHook(info: PostToolHookInfo): Promise<void> {
         ),
       );
     }
+  } else if (isCompositeTool(toolName) && !info.error) {
+    // ADR-045: a composite's internal shell commands must stay visible on the
+    // OCSF path. Emit one OCSF record per executed step from the composite's
+    // result envelope so a single top-level tool call does not hide them.
+    ocsfTasks.push(
+      ...ocsfTasksForCompositeSteps(toolName, AGENT_NAME, extractCompositeSteps(info.result), ocsfSink),
+    );
   }
   // Run both sinks independently — a slow capture must not delay or
   // starve the OCSF emission and vice versa.
@@ -162,7 +175,7 @@ async function postToolHook(info: PostToolHookInfo): Promise<void> {
 }
 
 try {
-  await startServer(import.meta.url, { postToolHook });
+  await startServer(import.meta.url, { postToolHook, composites: [fullPortScanComposite] });
 } catch (error) {
   console.error('[MCP] Fatal error:', error);
   process.exit(1);

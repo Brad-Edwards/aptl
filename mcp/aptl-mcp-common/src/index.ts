@@ -27,8 +27,21 @@ export {
   experimentNoRedactActive,
 } from './redaction.js';
 export type { LabConfig } from './config.js';
-export { loadLabConfig, substituteEnvVars, parseDotEnv } from './config.js';
+export { loadLabConfig, substituteEnvVars, parseDotEnv, getTargetCredentials } from './config.js';
 export type { ToolContext } from './tools/handlers.js';
+export { resolveCaptureContainer } from './tools/handlers.js';
+export {
+  generateCompositeToolDefinitions,
+  generateCompositeToolHandlers,
+  compositeContextKinds,
+} from './tools/composites.js';
+export type {
+  CompositeTool,
+  CompositeHandler,
+  CompositeContext,
+  CompositeContextKind,
+  CompositeStepRecord,
+} from './tools/composites.js';
 export {
   loadActiveTraceId,
   resolveActiveRunDir,

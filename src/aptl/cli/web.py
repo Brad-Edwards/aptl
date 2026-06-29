@@ -142,6 +142,13 @@ def serve(
     # and terminal-ticket store are in-process and not shared across workers, so
     # multiple workers would reject each other's sessions and tickets. There is
     # deliberately no --workers flag.
+    #
+    # proxy_headers + forwarded_allow_ips="127.0.0.1" honour X-Forwarded-Proto/For
+    # ONLY from a same-host (loopback) TLS-terminating proxy — e.g. `tailscale
+    # serve` or a co-located Caddy. That makes request.url.scheme resolve to
+    # https behind such a proxy, so the session cookie is issued Secure and the
+    # CSRF origin gate matches the browser's https origin. A direct client cannot
+    # spoof these headers because it does not connect from 127.0.0.1.
     uvicorn.run(
         "aptl.api.main:app",
         host=host,
@@ -151,4 +158,6 @@ def serve(
         log_level="info",
         timeout_keep_alive=65,
         access_log=True,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
     )

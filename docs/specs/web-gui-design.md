@@ -203,6 +203,30 @@ when neither is present:
 `web_static` candidate is forward-compatible with a future combined-wheel delivery
 and resolves to nothing in the current clone-and-run / Docker models.
 
+**Remote access.** The default bind is `127.0.0.1`, and that loopback model is the
+intended path for almost all use. When an operator needs the GUI from another
+device (for example over a Tailscale tailnet), the recommended setup keeps the
+server on loopback and puts a same-host TLS proxy in front:
+
+1. Run `tailscale serve --bg https / http://127.0.0.1:8400` (or a co-located
+   Caddy) so the proxy terminates TLS and forwards to the loopback server.
+2. Start the server with the browser-facing origin and host allow-list:
+   `APTL_ALLOWED_HOSTS=<machine>.<tailnet>.ts.net aptl web serve
+   --public-origin https://<machine>.<tailnet>.ts.net`.
+
+The server trusts `X-Forwarded-Proto` only from a loopback proxy, so behind that
+TLS front `request.url.scheme` resolves to `https`: the session cookie is issued
+`Secure` and the CSRF origin gate matches the browser's `https` origin.
+
+A direct non-loopback bind without a TLS front (`aptl web serve --host
+<address>`) also works for an environment whose transport is already encrypted,
+such as a tailnet. It still needs `APTL_ALLOWED_HOSTS` and `--public-origin`. The
+session cookie's `Secure` flag follows the request scheme, so over plain HTTP the
+cookie is delivered without `Secure` (a `Secure` cookie would be withheld by the
+browser and the two-factor session would never complete). The launch token and
+two-factor session still gate every request, but confidentiality then depends on
+the transport, not on the application. Prefer the TLS-fronted setup above.
+
 ## Design Inputs and Visual Direction
 
 The visual target is a quiet operational workbench: readable, dense enough for

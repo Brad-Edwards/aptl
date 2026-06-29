@@ -56,7 +56,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [032](adr-032-conversation-surface-hardening.md) | Conversation Surface Hardening | accepted | 2026-05-17 |
 | [033](adr-033-agent-reasoning-trace-boundary.md) | Red-Side Behavioural Capture and Non-Contamination Boundary | accepted | 2026-05-17 |
 | [034](adr-034-lab-managed-soc-tls-ca.md) | Lab-Managed CA for Verified SOC Stack TLS | accepted | 2026-05-18 |
-| [035](adr-035-aces-sdl-adoption.md) | Adopt ACES SDL as APTL's Scenario Authoring Surface | accepted | 2026-05-18 |
+| [035](adr-035-aces-sdl-adoption.md) | Adopt ACES SDL as APTL's Scenario Authoring Surface (realization model superseded by ADR-046) | accepted (amended) | 2026-05-18 |
 | [036](adr-036-snapshot-endpoint-registry.md) | Snapshot Endpoint Registry Boundary | accepted | 2026-05-18 |
 | [037](adr-037-docker-compose-backend-cohesion.md) | Docker Compose Backend Cohesion | accepted | 2026-05-18 |
 | [038](adr-038-docs-style-lint-and-published-site.md) | Documentation Style Lint and Published Docs Site | accepted | 2026-06-11 |
@@ -67,3 +67,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [043](adr-043-suricata-runtime-config-ownership-boundary.md) | Suricata Runtime Config Ownership Boundary | accepted | 2026-06-20 |
 | [044](adr-044-aces-aligned-run-reproducibility-record.md) | ACES-Aligned Run Reproducibility Record | accepted | 2026-06-25 |
 | [045](adr-045-ephemeral-lifecycle-policy-enforcement.md) | Ephemeral Lifecycle Policy Enforcement | accepted | 2026-06-28 |
+| [046](adr-046-dynamic-aces-scenario-realization.md) | Dynamic ACES Scenario Realization | accepted | 2026-06-29 |

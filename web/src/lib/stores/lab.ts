@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import type { LabStatus } from '../types';
-import { getLabStatus, subscribeLabEvents } from '../api';
+import { getLabStatus, subscribeLabEvents, type EventSubscription } from '../api';
 
 export const labStatus = writable<LabStatus>({
 	running: false,
@@ -10,7 +10,7 @@ export const labStatus = writable<LabStatus>({
 
 export const labLoading = writable(false);
 
-let eventSource: EventSource | null = null;
+let subscription: EventSubscription | null = null;
 let generation = 0;
 
 const RECONNECT_DELAY_MS = 5000;
@@ -38,19 +38,19 @@ export function initLabStore(): void {
 		});
 
 	// Start SSE
-	if (eventSource) {
-		eventSource.close();
+	if (subscription) {
+		subscription.close();
 	}
-	eventSource = subscribeLabEvents(
+	subscription = subscribeLabEvents(
 		(status) => {
 			if (currentGeneration === generation) {
 				labStatus.set(status);
 			}
 		},
-		(event) => {
-			const es = event.target as EventSource;
-			if (es.readyState === EventSource.CLOSED && currentGeneration === generation) {
-				// Schedule reconnect
+		() => {
+			// Stream ended or failed (not an explicit close): schedule reconnect,
+			// which re-fetches a fresh status and re-subscribes.
+			if (currentGeneration === generation) {
 				setTimeout(() => {
 					if (currentGeneration === generation) {
 						initLabStore();
@@ -64,8 +64,8 @@ export function initLabStore(): void {
 /** Stop SSE subscription. */
 export function destroyLabStore(): void {
 	generation++;
-	if (eventSource) {
-		eventSource.close();
-		eventSource = null;
+	if (subscription) {
+		subscription.close();
+		subscription = null;
 	}
 }

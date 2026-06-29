@@ -214,11 +214,9 @@ class TestKillMcpProcesses:
     @patch("aptl.core.kill.os.kill")
     @patch("aptl.core.kill._verify_mcp_process", return_value=True)
     @patch("aptl.core.kill._process_exited")
-    @patch("aptl.core.kill.time.sleep")
-    @patch("aptl.core.kill.time.monotonic")
     @patch("aptl.core.kill.sys")
     def test_sigkill_fallback_after_timeout(
-        self, mock_sys, mock_monotonic, mock_sleep, mock_alive, mock_verify, mock_kill, mock_find
+        self, mock_sys, mock_alive, mock_verify, mock_kill, mock_find
     ):
         from aptl.core.kill import kill_mcp_processes
 
@@ -228,10 +226,13 @@ class TestKillMcpProcesses:
         ]
         # Process stays alive throughout timeout (_process_exited returns False)
         mock_alive.return_value = False
-        # Simulate time progression past deadline
-        mock_monotonic.side_effect = [0.0, 0.0, 6.0]
-
-        killed, errors = kill_mcp_processes(timeout=5.0)
+        # Inject the clock as an explicit sequence: deadline=0.0+5.0, first loop
+        # check 0.0<5.0 (enter), second check 6.0<5.0 (exit past deadline).
+        killed, errors = kill_mcp_processes(
+            timeout=5.0,
+            time_source=iter([0.0, 0.0, 6.0]).__next__,
+            sleep=lambda _seconds: None,
+        )
 
         # SIGTERM must precede SIGKILL
         calls = mock_kill.call_args_list
@@ -244,11 +245,9 @@ class TestKillMcpProcesses:
     @patch("aptl.core.kill.os.kill")
     @patch("aptl.core.kill._verify_mcp_process", return_value=False)
     @patch("aptl.core.kill._process_exited")
-    @patch("aptl.core.kill.time.sleep")
-    @patch("aptl.core.kill.time.monotonic")
     @patch("aptl.core.kill.sys")
     def test_sigkill_skipped_when_pid_reassigned(
-        self, mock_sys, mock_monotonic, mock_sleep, mock_alive, mock_verify, mock_kill, mock_find
+        self, mock_sys, mock_alive, mock_verify, mock_kill, mock_find
     ):
         """SIGKILL is skipped if PID no longer belongs to an MCP process."""
         from aptl.core.kill import kill_mcp_processes
@@ -258,9 +257,11 @@ class TestKillMcpProcesses:
             {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
         ]
         mock_alive.return_value = False
-        mock_monotonic.side_effect = [0.0, 0.0, 6.0]
-
-        killed, errors = kill_mcp_processes(timeout=5.0)
+        killed, errors = kill_mcp_processes(
+            timeout=5.0,
+            time_source=iter([0.0, 0.0, 6.0]).__next__,
+            sleep=lambda _seconds: None,
+        )
 
         # SIGTERM should be sent, but SIGKILL should be skipped
         calls = mock_kill.call_args_list

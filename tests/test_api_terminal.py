@@ -74,7 +74,9 @@ def _make_mock_conn(process):
     return conn
 
 
-_VALID_ORIGIN = {"origin": "http://localhost:3000"}
+# Same-origin as the TestClient's default Host ("testserver"). The WS origin gate
+# is strict same-origin (UI-008a): Origin host must equal the request Host.
+_VALID_ORIGIN = {"origin": "http://testserver"}
 
 # A terminal endpoint as resolved from runtime inventory: container IP +
 # port 22 (issue #293 / ADR-040), NOT a hardcoded localhost:<port> map.
@@ -117,13 +119,13 @@ class TestTerminalWebSocket:
 
     @patch("aptl.api.routers.terminal.lab_status")
     def test_allowed_origin_accepted(self, mock_status, api_client):
-        """Connections from allowed origins proceed normally."""
+        """Connections from a same-origin browser proceed normally."""
         mock_status.return_value = _make_lab_status(running=False)
 
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers={"origin": "http://localhost:3000"},
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -166,7 +168,7 @@ class TestTerminalWebSocket:
             with api_client.websocket_connect(
                 "/api/terminal/ws/nonexistent",
                 subprotocols=_VALID_WS_SUBPROTOCOLS,
-                headers=_VALID_ORIGIN,
+                headers={**_VALID_ORIGIN},
             ) as ws:
                 ws.receive_json()
 
@@ -178,7 +180,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -197,7 +199,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -223,7 +225,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             # Receive one relayed message to deterministically synchronize:
             # by the time it arrives the handler has dialed asyncssh.connect
@@ -255,7 +257,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -283,7 +285,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             # Sync on the first relayed message so both relay tasks are live
             # before sending stdin (avoids a close-before-connect race).
@@ -314,7 +316,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "stdout"
@@ -340,7 +342,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             # Sync on the first relayed message before sending resize.
             ws.receive_json()
@@ -368,7 +370,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             # Sync on the first relayed message so the SSH connection has been
             # established before the client disconnects (then cleanup runs).
@@ -393,7 +395,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "error"
@@ -419,7 +421,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             # Sync on the first relayed message before sending malformed input.
             ws.receive_json()
@@ -451,7 +453,7 @@ class TestTerminalWebSocket:
         with api_client.websocket_connect(
             "/api/terminal/ws/victim",
             subprotocols=_VALID_WS_SUBPROTOCOLS,
-            headers=_VALID_ORIGIN,
+            headers={**_VALID_ORIGIN},
         ) as ws:
             msg = ws.receive_json()
             assert msg["type"] == "stdout"
@@ -468,9 +470,296 @@ class TestTerminalWebSocket:
             with api_client.websocket_connect(
                 f"/api/terminal/ws/{name}",
                 subprotocols=_VALID_WS_SUBPROTOCOLS,
-                headers=_VALID_ORIGIN,
+                headers={**_VALID_ORIGIN},
             ) as ws:
                 msg = ws.receive_json()
                 # Should get "lab not running" error, not unknown container
                 assert msg["type"] == "error"
                 assert "not running" in msg["message"]
+
+
+# ---------------------------------------------------------------------------
+# Terminal ticket store and endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestTerminalTicketStore:
+    """Unit tests for the module-level ticket store functions."""
+
+    def setup_method(self):
+        """Reset the ticket store before each test."""
+        from aptl.api.routers.terminal import _ticket_store
+        _ticket_store._tickets.clear()
+
+    def test_issue_returns_opaque_string(self):
+        from aptl.api.routers.terminal import issue_ticket
+        t = issue_ticket()
+        assert isinstance(t, str)
+        assert len(t) > 20  # token_urlsafe(32) → 43 chars
+
+    def test_consume_returns_true_first_call(self):
+        from aptl.api.routers.terminal import consume_ticket, issue_ticket
+        t = issue_ticket()
+        assert consume_ticket(t) is True
+
+    def test_consume_returns_false_second_call(self):
+        from aptl.api.routers.terminal import consume_ticket, issue_ticket
+        t = issue_ticket()
+        consume_ticket(t)
+        assert consume_ticket(t) is False
+
+    def test_consume_unknown_ticket_returns_false(self):
+        from aptl.api.routers.terminal import consume_ticket
+        assert consume_ticket("not-a-real-ticket") is False
+
+    def test_expired_ticket_returns_false(self):
+        """Tickets past their TTL are treated as non-existent.
+
+        The clock is injected as an explicit value sequence rather than patched
+        on the module: issue() reads it twice (prune + expiry stamp) at ``base``,
+        then consume()'s prune reads it once at ``base + 61`` — past the 30 s TTL.
+        Using a finite iterator means any extra clock call in the implementation
+        raises StopIteration and fails the test loudly, instead of silently
+        feeding the wrong value (the call-count-branching fake's blind spot).
+        """
+        from aptl.api.routers.terminal import _TicketStore
+
+        base = 1000.0
+        store = _TicketStore(
+            ttl=30.0,
+            time_source=iter([base, base, base + 61.0]).__next__,
+        )
+
+        ticket = store.issue()
+        assert store.consume(ticket) is False
+
+
+class TestVerifyWsTicket:
+    """Unit tests for verify_ws_ticket."""
+
+    def setup_method(self):
+        from aptl.api.routers.terminal import _ticket_store
+        _ticket_store._tickets.clear()
+
+    def test_valid_ticket_subprotocol_accepted(self):
+        from aptl.api.routers.terminal import issue_ticket, verify_ws_ticket
+        t = issue_ticket()
+        assert verify_ws_ticket(f"aptl-token.{t}") is True
+
+    def test_consumed_ticket_rejected_on_second_use(self):
+        from aptl.api.routers.terminal import issue_ticket, verify_ws_ticket
+        t = issue_ticket()
+        verify_ws_ticket(f"aptl-token.{t}")  # first use
+        assert verify_ws_ticket(f"aptl-token.{t}") is False
+
+    def test_unknown_ticket_rejected(self):
+        from aptl.api.routers.terminal import verify_ws_ticket
+        assert verify_ws_ticket("aptl-token.not-a-ticket") is False
+
+    def test_missing_prefix_rejected(self):
+        from aptl.api.routers.terminal import issue_ticket, verify_ws_ticket
+        t = issue_ticket()
+        assert verify_ws_ticket(t) is False  # no prefix
+
+    def test_empty_string_rejected(self):
+        from aptl.api.routers.terminal import verify_ws_ticket
+        assert verify_ws_ticket("") is False
+
+
+class TestTerminalTicketEndpoint:
+    """HTTP tests for GET /api/terminal/ticket."""
+
+    def test_ticket_endpoint_requires_auth(self, api_client):
+        """Without token override, endpoint should be reachable (deps overridden)."""
+        # api_client overrides verify_token → lambda: None (always passes)
+        resp = api_client.get("/api/terminal/ticket")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "ticket" in body
+        assert body["expires_in"] == 30
+
+    def test_ticket_endpoint_returns_unique_tickets(self, api_client):
+        """Two consecutive calls return different tickets."""
+        r1 = api_client.get("/api/terminal/ticket")
+        r2 = api_client.get("/api/terminal/ticket")
+        assert r1.json()["ticket"] != r2.json()["ticket"]
+
+    def test_ticket_endpoint_401_without_token(self, tmp_path, monkeypatch):
+        """Without overridden auth, the endpoint requires a bearer token."""
+        monkeypatch.setenv("APTL_API_TOKEN", _TEST_WS_TOKEN)
+        import aptl.api.deps as _deps
+        monkeypatch.setattr(_deps, "_WEB_AUTH", None)
+
+        from aptl.api.main import create_app
+        from aptl.api.deps import get_project_dir
+        from starlette.testclient import TestClient
+
+        real_app = create_app()
+        real_app.dependency_overrides[get_project_dir] = lambda: tmp_path
+        with TestClient(real_app) as c:
+            resp = c.get("/api/terminal/ticket")
+            assert resp.status_code == 401
+
+
+class TestWsAcceptsTicketSubprotocol:
+    """Integration-style: WS handshake with a ticket subprotocol.
+
+    Starlette 1.0.0's TestClient (anyio-backed) leaves a pending WS close
+    event in the event loop when successive connections are made within the
+    same TestClient session.  To avoid stale-subprotocol contamination across
+    tests, each test uses a FRESH TestClient (fresh anyio portal).
+
+    Single-use semantics are verified at the unit level in TestVerifyWsTicket
+    and TestTerminalTicketStore; the WS integration tests here verify only the
+    happy path and the straight-reject of an unknown ticket.
+    """
+
+    def setup_method(self) -> None:
+        from aptl.api.routers.terminal import _ticket_store
+        _ticket_store._tickets.clear()
+
+    def _make_fresh_client(self, tmp_path, monkeypatch):
+        """Create a fresh isolated TestClient (one per call = one per test)."""
+        monkeypatch.setenv("APTL_API_TOKEN", _TEST_WS_TOKEN)
+        import aptl.api.deps as _deps
+        monkeypatch.setattr(_deps, "_WEB_AUTH", None)
+
+        from aptl.api.deps import (
+            WebAuthSettings,
+            get_project_dir,
+            get_web_auth,
+            verify_token,
+        )
+        from aptl.api.main import create_app
+        from starlette.testclient import TestClient
+
+        fresh_app = create_app()
+        _test_auth = WebAuthSettings(api_token=_TEST_WS_TOKEN)
+        fresh_app.dependency_overrides[get_project_dir] = lambda: tmp_path
+        fresh_app.dependency_overrides[verify_token] = lambda: None
+        fresh_app.dependency_overrides[get_web_auth] = lambda: _test_auth
+        return TestClient(fresh_app)
+
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_ws_accepts_valid_ticket(self, mock_status, tmp_path, monkeypatch):
+        """A freshly issued ticket is accepted as WS auth."""
+        from aptl.api.routers.terminal import issue_ticket
+        mock_status.return_value = _make_lab_status(running=False)
+        t = issue_ticket()
+
+        with self._make_fresh_client(tmp_path, monkeypatch) as client:
+            with client.websocket_connect(
+                "/api/terminal/ws/victim",
+                subprotocols=[f"aptl-token.{t}"],
+                headers={**_VALID_ORIGIN},
+            ) as ws:
+                msg = ws.receive_json()
+                # Token check passes; reaches "lab not running" gate
+                assert msg["type"] == "error"
+                assert "not running" in msg["message"]
+
+    def test_ws_rejects_unknown_ticket(self, tmp_path, monkeypatch):
+        """An unknown ticket is rejected before the WS is accepted."""
+        with self._make_fresh_client(tmp_path, monkeypatch) as client:
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(
+                    "/api/terminal/ws/victim",
+                    subprotocols=["aptl-token.bogus-ticket-value"],
+                    headers={**_VALID_ORIGIN},
+                ) as ws:
+                    ws.receive_json()
+
+    def test_ticket_is_single_use_for_ws(self, tmp_path, monkeypatch):
+        """A spent ticket is rejected at the WS auth gate.
+
+        Starlette TestClient's anyio portal leaves in-flight close frames in the
+        event queue when a WS connection exits.  A subsequent ``websocket_connect``
+        in a new portal can replay those stale frames, making it appear that the
+        NEW connection's subprotocol is the OLD connection's ticket — causing a
+        false positive when the old ticket has already been consumed.
+
+        To avoid this, the "first use" is simulated by calling ``consume_ticket``
+        directly (which exercises exactly the code path ``verify_ws_ticket`` calls).
+        The WS integration then verifies that the auth gate rejects the now-spent
+        ticket.  The full accept path (fresh ticket → WS accepted) is covered by
+        ``test_ws_accepts_valid_ticket``; unit coverage of single-use is in
+        ``TestTerminalTicketStore`` and ``TestVerifyWsTicket``.
+        """
+        from aptl.api.routers.terminal import consume_ticket, issue_ticket
+
+        t = issue_ticket()
+
+        # Simulate first WS connection consuming the ticket (mirrors what
+        # _resolve_terminal_target does via verify_ws_ticket → consume_ticket).
+        assert consume_ticket(t) is True, "ticket must be in store after issue"
+
+        # A second WS connection with the same (now-consumed) ticket must be
+        # rejected before the WebSocket is accepted.
+        with self._make_fresh_client(tmp_path, monkeypatch) as client:
+            with pytest.raises(WebSocketDisconnect):
+                with client.websocket_connect(
+                    "/api/terminal/ws/victim",
+                    subprotocols=[f"aptl-token.{t}"],
+                    headers={**_VALID_ORIGIN},
+                ) as ws:
+                    ws.receive_json()
+
+
+class TestWsOriginAllowed:
+    """_ws_origin_allowed enforces STRICT same-origin (Origin host == Host)."""
+
+    @staticmethod
+    def _ws(origin=None, host=None):
+        headers = {}
+        if origin is not None:
+            headers["origin"] = origin
+        if host is not None:
+            headers["host"] = host
+        ws = MagicMock()
+        ws.headers = headers
+        return ws
+
+    def test_non_same_origin_rejected_even_if_loopback_named(self):
+        """SECURITY: a non-matching origin is rejected — no allow-list bypass.
+
+        A malicious local process on a trusted dev port must NOT pass the gate;
+        only Origin host == Host is accepted (the dev/preview proxy preserves
+        Host so the real browser still matches)."""
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        assert not _ws_origin_allowed(self._ws("http://localhost:3000", "testserver"))
+
+    def test_same_origin_shipped_model(self):
+        """Shipped `aptl web serve`: page and API share an origin; same-origin
+        (Origin netloc == Host) is trusted."""
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        assert _ws_origin_allowed(
+            self._ws("http://127.0.0.1:8400", "127.0.0.1:8400")
+        )
+
+    def test_same_origin_dev_proxy(self):
+        """Dev/preview proxy preserves Host, so the browser origin matches."""
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        assert _ws_origin_allowed(
+            self._ws("http://localhost:3000", "localhost:3000")
+        )
+
+    def test_missing_origin_rejected(self):
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        assert not _ws_origin_allowed(self._ws(origin=None, host="127.0.0.1:8400"))
+
+    def test_foreign_origin_rejected(self):
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        assert not _ws_origin_allowed(self._ws("http://evil.com", "127.0.0.1:8400"))
+
+    def test_origin_host_mismatch_rejected(self):
+        from aptl.api.routers.terminal import _ws_origin_allowed
+
+        # Origin not in allow-set and not matching Host → rejected.
+        assert not _ws_origin_allowed(
+            self._ws("http://127.0.0.1:8400", "evil.example:9999")
+        )

@@ -83,8 +83,18 @@ V1 includes these capabilities:
 
 V1 does not include:
 
-- multi-user accounts, RBAC, OAuth, OIDC, password login, or long-lived browser
-  sessions;
+- multi-user accounts, RBAC, OAuth, OIDC, or password login;
+
+> **Amended (UI-008a):** an earlier draft of this Non-Goal also excluded "browser
+> sessions" outright. That was wrong for a local code-execution tool: loopback
+> binding is not a security boundary (any local process/user can reach the port),
+> and forgeable `Sec-Fetch-*`/`Origin` headers are a CSRF-isolation signal, not a
+> credential. Following the Jupyter model, V1 **does** use a single-user,
+> server-issued **session credential** (no accounts, no login form) bootstrapped
+> from a one-time launch token, so the browser holds a non-forgeable credential a
+> sibling process cannot obtain. The credential is two-factor (an HttpOnly cookie
+> plus a port-scoped header token) so it survives the cross-port cookie leak; see
+> "Shipped implementation (UI-008a)" above.
 - remote shared deployment as a default mode;
 - generic Docker command, shell command, or arbitrary API execution endpoints;
 - full replacement of Wazuh Dashboard, TheHive, MISP, Shuffle, or Cortex;
@@ -115,6 +125,83 @@ The implementation must preserve the security posture from ADR-039:
 If static asset mounting removes the current SvelteKit server hook, UI-008 must
 replace it with an equivalent same-origin backend-for-frontend boundary in
 FastAPI rather than pushing bearer-token handling into page code.
+
+**Shipped implementation (UI-008a).** The SvelteKit app builds to a static SPA
+(`adapter-static`, `fallback: index.html`) that `aptl web serve` mounts behind
+the FastAPI app. A single FastAPI-owned cross-cutting layer
+(`src/aptl/api/middleware/bff.py`) is the BFF boundary, with these concerns kept
+distinct (rather than conflated, which was the flaw in the original
+SvelteKit-hook posture):
+
+- **Authentication** is a server-issued **two-factor session credential**, not a
+  header bearer. Because loopback binding is not a security boundary and
+  `Sec-Fetch-*`/`Origin` are client-forgeable, the operator bootstraps a session
+  via the Jupyter-style handshake: `aptl web serve` prints a one-time launch URL
+  (`GET /api/auth/login?token=…`, the only unauthenticated `/api` route) to the
+  operator's terminal. Visiting it sets an `HttpOnly`, `SameSite=Strict`
+  `aptl_session` cookie **and** hands the SPA a second factor: a port-scoped
+  header token delivered in the redirect URL fragment, which the SPA stores in
+  `sessionStorage` and echoes as `X-APTL-Session` on every `/api/*` call. The BFF
+  injects the API bearer server-side **only** when BOTH factors are valid, so the
+  browser never holds the API token. Two factors are required because cookies are
+  scoped by host, not port: the `aptl_session` cookie is also sent to any other
+  `127.0.0.1:<port>`, so a sibling local process that lures the browser to its
+  port could steal it. The header token lives in `sessionStorage` (scoped by
+  origin *including* port, never auto-sent on navigation), so a cross-port
+  attacker who steals the cookie still cannot forge the header, and an XSS payload
+  that reads the header token still cannot read the HttpOnly cookie. The two
+  values are independent HMAC tags of one per-process master secret, so neither
+  reveals the other (`src/aptl/api/session.py`).
+- **CSRF defence** is a strict same-origin `Sec-Fetch-Site`/`Origin` gate on
+  mutating `/api/*` requests. Origin must equal the request's own origin, with
+  no allow-list bypass, because the session cookie is a host credential
+  `SameSite` sends across ports. This is a CSRF-isolation signal only, never an
+  auth decision.
+- **DNS-rebinding defence** is a `Host` allow-list (loopback by default) on
+  `/api/*`.
+- **XSS / clickjacking hardening** is a strict CSP plus frame/MIME headers.
+  Because the header-token factor lives in XSS-readable `sessionStorage`, the SPA
+  ships a strict CSP (`script-src 'self'` with SvelteKit-hashed bootstrap, no
+  `unsafe-inline` scripts; `default-src`/`connect-src 'self'`) delivered as a
+  `<meta>` tag so it applies behind both `aptl web serve` and the Caddy proxy.
+  `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` are sent as
+  response headers (a `<meta>` CSP cannot carry `frame-ancestors`).
+
+`/api/*` routes (including an authenticated catch-all for unknown API paths)
+mount before the SPA fallback, which only serves files contained within the
+asset root. The terminal WebSocket carrier is server-side too: a same-origin
+`GET /api/terminal/ticket` (cookie-authenticated like any other `/api` call)
+returns a single-use, ~30 s ticket presented as the `aptl-token.<ticket>`
+subprotocol; the WS gate accepts a valid ticket (or a real token, for direct
+clients) and enforces the same strict same-origin check. The split `aptl-web-api` +
+`aptl-web-ui` Compose profile remains for dev/preview as a static SPA served
+behind a same-origin reverse proxy, with the control-plane token held only by
+the API container (which also mints the session secrets and logs the launch URL).
+In that profile the API runs `--api-only` behind the Caddy UI origin, so it is
+told the browser-facing origin via `APTL_WEB_PUBLIC_ORIGIN` (`--public-origin`)
+and prints the launch URL for the UI origin (`127.0.0.1:3000`) rather than its own
+bind address. The operator opens that URL so the session header token is stored
+for the origin the SPA actually runs on.
+
+**Asset delivery contract.** APTL ships as a cloned-and-run repository, not as a
+wheel that bundles a pre-built GUI, so there are two supported deliveries of the
+built SPA and `aptl web serve` fails hard (exit 1) rather than silently degrading
+when neither is present:
+
+- **Docker (`aptl lab start`, web profile):** the `aptl-web-ui` image builds the
+  SPA and serves it (Caddy) at the single origin, reverse-proxying `/api/*` to the
+  `aptl-web-api` container, which runs `aptl web serve --api-only` (deliberately
+  GUI-less behind the proxy).
+- **Local single-origin (`aptl web serve`):** the operator builds the frontend
+  (`cd web && npm run build`) and the server mounts the repo-relative `web/build`
+  output; `--web-root` or `APTL_WEB_ROOT` override the location. Run without a
+  build and without `--api-only`, the command exits 1 with build instructions
+  rather than starting a browser-broken API-only server.
+
+`get_web_asset_root` resolves, in precedence order, `--web-root` → `APTL_WEB_ROOT`
+→ the packaged `aptl/web_static` resource → repo-relative `web/build`. The
+`web_static` candidate is forward-compatible with a future combined-wheel delivery
+and resolves to nothing in the current clone-and-run / Docker models.
 
 ## Design Inputs and Visual Direction
 

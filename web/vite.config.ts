@@ -8,7 +8,11 @@ export default defineConfig({
 		proxy: {
 			'/api': {
 				target: 'http://localhost:8400',
-				changeOrigin: true,
+				// Preserve the browser's Host so the BFF sees the dev origin as
+				// same-origin (UI-008a strict same-origin CSRF/WS gate). With
+				// changeOrigin:true the upstream Host would become localhost:8400
+				// and same-origin checks on mutating/WS requests would fail.
+				changeOrigin: false,
 				ws: true
 			}
 		}

@@ -2,14 +2,17 @@
 
 import asyncio
 import json
+import secrets
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import asyncssh
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from aptl.api.deps import (
-    ALLOWED_ORIGINS,
     WebAuthSettings,
     get_project_dir,
     get_web_auth,
@@ -25,6 +28,91 @@ from aptl.utils.logging import get_logger
 log = get_logger("api.terminal")
 
 router = APIRouter(tags=["terminal"])
+
+# ---------------------------------------------------------------------------
+# Single-use terminal ticket store
+# ---------------------------------------------------------------------------
+
+_TICKET_TTL: float = 30.0
+_WS_TICKET_PREFIX = "aptl-token."
+
+
+class _TicketStore:
+    """In-memory single-use ticket store with monotonic-clock TTL.
+
+    Each ticket is a ``secrets.token_urlsafe(32)`` string valid for at most
+    one WebSocket authentication within *ttl* seconds of issuance.  Expired
+    and consumed tickets are pruned on every access.
+    """
+
+    def __init__(
+        self,
+        ttl: float = _TICKET_TTL,
+        time_source: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._ttl: float = ttl
+        # Injectable monotonic clock so tests drive TTL with an explicit value
+        # sequence instead of patching the module and counting calls.
+        self._now: Callable[[], float] = time_source
+        # ticket → expiry timestamp (monotonic seconds)
+        self._tickets: dict[str, float] = {}
+
+    def issue(self) -> str:
+        """Issue a new single-use ticket and return its opaque value."""
+        self._prune()
+        ticket = secrets.token_urlsafe(32)
+        self._tickets[ticket] = self._now() + self._ttl
+        return ticket
+
+    def consume(self, ticket: str) -> bool:
+        """Consume *ticket*.
+
+        Returns ``True`` exactly once for a valid, unexpired ticket.
+        Returns ``False`` for unknown, already-consumed, or expired tickets.
+        """
+        self._prune()
+        if ticket not in self._tickets:
+            return False
+        del self._tickets[ticket]
+        return True
+
+    def _prune(self) -> None:
+        """Remove all expired tickets from the store."""
+        now = self._now()
+        expired = [t for t, exp in self._tickets.items() if exp <= now]
+        for t in expired:
+            del self._tickets[t]
+
+
+# Module-level store; tests may reset ``_ticket_store._tickets`` directly.
+_ticket_store = _TicketStore()
+
+
+def issue_ticket() -> str:
+    """Issue a new single-use terminal WebSocket ticket."""
+    return _ticket_store.issue()
+
+
+def consume_ticket(ticket: str) -> bool:
+    """Consume *ticket*.  Returns ``True`` once; ``False`` thereafter."""
+    return _ticket_store.consume(ticket)
+
+
+def verify_ws_ticket(sec_websocket_protocol: str) -> bool:
+    """Extract and consume a ticket from a ``Sec-WebSocket-Protocol`` value.
+
+    The ticket is conveyed as ``aptl-token.<TICKET>`` — the same prefix used
+    by :func:`aptl.api.deps.verify_ws_token` for bearer tokens.  Returns
+    ``True`` exactly once for a valid, unexpired ticket; ``False`` otherwise.
+    """
+    if not sec_websocket_protocol or not sec_websocket_protocol.startswith(
+        _WS_TICKET_PREFIX
+    ):
+        return False
+    candidate = sec_websocket_protocol[len(_WS_TICKET_PREFIX):]
+    if not candidate:
+        return False
+    return consume_ticket(candidate)
 
 
 def _get_key_path() -> Path:
@@ -74,6 +162,25 @@ def _sanitize(value: str) -> str:
     return value.replace("\r", "").replace("\n", "")
 
 
+def _ws_origin_allowed(websocket: WebSocket) -> bool:
+    """Return True when the WebSocket upgrade is strictly same-origin.
+
+    The upgrade is trusted only when its ``Origin`` host matches the request's
+    own ``Host`` — the shipped ``aptl web serve`` single-origin model, and the
+    dev/preview profile too because the proxy preserves the browser's Host
+    (Caddy ``header_up Host {host}``). There is no allow-list bypass: matching a
+    configured origin by name would let a malicious local process on a trusted
+    dev port drive the terminal (the same CSRF hole closed for HTTP). A missing
+    Origin is rejected — ``Origin`` is a browser-set defence, not a credential,
+    but its absence on a browser upgrade is anomalous.
+    """
+    origin = websocket.headers.get("origin", "")
+    host = websocket.headers.get("host", "")
+    if not origin or not host:
+        return False
+    return urlsplit(origin).netloc == host
+
+
 class _TerminalReject(Exception):
     """Internal signal that a pre-dial gate has closed the WebSocket.
 
@@ -101,19 +208,22 @@ async def _resolve_terminal_target(
     """
     safe_container = _sanitize(container)
 
-    # Verify the bearer token before the handshake is accepted (ADR-039).
+    # Verify bearer token OR single-use ticket before the handshake (ADR-039).
+    # Browser clients receive a ticket from GET /api/terminal/ticket (which is
+    # injected with the server bearer by BFF middleware) and convey it as the
+    # Sec-WebSocket-Protocol subprotocol.  Direct API clients use a real token.
     protocol = websocket.headers.get("sec-websocket-protocol", "")
-    if not verify_ws_token(protocol, auth):
+    if not (verify_ws_token(protocol, auth) or verify_ws_ticket(protocol)):
         await websocket.close(code=1008, reason="Unauthorized")
-        log.warning("Rejected WebSocket: invalid or missing auth token")
+        log.warning("Rejected WebSocket: invalid or missing auth token or ticket")
         raise _TerminalReject
 
     # Reject cross-origin WebSocket connections.
     # CORS middleware does NOT protect WebSocket upgrades — browsers send
     # them cross-origin without preflight. Without this check, any website
     # the user visits could open a shell on lab containers.
-    origin = websocket.headers.get("origin", "")
-    if not origin or origin not in ALLOWED_ORIGINS:
+    if not _ws_origin_allowed(websocket):
+        origin = websocket.headers.get("origin", "")
         await websocket.close(code=1008, reason="Origin not allowed")
         log.warning("Rejected WebSocket from disallowed origin: %s", origin)
         raise _TerminalReject
@@ -172,6 +282,22 @@ async def _resolve_terminal_target(
 
     log.info("Terminal WebSocket accepted for %s", safe_container)
     return endpoint, kh_path
+
+
+@router.get("/terminal/ticket")
+async def terminal_ticket() -> dict[str, object]:
+    """Issue a single-use WebSocket authentication ticket.
+
+    The ticket is valid for :data:`_TICKET_TTL` seconds and may be used exactly
+    once as the ``Sec-WebSocket-Protocol`` subprotocol value on a subsequent
+    ``/api/terminal/ws/{container}`` WebSocket connection.
+
+    This endpoint is auth-gated by ``Depends(verify_token)`` via the router's
+    ``dependencies`` list in :func:`aptl.api.main.create_app`.  Same-origin
+    browser calls receive a bearer token injection from the BFF middleware, so
+    no explicit ``Authorization`` header is required on the browser side.
+    """
+    return {"ticket": issue_ticket(), "expires_in": int(_TICKET_TTL)}
 
 
 @router.websocket("/terminal/ws/{container}")

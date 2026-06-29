@@ -175,48 +175,6 @@ class TestTerminalOriginIntegration:
         with pytest.raises(WebSocketDenialResponse):
             with integration_client.websocket_connect(
                 "/api/terminal/ws/nonexistent",
-                headers={"origin": "http://localhost:3000"},
+                headers={"origin": "http://testserver"},
             ) as ws:
                 ws.receive_json()
-
-
-# ---------------------------------------------------------------------------
-# CORS env var override
-# ---------------------------------------------------------------------------
-
-
-class TestCorsEnvOverride:
-    """Verify that APTL_ALLOWED_ORIGINS env var parsing logic works.
-
-    Tests call _parse_allowed_origins directly so that regressions in the
-    production parsing function (not just a local duplicate) are caught.
-    """
-
-    def test_custom_origins_parsed(self):
-        """Comma-separated origins are parsed into a set."""
-        from aptl.api.deps import _parse_allowed_origins
-
-        result = _parse_allowed_origins("http://custom:9000,http://other:8080")
-        assert result == {"http://custom:9000", "http://other:8080"}
-
-    def test_empty_env_falls_back_to_defaults(self):
-        """Empty string falls back to the default dev origins."""
-        from aptl.api.deps import _parse_allowed_origins
-
-        result = _parse_allowed_origins("")
-        assert "http://localhost:3000" in result
-        assert "http://localhost:5173" in result
-
-    def test_whitespace_trimmed(self):
-        """Leading/trailing whitespace in origins is stripped."""
-        from aptl.api.deps import _parse_allowed_origins
-
-        result = _parse_allowed_origins(" http://a:1 , http://b:2 ")
-        assert result == {"http://a:1", "http://b:2"}
-
-    def test_default_origins_are_set(self):
-        """Without env override, default origins are present."""
-        from aptl.api.deps import ALLOWED_ORIGINS
-
-        assert "http://localhost:3000" in ALLOWED_ORIGINS
-        assert "http://localhost:5173" in ALLOWED_ORIGINS

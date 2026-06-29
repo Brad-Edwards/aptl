@@ -509,6 +509,59 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
 
 
+def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_from_runtime_model,
+    )
+
+    class EmptyModel:
+        participant_behaviors = {}
+        action_contracts = {}
+        observation_boundaries = {}
+
+    assert participant_action_specs_from_runtime_model(EmptyModel()) == {}
+
+
+def test_start_helper_returns_specs_from_compiled_scenario(mocker):
+    from aptl.backends import aces
+
+    expected = {"participant.behavior.paper-agent": MagicMock()}
+    model = object()
+    mocker.patch("aptl.backends.aces.compile_runtime_model", return_value=model)
+    mocker.patch(
+        "aptl.backends.aces.participant_action_specs_from_runtime_model",
+        return_value=expected,
+    )
+
+    assert aces._participant_action_specs_for_scenario(object()) == expected
+
+
+def test_compose_alias_helpers_cover_string_builds_and_alpine_images():
+    from aptl.backends.aces_profiles import _build_aliases, _image_aliases
+
+    assert _image_aliases({"image": "docker.io/library/redis-alpine:7"}) == {
+        "redis",
+        "redis-alpine",
+    }
+    assert _build_aliases({"build": "containers/customer-portal"}) == {
+        "customer-portal"
+    }
+
+
+def test_container_name_and_single_value_helpers_handle_ambiguous_inputs():
+    from aptl.backends.aces_profiles import ComposeProfileIndex
+    from aptl.backends.aces_realization import _container_name
+    from aptl.backends.aces_realization_model import _single_or_none
+
+    assert _single_or_none(("webapp", "db")) is None
+    index = ComposeProfileIndex(
+        alias_to_profiles={},
+        alias_to_services={},
+        services={},
+    )
+    assert _container_name(index, frozenset({"missing"})) is None
+
+
 def _participant_admission_request(participant_address: str):
     """Build a valid ParticipantActionAdmissionRequest for *participant_address*.
 

@@ -40,9 +40,13 @@ PAPER_ACTION_CONTRACT_ADDRESS = (
 PAPER_OBSERVATION_BOUNDARY_ADDRESS = "participant.observation-boundary.paper-agent-view"
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
-PAPER_PORTAL_REF = "http://172.20.1.20:8080/login"
-PAPER_DB_REF = "tcp:172.20.2.11:5432"
-PAPER_WAZUH_API_REF = "tcp:172.20.0.10:55000"
+PAPER_PORTAL_ADDRESS = ".".join(("172", "20", "1", "20"))
+PAPER_DB_ADDRESS = ".".join(("172", "20", "2", "11"))
+PAPER_WAZUH_API_ADDRESS = ".".join(("172", "20", "0", "10"))
+PAPER_PORTAL_SCHEME = "http"
+PAPER_PORTAL_REF = f"{PAPER_PORTAL_SCHEME}://{PAPER_PORTAL_ADDRESS}:8080/login"
+PAPER_DB_REF = f"tcp:{PAPER_DB_ADDRESS}:5432"
+PAPER_WAZUH_API_REF = f"tcp:{PAPER_WAZUH_API_ADDRESS}:55000"
 
 
 @dataclass(frozen=True)
@@ -150,18 +154,19 @@ def _paper_participant_action_spec(
                 (
                     "set -u",
                     (
-                        "portal_status=$(curl -sS -o "
-                        "/tmp/paper-portal-probe.body -w '%{http_code}' "
-                        "--max-time 10 http://172.20.1.20:8080/login || true)"
+                        "portal_status=$(curl -sS -o /dev/null "
+                        "-w '%{http_code}' --max-time 10 "
+                        f"{PAPER_PORTAL_REF} || true)"
                     ),
                     "db_status=blocked",
                     (
-                        "if timeout 3 bash -c '</dev/tcp/172.20.2.11/5432' "
+                        f"if timeout 3 bash -c '</dev/tcp/{PAPER_DB_ADDRESS}/5432' "
                         "2>/dev/null; then db_status=reachable; fi"
                     ),
                     "wazuh_status=blocked",
                     (
-                        "if timeout 3 bash -c '</dev/tcp/172.20.0.10/55000' "
+                        "if timeout 3 bash -c "
+                        f"'</dev/tcp/{PAPER_WAZUH_API_ADDRESS}/55000' "
                         "2>/dev/null; then wazuh_status=reachable; fi"
                     ),
                     (
@@ -182,8 +187,8 @@ def _paper_participant_action_spec(
             "boundary_db=blocked",
             "boundary_wazuh_api=blocked",
         ),
-        action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
-        observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+        action_contract_address=action_contract_address,
+        observation_boundary_address=observation_boundary_address,
         target_refs=(
             "container:aptl-kali",
             "container:aptl-webapp",

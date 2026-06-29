@@ -809,16 +809,11 @@ def _redact_command_flags(value: str) -> str:
     ``echo '-p' hunter2`` is preserved verbatim.
     """
     out = _unquote_options_in_credential_segments(value)
-    if "-p" in out:
-        out = _redact_short_password_flag(out)
-    if "-H" in out or "hashes" in out:
-        out = _redact_ntlm_hash_flag(out)
-    if "-w" in out:
-        out = _redact_ldap_password_flag(out)
-    if "--user" in out or "-u" in out or "-U" in out:
-        out = _redact_basic_auth_user(out)
-    if ":" in out and "@" in out:
-        out = _redact_impacket_positional_auth(out)
+    out = _redact_short_password_flag(out)
+    out = _redact_ntlm_hash_flag(out)
+    out = _redact_ldap_password_flag(out)
+    out = _redact_basic_auth_user(out)
+    out = _redact_impacket_positional_auth(out)
     return out
 
 

@@ -207,6 +207,10 @@ nav:
     - ADR-040 Terminal SSH Host-Key Verification: adrs/adr-040-terminal-ssh-host-key-verification.md
     - ADR-041 Kali Capture Sidecar Ownership Boundary: adrs/adr-041-kali-capture-sidecar-ownership-boundary.md
     - ADR-042 Sidecar-Owned PTY Master: adrs/adr-042-sidecar-owned-pty-master.md
+    - ADR-043 Suricata Runtime Config Ownership Boundary: adrs/adr-043-suricata-runtime-config-ownership-boundary.md
+    - ADR-044 ACES-Aligned Run Reproducibility Record: adrs/adr-044-aces-aligned-run-reproducibility-record.md
+    - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
+    - ADR-046 Dynamic ACES Scenario Realization: adrs/adr-046-dynamic-aces-scenario-realization.md
 
 extra:
   social:

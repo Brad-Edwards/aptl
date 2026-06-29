@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from aptl.api.deps import (
@@ -88,7 +88,7 @@ def create_app() -> FastAPI:
         include_in_schema=False,
         responses={401: {"description": "Invalid or missing one-time launch token."}},
     )
-    async def login(token: str = "") -> Response:
+    async def login(request: Request, token: str = "") -> Response:
         """Exchange a valid launch token for the two-factor session, then redirect."""
         if not verify_launch_token(token):
             raise HTTPException(
@@ -100,16 +100,21 @@ def create_app() -> FastAPI:
             url=f"/#{SESSION_HEADER_PARAM}={session_header_value()}",
             status_code=303,
         )
-        # secure=True is correct for both delivery models: loopback origins
-        # (127.0.0.1) are "potentially trustworthy" secure contexts, so browsers
-        # set and return Secure cookies over the default loopback-http `aptl web
-        # serve`; and when the API is fronted by TLS (the split aptl-web-ui Caddy
-        # profile via --public-origin https://...) the flag is mandatory.
+        # The Secure flag follows the effective request scheme so the cookie is
+        # delivered correctly across every shipping model. Over HTTPS (a TLS
+        # front such as Tailscale Serve or the split aptl-web-ui Caddy profile,
+        # surfaced here via uvicorn's loopback-trusted X-Forwarded-Proto) it is
+        # mandatory. Over plain HTTP it must be OFF, or the browser withholds the
+        # cookie and the two-factor session never completes: that covers the
+        # default loopback `aptl web serve` (no wire to protect) and an opt-in
+        # remote bind whose confidentiality comes from the transport (e.g.
+        # Tailscale/WireGuard). request.url.scheme is trustworthy because
+        # forwarded headers are honoured only from a loopback proxy.
         resp.set_cookie(
             SESSION_COOKIE,
             session_cookie_value(),
             httponly=True,
-            secure=True,
+            secure=request.url.scheme == "https",
             samesite="strict",
             path="/",
         )

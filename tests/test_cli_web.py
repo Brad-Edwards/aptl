@@ -54,6 +54,8 @@ class TestWebServe:
             log_level="info",
             timeout_keep_alive=65,
             access_log=True,
+            proxy_headers=True,
+            forwarded_allow_ips="127.0.0.1",
         )
 
     @patch("uvicorn.run")

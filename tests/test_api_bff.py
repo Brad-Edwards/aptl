@@ -363,14 +363,12 @@ class TestLoginHandshake:
 
         app = create_app()
         app.dependency_overrides[get_project_dir] = lambda: tmp_path
-        # The session cookie is issued with Secure=True. A real browser treats
-        # the loopback serve origin (http://127.0.0.1) as a "potentially
-        # trustworthy" secure context and so stores and resends the Secure
-        # cookie; a generic HTTP client only does so over https. Use an https
-        # base_url to model that browser behaviour for the handshake round-trip.
-        with TestClient(
-            app, base_url="https://testserver", raise_server_exceptions=True
-        ) as c:
+        # Default http base_url models the 98% case: `aptl web serve` on the
+        # loopback origin. The cookie's Secure flag follows the request scheme,
+        # so over http it is NOT Secure and the generic HTTP client stores and
+        # resends it (just as a browser does on loopback). The https path is
+        # covered separately by test_login_cookie_secure_flag_follows_scheme.
+        with TestClient(app, raise_server_exceptions=True) as c:
             yield c
 
     def test_valid_launch_token_sets_cookie_and_redirects(self, login_client):
@@ -391,13 +389,37 @@ class TestLoginHandshake:
         assert "aptl_session=" in set_cookie
         assert "httponly" in set_cookie.lower()
         assert "samesite=strict" in set_cookie.lower()
+        # Over plain http (loopback serve) the cookie must NOT be Secure, or the
+        # browser would withhold it and the two-factor session never completes.
+        assert "secure" not in set_cookie.lower()
+
+    def test_login_cookie_secure_flag_follows_scheme(self, tmp_path, _set_token):
+        """Over https the session cookie IS issued Secure (TLS-fronted deploys).
+
+        A real browser, or a same-host TLS proxy (Tailscale Serve / Caddy) whose
+        X-Forwarded-Proto uvicorn trusts from loopback, reaches the app over
+        https; the cookie must then carry Secure. Modelled with an https base_url.
+        """
+        from aptl.api.deps import get_project_dir
+        from aptl.api.main import create_app
+        from starlette.testclient import TestClient
+
+        app = create_app()
+        app.dependency_overrides[get_project_dir] = lambda: tmp_path
+        with TestClient(
+            app, base_url="https://testserver", raise_server_exceptions=True
+        ) as c:
+            resp = c.get(
+                f"/api/auth/login?token={_LAUNCH_TOKEN}", follow_redirects=False
+            )
+        assert resp.status_code == 303
+        assert "secure" in resp.headers.get("set-cookie", "").lower()
 
     def test_cookie_from_handshake_authenticates_api(self, login_client):
         """After the handshake, both issued factors authenticate /api/* calls.
 
-        TestClient persists the Secure Set-Cookie automatically (the fixture's
-        https base_url models the browser treating the loopback origin as a
-        secure context); a real browser also captures the header token from the
+        The client persists the (non-Secure, loopback-http) Set-Cookie
+        automatically; a real browser also captures the header token from the
         redirect fragment, which we simulate by sending ``X-APTL-Session``.
         """
         from aptl.api.session import session_header_value

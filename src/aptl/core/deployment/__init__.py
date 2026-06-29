@@ -19,11 +19,19 @@ from pathlib import Path
 
 from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.deployment.realization import (
+    DeploymentNetworkRealization,
+    DeploymentNodeRealization,
+    DeploymentRealizationSpec,
+)
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
 
 __all__ = [
     "DeploymentBackend",
     "DockerComposeBackend",
+    "DeploymentNetworkRealization",
+    "DeploymentNodeRealization",
+    "DeploymentRealizationSpec",
     "SSHComposeBackend",
     "get_backend",
 ]

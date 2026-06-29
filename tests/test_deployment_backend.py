@@ -14,6 +14,9 @@ import pytest
 from aptl.core.config import AptlConfig, DeploymentConfig
 from aptl.core.deployment import (
     DockerComposeBackend,
+    DeploymentNetworkRealization,
+    DeploymentNodeRealization,
+    DeploymentRealizationSpec,
     SSHComposeBackend,
     get_backend,
 )
@@ -213,6 +216,109 @@ class TestDockerComposeBackend:
 
         assert result.success is False
         assert "compose up failed" in result.error
+
+    def test_realize_reconciles_project_networks_after_start(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.red-workbench",
+                    name="red-workbench",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=("redteam-net", "dmz-net"),
+                ),
+            ),
+            networks=(
+                DeploymentNetworkRealization(name="redteam-net"),
+                DeploymentNetworkRealization(name="dmz-net"),
+            ),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "NetworkSettings": {
+                        "Networks": {
+                            "test_aptl-redteam": {},
+                            "test_aptl-dmz": {},
+                            "test_aptl-internal": {},
+                            "unmanaged": {},
+                        }
+                    }
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=(
+                        "test_aptl-redteam\n"
+                        "test_aptl-dmz\n"
+                        "test_aptl-internal\n"
+                    ),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "network",
+            "disconnect",
+            "test_aptl-internal",
+            "aptl-kali",
+        ] in commands
+        assert all("unmanaged" not in command for command in commands)
+
+    def test_realize_skips_nodes_without_declared_networks(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.legacy",
+                    name="legacy",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=(),
+                ),
+            ),
+            networks=(),
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout="test_aptl-internal\n",
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert all(
+            command[:3] != ["docker", "network", "disconnect"]
+            for command in commands
+        )
 
     def test_stop_calls_compose_down(self, tmp_path):
         backend = self._make_backend(tmp_path)

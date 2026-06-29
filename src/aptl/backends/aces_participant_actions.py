@@ -33,8 +33,16 @@ PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
     "participant.observation-boundary.aptl.kali-victim-ssh-probe"
 )
 PARTICIPANT_BEHAVIOR_ADDRESS = PARTICIPANT_ACTION_ADDRESS
+PAPER_PARTICIPANT_ACTION_ADDRESS = "participant.behavior.paper-agent"
+PAPER_ACTION_CONTRACT_ADDRESS = (
+    "participant.action-contract.probe-customer-portal-login"
+)
+PAPER_OBSERVATION_BOUNDARY_ADDRESS = "participant.observation-boundary.paper-agent-view"
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
+PAPER_PORTAL_REF = "http://172.20.1.20:8080/login"
+PAPER_DB_REF = "tcp:172.20.2.11:5432"
+PAPER_WAZUH_API_REF = "tcp:172.20.0.10:55000"
 
 
 @dataclass(frozen=True)
@@ -95,6 +103,95 @@ DEFAULT_PARTICIPANT_ACTIONS = {
         ),
     )
 }
+
+
+def participant_action_specs_from_runtime_model(
+    model: object,
+) -> dict[str, ParticipantActionSpec]:
+    """Return APTL action bindings enabled by compiled participant artifacts."""
+
+    behaviors = _compiled_artifact_mapping(model, "participant_behaviors")
+    action_contracts = _compiled_artifact_mapping(model, "action_contracts")
+    observation_boundaries = _compiled_artifact_mapping(model, "observation_boundaries")
+    if not (
+        PAPER_PARTICIPANT_ACTION_ADDRESS in behaviors
+        and PAPER_ACTION_CONTRACT_ADDRESS in action_contracts
+        and PAPER_OBSERVATION_BOUNDARY_ADDRESS in observation_boundaries
+    ):
+        return {}
+    return {
+        PAPER_PARTICIPANT_ACTION_ADDRESS: _paper_participant_action_spec(
+            action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
+            observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+        )
+    }
+
+
+def _compiled_artifact_mapping(model: object, attribute: str) -> Mapping[str, object]:
+    """Return a compiled model mapping attribute, or an empty mapping."""
+
+    value = getattr(model, attribute, {})
+    return value if isinstance(value, Mapping) else {}
+
+
+def _paper_participant_action_spec(
+    *,
+    action_contract_address: str,
+    observation_boundary_address: str,
+) -> ParticipantActionSpec:
+    """Build the APTL runtime binding for the compiled paper action contract."""
+
+    return ParticipantActionSpec(
+        source_container="aptl-kali",
+        command=(
+            "bash",
+            "-lc",
+            "\n".join(
+                (
+                    "set -u",
+                    (
+                        "portal_status=$(curl -sS -o "
+                        "/tmp/paper-portal-probe.body -w '%{http_code}' "
+                        "--max-time 10 http://172.20.1.20:8080/login || true)"
+                    ),
+                    "db_status=blocked",
+                    (
+                        "if timeout 3 bash -c '</dev/tcp/172.20.2.11/5432' "
+                        "2>/dev/null; then db_status=reachable; fi"
+                    ),
+                    "wazuh_status=blocked",
+                    (
+                        "if timeout 3 bash -c '</dev/tcp/172.20.0.10/55000' "
+                        "2>/dev/null; then wazuh_status=reachable; fi"
+                    ),
+                    (
+                        "printf 'portal_http_status=%s\\nboundary_db=%s\\n"
+                        "boundary_wazuh_api=%s\\n' "
+                        '"$portal_status" "$db_status" "$wazuh_status"'
+                    ),
+                    (
+                        '[ "$portal_status" = "200" ] '
+                        '&& [ "$db_status" = "blocked" ] '
+                        '&& [ "$wazuh_status" = "blocked" ]'
+                    ),
+                )
+            ),
+        ),
+        success_markers=(
+            "portal_http_status=200",
+            "boundary_db=blocked",
+            "boundary_wazuh_api=blocked",
+        ),
+        action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
+        observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+        target_refs=(
+            "container:aptl-kali",
+            "container:aptl-webapp",
+            PAPER_PORTAL_REF,
+            f"boundary-negative:{PAPER_DB_REF}",
+            f"boundary-negative:{PAPER_WAZUH_API_REF}",
+        ),
+    )
 
 
 def participant_action_diagnostic(

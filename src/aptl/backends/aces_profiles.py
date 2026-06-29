@@ -14,6 +14,13 @@ from aptl.core.config import AptlConfig
 
 CORE_PROFILES = ("otel",)
 IDENTIFIER_SEPARATORS = re.compile(r"[^a-z0-9]+")
+APTL_SERVICE_ALIASES = {
+    "db": frozenset({"customer-db", "postgres"}),
+    "kali": frozenset({"red-workbench"}),
+    "webapp": frozenset({"customer-portal", "customer-portal-app"}),
+    "wazuh.indexer": frozenset({"wazuh-indexer"}),
+    "wazuh.manager": frozenset({"wazuh-manager"}),
+}
 
 
 @dataclass(frozen=True)
@@ -25,6 +32,7 @@ class ComposeServiceInfo(object):
     profiles: frozenset[str]
     dependencies: frozenset[str]
     networks: frozenset[str]
+    container_name: str | None
 
 
 @dataclass(frozen=True)
@@ -44,9 +52,15 @@ class ComposeProfileIndex(object):
 
     def service_names_for_aliases(self, aliases: set[str]) -> frozenset[str]:
         """Return Compose service names associated with normalized aliases."""
+        unique_services: set[str] = set()
         services: set[str] = set()
         for alias in aliases:
-            services.update(self.alias_to_services.get(alias, frozenset()))
+            matches = self.alias_to_services.get(alias, frozenset())
+            if len(matches) == 1:
+                unique_services.update(matches)
+            services.update(matches)
+        if unique_services:
+            return frozenset(unique_services)
         return frozenset(services)
 
     def profiles_for_services(self, service_names: set[str]) -> frozenset[str]:
@@ -272,6 +286,7 @@ def _service_info(
         profiles=frozenset(_service_profiles(service_def)),
         dependencies=frozenset(_service_dependencies(service_def)),
         networks=frozenset(_service_networks(service_def)),
+        container_name=_service_container_name(service_def),
     )
 
 
@@ -334,13 +349,53 @@ def _service_aliases(
     service_name: str,
     service_def: Mapping[str, object],
 ) -> set[str]:
-    """Return service name, container name, and hostname aliases."""
+    """Return service name, container name, source, and hostname aliases."""
     aliases = {service_name}
+    aliases.update(APTL_SERVICE_ALIASES.get(service_name, frozenset()))
     for alias_key in ("container_name", "hostname"):
         alias = service_def.get(alias_key)
         if isinstance(alias, str) and alias.strip():
             aliases.add(alias)
+    aliases.update(_image_aliases(service_def))
+    aliases.update(_build_aliases(service_def))
     return aliases
+
+
+def _service_container_name(service_def: Mapping[str, object]) -> str | None:
+    """Return the explicit Compose container name, if present."""
+
+    value = service_def.get("container_name")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def _image_aliases(service_def: Mapping[str, object]) -> set[str]:
+    """Return aliases derived from a Compose image reference."""
+
+    image = service_def.get("image")
+    if not isinstance(image, str) or not image.strip():
+        return set()
+    terminal = image.rsplit("/", 1)[-1]
+    repository = terminal.split(":", 1)[0]
+    aliases = {repository}
+    if repository.endswith("-alpine"):
+        aliases.add(repository.removesuffix("-alpine"))
+    return {alias for alias in aliases if alias}
+
+
+def _build_aliases(service_def: Mapping[str, object]) -> set[str]:
+    """Return aliases derived from a Compose build context."""
+
+    build = service_def.get("build")
+    context: object = None
+    if isinstance(build, str):
+        context = build
+    elif isinstance(build, Mapping):
+        context = build.get("context")
+    if not isinstance(context, str) or not context.strip():
+        return set()
+    return {Path(context).name}
 
 
 def _raw_node_values(address: str, payload: Mapping[str, Any]) -> set[str]:
@@ -354,6 +409,9 @@ def _raw_node_values(address: str, payload: Mapping[str, Any]) -> set[str]:
             raw_values.update(
                 _payload_string_values(node_spec, ("name", "node_id", "hostname"))
             )
+            source = node_spec.get("source")
+            if isinstance(source, Mapping):
+                raw_values.update(_payload_string_values(source, ("name",)))
     return raw_values
 
 

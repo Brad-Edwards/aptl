@@ -30,6 +30,12 @@
       "name": "TechVault Observability Core",
       "description": "OTEL collector, Tempo, and Grafana only: the smallest bounded startup surface.",
       "path": "scenarios/techvault-observability-core.sdl.yaml"
+    },
+    {
+      "id": "paper-agent-loop",
+      "name": "Paper Agent Loop",
+      "description": "APTL realization of the ACES paper participant/portal/DB/Wazuh evidence loop.",
+      "path": "scenarios/paper-agent-loop.sdl.yaml"
     }
   ]
 }

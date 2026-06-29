@@ -9,7 +9,7 @@ start.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
 from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+from aces_processor.compiler import compile_runtime_model
 from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
@@ -32,6 +33,11 @@ from aptl.backends.aces_diagnostics import (
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.aces_evaluator import AptlEvaluator
 from aptl.backends.aces_orchestrator import AptlOrchestrator
+from aptl.backends.aces_participant_actions import (
+    DEFAULT_PARTICIPANT_ACTIONS,
+    ParticipantActionSpec,
+    participant_action_specs_from_runtime_model,
+)
 from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 from aptl.backends.aces_realization import (
     AptlRealization,
@@ -79,6 +85,7 @@ def create_aptl_runtime_target(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
+    participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
 ) -> RuntimeTarget:
     """Build the ACES runtime target for APTL."""
 
@@ -88,7 +95,13 @@ def create_aptl_runtime_target(
         deployment_backend=backend,
     )
     orchestrator = AptlOrchestrator()
-    participant_runtime = AptlParticipantRuntime(deployment_backend=backend)
+    action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
+    if participant_action_specs:
+        action_specs.update(participant_action_specs)
+    participant_runtime = AptlParticipantRuntime(
+        deployment_backend=backend,
+        action_specs=action_specs,
+    )
     return RuntimeTarget(
         name=APTL_ACES_TARGET_NAME,
         manifest=create_aptl_manifest(),
@@ -121,10 +134,12 @@ def start_aces_scenario(
         resolved_scenario = project_dir / resolved_scenario
     try:
         scenario = parse_sdl_file(resolved_scenario)
+        participant_action_specs = _participant_action_specs_for_scenario(scenario)
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
             backend=backend,
+            participant_action_specs=participant_action_specs,
         )
         execution_plan = RuntimeManager(target).plan(scenario)
         return _run_execution_plan(
@@ -174,6 +189,18 @@ def selected_profiles_for_scenario(
         plan=execution_plan.provisioning, project_dir=project_dir, config=config
     )
     return select_backend_profiles(config, realization.profiles)
+
+
+def _participant_action_specs_for_scenario(
+    scenario: object,
+) -> dict[str, ParticipantActionSpec]:
+    """Best-effort participant bindings from compiled runtime artifacts."""
+
+    try:
+        model = compile_runtime_model(scenario)
+    except Exception:
+        return {}
+    return participant_action_specs_from_runtime_model(model)
 
 
 def _run_execution_plan(
@@ -405,7 +432,8 @@ class AptlProvisioner(object):
                     "realization": realization.details(),
                 },
             )
-        start_result = self.deployment_backend.start(selected_profiles)
+        deployment_spec = realization.deployment_spec(selected_profiles)
+        start_result = self.deployment_backend.realize(deployment_spec)
         if not start_result.success:
             diagnostics.append(
                 diagnostic(

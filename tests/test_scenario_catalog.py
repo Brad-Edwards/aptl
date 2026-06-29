@@ -72,6 +72,17 @@ scenarios:
     assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
 
 
+def test_repository_catalog_includes_paper_agent_loop():
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    project_root = Path(__file__).resolve().parents[1]
+    catalog = load_scenario_catalog(project_root)
+    entries = {entry.id: entry for entry in catalog.scenarios}
+
+    assert entries["paper-agent-loop"].path == "scenarios/paper-agent-loop.sdl.yaml"
+    assert (project_root / entries["paper-agent-loop"].path).exists()
+
+
 def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 

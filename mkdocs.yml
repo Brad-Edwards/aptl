@@ -155,6 +155,7 @@ nav:
     - SOC Feature Spec: specs/soc-feature-spec.md
     - Web GUI Design Specification: specs/web-gui-design.md
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
+    - Web Component Kit: specs/web-component-kit.md
   - Troubleshooting: troubleshooting/index.md
   - Records:
     - CI/CD Remote Deployment (removed): deployment/ci-cd-deploy.md

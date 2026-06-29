@@ -137,6 +137,63 @@ The design specification must name how each in-scope page passes these layers.
   cookie-consent or terms-wall patterns unless non-essential analytics,
   third-party embeds, or legally approved terms text are introduced.
 
+## UI-008b Component Kit Guardrails
+
+UI-008b should create a small APTL component kit from the current Svelte and
+Tailwind surface, not a parallel design system.
+
+- Treat `web/src/app.css` as the canonical token source. Promote the existing
+  Tailwind v4 `@theme` variables into documented color, type, spacing, radius,
+  status, focus, and density conventions there or in adjacent design docs. Do
+  not introduce a second Tailwind config, JavaScript token mirror, CSS-in-TS
+  theme object, or copied admin-template token set.
+- The component kit is a presentation and interaction layer. It must not own
+  API fetching, auth carrier construction, DTO parsing, lifecycle semantics,
+  scenario shaping, terminal ticket flow, SIEM query validation, config
+  validation, logging, persistence, or redaction.
+- Keep the app shell anchored on `web/src/lib/components/NavBar.svelte` and
+  `web/src/routes/+layout.svelte`: top navigation, text labels, compact lab
+  status, and constrained content regions. Do not add an icon-only sidebar,
+  mission-control nav rail, or wholesale Tailwind UI shell.
+- Keep primitive props semantic and content-model-oriented. A status badge
+  should accept a known status/severity/label shape, not arbitrary color class
+  strings. Tables should accept rows, columns, captions, loading/empty/error
+  state, and bounded row actions; they should not infer backend states from
+  English messages.
+- Use existing component families as incumbents: `LabStatusBadge`,
+  `LabStartNotice`, `ContainerGrid`, `ContainerCard`, `ScenarioCard`,
+  `Terminal`, `TerminalBlock`, and the workbench blocks. New primitives should
+  factor repeated recipes out of those components without changing their data
+  authority.
+- Centralize repeated status styling currently duplicated across
+  `LabStatusBadge`, `ContainerCard`, `ScenarioCard`, `WorkbenchStatusBar`,
+  `ObjectiveBlock`, and `ContainerStatusBlock`. Reuse
+  `web/src/lib/container-state.ts` or evolve it into a narrow UI-state helper
+  instead of adding one-off switch statements per component.
+- Dialogs, drawers, menus, popovers, tabs, and tooltips need accessible
+  behavior. A small headless Svelte primitive or dependency is acceptable only
+  for focus management, ARIA semantics, keyboard handling, and portal/overlay
+  mechanics; the APTL kit still owns tokens, density, copy, and content
+  structure.
+- Treat `NarrativeBlock` plus `renderMarkdown()` / DOMPurify as the only
+  existing sanctioned raw-HTML path. Generic primitives should render text or
+  Svelte children, not add new `{@html}` surfaces.
+- Preserve SvelteKit's static SPA and strict CSP posture from
+  `web/src/routes/+layout.ts` and `web/svelte.config.js`: no remote assets,
+  no inline-script-dependent component behavior, no API token in route data,
+  generated bundles, local storage, examples, screenshots, or style tokens.
+- Kit tests belong under `web/tests/components/` and should assert behavior,
+  semantics, and variants: roles, accessible names, focus/keyboard behavior,
+  disabled/loading/empty/error states, non-color status labels, and density
+  class selection. Do not rely on snapshots as the only evidence.
+- If the kit adds local preferences such as density, color mode, motion, locale,
+  time display, or terminal font size, put the schema-versioned browser-local
+  preferences seam behind one helper/store. Persist only the non-secret keys
+  allowed by `web-gui-design.md`; never persist auth material, terminal I/O,
+  raw SIEM custom queries, copied command history, hints viewed, or notes.
+- A user-visible kit change needs a `changelog.d/<issue>.<type>.md` fragment.
+  Docs-only preflight changes do not.
+
 ## Extensibility Seams
 
 The design specification should include a compact page contract table for each

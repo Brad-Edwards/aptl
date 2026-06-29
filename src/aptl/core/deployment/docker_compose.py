@@ -341,18 +341,12 @@ class DockerComposeBackend(ComposeQueryMixin):
     ) -> list[str]:
         """Detach a realized container from project networks outside its spec."""
 
-        failures: list[str] = []
-        for network_name in sorted(current - desired):
-            result = self._run(
-                ["docker", "network", "disconnect", network_name, container_name],
-                timeout=_REALIZATION_TIMEOUT,
-            )
-            if result.returncode != 0:
-                failures.append(
-                    f"Failed to disconnect {container_name} from {network_name}: "
-                    f"{result.stderr.strip()}"
-                )
-        return failures
+        return self._change_network_memberships(
+            container_name=container_name,
+            network_names=current - desired,
+            action="disconnect",
+            preposition="from",
+        )
 
     def _connect_missing_networks(
         self,
@@ -362,15 +356,33 @@ class DockerComposeBackend(ComposeQueryMixin):
     ) -> list[str]:
         """Attach a realized container to declared project networks it lacks."""
 
+        return self._change_network_memberships(
+            container_name=container_name,
+            network_names=desired - current,
+            action="connect",
+            preposition="to",
+        )
+
+    def _change_network_memberships(
+        self,
+        *,
+        container_name: str,
+        network_names: set[str],
+        action: str,
+        preposition: str,
+    ) -> list[str]:
+        """Run one Docker network membership action across sorted networks."""
+
         failures: list[str] = []
-        for network_name in sorted(desired - current):
+        for network_name in sorted(network_names):
             result = self._run(
-                ["docker", "network", "connect", network_name, container_name],
+                ["docker", "network", action, network_name, container_name],
                 timeout=_REALIZATION_TIMEOUT,
             )
             if result.returncode != 0:
                 failures.append(
-                    f"Failed to connect {container_name} to {network_name}: "
+                    f"Failed to {action} {container_name} "
+                    f"{preposition} {network_name}: "
                     f"{result.stderr.strip()}"
                 )
         return failures

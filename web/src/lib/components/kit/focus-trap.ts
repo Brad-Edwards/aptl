@@ -48,7 +48,7 @@ export function createFocusTrap(container: HTMLElement): FocusTrap {
 			return;
 		}
 		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
+		const last = focusable.at(-1) ?? first;
 		const active = document.activeElement;
 		if (event.shiftKey && (active === first || active === container)) {
 			event.preventDefault();

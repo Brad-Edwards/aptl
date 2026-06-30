@@ -136,6 +136,24 @@ class KillActionResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class ScenarioSummaryResponse(BaseModel):
+    """Card-summary projection of one curated scenario catalog entry.
+
+    Narrow by design: only the facts the curated catalog
+    (``scenarios/catalog.json`` / :class:`ScenarioCatalogEntry`) authoritatively
+    owns. Richer card facts (mode, difficulty, tags, estimated time, required
+    containers) are intentionally NOT modelled here — the ACES SDL does not own
+    those fields and the legacy in-tree scenario model that did is deliberately
+    not revived (see ``docs/specs/web-gui-design-preflight.md`` UI-008c). Those
+    belong to the scenario-detail/workbench projection, which is out of scope
+    for the Lab Home slice.
+    """
+
+    id: str
+    name: str
+    description: str = ""
+
+
 class ConfigResponse(BaseModel):
     """Response for GET /api/config."""
 

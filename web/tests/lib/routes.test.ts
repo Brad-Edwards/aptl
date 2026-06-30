@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('scenario [id] page load', () => {
 	it('fetches scenario by ID and returns it', async () => {
@@ -41,13 +41,24 @@ describe('scenario [id] page load', () => {
 
 		await expect(
 			load({ params: { id: 'missing' }, fetch: mockFetch } as any)
-		).rejects.toThrow();
+		).rejects.toMatchObject({
+			status: 404,
+			body: { message: expect.stringContaining('Not found') }
+		});
 	});
 });
 
 describe('home page load', () => {
-	it('fetches and returns scenarios list', async () => {
-		const scenarios = [{ id: 's1', name: 'Scenario 1' }];
+	// `load` routes through `getScenarios()` (shared API boundary, carries the
+	// X-APTL-Session header) and threads its load-provided `event.fetch` into it,
+	// so these pass a mock `fetch` via the load event and assert it is the one
+	// used to reach `/api/scenarios`.
+	beforeEach(() => {
+		sessionStorage.clear();
+	});
+
+	it('fetches and returns the scenario catalog summary', async () => {
+		const scenarios = [{ id: 's1', name: 'Scenario 1', description: 'first' }];
 		const mockFetch = vi.fn().mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve(scenarios)
@@ -57,26 +68,32 @@ describe('home page load', () => {
 		const result = await load({ fetch: mockFetch } as any);
 
 		expect(result.scenarios).toEqual(scenarios);
+		expect(result.scenariosError).toBe(false);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/scenarios',
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
 	});
 
-	it('returns empty array on fetch error', async () => {
+	it('degrades to an empty list with an error flag on fetch error', async () => {
 		const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
 		const { load } = await import('../../src/routes/+page');
 		const result = await load({ fetch: mockFetch } as any);
 
 		expect(result.scenarios).toEqual([]);
+		expect(result.scenariosError).toBe(true);
 	});
 
-	it('returns empty array on non-ok response', async () => {
-		const mockFetch = vi.fn().mockResolvedValue({
-			ok: false,
-			status: 500
-		});
+	it('degrades to an empty list with an error flag on non-ok response', async () => {
+		const mockFetch = vi
+			.fn()
+			.mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('boom') });
 
 		const { load } = await import('../../src/routes/+page');
 		const result = await load({ fetch: mockFetch } as any);
 
 		expect(result.scenarios).toEqual([]);
+		expect(result.scenariosError).toBe(true);
 	});
 });

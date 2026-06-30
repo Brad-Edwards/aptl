@@ -19,6 +19,7 @@ from aces_contracts.participant_behavior import (
 from aces_contracts.participant_episode import ParticipantEpisodeExecutionState
 from aces_contracts.planning import RuntimeDomain
 from aces_contracts.runtime_state import SnapshotEntry
+from aces_processor.compiler import compile_runtime_model
 
 from aptl.utils.redaction import redact
 
@@ -129,6 +130,18 @@ def participant_action_specs_from_runtime_model(
             observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
         )
     }
+
+
+def participant_action_specs_for_scenario(
+    scenario: object,
+) -> dict[str, ParticipantActionSpec]:
+    """Best-effort participant bindings from compiled runtime artifacts."""
+
+    try:
+        model = compile_runtime_model(scenario)
+    except Exception:
+        return {}
+    return participant_action_specs_from_runtime_model(model)
 
 
 def _compiled_artifact_mapping(model: object, attribute: str) -> Mapping[str, object]:

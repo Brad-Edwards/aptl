@@ -15,7 +15,10 @@ Usage::
     result = backend.start(profiles=["wazuh", "victim", "kali"])
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
@@ -25,6 +28,9 @@ from aptl.core.deployment.realization import (
     DeploymentRealizationSpec,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
+
+if TYPE_CHECKING:
+    from aptl.core.config import AptlConfig
 
 __all__ = [
     "DeploymentBackend",
@@ -37,7 +43,7 @@ __all__ = [
 ]
 
 
-def get_backend(config: "AptlConfig", project_dir: Path) -> DeploymentBackend:  # noqa: F821
+def get_backend(config: AptlConfig, project_dir: Path) -> DeploymentBackend:
     """Create a deployment backend from configuration.
 
     Reads ``config.deployment.provider`` to select the backend:
@@ -55,8 +61,6 @@ def get_backend(config: "AptlConfig", project_dir: Path) -> DeploymentBackend:  
         ValueError: If the provider is not recognized or required
             fields are missing.
     """
-    from aptl.core.config import AptlConfig  # avoid circular import
-
     provider = config.deployment.provider
     project_name = config.deployment.project_name
 

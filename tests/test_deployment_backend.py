@@ -20,7 +20,7 @@ from aptl.core.deployment import (
     SSHComposeBackend,
     get_backend,
 )
-from aptl.core.deployment.docker_compose import (
+from aptl.core.deployment._compose_realization import (
     _container_networks,
     _network_name_candidates,
     _resolve_realization_networks,

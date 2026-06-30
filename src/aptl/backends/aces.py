@@ -10,14 +10,13 @@ start.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
 from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
-from aces_processor.compiler import compile_runtime_model
 from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
@@ -36,7 +35,7 @@ from aptl.backends.aces_orchestrator import AptlOrchestrator
 from aptl.backends.aces_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
     ParticipantActionSpec,
-    participant_action_specs_from_runtime_model,
+    participant_action_specs_for_scenario,
 )
 from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 from aptl.backends.aces_realization import (
@@ -47,6 +46,7 @@ from aptl.backends.aces_profiles import (
     load_compose_profile_index,
     select_backend_profiles,
 )
+from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO, AcesStartOutcome
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -59,25 +59,6 @@ if TYPE_CHECKING:
     from aptl.core.runstore import RunStorageBackend
 
 log = get_logger("aces-backend")
-
-DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
-
-
-@dataclass
-class AcesStartOutcome:
-    """Reference-holder for start_aces_scenario outputs (REP-001 / ADR-044).
-
-    Carries the lab result alongside ACES runtime facts captured during
-    _run_execution_plan so downstream steps can build a reproducibility
-    record without re-running ACES planning or calling Docker.
-    """
-
-    lab_result: LabResult
-    final_snapshot: RuntimeSnapshot
-    realization_details: dict[str, Any]
-    selected_profiles: list[str]
-    scenario_path: Path | None
-    manifest_payload: dict[str, Any] = field(default_factory=dict)
 
 
 def create_aptl_runtime_target(
@@ -134,7 +115,7 @@ def start_aces_scenario(
         resolved_scenario = project_dir / resolved_scenario
     try:
         scenario = parse_sdl_file(resolved_scenario)
-        participant_action_specs = _participant_action_specs_for_scenario(scenario)
+        participant_action_specs = participant_action_specs_for_scenario(scenario)
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
@@ -189,18 +170,6 @@ def selected_profiles_for_scenario(
         plan=execution_plan.provisioning, project_dir=project_dir, config=config
     )
     return select_backend_profiles(config, realization.profiles)
-
-
-def _participant_action_specs_for_scenario(
-    scenario: object,
-) -> dict[str, ParticipantActionSpec]:
-    """Best-effort participant bindings from compiled runtime artifacts."""
-
-    try:
-        model = compile_runtime_model(scenario)
-    except Exception:
-        return {}
-    return participant_action_specs_from_runtime_model(model)
 
 
 def _run_execution_plan(

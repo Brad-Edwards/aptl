@@ -523,17 +523,23 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
 
 
 def test_start_helper_returns_specs_from_compiled_scenario(mocker):
-    from aptl.backends import aces
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_for_scenario,
+    )
 
     expected = {"participant.behavior.paper-agent": MagicMock()}
     model = object()
-    mocker.patch("aptl.backends.aces.compile_runtime_model", return_value=model)
     mocker.patch(
-        "aptl.backends.aces.participant_action_specs_from_runtime_model",
+        "aptl.backends.aces_participant_actions.compile_runtime_model",
+        return_value=model,
+    )
+    mocker.patch(
+        "aptl.backends.aces_participant_actions."
+        "participant_action_specs_from_runtime_model",
         return_value=expected,
     )
 
-    assert aces._participant_action_specs_for_scenario(object()) == expected
+    assert participant_action_specs_for_scenario(object()) == expected
 
 
 def test_compose_alias_helpers_cover_string_builds_and_alpine_images():

@@ -6,7 +6,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import re
 
 import yaml
 
@@ -24,31 +23,46 @@ from aptl.core.config import AptlConfig
 
 _BINDING_SCHEMA = "aptl-participant-runtime-binding/v1"
 _BINDING_TAGS = frozenset({"aptl-participant-runtime-binding"})
-_PLACEHOLDER = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+_NODES_PREFIX = "nodes."
+_PROVISION_NODE_PREFIX = "provision.node."
+_PARTICIPANT_PREFIX = "participant.behavior."
+_ACTION_CONTRACT_PREFIX = "participant.action-contract."
+_OBSERVATION_BOUNDARY_PREFIX = "participant.observation-boundary."
 
 
 @dataclass(frozen=True)
 class _BindingContext:
+    """Runtime lookup context for participant binding resolution."""
+
     realization: AptlRealization
     profile_index: ComposeProfileIndex
     provisioning_plan: ProvisioningPlan
 
     def node(self, ref: str) -> NodeRealization | None:
+        """Resolve a node ref into its APTL realization."""
+
         node_name = _node_name(ref)
         if node_name is None:
             return None
         for node in self.realization.nodes:
-            if ref in {node.address, node.name} or node_name in {node.name, node.address}:
+            if ref in {node.address, node.name} or node_name in {
+                node.name,
+                node.address,
+            }:
                 return node
         return None
 
     def service(self, ref: str) -> tuple[NodeRealization, Mapping[str, object]] | None:
+        """Resolve a service ref into its node and compiled service payload."""
+
         service_ref = _node_service_ref(ref)
         if service_ref is None:
             return None
         node_name, service_name = service_ref
-        node = self.node(f"nodes.{node_name}")
-        resource = self.provisioning_plan.resources.get(f"provision.node.{node_name}")
+        node = self.node(f"{_NODES_PREFIX}{node_name}")
+        resource = self.provisioning_plan.resources.get(
+            f"{_PROVISION_NODE_PREFIX}{node_name}"
+        )
         payload = resource.payload if resource is not None else None
         services = _node_services(payload)
         service = services.get(service_name)
@@ -57,10 +71,14 @@ class _BindingContext:
         return node, service
 
     def container_name(self, ref: str) -> str | None:
+        """Resolve a node ref into the backend container name."""
+
         node = self.node(ref)
         return node.container_name if node is not None else None
 
     def service_port(self, ref: str) -> int | None:
+        """Resolve a service ref into the declared service port."""
+
         resolved = self.service(ref)
         if resolved is None:
             return None
@@ -68,6 +86,8 @@ class _BindingContext:
         return raw if isinstance(raw, int) and raw > 0 else None
 
     def service_host(self, ref: str, source_ref: str) -> str | None:
+        """Resolve a service ref into an address reachable from a source node."""
+
         resolved = self.service(ref)
         if resolved is None:
             return None
@@ -79,6 +99,8 @@ class _BindingContext:
         return _select_service_address(service_info, source_node, target_node)
 
     def _compose_service(self, node: NodeRealization) -> ComposeServiceInfo | None:
+        """Return the Compose service bound to a realized ACES node."""
+
         for service_name in node.backend_services:
             service = self.profile_index.services.get(service_name)
             if service is not None:
@@ -152,7 +174,9 @@ def _spec_from_binding(
 
     if binding.get("runtime_target") != "aptl":
         raise ValueError("unsupported runtime target")
-    participant_address = _participant_address(_required_string(binding, "participant_ref"))
+    participant_address = _participant_address(
+        _required_string(binding, "participant_ref")
+    )
     action_contract_address = _action_contract_address(
         _required_string(binding, "action_contract_ref")
     )
@@ -200,6 +224,8 @@ def _assert_compiled_addresses(
     action_contract_address: str,
     observation_boundary_address: str,
 ) -> None:
+    """Validate binding refs against compiled participant artifacts."""
+
     behaviors = _compiled_artifact_mapping(model, "participant_behaviors")
     action_contracts = _compiled_artifact_mapping(model, "action_contracts")
     observation_boundaries = _compiled_artifact_mapping(model, "observation_boundaries")
@@ -210,7 +236,11 @@ def _assert_compiled_addresses(
         or observation_boundary_address not in observation_boundaries
     ):
         raise ValueError("binding references uncompiled participant artifacts")
-    if action_contract_address not in getattr(behavior, "action_contract_addresses", ()):
+    if action_contract_address not in getattr(
+        behavior,
+        "action_contract_addresses",
+        (),
+    ):
         raise ValueError("binding action contract is not assigned to participant")
     if observation_boundary_address not in getattr(
         behavior, "observation_boundary_addresses", ()
@@ -226,10 +256,21 @@ def _render_template(
 ) -> str:
     """Render constrained runtime placeholders inside one binding string."""
 
-    def replace(match: re.Match[str]) -> str:
-        return _resolve_placeholder(match.group(1), context, source_ref)
-
-    return _PLACEHOLDER.sub(replace, template)
+    rendered: list[str] = []
+    cursor = 0
+    while cursor < len(template):
+        start = template.find("{{", cursor)
+        if start < 0:
+            rendered.append(template[cursor:])
+            break
+        end = template.find("}}", start + 2)
+        if end < 0:
+            raise ValueError("runtime binding placeholder is unterminated")
+        rendered.append(template[cursor:start])
+        token = template[start + 2 : end].strip()
+        rendered.append(_resolve_placeholder(token, context, source_ref))
+        cursor = end + 2
+    return "".join(rendered)
 
 
 def _resolve_placeholder(
@@ -237,6 +278,8 @@ def _resolve_placeholder(
     context: _BindingContext,
     source_ref: str,
 ) -> str:
+    """Resolve one constrained runtime placeholder token."""
+
     parts = [part.strip() for part in token.split(":", 3)]
     if len(parts) < 2:
         raise ValueError("runtime binding placeholder is missing a ref")
@@ -268,6 +311,8 @@ def _select_service_address(
     source_node: NodeRealization | None,
     target_node: NodeRealization,
 ) -> str | None:
+    """Choose the best backend address for a service from a source node."""
+
     if source_node is not None:
         shared = set(source_node.networks) & set(target_node.networks)
         value = _address_for_aces_networks(service, shared)
@@ -286,7 +331,11 @@ def _address_for_aces_networks(
     service: ComposeServiceInfo,
     aces_networks: set[str],
 ) -> str | None:
-    desired_aliases = set().union(*(_network_aliases(network) for network in aces_networks))
+    """Return a static service address on one of the requested ACES networks."""
+
+    desired_aliases = set().union(
+        *(_network_aliases(network) for network in aces_networks)
+    )
     for network_name, address in sorted(service.network_addresses.items()):
         if desired_aliases & _network_aliases(network_name):
             return address
@@ -294,6 +343,8 @@ def _address_for_aces_networks(
 
 
 def _network_aliases(raw: str) -> set[str]:
+    """Return comparable aliases for ACES and Compose network identifiers."""
+
     normalized = normalize_identifier(raw)
     aliases = {normalized}
     for value in tuple(aliases):
@@ -305,6 +356,8 @@ def _network_aliases(raw: str) -> set[str]:
 
 
 def _node_services(payload: object) -> dict[str, Mapping[str, object]]:
+    """Return compiled node services keyed by service name."""
+
     if not isinstance(payload, Mapping):
         return {}
     spec = payload.get("spec")
@@ -322,60 +375,76 @@ def _node_services(payload: object) -> dict[str, Mapping[str, object]]:
 
 
 def _node_service_ref(ref: str) -> tuple[str, str] | None:
-    if not ref.startswith("nodes."):
+    """Split an ACES node service ref into node and service names."""
+
+    if not ref.startswith(_NODES_PREFIX):
         return None
-    node_name, sep, service_name = ref[len("nodes.") :].partition(".services.")
+    node_name, sep, service_name = ref[len(_NODES_PREFIX) :].partition(".services.")
     if not sep or not node_name or not service_name:
         return None
     return node_name, service_name
 
 
 def _node_name(ref: str) -> str | None:
-    if ref.startswith("nodes."):
-        return ref[len("nodes.") :].split(".", 1)[0]
-    if ref.startswith("provision.node."):
-        return ref[len("provision.node.") :].split(".", 1)[0]
+    """Return a node name from ACES shorthand or compiled node refs."""
+
+    if ref.startswith(_NODES_PREFIX):
+        return ref[len(_NODES_PREFIX) :].split(".", 1)[0]
+    if ref.startswith(_PROVISION_NODE_PREFIX):
+        return ref[len(_PROVISION_NODE_PREFIX) :].split(".", 1)[0]
     return ref if ref else None
 
 
 def _participant_address(ref: str) -> str:
-    return ref if ref.startswith("participant.behavior.") else f"participant.behavior.{ref}"
+    """Return a compiled participant behavior address."""
+
+    return ref if ref.startswith(_PARTICIPANT_PREFIX) else f"{_PARTICIPANT_PREFIX}{ref}"
 
 
 def _action_contract_address(ref: str) -> str:
-    return (
-        ref
-        if ref.startswith("participant.action-contract.")
-        else f"participant.action-contract.{ref}"
-    )
+    """Return a compiled participant action-contract address."""
+
+    if ref.startswith(_ACTION_CONTRACT_PREFIX):
+        return ref
+    return f"{_ACTION_CONTRACT_PREFIX}{ref}"
 
 
 def _observation_boundary_address(ref: str) -> str:
+    """Return a compiled participant observation-boundary address."""
+
     return (
         ref
-        if ref.startswith("participant.observation-boundary.")
-        else f"participant.observation-boundary.{ref}"
+        if ref.startswith(_OBSERVATION_BOUNDARY_PREFIX)
+        else f"{_OBSERVATION_BOUNDARY_PREFIX}{ref}"
     )
 
 
 def _compiled_artifact_mapping(model: object, attribute: str) -> Mapping[str, object]:
+    """Return a compiled model mapping attribute or an empty mapping."""
+
     value = getattr(model, attribute, {})
     return value if isinstance(value, Mapping) else {}
 
 
 def _binding_mapping(value: object) -> Mapping[str, object]:
+    """Return a binding mapping field or raise a validation error."""
+
     if not isinstance(value, Mapping):
         raise ValueError("runtime binding field must be a mapping")
     return value
 
 
 def _string_list(value: object) -> list[str]:
+    """Return non-empty strings from a list-valued binding field."""
+
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str) and item.strip()]
 
 
 def _required_string(mapping: Mapping[str, object], key: str) -> str:
+    """Return a required non-empty string binding field."""
+
     value = mapping.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"runtime binding requires {key}")
@@ -383,10 +452,14 @@ def _required_string(mapping: Mapping[str, object], key: str) -> str:
 
 
 def _optional_string(mapping: Mapping[str, object], key: str) -> str | None:
+    """Return an optional non-empty string binding field."""
+
     value = mapping.get(key)
     return value if isinstance(value, str) and value.strip() else None
 
 
 def _optional_positive_int(mapping: Mapping[str, object], key: str) -> int | None:
+    """Return an optional positive integer binding field."""
+
     value = mapping.get(key)
     return value if isinstance(value, int) and value > 0 else None

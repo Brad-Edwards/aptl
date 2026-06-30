@@ -1,11 +1,4 @@
-"""APTL ACES runtime target.
-
-This module is the handoff layer between the external ACES SDL/runtime
-packages and APTL's existing deployment primitives.  It intentionally keeps
-Docker/SSH details behind ``DeploymentBackend``; the ACES provisioner only
-translates a provisioning plan into the compose profiles APTL can already
-start.
-"""
+"""APTL ACES runtime target and deployment handoff."""
 
 from __future__ import annotations
 
@@ -160,15 +153,7 @@ def selected_profiles_for_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> list[str]:
-    """Return the Compose profiles a scenario selects for the backend start.
-
-    Mirrors ``start_aces_scenario``'s selection path (parse -> plan -> interpret
-    -> select_backend_profiles) without side effects, so post-start readiness
-    checks can scope to the profiles the scenario actually started rather than
-    the global ``config.containers`` flags. A bounded curated scenario starts a
-    subset of the enabled profiles, so a config-flag gate would wait on services
-    the scenario never launched.
-    """
+    """Return the Compose profiles selected by a scenario without side effects."""
     resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
     if not resolved_scenario.is_absolute():
         resolved_scenario = project_dir / resolved_scenario

@@ -777,17 +777,21 @@ class TestRedactorBounds:
     fail CLOSED — they over-redact, never leak.
     """
 
-    # A budget that cleanly separates the linear path (milliseconds) from a
-    # reintroduced O(n^2) backtracking regression (tens of seconds at these
-    # input sizes), while staying loose enough never to flake on a busy CI.
+    # A CPU-time budget that cleanly separates the linear path (milliseconds of
+    # CPU) from a reintroduced O(n^2) backtracking regression (tens of seconds
+    # of CPU at these input sizes). Measured with process CPU time, not wall
+    # clock: an oversubscribed host that starves this process of scheduler time
+    # inflates wall-clock duration even for the linear path and would flake the
+    # test, whereas catastrophic backtracking burns CPU — which process_time
+    # captures and scheduling delay does not.
     _BUDGET_S = 3.0
 
     def _redact_within_budget(self, value):
         import time
 
-        start = time.monotonic()
+        start = time.process_time()
         out = redact(value)
-        return out, time.monotonic() - start
+        return out, time.process_time() - start
 
     def test_impacket_positional_no_at_is_linear_not_redos(self):
         # `user:value` with no terminating `@`: before the fix this drove

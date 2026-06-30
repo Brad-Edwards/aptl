@@ -1,15 +1,28 @@
 @import 'tailwindcss';
 
+/*
+ * APTL design tokens — the canonical source for the web GUI's "quiet
+ * operational workbench" look. These `@theme` custom properties drive every
+ * Tailwind `*-aptl-*` utility (e.g. `bg-aptl-surface`, `text-aptl-text-muted`,
+ * `ring-aptl-focus`). This file is the single token source: the component kit
+ * (`web/src/lib/components/kit/`) maps semantic intent to these utilities
+ * through shared recipes in `kit/tone.ts` rather than duplicating values in JS
+ * or forking a Tailwind config. See `docs/specs/web-component-kit.md`.
+ */
 @theme {
-	/* APTL Purple Team palette */
+	/* Surface ramp — page background through raised surfaces and borders. */
 	--color-aptl-bg: #1a1d23;
 	--color-aptl-surface: #23272f;
 	--color-aptl-surface-hover: #2a2f38;
 	--color-aptl-border: #333842;
+
+	/* Text — primary copy and muted/secondary copy. */
 	--color-aptl-text: #e2e8f0;
 	--color-aptl-text-muted: #94a3b8;
 
-	/* Accent colors */
+	/* Accent + semantic status colors. Purple stays an APTL accent; status and
+	   hierarchy carry meaning through the semantic colors below, never colour
+	   alone (see kit `Tone`: info/success/warning/danger/accent/neutral). */
 	--color-aptl-indigo: #6366f1;
 	--color-aptl-indigo-hover: #818cf8;
 	--color-aptl-violet: #a855f7;
@@ -18,9 +31,29 @@
 	--color-aptl-green: #22c55e;
 	--color-aptl-amber: #f59e0b;
 
-	/* Typography */
+	/* Focus — named token for the shared focus-ring recipe (WCAG 2.2 visible
+	   focus). Aliases indigo so focus treatment is consistent and overridable
+	   in one place. */
+	--color-aptl-focus: #6366f1;
+
+	/* Typography — sans for UI copy (system-font fallback), mono for terminal
+	   and command text. */
 	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Reduced-motion safety: honour `prefers-reduced-motion` globally so kit
+   affordances (e.g. the StatusBadge pulse) never animate against the user's
+   stated preference, even where a component forgets the `motion-safe:` guard. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
 }
 
 body {

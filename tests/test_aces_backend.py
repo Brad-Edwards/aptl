@@ -449,18 +449,24 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     from aces_processor.compiler import compile_runtime_model
     from aces_contracts.runtime_state import OperationState
     from aces_runtime.control_plane import RuntimeControlPlane
+    from aces_runtime.manager import RuntimeManager
     from aces_sdl import parse_sdl_file
 
     from aptl.backends.aces import create_aptl_runtime_target
     from aptl.backends.aces_participant_actions import (
         DEFAULT_PARTICIPANT_ACTIONS,
-        PAPER_ACTION_CONTRACT_ADDRESS,
-        PAPER_OBSERVATION_BOUNDARY_ADDRESS,
-        PAPER_PARTICIPANT_ACTION_ADDRESS,
         participant_action_specs_from_runtime_model,
     )
 
-    assert PAPER_PARTICIPANT_ACTION_ADDRESS not in DEFAULT_PARTICIPANT_ACTIONS
+    participant_address = "participant.behavior.paper-agent"
+    action_contract_address = "participant.action-contract.probe-customer-portal-login"
+    observation_boundary_address = "participant.observation-boundary.paper-agent-view"
+
+    assert participant_address not in DEFAULT_PARTICIPANT_ACTIONS
+    assert not (
+        Path(__file__).resolve().parents[1]
+        / "src/aptl/backends/aces_paper_participant_actions.py"
+    ).exists()
     backend = MagicMock()
     backend.container_exec.return_value = subprocess.CompletedProcess(
         args=["bash"],
@@ -473,20 +479,33 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         stderr="",
     )
     project_root = Path(__file__).resolve().parents[1]
-    model = compile_runtime_model(
-        parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    model = compile_runtime_model(scenario)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    plan_target = create_aptl_runtime_target(
+        project_dir=project_root,
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(plan_target).plan(scenario)
+    participant_action_specs = participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=plan.provisioning,
+        project_dir=project_root,
+        config=config,
     )
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
-        config=AptlConfig(lab={"name": "test"}),
+        config=config,
         backend=backend,
-        participant_action_specs=participant_action_specs_from_runtime_model(model),
+        participant_action_specs=participant_action_specs,
     )
     control_plane = RuntimeControlPlane(target)
 
-    receipt = control_plane.initialize_participant_episode(
-        PAPER_PARTICIPANT_ACTION_ADDRESS
-    )
+    receipt = control_plane.initialize_participant_episode(participant_address)
     status = control_plane.get_operation(receipt.operation_id)
 
     assert status is not None
@@ -497,19 +516,25 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     assert command[:2] == ["bash", "-lc"]
     assert "172.20.1.20:8080/login" in command[2]
     assert "172.20.2.11/5432" in command[2]
-    assert "172.20.0.10/55000" in command[2]
-    behavior = control_plane.snapshot.participant_behavior_history[
-        PAPER_PARTICIPANT_ACTION_ADDRESS
-    ]
-    assert behavior[0]["action_contract_address"] == PAPER_ACTION_CONTRACT_ADDRESS
-    assert (
-        behavior[-1]["observation_boundary_address"]
-        == PAPER_OBSERVATION_BOUNDARY_ADDRESS
-    )
+    assert "172.20.2.30/55000" in command[2]
+    behavior = control_plane.snapshot.participant_behavior_history[participant_address]
+    assert behavior[0]["action_contract_address"] == action_contract_address
+    assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
     assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
+    assert participant_action_specs[participant_address].target_refs == (
+        "container:aptl-kali",
+        "container:aptl-webapp",
+        "http://172.20.1.20:8080/login",
+        "boundary-negative:tcp:172.20.2.11:5432",
+        "boundary-negative:tcp:172.20.2.30:55000",
+    )
 
 
 def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
+    from aces_runtime.manager import RuntimeManager
+    from aces_sdl import parse_sdl_file
+
+    from aptl.backends.aces import create_aptl_runtime_target
     from aptl.backends.aces_participant_actions import (
         participant_action_specs_from_runtime_model,
     )
@@ -518,8 +543,30 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
         participant_behaviors = {}
         action_contracts = {}
         observation_boundaries = {}
+        content_placements = {}
 
-    assert participant_action_specs_from_runtime_model(EmptyModel()) == {}
+    project_root = Path(__file__).resolve().parents[1]
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    target = create_aptl_runtime_target(
+        project_dir=project_root,
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(target).plan(scenario)
+
+    assert (
+        participant_action_specs_from_runtime_model(
+            EmptyModel(),
+            provisioning_plan=plan.provisioning,
+            project_dir=project_root,
+            config=config,
+        )
+        == {}
+    )
 
 
 def test_start_helper_returns_specs_from_compiled_scenario(mocker):
@@ -529,6 +576,9 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
 
     expected = {"participant.behavior.paper-agent": MagicMock()}
     model = object()
+    provisioning_plan = object()
+    project_dir = Path(__file__).resolve().parents[1]
+    config = AptlConfig(lab={"name": "test"})
     mocker.patch(
         "aptl.backends.aces_participant_actions.compile_runtime_model",
         return_value=model,
@@ -539,7 +589,15 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
         return_value=expected,
     )
 
-    assert participant_action_specs_for_scenario(object()) == expected
+    assert (
+        participant_action_specs_for_scenario(
+            object(),
+            provisioning_plan=provisioning_plan,
+            project_dir=project_dir,
+            config=config,
+        )
+        == expected
+    )
 
 
 def test_compose_alias_helpers_cover_string_builds_and_alpine_images():

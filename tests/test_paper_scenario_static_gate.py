@@ -35,6 +35,9 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
     model, plan, _config = _paper_plan()
 
     assert model.diagnostics == []
+    binding = model.content_placements["provision.content.aptl-participant-runtime-binding"]
+    assert "aptl-participant-runtime-binding" in binding.spec["tags"]
+    assert "schema_version: aptl-participant-runtime-binding/v1" in binding.spec["text"]
     assert "participant.behavior.paper-agent" in model.participant_behaviors
     assert (
         "participant.action-contract.probe-customer-portal-login"
@@ -45,6 +48,9 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
         in model.observation_boundaries
     )
     assert plan.diagnostics == []
+    assert not (
+        PROJECT_ROOT / "src/aptl/backends/aces_paper_participant_actions.py"
+    ).exists()
 
 
 def test_paper_scenario_realizes_declared_topology_and_evaluator_surfaces():

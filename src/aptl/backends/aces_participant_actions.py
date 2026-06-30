@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
@@ -17,16 +18,14 @@ from aces_contracts.participant_behavior import (
     ParticipantRuntimeLifecyclePhase,
 )
 from aces_contracts.participant_episode import ParticipantEpisodeExecutionState
-from aces_contracts.planning import RuntimeDomain
+from aces_contracts.planning import ProvisioningPlan, RuntimeDomain
 from aces_contracts.runtime_state import SnapshotEntry
 from aces_processor.compiler import compile_runtime_model
 
-from aptl.backends.aces_paper_participant_actions import (
-    PAPER_ACTION_CONTRACT_ADDRESS,
-    PAPER_OBSERVATION_BOUNDARY_ADDRESS,
-    PAPER_PARTICIPANT_ACTION_ADDRESS,
-    paper_participant_action_spec,
+from aptl.backends.aces_participant_bindings import (
+    participant_action_specs_from_runtime_model as _binding_action_specs,
 )
+from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -106,32 +105,31 @@ DEFAULT_PARTICIPANT_ACTIONS = {
 
 def participant_action_specs_from_runtime_model(
     model: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
 ) -> dict[str, ParticipantActionSpec]:
-    """Return APTL action bindings enabled by compiled participant artifacts."""
+    """Return APTL action bindings declared by compiled runtime artifacts."""
 
-    behaviors = _compiled_artifact_mapping(model, "participant_behaviors")
-    action_contracts = _compiled_artifact_mapping(model, "action_contracts")
-    observation_boundaries = _compiled_artifact_mapping(model, "observation_boundaries")
-    if not (
-        PAPER_PARTICIPANT_ACTION_ADDRESS in behaviors
-        and PAPER_ACTION_CONTRACT_ADDRESS in action_contracts
-        and PAPER_OBSERVATION_BOUNDARY_ADDRESS in observation_boundaries
-    ):
-        return {}
-    return {
-        PAPER_PARTICIPANT_ACTION_ADDRESS: cast(
-            ParticipantActionSpec,
-            paper_participant_action_spec(
-                ParticipantActionSpec,
-                action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
-                observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
-            ),
-        )
-    }
+    return cast(
+        dict[str, ParticipantActionSpec],
+        _binding_action_specs(
+            model,
+            provisioning_plan=provisioning_plan,
+            project_dir=project_dir,
+            config=config,
+            spec_factory=ParticipantActionSpec,
+        ),
+    )
 
 
 def participant_action_specs_for_scenario(
     scenario: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
 ) -> dict[str, ParticipantActionSpec]:
     """Best-effort participant bindings from compiled runtime artifacts."""
 
@@ -139,14 +137,12 @@ def participant_action_specs_for_scenario(
         model = compile_runtime_model(scenario)
     except Exception:
         return {}
-    return participant_action_specs_from_runtime_model(model)
-
-
-def _compiled_artifact_mapping(model: object, attribute: str) -> Mapping[str, object]:
-    """Return a compiled model mapping attribute, or an empty mapping."""
-
-    value = getattr(model, attribute, {})
-    return value if isinstance(value, Mapping) else {}
+    return participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=provisioning_plan,
+        project_dir=project_dir,
+        config=config,
+    )
 
 
 def participant_action_diagnostic(

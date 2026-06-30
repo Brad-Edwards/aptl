@@ -115,14 +115,25 @@ def start_aces_scenario(
         resolved_scenario = project_dir / resolved_scenario
     try:
         scenario = parse_sdl_file(resolved_scenario)
-        participant_action_specs = participant_action_specs_for_scenario(scenario)
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
             backend=backend,
-            participant_action_specs=participant_action_specs,
         )
         execution_plan = RuntimeManager(target).plan(scenario)
+        participant_action_specs = participant_action_specs_for_scenario(
+            scenario,
+            provisioning_plan=execution_plan.provisioning,
+            project_dir=project_dir,
+            config=config,
+        )
+        if participant_action_specs:
+            target = create_aptl_runtime_target(
+                project_dir=project_dir,
+                config=config,
+                backend=backend,
+                participant_action_specs=participant_action_specs,
+            )
         return _run_execution_plan(
             target,
             execution_plan,

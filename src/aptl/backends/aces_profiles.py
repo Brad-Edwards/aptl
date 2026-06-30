@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import re
@@ -33,6 +33,7 @@ class ComposeServiceInfo(object):
     dependencies: frozenset[str]
     networks: frozenset[str]
     container_name: str | None
+    network_addresses: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -287,6 +288,7 @@ def _service_info(
         dependencies=frozenset(_service_dependencies(service_def)),
         networks=frozenset(_service_networks(service_def)),
         container_name=_service_container_name(service_def),
+        network_addresses=_service_network_addresses(service_def),
     )
 
 
@@ -317,6 +319,22 @@ def _service_networks(service_def: Mapping[str, object]) -> set[str]:
     if isinstance(networks, list | tuple | set | frozenset):
         return {str(network_name) for network_name in networks if str(network_name)}
     return set()
+
+
+def _service_network_addresses(service_def: Mapping[str, object]) -> dict[str, str]:
+    """Return static IPv4 addresses keyed by Compose network name."""
+
+    networks = service_def.get("networks")
+    if not isinstance(networks, Mapping):
+        return {}
+    addresses: dict[str, str] = {}
+    for network_name, network_def in networks.items():
+        if not isinstance(network_def, Mapping):
+            continue
+        address = network_def.get("ipv4_address")
+        if isinstance(address, str) and address.strip():
+            addresses[str(network_name)] = address
+    return addresses
 
 
 def _service_selected(service_def: object, selected_profiles: set[str]) -> bool:

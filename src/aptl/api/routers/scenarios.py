@@ -7,6 +7,7 @@ separate slice and stays absent here.
 
 import asyncio
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
@@ -45,7 +46,7 @@ def _load_scenario_summaries(project_dir: Path) -> list[ScenarioSummaryResponse]
 
 @router.get("/scenarios")
 async def list_scenarios(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> list[ScenarioSummaryResponse]:
     """List the curated ACES scenario catalog as card summaries."""
     log.info("GET /scenarios")

@@ -1,6 +1,6 @@
 """API response models for the APTL web interface."""
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,7 +63,7 @@ class ContainerInfo(BaseModel):
     ports: list[str] = []
 
     @classmethod
-    def from_compose_dict(cls, data: dict) -> "ContainerInfo":
+    def from_compose_dict(cls, data: dict[str, Any]) -> "ContainerInfo":
         """Create from docker compose ps JSON output."""
         # docker compose ps --format json uses varying key names
         # across versions; handle common variants.

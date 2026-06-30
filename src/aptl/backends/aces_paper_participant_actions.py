@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TypeVar
 
 PAPER_PARTICIPANT_ACTION_ADDRESS = "participant.behavior.paper-agent"
 PAPER_ACTION_CONTRACT_ADDRESS = (
@@ -18,15 +17,13 @@ PAPER_PORTAL_REF = f"{PAPER_PORTAL_SCHEME}://{PAPER_PORTAL_ADDRESS}:8080/login"
 PAPER_DB_REF = f"tcp:{PAPER_DB_ADDRESS}:5432"
 PAPER_WAZUH_API_REF = f"tcp:{PAPER_WAZUH_API_ADDRESS}:55000"
 
-_ParticipantActionSpec = TypeVar("_ParticipantActionSpec")
-
 
 def paper_participant_action_spec(
-    spec_factory: Callable[..., _ParticipantActionSpec],
+    spec_factory: Callable[..., object],
     *,
     action_contract_address: str,
     observation_boundary_address: str,
-) -> _ParticipantActionSpec:
+) -> object:
     """Build the APTL runtime binding for the compiled paper action contract."""
 
     return spec_factory(

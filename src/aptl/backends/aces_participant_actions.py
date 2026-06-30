@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from aces_contracts.diagnostics import Diagnostic, Severity
@@ -119,10 +119,13 @@ def participant_action_specs_from_runtime_model(
     ):
         return {}
     return {
-        PAPER_PARTICIPANT_ACTION_ADDRESS: paper_participant_action_spec(
+        PAPER_PARTICIPANT_ACTION_ADDRESS: cast(
             ParticipantActionSpec,
-            action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
-            observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+            paper_participant_action_spec(
+                ParticipantActionSpec,
+                action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
+                observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+            ),
         )
     }
 

@@ -21,6 +21,12 @@ from aces_contracts.planning import RuntimeDomain
 from aces_contracts.runtime_state import SnapshotEntry
 from aces_processor.compiler import compile_runtime_model
 
+from aptl.backends.aces_paper_participant_actions import (
+    PAPER_ACTION_CONTRACT_ADDRESS,
+    PAPER_OBSERVATION_BOUNDARY_ADDRESS,
+    PAPER_PARTICIPANT_ACTION_ADDRESS,
+    paper_participant_action_spec,
+)
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -34,20 +40,8 @@ PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
     "participant.observation-boundary.aptl.kali-victim-ssh-probe"
 )
 PARTICIPANT_BEHAVIOR_ADDRESS = PARTICIPANT_ACTION_ADDRESS
-PAPER_PARTICIPANT_ACTION_ADDRESS = "participant.behavior.paper-agent"
-PAPER_ACTION_CONTRACT_ADDRESS = (
-    "participant.action-contract.probe-customer-portal-login"
-)
-PAPER_OBSERVATION_BOUNDARY_ADDRESS = "participant.observation-boundary.paper-agent-view"
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
-PAPER_PORTAL_ADDRESS = ".".join(("172", "20", "1", "20"))
-PAPER_DB_ADDRESS = ".".join(("172", "20", "2", "11"))
-PAPER_WAZUH_API_ADDRESS = ".".join(("172", "20", "0", "10"))
-PAPER_PORTAL_SCHEME = "http"
-PAPER_PORTAL_REF = f"{PAPER_PORTAL_SCHEME}://{PAPER_PORTAL_ADDRESS}:8080/login"
-PAPER_DB_REF = f"tcp:{PAPER_DB_ADDRESS}:5432"
-PAPER_WAZUH_API_REF = f"tcp:{PAPER_WAZUH_API_ADDRESS}:55000"
 
 
 @dataclass(frozen=True)
@@ -125,7 +119,8 @@ def participant_action_specs_from_runtime_model(
     ):
         return {}
     return {
-        PAPER_PARTICIPANT_ACTION_ADDRESS: _paper_participant_action_spec(
+        PAPER_PARTICIPANT_ACTION_ADDRESS: paper_participant_action_spec(
+            ParticipantActionSpec,
             action_contract_address=PAPER_ACTION_CONTRACT_ADDRESS,
             observation_boundary_address=PAPER_OBSERVATION_BOUNDARY_ADDRESS,
         )
@@ -149,67 +144,6 @@ def _compiled_artifact_mapping(model: object, attribute: str) -> Mapping[str, ob
 
     value = getattr(model, attribute, {})
     return value if isinstance(value, Mapping) else {}
-
-
-def _paper_participant_action_spec(
-    *,
-    action_contract_address: str,
-    observation_boundary_address: str,
-) -> ParticipantActionSpec:
-    """Build the APTL runtime binding for the compiled paper action contract."""
-
-    return ParticipantActionSpec(
-        source_container="aptl-kali",
-        command=(
-            "bash",
-            "-lc",
-            "\n".join(
-                (
-                    "set -u",
-                    (
-                        "portal_status=$(curl -sS -o /dev/null "
-                        "-w '%{http_code}' --max-time 10 "
-                        f"{PAPER_PORTAL_REF} || true)"
-                    ),
-                    "db_status=blocked",
-                    (
-                        f"if timeout 3 bash -c '</dev/tcp/{PAPER_DB_ADDRESS}/5432' "
-                        "2>/dev/null; then db_status=reachable; fi"
-                    ),
-                    "wazuh_status=blocked",
-                    (
-                        "if timeout 3 bash -c "
-                        f"'</dev/tcp/{PAPER_WAZUH_API_ADDRESS}/55000' "
-                        "2>/dev/null; then wazuh_status=reachable; fi"
-                    ),
-                    (
-                        "printf 'portal_http_status=%s\\nboundary_db=%s\\n"
-                        "boundary_wazuh_api=%s\\n' "
-                        '"$portal_status" "$db_status" "$wazuh_status"'
-                    ),
-                    (
-                        '[ "$portal_status" = "200" ] '
-                        '&& [ "$db_status" = "blocked" ] '
-                        '&& [ "$wazuh_status" = "blocked" ]'
-                    ),
-                )
-            ),
-        ),
-        success_markers=(
-            "portal_http_status=200",
-            "boundary_db=blocked",
-            "boundary_wazuh_api=blocked",
-        ),
-        action_contract_address=action_contract_address,
-        observation_boundary_address=observation_boundary_address,
-        target_refs=(
-            "container:aptl-kali",
-            "container:aptl-webapp",
-            PAPER_PORTAL_REF,
-            f"boundary-negative:{PAPER_DB_REF}",
-            f"boundary-negative:{PAPER_WAZUH_API_REF}",
-        ),
-    )
 
 
 def participant_action_diagnostic(

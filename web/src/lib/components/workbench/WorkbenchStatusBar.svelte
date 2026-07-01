@@ -1,16 +1,15 @@
 <script lang="ts">
-	import type { ScenarioDefinition, ContainerInfo } from '$lib/types';
+	import type { ScenarioDetail, ContainerInfo } from '$lib/types';
 	import { labStatus } from '$lib/stores/lab';
 	import { stateColor } from '$lib/container-state';
 
 	interface Props {
-		scenario: ScenarioDefinition;
+		scenario: ScenarioDetail;
 	}
 
 	let { scenario }: Props = $props();
 
-	const meta = $derived(scenario.metadata);
-	const containers = $derived(scenario.containers.required);
+	const containers = $derived(scenario.required_containers);
 
 	const modeColor = $derived.by(() => {
 		switch (scenario.mode) {
@@ -29,11 +28,6 @@
 		const c = $labStatus.containers.find((c: ContainerInfo) => c.name === name);
 		return c?.state ?? 'unknown';
 	}
-
-	const totalPoints = $derived(
-		scenario.objectives.red.reduce((sum, o) => sum + o.points, 0) +
-			scenario.objectives.blue.reduce((sum, o) => sum + o.points, 0)
-	);
 </script>
 
 <div
@@ -48,15 +42,25 @@
 			&larr; Lab
 		</a>
 
-		<h1 class="truncate text-sm font-semibold text-aptl-text">{meta.name}</h1>
+		<h1 class="truncate text-sm font-semibold text-aptl-text">{scenario.name}</h1>
 
-		<span class="rounded-full px-2 py-0.5 text-xs font-medium {modeColor}">
-			{scenario.mode}
-		</span>
+		{#if scenario.mode}
+			<span class="rounded-full px-2 py-0.5 text-xs font-medium {modeColor}">
+				{scenario.mode}
+			</span>
+		{/if}
+
+		{#if scenario.difficulty}
+			<span class="text-xs text-aptl-text-muted">{scenario.difficulty}</span>
+		{/if}
+
+		{#if scenario.estimated_minutes}
+			<span class="text-xs text-aptl-text-muted">~{scenario.estimated_minutes} min</span>
+		{/if}
 
 		<!-- Container pills -->
 		<div class="flex items-center gap-1.5">
-			{#each containers as name}
+			{#each containers as name (name)}
 				{@const state = containerState(name)}
 				<div
 					class="flex items-center gap-1 rounded-full border border-aptl-border px-2 py-0.5"
@@ -72,10 +76,13 @@
 			{/each}
 		</div>
 
-		<!-- Scoring -->
-		{#if totalPoints > 0}
-			<span class="ml-auto text-xs text-aptl-text-muted">
-				{totalPoints} pts available
+		<!-- Scenario projection validity (distinct from lab readiness) -->
+		{#if !scenario.validation.valid}
+			<span
+				class="ml-auto rounded-full bg-aptl-amber/10 px-2 py-0.5 text-xs font-medium text-aptl-amber"
+				role="status"
+			>
+				{scenario.validation.detail ?? 'Scenario unavailable'}
 			</span>
 		{/if}
 	</div>

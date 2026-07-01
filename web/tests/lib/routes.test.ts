@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('scenario [id] page load', () => {
+	// `load` routes through `getScenario()` (shared API boundary, carries the
+	// X-APTL-Session header) and threads its load-provided `event.fetch` into it,
+	// so these assert the mock fetch is the one used to reach `/api/scenarios/:id`.
 	it('fetches scenario by ID and returns it', async () => {
-		const scenarioData = { metadata: { id: 'test-1', name: 'Test' } };
+		const scenarioData = {
+			id: 'test-1',
+			name: 'Test',
+			description: '',
+			blocks: []
+		};
 		const mockFetch = vi.fn().mockResolvedValue({
 			ok: true,
 			json: () => Promise.resolve(scenarioData)
@@ -15,26 +23,32 @@ describe('scenario [id] page load', () => {
 		} as any);
 
 		expect(result.scenario).toEqual(scenarioData);
-		expect(mockFetch).toHaveBeenCalledWith('/api/scenarios/test-1');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/scenarios/test-1',
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
 	});
 
 	it('encodes special characters in scenario ID', async () => {
 		const mockFetch = vi.fn().mockResolvedValue({
 			ok: true,
-			json: () => Promise.resolve({ metadata: { id: 'a/b' } })
+			json: () => Promise.resolve({ id: 'a/b', blocks: [] })
 		});
 
 		const { load } = await import('../../src/routes/scenarios/[id]/+page');
 		await load({ params: { id: 'a/b' }, fetch: mockFetch } as any);
 
-		expect(mockFetch).toHaveBeenCalledWith('/api/scenarios/a%2Fb');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/scenarios/a%2Fb',
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
 	});
 
-	it('throws error on non-ok response', async () => {
+	it('maps an unknown scenario (404) to a route-level not-found', async () => {
 		const mockFetch = vi.fn().mockResolvedValue({
 			ok: false,
 			status: 404,
-			text: () => Promise.resolve('Not found')
+			text: () => Promise.resolve('Unknown scenario')
 		});
 
 		const { load } = await import('../../src/routes/scenarios/[id]/+page');
@@ -43,7 +57,24 @@ describe('scenario [id] page load', () => {
 			load({ params: { id: 'missing' }, fetch: mockFetch } as any)
 		).rejects.toMatchObject({
 			status: 404,
-			body: { message: expect.stringContaining('Not found') }
+			body: { message: expect.stringContaining('not found') }
+		});
+	});
+
+	it('maps a projection failure (502) to a redacted unavailable state', async () => {
+		const mockFetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 502,
+			text: () => Promise.resolve('boom')
+		});
+
+		const { load } = await import('../../src/routes/scenarios/[id]/+page');
+
+		await expect(
+			load({ params: { id: 'broken' }, fetch: mockFetch } as any)
+		).rejects.toMatchObject({
+			status: 502,
+			body: { message: expect.stringContaining('unavailable') }
 		});
 	});
 });

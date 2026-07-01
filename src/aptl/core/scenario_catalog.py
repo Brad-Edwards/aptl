@@ -5,15 +5,42 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic import model_validator
 
+from aptl.core.scenarios import ScenarioNotFoundError, ScenarioValidationError
 from aptl.utils.redaction import redact
 
 CATALOG_RELATIVE_PATH = Path("scenarios") / "catalog.json"
 _SCENARIO_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+class ScenarioCatalogMetadata(BaseModel):
+    """Narrow validated card/detail metadata ACES does not own uniformly.
+
+    UI-008d needs card facts (mode, difficulty, estimated duration, tags) that
+    the ACES SDL does not carry per-scenario today. Rather than infer them in
+    Svelte or revive the deleted in-tree scenario schema, the curated catalog
+    owns them as this strict optional extension. All fields are optional so a
+    catalog entry may omit the block entirely.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["red", "blue", "purple"] | None = None
+    difficulty: Literal["beginner", "intermediate", "advanced", "expert"] | None = None
+    estimated_minutes: int | None = None
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("estimated_minutes")
+    @classmethod
+    def validate_estimated_minutes(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("estimated_minutes must be a positive integer")
+        return value
 
 
 class ScenarioCatalogEntry(BaseModel):
@@ -25,6 +52,7 @@ class ScenarioCatalogEntry(BaseModel):
     name: str
     path: str
     description: str = ""
+    metadata: ScenarioCatalogMetadata | None = None
 
     @field_validator("id")
     @classmethod
@@ -137,11 +165,52 @@ def _resolve_project_file(project_dir: Path, candidate: Path) -> Path:
     return resolved
 
 
+def resolve_and_parse_scenario(
+    project_dir: Path, scenario_id: str
+) -> tuple[ScenarioCatalogEntry, object]:
+    """Resolve a catalog id and parse its ACES SDL into a ``Scenario``.
+
+    Returns the matched catalog entry and its parsed ACES ``Scenario`` object
+    (the authority the scenario-detail projection reads from). Raises
+    :class:`~aptl.core.scenarios.ScenarioNotFoundError` when no catalog exists
+    or the id is unknown, and :class:`~aptl.core.scenarios.ScenarioValidationError`
+    with a redacted, path-free message when the catalog is malformed or the
+    selected SDL fails to resolve/parse — so callers can map not-found to a
+    404 and invalid to a redacted unavailable state without leaking the
+    internal catalog ``path`` locator or raw parser output.
+    """
+    catalog_path = project_dir / CATALOG_RELATIVE_PATH
+    if not catalog_path.is_file():
+        raise ScenarioNotFoundError(scenario_id)
+    try:
+        catalog = load_scenario_catalog(project_dir)
+    except ValueError as exc:
+        raise ScenarioValidationError(redact(str(exc))) from exc
+    entry = catalog.get(scenario_id)
+    if entry is None:
+        raise ScenarioNotFoundError(scenario_id)
+    try:
+        resolved = _resolve_project_file(project_dir, Path(entry.path))
+        scenario = _parse_aces_sdl(resolved)
+    except ValueError as exc:
+        raise ScenarioValidationError(redact(str(exc))) from exc
+    return entry, scenario
+
+
 def _validate_aces_sdl(path: Path) -> None:
     """Validate selected SDL through the ACES parser authority."""
+    _parse_aces_sdl(path)
+
+
+def _parse_aces_sdl(path: Path) -> object:
+    """Parse selected SDL through the ACES parser authority.
+
+    Returns the parsed ``Scenario`` object. Raises a redacted ``ValueError``
+    on any parser failure so the internal SDL contents never surface.
+    """
     sdl_error, parse_sdl_file = _load_aces_sdl_parser()
     try:
-        parse_sdl_file(path)
+        return parse_sdl_file(path)
     except (FileNotFoundError, sdl_error, TypeError, ValueError) as exc:
         raise ValueError(
             f"Selected ACES SDL scenario is invalid: {redact(str(exc))}"

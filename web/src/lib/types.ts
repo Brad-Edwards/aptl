@@ -67,144 +67,123 @@ export interface KillActionResponse {
 	errors: string[];
 }
 
-/** Scenario summary for the Lab Home catalog entry points.
+export type ScenarioMode = 'red' | 'blue' | 'purple';
+export type ScenarioDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
+
+/** Whether a catalog entry resolved and its ACES SDL projected cleanly.
  *
- *  Narrow by design: mirrors `aptl.api.schemas.ScenarioSummaryResponse`, which
- *  projects only the facts the curated catalog owns. Richer card facts
- *  (mode, difficulty, tags, estimated time, required containers) are not part
- *  of the summary contract — they live in the scenario-detail/workbench
- *  projection, a separate slice.
+ *  Mirrors `aptl.api.schemas.ScenarioValidationState`. Distinct from lab
+ *  readiness, container health, objective completion, and scoring: `valid`
+ *  means only that the catalog entry and its ACES projection loaded/validated.
+ *  `detail` carries a redacted user-facing reason when `valid` is `false`.
+ */
+export interface ScenarioValidation {
+	valid: boolean;
+	detail: string | null;
+}
+
+/** Enriched scenario card summary for the Lab Home entry points (UI-008d).
+ *
+ *  Mirrors `aptl.api.schemas.ScenarioSummaryResponse`: catalog-owned id/name/
+ *  description, the narrow catalog metadata extension (mode/difficulty/
+ *  estimated_minutes/tags), plus required containers and validation projected
+ *  from the ACES SDL. The internal catalog `path` locator is never exposed.
  */
 export interface ScenarioSummary {
 	id: string;
 	name: string;
 	description: string;
+	mode: ScenarioMode | null;
+	difficulty: ScenarioDifficulty | null;
+	estimated_minutes: number | null;
+	tags: string[];
+	required_containers: string[];
+	validation: ScenarioValidation;
 }
 
-// --- Full scenario definition types (mirrors Python core/scenarios.py) ---
+// --- Scenario-detail workbench projection (UI-008d) ---
+//
+// Mirrors the backend-owned wire shapes in `aptl.api.schemas`. The ordered
+// `WorkbenchBlock` discriminated union — NOT the removed legacy in-tree
+// scenario model — is the contract; the route renders these blocks directly
+// from the API. Blocks are display/action descriptors, not authorities.
 
-export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert';
-export type ScenarioMode = 'red' | 'blue' | 'purple';
-export type ObjectiveType = 'manual' | 'wazuh_alert' | 'command_output' | 'file_exists';
-export type PreconditionType = 'exec' | 'file';
-
-export interface MitreReference {
-	tactics: string[];
-	techniques: string[];
+export interface NarrativeBlock {
+	type: 'narrative';
+	key: string;
+	content: string;
 }
 
-export interface ScenarioMetadata {
+export interface SectionDividerBlock {
+	type: 'section-divider';
+	key: string;
+	title: string;
+}
+
+export interface ContainerStatusBlock {
+	type: 'container-status';
+	key: string;
+	containers: string[];
+}
+
+export interface ObjectiveBlock {
+	type: 'objective';
+	key: string;
+	name: string;
+	description: string;
+	success: string;
+}
+
+export interface StepBlock {
+	type: 'step';
+	key: string;
+	index: number;
+	name: string;
+	description: string;
+	step_type: string;
+}
+
+export interface SiemQueryBlock {
+	type: 'siem-query';
+	key: string;
+	product_name: string;
+	description: string;
+	query: Record<string, unknown>;
+}
+
+export interface TerminalBlock {
+	type: 'terminal';
+	key: string;
+	container: string;
+	label: string;
+}
+
+export type WorkbenchBlock =
+	| NarrativeBlock
+	| SectionDividerBlock
+	| ContainerStatusBlock
+	| ObjectiveBlock
+	| StepBlock
+	| SiemQueryBlock
+	| TerminalBlock;
+
+/** Full scenario-detail projection for `/scenarios/[id]`.
+ *
+ *  Mirrors `aptl.api.schemas.ScenarioDetailResponse`: header facts plus an
+ *  ordered `WorkbenchBlock` union. Never carries the catalog `path` locator or
+ *  raw parser output.
+ */
+export interface ScenarioDetail {
 	id: string;
 	name: string;
 	description: string;
-	version: string;
-	author: string;
-	difficulty: Difficulty;
-	estimated_minutes: number;
+	mode: ScenarioMode | null;
+	difficulty: ScenarioDifficulty | null;
+	estimated_minutes: number | null;
 	tags: string[];
-	mitre_attack: MitreReference;
-}
-
-export interface ContainerRequirements {
-	required: string[];
-}
-
-export interface Precondition {
-	type: PreconditionType;
-	container: string;
-	description: string;
-	command?: string;
-	path?: string;
-	content?: string;
-}
-
-export interface Hint {
-	level: number;
-	text: string;
-	point_penalty: number;
-}
-
-export interface WazuhAlertValidation {
-	query: Record<string, unknown>;
-	min_matches: number;
-	time_window_seconds: number;
-}
-
-export interface CommandOutputValidation {
-	container: string;
-	command: string;
-	contains: string[];
-	regex?: string;
-}
-
-export interface FileExistsValidation {
-	container: string;
-	path: string;
-	contains?: string;
-}
-
-export interface Objective {
-	id: string;
-	description: string;
-	type: ObjectiveType;
-	points: number;
-	hints: Hint[];
-	wazuh_alert?: WazuhAlertValidation;
-	command_output?: CommandOutputValidation;
-	file_exists?: FileExistsValidation;
-}
-
-export interface ObjectiveSet {
-	red: Objective[];
-	blue: Objective[];
-}
-
-export interface TimeBonusConfig {
-	enabled: boolean;
-	max_bonus: number;
-	decay_after_minutes: number;
-}
-
-export interface ScoringConfig {
-	time_bonus: TimeBonusConfig;
-	passing_score: number;
-	max_score: number;
-}
-
-export interface ExpectedDetection {
-	product_name: string;
-	analytic_uid?: string;
-	analytic_name?: string;
-	severity_id: number;
-	description: string;
-	max_detection_time_seconds: number;
-}
-
-export interface AttackStep {
-	step_number: number;
-	technique_id: string;
-	technique_name: string;
-	tactic: string;
-	description: string;
-	target: string;
-	vulnerability: string;
-	commands: string[];
-	prerequisites: string[];
-	expected_detections: ExpectedDetection[];
-	investigation_hints: string[];
-	remediation: string[];
-}
-
-export interface ScenarioDefinition {
-	metadata: ScenarioMetadata;
-	mode: ScenarioMode;
-	containers: ContainerRequirements;
-	preconditions: Precondition[];
-	objectives: ObjectiveSet;
-	scoring: ScoringConfig;
-	attack_chain: string;
-	steps: AttackStep[];
-	defenses?: Record<string, unknown>;
+	required_containers: string[];
+	validation: ScenarioValidation;
+	blocks: WorkbenchBlock[];
 }
 
 /** APTL configuration. */

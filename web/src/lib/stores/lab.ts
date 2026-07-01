@@ -61,6 +61,26 @@ export function initLabStore(): void {
 	);
 }
 
+/**
+ * Re-fetch lab status once, without disturbing the existing SSE subscription.
+ * Used after a lifecycle action (start/stop/kill) so the UI reflects the new
+ * state immediately rather than waiting for the next SSE poll. Generation-guarded
+ * so a result that arrives after `destroyLabStore()` does not clobber the store.
+ */
+export async function refreshLabStatus(): Promise<void> {
+	const currentGeneration = generation;
+	try {
+		const status = await getLabStatus();
+		if (currentGeneration === generation) {
+			labStatus.set(status);
+		}
+	} catch (err) {
+		if (currentGeneration === generation) {
+			labStatus.update((s) => ({ ...s, error: String(err) }));
+		}
+	}
+}
+
 /** Stop SSE subscription. */
 export function destroyLabStore(): void {
 	generation++;

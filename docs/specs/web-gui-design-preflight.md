@@ -194,6 +194,66 @@ Tailwind surface, not a parallel design system.
 - A user-visible kit change needs a `changelog.d/<issue>.<type>.md` fragment.
   Docs-only preflight changes do not.
 
+## UI-008c Lab Home Guardrails
+
+UI-008c (`/`) is a composition of existing control-plane and component-kit
+boundaries. It must answer whether the lab is usable and what the operator can
+do next; it must not become a second lifecycle, scenario, terminal, or Docker
+authority.
+
+- Keep all HTTP and SSE traffic behind `web/src/lib/api.ts` and
+  `web/src/lib/stores/lab.ts`. Do not fetch authenticated `/api/*` routes
+  directly from `+page.ts` / route components unless the shared session-header
+  boundary is still used.
+- Keep `/api/lab/events` on fetch streaming with `X-APTL-Session`; do not switch
+  back to native `EventSource`, which cannot send the port-scoped session
+  factor.
+- `GET /api/lab/status` currently owns running/container/error state only.
+  `POST /api/lab/start` owns ADR-030 startup outcome and diagnostics. If Lab
+  Home needs startup diagnostics after a reload or from SSE, add that structured
+  field at the core/API DTO boundary first; do not infer readiness from
+  container health, colors, stale browser state, or English messages.
+- Reuse `LabActionResponse` for start/stop and add/use a mirrored
+  `KillActionResponse` for kill. Do not overload one action envelope with the
+  other's fields, and do not parse backend messages to decide success.
+- Lifecycle controls are single-flight from the UI perspective. Disable or
+  otherwise serialize start, stop, and kill while one action is pending, refresh
+  status from the shared store/API afterward, and avoid optimistic state changes
+  that contradict the next SSE event.
+- `POST /api/lab/kill` is the existing emergency path with the existing
+  `containers` scope parameter. The UI confirmation state belongs in a small
+  `KillConfirmDialog` built from the kit `Dialog` and `Button`; do not add a
+  generic command-confirmation system or a second modal primitive.
+- Scenario entry points must come from a new narrow ACES/catalog API projection
+  when this slice needs them. The current Python tests deliberately assert the
+  removed legacy `/api/scenarios` routes are absent, so UI-008c must replace
+  that absence with explicit DTOs in `src/aptl/api/schemas.py` backed by
+  `src/aptl/core/scenario_catalog.py` / the ACES parser, not by reviving the old
+  in-tree scenario model from `src/aptl/core/scenarios.py`.
+- Scenario summary DTOs should expose only card/list facts: id, name,
+  description, mode, difficulty, estimated time, tags, required containers, and
+  validation/status summary. Workbench detail, scoring, SIEM query execution,
+  and terminal session state stay out of the Lab Home summary contract.
+- Terminal links on container cards must remain a projection of
+  `ENDPOINT_REGISTRY` / terminal allow-list semantics. Do not hardcode a new
+  SSH container set in the route when the endpoint registry already owns
+  terminal target identity.
+- Use component-kit semantics for controls and status: `Button` variants for
+  primary/destructive actions, `Dialog` for confirmation, shared status/badge
+  tones, `LabStartNotice` for diagnostics, `ContainerGrid` for containers, and
+  `ScenarioCard` for scenario summaries. Do not add page-local color switch
+  statements or an alternate card/button system.
+- Catalog, status, and action error states need stable user-facing categories
+  and redacted details. API routes may name the route, validation layer,
+  scenario id, or component, but must not return raw stack traces, `.env`
+  values, bearer/session credentials, private keys, or secret-bearing command
+  output.
+- Tests for this slice should cover the route/component behavior, not only leaf
+  helpers: kill confirmation focus/escape/cancel/confirm, single-flight action
+  disabling, start diagnostics rendering for every ADR-030 outcome, catalog
+  loading/error/empty states, SSE-driven status updates, and the API client
+  carrying the session header on every `/api/*` call.
+
 ## Extensibility Seams
 
 The design specification should include a compact page contract table for each

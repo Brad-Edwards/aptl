@@ -182,6 +182,32 @@ describe('lab store', () => {
 		destroyLabStore();
 	});
 
+	it('refreshLabStatus re-fetches status without opening an SSE stream', async () => {
+		statusResponder = () =>
+			Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({ running: true, containers: [], error: null })
+			});
+
+		const { labStatus, refreshLabStatus } = await import('../../src/lib/stores/lab');
+
+		await refreshLabStatus();
+
+		expect(get(labStatus).running).toBe(true);
+		// A status refresh must not spin up a new events subscription.
+		expect(eventsConns.length).toBe(0);
+	});
+
+	it('refreshLabStatus records a fetch error on the store', async () => {
+		statusResponder = () => Promise.reject(new Error('refresh boom'));
+
+		const { labStatus, refreshLabStatus } = await import('../../src/lib/stores/lab');
+
+		await refreshLabStatus();
+
+		expect(get(labStatus).error).toContain('refresh boom');
+	});
+
 	it('destroyLabStore is safe to call when no stream exists', async () => {
 		const { destroyLabStore } = await import('../../src/lib/stores/lab');
 

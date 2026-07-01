@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
+from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -42,7 +43,7 @@ _SEED_TIMEOUT = 600
 _SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
-class DockerComposeBackend(ComposeQueryMixin):
+class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     """Docker Compose deployment backend.
 
     Manages lab lifecycle via ``docker compose`` subprocess calls.

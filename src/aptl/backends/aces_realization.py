@@ -282,7 +282,12 @@ def _realize_node(
 
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
-    profiles = profile_hints | profile_index.profiles_for_aliases(aliases)
+    backend_services = profile_index.service_names_for_aliases(aliases)
+    profiles = (
+        profile_hints
+        | profile_index.profiles_for_aliases(aliases)
+        | profile_index.profiles_for_services(set(backend_services))
+    )
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
@@ -291,11 +296,27 @@ def _realize_node(
         name=_resource_name(resource.address, payload),
         aliases=tuple(sorted(aliases)),
         profiles=tuple(sorted(profiles)),
+        backend_services=tuple(sorted(backend_services)),
+        container_name=_container_name(profile_index, backend_services),
         services=tuple(sorted(_service_names(node_spec))),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         declared_health=_health_status(node_spec),
     )
+
+
+def _container_name(
+    profile_index: ComposeProfileIndex,
+    service_names: frozenset[str],
+) -> str | None:
+    """Return the concrete container name for an unambiguous service binding."""
+
+    if len(service_names) != 1:
+        return None
+    service = profile_index.services.get(next(iter(service_names)))
+    if service is None:
+        return None
+    return service.container_name or service.name
 
 
 def _realize_network(

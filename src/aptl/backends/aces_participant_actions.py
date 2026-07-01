@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from aces_contracts.diagnostics import Diagnostic, Severity
@@ -17,9 +18,14 @@ from aces_contracts.participant_behavior import (
     ParticipantRuntimeLifecyclePhase,
 )
 from aces_contracts.participant_episode import ParticipantEpisodeExecutionState
-from aces_contracts.planning import RuntimeDomain
+from aces_contracts.planning import ProvisioningPlan, RuntimeDomain
 from aces_contracts.runtime_state import SnapshotEntry
+from aces_processor.compiler import compile_runtime_model
 
+from aptl.backends.aces_participant_bindings import (
+    participant_action_specs_from_runtime_model as _binding_action_specs,
+)
+from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -95,6 +101,48 @@ DEFAULT_PARTICIPANT_ACTIONS = {
         ),
     )
 }
+
+
+def participant_action_specs_from_runtime_model(
+    model: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
+) -> dict[str, ParticipantActionSpec]:
+    """Return APTL action bindings declared by compiled runtime artifacts."""
+
+    return cast(
+        dict[str, ParticipantActionSpec],
+        _binding_action_specs(
+            model,
+            provisioning_plan=provisioning_plan,
+            project_dir=project_dir,
+            config=config,
+            spec_factory=ParticipantActionSpec,
+        ),
+    )
+
+
+def participant_action_specs_for_scenario(
+    scenario: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
+) -> dict[str, ParticipantActionSpec]:
+    """Best-effort participant bindings from compiled runtime artifacts."""
+
+    try:
+        model = compile_runtime_model(scenario)
+    except Exception:
+        return {}
+    return participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=provisioning_plan,
+        project_dir=project_dir,
+        config=config,
+    )
 
 
 def participant_action_diagnostic(

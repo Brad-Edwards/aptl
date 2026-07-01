@@ -101,15 +101,65 @@ ADR-025); secret-bearing runtime values stay in `EnvVars` and `.env`
 (`src/aptl/core/env.py:25`). The realization record stores digests and
 non-secret identities only.
 
+## Paper Scenario Spine Addendum
+
+Issue #573 starts the first end-to-end dynamic realization: the paper scenario
+from Brad-Edwards/aces#598. For that scenario, the profile-index driver above is
+only historical compatibility for the TechVault curated variants. The paper
+scenario must not be realized by selecting profiles over the fixed
+`docker-compose.yml`; it must realize the topology declared by the compiled ACES
+plan.
+
+The interpret stage remains pure. It consumes `PlannedResource`s and compiled
+runtime artifacts and emits portable, typed APTL realization specs: nodes,
+networks, participant action contracts, observation boundaries, and evaluator
+evidence surfaces. It does not call Docker, read runtime container state, branch
+on a scenario name, or construct backend argv.
+
+The driver stage is the `DeploymentBackend` boundary from ADR-037. Any new
+realization operation must be a narrow typed method on `DeploymentBackend` and
+implemented by both local and SSH Compose backends using their existing runner,
+timeout, project-name, label-filtering, and error-envelope behavior. Do not add
+a generic `docker(args)`, `host_run(args)`, or raw Compose-output parser to the
+ACES adapter.
+
+Participant action realization must be compiled-artifact driven. The existing
+`DEFAULT_PARTICIPANT_ACTIONS` / `PARTICIPANT_ACTION_ADDRESS` TechVault SSH probe
+is not the paper-scenario contract. The `probe-customer-portal-login` action,
+its source participant, target address, command/interaction contract, success
+classification, and disclosed observation boundary must come from the compiled
+SDL/runtime artifacts. Scenario identity may select the scenario file; it must
+not select behavior.
+
+Wazuh evidence for the paper action is evaluator-only evidence. It may be made
+available through `AptlEvaluator`, `RuntimeSnapshot`, and `LocalRunStore`, but
+it must not be exposed as participant-visible task context or participant
+observation-boundary content, and it must not claim detection quality. Boundary
+checks must prove the participant path reaches the DMZ portal while the internal
+DB and Wazuh/evaluator surfaces are absent from the participant-visible
+workbench/task context.
+
+Non-secret realization knobs continue to bind through strict `AptlConfig`
+(ADR-025). Secret-bearing runtime values continue to bind through `EnvVars`,
+`.env`, rendered config, and placeholder checks (ADR-028/ADR-029). Any
+realization evidence persisted to disk must use `LocalRunStore` JSON/JSONL
+writers or `RangeSnapshot.to_dict()` so path validation and redaction stay at
+the existing serialization boundaries.
+
+The extensibility parameter is the typed realization spec, not the paper
+scenario name. Future scenarios should be able to vary participant source node,
+target service, network boundary, evaluator-only evidence source, and backend
+project name without editing a paper-scenario branch.
+
 ## Security Layers
 
 | Layer | Requirement |
 | --- | --- |
 | ACES parser and compiler gate | Authored scenarios enter through `aces_sdl.parse_sdl_file` and compile through the ACES compiler and planner. APTL does not structurally revalidate ACES SDL or recompile the `RuntimeModel` with local models. |
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
-| Deployment boundary gate | Profile selection drives `DeploymentBackend.start_lab`. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
+| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
-| Persistence and redaction | Realization details and selected profiles enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
+| Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
 
 ## Maintainability
 
@@ -120,8 +170,8 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/backends/aces_realization.py` and
   `src/aptl/backends/aces_realization_model.py` for the interpret stage and its
   typed output.
-- `src/aptl/backends/aces_profiles.py` for the driver stage (profile index and
-  selection).
+- `src/aptl/backends/aces_profiles.py` for curated compatibility only. It is
+  not the paper-scenario topology driver.
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
@@ -139,10 +189,13 @@ introducing a new harness.
 
 The extensibility seam is the boundary between the interpreted realization and
 the driver. Interpret produces a typed `AptlRealization` from the compiled plan;
-the driver maps that realization onto compose profiles. A new authored resource
+the compatibility driver maps that realization onto compose profiles. For the
+paper scenario and later fully dynamic scenarios, the driver consumes the typed
+realization spec directly through `DeploymentBackend`. A new authored resource
 type is added by extending `SUPPORTED_RESOURCE_TYPES` and the interpreter, then
-mapping it in the profile index—without changing the driver's contract, adding a
-second topology authority, or branching on a specific scenario name.
+adding a typed backend realization operation when runtime side effects are
+needed, without adding a second topology authority or branching on a specific
+scenario name.
 
 The design must stay parameterized by scenario identity and backend manifest
 version. It must not assume TechVault is the only scenario, that Docker Compose
@@ -189,6 +242,10 @@ support mode is static.
 
 - Treating a scenario name as a profile selector instead of deriving profiles
   from the interpreted realization.
+- Using `select_backend_profiles` or `ComposeProfileIndex` as the topology
+  driver for the paper scenario.
+- Extending `DEFAULT_PARTICIPANT_ACTIONS` with paper-scenario behavior instead
+  of deriving participant action specs from compiled SDL/runtime artifacts.
 - Calling `docker` or `docker compose`, or parsing compose output, from the
   interpret or driver stage instead of routing through `DeploymentBackend`.
 - Re-evaluating SEM-218 explicitness classes with a local model rather than
@@ -216,5 +273,8 @@ support mode is static.
 - SEM-218 (ACES compiled realization requirements) and RUN-314 / autarchy-ai/aces#197
   (reference emulation backend).
 - Related issues: [#554](https://github.com/Brad-Edwards/aptl/issues/554),
-  [#556](https://github.com/Brad-Edwards/aptl/issues/556) (paper scenario);
-  DSL-008 / [#422](https://github.com/Brad-Edwards/aptl/issues/422).
+  [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded paper
+  scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
+  [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and
+  [aces#600](https://github.com/Brad-Edwards/aces/issues/600); DSL-008 /
+  [#422](https://github.com/Brad-Edwards/aptl/issues/422).

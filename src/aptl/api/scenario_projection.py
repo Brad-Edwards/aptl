@@ -13,13 +13,15 @@ catalog ``path`` locator is never read into any wire field.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Optional, TypedDict
 
 from aptl.api.schemas import (
     ContainerStatusBlock,
     NarrativeBlock,
     ObjectiveBlock,
     ScenarioDetailResponse,
+    ScenarioDifficultyLiteral,
+    ScenarioModeLiteral,
     ScenarioSummaryResponse,
     ScenarioValidationState,
     SectionDividerBlock,
@@ -27,21 +29,31 @@ from aptl.api.schemas import (
     TerminalBlock,
     WorkbenchBlock,
 )
+from aptl.core.scenario_catalog import ScenarioCatalogEntry
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
-    from aptl.core.scenario_catalog import ScenarioCatalogEntry
+
+class MetadataFacts(TypedDict):
+    """The card facts drawn from the narrow catalog metadata extension."""
+
+    mode: Optional[ScenarioModeLiteral]
+    difficulty: Optional[ScenarioDifficultyLiteral]
+    estimated_minutes: Optional[int]
+    tags: list[str]
 
 
 def _node_type(node: object) -> str:
+    """Return the node's ACES type string (``vm`` / ``switch``), or ``""``."""
     node_type = getattr(node, "type", None)
     return getattr(node_type, "value", node_type) or ""
 
 
 def _is_vm(node: object) -> bool:
+    """Return whether an ACES node is a VM (a candidate required container)."""
     return _node_type(node) == "vm"
 
 
 def _exposes_ssh(node: object) -> bool:
+    """Return whether a node exposes an SSH service (by service name or port 22)."""
     for service in getattr(node, "services", []) or []:
         if (
             getattr(service, "name", "") == "ssh"
@@ -58,11 +70,13 @@ def scenario_required_containers(scenario: object) -> list[str]:
 
 
 def _ssh_containers(scenario: object) -> list[str]:
+    """Return the VM node names that expose an SSH service."""
     nodes = getattr(scenario, "nodes", {}) or {}
     return [name for name, node in nodes.items() if _is_vm(node) and _exposes_ssh(node)]
 
 
-def _metadata_facts(entry: "ScenarioCatalogEntry") -> dict:
+def _metadata_facts(entry: ScenarioCatalogEntry) -> MetadataFacts:
+    """Extract the catalog metadata card facts, defaulting each to absent."""
     meta = getattr(entry, "metadata", None)
     if meta is None:
         return {"mode": None, "difficulty": None, "estimated_minutes": None, "tags": []}
@@ -74,7 +88,10 @@ def _metadata_facts(entry: "ScenarioCatalogEntry") -> dict:
     }
 
 
-def _title_narrative(entry: "ScenarioCatalogEntry", facts: dict) -> NarrativeBlock:
+def _title_narrative(
+    entry: ScenarioCatalogEntry, facts: MetadataFacts
+) -> NarrativeBlock:
+    """Build the title narrative block (name, description, metadata line)."""
     parts: list[str] = []
     if facts["mode"]:
         parts.append(f"**Mode:** {facts['mode']}")
@@ -90,6 +107,7 @@ def _title_narrative(entry: "ScenarioCatalogEntry", facts: dict) -> NarrativeBlo
 
 
 def _objective_success_summary(success: object) -> str:
+    """Render an ACES objective's declarative success criteria as display copy."""
     mode = getattr(success, "mode", "")
     mode_label = getattr(mode, "value", mode) or "all_of"
     groups = [
@@ -104,6 +122,7 @@ def _objective_success_summary(success: object) -> str:
 
 
 def _objective_blocks(scenario: object) -> list[WorkbenchBlock]:
+    """Project ACES declarative objectives into objective blocks (empty if none)."""
     objectives = getattr(scenario, "objectives", {}) or {}
     if not objectives:
         return []
@@ -123,6 +142,7 @@ def _objective_blocks(scenario: object) -> list[WorkbenchBlock]:
 
 
 def _step_blocks(scenario: object) -> list[WorkbenchBlock]:
+    """Project ACES workflow steps into ordered step blocks (empty if none)."""
     workflows = getattr(scenario, "workflows", {}) or {}
     if not workflows:
         return []
@@ -152,6 +172,7 @@ def _step_blocks(scenario: object) -> list[WorkbenchBlock]:
 
 
 def _terminal_blocks(scenario: object) -> list[WorkbenchBlock]:
+    """Project SSH-exposing VM nodes into lazy terminal blocks (empty if none)."""
     ssh_containers = _ssh_containers(scenario)
     if not ssh_containers:
         return []
@@ -168,7 +189,7 @@ def _terminal_blocks(scenario: object) -> list[WorkbenchBlock]:
 
 
 def build_workbench_blocks(
-    entry: "ScenarioCatalogEntry", scenario: object, facts: dict
+    entry: ScenarioCatalogEntry, scenario: object, facts: MetadataFacts
 ) -> list[WorkbenchBlock]:
     """Project the ordered ``WorkbenchBlock`` union from ACES scenario data."""
     blocks: list[WorkbenchBlock] = [_title_narrative(entry, facts)]
@@ -184,7 +205,7 @@ def build_workbench_blocks(
 
 
 def build_scenario_detail(
-    entry: "ScenarioCatalogEntry", scenario: object
+    entry: ScenarioCatalogEntry, scenario: object
 ) -> ScenarioDetailResponse:
     """Build the scenario-detail response from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -203,7 +224,7 @@ def build_scenario_detail(
 
 
 def build_scenario_summary(
-    entry: "ScenarioCatalogEntry", scenario: object
+    entry: ScenarioCatalogEntry, scenario: object
 ) -> ScenarioSummaryResponse:
     """Build an enriched card summary from a catalog entry + parsed SDL."""
     facts = _metadata_facts(entry)
@@ -220,9 +241,7 @@ def build_scenario_summary(
     )
 
 
-def invalid_scenario_summary(
-    entry: "ScenarioCatalogEntry",
-) -> ScenarioSummaryResponse:
+def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResponse:
     """Build a card summary for an entry whose ACES SDL failed to project.
 
     Carries the catalog-owned facts (id/name/description/metadata) and a

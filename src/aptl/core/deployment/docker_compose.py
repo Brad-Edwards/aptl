@@ -72,6 +72,8 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         self,
         action: str,
         profiles: list[str],
+        *,
+        compose_files: Sequence[Path] | None = None,
     ) -> list[str]:
         """Build a docker compose command with profile flags.
 
@@ -93,6 +95,8 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         # the orphan-cleanup filters, so a lab started here cannot be stopped or
         # inspected and its networks collide with the real project's subnets.
         cmd = ["docker", "compose", "-p", self._project_name]
+        for compose_file in compose_files or ():
+            cmd.extend(["-f", str(compose_file)])
 
         for profile in profiles:
             cmd.extend(["--profile", profile])

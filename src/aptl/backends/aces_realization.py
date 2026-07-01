@@ -18,6 +18,7 @@ from aptl.backends.aces_diagnostics import (
     unsupported_resource_diagnostics,
 )
 from aptl.backends.aces_dependency_closure import append_dependency_closure
+from aptl.backends.aces_image_realization import resolve_node_image
 from aptl.backends.aces_profiles import (
     ComposeProfileIndex,
     explicit_compose_profile_hints,
@@ -31,6 +32,7 @@ from aptl.backends.aces_realization_model import (
     NetworkRealization,
     NodeRealization,
     PlacementRealization,
+    _single_or_none,
 )
 from aptl.backends.aces_realization_values import (
     first_nonempty_string as _first_nonempty_string,
@@ -71,6 +73,7 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
+        project_dir,
         diagnostics,
     )
     append_dependency_closure(
@@ -129,6 +132,7 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
+    project_dir: Path,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
     """Realize node and network resources before resolving placements."""
@@ -139,7 +143,13 @@ def _realize_nodes_and_networks(
     for resource in payload_resources:
         payload = resource.payload
         if resource.resource_type == "node":
-            node = _realize_node(resource, payload, profile_index)
+            node = _realize_node(
+                resource,
+                payload,
+                profile_index,
+                project_dir,
+                diagnostics,
+            )
             nodes.append(node)
             profiles.update(node.profiles)
             if not node.profiles:
@@ -277,6 +287,8 @@ def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
+    project_dir: Path,
+    diagnostics: list[Diagnostic],
 ) -> NodeRealization:
     """Realize a node resource into APTL profile and runtime details."""
 
@@ -291,6 +303,7 @@ def _realize_node(
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
+    service_name = _single_or_none(tuple(sorted(backend_services)))
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
@@ -302,6 +315,13 @@ def _realize_node(
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         declared_health=_health_status(node_spec),
+        image=resolve_node_image(
+            resource=resource,
+            payload=payload,
+            project_dir=project_dir,
+            service_name=service_name,
+            diagnostics=diagnostics,
+        ),
     )
 
 

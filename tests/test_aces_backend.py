@@ -595,14 +595,15 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
 
     expected = {"participant.behavior.paper-agent": MagicMock()}
     model = object()
+    scenario = object()
     provisioning_plan = object()
     project_dir = Path(__file__).resolve().parents[1]
     config = AptlConfig(lab={"name": "test"})
-    mocker.patch(
+    compile_mock = mocker.patch(
         "aptl.backends.aces_participant_actions.compile_runtime_model",
         return_value=model,
     )
-    mocker.patch(
+    spec_mock = mocker.patch(
         "aptl.backends.aces_participant_actions."
         "participant_action_specs_from_runtime_model",
         return_value=expected,
@@ -610,12 +611,19 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
 
     assert (
         participant_action_specs_for_scenario(
-            object(),
+            scenario,
             provisioning_plan=provisioning_plan,
             project_dir=project_dir,
             config=config,
         )
         == expected
+    )
+    compile_mock.assert_called_once_with(scenario)
+    spec_mock.assert_called_once_with(
+        model,
+        provisioning_plan=provisioning_plan,
+        project_dir=project_dir,
+        config=config,
     )
 
 
@@ -1368,6 +1376,216 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
     assert spec.nodes[0].service_name == "kali"
     assert spec.nodes[0].container_name == "kali"
     assert spec.nodes[0].networks == ("dmz-net", "redteam-net")
+
+
+def test_realization_resolves_digest_pinned_source_image(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    digest = "sha256:" + "a" * 64
+    _write_compose(tmp_path, {"db": ["enterprise"]})
+    node = _node_resource("db")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "postgres",
+        "version": f"postgres@{digest}",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["enterprise", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "pull"
+    assert image.service_name == "db"
+    assert image.image_ref == f"postgres@{digest}"
+    assert image.source_name == "postgres"
+    assert image.source_version == f"postgres@{digest}"
+
+
+def test_realization_uses_allowed_source_when_upstream_build_path_is_note(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"wazuh-manager": ["wazuh"]})
+    node = _node_resource("wazuh-manager")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "wazuh-manager",
+        "version": "4.x",
+        "build": {
+            "dockerfile_path": (
+                "upstream Wazuh manager Dockerfile not present in APTL checkout"
+            ),
+            "instructions": [{"instruction": "from", "arguments": ["amazonlinux"]}],
+        },
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"wazuh": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["wazuh", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "pull"
+    assert image.policy_rule == "allowed-source"
+    assert image.image_ref == "wazuh/wazuh-manager:4.12.0"
+
+
+def test_realization_resolves_project_build_provenance(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    dockerfile = tmp_path / "containers" / "custom" / "Dockerfile"
+    dockerfile.parent.mkdir(parents=True)
+    dockerfile.write_text("FROM scratch\n")
+    _write_compose(tmp_path, {"custom": ["enterprise"]})
+    node = _node_resource("custom")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "aptl-custom",
+        "version": "aptl-custom@sha256:" + "b" * 64,
+        "build": {
+            "dockerfile_path": "containers/custom/Dockerfile",
+            "instructions": [{"instruction": "from", "arguments": ["scratch"]}],
+            "layers": [{"digest": "sha256:" + "c" * 64}],
+            "source_inputs": [
+                {
+                    "source_path": "containers/custom/Dockerfile",
+                    "checksum": "d" * 64,
+                }
+            ],
+        },
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["enterprise", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "build"
+    assert image.service_name == "custom"
+    assert image.image_ref == "aptl-custom:local"
+    assert image.dockerfile_path == "containers/custom/Dockerfile"
+    assert image.context_path == "."
+    assert image.provenance == {
+        "instructions": 1,
+        "layers": 1,
+        "source_inputs": 1,
+    }
+    assert realization.details()["nodes"][0]["image"]["mode"] == "build"
+
+
+def test_realization_rejects_untrusted_source_without_value_leakage(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"bad": ["enterprise"]})
+    node = _node_resource("bad")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "evil.example/secret-app",
+        "version": "latest",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    diagnostics = list(realization.diagnostics)
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in diagnostics
+    )
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "evil" not in rendered
+    assert "secret-app" not in rendered
+    assert "latest" not in rendered
+
+
+def test_realization_rejects_digest_ref_outside_allowed_source_policy(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    digest = "sha256:" + "e" * 64
+    _write_compose(tmp_path, {"db": ["enterprise"]})
+    node = _node_resource("db")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "postgres",
+        "version": f"evil.example/secret-db@{digest}",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    diagnostics = list(realization.diagnostics)
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in diagnostics
+    )
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "evil" not in rendered
+    assert "secret-db" not in rendered
+    assert digest not in rendered
+
+
+def test_realization_rejects_unresolved_source_without_default_fallback(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"custom": ["enterprise"]})
+    node = _node_resource("custom")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "unapproved-custom",
+        "version": "1.0",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in realization.diagnostics
+    )
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
+
+
+def test_realization_accepts_compose_owned_reference_source_without_override(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"customer-portal": ["enterprise"]})
+    node = _node_resource("customer-portal")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "customer-portal-app",
+        "version": "reference",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
 
 
 def test_realization_prefers_unique_node_alias_over_shared_source_alias(tmp_path):

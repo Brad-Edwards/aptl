@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
-from aptl.core.deployment.realization import DeploymentRealizationSpec
+import yaml
+
+from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
+    DeploymentRealizationSpec,
+)
 from aptl.core.lab_types import LabResult
 
 _NETWORK_TOKEN_SEPARATORS = re.compile(r"[^a-z0-9]+")
 _REALIZATION_TIMEOUT = 30
+_IMAGE_REALIZATION_TIMEOUT = 600
+_IMAGE_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose-images.yml"
 
 
 def _container_networks(container_info: dict[str, Any]) -> set[str]:
@@ -100,7 +108,17 @@ class ComposeRealizationMixin:
         """Realize a typed scenario deployment through Docker Compose."""
 
         profiles = list(realization.profiles)
-        start_result = self.start(profiles, build=build)
+        image_result, compose_files = self._prepare_realization_images(realization)
+        if image_result is not None:
+            return image_result
+        if compose_files is None:
+            start_result = self.start(profiles, build=build)
+        else:
+            start_result = self._start_with_compose_files(
+                profiles,
+                build=build,
+                compose_files=compose_files,
+            )
         if not start_result.success:
             return start_result
         failures = self._reconcile_realization_networks(realization)
@@ -110,6 +128,103 @@ class ComposeRealizationMixin:
                 error="; ".join(failures[:5]),
             )
         return LabResult(success=True, message="Lab realized")
+
+    def _prepare_realization_images(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> tuple[LabResult | None, tuple[Path, ...] | None]:
+        """Run typed pull/build image operations and write a compose override."""
+
+        if not realization.images:
+            return None, None
+        for image in realization.images:
+            result = self._realize_image(image)
+            if result is not None:
+                return result, None
+        override_path = self._write_image_override(realization.images)
+        return None, (self._project_dir / "docker-compose.yml", override_path)
+
+    def _realize_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Run one image operation through this backend's Docker runner."""
+
+        if image.mode == "pull":
+            result = self._run(
+                ["docker", "pull", image.image_ref],
+                timeout=_IMAGE_REALIZATION_TIMEOUT,
+            )
+            if result.returncode != 0:
+                return LabResult(
+                    success=False,
+                    error=f"Image pull failed for ACES node {image.address}.",
+                )
+            return None
+        if image.mode == "build":
+            if not image.dockerfile_path or not image.context_path:
+                return LabResult(
+                    success=False,
+                    error=f"Image build input missing for ACES node {image.address}.",
+                )
+            result = self._run(
+                [
+                    "docker",
+                    "build",
+                    "-t",
+                    image.image_ref,
+                    "-f",
+                    image.dockerfile_path,
+                    image.context_path,
+                ],
+                timeout=_IMAGE_REALIZATION_TIMEOUT,
+            )
+            if result.returncode != 0:
+                return LabResult(
+                    success=False,
+                    error=f"Image build failed for ACES node {image.address}.",
+                )
+            return None
+        return LabResult(
+            success=False,
+            error=f"Unsupported image realization mode for ACES node {image.address}.",
+        )
+
+    def _write_image_override(
+        self,
+        images: tuple[DeploymentImageRealization, ...],
+    ) -> Path:
+        """Write a contained Compose override for scenario-resolved images."""
+
+        override_path = self._project_dir / _IMAGE_OVERRIDE_RELATIVE_PATH
+        override_path.parent.mkdir(parents=True, exist_ok=True)
+        services = {
+            image.service_name: {"image": image.image_ref, "build": None}
+            for image in images
+        }
+        override_path.write_text(
+            yaml.safe_dump({"services": services}, sort_keys=True),
+            encoding="utf-8",
+        )
+        return override_path
+
+    def _start_with_compose_files(
+        self,
+        profiles: list[str],
+        *,
+        build: bool,
+        compose_files: tuple[Path, ...],
+    ) -> LabResult:
+        """Start lab services using a generated realization override."""
+
+        cmd = self._build_command("up", profiles, compose_files=compose_files)
+        if build:
+            cmd.append("--build")
+        cmd.append("-d")
+        result = self._run(cmd)
+        if result.returncode != 0:
+            return LabResult(success=False, error=result.stderr)
+        return LabResult(success=True, message="Lab started")
 
     def _reconcile_realization_networks(
         self,

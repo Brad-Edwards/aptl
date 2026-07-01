@@ -151,6 +151,61 @@ scenario name. Future scenarios should be able to vary participant source node,
 target service, network boundary, evaluator-only evidence source, and backend
 project name without editing a paper-scenario branch.
 
+## Image Realization Addendum
+
+Issue #574 realizes node images from ACES `source` and captured
+`source.build` provenance. This is part of the same dynamic realization
+boundary as nodes and networks; it is not a Compose-profile aliasing feature.
+
+APTL consumes the ACES `Source` and `ContainerImageBuildProvenance` schemas as
+compiled into each node resource payload under `spec.node.source`. Do not define
+an APTL-local source, image, Dockerfile, layer, or build-provenance schema. The
+interpreter may extract the ACES payload into APTL's typed realization output,
+but the source of truth remains the ACES parser/compiler and the backend-facing
+`ProvisioningPlan`.
+
+Image realization has two valid outcomes:
+
+- **Pull.** A node `source` resolves through an APTL image policy and resolver
+  to a pullable image reference. Digest-pinned references are preferred and are
+  the identity recorded in run evidence when available.
+- **Build.** A node `source.build` carries enough captured provenance to build a
+  local image through the deployment backend. Build provenance is evidence and
+  input to a typed build operation; raw Docker history text and layer metadata
+  must not be treated as shell script. If the provenance is insufficient to
+  construct a safe build context and instruction stream, realization rejects
+  with a diagnostic.
+
+The image trust policy is enforced at the realization boundary before any pull,
+build, tag, or compose start can use the image. Policy is a non-secret
+first-party concern: if it becomes configurable, it belongs in strict
+`AptlConfig`; otherwise it may be a narrow code-owned policy object passed into
+the interpreter/driver seam. It must not be hidden in `.env`, Compose labels, a
+scenario-name branch, or a backend-specific allowlist.
+
+All image side effects route through `DeploymentBackend`. APTL adapter code may
+extend `DeploymentRealizationSpec` and add narrow typed backend operations, but
+it must not call `docker pull`, `docker build`, `docker tag`, or
+`docker compose` directly. Docker Compose and SSH Compose must share the same
+runner, timeout, project-name, logging, redaction, and error-envelope behavior
+defined by ADR-037.
+
+Rejection is a structured diagnostic, not a raw backend error. Diagnostics may
+name the node address, policy reason code, and non-secret policy rule id, but
+must not echo an untrusted image reference, build arg value, registry
+credential, rendered Dockerfile text, raw backend stderr, or `.env` value. Use
+the existing `aptl.backends.aces_diagnostics.diagnostic()` and
+`render_aces_diagnostics()` path so redaction and ACES operation-status
+contracts stay intact.
+
+Realization evidence is non-secret identity and provenance only: resolved image
+digest/ref, pull-or-build mode, source name/version, provenance references,
+instruction/layer digests when safe, and policy decision metadata. Persist it
+through `AptlRealization.details()`, `ApplyResult.details`, `LocalRunStore`, and
+`RangeSnapshot.to_dict()` as appropriate. Do not create a second run record or
+store registry credentials, build secrets, raw environment values, or rendered
+secret-bearing config.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -158,6 +213,7 @@ project name without editing a paper-scenario branch.
 | ACES parser and compiler gate | Authored scenarios enter through `aces_sdl.parse_sdl_file` and compile through the ACES compiler and planner. APTL does not structurally revalidate ACES SDL or recompile the `RuntimeModel` with local models. |
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
 | Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
+| Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
 
@@ -176,7 +232,7 @@ The canonical incumbents this decision builds on are:
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
-  operation.
+  operation, including any future image pull/build/tag side effects.
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
@@ -201,6 +257,13 @@ The design must stay parameterized by scenario identity and backend manifest
 version. It must not assume TechVault is the only scenario, that Docker Compose
 is the only possible realization vehicle, or that the current realization
 support mode is static.
+
+For image realization, the extensibility seam is the tuple of ACES source
+identity, optional build provenance, image trust policy, resolved image
+reference/digest, backend provider, and platform/build context. The next likely
+change is multi-architecture images, registry authentication, SBOM/attestation
+checks, or another backend provider. Those should add policy fields or typed
+backend parameters, not scenario branches or Compose-service rewrites.
 
 ## Consequences
 
@@ -251,6 +314,16 @@ support mode is static.
   action binding.
 - Calling `docker` or `docker compose`, or parsing compose output, from the
   interpret or driver stage instead of routing through `DeploymentBackend`.
+- Resolving node images by reading whatever image/build block a pre-existing
+  Compose service pins, or treating a Compose profile match as image identity.
+- Treating ACES `Source.name` / `version` as a raw Docker image reference until
+  it has passed the APTL image resolver and trust policy.
+- Building from raw Docker history strings, unbounded Dockerfile text, or
+  unvalidated build context paths instead of typed `source.build` provenance and
+  project-contained backend operations.
+- Echoing disallowed image refs, registry credentials, build arg values,
+  rendered Dockerfile text, or backend stderr in diagnostics, logs, snapshots,
+  API responses, or run records.
 - Re-evaluating SEM-218 explicitness classes with a local model rather than
   consuming `realization_requirements` and the planner gate.
 - Adding a second topology authority, a duplicate compose parser, or a local

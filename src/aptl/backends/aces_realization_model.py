@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from aces_contracts.diagnostics import Diagnostic
 
 from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
@@ -27,9 +28,10 @@ class NodeRealization(object):
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
     declared_health: str | None = None
+    image: DeploymentImageRealization | None = None
 
     def details(self) -> dict[str, object]:
-        return {
+        details: dict[str, object] = {
             "address": self.address,
             "name": self.name,
             "aliases": list(self.aliases),
@@ -41,6 +43,9 @@ class NodeRealization(object):
             "static_addresses": list(self.static_addresses),
             "declared_health": self.declared_health,
         }
+        if self.image is not None:
+            details["image"] = self.image.details()
+        return details
 
 
 @dataclass(frozen=True)
@@ -118,6 +123,7 @@ class AptlRealization(object):
                 )
                 for network in self.networks
             ),
+            images=tuple(node.image for node in self.nodes if node.image is not None),
         )
 
     def details(self) -> dict[str, object]:

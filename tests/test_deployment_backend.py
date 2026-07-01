@@ -14,6 +14,7 @@ import pytest
 from aptl.core.config import AptlConfig, DeploymentConfig
 from aptl.core.deployment import (
     DockerComposeBackend,
+    DeploymentImageRealization,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
@@ -472,6 +473,77 @@ class TestDockerComposeBackend:
         )
         assert desired == {"test_aptl-dmz"}
         assert missing == ["unknown-net"]
+
+    def test_realize_pulls_builds_and_overrides_images(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        digest = "sha256:" + "a" * 64
+        spec = DeploymentRealizationSpec(
+            profiles=("enterprise",),
+            nodes=(),
+            networks=(),
+            images=(
+                DeploymentImageRealization(
+                    address="provision.node.db",
+                    service_name="db",
+                    source_name="postgres",
+                    source_version=f"postgres@{digest}",
+                    image_ref=f"postgres@{digest}",
+                    mode="pull",
+                    policy_rule="digest-pinned",
+                ),
+                DeploymentImageRealization(
+                    address="provision.node.custom",
+                    service_name="custom",
+                    source_name="aptl-custom",
+                    source_version="aptl-custom@sha256:" + "b" * 64,
+                    image_ref="aptl-custom:local",
+                    mode="build",
+                    policy_rule="project-build-provenance",
+                    dockerfile_path="containers/custom/Dockerfile",
+                    context_path=".",
+                    provenance={"instructions": 1, "layers": 1},
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(returncode=0, stdout="test_aptl-internal\n", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert ["docker", "pull", f"postgres@{digest}"] in commands
+        assert [
+            "docker",
+            "build",
+            "-t",
+            "aptl-custom:local",
+            "-f",
+            "containers/custom/Dockerfile",
+            ".",
+        ] in commands
+        compose_up = next(command for command in commands if command[-2:] == ["up", "-d"])
+        assert "-f" in compose_up
+        override_paths = [
+            compose_up[index + 1]
+            for index, token in enumerate(compose_up)
+            if token == "-f"
+        ]
+        assert str(tmp_path / "docker-compose.yml") in override_paths
+        override_path = tmp_path / ".aptl" / "realization" / "compose-images.yml"
+        assert str(override_path) in override_paths
+        override = override_path.read_text()
+        assert "db:" in override
+        assert f"image: postgres@{digest}" in override
+        assert "custom:" in override
+        assert "image: aptl-custom:local" in override
+        assert "build: null" in override
 
     def test_stop_calls_compose_down(self, tmp_path):
         backend = self._make_backend(tmp_path)

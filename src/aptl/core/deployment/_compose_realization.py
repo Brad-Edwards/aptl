@@ -109,25 +109,15 @@ class ComposeRealizationMixin:
 
         profiles = list(realization.profiles)
         image_result, compose_files = self._prepare_realization_images(realization)
-        if image_result is not None:
-            return image_result
-        if compose_files is None:
-            start_result = self.start(profiles, build=build)
-        else:
-            start_result = self._start_with_compose_files(
+        result = image_result
+        if result is None:
+            start_result = self._start_realized_services(
                 profiles,
                 build=build,
                 compose_files=compose_files,
             )
-        if not start_result.success:
-            return start_result
-        failures = self._reconcile_realization_networks(realization)
-        if failures:
-            return LabResult(
-                success=False,
-                error="; ".join(failures[:5]),
-            )
-        return LabResult(success=True, message="Lab realized")
+            result = self._realization_result(start_result, realization)
+        return result
 
     def _prepare_realization_images(
         self,
@@ -151,22 +141,39 @@ class ComposeRealizationMixin:
         """Run one image operation through this backend's Docker runner."""
 
         if image.mode == "pull":
-            result = self._run(
-                ["docker", "pull", image.image_ref],
-                timeout=_IMAGE_REALIZATION_TIMEOUT,
-            )
-            if result.returncode != 0:
-                return LabResult(
-                    success=False,
-                    error=f"Image pull failed for ACES node {image.address}.",
-                )
-            return None
+            return self._pull_realization_image(image)
         if image.mode == "build":
-            if not image.dockerfile_path or not image.context_path:
-                return LabResult(
-                    success=False,
-                    error=f"Image build input missing for ACES node {image.address}.",
-                )
+            return self._build_realization_image(image)
+        return LabResult(
+            success=False,
+            error=f"Unsupported image realization mode for ACES node {image.address}.",
+        )
+
+    def _pull_realization_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Pull one scenario-resolved image reference."""
+
+        result = self._run(
+            ["docker", "pull", image.image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        error = (
+            f"Image pull failed for ACES node {image.address}."
+            if result.returncode != 0
+            else None
+        )
+        return LabResult(success=False, error=error) if error else None
+
+    def _build_realization_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Build one scenario-resolved local image reference."""
+
+        error = self._build_realization_input_error(image)
+        if error is None:
             result = self._run(
                 [
                     "docker",
@@ -174,20 +181,28 @@ class ComposeRealizationMixin:
                     "-t",
                     image.image_ref,
                     "-f",
-                    image.dockerfile_path,
-                    image.context_path,
+                    str(image.dockerfile_path),
+                    str(image.context_path),
                 ],
                 timeout=_IMAGE_REALIZATION_TIMEOUT,
             )
-            if result.returncode != 0:
-                return LabResult(
-                    success=False,
-                    error=f"Image build failed for ACES node {image.address}.",
-                )
-            return None
-        return LabResult(
-            success=False,
-            error=f"Unsupported image realization mode for ACES node {image.address}.",
+            error = (
+                f"Image build failed for ACES node {image.address}."
+                if result.returncode != 0
+                else None
+            )
+        return LabResult(success=False, error=error) if error else None
+
+    @staticmethod
+    def _build_realization_input_error(
+        image: DeploymentImageRealization,
+    ) -> str | None:
+        """Return an image-build input error message, if any."""
+
+        return (
+            f"Image build input missing for ACES node {image.address}."
+            if not image.dockerfile_path or not image.context_path
+            else None
         )
 
     def _write_image_override(
@@ -225,6 +240,40 @@ class ComposeRealizationMixin:
         if result.returncode != 0:
             return LabResult(success=False, error=result.stderr)
         return LabResult(success=True, message="Lab started")
+
+    def _start_realized_services(
+        self,
+        profiles: list[str],
+        *,
+        build: bool,
+        compose_files: tuple[Path, ...] | None,
+    ) -> LabResult:
+        """Start services with the generated override when one exists."""
+
+        if compose_files is None:
+            return self.start(profiles, build=build)
+        return self._start_with_compose_files(
+            profiles,
+            build=build,
+            compose_files=compose_files,
+        )
+
+    def _realization_result(
+        self,
+        start_result: LabResult,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult:
+        """Return the final result after service start and network reconciliation."""
+
+        result = start_result
+        if start_result.success:
+            failures = self._reconcile_realization_networks(realization)
+            result = (
+                LabResult(success=False, error="; ".join(failures[:5]))
+                if failures
+                else LabResult(success=True, message="Lab realized")
+            )
+        return result
 
     def _reconcile_realization_networks(
         self,

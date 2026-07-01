@@ -7,7 +7,8 @@ network, participant, and evaluator intent, then handed to `DeploymentBackend`
 for backend side effects. The paper participant action is also realized from
 compiled runtime content: the scenario carries an
 `aptl-participant-runtime-binding/v1` payload that APTL parses into the
-container command, success markers, and target evidence references.
+container command, success markers, target evidence references, and participant
+snapshot surfaces.
 
 Run it through the public path:
 
@@ -35,6 +36,12 @@ boundary markers for direct database and Wazuh API reachability. Those markers
 are participant-runtime evidence for the boundary; Wazuh evidence remains
 evaluator-only and is registered as pending evaluator/runtime state rather than
 participant-visible task context or a detection-quality claim.
+
+The participant behavior, action-contract, observation-boundary, action-instance,
+and shared-state snapshot entries are emitted from the runtime-selected
+participant/action/boundary addresses. They must not reuse the legacy TechVault
+SSH participant identifiers when the paper scenario supplies its own compiled
+runtime binding.
 
 ## Upstream Provenance
 

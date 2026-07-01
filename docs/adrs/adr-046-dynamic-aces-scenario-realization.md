@@ -127,9 +127,9 @@ Participant action realization must be compiled-artifact driven. The existing
 `DEFAULT_PARTICIPANT_ACTIONS` / `PARTICIPANT_ACTION_ADDRESS` TechVault SSH probe
 is not the paper-scenario contract. The `probe-customer-portal-login` action,
 its source participant, target address, command/interaction contract, success
-classification, and disclosed observation boundary must come from the compiled
-SDL/runtime artifacts. Scenario identity may select the scenario file; it must
-not select behavior.
+classification, disclosed observation boundary, participant snapshot entries,
+and shared-state scope must come from the compiled SDL/runtime artifacts.
+Scenario identity may select the scenario file; it must not select behavior.
 
 Wazuh evidence for the paper action is evaluator-only evidence. It may be made
 available through `AptlEvaluator`, `RuntimeSnapshot`, and `LocalRunStore`, but
@@ -246,6 +246,9 @@ support mode is static.
   driver for the paper scenario.
 - Extending `DEFAULT_PARTICIPANT_ACTIONS` with paper-scenario behavior instead
   of deriving participant action specs from compiled SDL/runtime artifacts.
+- Emitting participant snapshot entries or shared-state scopes with legacy
+  TechVault SSH identifiers after the runtime selected a different participant
+  action binding.
 - Calling `docker` or `docker compose`, or parsing compose output, from the
   interpret or driver stage instead of routing through `DeploymentBackend`.
 - Re-evaluating SEM-218 explicitness classes with a local model rather than

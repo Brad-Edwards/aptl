@@ -38,7 +38,6 @@ PARTICIPANT_ACTION_CONTRACT_ADDRESS = (
 PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
     "participant.observation-boundary.aptl.kali-victim-ssh-probe"
 )
-PARTICIPANT_BEHAVIOR_ADDRESS = PARTICIPANT_ACTION_ADDRESS
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
 
@@ -199,10 +198,10 @@ def drive_participant_action(
         behavior_events=[attempted, observed],
         diagnostics=diagnostics,
         snapshot_entries=_action_snapshot_entries(
-            spec, action_instance_id, observation.success
+            participant_address, spec, action_instance_id, observation.success
         ),
         shared_state_records=_shared_state_records(
-            spec, action_instance_id, observation.success
+            participant_address, spec, action_instance_id, observation.success
         ),
     )
 
@@ -330,18 +329,22 @@ def _observation_event(
 
 
 def _action_snapshot_entries(
+    participant_address: str,
     spec: ParticipantActionSpec,
     action_instance_id: str,
     success: bool,
 ) -> dict[str, SnapshotEntry]:
     """Build participant snapshot entries for the action contract and result."""
 
+    action_name = _address_leaf(spec.action_contract_address)
+    boundary_name = _address_leaf(spec.observation_boundary_address)
     return {
-        PARTICIPANT_BEHAVIOR_ADDRESS: SnapshotEntry(
-            address=PARTICIPANT_BEHAVIOR_ADDRESS,
+        participant_address: SnapshotEntry(
+            address=participant_address,
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-behavior",
             payload={
+                "participant_address": participant_address,
                 "action_contract_addresses": [spec.action_contract_address],
                 "observation_boundary_addresses": [
                     spec.observation_boundary_address
@@ -354,8 +357,8 @@ def _action_snapshot_entries(
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-action-contract",
             payload={
-                "name": "APTL Kali victim SSH probe",
-                "action_name": "kali-victim-ssh-probe",
+                "name": f"APTL participant action {action_name}",
+                "action_name": action_name,
                 "semantic_version": "1.0.0",
                 "lifecycle_state": "active",
                 "behavioral_granularity": "single-command",
@@ -372,9 +375,9 @@ def _action_snapshot_entries(
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-observation-boundary",
             payload={
-                "name": "APTL Kali victim SSH observation boundary",
-                "boundary_name": "kali-victim-ssh-probe-output",
-                "projection_basis": "nmap grepable output excerpt",
+                "name": f"APTL participant observation boundary {boundary_name}",
+                "boundary_name": boundary_name,
+                "projection_basis": "terminal command output excerpt",
                 "observable_refs": list(spec.target_refs),
                 "evidence_refs": [action_instance_id],
                 "disclosed_refs": list(spec.target_refs),
@@ -401,6 +404,7 @@ def _action_snapshot_entries(
 
 
 def _shared_state_records(
+    participant_address: str,
     spec: ParticipantActionSpec,
     action_instance_id: str,
     success: bool,
@@ -415,7 +419,7 @@ def _shared_state_records(
         ).hexdigest()
         records[ref] = {
             "state_address": ref,
-            "state_scope": "aptl-techvault-live-range",
+            "state_scope": participant_address,
             "state_kind": state_kind,
             "ordering_basis": "participant-action-observation",
             "conflict_policy": "single-writer-observation",
@@ -432,3 +436,9 @@ def _shared_state_records(
             "evidence_refs": [action_instance_id],
         }
     return records
+
+
+def _address_leaf(address: str) -> str:
+    """Return the terminal address segment for a runtime artifact."""
+
+    return address.rsplit(".", 1)[-1] if address else "runtime-artifact"

@@ -521,6 +521,25 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     assert behavior[0]["action_contract_address"] == action_contract_address
     assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
     assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
+    entries = control_plane.snapshot.entries
+    assert (
+        entries[participant_address].payload["participant_address"]
+        == participant_address
+    )
+    assert entries[action_contract_address].payload["action_name"] == (
+        "probe-customer-portal-login"
+    )
+    assert entries[observation_boundary_address].payload["boundary_name"] == (
+        "paper-agent-view"
+    )
+    assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
+    assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
+    shared_state_records = getattr(
+        control_plane.snapshot, "shared_state_records", {}
+    )
+    assert {
+        record["state_scope"] for record in shared_state_records.values()
+    } == {participant_address}
     assert participant_action_specs[participant_address].target_refs == (
         "container:aptl-kali",
         "container:aptl-webapp",

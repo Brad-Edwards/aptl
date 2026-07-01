@@ -52,16 +52,33 @@ export interface LabActionResponse {
 	diagnostics?: StartupDiagnostic[];
 }
 
-/** Scenario summary for listing. */
+/** Response for POST /api/lab/kill.
+ *
+ *  Mirrors `aptl.api.schemas.KillActionResponse`. Kept distinct from
+ *  `LabActionResponse` (start/stop) on purpose — kill reports its own
+ *  blast-radius outcome (processes killed, whether containers were also
+ *  stopped) rather than an ADR-030 startup outcome.
+ */
+export interface KillActionResponse {
+	success: boolean;
+	mcp_processes_killed: number;
+	containers_stopped: boolean;
+	session_cleared: boolean;
+	errors: string[];
+}
+
+/** Scenario summary for the Lab Home catalog entry points.
+ *
+ *  Narrow by design: mirrors `aptl.api.schemas.ScenarioSummaryResponse`, which
+ *  projects only the facts the curated catalog owns. Richer card facts
+ *  (mode, difficulty, tags, estimated time, required containers) are not part
+ *  of the summary contract — they live in the scenario-detail/workbench
+ *  projection, a separate slice.
+ */
 export interface ScenarioSummary {
 	id: string;
 	name: string;
 	description: string;
-	difficulty: string;
-	mode: string;
-	estimated_minutes: number;
-	tags: string[];
-	containers_required: string[];
 }
 
 // --- Full scenario definition types (mirrors Python core/scenarios.py) ---

@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	KillActionResponse,
 	LabActionResponse,
 	LabStatus,
 	ScenarioDefinition,
@@ -10,10 +11,17 @@ import { sessionHeaders } from './session';
 const BASE = '/api';
 const MAX_ERROR_TEXT_LENGTH = 500;
 
-async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchJSON<T>(
+	path: string,
+	init?: RequestInit,
+	fetchFn: typeof fetch = fetch
+): Promise<T> {
 	// Every /api/* call carries the port-scoped session header (the second auth
 	// factor); the HttpOnly cookie rides along automatically. See ./session.
-	const res = await fetch(`${BASE}${path}`, {
+	// `fetchFn` defaults to the global `fetch` for browser-side calls; a
+	// SvelteKit `load` passes its own `event.fetch` so relative URLs resolve
+	// correctly in every load context (SSR/prerender included).
+	const res = await fetchFn(`${BASE}${path}`, {
 		...init,
 		headers: sessionHeaders(init?.headers)
 	});
@@ -39,8 +47,22 @@ export async function stopLab(): Promise<LabActionResponse> {
 	return fetchJSON<LabActionResponse>('/lab/stop', { method: 'POST' });
 }
 
-export async function getScenarios(): Promise<ScenarioSummary[]> {
-	return fetchJSON<ScenarioSummary[]>('/scenarios');
+/**
+ * Emergency kill switch. Always terminates MCP processes and clears session
+ * state; `containers` widens the blast radius to also force-stop every lab
+ * container. Returns the distinct `KillActionResponse` shape (not the
+ * start/stop `LabActionResponse`).
+ */
+export async function killLab(containers: boolean): Promise<KillActionResponse> {
+	return fetchJSON<KillActionResponse>(`/lab/kill?containers=${containers}`, {
+		method: 'POST'
+	});
+}
+
+export async function getScenarios(
+	fetchFn: typeof fetch = fetch
+): Promise<ScenarioSummary[]> {
+	return fetchJSON<ScenarioSummary[]>('/scenarios', undefined, fetchFn);
 }
 
 export async function getScenario(id: string): Promise<ScenarioDefinition> {

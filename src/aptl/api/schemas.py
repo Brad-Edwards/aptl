@@ -1,6 +1,6 @@
 """API response models for the APTL web interface."""
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -63,7 +63,7 @@ class ContainerInfo(BaseModel):
     ports: list[str] = []
 
     @classmethod
-    def from_compose_dict(cls, data: dict) -> "ContainerInfo":
+    def from_compose_dict(cls, data: dict[str, Any]) -> "ContainerInfo":
         """Create from docker compose ps JSON output."""
         # docker compose ps --format json uses varying key names
         # across versions; handle common variants.
@@ -134,6 +134,24 @@ class KillActionResponse(BaseModel):
     containers_stopped: bool = False
     session_cleared: bool = False
     errors: list[str] = Field(default_factory=list)
+
+
+class ScenarioSummaryResponse(BaseModel):
+    """Card-summary projection of one curated scenario catalog entry.
+
+    Narrow by design: only the facts the curated catalog
+    (``scenarios/catalog.json`` / :class:`ScenarioCatalogEntry`) authoritatively
+    owns. Richer card facts (mode, difficulty, tags, estimated time, required
+    containers) are intentionally NOT modelled here — the ACES SDL does not own
+    those fields and the legacy in-tree scenario model that did is deliberately
+    not revived (see ``docs/specs/web-gui-design-preflight.md`` UI-008c). Those
+    belong to the scenario-detail/workbench projection, which is out of scope
+    for the Lab Home slice.
+    """
+
+    id: str
+    name: str
+    description: str = ""
 
 
 class ConfigResponse(BaseModel):

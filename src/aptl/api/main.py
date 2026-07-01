@@ -11,7 +11,7 @@ from aptl.api.deps import (
     verify_token,
 )
 from aptl.api.middleware.bff import BFFMiddleware
-from aptl.api.routers import config, kill, lab, terminal
+from aptl.api.routers import config, kill, lab, scenarios, terminal
 from aptl.api.session import (
     SESSION_COOKIE,
     SESSION_HEADER_PARAM,
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(config.router, prefix="/api", dependencies=_auth)
     app.include_router(terminal.router, prefix="/api", dependencies=_auth)
     app.include_router(kill.router, prefix="/api", dependencies=_auth)
+    app.include_router(scenarios.router, prefix="/api", dependencies=_auth)
 
     @app.get("/api/health", dependencies=_auth)
     async def health() -> dict[str, str]:

@@ -34,6 +34,7 @@ import {
 	getLabStatus,
 	startLab,
 	stopLab,
+	killLab,
 	getScenarios,
 	getScenario,
 	getConfig,
@@ -89,6 +90,60 @@ describe('API client', () => {
 			'/api/lab/stop',
 			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
 		);
+	});
+
+	it('killLab posts to /api/lab/kill without stopping containers by default', async () => {
+		const data = {
+			success: true,
+			mcp_processes_killed: 3,
+			containers_stopped: false,
+			session_cleared: true,
+			errors: []
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(data)
+		});
+
+		const result = await killLab(false);
+		expect(result).toEqual(data);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/kill?containers=false',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
+	});
+
+	it('killLab passes containers=true to widen the blast radius', async () => {
+		const data = {
+			success: true,
+			mcp_processes_killed: 1,
+			containers_stopped: true,
+			session_cleared: true,
+			errors: []
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(data)
+		});
+
+		const result = await killLab(true);
+		expect(result.containers_stopped).toBe(true);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/kill?containers=true',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
+	});
+
+	it('killLab carries the session header', async () => {
+		sessionStorage.setItem('aptl_session', 'tok-kill');
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ success: true })
+		});
+
+		await killLab(false);
+		const headers = mockFetch.mock.calls[0][1].headers as Headers;
+		expect(headers.get('X-APTL-Session')).toBe('tok-kill');
 	});
 
 	it('startLab carries ADR-030 outcome + diagnostics through fetch', async () => {

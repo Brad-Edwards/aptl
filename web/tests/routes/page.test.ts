@@ -1,7 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
-import type { LabStatus } from '../../src/lib/types';
+import type { LabStatus, ScenarioSummary } from '../../src/lib/types';
+
+function summary(overrides: Partial<ScenarioSummary> = {}): ScenarioSummary {
+	return {
+		id: 's1',
+		name: 'Scenario',
+		description: '',
+		mode: null,
+		difficulty: null,
+		estimated_minutes: null,
+		tags: [],
+		required_containers: [],
+		validation: { valid: true, detail: null },
+		...overrides
+	};
+}
 
 const labStatus = writable<LabStatus>({ running: false, containers: [], error: null });
 const labLoading = writable(false);
@@ -14,7 +29,7 @@ vi.mock('$lib/stores/lab', () => ({ labStatus, labLoading, refreshLabStatus }));
 vi.mock('$lib/api', () => ({ startLab, stopLab, killLab }));
 
 async function renderPage(
-	data: { scenarios: { id: string; name: string; description: string }[]; scenariosError: boolean } = {
+	data: { scenarios: ScenarioSummary[]; scenariosError: boolean } = {
 		scenarios: [],
 		scenariosError: false
 	}
@@ -131,8 +146,8 @@ describe('Lab Home route', () => {
 	it('renders scenario cards from the catalog summary', async () => {
 		await renderPage({
 			scenarios: [
-				{ id: 's1', name: 'Scenario One', description: 'first' },
-				{ id: 's2', name: 'Scenario Two', description: 'second' }
+				summary({ id: 's1', name: 'Scenario One', description: 'first' }),
+				summary({ id: 's2', name: 'Scenario Two', description: 'second' })
 			],
 			scenariosError: false
 		});

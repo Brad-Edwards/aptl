@@ -3,13 +3,26 @@ import type {
 	KillActionResponse,
 	LabActionResponse,
 	LabStatus,
-	ScenarioDefinition,
+	ScenarioDetail,
 	ScenarioSummary
 } from './types';
 import { sessionHeaders } from './session';
 
 const BASE = '/api';
 const MAX_ERROR_TEXT_LENGTH = 500;
+
+/** An error from a non-2xx `/api/*` response, carrying the HTTP status so
+ *  callers (e.g. the scenario workbench loader) can branch on it — a 404 maps
+ *  to a route-level not-found, anything else to a generic unavailable state. */
+export class ApiError extends Error {
+	readonly status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.name = 'ApiError';
+		this.status = status;
+	}
+}
 
 async function fetchJSON<T>(
 	path: string,
@@ -30,7 +43,7 @@ async function fetchJSON<T>(
 		if (text.length > MAX_ERROR_TEXT_LENGTH) {
 			text = text.slice(0, MAX_ERROR_TEXT_LENGTH) + '...';
 		}
-		throw new Error(`API error ${res.status}: ${text}`);
+		throw new ApiError(res.status, `API error ${res.status}: ${text}`);
 	}
 	return res.json() as Promise<T>;
 }
@@ -65,8 +78,15 @@ export async function getScenarios(
 	return fetchJSON<ScenarioSummary[]>('/scenarios', undefined, fetchFn);
 }
 
-export async function getScenario(id: string): Promise<ScenarioDefinition> {
-	return fetchJSON<ScenarioDefinition>(`/scenarios/${encodeURIComponent(id)}`);
+export async function getScenario(
+	id: string,
+	fetchFn: typeof fetch = fetch
+): Promise<ScenarioDetail> {
+	return fetchJSON<ScenarioDetail>(
+		`/scenarios/${encodeURIComponent(id)}`,
+		undefined,
+		fetchFn
+	);
 }
 
 export async function getConfig(): Promise<AppConfig> {

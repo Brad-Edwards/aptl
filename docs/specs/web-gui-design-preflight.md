@@ -254,6 +254,63 @@ authority.
   loading/error/empty states, SSE-driven status updates, and the API client
   carrying the session header on every `/api/*` call.
 
+## UI-008d Scenario Catalog and Workbench Guardrails
+
+UI-008d (`/scenarios/[id]`) is a backend-owned ACES/catalog projection rendered
+as a notebook-style workbench. It must not turn the browser into a scenario
+parser, terminal authority, SIEM authority, scoring store, or replacement SDL.
+
+- Keep `src/aptl/api/routers/scenarios.py` and `src/aptl/api/schemas.py` as the
+  scenario HTTP/DTO owners. The detail route should return a stable projection
+  such as scenario header facts plus an ordered `WorkbenchBlock` discriminated
+  union. Do not let the current web-only legacy `ScenarioDefinition` /
+  `buildBlockSequence()` shape become the contract.
+- Keep scenario list/detail fetches behind `web/src/lib/api.ts`, with
+  load-provided `event.fetch` threaded through where needed, so the shared
+  `X-APTL-Session` carrier is applied. Do not fetch authenticated `/api/*`
+  routes directly from `web/src/routes/scenarios/[id]/+page.ts`.
+- Resolve catalog ids through `src/aptl/core/scenario_catalog.py`. The catalog
+  `path` stays internal and project-contained, with ACES SDL validation handled
+  by the ACES parser authority; API responses must not expose local filesystem
+  paths or archived legacy YAML locators.
+- Required containers, objective/step content, workflows, and authored
+  narrative come from the ACES document or compiled ACES/runtime artifacts. If a
+  card/detail header needs user-facing metadata ACES does not own uniformly
+  today (mode, difficulty, duration, tags), add a narrow validated catalog
+  metadata extension instead of inferring it in Svelte or reviving the deleted
+  in-tree scenario schema.
+- Keep scenario validation state distinct from lab readiness, objective
+  completion, and scoring. A "valid scenario" indicator means the catalog entry
+  and ACES projection loaded/validated; it must not imply the lab is running,
+  containers are healthy, detections fired, or objectives are complete.
+- Workbench blocks are display/action descriptors, not authorities. A terminal
+  block may name a requested container target, but the terminal WebSocket still
+  enforces ADR-039/ADR-040 gates: auth/ticket, same-origin upgrade, allow-list,
+  lab-running check, runtime endpoint inventory, and pinned `known_hosts`.
+- SIEM query blocks should carry curated query ids/parameters and display copy.
+  Execution belongs to the SIEM API owner with backend validation, time-range
+  and row caps, stable error kinds, and redacted details. Do not ship raw
+  OpenSearch passthrough from a scenario block unless that backend validation
+  surface exists.
+- Narrative blocks may render Markdown only through the existing
+  `renderMarkdown()` / DOMPurify path. Do not add another `{@html}` renderer,
+  allow raw HTML from scenarios, or weaken the strict CSP/static-SPA posture.
+- Hints stay browser-local in v1. Do not persist revealed hints, points,
+  transcripts, notes, answers, or notebook state until a separate scoring or
+  persistence contract owns storage, redaction, and replay semantics.
+- Lazy tools stay lazy. Inline terminal and SIEM blocks must not open sockets or
+  execute queries merely because the document rendered; visible user action or
+  an explicit refresh control starts the side effect.
+- Errors should use route-appropriate standard envelopes: unknown scenario as a
+  short 404, invalid/unreadable catalog or ACES projection as a redacted
+  validation/unavailable state, terminal errors through the existing WebSocket
+  message shape, and query errors through the SIEM result envelope. Do not add a
+  scenario-specific exception hierarchy.
+- Tests for this slice should prove the projection boundary: detail DTOs do not
+  leak catalog paths or raw parser exceptions, unknown ids fail narrowly, block
+  unions render exhaustively, terminal/SIEM blocks stay lazy, markdown is
+  sanitized, and every `/api/*` fetch path carries the shared session header.
+
 ## Extensibility Seams
 
 The design specification should include a compact page contract table for each

@@ -1,16 +1,19 @@
 <script lang="ts">
-	import type { ScenarioDefinition } from '$lib/types';
-	import { buildBlockSequence } from '$lib/workbench';
+	import type { ScenarioDetail } from '$lib/types';
 	import WorkbenchStatusBar from '$lib/components/workbench/WorkbenchStatusBar.svelte';
 	import NarrativeBlock from '$lib/components/workbench/NarrativeBlock.svelte';
 	import ContainerStatusBlock from '$lib/components/workbench/ContainerStatusBlock.svelte';
-	import AttackStepBlock from '$lib/components/workbench/AttackStepBlock.svelte';
 	import SectionDivider from '$lib/components/workbench/SectionDivider.svelte';
 	import ObjectiveBlock from '$lib/components/workbench/ObjectiveBlock.svelte';
+	import StepBlock from '$lib/components/workbench/StepBlock.svelte';
+	import SiemQueryBlock from '$lib/components/workbench/SiemQueryBlock.svelte';
+	import TerminalBlock from '$lib/components/workbench/TerminalBlock.svelte';
 
-	let { data }: { data: { scenario: ScenarioDefinition } } = $props();
+	let { data }: { data: { scenario: ScenarioDetail } } = $props();
 
-	const blocks = $derived(buildBlockSequence(data.scenario));
+	// Blocks are the backend-owned ordered projection; the route renders them
+	// directly rather than deriving a sequence in the browser.
+	const blocks = $derived(data.scenario.blocks);
 </script>
 
 <WorkbenchStatusBar scenario={data.scenario} />
@@ -21,12 +24,29 @@
 			<NarrativeBlock content={block.content} />
 		{:else if block.type === 'container-status'}
 			<ContainerStatusBlock containers={block.containers} />
-		{:else if block.type === 'attack-step'}
-			<AttackStepBlock step={block.step} stepIndex={block.stepIndex} />
 		{:else if block.type === 'section-divider'}
 			<SectionDivider title={block.title} />
 		{:else if block.type === 'objective'}
-			<ObjectiveBlock objective={block.objective} team={block.team} />
+			<ObjectiveBlock
+				name={block.name}
+				description={block.description}
+				success={block.success}
+			/>
+		{:else if block.type === 'step'}
+			<StepBlock
+				index={block.index}
+				name={block.name}
+				description={block.description}
+				stepType={block.step_type}
+			/>
+		{:else if block.type === 'siem-query'}
+			<SiemQueryBlock
+				query={block.query}
+				description={block.description}
+				product_name={block.product_name}
+			/>
+		{:else if block.type === 'terminal'}
+			<TerminalBlock container={block.container} label={block.label} />
 		{/if}
 	{/each}
 </div>

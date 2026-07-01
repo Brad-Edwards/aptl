@@ -1,47 +1,33 @@
 <script lang="ts">
-	import type { Objective } from '$lib/types';
-	import HintToggle from './HintToggle.svelte';
-	import SiemQueryBlock from './SiemQueryBlock.svelte';
-
+	// A declarative ACES experiment objective projected by the backend. Legacy
+	// per-objective scoring, team, alert queries, and hints are not part of the
+	// ACES objective shape; hint reveal (v1, local-only) belongs to a future
+	// hints-bearing block, not this projection.
 	interface Props {
-		objective: Objective;
-		team: 'red' | 'blue';
+		name: string;
+		description: string;
+		success: string;
 	}
 
-	let { objective, team }: Props = $props();
-
-	const borderClass = $derived(
-		team === 'red' ? 'border-aptl-violet/30' : 'border-aptl-teal/30'
-	);
-	const badgeBg = $derived(
-		team === 'red' ? 'bg-aptl-violet/10 text-aptl-violet' : 'bg-aptl-teal/10 text-aptl-teal'
-	);
+	let { name, description, success }: Props = $props();
 </script>
 
-<div class="rounded-lg border {borderClass} bg-aptl-surface p-4">
+<div class="rounded-lg border border-aptl-border bg-aptl-surface p-4">
 	<div class="mb-2 flex flex-wrap items-center gap-2">
-		<span class="rounded-full px-2 py-0.5 text-xs font-medium {badgeBg}">
-			{team}
+		<span class="rounded-full bg-aptl-indigo/10 px-2 py-0.5 text-xs font-medium text-aptl-indigo">
+			objective
 		</span>
-		<span class="rounded-full bg-aptl-surface-hover px-2 py-0.5 text-xs text-aptl-text-muted">
-			{objective.type}
-		</span>
-		<span class="ml-auto text-sm font-semibold text-aptl-text">
-			{objective.points} pts
-		</span>
+		<span class="text-sm font-semibold text-aptl-text">{name}</span>
 	</div>
 
-	<p class="text-sm text-aptl-text">{objective.description}</p>
-
-	{#if objective.wazuh_alert}
-		<div class="mt-3">
-			<SiemQueryBlock
-				query={objective.wazuh_alert.query}
-				description={`Wazuh alert query (min ${objective.wazuh_alert.min_matches} match${objective.wazuh_alert.min_matches === 1 ? '' : 'es'} in ${objective.wazuh_alert.time_window_seconds}s)`}
-				product_name="wazuh"
-			/>
-		</div>
+	{#if description}
+		<p class="text-sm text-aptl-text-muted">{description}</p>
 	{/if}
 
-	<HintToggle hints={objective.hints} objectiveId={objective.id} />
+	{#if success}
+		<p class="mt-2 text-xs text-aptl-text-muted">
+			<span class="font-medium text-aptl-text">Success:</span>
+			{success}
+		</p>
+	{/if}
 </div>

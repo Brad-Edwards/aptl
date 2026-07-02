@@ -25,9 +25,9 @@ type, route contract, or workflow concept.
 | Web auth, auth env binding, project-dir binding | `src/aptl/api/deps.py` |
 | API response DTOs | `src/aptl/api/schemas.py` |
 | Svelte API fetch boundary and SSE subscription | `web/src/lib/api.ts` |
+| Browser session second factor | `web/src/lib/session.ts`, `src/aptl/api/session.py` |
+| Browser terminal carrier helpers | `web/src/lib/bff.ts`, `src/aptl/api/routers/terminal.py` |
 | Svelte wire-type mirror | `web/src/lib/types.ts` |
-| Legacy split-profile Svelte server-side bearer-token proxy | `web/src/hooks.server.ts` |
-| Legacy split-profile WebSocket token carrier data | `web/src/routes/+layout.server.ts` |
 | `aptl web serve` bind/runtime contract | `src/aptl/cli/web.py` |
 | Split web Compose profile | `docker-compose.yml` services `aptl-web-api` and `aptl-web-ui` |
 | Web build artifact contract | `web/package.json`, `web/svelte.config.js`, `web/vite.config.ts` |
@@ -310,6 +310,57 @@ parser, terminal authority, SIEM authority, scoring store, or replacement SDL.
   leak catalog paths or raw parser exceptions, unknown ids fail narrowly, block
   unions render exhaustively, terminal/SIEM blocks stay lazy, markdown is
   sanitized, and every `/api/*` fetch path carries the shared session header.
+
+## UI-008e Focused Terminal Guardrails
+
+UI-008e (`/terminal/[container]` and inline `TerminalBlock`) is a terminal
+surface over the existing ADR-039/ADR-040 relay. It must not become a generic
+command-execution API, a browser-owned container allow-list, or a second
+endpoint/trust registry.
+
+- Keep the terminal backend authority in `src/aptl/api/routers/terminal.py`.
+  The route must continue to pass the gates in this order before dialing SSH:
+  WebSocket auth ticket or direct token, strict same-origin upgrade, terminal
+  allow-list from `TERMINAL_CONTAINER_NAMES`, lab-running state, runtime
+  endpoint projection from `lab_terminal_ssh_endpoints()`, and pinned
+  `known_hosts` from `known_hosts_path()`.
+- Keep the browser carrier in `web/src/lib/bff.ts` and `web/src/lib/session.ts`.
+  The component fetches a short-lived ticket from the relative
+  `/api/terminal/ticket` endpoint with `sessionHeaders()`, then presents
+  `aptl-token.<ticket>` as the WebSocket subprotocol. Do not put API tokens,
+  tickets, or session factors in URL query strings, route data, local storage,
+  stores, examples, logs, or generated bundles.
+- Treat `TerminalBlock` and focused route params as requested targets only.
+  Inline blocks may name `container`, and container cards may show terminal
+  affordances, but the server-side allow-list and runtime inventory remain the
+  only authorization and reachability authority. Avoid a second hardcoded SSH
+  container set as anything more than a removable display hint.
+- Surface terminal rejection as narrow user-facing categories without leaking
+  secrets or validation internals: authentication/session unavailable,
+  same-origin policy rejected, unknown terminal target, lab not running,
+  container unavailable, host keys not pinned/verified, SSH connection failed,
+  and WebSocket disconnected. Prefer the existing WebSocket
+  `{type: "error", message}` envelope when the server can send one; use close
+  reason/code only as a fallback for pre-accept failures.
+- Preserve terminal side effects as explicit and bounded. Inline terminal
+  blocks stay lazy until user action, focused terminal opens one requested
+  session, resize/stdin are the only client-to-server message types, and
+  malformed messages are ignored rather than promoted to an execution surface.
+- Keep terminal output ephemeral in v1. Do not persist transcripts, command
+  history, terminal input/output, copied commands, error payloads, or SSH stream
+  data in `sessionStorage`, `localStorage`, run archives, scenario state, or
+  logs.
+- Use existing observability and redaction conventions: module-local
+  `get_logger(...)`, sanitized route parameters, validation-layer labels, and
+  no operator keystrokes, ticket values, bearer/session credentials, private
+  key material, raw exception payloads, or terminal bytes in logs.
+- Tests should extend the existing seams instead of adding a parallel harness:
+  `tests/test_api_terminal.py` for auth/origin/allow-list/lab-state/runtime
+  endpoint/known-hosts gates, `tests/test_host_keys.py` and
+  `tests/test_endpoints.py` for trust and endpoint projections,
+  `web/tests/lib/bff.test.ts` for carrier construction, and
+  `web/tests/components/Terminal.test.ts` plus workbench block tests for the
+  component states and lazy mounting.
 
 ## Extensibility Seams
 

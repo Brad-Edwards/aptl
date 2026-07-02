@@ -119,6 +119,87 @@ describe('Terminal', () => {
 		expect(WSSpy).not.toHaveBeenCalled();
 	});
 
+	it('renders an accessible status region that starts in a connecting state', async () => {
+		const { getByRole } = render(Terminal, { props: { container: 'kali' } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const status = getByRole('status');
+		expect(status).toBeTruthy();
+		expect(status.getAttribute('data-phase')).toBe('connecting');
+	});
+
+	it('surfaces an unauthorized ticket failure as a narrow accessible reason', async () => {
+		fetchMock.mockResolvedValue({ ok: false, status: 401 });
+
+		const { getByRole } = render(Terminal, { props: { container: 'kali' } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(WSSpy).not.toHaveBeenCalled();
+		const status = getByRole('status');
+		expect(status.getAttribute('data-phase')).toBe('error');
+		expect(status.textContent).toMatch(/not authorized/i);
+	});
+
+	it('surfaces a server error frame in the accessible status region', async () => {
+		const { getByRole } = render(Terminal, { props: { container: 'kali' } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const wsInstance = WSSpy.mock.instances[0] as unknown as {
+			onmessage: (e: { data: string }) => void;
+		};
+		wsInstance.onmessage({ data: JSON.stringify({ type: 'error', message: 'Lab is not running' }) });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const status = getByRole('status');
+		expect(status.getAttribute('data-phase')).toBe('error');
+		expect(status.textContent).toMatch(/lab is not running/i);
+	});
+
+	it('surfaces a close reason (unknown container) in the accessible status region', async () => {
+		const { getByRole } = render(Terminal, { props: { container: 'bogus' } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const wsInstance = WSSpy.mock.instances[0] as unknown as {
+			onclose: (e: { code: number; reason: string }) => void;
+		};
+		wsInstance.onclose({ code: 1008, reason: 'Unknown container' });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const status = getByRole('status');
+		expect(status.getAttribute('data-phase')).toBe('error');
+		expect(status.textContent).toMatch(/allowed terminal target/i);
+	});
+
+	it('reports the connected state after the first stdout chunk', async () => {
+		const { getByRole } = render(Terminal, { props: { container: 'kali' } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const wsInstance = WSSpy.mock.instances[0] as unknown as {
+			onmessage: (e: { data: string }) => void;
+		};
+		wsInstance.onmessage({ data: JSON.stringify({ type: 'stdout', data: '$ ' }) });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const status = getByRole('status');
+		expect(status.getAttribute('data-phase')).toBe('connected');
+	});
+
+	it('invokes onstatechange when the connection status changes', async () => {
+		const onstatechange = vi.fn();
+		render(Terminal, { props: { container: 'kali', onstatechange } });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const wsInstance = WSSpy.mock.instances[0] as unknown as {
+			onmessage: (e: { data: string }) => void;
+		};
+		wsInstance.onmessage({ data: JSON.stringify({ type: 'error', message: 'SSH connection failed' }) });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(onstatechange).toHaveBeenCalledWith(
+			expect.objectContaining({ phase: 'error', text: 'SSH connection failed' })
+		);
+	});
+
 	it('does not open an orphan WS if torn down during ticket fetch', async () => {
 		// Hold the ticket request in flight, tear the component down, THEN resolve.
 		let resolveTicket!: () => void;

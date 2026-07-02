@@ -6,7 +6,14 @@
  * and returns the opaque ticket string; throws on non-ok response.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { terminalWsUrl, fetchTerminalTicket } from '../../src/lib/bff';
+import {
+	terminalWsUrl,
+	fetchTerminalTicket,
+	TerminalTicketError,
+	describeTicketFailure,
+	describeErrorFrame,
+	describeTerminalClose
+} from '../../src/lib/bff';
 
 // Helper: override window.location in jsdom for the duration of a test.
 function stubLocation(protocol: string, host: string) {
@@ -91,5 +98,88 @@ describe('fetchTerminalTicket', () => {
 		);
 
 		await expect(fetchTerminalTicket()).rejects.toThrow();
+	});
+
+	it('throws a TerminalTicketError carrying the HTTP status', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 401
+			})
+		);
+
+		await expect(fetchTerminalTicket()).rejects.toBeInstanceOf(TerminalTicketError);
+		await fetchTerminalTicket().catch((err) => {
+			expect(err).toBeInstanceOf(TerminalTicketError);
+			expect(err.status).toBe(401);
+			// No server body is echoed into the error message.
+			expect(err.message).not.toMatch(/detail|body|stack/i);
+		});
+	});
+});
+
+describe('describeTicketFailure', () => {
+	it('maps 401 to an auth/session-expired message', () => {
+		expect(describeTicketFailure(401)).toMatch(/not authorized/i);
+		expect(describeTicketFailure(401)).toMatch(/session/i);
+	});
+
+	it('maps 403 to the same auth category', () => {
+		expect(describeTicketFailure(403)).toMatch(/not authorized/i);
+	});
+
+	it('maps any other status to a generic start failure', () => {
+		expect(describeTicketFailure(503)).toMatch(/could not start/i);
+		expect(describeTicketFailure(0)).toMatch(/could not start/i);
+	});
+});
+
+describe('describeErrorFrame', () => {
+	it('surfaces the server error message verbatim as an error status', () => {
+		const s = describeErrorFrame('Lab is not running');
+		expect(s).toEqual({ phase: 'error', text: 'Lab is not running', isError: true });
+	});
+});
+
+describe('describeTerminalClose', () => {
+	it('maps each narrow server close reason to operator copy', () => {
+		expect(describeTerminalClose(1008, 'Unauthorized', false)).toMatchObject({
+			phase: 'error',
+			isError: true
+		});
+		expect(describeTerminalClose(1008, 'Origin not allowed', false).text).toMatch(/origin/i);
+		expect(describeTerminalClose(1008, 'Unknown container', false).text).toMatch(/allowed/i);
+		expect(describeTerminalClose(1008, 'Lab not running', false).text).toMatch(/not running/i);
+		expect(describeTerminalClose(1008, 'Container not available', false).text).toMatch(
+			/not currently available/i
+		);
+		expect(describeTerminalClose(1008, 'Host keys not pinned', false).text).toMatch(
+			/host keys.*restart/i
+		);
+	});
+
+	it('surfaces an unmapped but present reason verbatim', () => {
+		const s = describeTerminalClose(1008, 'Some new backend reason', false);
+		expect(s).toEqual({ phase: 'error', text: 'Some new backend reason', isError: true });
+	});
+
+	it('reports an abnormal close with no reason and no data as refused', () => {
+		const s = describeTerminalClose(1006, '', false);
+		expect(s.phase).toBe('error');
+		expect(s.text).toMatch(/refused|unauthorized|blocked/i);
+	});
+
+	it('reports a close after data as a graceful session end', () => {
+		const s = describeTerminalClose(1000, '', true);
+		expect(s.phase).toBe('closed');
+		expect(s.isError).toBe(false);
+		expect(s.text).toMatch(/ended/i);
+	});
+
+	it('reports a normal close with no data as a plain closed state', () => {
+		const s = describeTerminalClose(1000, '', false);
+		expect(s.phase).toBe('closed');
+		expect(s.isError).toBe(false);
 	});
 });

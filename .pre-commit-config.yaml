@@ -129,7 +129,7 @@ repos:
         entry: tools/vale-lint-hook.sh
         language: system
         types_or: [markdown]
-        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|docs/history/|docs/known-issues/|docs/components/mcp-smoke-test-results-|node_modules/|\.tools/|\.vale/)
+        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|node_modules/|\.tools/|\.vale/)
 
       - id: pytest
         name: Python tests (pytest)

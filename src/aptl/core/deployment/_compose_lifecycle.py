@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+import subprocess
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Protocol
 
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
@@ -10,8 +13,32 @@ from aptl.utils.logging import get_logger
 log = get_logger("deployment.docker_compose")
 
 
+class _ComposeLifecycleBackend(Protocol):
+    """Backend operations needed by the compose lifecycle helpers."""
+
+    def _run(
+        self,
+        cmd: list[str],
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run one backend-scoped command."""
+
+    def _build_command(
+        self,
+        action: str,
+        profiles: list[str],
+        *,
+        compose_files: Sequence[Path] | None = None,
+    ) -> list[str]:
+        """Build a Docker Compose command."""
+
+    def remove_project_networks(self) -> list[str]:
+        """Remove leftover project-scoped realization networks."""
+
+
 def kill_compose_lab(
-    backend: Any,
+    backend: _ComposeLifecycleBackend,
     profiles: list[str],
     *,
     timeout: int,
@@ -39,7 +66,7 @@ def kill_compose_lab(
 
 
 def _run_compose_kill(
-    backend: Any,
+    backend: _ComposeLifecycleBackend,
     profiles: list[str],
     *,
     timeout: int,
@@ -68,7 +95,7 @@ def _run_compose_kill(
 
 
 def _run_compose_down(
-    backend: Any,
+    backend: _ComposeLifecycleBackend,
     profiles: list[str],
     *,
     timeout: int,

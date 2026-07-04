@@ -153,9 +153,9 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 **Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
 
-**Reference:** [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
+**Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Known Issues](docs/known-issues/uat-findings-2026-02-23.md) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+**Ops:** [Troubleshooting](docs/troubleshooting/) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
 
 ## Ethics & Disclaimers
 

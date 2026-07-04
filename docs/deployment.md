@@ -5,9 +5,15 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 aptl lab start
 ```
+
+The virtualenv keeps the editable install off the system Python, so it works
+on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
+[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
+`python3-venv` package (`sudo apt install python3-venv`).
 
 **Use the CLI.** Manual deployment is error-prone and takes longer.
 
@@ -130,6 +136,52 @@ docker compose --profile wazuh --profile victim --profile kali stop
 # Manual clean removal
 docker compose --profile wazuh --profile victim --profile kali down -v
 ```
+
+## Lifecycle Policy
+
+The lab can auto-teardown on a TTL or idle timeout and provision on a schedule
+(DEP-003). Add a `lifecycle_policy` block to `aptl.json`:
+
+```json
+{
+  "lab": { "name": "aptl" },
+  "lifecycle_policy": {
+    "ttl_minutes": 240,
+    "idle_timeout_minutes": 60,
+    "teardown_remove_volumes": true,
+    "schedule": [
+      { "at": "08:00", "days": ["mon", "tue", "wed", "thu", "fri"], "scenario": null }
+    ]
+  }
+}
+```
+
+- `ttl_minutes` tears the range down once it has run that long.
+- `idle_timeout_minutes` tears the range down after no run capture activity for
+  that long.
+- `teardown_remove_volumes` controls whether an auto-teardown removes Compose
+  volumes (a full clean teardown).
+- `schedule` provisions a clean range at each `HH:MM` UTC time. `days` is an
+  optional weekday filter (empty means every day); `scenario` is an optional
+  curated scenario id.
+
+Enforcement is a single idempotent tick that you schedule yourself:
+
+```bash
+# One evaluate-and-act tick (wire to a systemd timer or cron)
+aptl lab enforce
+
+# Or run a single-owner loop on a host without a timer
+aptl lab monitor --interval 60
+
+# Inspect the resolved policy and current lifecycle state
+aptl lab policy show
+```
+
+The tick holds a per-project lock, so a manual `enforce` and a running
+`monitor` never act at once. See
+[ADR-045](adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md) for the
+design.
 
 ## Troubleshooting
 

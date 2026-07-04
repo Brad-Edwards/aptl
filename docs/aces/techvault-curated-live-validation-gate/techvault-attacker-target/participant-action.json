@@ -1,0 +1,437 @@
+{
+  "schema": "aptl.participant-action-proof/v1",
+  "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+  "operation_receipt_contract": "operation-receipt-v1",
+  "operation_status_contract": "operation-status-v1",
+  "runtime_snapshot_contract": "runtime-snapshot-v1",
+  "operation_receipt": {
+    "operation_id": "operation-id-redacted",
+    "domain": "participant",
+    "accepted": true,
+    "submitted_at": "2026-06-25T17:01:58.677436Z",
+    "diagnostics": []
+  },
+  "operation_status": {
+    "operation_id": "operation-id-redacted",
+    "domain": "participant",
+    "state": "succeeded",
+    "submitted_at": "2026-06-25T17:01:58.677436Z",
+    "updated_at": "2026-06-25T17:01:58.891076Z",
+    "diagnostics": [],
+    "changed_addresses": [
+      "runtime.snapshot.participant-episode-results.participant.behavior.techvault.kali-victim-ssh-probe",
+      "runtime.snapshot.participant-episode-history.participant.behavior.techvault.kali-victim-ssh-probe",
+      "runtime.snapshot.participant-behavior-history.participant.behavior.techvault.kali-victim-ssh-probe",
+      "participant.behavior.techvault.kali-victim-ssh-probe",
+      "participant.action-contract.aptl.kali-victim-ssh-probe",
+      "participant.observation-boundary.aptl.kali-victim-ssh-probe",
+      "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted"
+    ]
+  },
+  "participant_runtime_status": {
+    "backend": "aptl",
+    "participants": [
+      "participant.behavior.techvault.kali-victim-ssh-probe"
+    ],
+    "action_participants": [
+      "participant.behavior.techvault.kali-victim-ssh-probe"
+    ]
+  },
+  "participant_episode_results": {
+    "participant.behavior.techvault.kali-victim-ssh-probe": {
+      "state_schema_version": "participant-episode-state/v1",
+      "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+      "episode_id": "episode-id-redacted",
+      "sequence_number": 0,
+      "status": "running",
+      "terminal_reason": null,
+      "initialized_at": "2026-06-25T17:01:58.677519Z",
+      "updated_at": "2026-06-25T17:01:58.677519Z",
+      "terminated_at": null,
+      "last_control_action": "initialize",
+      "previous_episode_id": null
+    }
+  },
+  "participant_episode_history": {
+    "participant.behavior.techvault.kali-victim-ssh-probe": [
+      {
+        "event_type": "episode_initialized",
+        "timestamp": "2026-06-25T17:01:58.677519Z",
+        "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+        "episode_id": "episode-id-redacted",
+        "sequence_number": 0,
+        "terminal_reason": null,
+        "control_action": "initialize",
+        "details": {}
+      },
+      {
+        "event_type": "episode_running",
+        "timestamp": "2026-06-25T17:01:58.677519Z",
+        "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+        "episode_id": "episode-id-redacted",
+        "sequence_number": 0,
+        "terminal_reason": null,
+        "control_action": null,
+        "details": {}
+      }
+    ]
+  },
+  "participant_behavior_history": {
+    "participant.behavior.techvault.kali-victim-ssh-probe": [
+      {
+        "event_type": "action_attempted",
+        "timestamp": "2026-06-25T17:01:58.677598Z",
+        "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+        "episode_id": "episode-id-redacted",
+        "action_instance_id": "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted",
+        "action_contract_address": "participant.action-contract.aptl.kali-victim-ssh-probe",
+        "observation_boundary_address": null,
+        "observation_status": null,
+        "actor_provenance": "codex-cli",
+        "lifecycle_phase": "execution_attempt",
+        "phase_realization": "runtime_mediated",
+        "admission_disposition": null,
+        "operation_ref": "container_exec:aptl-kali",
+        "operation_state": "running",
+        "state_transition_kind": null,
+        "post_state_digest": null,
+        "joint_action_set_id": null,
+        "realized_order": null,
+        "interaction_ref": null,
+        "interaction_class": "shared_state_change",
+        "shared_state_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ],
+        "details": {
+          "source_container": "aptl-kali",
+          "command": [
+            "nmap",
+            "-p",
+            "22",
+            "-Pn",
+            "--open",
+            "172.20.2.20",
+            "-oG",
+            "-"
+          ],
+          "target_refs": [
+            "container:aptl-kali",
+            "container:aptl-victim",
+            "tcp:172.20.2.20:22"
+          ]
+        }
+      },
+      {
+        "event_type": "observation_emitted",
+        "timestamp": "2026-06-25T17:01:58.890527Z",
+        "participant_address": "participant.behavior.techvault.kali-victim-ssh-probe",
+        "episode_id": "episode-id-redacted",
+        "action_instance_id": "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted",
+        "action_contract_address": "participant.action-contract.aptl.kali-victim-ssh-probe",
+        "observation_boundary_address": "participant.observation-boundary.aptl.kali-victim-ssh-probe",
+        "observation_status": "terminal",
+        "actor_provenance": "codex-cli",
+        "lifecycle_phase": "observation_emission",
+        "phase_realization": "observed",
+        "admission_disposition": null,
+        "operation_ref": null,
+        "operation_state": null,
+        "state_transition_kind": null,
+        "post_state_digest": "sha256:redacted-proof-digest",
+        "joint_action_set_id": null,
+        "realized_order": null,
+        "interaction_ref": null,
+        "interaction_class": "shared_state_change",
+        "shared_state_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ],
+        "details": {
+          "returncode": 0,
+          "success": true,
+          "stdout_excerpt": "# Nmap 7.99 scan initiated Thu Jun 25 17:01:58 2026 as: /usr/lib/nmap/nmap -p 22 -Pn --open -oG - 172.20.2.20\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tStatus: Up\nHost: 172.20.2.20 (aptl-victim.aptl_aptl-internal)\tPorts: 22/open/tcp//ssh///\n# Nmap done at Thu Jun 25 17:01:58 2026 -- 1 IP address (1 host up) scanned in 0.11 seconds\n",
+          "stderr_excerpt": "",
+          "success_markers": [
+            "22/open"
+          ]
+        }
+      }
+    ]
+  },
+  "participant_shared_state_records": {},
+  "participant_shared_state_history": {},
+  "participant_joint_action_records": {},
+  "participant_time_management_contexts": {},
+  "participant_snapshot_entries": {
+    "participant.behavior.techvault.kali-victim-ssh-probe": {
+      "domain": "participant",
+      "resource_type": "participant-behavior",
+      "status": "ready",
+      "payload": {
+        "action_contract_addresses": [
+          "participant.action-contract.aptl.kali-victim-ssh-probe"
+        ],
+        "observation_boundary_addresses": [
+          "participant.observation-boundary.aptl.kali-victim-ssh-probe"
+        ],
+        "shared_state_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ]
+      }
+    },
+    "participant.action-contract.aptl.kali-victim-ssh-probe": {
+      "domain": "participant",
+      "resource_type": "participant-action-contract",
+      "status": "ready",
+      "payload": {
+        "name": "APTL Kali victim SSH probe",
+        "action_name": "kali-victim-ssh-probe",
+        "semantic_version": "1.0.0",
+        "lifecycle_state": "active",
+        "behavioral_granularity": "single-command",
+        "interaction_classes": [
+          "shared_state_change"
+        ],
+        "shared_state_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ],
+        "source_container": "aptl-kali",
+        "command": [
+          "nmap",
+          "-p",
+          "22",
+          "-Pn",
+          "--open",
+          "172.20.2.20",
+          "-oG",
+          "-"
+        ],
+        "success_markers": [
+          "22/open"
+        ],
+        "target_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ]
+      }
+    },
+    "participant.observation-boundary.aptl.kali-victim-ssh-probe": {
+      "domain": "participant",
+      "resource_type": "participant-observation-boundary",
+      "status": "ready",
+      "payload": {
+        "name": "APTL Kali victim SSH observation boundary",
+        "boundary_name": "kali-victim-ssh-probe-output",
+        "projection_basis": "nmap grepable output excerpt",
+        "observable_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ],
+        "evidence_refs": [
+          "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted"
+        ],
+        "disclosed_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ],
+        "realized_view_disclosure": "terminal-observation",
+        "source_container": "aptl-kali",
+        "target_refs": [
+          "container:aptl-kali",
+          "container:aptl-victim",
+          "tcp:172.20.2.20:22"
+        ]
+      }
+    },
+    "participant.behavior.techvault.kali-victim-ssh-probe.action-instance-redacted": {
+      "domain": "participant",
+      "resource_type": "participant-action-instance",
+      "status": "ready",
+      "payload": {
+        "action_contract_address": "participant.action-contract.aptl.kali-victim-ssh-probe",
+        "observation_boundary_address": "participant.observation-boundary.aptl.kali-victim-ssh-probe",
+        "actor_provenance": "codex-cli",
+        "success": true
+      }
+    }
+  },
+  "post_action_range_snapshot": {
+    "timestamp": "2026-06-25T17:01:59.183577+00:00",
+    "containers": [
+      {
+        "name": "aptl-victim",
+        "image": "aptl-victim",
+        "status": "Up 54 seconds (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-internal": "172.20.2.20"
+        },
+        "ports": [
+          "22/tcp",
+          "514/tcp"
+        ]
+      },
+      {
+        "name": "aptl-wazuh-dashboard",
+        "image": "wazuh/wazuh-dashboard:4.12.0",
+        "status": "Up 54 seconds (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.11"
+        },
+        "ports": [
+          "443/tcp",
+          "127.0.0.1:443->5601/tcp"
+        ]
+      },
+      {
+        "name": "aptl-kali-capture",
+        "image": "aptl-kali-capture",
+        "status": "Up About a minute",
+        "health": "",
+        "networks": {},
+        "ports": []
+      },
+      {
+        "name": "aptl-wazuh-manager",
+        "image": "wazuh/wazuh-manager:4.12.0",
+        "status": "Up About a minute (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-dmz": "172.20.1.10",
+          "aptl_aptl-internal": "172.20.2.30",
+          "aptl_aptl-security": "172.20.0.10"
+        },
+        "ports": [
+          "127.0.0.1:1514-1515->1514-1515/tcp",
+          "127.0.0.1:514->514/udp",
+          "127.0.0.1:55000->55000/tcp",
+          "1516/tcp"
+        ]
+      },
+      {
+        "name": "aptl-kali",
+        "image": "aptl-kali",
+        "status": "Up About a minute (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-dmz": "172.20.1.30",
+          "aptl_aptl-internal": "172.20.2.35",
+          "aptl_aptl-redteam": "172.20.4.30"
+        },
+        "ports": [
+          "22/tcp"
+        ]
+      },
+      {
+        "name": "aptl-otel-collector",
+        "image": "otel/opentelemetry-collector-contrib:0.123.0",
+        "status": "Up About a minute (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.53"
+        },
+        "ports": [
+          "127.0.0.1:4317-4318->4317-4318/tcp",
+          "55678-55679/tcp"
+        ]
+      },
+      {
+        "name": "aptl-grafana-otel",
+        "image": "grafana/grafana:11.6.0",
+        "status": "Up About a minute",
+        "health": "",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.52"
+        },
+        "ports": [
+          "127.0.0.1:3100->3000/tcp"
+        ]
+      },
+      {
+        "name": "aptl-tempo",
+        "image": "grafana/tempo:2.7.2",
+        "status": "Up About a minute",
+        "health": "",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.51"
+        },
+        "ports": [
+          "127.0.0.1:3200->3200/tcp"
+        ]
+      },
+      {
+        "name": "aptl-wazuh-indexer",
+        "image": "wazuh/wazuh-indexer:4.12.0",
+        "status": "Up About a minute (healthy)",
+        "health": "healthy",
+        "networks": {
+          "aptl_aptl-security": "172.20.0.12"
+        },
+        "ports": [
+          "127.0.0.1:9200->9200/tcp"
+        ]
+      }
+    ],
+    "networks": [
+      {
+        "name": "aptl_aptl-dmz",
+        "subnet": "172.20.1.0/24",
+        "gateway": "172.20.1.1",
+        "containers": [
+          "aptl-kali",
+          "aptl-wazuh-manager"
+        ]
+      },
+      {
+        "name": "aptl_aptl-internal",
+        "subnet": "172.20.2.0/24",
+        "gateway": "172.20.2.1",
+        "containers": [
+          "aptl-kali",
+          "aptl-victim",
+          "aptl-wazuh-manager"
+        ]
+      },
+      {
+        "name": "aptl_aptl-redteam",
+        "subnet": "172.20.4.0/24",
+        "gateway": "172.20.4.1",
+        "containers": [
+          "aptl-kali"
+        ]
+      },
+      {
+        "name": "aptl_aptl-security",
+        "subnet": "172.20.0.0/24",
+        "gateway": "172.20.0.1",
+        "containers": [
+          "aptl-grafana-otel",
+          "aptl-otel-collector",
+          "aptl-tempo",
+          "aptl-wazuh-dashboard",
+          "aptl-wazuh-indexer",
+          "aptl-wazuh-manager"
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "episode_violations": [],
+    "behavior_violations": [],
+    "shared_state_violations": [],
+    "concurrency_violations": [],
+    "capture_diagnostics": []
+  },
+  "verdict": "PASS"
+}

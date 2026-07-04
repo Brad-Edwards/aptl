@@ -15,6 +15,12 @@ workflow:
   completion_command: 'pytest -n auto -k "not integration" && pytest -n auto tests/test_techvault_static_gate.py -m integration'
   lint_command: pre-commit run --all-files
   format_command: pre-commit run --all-files
+  review_disposition:
+    enabled: true
+    mode: shadow
+    max_auto_overrides: 1
+    judge:
+      enabled: true
 sonarcloud:
   project_key: Brad-Edwards_aptl
   organization: brad-edwards
@@ -27,3 +33,78 @@ routing:
   default_fallback: parent
 rules:
   plan_rules: .gc/plan-rules.md
+# Canonical boundary model declarations (GC-GRC-004 / GC-GRC-023). These are the
+# eight trust boundaries of the aptl platform + contained cyber range, declared
+# so the in-loop /implement GRC screening reuses them. They were the basis of
+# the GRC baseline bootstrap (issue #597, GC-GRC-018).
+grc:
+  boundaries:
+    - key: range-perimeter
+      name: Range Containment Perimeter
+      description: Outermost trust boundary — the contained range vs. the external internet; egress firewall (SAF-002) is the primary safety boundary.
+      paths:
+        - docker-compose.yml
+        - src/aptl/core/**
+        - config/suricata/**
+      surfaces: [network, config, iac]
+    - key: host-boundary
+      name: Docker Host Boundary
+      description: Docker host vs. range containers — kill switch (SAF-001), resource limits (INF-004), health checks (INF-003).
+      paths:
+        - docker-compose.yml
+        - containers/base/**
+        - src/aptl/cli/**
+      surfaces: [iac, config]
+    - key: mcp-control-plane
+      name: MCP Control Plane
+      description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
+      paths:
+        - mcp/**
+      surfaces: [code, config]
+    - key: redteam-zone
+      name: Red Team Zone (aptl-redteam)
+      description: Attacker network hosting Kali and the reverse-engineering container.
+      paths:
+        - containers/kali/**
+        - containers/kali-capture/**
+        - containers/reverse/**
+      surfaces: [network]
+    - key: dmz-zone
+      name: DMZ Zone (aptl-dmz)
+      description: Semi-exposed victim network — webapp, mailserver, DNS.
+      paths:
+        - containers/webapp/**
+        - containers/mailserver/**
+        - containers/dns/**
+      surfaces: [network]
+    - key: internal-zone
+      name: Internal Zone (aptl-internal)
+      description: Internal enterprise network — Active Directory, PostgreSQL, SMB fileshare, victim/workstation hosts.
+      paths:
+        - containers/ad/**
+        - containers/db/**
+        - containers/fileshare/**
+        - containers/victim/**
+        - containers/workstation/**
+        - containers/windows-victim/**
+      surfaces: [network]
+    - key: security-zone
+      name: Security/SOC Zone (aptl-security)
+      description: Defensive stack — Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle; zone isolation via multi-homing only (NET-005).
+      paths:
+        - containers/wazuh-sidecar/**
+        - containers/misp-suricata-sync/**
+        - config/wazuh_cluster/**
+        - config/cortex/**
+        - config/thehive/**
+        - config/wazuh_dashboard/**
+        - config/wazuh_indexer/**
+      surfaces: [network, config]
+    - key: observability-plane
+      name: Observability Plane
+      description: OpenTelemetry collector, Tempo, Grafana, and the aptl web API/UI experiment-observability surface.
+      paths:
+        - config/otel/**
+        - web/**
+        - src/aptl/api/**
+      surfaces: [code, network]

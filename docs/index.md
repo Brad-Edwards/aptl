@@ -7,9 +7,16 @@ Docker-based purple team lab: Wazuh SIEM + enterprise infrastructure + Kali + AI
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 aptl lab start
 ```
+
+The virtualenv keeps the editable install off the system Python, so it works
+on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
+[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
+`python3-venv` package (`sudo apt install python3-venv`); see
+[Prerequisites](getting-started/prerequisites.md).
 
 **Access:**
 
@@ -49,23 +56,21 @@ aptl lab start
 ### Architecture Decision Records
 - [ADR Index](adrs/README.md) -- Why we built it this way
 
-### Scenario Description Language (SDL)
-- [SDL Overview](sdl/index.md): What the SDL is and how to use it
-- [Sections Reference](sdl/sections.md): Complete reference for all 21 sections
-- [Parser Behavior](sdl/parser.md): Key normalization, shorthands, SDL-only parsing
-- [Semantic Validation](sdl/validation.md): Cross-reference checks (22 passes)
-- [Design Precedents](sdl/precedents.md): Where each element comes from
-- [Limitations](sdl/limitations.md): What the SDL cannot express yet
-- [Testing](sdl/testing.md): Unit tests, stress tests, fuzz tests
-- [Runtime Architecture](sdl/runtime-architecture.md): SDL-native compiler, planner, and runtime target design
+### Scenario Authoring
+- [Authoring Boundary](sdl/index.md): Current ACES-owned scenario handoff
+- [Curated ACES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
+- [TechVault Static Validation Gate](aces/techvault-static-validation-gate.md): Current static scenario gate
+- [TechVault Live Validation Gate](aces/techvault-live-validation-gate.md): Current runtime realization gate
 
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context
+- [Web GUI Design Specification](specs/web-gui-design.md): v1 product scope, route map, interaction design, component inventory, and implementation hand-off
 
 ### Testing
 - [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
+- [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)
 - [Container Template Guide](containers/victim-template-guide.md)
@@ -73,8 +78,3 @@ aptl lab start
 ### Operations
 - [Deployment](deployment.md)
 - [Troubleshooting](troubleshooting/)
-- [Known Issues—UAT Findings](known-issues/uat-findings-2026-02-23.md)
-
-### History
-- [Smoke Test Results 2026-02-08](history/smoke-test-results-2026-02-08.md)
-- [MCP Smoke Test Results 2026-02-22](components/mcp-smoke-test-results-2026-02-22.md)

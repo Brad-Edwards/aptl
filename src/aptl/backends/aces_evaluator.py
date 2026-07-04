@@ -1,9 +1,9 @@
 """APTL ACES evaluation adapter.
 
-Promotes APTL's ACES backend from ``orchestration-capable`` to
-``orchestration-evaluation`` (SCN-010 follow-on #312). APTL's scenario runtime
-engine (RTE-001) already evaluates conditions and objectives; this adapter
-exposes that surface through the *portable* ACES contracts
+APTL's full remote-control-plane backend includes this evaluation component for
+the objective/condition surface introduced by SCN-010 follow-on #312. APTL's
+scenario runtime engine (RTE-001) already evaluates conditions and objectives;
+this adapter exposes that surface through the *portable* ACES contracts
 ``evaluation-result-envelope-v1`` and ``evaluation-history-event-stream-v1``
 rather than APTL-native scoring shapes.
 
@@ -20,9 +20,10 @@ by #514), the same ``results()`` / ``history()`` surface will report the real
 ``RUNNING`` → terminal transitions and ``EvaluationHistoryEvent`` streams.
 ``stop()`` clears evaluation state.
 
-This keeps the orchestration-evaluation claim honest: APTL publishes the
-evaluation result/history *contract* surface and the loaded/registered run
-state, not a synthetic in-memory result that never progresses.
+This keeps the full remote-control-plane evaluation claim honest: APTL
+publishes the evaluation result/history *contract* surface and the
+loaded/registered run state, not a synthetic in-memory result that never
+progresses.
 """
 
 from __future__ import annotations
@@ -45,7 +46,9 @@ from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotE
 from aptl.utils.redaction import redact
 
 EVALUATION_ADDRESS = "runtime.apply.evaluation"
-_OBSERVABLE_RESOURCE_TYPES = frozenset({"condition-binding", "objective"})
+_OBSERVABLE_RESOURCE_TYPES = frozenset(
+    {"condition-binding", "evaluation", "goal", "metric", "objective", "tlo"}
+)
 
 
 def _evaluation_diagnostic(code: str, address: str, message: str) -> Diagnostic:
@@ -113,7 +116,7 @@ def _register_evaluation(
 
 @dataclass
 class AptlEvaluator(object):
-    """``orchestration-evaluation`` ACES backend adapter for APTL."""
+    """ACES evaluation adapter for APTL's full remote-control-plane target."""
 
     _results: dict[str, dict[str, object]] = field(default_factory=dict, init=False)
     _history: dict[str, list[dict[str, object]]] = field(default_factory=dict, init=False)

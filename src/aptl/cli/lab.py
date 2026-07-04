@@ -6,9 +6,11 @@ from typing import Optional
 
 import typer
 
+from aptl.cli import lifecycle
 from aptl.cli.continuity import continuity_audit
 from aptl.core.lab import (
     LabResult,
+    clean_boot_lab,
     lab_status,
     orchestrate_lab_start,
     stop_lab,
@@ -29,6 +31,11 @@ app = typer.Typer(help="Lab lifecycle management.")
 # so the command stays at `aptl lab continuity-audit` (no UX change).
 app.command("continuity-audit")(continuity_audit)
 
+# Ephemeral lifecycle policy commands (DEP-003) live in aptl.cli.lifecycle so
+# this module stays focused; register them under `lab` (no UX change:
+# `aptl lab enforce` / `monitor` / `policy show`).
+lifecycle.register(app)
+
 
 # Headline phrasing per outcome — kept beside the renderer so the CLI's
 # user-visible classification stays in one place (ADR-030 anti-pattern:
@@ -42,11 +49,39 @@ _OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
         "should still run."
     ),
     StartupOutcome.DEGRADED_UNUSABLE: (
-        "Lab is degraded_unusable — some capabilities or SSH targets "
-        "are not reachable."
+        "Lab is degraded_unusable — some capabilities or SSH targets are not reachable."
     ),
     StartupOutcome.FAILED: "Lab start failed.",
 }
+
+
+# Shared destructive-data warning. Both `stop --volumes` and
+# `start --clean` remove Compose-managed volumes, so the operator sees one
+# canonical statement of what gets destroyed.
+_DESTRUCTIVE_DATA_WARNING = (
+    "\n  WARNING: This will destroy all lab data including:\n"
+    "    - Wazuh SIEM indexes and configuration\n"
+    "    - MISP threat intelligence data\n"
+    "    - TheHive cases and analysis\n"
+    "    - Shuffle SOAR workflows\n"
+    "    - All container logs and state\n"
+)
+
+
+def _confirm_destructive(skip_prompt: bool) -> bool:
+    """Confirm a volume-destroying action; return False if the operator aborts.
+
+    Centralizes the destructive-action gate shared by ``stop --volumes`` and
+    ``start --clean``: print the canonical warning and require an explicit
+    ``y`` unless ``skip_prompt`` (``--yes``) was passed.
+    """
+    if skip_prompt:
+        return True
+    typer.echo(_DESTRUCTIVE_DATA_WARNING)
+    if not typer.confirm("  Continue?", default=False):
+        typer.echo("Aborted.")
+        return False
+    return True
 
 
 def _render_start_result(result: LabResult) -> None:
@@ -105,9 +140,25 @@ def start(
         "--scenario-path",
         help="Explicit ACES SDL scenario path under the project directory.",
     ),
+    clean: bool = typer.Option(
+        False,
+        "--clean",
+        "-c",
+        help=(
+            "Ephemeral clean boot (RNG-001): tear down the lab and remove "
+            "Compose volumes before starting, guaranteeing clean state "
+            "between runs. Destroys all lab data."
+        ),
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip the confirmation prompt for --clean.",
+    ),
 ) -> None:
     """Start the APTL lab environment."""
-    log.info("Starting lab from %s", project_dir)
+    log.info("Starting lab from %s (clean=%s)", project_dir, clean)
 
     try:
         selected_scenario = resolve_scenario_selection(
@@ -119,11 +170,21 @@ def start(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
-    result = orchestrate_lab_start(
-        project_dir,
-        skip_seed=skip_seed,
-        scenario_path=selected_scenario,
-    )
+    if clean:
+        if not _confirm_destructive(yes):
+            raise typer.Exit(code=0)
+        result = clean_boot_lab(
+            project_dir,
+            remove_volumes=True,
+            skip_seed=skip_seed,
+            scenario_path=selected_scenario,
+        )
+    else:
+        result = orchestrate_lab_start(
+            project_dir,
+            skip_seed=skip_seed,
+            scenario_path=selected_scenario,
+        )
 
     _render_start_result(result)
     if not result.success:
@@ -173,18 +234,8 @@ def stop(
     ),
 ) -> None:
     """Stop the APTL lab environment."""
-    if volumes and not yes:
-        typer.echo(
-            "\n  WARNING: This will destroy all lab data including:\n"
-            "    - Wazuh SIEM indexes and configuration\n"
-            "    - MISP threat intelligence data\n"
-            "    - TheHive cases and analysis\n"
-            "    - Shuffle SOAR workflows\n"
-            "    - All container logs and state\n"
-        )
-        if not typer.confirm("  Continue?", default=False):
-            typer.echo("Aborted.")
-            raise typer.Exit(code=0)
+    if volumes and not _confirm_destructive(yes):
+        raise typer.Exit(code=0)
 
     log.info("Stopping lab (volumes=%s)", volumes)
 
@@ -297,7 +348,7 @@ def validate_live(
         help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
     ),
     profile: str = typer.Option(
-        "orchestration-evaluation",
+        "full-remote-control-plane",
         "--profile",
         help="ACES backend capability profile to validate against.",
     ),

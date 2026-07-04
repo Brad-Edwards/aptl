@@ -5,31 +5,73 @@
       "id": "techvault-operational",
       "name": "TechVault Operational",
       "description": "Default public APTL startup scenario backed by ACES SDL.",
-      "path": "scenarios/techvault-operational.sdl.yaml"
+      "path": "scenarios/techvault-operational.sdl.yaml",
+      "metadata": {
+        "mode": "purple",
+        "difficulty": "advanced",
+        "estimated_minutes": 60,
+        "tags": ["soc", "full-stack", "purple"]
+      }
     },
     {
       "id": "techvault-attacker-target",
       "name": "TechVault Attacker/Target",
       "description": "Kali red-team host plus a single monitored victim and core observability.",
-      "path": "scenarios/techvault-attacker-target.sdl.yaml"
+      "path": "scenarios/techvault-attacker-target.sdl.yaml",
+      "metadata": {
+        "mode": "red",
+        "difficulty": "beginner",
+        "estimated_minutes": 30,
+        "tags": ["red", "recon"]
+      }
     },
     {
       "id": "techvault-enterprise-web",
       "name": "TechVault Enterprise Web",
       "description": "Vulnerable webapp plus database and core observability, with no SOC stack.",
-      "path": "scenarios/techvault-enterprise-web.sdl.yaml"
+      "path": "scenarios/techvault-enterprise-web.sdl.yaml",
+      "metadata": {
+        "mode": "red",
+        "difficulty": "intermediate",
+        "estimated_minutes": 45,
+        "tags": ["web", "exploitation"]
+      }
     },
     {
       "id": "techvault-defensive-min",
       "name": "TechVault Defensive Minimum",
       "description": "Wazuh manager, indexer, and dashboard plus core observability, with no full SOC stack.",
-      "path": "scenarios/techvault-defensive-min.sdl.yaml"
+      "path": "scenarios/techvault-defensive-min.sdl.yaml",
+      "metadata": {
+        "mode": "blue",
+        "difficulty": "beginner",
+        "estimated_minutes": 30,
+        "tags": ["blue", "detection"]
+      }
     },
     {
       "id": "techvault-observability-core",
       "name": "TechVault Observability Core",
       "description": "OTEL collector, Tempo, and Grafana only: the smallest bounded startup surface.",
-      "path": "scenarios/techvault-observability-core.sdl.yaml"
+      "path": "scenarios/techvault-observability-core.sdl.yaml",
+      "metadata": {
+        "mode": "blue",
+        "difficulty": "beginner",
+        "estimated_minutes": 20,
+        "tags": ["observability"]
+      }
+    },
+    {
+      "id": "paper-agent-loop",
+      "name": "Paper Agent Loop",
+      "description": "APTL realization of the ACES paper participant/portal/DB/Wazuh evidence loop.",
+      "path": "scenarios/paper-agent-loop.sdl.yaml",
+      "metadata": {
+        "mode": "purple",
+        "difficulty": "advanced",
+        "estimated_minutes": 45,
+        "tags": ["paper", "evidence", "purple"]
+      }
     }
   ]
 }

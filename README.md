@@ -19,10 +19,17 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
+
+The virtualenv keeps the install off the system Python, so the editable
+install works on modern Debian/Ubuntu/WSL2 hosts that block system-wide
+`pip` under [PEP 668](https://peps.python.org/pep-0668/). On those hosts the
+`python3 -m venv` step needs the `python3-venv` package
+(`sudo apt install python3-venv`).
 
 `aptl lab start` refuses to run while `.env` still contains the
 `.env.example` placeholder values.
@@ -136,7 +143,7 @@ Smoke-test the wiring once the lab is up:
 Localhost-only web UI for lab control and scenario runs.
 
 ```bash
-pip install -e ".[web]"
+pip install -e ".[web]"        # in the same .venv from Quick Start
 aptl web serve                 # API server
 cd web && npm install && npm run dev   # frontend (separate terminal)
 ```
@@ -153,9 +160,9 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 **Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
 
-**Reference:** [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
+**Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
 
-**Ops:** [Troubleshooting](docs/troubleshooting/) · [Known Issues](docs/known-issues/uat-findings-2026-02-23.md) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
+**Ops:** [Troubleshooting](docs/troubleshooting/) · [Smoke Test Plan](docs/testing/smoke-test-plan.md)
 
 ## Ethics & Disclaimers
 

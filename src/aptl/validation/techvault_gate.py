@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
-DEFAULT_PROFILE = "orchestration-evaluation"
+DEFAULT_PROFILE = "full-remote-control-plane"
 DEFAULT_SCENARIO = Path("scenarios") / "techvault.sdl.yaml"
 DEFAULT_PARITY_INVENTORY = Path("docs") / "aces" / "parity-inventory.yaml"
 
@@ -153,6 +153,7 @@ def validate_scenario(
             profile=opts.profile,
             fixtures_root=opts.fixtures_root,
             profiles_root=opts.profiles_root,
+            reference_scenario=scenario,
         )
     )
 

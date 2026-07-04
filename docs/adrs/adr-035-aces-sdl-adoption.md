@@ -2,11 +2,31 @@
 
 ## Status
 
-proposed
+accepted (amended 2026-06-29 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
 
 ## Date
 
-2026-05-18
+2026-05-18 (amended 2026-06-29)
+
+## Last Updated
+
+2026-06-29
+
+## Status update—2026-06-29
+
+The realization model in this ADR (specifically the Parity Inventory Boundary's
+statement that topology, profiles, networks, static IPs, hostnames, volumes,
+health checks, published ports, and service dependencies come from
+`docker-compose.yml` and the `DeploymentBackend` inventory methods) is
+**superseded by [ADR-046](adr-046-dynamic-aces-scenario-realization.md)**.
+ADR-046 establishes that the compiled ACES `RuntimeModel`, interpreted through
+`interpret_provisioning_plan`, is the authoritative topology source;
+`docker-compose.yml` remains the realization vehicle selected by profile rather
+than the topology authority.
+
+What this ADR decided still stands: ACES SDL adoption as the canonical authoring
+surface, the backend-manifest and conformance model, the `DeploymentBackend`
+execution boundary, and the ACES backend integration guardrails are preserved.
 
 ## Context
 
@@ -31,7 +51,8 @@ ACES is the system whose multi-backend reproducibility story has to hold up
 for the research to land; APTL is the realistic backend that proves the
 contract surface against a full purple-team lab.
 
-APTL today maintains its own in-tree SDL at `aptl.core.sdl`, plus a
+When this decision was written, APTL maintained its own in-tree SDL at
+`aptl.core.sdl`, plus a
 Pydantic-validated YAML schema at `aptl.core.scenarios` (SCN-001), with a
 parallel grammar/parser/validation story tracked by DSL-001..DSL-009. The
 in-tree SDL and ACES SDL both started from the Open Cyber Range SDL (the
@@ -54,6 +75,14 @@ Carrying two SDLs has three concrete costs:
    (`aces.lock.json`), OCI module distribution, MCP server, conformance
    runner—and would have to be rebuilt in-tree to reach parity.
 
+Implementation status as of 2026-06-25: public lab startup now defaults to the
+ACES-authored operational TechVault SDL through `start_aces_scenario()`,
+`scenarios/catalog.json`, and the ACES runtime manager. APTL has since promoted
+its backend manifest and gates beyond the Phase A bootstrap claims. Remaining
+work under issue #530 is reconciliation cleanup: remove or quarantine legacy
+APTL SDL/YAML surfaces and update stale docs/tests so they cannot be mistaken
+for current authoring or runtime authorities.
+
 ## Decision
 
 APTL adopts ACES SDL as its canonical scenario authoring surface and
@@ -65,66 +94,66 @@ Specifically:
   / `parse_sdl_file` against ACES's published schemas and semantic
   validators.
 - APTL implements one `RuntimeTarget` registered into the ACES runtime
-  target registry (final import path pinned during implementation) and
-  publishes a `backend-manifest-v2` claiming conformance to the
-  **`orchestration-capable`** profile. `provisioning-only` was the
-  bootstrap target; `orchestration-evaluation` remains tracked by #312
-  until objective evaluation under the evaluator contract is wired through.
+  target registry and publishes a `backend-manifest-v2` from
+  `src/aptl/backends/aces_manifest.py:create_aptl_manifest()`. The manifest
+  and conformance gates are the source of truth for the current backend
+  profile claim; do not copy stale profile names from historical planning text.
 - APTL's CLI delegates `aptl lab start` and friends through the ACES
   `RuntimeManager` lifecycle (compile → plan → validate → apply → start
   orchestrator/evaluator → stop) instead of the current imperative Python
   lifecycle.
-- APTL's published backend manifest is committed under an APTL-side
-  contracts path (final location pinned during implementation) and
-  validated by `aces conformance backend --profile orchestration-capable`
-  as a pre-push gate.
-- The legacy `aptl.core.sdl` parser and `scenarios/*.yaml` Pydantic path
-  remain functional throughout the adoption work. The `aces_sdl`
+- APTL's published backend manifest is validated by the ACES target
+  conformance runner and the published `aces conformance backend --profile
+  <current-profile>` CLI path used by the static/live gates.
+- During Phase A, the legacy `aptl.core.sdl` parser and `scenarios/*.yaml`
+  Pydantic path remained functional. The `aces_sdl`
   dependency, the ACES backend target, and the ACES TechVault scenario
   land as a *parallel* path during Phase A.
-- At cutover (Phase B, a single PR), the public startup path flips to the
+- At cutover (Phase B, a single PR), the public startup path flipped to the
   ACES-authored operational TechVault SDL
   (`scenarios/techvault-operational.sdl.yaml`). The deeper
   `scenarios/techvault.sdl.yaml` remains the detailed inventory/parity
   artifact rather than the runtime boot contract. Legacy `scenarios/*.yaml`
-  moves to `scenarios/archive/` as strictly reference-only material (not
+  moved to `scenarios/archive/` as strictly reference-only material (not
   loaded by any runtime path), `aptl.core.sdl` is deleted,
-  `aptl.core.scenarios` collapses to a thin loader around
-  `aces_sdl.parse_sdl_file`, and Pydantic `ScenarioDefinition` models are
+  `aptl.core.scenarios` remains only as shared session/continuity exception
+  types, and Pydantic `ScenarioDefinition` models are
   deleted.
 
 ## Backend Profile Choice
 
-APTL targeted `provisioning-only` initially because that profile requires
-only `backend-manifest-v2`, `operation-receipt-v1`, `operation-status-v1`,
-and `runtime-snapshot-v1`—all reachable by wrapping the existing lab
-provisioning code. Issue #311 has since promoted APTL to
-`orchestration-capable`: the manifest declares a real
-`capabilities.orchestrator` and the `workflow-result-envelope-v1` /
-`workflow-history-event-stream-v1` contracts, the runtime target publishes a
-concrete ACES `Orchestrator` (`aptl.backends.aces_orchestrator`) that exposes
-RTE-001's workflow drive surface through those portable contracts, scenario
-start routes through the ACES control plane, and the static/live gates,
-pre-push hook, CI job, and `aptl lab validate-live` default to the
-`orchestration-capable` profile.
-`orchestration-evaluation` further adds the evaluator envelopes and
-corresponds to SCN-007 (Objective-Based Scoring with Hints), tracked
-under issue #312. The `full-remote-control-plane` profile is out of
-scope.
+APTL targeted `provisioning-only` initially because that profile requires only
+`backend-manifest-v2`, `operation-receipt-v1`, `operation-status-v1`, and
+`runtime-snapshot-v1`—all reachable by wrapping the existing lab provisioning
+code. Issue #311 promoted APTL to `orchestration-capable`: the manifest
+declared a real `capabilities.orchestrator` and the
+`workflow-result-envelope-v1` / `workflow-history-event-stream-v1` contracts,
+the runtime target published a concrete ACES `Orchestrator`
+(`aptl.backends.aces_orchestrator`), and scenario start routed through the ACES
+control plane. Issue #312 then promoted the evaluator surface through
+`aptl.backends.aces_evaluator` and the evaluation result/history contracts.
+
+Current code may advance beyond those historical milestones. The canonical
+profile claim is whatever `create_aptl_manifest()` plus the static/live gates
+validate today; as of this update those paths target
+`full-remote-control-plane`. Cleanup work must not preserve older
+`provisioning-only`, `orchestration-capable`, or `orchestration-evaluation`
+wording as a current contract unless it is clearly labeled historical.
 
 ## Parity Gate
 
-Before cutover, the ACES TechVault scenario must reach capability parity
-with the union of the current `scenarios/*.yaml` set. Concretely it must
-exercise:
+Before cutover, the ACES TechVault scenario had to reach capability parity
+with the union of the legacy scenario set now archived under
+`scenarios/archive/`. Concretely it had to exercise:
 
 - the same node / service / vulnerability / feature surfaces
 - the same injects and scenario flow shapes
 - the same objectives and scoring outputs (where SCN-007 applies)
 - the same run-archive surfaces captured for current scenarios
 
-The parity check is reviewed in the cutover PR description and is a hard
-prerequisite. No cutover PR merges without it.
+The parity check was reviewed in the cutover PR description as a hard
+prerequisite. Post-cutover cleanup continues to preserve the inventory as the
+audit surface.
 
 ## Parity Inventory Boundary
 
@@ -159,7 +188,8 @@ The inventory must map every legacy surface to exactly one owning category:
 The canonical source for a row is the existing owner, not the inventory
 document itself. In particular:
 
-- authored legacy fields come from `scenarios/*.yaml` until cutover;
+- authored legacy fields now come from archived reference fixtures under
+  `scenarios/archive/`;
 - topology, profiles, networks, static IPs, hostnames, volumes, health checks,
   published ports, and service dependencies come from `docker-compose.yml` and
   the `DeploymentBackend` inventory methods;
@@ -211,8 +241,9 @@ the caller is ACES.
   JSON/JSONL redaction boundaries where those artifacts cross APTL
   serialization.
 - Published backend capability stays profile-named and contract-validated:
-  `orchestration-capable` is the current claim, and any further profile
-  promotion belongs to the follow-on issues already named here.
+  `create_aptl_manifest()` plus the static/live conformance gates define the
+  current claim. Any future profile promotion must update the manifest,
+  runtime target components, conformance gates, and ADR wording together.
 
 The extensibility seam is the ACES backend capability profile plus a small
 backend realization map from ACES runtime resource kinds to existing APTL
@@ -220,11 +251,40 @@ control-plane owners. Do not make TechVault-specific branches the public
 adapter contract; TechVault is the parity proving case for the supported
 expressivity class, not the backend's type system.
 
-## Migration Plan
+## Legacy Cleanup Reconciliation
 
-The migration splits into a multi-PR prep phase and a single-PR cutover.
-APTL remains fully functional throughout the prep phase—the legacy
-in-tree SDL path stays the default until cutover.
+Issue #530 is a post-cutover reconciliation, not a new scenario-authoring
+surface. It must leave one active path:
+
+- Public runtime selection flows through `scenarios/catalog.json`,
+  `aptl.core.scenario_catalog.resolve_scenario_selection()`,
+  `aces_sdl.parse_sdl_file`, `RuntimeManager.plan()`, and
+  `aptl.backends.aces.start_aces_scenario()`.
+- Backend capability and runtime handoff flow through `create_aptl_manifest()`,
+  `create_aptl_runtime_target()`, `AptlProvisioner`, `AptlOrchestrator`,
+  `AptlEvaluator`, `AptlParticipantRuntime`, ACES diagnostics, and
+  `DeploymentBackend`.
+- Legacy `scenarios/*.yaml`, `aptl.core.sdl`, `aptl.core.scenarios`, and
+  `ScenarioDefinition` references may remain only when explicitly marked as
+  historical or reference-only and unreachable from catalog/default startup,
+  static/live gates, and runtime loaders. Unlabeled references are drift.
+- If any legacy local SDL code is intentionally retained, this ADR and Ground
+  Control status must say why. It must not parse, validate, or model ACES SDL,
+  and it must not reintroduce APTL-local SDL semantics as a source of truth.
+- The parity inventory and historical preflight notes remain audit/history
+  surfaces. They must not become runtime inputs, alternate schema authorities,
+  or justification for keeping duplicate parser, validator, exception, or
+  readiness layers alive.
+- The cleanup regression target is that
+  `rg "aptl.core.sdl|ScenarioDefinition|scenarios/.*\\.yaml" docs src tests scenarios`
+  returns either no hits or only hits carrying clear historical/reference-only
+  labels.
+
+## Historical Migration Plan
+
+The migration split into a multi-PR prep phase and a single-PR cutover. This
+section records the original adoption sequence; current cleanup work is governed
+by the Legacy Cleanup Reconciliation section above.
 
 ### Phase A—Prep (multiple PRs, parallel ACES path, non-default)
 
@@ -254,8 +314,8 @@ Lands in one PR:
 - `scenarios/*.yaml` moves to `scenarios/archive/` with a README marking
   the directory strictly reference-only (not loaded by any runtime path).
 - `aptl.core.sdl` deleted.
-- `aptl.core.scenarios` Pydantic models deleted; loader collapses to a
-  thin `aces_sdl.parse_sdl_file` wrapper.
+- `aptl.core.scenarios` Pydantic models deleted; the module remains only for
+  shared session/continuity exception types.
 - `aces conformance backend --profile orchestration-capable` switches from
   advisory to enforced (pre-push gate).
 - Ground Control reconciliation in the same PR:

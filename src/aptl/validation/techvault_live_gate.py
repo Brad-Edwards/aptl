@@ -12,7 +12,7 @@ archive.
 Like the static gate, it is scenario-generic and parameterized by scenario
 path, backend profile, and project directory: TechVault is the proving input,
 never a hardcoded branch (ADR-035). The next scenario in APTL's
-``orchestration-evaluation`` expressivity class passes through by changing inputs.
+``full-remote-control-plane`` expressivity class passes through by changing inputs.
 
 The gate is inherently integration / live-run work: it requires Docker, the SOC
 stack's resources, real ``.env`` secrets, and minutes-long startup. It is wired
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
 
-DEFAULT_PROFILE = "orchestration-evaluation"
+DEFAULT_PROFILE = "full-remote-control-plane"
 
 # Stable failure categories (issue #323 acceptance: a failure must identify the
 # layer that broke). These map onto existing ACES diagnostics and APTL startup
@@ -132,9 +132,7 @@ class LiveGateReport(object):
             for diagnostic in check.diagnostics:
                 lines.append(f"        - {diagnostic}")
         if not self.passed:
-            lines.append(
-                "  failing layers: " + ", ".join(self.failure_categories())
-            )
+            lines.append("  failing layers: " + ", ".join(self.failure_categories()))
         return "\n".join(lines)
 
 
@@ -142,7 +140,7 @@ class LiveGateReport(object):
 class LiveGateOptions(object):
     """Tunable inputs for the live validation gate.
 
-    ``profile`` selects the backend capability profile (``orchestration-evaluation``).
+    ``profile`` selects the backend capability profile (``full-remote-control-plane``).
     ``clean_volumes`` runs the data-destroying ``stop -v`` cleanup before the
     boot; ``skip_clean_boot`` validates against an already-running lab without
     the destructive cleanup (operator opt-in for a non-destructive check). The

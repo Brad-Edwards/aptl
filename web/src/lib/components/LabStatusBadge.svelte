@@ -1,4 +1,6 @@
 <script lang="ts">
+	import StatusBadge from '$lib/components/kit/StatusBadge.svelte';
+
 	interface Props {
 		running: boolean;
 	}
@@ -6,16 +8,13 @@
 	let { running }: Props = $props();
 </script>
 
-<div
-	role="status"
-	aria-label="Lab is {running ? 'running' : 'stopped'}"
-	class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium
-		{running
-		? 'bg-aptl-green/10 text-aptl-green'
-		: 'bg-aptl-text-muted/10 text-aptl-text-muted'}"
->
-	<span
-		class="h-2 w-2 rounded-full {running ? 'bg-aptl-green animate-pulse' : 'bg-aptl-text-muted'}"
-	></span>
-	{running ? 'Running' : 'Stopped'}
-</div>
+<!--
+	Compact running/stopped status, built on the component-kit StatusBadge so the
+	status palette and the live-pulse/reduced-motion behaviour stay centralised.
+	Colour is never the only cue — the text label carries the state.
+-->
+<StatusBadge
+	tone={running ? 'success' : 'neutral'}
+	label={running ? 'Lab running' : 'Lab stopped'}
+	pulse={running}
+/>

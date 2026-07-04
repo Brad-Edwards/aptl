@@ -1,11 +1,11 @@
 """APTL ACES orchestration adapter.
 
-Promotes APTL's ACES backend from ``provisioning-only`` to
-``orchestration-capable`` (SCN-010 follow-on #311). APTL's scenario runtime
-engine (RTE-001) drives scenario steps with state-machine semantics;
-this adapter exposes that drive surface through the *portable* ACES contracts
-``workflow-result-envelope-v1`` and ``workflow-history-event-stream-v1`` rather
-than APTL-native run-archive shapes.
+APTL's full remote-control-plane backend includes this orchestration component
+for the workflow surface first introduced by SCN-010 follow-on #311. APTL's
+scenario runtime engine (RTE-001) drives scenario steps with state-machine
+semantics; this adapter exposes that drive surface through the *portable* ACES
+contracts ``workflow-result-envelope-v1`` and
+``workflow-history-event-stream-v1`` rather than APTL-native run-archive shapes.
 
 The adapter is the ACES ``Orchestrator`` component published on APTL's
 ``RuntimeTarget``. ``start()`` loads an ACES ``OrchestrationPlan`` into runtime
@@ -118,7 +118,7 @@ def _objective_outcomes_from_evaluation(
 
 @dataclass
 class AptlOrchestrator(object):
-    """``orchestration-capable`` ACES backend adapter for APTL."""
+    """ACES orchestration adapter for APTL's full remote-control-plane target."""
 
     _engine: WorkflowEngine = field(default_factory=WorkflowEngine, init=False)
     _workflow_payloads: dict[str, dict[str, object]] = field(default_factory=dict, init=False)

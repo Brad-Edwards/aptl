@@ -4,9 +4,8 @@ These are runtime models for describing attack procedures, NOT part
 of the SDL specification. They define attack steps with MITRE technique
 mappings and OCSF-aligned expected detection expectations.
 
-For the SDL specification's orchestration model, see
-``aptl.core.sdl.orchestration`` (OCR's events → scripts → stories
-pipeline).
+ACES owns scenario orchestration semantics after the SDL cutover. These local
+models remain narrow support types for APTL's runtime helpers and tests.
 """
 
 from enum import IntEnum
@@ -16,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class _StrictModel(BaseModel):
+    """Pydantic base model that rejects unknown attack fields."""
+
     model_config = ConfigDict(extra="forbid")
 
 

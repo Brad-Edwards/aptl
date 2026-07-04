@@ -1,11 +1,12 @@
 """Tests for service readiness polling.
 
-Tests are written FIRST (TDD). All subprocess, time.sleep, and
-time.monotonic calls are mocked.
+Subprocess calls are mocked; the monotonic clock and sleep are injected into
+``wait_for_service`` as explicit value sequences rather than patched on the
+module, so a drift in the clock-call count fails loudly via StopIteration.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,81 +14,69 @@ import pytest
 class TestWaitForService:
     """Tests for the generic retry-poll loop."""
 
-    def test_succeeds_immediately_when_check_fn_returns_true(self, mocker):
+    def test_succeeds_immediately_when_check_fn_returns_true(self):
         """Should return ready=True without retries when check passes."""
         from aptl.core.services import wait_for_service
 
-        mocker.patch("aptl.core.services.time.sleep")
-        mocker.patch("aptl.core.services.time.monotonic", side_effect=[0.0, 0.1])
-
         check_fn = MagicMock(return_value=True)
 
+        # start (0.0) + on-ready elapsed (0.1). The explicit finite sequence
+        # fails loudly (StopIteration) if the clock-call count drifts.
         result = wait_for_service(
             check_fn=check_fn,
             timeout=60,
             interval=5,
             service_name="test-service",
+            time_source=iter([0.0, 0.1]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is True
         assert check_fn.call_count == 1
 
-    def test_retries_until_success_within_timeout(self, mocker):
+    def test_retries_until_success_within_timeout(self):
         """Should retry and eventually succeed when check_fn starts failing."""
         from aptl.core.services import wait_for_service
 
-        mocker.patch("aptl.core.services.time.sleep")
-        # Simulate 3 checks at t=0, t=5, t=10
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 5.0, 10.0, 15.0],
-        )
-
         check_fn = MagicMock(side_effect=[False, False, True])
 
+        # start(0) + now after fail 1 (5) + now after fail 2 (10) + on-ready (15)
         result = wait_for_service(
             check_fn=check_fn,
             timeout=60,
             interval=5,
             service_name="test-service",
+            time_source=iter([0.0, 5.0, 10.0, 15.0]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is True
         assert check_fn.call_count == 3
 
-    def test_times_out_when_check_fn_always_fails(self, mocker):
+    def test_times_out_when_check_fn_always_fails(self):
         """Should return ready=False when timeout is exceeded."""
         from aptl.core.services import wait_for_service
 
-        mocker.patch("aptl.core.services.time.sleep")
-        # Simulate time progressing past timeout
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0],
-        )
-
         check_fn = MagicMock(return_value=False)
 
+        # start(0) then now reads 5,10,15,20,25,30; at 30 >= deadline(30) → timeout
         result = wait_for_service(
             check_fn=check_fn,
             timeout=30,
             interval=5,
             service_name="test-service",
+            time_source=iter([0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is False
         assert "timeout" in result.error.lower() or "timed out" in result.error.lower()
 
-    def test_respects_interval_between_checks(self, mocker):
+    def test_respects_interval_between_checks(self):
         """Should sleep for the specified interval between checks."""
         from aptl.core.services import wait_for_service
 
-        mock_sleep = mocker.patch("aptl.core.services.time.sleep")
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 5.0, 10.0, 15.0],
-        )
-
+        sleep_mock = MagicMock()
         check_fn = MagicMock(side_effect=[False, False, True])
 
         wait_for_service(
@@ -95,21 +84,17 @@ class TestWaitForService:
             timeout=60,
             interval=10,
             service_name="test-service",
+            time_source=iter([0.0, 5.0, 10.0, 15.0]).__next__,
+            sleep=sleep_mock,
         )
 
         # Sleep should be called with the interval between failed checks
-        for c in mock_sleep.call_args_list:
+        for c in sleep_mock.call_args_list:
             assert c[0][0] == 10
 
-    def test_reports_elapsed_time(self, mocker):
+    def test_reports_elapsed_time(self):
         """Should report elapsed seconds in the result."""
         from aptl.core.services import wait_for_service
-
-        mocker.patch("aptl.core.services.time.sleep")
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 5.0, 12.5],
-        )
 
         check_fn = MagicMock(side_effect=[False, True])
 
@@ -118,20 +103,16 @@ class TestWaitForService:
             timeout=60,
             interval=5,
             service_name="test-service",
+            time_source=iter([0.0, 5.0, 12.5]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is True
         assert result.elapsed_seconds == pytest.approx(12.5, abs=1.0)
 
-    def test_handles_check_fn_exception(self, mocker):
+    def test_handles_check_fn_exception(self):
         """Should treat exceptions from check_fn as failures and continue retrying."""
         from aptl.core.services import wait_for_service
-
-        mocker.patch("aptl.core.services.time.sleep")
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 5.0, 10.0, 15.0],
-        )
 
         check_fn = MagicMock(
             side_effect=[ConnectionError("refused"), False, True]
@@ -142,29 +123,27 @@ class TestWaitForService:
             timeout=60,
             interval=5,
             service_name="test-service",
+            time_source=iter([0.0, 5.0, 10.0, 15.0]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is True
         assert check_fn.call_count == 3
 
-    def test_timeout_zero_fails_immediately(self, mocker):
+    def test_timeout_zero_fails_immediately(self):
         """Should fail/return immediately with timeout=0 (C7)."""
         from aptl.core.services import wait_for_service
 
-        mocker.patch("aptl.core.services.time.sleep")
-        # t=0 for start, t=0 for deadline check
-        mocker.patch(
-            "aptl.core.services.time.monotonic",
-            side_effect=[0.0, 0.0, 0.0],
-        )
-
         check_fn = MagicMock(return_value=False)
 
+        # start(0.0) + deadline check now(0.0); now >= deadline(0.0) → timeout
         result = wait_for_service(
             check_fn=check_fn,
             timeout=0,
             interval=1,
             service_name="test-service",
+            time_source=iter([0.0, 0.0]).__next__,
+            sleep=lambda _seconds: None,
         )
 
         assert result.ready is False

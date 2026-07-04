@@ -6,9 +6,9 @@ Wazuh Indexer, Manager API, and SSH services.
 
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from aptl.utils.logging import get_logger
 
@@ -29,6 +29,9 @@ def wait_for_service(
     timeout: int,
     interval: int,
     service_name: str,
+    *,
+    time_source: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> ServiceResult:
     """Poll a service until it becomes ready or timeout is exceeded.
 
@@ -38,12 +41,15 @@ def wait_for_service(
         timeout: Maximum seconds to wait.
         interval: Seconds between checks.
         service_name: Human-readable name for logging.
+        time_source: Monotonic clock, injectable so tests drive the deadline
+            with an explicit value sequence instead of patching the module.
+        sleep: Sleep function, injectable so tests don't actually block.
 
     Returns:
         ServiceResult indicating whether the service became ready and
         how long the wait took.
     """
-    start = time.monotonic()
+    start = time_source()
     deadline = start + timeout
 
     log.info("Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval)
@@ -51,13 +57,13 @@ def wait_for_service(
     while True:
         try:
             if check_fn():
-                elapsed = time.monotonic() - start
+                elapsed = time_source() - start
                 log.info("%s is ready (%.1fs)", service_name, elapsed)
                 return ServiceResult(ready=True, elapsed_seconds=elapsed)
         except Exception as exc:
             log.debug("%s check raised %s: %s", service_name, type(exc).__name__, exc)
 
-        now = time.monotonic()
+        now = time_source()
         if now >= deadline:
             elapsed = now - start
             log.warning("%s timed out after %.1fs", service_name, elapsed)
@@ -67,7 +73,7 @@ def wait_for_service(
                 error=f"{service_name} timed out after {elapsed:.0f}s",
             )
 
-        time.sleep(interval)
+        sleep(interval)
 
 
 def check_indexer_ready(url: str, username: str, password: str) -> bool:

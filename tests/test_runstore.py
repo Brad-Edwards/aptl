@@ -455,3 +455,14 @@ class TestResolveActiveRunDir:
         # Invariant: trace_id from a malformed/hostile source must not
         # let an attacker write outside the runs/ dir. Reject defensively.
         assert resolve_active_run_dir(state) is None
+
+    def test_list_runs_returns_run_after_manifest_write(self, tmp_path):
+        """list_runs() includes a run_id once manifest.json exists."""
+        store = LocalRunStore(tmp_path / "runs")
+        run_id = "run_20260101T000000Z"
+        store.create_run(run_id)
+        # Before writing manifest, list_runs should not include the run
+        assert run_id not in store.list_runs()
+        # After writing manifest.json, list_runs should include it
+        store.write_json(run_id, "manifest.json", {"schema_version": "aptl.run-record/v1"})
+        assert run_id in store.list_runs()

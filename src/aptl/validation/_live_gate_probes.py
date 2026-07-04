@@ -12,7 +12,7 @@ telemetry probes without a live lab.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -28,11 +28,10 @@ from aces_runtime.manager import RuntimeManager
 from aces_sdl.scenario import Scenario
 
 from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_profiles import normalize_identifier
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
-from aptl.core.lab import orchestrate_lab_start, stop_lab
+from aptl.core.lab import clean_boot_lab
 from aptl.core.lab_types import StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.core.snapshot import capture_snapshot
@@ -135,23 +134,26 @@ def _boot_lab(
             diagnostics.append("snapshot capture returned no data for running lab")
         return diagnostics
 
-    stop_result = stop_lab(
-        remove_volumes=options.clean_volumes, project_dir=project_dir
+    # Reuse the RNG-001 clean-boot lifecycle capability rather than open-coding
+    # the destructive stop+start here: the gate is a proof point, not the only
+    # implementation home. A failed cleanup is fatal inside ``clean_boot_lab``
+    # (a contaminated environment must not be snapshotted as proof), so a
+    # ``FAILED`` outcome covers both cleanup and start failures.
+    boot_result = clean_boot_lab(
+        project_dir,
+        remove_volumes=options.clean_volumes,
+        scenario_path=scenario_path,
     )
-    if not stop_result.success:
-        diagnostics.append(redact(f"pre-boot cleanup failed: {stop_result.error}"))
-
-    start_result = orchestrate_lab_start(project_dir, scenario_path=scenario_path)
-    if start_result.outcome is StartupOutcome.FAILED:
+    if boot_result.outcome is StartupOutcome.FAILED:
         diagnostics.append(
-            redact(f"public lab start failed: {start_result.error or 'unknown'}")
+            redact(f"public lab start failed: {boot_result.error or 'unknown'}")
         )
-        diagnostics.extend(_startup_diag_lines(start_result))
+        diagnostics.extend(_startup_diag_lines(boot_result))
         return diagnostics
-    if start_result.outcome is not StartupOutcome.READY:
+    if boot_result.outcome is not StartupOutcome.READY:
         # Degraded-but-usable still boots the range; record the degradation but
         # let later readiness checks decide pass/fail on concrete components.
-        diagnostics_note = _startup_diag_lines(start_result)
+        diagnostics_note = _startup_diag_lines(boot_result)
         log.warning("lab booted degraded: %s", "; ".join(diagnostics_note) or "")
 
     state.snapshot = _capture(project_dir, config)
@@ -182,77 +184,6 @@ def _startup_diag_lines(result: "LabResult") -> list[str]:
             )
         )
     return lines
-
-
-def _node_readiness_diagnostics(
-    nodes: Sequence[Mapping[str, Any]],
-    containers: Sequence[Mapping[str, Any]],
-    selected: set[str],
-) -> tuple[list[str], set[str]]:
-    """Return (hard-failure diagnostics, matched container names) for realized nodes."""
-    diagnostics: list[str] = []
-    matched_names: set[str] = set()
-    for node in nodes:
-        # Only nodes whose profile is in the started subset get a container; a
-        # declared node in a non-selected profile (e.g. mail/reverse when those
-        # profiles are disabled) is correctly absent and not a readiness gap.
-        if selected and not (set(node.get("profiles", ())) & selected):
-            continue
-        container = _live_container_for_node(node, containers)
-        if container is None:
-            diagnostics.append(
-                f"realized node {node.get('name', '?')!r} has no live container"
-            )
-            continue
-        matched_names.add(container.get("name", ""))
-        diagnostics.extend(
-            _container_health_diagnostics(node.get("name", "?"), container)
-        )
-    return diagnostics, matched_names
-
-
-def _warn_unhealthy_infra(
-    containers: Sequence[Mapping[str, Any]], matched_names: set[str]
-) -> None:
-    """Log unhealthy non-node infra containers as informational notes only."""
-    for container in containers:
-        if container.get("name", "") in matched_names:
-            continue
-        if container.get("health") == "unhealthy":
-            log.warning(
-                "non-node infra container unhealthy: %s", container.get("name", "?")
-            )
-
-
-def _container_health_diagnostics(
-    node_name: str, container: Mapping[str, Any]
-) -> list[str]:
-    """Return hard-failure diagnostics for one realized node's container."""
-    status = str(container.get("status", ""))
-    health = str(container.get("health", ""))
-    if not status.startswith("Up"):
-        return [f"node {node_name!r} container not running (status={status!r})"]
-    if health == "unhealthy":
-        return [f"node {node_name!r} container unhealthy"]
-    return []
-
-
-def _live_container_for_node(
-    node: Mapping[str, Any], containers: Sequence[Mapping[str, Any]]
-) -> Mapping[str, Any] | None:
-    """Match a realized node to a live container by normalized alias."""
-    node_keys: set[str] = set()
-    raw_values = [node.get("name", ""), *node.get("aliases", ())]
-    for raw in raw_values:
-        norm = normalize_identifier(str(raw))
-        if norm:
-            node_keys.add(norm)
-            node_keys.add(norm.removeprefix("aptl-"))
-    for container in containers:
-        cname = normalize_identifier(str(container.get("name", "")))
-        if cname in node_keys or cname.removeprefix("aptl-") in node_keys:
-            return container
-    return None
 
 
 def _shared_network_targets(
@@ -289,19 +220,23 @@ def _ping_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
 
 
 def _collect_until_evidence(
-    backend: "DeploymentBackend", start_iso: str, window_seconds: int
+    backend: "DeploymentBackend",
+    start_iso: str,
+    window_seconds: int,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Poll for defensive-stack evidence until found or the window elapses.
 
     Both Suricata flow flushing and Wazuh ingest have latency, so the gate polls
     rather than sleeping a fixed interval; it returns as soon as a traffic-derived
-    Suricata event or a Wazuh alert appears.
+    Suricata event or a Wazuh alert appears. ``sleep_fn`` is injectable so tests
+    can skip the real poll wait without patching ``time.sleep`` on the module.
     """
     steps = max(1, window_seconds // _POLL_STEP_SECONDS)
     eve: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
     for _ in range(steps):
-        time.sleep(_POLL_STEP_SECONDS)
+        sleep_fn(_POLL_STEP_SECONDS)
         now = _now_iso()
         eve = collect_suricata_eve(start_iso, now, backend)
         alerts = collect_wazuh_alerts(start_iso, now)

@@ -44,24 +44,6 @@ def resource_name(address: str, payload: Mapping[str, Any]) -> str:
     return first_nonempty_string(payload_string_values(payload, ("name",))) or address
 
 
-def runtime_spec(
-    payload: Mapping[str, Any],
-    spec: Mapping[str, Any] | None,
-) -> Mapping[str, Any] | None:
-    """Return the runtime-specific payload block when present."""
-
-    for container in (payload, spec):
-        if container is None:
-            continue
-        runtime = container.get("runtime")
-        if isinstance(runtime, Mapping):
-            return runtime
-        aptl = container.get("aptl")
-        if isinstance(aptl, Mapping):
-            return aptl
-    return None
-
-
 def service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract named services from a node specification."""
 
@@ -78,6 +60,21 @@ def service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
         if isinstance(name, str) and name.strip():
             names.add(name)
     return names
+
+
+def health_status(node_spec: Mapping[str, Any] | None) -> str | None:
+    """Extract the declared health status from a node's runtime block.
+
+    ACES carries the SDL ``runtime.health`` declaration into the compiled node
+    payload at ``spec.node.runtime.health.status``. The ``status`` is the
+    realizable expectation (e.g. ``healthy``) compared against live container
+    health; the sibling ``description`` is prose and is not realized.
+    """
+
+    runtime = node_spec.get("runtime") if isinstance(node_spec, Mapping) else None
+    health = runtime.get("health") if isinstance(runtime, Mapping) else None
+    status = health.get("status") if isinstance(health, Mapping) else None
+    return status if isinstance(status, str) and status.strip() else None
 
 
 def network_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
@@ -99,31 +96,92 @@ def dependency_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
 def static_addresses(infra_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract static host addresses from infrastructure details."""
 
+    return {
+        address
+        for _, address in static_address_assignments(infra_spec)
+    }
+
+
+def static_address_assignments(
+    infra_spec: Mapping[str, Any] | None,
+) -> tuple[tuple[str, str], ...]:
+    """Extract static host addresses keyed by linked network."""
+
     if infra_spec is None:
-        return set()
-    properties = infra_spec.get("properties")
-    addresses: set[str] = set()
+        return ()
+    assignments = _static_assignments_from_properties(
+        infra_spec.get("properties"),
+        infra_spec,
+    )
+    return tuple(sorted(assignments.items()))
+
+
+def _static_assignments_from_properties(
+    properties: object,
+    infra_spec: Mapping[str, Any],
+) -> dict[str, str]:
+    """Extract static assignments from ACES infrastructure properties."""
+
     if isinstance(properties, list):
-        for item in properties:
-            if isinstance(item, Mapping):
-                addresses.update(string_values(item.values()))
-    elif isinstance(properties, Mapping):
-        for key in ("address", "ip", "ipv4_address", "static_address"):
-            value = properties.get(key)
-            if isinstance(value, str) and value.strip():
-                addresses.add(value)
-    return addresses
+        return _static_assignments_from_property_list(properties)
+    if isinstance(properties, Mapping):
+        return _static_assignments_from_property_mapping(properties, infra_spec)
+    return {}
 
 
-def string_list(
-    payload: Mapping[str, Any] | None,
-    key: str,
-) -> set[str]:
-    """Extract a string set from an optional mapping key."""
+def _static_assignments_from_property_list(
+    properties: list[object],
+) -> dict[str, str]:
+    """Extract explicit network-to-address property entries."""
 
-    if payload is None:
-        return set()
-    return string_values(payload.get(key))
+    assignments: dict[str, str] = {}
+    for item in properties:
+        if isinstance(item, Mapping):
+            assignments.update(_static_assignments_from_property_item(item))
+    return assignments
+
+
+def _static_assignments_from_property_item(
+    item: Mapping[object, object],
+) -> dict[str, str]:
+    """Extract static addresses from one ACES network-property mapping."""
+
+    assignments: dict[str, str] = {}
+    for network, address in item.items():
+        network_name = str(network).strip()
+        address_value = _nonempty_string(address)
+        if network_name and address_value is not None:
+            assignments[network_name] = address_value
+    return assignments
+
+
+def _static_assignments_from_property_mapping(
+    properties: Mapping[str, Any],
+    infra_spec: Mapping[str, Any],
+) -> dict[str, str]:
+    """Extract a single static address from legacy scalar property forms."""
+
+    address = _first_static_address_value(properties)
+    network_values = sorted(network_names(infra_spec))
+    if address is not None and len(network_values) == 1:
+        return {network_values[0]: address}
+    return {}
+
+
+def _first_static_address_value(properties: Mapping[str, Any]) -> str | None:
+    """Return the first non-empty legacy static address property."""
+
+    for key in ("address", "ip", "ipv4_address", "static_address"):
+        value = _nonempty_string(properties.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _nonempty_string(value: object) -> str | None:
+    """Return a stripped string only when it carries content."""
+
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def string_values(raw: object) -> set[str]:

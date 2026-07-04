@@ -32,6 +32,30 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"
 ```
 
+## Python environment
+
+Install the CLI into a virtualenv, not the system Python. Modern
+Debian/Ubuntu/WSL2 hosts mark the system interpreter as externally managed and
+block system-wide `pip` under [PEP 668](https://peps.python.org/pep-0668/), so
+`pip install -e .` against the system Python fails with
+`error: externally-managed-environment`.
+
+**Debian/Ubuntu/WSL2:** install the `venv` module first (Debian ships it
+separately from `python3`):
+
+```bash
+sudo apt install python3-venv   # or python3-full
+```
+
+Then create and activate the virtualenv from the repo root:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+```
+
+`.venv` is gitignored. Re-run `source .venv/bin/activate` in each new shell
+before using `aptl`.
+
 ## Verify
 
 ```bash

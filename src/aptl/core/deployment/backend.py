@@ -18,6 +18,10 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.deployment.realization import (
+    DeploymentNetworkRealization,
+    DeploymentRealizationSpec,
+)
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
@@ -42,6 +46,28 @@ class DeploymentBackend(Protocol):
 
         Args:
             profiles: List of profile names to activate.
+            build: If True, rebuild images before starting.
+
+        Returns:
+            LabResult indicating success or failure.
+        """
+        ...
+
+    def realize(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        build: bool = True,
+    ) -> LabResult:
+        """Realize a typed scenario deployment through the backend.
+
+        Implementations may use profiles as a vehicle for starting existing
+        services, but the declared nodes/networks in ``realization`` are the
+        topology authority for any follow-on side effects.
+
+        Args:
+            realization: Typed deployment realization emitted from ACES plan
+                resources.
             build: If True, rebuild images before starting.
 
         Returns:
@@ -94,6 +120,41 @@ class DeploymentBackend(Protocol):
             List of warning messages for images that failed to pull
             (non-fatal).
         """
+        ...
+
+    def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
+        """Materialize one scenario-declared network.
+
+        Implementations choose the concrete backend network name, but must keep
+        it scoped to this deployment project and honor CIDR, gateway, and
+        internal-egress settings when present.
+        """
+        ...
+
+    def connect_container_network(
+        self,
+        container_name: str,
+        network_name: str,
+        *,
+        ipv4_address: str | None = None,
+        aliases: tuple[str, ...] = (),
+    ) -> LabResult:
+        """Attach one container to one backend network.
+
+        Args:
+            container_name: Concrete backend container name.
+            network_name: Concrete backend network name.
+            ipv4_address: Optional static IPv4 address for this attachment.
+            aliases: Optional DNS aliases to preserve on the attachment.
+        """
+        ...
+
+    def disconnect_container_network(
+        self,
+        container_name: str,
+        network_name: str,
+    ) -> LabResult:
+        """Detach one container from one backend network."""
         ...
 
     def seed_named_volumes(

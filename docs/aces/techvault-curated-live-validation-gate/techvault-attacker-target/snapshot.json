@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-06-24T05:04:24.004920+00:00",
+  "timestamp": "2026-06-25T17:01:56.384722+00:00",
   "containers": [
     {
       "name": "aptl-victim",
       "image": "aptl-victim",
-      "status": "Up 47 seconds (healthy)",
+      "status": "Up 51 seconds (healthy)",
       "health": "healthy",
       "networks": {
         "aptl_aptl-internal": "172.20.2.20"
@@ -17,7 +17,7 @@
     {
       "name": "aptl-wazuh-dashboard",
       "image": "wazuh/wazuh-dashboard:4.12.0",
-      "status": "Up 47 seconds (healthy)",
+      "status": "Up 51 seconds (healthy)",
       "health": "healthy",
       "networks": {
         "aptl_aptl-security": "172.20.0.11"
@@ -67,30 +67,6 @@
       ]
     },
     {
-      "name": "aptl-grafana-otel",
-      "image": "grafana/grafana:11.6.0",
-      "status": "Up About a minute",
-      "health": "",
-      "networks": {
-        "aptl_aptl-security": "172.20.0.52"
-      },
-      "ports": [
-        "127.0.0.1:3100->3000/tcp"
-      ]
-    },
-    {
-      "name": "aptl-wazuh-indexer",
-      "image": "wazuh/wazuh-indexer:4.12.0",
-      "status": "Up About a minute (healthy)",
-      "health": "healthy",
-      "networks": {
-        "aptl_aptl-security": "172.20.0.12"
-      },
-      "ports": [
-        "127.0.0.1:9200->9200/tcp"
-      ]
-    },
-    {
       "name": "aptl-otel-collector",
       "image": "otel/opentelemetry-collector-contrib:0.123.0",
       "status": "Up About a minute (healthy)",
@@ -104,6 +80,18 @@
       ]
     },
     {
+      "name": "aptl-grafana-otel",
+      "image": "grafana/grafana:11.6.0",
+      "status": "Up About a minute",
+      "health": "",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.52"
+      },
+      "ports": [
+        "127.0.0.1:3100->3000/tcp"
+      ]
+    },
+    {
       "name": "aptl-tempo",
       "image": "grafana/tempo:2.7.2",
       "status": "Up About a minute",
@@ -113,6 +101,18 @@
       },
       "ports": [
         "127.0.0.1:3200->3200/tcp"
+      ]
+    },
+    {
+      "name": "aptl-wazuh-indexer",
+      "image": "wazuh/wazuh-indexer:4.12.0",
+      "status": "Up About a minute (healthy)",
+      "health": "healthy",
+      "networks": {
+        "aptl_aptl-security": "172.20.0.12"
+      },
+      "ports": [
+        "127.0.0.1:9200->9200/tcp"
       ]
     }
   ],

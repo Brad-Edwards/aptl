@@ -46,13 +46,15 @@ from aptl.validation._live_gate_probes import (
     _generate_event,
     _is_traffic_event,
     _missing_manifest_keys,
-    _node_readiness_diagnostics,
     _now_iso,
     _ping_from_kali,
     _scenario_name,
     _shared_network_targets,
     _single_node_plan,
     _variation_diagnostics,
+)
+from aptl.validation._live_gate_readiness import (
+    _node_readiness_diagnostics,
     _warn_unhealthy_infra,
 )
 from aptl.validation.techvault_gate import GateOptions, validate_scenario
@@ -201,9 +203,7 @@ def check_aces_driven_boot(
         state,
         scenario_path=scenario_path,
     )
-    return _check(
-        "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics
-    )
+    return _check("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, boot_diagnostics)
 
 
 # --------------------------------------------------------------------------- #
@@ -418,7 +418,7 @@ def check_run_archive_manifest(
         "snapshot": state.snapshot,
         "evidence": state.evidence,
         "evaluator_surfaces": {
-            "profile": "orchestration-evaluation",
+            "profile": "full-remote-control-plane",
             "contracts": [
                 "evaluation-result-envelope-v1",
                 "evaluation-history-event-stream-v1",
@@ -426,12 +426,21 @@ def check_run_archive_manifest(
             "execution_state_integration": "#514",
         },
         "orchestrator_surfaces": {
-            "profile": "orchestration-capable",
+            "profile": "orchestration-evaluation",
             "contracts": [
                 "workflow-result-envelope-v1",
                 "workflow-history-event-stream-v1",
             ],
             "execution_state_integration": "aptl.core.runtime.workflow_engine",
+        },
+        "participant_runtime_surfaces": {
+            "profile": "full-remote-control-plane",
+            "contracts": [
+                "participant-episode-state-envelope-v1",
+                "participant-episode-history-event-stream-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "execution_state_integration": "aptl.backends.aces_participant_runtime",
         },
     }
 

@@ -8,7 +8,9 @@ already prove each variant parses, compiles, and realizes to a bounded Compose
 profile set without starting Docker. This gate goes one step further: it boots
 each variant through APTL's public start path and proves the running containers
 and networks match the variant's ACES-realized reduced surface, not the full
-TechVault range.
+TechVault range. For `techvault-attacker-target`, it also drives a red
+participant action through the ACES `ParticipantRuntime` control plane and
+records participant episode plus behavior-history evidence.
 
 It implements the live half of issue #535 (SCN-010K) and follows the boundary
 set by the [curated live validation preflight](techvault-curated-live-validation-preflight.md).
@@ -34,6 +36,13 @@ the existing canonical authorities rather than re-modelling them:
   container, no unexpected steady-state container is present, and the network set
   matches. Each gap becomes one structured diagnostic naming the layer that
   broke, never raw Docker or CLI text.
+- `run_participant_action_proof()` uses the configured deployment backend and
+  `RuntimeControlPlane.initialize_participant_episode()` to drive the
+  `participant.behavior.techvault.kali-victim-ssh-probe` action. The action runs from
+  `aptl-kali` against the realized victim SSH endpoint through
+  `DeploymentBackend.container_exec()`, then validates the standard
+  `operation-receipt-v1`, `operation-status-v1`, `runtime-snapshot-v1`,
+  participant episode, and participant behavior-history surfaces.
 
 The expected surface is the set of steady-state services the selected profiles
 activate, not only the declared ACES nodes. `docker compose --profile <p>`
@@ -57,18 +66,20 @@ that variant's container profiles. The always-on `otel` core needs no flag.
 
 ## Recorded results
 
-All four variants were booted on 2026-06-24 (UTC) on a single Docker host through
-`aptl lab start --scenario <catalog-id> --skip-seed`, captured with
-`aptl lab status --json`, and compared with `compare_to_snapshot()`. Every variant
+The recorded evidence combines the original 2026-06-24 boot-only rows from
+issue #535 with the refreshed DSL-010 participant-runtime row. Every variant
 reached the `Lab is ready.` outcome (`StartupOutcome.READY`) and matched its
-reduced surface exactly.
+reduced surface exactly. The `techvault-attacker-target` proof was refreshed on
+2026-06-25 (UTC) with the current no-`--skip-seed` driver and additionally
+records a participant action artifact that proves the Kali-to-victim interaction
+through the promoted participant runtime.
 
 | Catalog id | Date (UTC) | Readiness | Boot | Containers | Networks | Verdict |
 |---|---|---|---|---|---|---|
 | `techvault-observability-core` | 2026-06-24 | Lab is ready. | 51s | 3 | 1 | PASS |
 | `techvault-defensive-min` | 2026-06-24 | Lab is ready. | 90s | 6 | 3 | PASS |
 | `techvault-enterprise-web` | 2026-06-24 | Lab is ready. | 99s | 10 | 3 | PASS |
-| `techvault-attacker-target` | 2026-06-24 | Lab is ready. | 97s | 9 | 4 | PASS |
+| `techvault-attacker-target` | 2026-06-25 | Lab is ready. | 154s | 9 | 4 | PASS + participant action |
 
 The booted containers and networks for each run equal the ACES-realized selected
 profile surface:
@@ -91,10 +102,14 @@ Per-variant evidence is committed under
 
 - `result.json`: the matched config, exact command, readiness outcome, boot
   duration, selected profiles, realized nodes, expected and actual services and
-  networks, the verdict, and any diagnostics.
+  networks, participant-action summary, the verdict, and any diagnostics.
 - `snapshot.json`: the captured `RangeSnapshot` trimmed to container and network
   surface (`summarize_snapshot()`). The source snapshot is redacted by
   `capture_snapshot()` (ADR-029); no secrets are recorded.
+- `participant-action.json` (`techvault-attacker-target` only): the ACES
+  operation receipt/status, participant episode state/history, participant
+  behavior history, participant runtime snapshot entries, post-action snapshot
+  summary, validator diagnostics, and final verdict.
 
 ## Reproducing the proof
 
@@ -118,20 +133,17 @@ The manual equivalent, for one variant, is to enable that variant's container
 profiles in `aptl.json`, then:
 
 ```bash
-aptl lab start --scenario techvault-defensive-min --skip-seed
+aptl lab start --scenario techvault-defensive-min
 aptl lab status --json
 aptl lab stop -v -y
 ```
 
 ## Known limitations
 
-- The proof boots with `--skip-seed`. The SOC seed step keys off the global
-  `config.containers.soc` flag rather than the scenario's selected profiles, so a
-  reduced variant booted with `soc` enabled would attempt to seed SOC tools that
-  the variant never started. A reduced variant uses a matched config (so `soc` is
-  not enabled) and `--skip-seed`. Scoping the seed step to the selected profiles,
-  like the post-start readiness checks already are, is a candidate follow-up,
-  outside the scope of this proof.
+- Only `techvault-attacker-target` has a participant action proof because it is
+  the curated variant that realizes both the Kali participant container and the
+  victim target container. The other curated variants still prove their reduced
+  boot surface and explicitly record the participant action as skipped.
 - The full live gate's realization check (`check_provisioning_realization`)
   asserts the selected profiles equal `public_start_profiles(config)`, so a
   reduced variant only satisfies it under its matched config. Reduced variants are

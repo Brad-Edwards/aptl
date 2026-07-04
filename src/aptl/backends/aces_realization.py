@@ -18,6 +18,7 @@ from aptl.backends.aces_diagnostics import (
     unsupported_resource_diagnostics,
 )
 from aptl.backends.aces_dependency_closure import append_dependency_closure
+from aptl.backends.aces_image_realization import resolve_node_image
 from aptl.backends.aces_profiles import (
     ComposeProfileIndex,
     explicit_compose_profile_hints,
@@ -26,14 +27,19 @@ from aptl.backends.aces_profiles import (
     normalize_identifier,
     public_start_profiles,
 )
+from aptl.backends.aces_realization_networks import (
+    append_network_topology_diagnostics,
+)
 from aptl.backends.aces_realization_model import (
     AptlRealization,
     NetworkRealization,
     NodeRealization,
     PlacementRealization,
+    _single_or_none,
 )
 from aptl.backends.aces_realization_values import (
     first_nonempty_string as _first_nonempty_string,
+    health_status as _health_status,
     mapping as _mapping,
     network_names as _network_names,
     optional_bool as _optional_bool,
@@ -41,10 +47,9 @@ from aptl.backends.aces_realization_values import (
     placement_target_values as _placement_target_values,
     resolve_target_address as _resolve_target_address,
     resource_name as _resource_name,
-    runtime_spec as _runtime_spec,
     service_names as _service_names,
+    static_address_assignments as _static_address_assignments,
     static_addresses as _static_addresses,
-    string_list as _string_list,
 )
 from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
@@ -72,6 +77,8 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
+        project_dir,
+        config,
         diagnostics,
     )
     append_dependency_closure(
@@ -83,6 +90,7 @@ def interpret_provisioning_plan(
         profiles,
         diagnostics,
     )
+    append_network_topology_diagnostics(nodes, networks, diagnostics)
     placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
     _append_profile_diagnostics(profiles, config, diagnostics)
 
@@ -130,6 +138,8 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
+    project_dir: Path,
+    config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
     """Realize node and network resources before resolving placements."""
@@ -140,7 +150,14 @@ def _realize_nodes_and_networks(
     for resource in payload_resources:
         payload = resource.payload
         if resource.resource_type == "node":
-            node = _realize_node(resource, payload, profile_index)
+            node = _realize_node(
+                resource,
+                payload,
+                profile_index,
+                project_dir,
+                config,
+                diagnostics,
+            )
             nodes.append(node)
             profiles.update(node.profiles)
             if not node.profiles:
@@ -278,28 +295,125 @@ def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
+    project_dir: Path,
+    config: AptlConfig,
+    diagnostics: list[Diagnostic],
 ) -> NodeRealization:
     """Realize a node resource into APTL profile and runtime details."""
 
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
-    profiles = profile_hints | profile_index.profiles_for_aliases(aliases)
+    backend_services = profile_index.service_names_for_aliases(aliases)
+    profiles = (
+        profile_hints
+        | profile_index.profiles_for_aliases(aliases)
+        | profile_index.profiles_for_services(set(backend_services))
+    )
+    if not profiles and _is_aces_conformance_probe_node(resource, payload):
+        backend_services = _conformance_probe_services(profile_index, config)
+        profiles = profile_index.profiles_for_services(set(backend_services))
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
-    runtime_spec = _runtime_spec(payload, spec)
+    service_name = _single_or_none(tuple(sorted(backend_services)))
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
         aliases=tuple(sorted(aliases)),
         profiles=tuple(sorted(profiles)),
+        backend_services=tuple(sorted(backend_services)),
+        container_name=_container_name(profile_index, backend_services),
         services=tuple(sorted(_service_names(node_spec))),
-        rendered_configs=tuple(sorted(_string_list(runtime_spec, "rendered_configs"))),
-        evidence_paths=tuple(sorted(_string_list(runtime_spec, "evidence_paths"))),
-        telemetry_paths=tuple(sorted(_string_list(runtime_spec, "telemetry_paths"))),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
+        static_address_assignments=_static_address_assignments(infra_spec),
+        declared_health=_health_status(node_spec),
+        image=resolve_node_image(
+            resource=resource,
+            payload=payload,
+            project_dir=project_dir,
+            service_name=service_name,
+            diagnostics=diagnostics,
+        ),
     )
+
+
+def _is_aces_conformance_probe_node(
+    resource: PlannedResource,
+    payload: Mapping[str, Any],
+) -> bool:
+    """Return whether a node is ACES' backend-neutral live probe."""
+
+    spec = _mapping(payload.get("spec"))
+    node_spec = _mapping(spec.get("node")) if spec else None
+    infra_spec = _mapping(spec.get("infrastructure")) if spec else None
+    return (
+        _has_aces_conformance_probe_identity(resource, payload)
+        and _has_empty_aces_probe_node_spec(node_spec)
+        and _has_empty_aces_probe_infra_spec(infra_spec)
+    )
+
+
+def _has_aces_conformance_probe_identity(
+    resource: PlannedResource,
+    payload: Mapping[str, Any],
+) -> bool:
+    """Return whether resource identity matches ACES' generic VM probe."""
+
+    return (
+        resource.address,
+        str(payload.get("name", "")),
+        str(payload.get("node_name", "")),
+        str(payload.get("node_type", "")),
+        str(payload.get("os_family", "")),
+    ) == ("provision.node.vm", "vm", "vm", "vm", "linux")
+
+
+def _has_empty_aces_probe_node_spec(
+    node_spec: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether the generic probe has no concrete service source."""
+
+    return (
+        bool(node_spec)
+        and node_spec.get("source") is None
+        and not _service_names(node_spec)
+    )
+
+
+def _has_empty_aces_probe_infra_spec(
+    infra_spec: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether the generic probe has no scenario network intent."""
+
+    return not _network_names(infra_spec) and not _static_addresses(infra_spec)
+
+
+def _conformance_probe_services(
+    profile_index: ComposeProfileIndex,
+    config: AptlConfig,
+) -> frozenset[str]:
+    """Bind ACES' generic probe to one enabled APTL service, if available."""
+
+    for profile in public_start_profiles(config):
+        for service_name, service in sorted(profile_index.services.items()):
+            if profile in service.profiles:
+                return frozenset({service_name})
+    return frozenset()
+
+
+def _container_name(
+    profile_index: ComposeProfileIndex,
+    service_names: frozenset[str],
+) -> str | None:
+    """Return the concrete container name for an unambiguous service binding."""
+
+    if len(service_names) != 1:
+        return None
+    service = profile_index.services.get(next(iter(service_names)))
+    if service is None:
+        return None
+    return service.container_name or service.name
 
 
 def _realize_network(

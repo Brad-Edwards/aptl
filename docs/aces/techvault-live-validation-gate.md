@@ -11,7 +11,7 @@ the run archive. It implements requirement SCN-010 (issue #323).
 
 The gate is scenario-generic by construction. `validate_live_deployment()` takes
 a scenario path, a backend profile, the project directory, and a run id, so the
-next scenario in APTL's `orchestration-capable` expressivity class passes
+next scenario in APTL's `full-remote-control-plane` expressivity class passes
 through by changing inputs rather than by editing the gate. TechVault is the
 proving input, never a hardcoded branch (ADR-035).
 
@@ -33,7 +33,7 @@ layer that broke:
    than degrading to a warning.
 2. **Boot-input agreement** (`backend_instantiation`). The selected scenario is
    passed through to public startup. The profile under validation must still be
-   the public start path's capability profile (`orchestration-capable`). A
+   the public start path's capability profile (`full-remote-control-plane`). A
    profile mismatch is a hard failure raised before any destructive boot, so the
    gate never validates a profile the boot path will not realize.
 3. **ACES-driven boot** (`backend_interpretation` or `backend_instantiation`).
@@ -145,7 +145,7 @@ the prompt in automation, or `--skip-clean-boot` to validate an already-running
 lab without the destructive `stop -v` and reboot. `--scenario` accepts an
 explicit ACES SDL path for the live gate and is passed through to public lab
 startup. `--profile` must remain the public startup capability profile
-(`orchestration-capable`); profile mismatches fail the boot-input agreement
+(`full-remote-control-plane`); profile mismatches fail the boot-input agreement
 check before boot. `--run-id` sets the run-archive id.
 
 The same boot runs as the explicitly gated integration test:

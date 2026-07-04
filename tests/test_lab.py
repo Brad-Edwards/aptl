@@ -5,6 +5,7 @@ compose command construction, and full orchestration. All subprocess/docker
 calls are mocked.
 """
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -189,6 +190,14 @@ class TestLabStart:
 class TestLabStop:
     """Tests for lab stop logic."""
 
+    @staticmethod
+    def _compose_down_args(mock_subprocess):
+        for call in mock_subprocess.call_args_list:
+            cmd_args = call.args[0]
+            if "down" in cmd_args:
+                return cmd_args
+        raise AssertionError("docker compose down was not called")
+
     def test_stop_calls_compose_down(self, mock_subprocess):
         """stop_lab should invoke docker compose down."""
         from aptl.core.lab import stop_lab
@@ -198,7 +207,7 @@ class TestLabStop:
         result = stop_lab()
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "down" in cmd_args
 
     def test_stop_with_volumes_flag(self, mock_subprocess):
@@ -209,7 +218,7 @@ class TestLabStop:
 
         stop_lab(remove_volumes=True)
 
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "-v" in cmd_args
 
     def test_stop_returns_failure_on_error(self, mock_subprocess):
@@ -233,7 +242,7 @@ class TestLabStop:
         result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         # Should include all fallback profiles
         assert "wazuh" in cmd_args
         assert "victim" in cmd_args
@@ -254,9 +263,164 @@ class TestLabStop:
         result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
+
+
+class TestCleanBootLab:
+    """Tests for the RNG-001 clean-boot lifecycle mode.
+
+    ``clean_boot_lab`` is the single reusable destructive clean-state seam:
+    stop the project-scoped deployment with volume removal, then boot
+    through the public start path. A failed cleanup is fatal — a
+    contaminated environment must never be reused as ``clean``.
+    """
+
+    def test_clean_boot_stops_with_volumes_then_starts(self, monkeypatch, tmp_path):
+        """Clean boot tears down (volumes removed) before booting, in order."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        order: list[str] = []
+
+        def fake_stop(**kwargs):
+            order.append("stop")
+            assert kwargs["remove_volumes"] is True
+            return LabResult(success=True, message="stopped")
+
+        def fake_start(project_dir, **kwargs):
+            order.append("start")
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is True
+        assert result.outcome is StartupOutcome.READY
+        assert order == ["stop", "start"]
+
+    def test_clean_boot_stop_failure_is_fatal_and_skips_start(
+        self, monkeypatch, tmp_path
+    ):
+        """A failed cleanup is fatal: do not start a contaminated lab."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        started = []
+
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **k: LabResult(success=False, error="down failed"),
+        )
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: started.append(1)
+            or LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is False
+        assert result.outcome is StartupOutcome.FAILED
+        assert started == [], "start must not run after a failed cleanup"
+
+    def test_clean_boot_redacts_stop_error(self, monkeypatch, tmp_path):
+        """Raw Docker stderr from a failed cleanup is redacted in the envelope."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult
+
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **k: LabResult(success=False, error="raw docker stderr"),
+        )
+        monkeypatch.setattr(lab, "redact", lambda s: f"REDACTED::{s}")
+        monkeypatch.setattr(
+            lab, "orchestrate_lab_start", lambda *a, **k: pytest.fail("unreachable")
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert "REDACTED::" in result.error
+
+    def test_clean_boot_threads_skip_seed_and_scenario_path(
+        self, monkeypatch, tmp_path
+    ):
+        """Seed behavior and scenario selection flow through to the start path."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        captured = {}
+
+        monkeypatch.setattr(lab, "stop_lab", lambda **k: LabResult(success=True))
+
+        def fake_start(project_dir, *, skip_seed=False, scenario_path=None):
+            captured["skip_seed"] = skip_seed
+            captured["scenario_path"] = scenario_path
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
+
+        scenario = tmp_path / "scenario.yaml"
+        clean_boot_lab(tmp_path, skip_seed=True, scenario_path=scenario)
+
+        assert captured == {"skip_seed": True, "scenario_path": scenario}
+
+    def test_clean_boot_remove_volumes_false_honored(self, monkeypatch, tmp_path):
+        """The cleanup policy is a knob: remove_volumes=False is forwarded."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        captured = {}
+
+        def fake_stop(**kwargs):
+            captured["remove_volumes"] = kwargs["remove_volumes"]
+            return LabResult(success=True)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        clean_boot_lab(tmp_path, remove_volumes=False)
+
+        assert captured["remove_volumes"] is False
+
+    def test_clean_boot_forwards_backend_to_stop(self, monkeypatch, tmp_path):
+        """An explicit backend is forwarded to the project-scoped stop."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        sentinel_backend = MagicMock()
+        captured = {}
+
+        def fake_stop(**kwargs):
+            captured["backend"] = kwargs.get("backend")
+            return LabResult(success=True)
+
+        monkeypatch.setattr(lab, "stop_lab", fake_stop)
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *a, **k: LabResult(success=True, outcome=StartupOutcome.READY),
+        )
+
+        clean_boot_lab(tmp_path, backend=sentinel_backend)
+
+        assert captured["backend"] is sentinel_backend
 
 
 class TestLabStatus:
@@ -1370,7 +1534,7 @@ class TestSeedSuricataVolumesStep:
         suffixes = {s.volume_suffix for s in seeds}
         assert suffixes == {"suricata_config_seed", "suricata_misp_rules"}
 
-    def test_seed_error_aborts_lab_start_step(self, tmp_path):
+    def test_seed_error_aborts_lab_start_step(self, tmp_path, caplog):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import _step_seed_suricata_volumes
 
@@ -1379,6 +1543,7 @@ class TestSeedSuricataVolumesStep:
         backend.seed_named_volumes.side_effect = BackendSeedError(
             "Seeding named volume 'suricata_config_seed' failed"
         )
+        caplog.set_level(logging.ERROR, logger="aptl.lab")
 
         result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
 
@@ -1387,6 +1552,13 @@ class TestSeedSuricataVolumesStep:
         assert "suricata runtime volume seeding failed" in (
             result.error or ""
         ).lower()
+        seed_records = [
+            record
+            for record in caplog.records
+            if record.getMessage() == "Suricata volume seed failed: BackendSeedError"
+        ]
+        assert seed_records
+        assert seed_records[0].exc_info is not None
 
     def test_missing_source_aborts_step(self, tmp_path):
         from aptl.core.lab import _step_seed_suricata_volumes
@@ -1518,7 +1690,8 @@ class TestStartupClassificationWiring:
         backend.pull_images.return_value = []
         ctx.backend = backend
 
-        _step_pull_images(ctx)
+        result = _step_pull_images(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -1534,7 +1707,8 @@ class TestStartupClassificationWiring:
         ]
         ctx.backend = backend
 
-        _step_pull_images(ctx)
+        result = _step_pull_images(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1566,7 +1740,8 @@ class TestStartupClassificationWiring:
             ],
         )
 
-        _step_wait_for_services(ctx)
+        result = _step_wait_for_services(ctx)
+        assert result is None
 
         indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
         assert len(indexer_diags) == 1
@@ -1592,7 +1767,8 @@ class TestStartupClassificationWiring:
             ],
         )
 
-        _step_wait_for_services(ctx)
+        result = _step_wait_for_services(ctx)
+        assert result is None
 
         manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
         assert len(manager_diags) == 1
@@ -1609,7 +1785,8 @@ class TestStartupClassificationWiring:
             return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
         )
 
-        _step_wait_for_services(ctx)
+        result = _step_wait_for_services(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -1623,7 +1800,8 @@ class TestStartupClassificationWiring:
             return_value=ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
         )
 
-        _step_wait_for_services(ctx)
+        result = _step_wait_for_services(ctx)
+        assert result is None
 
         # Wazuh probes never ran -> no diagnostics.
         assert ctx.diagnostics == []
@@ -1645,7 +1823,8 @@ class TestStartupClassificationWiring:
         )
         wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
 
-        _step_wait_for_services(ctx)
+        result = _step_wait_for_services(ctx)
+        assert result is None
 
         wait_mock.assert_not_called()
         assert ctx.diagnostics == []
@@ -1676,7 +1855,8 @@ class TestStartupClassificationWiring:
             ],
         )
 
-        _step_test_ssh(ctx)
+        result = _step_test_ssh(ctx)
+        assert result is None
 
         readiness_diags = [
             d for d in ctx.diagnostics if d.impact is DiagnosticImpact.READINESS
@@ -1704,7 +1884,8 @@ class TestStartupClassificationWiring:
             return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
         )
 
-        _step_test_ssh(ctx)
+        result = _step_test_ssh(ctx)
+        assert result is None
 
         # Inspect the partial passed to wait_for_service for the SSH probe.
         for call in wait.call_args_list:
@@ -1725,7 +1906,8 @@ class TestStartupClassificationWiring:
         mocker.patch("aptl.core.lab.container_networks", return_value={})
         wait = mocker.patch("aptl.core.lab.wait_for_service")
 
-        _step_test_ssh(ctx)
+        result = _step_test_ssh(ctx)
+        assert result is None
 
         readiness_diags = [
             d for d in ctx.diagnostics if d.impact is DiagnosticImpact.READINESS
@@ -1749,7 +1931,8 @@ class TestStartupClassificationWiring:
             return_value=ServiceResult(ready=True, elapsed_seconds=2.0),
         )
 
-        _step_test_ssh(ctx)
+        result = _step_test_ssh(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -1767,7 +1950,8 @@ class TestStartupClassificationWiring:
         networks = mocker.patch("aptl.core.lab.container_networks")
         wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
 
-        _step_test_ssh(ctx)
+        result = _step_test_ssh(ctx)
+        assert result is None
 
         networks.assert_not_called()
         wait_mock.assert_not_called()
@@ -1781,7 +1965,8 @@ class TestStartupClassificationWiring:
 
         ctx = self._ctx(tmp_path)
         # No mcp/build-all-mcps.sh script in tmp_path
-        _step_build_mcps(ctx)
+        result = _step_build_mcps(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1812,7 +1997,8 @@ class TestStartupClassificationWiring:
             ),
         )
 
-        _step_build_mcps(ctx)
+        result = _step_build_mcps(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1837,7 +2023,8 @@ class TestStartupClassificationWiring:
             return_value=MagicMock(returncode=0, stdout="", stderr=""),
         )
 
-        _step_build_mcps(ctx)
+        result = _step_build_mcps(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -1853,7 +2040,8 @@ class TestStartupClassificationWiring:
             "aptl.core.lab.capture_snapshot", return_value=RangeSnapshot()
         )
 
-        _step_capture_snapshot(ctx)
+        result = _step_capture_snapshot(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -1874,7 +2062,8 @@ class TestStartupClassificationWiring:
         )
 
         # Must not raise — degradation, not failure.
-        _step_capture_snapshot(ctx)
+        result = _step_capture_snapshot(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1884,6 +2073,113 @@ class TestStartupClassificationWiring:
         # Exception text must not leak into the structured message
         # (ADR-029 / ADR-030).
         assert "docker daemon unreachable" not in diag.message
+
+    # -- write_run_record (REP-001) ------------------------------------
+
+    def _run_record_ctx(self, tmp_path):
+        """A ctx carrying a real run target + aces_outcome + snapshot so
+        _step_write_run_record writes a real manifest under the run dir."""
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import _LabStartContext
+        from aptl.core.lab_types import LabResult
+        from aptl.core.runstore import LocalRunStore
+        from aptl.core.snapshot import RangeSnapshot
+
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        run_store = LocalRunStore(tmp_path / ".aptl" / "runs")
+        run_id = "run_20260101T000000Z"
+        outcome = AcesStartOutcome(
+            lab_result=LabResult(success=True, message="ok"),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={"nodes": [{"name": "techvault.victim"}]},
+            selected_profiles=["victim", "otel"],
+            scenario_path=tmp_path / "scenarios" / "demo.sdl.yaml",
+        )
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            config=self._make_config(),
+            backend=MagicMock(),
+        )
+        ctx.aces_outcome = outcome
+        ctx.snapshot = RangeSnapshot()
+        ctx.run_store = run_store
+        ctx.run_id = run_id
+        return ctx, run_store, run_id
+
+    def test_write_run_record_references_existing_orchestration_evidence(
+        self, tmp_path
+    ):
+        """GAP 3: evidence_references lists an existing orchestration artifact
+        by RELATIVE path and does NOT inline its bytes into the manifest."""
+        from aptl.core.lab import _step_write_run_record
+
+        ctx, run_store, run_id = self._run_record_ctx(tmp_path)
+        # Stage an orchestration artifact under the run dir before writing.
+        run_store.write_json(
+            run_id,
+            "orchestration/exercise.workflow.demo/result.json",
+            {"workflow_status": "COMPLETED", "secret_value": "should-not-inline"},
+        )
+
+        result = _step_write_run_record(ctx)
+        assert result is None
+
+        manifest = run_store.get_run_manifest(run_id)
+        refs = manifest["backend_evidence"]["evidence_references"]
+        paths = {ref["path"] for ref in refs}
+        rel = "orchestration/exercise.workflow.demo/result.json"
+        assert rel in paths
+        # Relative, never absolute.
+        for ref in refs:
+            assert not ref["path"].startswith("/")
+            assert ref["kind"] == "orchestration"
+        # Bytes are referenced, not inlined: the artifact's payload value must
+        # not appear anywhere in the serialized manifest.
+        import json as _json
+
+        assert "should-not-inline" not in _json.dumps(manifest)
+
+    def test_write_run_record_shares_run_id_with_orchestration(self, tmp_path):
+        """GAP 4: the run record and orchestration artifacts share one run_id —
+        the manifest run_id equals the run dir holding the orchestration data."""
+        from aptl.core.lab import _step_write_run_record
+
+        ctx, run_store, run_id = self._run_record_ctx(tmp_path)
+        run_store.write_json(
+            run_id,
+            "orchestration/wf/result.json",
+            {"workflow_status": "PENDING"},
+        )
+
+        result = _step_write_run_record(ctx)
+        assert result is None
+
+        manifest = run_store.get_run_manifest(run_id)
+        assert manifest["run_id"] == run_id
+        # The realization populated by GAP 1 is carried into the record.
+        assert manifest["aces"]["realization"]["nodes"]
+        assert manifest["backend_evidence"]["selected_profiles"] == [
+            "victim",
+            "otel",
+        ]
+        assert run_id in run_store.list_runs()
+
+    def test_resolve_run_target_mints_validatable_run_id(self, tmp_path):
+        """_resolve_run_target mints a run_id that passes runstore._validate_id
+        when no active trace context exists (GAP 4 fallback)."""
+        from aptl.core.lab import _LabStartContext, _resolve_run_target
+        from aptl.core.runstore import _validate_id
+
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        store, run_id = _resolve_run_target(ctx)
+        # Must not raise.
+        assert _validate_id(run_id, "run_id") == run_id
+        # create_run + manifest must round-trip under the minted id.
+        store.create_run(run_id)
+        store.write_json(run_id, "manifest.json", {"run_id": run_id})
+        assert run_id in store.list_runs()
 
     # -- seed_soc (capability) -----------------------------------------
 
@@ -1924,7 +2220,8 @@ class TestStartupClassificationWiring:
             ),
         )
 
-        _step_seed_soc(ctx)
+        result = _step_seed_soc(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1965,7 +2262,8 @@ class TestStartupClassificationWiring:
             side_effect=subprocess.TimeoutExpired(cmd=str(seed_script), timeout=1),
         )
 
-        _step_seed_soc(ctx)
+        result = _step_seed_soc(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -1981,7 +2279,8 @@ class TestStartupClassificationWiring:
         ctx = self._ctx(tmp_path)
         ctx.skip_seed = True
 
-        _step_seed_soc(ctx)
+        result = _step_seed_soc(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -2009,7 +2308,8 @@ class TestStartupClassificationWiring:
             ),
         )
         # No scripts/seed-prime.sh in tmp_path
-        _step_seed_soc(ctx)
+        result = _step_seed_soc(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -2025,7 +2325,8 @@ class TestStartupClassificationWiring:
 
         ctx = self._ctx(tmp_path, config=self._make_config())  # soc not set -> False
         # No scripts/seed-prime.sh in tmp_path
-        _step_seed_soc(ctx)
+        result = _step_seed_soc(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -2043,7 +2344,8 @@ class TestStartupClassificationWiring:
             side_effect=RuntimeError("THEHIVE_API_KEY mismatch"),
         )
 
-        _step_sync_mcp_config(ctx)
+        result = _step_sync_mcp_config(ctx)
+        assert result is None
 
         assert len(ctx.diagnostics) == 1
         diag = ctx.diagnostics[0]
@@ -2060,7 +2362,8 @@ class TestStartupClassificationWiring:
         ctx = self._ctx(tmp_path)
         mocker.patch("aptl.core.lab._sync_mcp_config_keys", return_value=None)
 
-        _step_sync_mcp_config(ctx)
+        result = _step_sync_mcp_config(ctx)
+        assert result is None
 
         assert ctx.diagnostics == []
 
@@ -2280,12 +2583,18 @@ class TestLabOrchestrationContracts:
         result = _step_start_containers(ctx)
 
         assert result is None
+        # GAP 4: the handoff is invoked with the single run target resolved
+        # once on ctx, so orchestration and the run record share a run_id.
         start_aces.assert_called_once_with(
             tmp_path,
             ctx.config,
             ctx.backend,
             scenario_path=None,
+            run_store=ctx.run_store,
+            run_id=ctx.run_id,
         )
+        assert ctx.run_store is not None
+        assert ctx.run_id
 
     def test_start_containers_preserves_scenario_path_on_soc_retry(self, mocker, tmp_path):
         from aptl.core.lab import LabResult, _step_start_containers

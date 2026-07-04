@@ -25,4 +25,11 @@ RUN pip install --no-cache-dir ".[web]" && \
 
 EXPOSE 8400
 
-CMD ["uvicorn", "aptl.api.main:app", "--host", "0.0.0.0", "--port", "8400", "--workers", "2", "--log-level", "info", "--timeout-keep-alive", "65"]
+# Use the `aptl web serve` entrypoint (not raw uvicorn) so the container mints
+# the per-process browser-session secrets and logs the one-time login URL/token
+# (UI-008a / ADR-039). Grab the launch token from the container logs to bootstrap
+# a browser session through the UI origin. A SINGLE worker is required: the
+# launch-token (one-time), session, and terminal-ticket stores are in-process and
+# not shared across workers. --api-only is deliberate: this container serves only
+# the JSON API; the sibling aptl-web-ui (Caddy) container serves the built GUI.
+CMD ["aptl", "web", "serve", "--host", "0.0.0.0", "--port", "8400", "--workers", "1", "--api-only"]

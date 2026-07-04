@@ -64,7 +64,13 @@ REJECT counts the same as DROP because both block traffic; the wedge symptom is 
 
 ### Why we don't infer mode
 
-Codex's preflight guardrail (`docs/sdl/runtime-architecture.md`): *"runtime behavior must not infer purple mode from filenames, legacy fixtures, agents present, or CLI defaults."* The SDL `Scenario` model has no `mode` field; the legacy `scenarios/*.yaml` `mode:` keys do not validate. A half-baked gate would either silently default to "purple" (and become indistinguishable from "always-on") or read `mode:` from raw YAML (and violate the no-infer rule).
+Codex's preflight guardrail (`docs/sdl/runtime-architecture.md`): runtime
+behavior must not infer purple mode from filenames, legacy fixtures, agents
+present, or CLI defaults. After the ADR-035 cutover, the old `mode:` keys live
+only in archived reference fixtures under `scenarios/archive/`; they are not
+startup inputs. A half-baked gate would either silently default to "purple"
+(and become indistinguishable from "always-on") or read `mode:` from archived
+YAML (and violate the no-infer rule).
 
 The cleaner design is to run the audit **unconditionally**, because every shipped APTL scenario is purple-team by design—APTL is the purple-team lab. We do not *read* `mode` from anywhere; the audit always runs. When SDL adds an authoritative `mode` field (issue #263), the audit gains a `scenario.mode == PURPLE` gate at the same call site, with `red` and `blue` runs explicitly skipped (so a defender's source-IP ban remains valid in non-purple modes). That migration is mechanically small (one `if scenario.mode == PURPLE` check at the runtime call site) and intentionally deferred to #263 so this ADR is not blocked on schema work.
 

@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import type { LabStatus } from '../types';
-import { getLabStatus, subscribeLabEvents } from '../api';
+import { getLabStatus, subscribeLabEvents, type EventSubscription } from '../api';
 
 export const labStatus = writable<LabStatus>({
 	running: false,
@@ -10,7 +10,7 @@ export const labStatus = writable<LabStatus>({
 
 export const labLoading = writable(false);
 
-let eventSource: EventSource | null = null;
+let subscription: EventSubscription | null = null;
 let generation = 0;
 
 const RECONNECT_DELAY_MS = 5000;
@@ -38,19 +38,19 @@ export function initLabStore(): void {
 		});
 
 	// Start SSE
-	if (eventSource) {
-		eventSource.close();
+	if (subscription) {
+		subscription.close();
 	}
-	eventSource = subscribeLabEvents(
+	subscription = subscribeLabEvents(
 		(status) => {
 			if (currentGeneration === generation) {
 				labStatus.set(status);
 			}
 		},
-		(event) => {
-			const es = event.target as EventSource;
-			if (es.readyState === EventSource.CLOSED && currentGeneration === generation) {
-				// Schedule reconnect
+		() => {
+			// Stream ended or failed (not an explicit close): schedule reconnect,
+			// which re-fetches a fresh status and re-subscribes.
+			if (currentGeneration === generation) {
 				setTimeout(() => {
 					if (currentGeneration === generation) {
 						initLabStore();
@@ -61,11 +61,31 @@ export function initLabStore(): void {
 	);
 }
 
+/**
+ * Re-fetch lab status once, without disturbing the existing SSE subscription.
+ * Used after a lifecycle action (start/stop/kill) so the UI reflects the new
+ * state immediately rather than waiting for the next SSE poll. Generation-guarded
+ * so a result that arrives after `destroyLabStore()` does not clobber the store.
+ */
+export async function refreshLabStatus(): Promise<void> {
+	const currentGeneration = generation;
+	try {
+		const status = await getLabStatus();
+		if (currentGeneration === generation) {
+			labStatus.set(status);
+		}
+	} catch (err) {
+		if (currentGeneration === generation) {
+			labStatus.update((s) => ({ ...s, error: String(err) }));
+		}
+	}
+}
+
 /** Stop SSE subscription. */
 export function destroyLabStore(): void {
 	generation++;
-	if (eventSource) {
-		eventSource.close();
-		eventSource = null;
+	if (subscription) {
+		subscription.close();
+		subscription = null;
 	}
 }

@@ -6,6 +6,8 @@ Compose as the default backend.  Includes the full orchestration of lab
 startup.
 """
 
+from __future__ import annotations
+
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -74,6 +76,7 @@ from aptl.utils.redaction import redact
 if TYPE_CHECKING:
     from docker.client import DockerClient
 
+    from aptl.backends.aces import AcesStartOutcome
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -84,8 +87,16 @@ def start_aces_scenario(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
-) -> LabResult:
-    """Lazy ACES handoff import for the public lab-start path."""
+    *,
+    run_store: object = None,
+    run_id: str | None = None,
+) -> AcesStartOutcome | LabResult:
+    """Lazy ACES handoff import for the public lab-start path.
+
+    ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
+    are threaded into the ACES handoff so orchestration persists workflow
+    artifacts under the same run directory the run record is written to.
+    """
     try:
         from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
     except ImportError as exc:
@@ -98,6 +109,8 @@ def start_aces_scenario(
         config,
         backend,
         scenario_path=scenario_path,
+        run_store=run_store,
+        run_id=run_id,
     )
 
 
@@ -321,6 +334,70 @@ def stop_lab(
     return backend.stop(profiles, remove_volumes=remove_volumes)
 
 
+def clean_boot_lab(
+    project_dir: Path,
+    *,
+    remove_volumes: bool = True,
+    skip_seed: bool = False,
+    scenario_path: Optional[Path] = None,
+    backend: Optional["DeploymentBackend"] = None,
+) -> LabResult:
+    """Boot the lab into a guaranteed clean state (RNG-001).
+
+    The single reusable destructive clean-state lifecycle mode: tear down
+    the project-scoped deployment removing Compose-managed volumes (the
+    first cleanup policy), then boot through the public start path so the
+    range comes up free of contamination (files, processes, service
+    databases/logs, generated in-container credentials) from a prior run.
+
+    Cleanup and boot reuse :func:`stop_lab` and
+    :func:`orchestrate_lab_start`; both are project-scoped through the
+    deployment backend (``-p <project_name>`` + compose-project labels),
+    so this never enumerates or removes unrelated Docker objects on a
+    shared daemon. It removes only Compose-managed state — never ``.env``,
+    ``keys/``, ``.mcp.json``, checked-in config, or run archives.
+
+    A failed cleanup is a fatal lifecycle failure, not a partial-readiness
+    state: a contaminated environment must never be reused as "clean", so
+    a stop failure short-circuits before the boot. Raw Docker stderr is
+    redacted before it crosses this boundary.
+
+    Args:
+        project_dir: Root directory of the APTL project.
+        remove_volumes: Cleanup policy. When ``True`` (default) the
+            teardown removes Compose-managed volumes; the knob lets future
+            cleanup variations extend this one mode.
+        skip_seed: Forwarded to the start path (skip SOC tool seeding).
+        scenario_path: Optional selected ACES SDL scenario path.
+        backend: Optional pre-created deployment backend, forwarded to the
+            teardown so callers that already resolved one avoid a re-create.
+
+    Returns:
+        LabResult — the boot outcome on success, or a fatal ``FAILED``
+        result carrying the redacted cleanup error when teardown fails.
+    """
+    stop_result = stop_lab(
+        remove_volumes=remove_volumes,
+        project_dir=project_dir,
+        backend=backend,
+    )
+    if not stop_result.success:
+        return LabResult(
+            success=False,
+            error=redact(
+                "clean-state cleanup failed; lab not booted: "
+                f"{stop_result.error}"
+            ),
+            outcome=StartupOutcome.FAILED,
+        )
+
+    return orchestrate_lab_start(
+        project_dir,
+        skip_seed=skip_seed,
+        scenario_path=scenario_path,
+    )
+
+
 def lab_status(
     project_dir: Optional[Path] = None,
     backend: Optional["DeploymentBackend"] = None,
@@ -484,6 +561,15 @@ class _LabStartContext(object):
     ssh_key_path: Path | None = None
     selected_profiles: set[str] = field(default_factory=set)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
+    # REP-001: ACES start outcome and range snapshot for run record writing.
+    # Use object to avoid circular imports; typed at use sites.
+    aces_outcome: object = None
+    snapshot: object = None
+    # REP-001 / GAP 4: one run store + run_id resolved once per lab-start run,
+    # threaded through orchestration and reused by the run-record step so
+    # workflow artifacts and the record share a single run directory.
+    run_store: object = None
+    run_id: str | None = None
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -835,7 +921,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     ) as exc:
         # Narrow, redacted failure (ADR-043): name the artifact/exception
         # type, not raw Docker stderr.
-        log.error("Suricata volume seed failed: %s", type(exc).__name__)
+        log.exception("Suricata volume seed failed: %s", type(exc).__name__)
         return LabResult(
             success=False,
             error=f"Suricata runtime volume seeding failed: {exc}",
@@ -982,26 +1068,38 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
-    start_result = start_aces_scenario(
+    # GAP 4: resolve the single run target ONCE, before the ACES handoff, so
+    # orchestration persists workflow artifacts and the later run-record step
+    # write to the same run directory / run_id.
+    ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    outcome = start_aces_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
+        run_store=ctx.run_store,
+        run_id=ctx.run_id,
     )
-    if not start_result.success and ctx.config.containers.soc:
+    lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
+    if not lab_result.success and ctx.config.containers.soc:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
             "initializing). Waiting 60s and retrying..."
         )
         import time
         time.sleep(60)
-        start_result = start_aces_scenario(
+        outcome = start_aces_scenario(
             ctx.project_dir,
             ctx.config,
             ctx.backend,
             scenario_path=ctx.scenario_path,
+            run_store=ctx.run_store,
+            run_id=ctx.run_id,
         )
-    if start_result.success:
+        lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
+    if lab_result.success:
+        # Store the ACES start outcome for the run record step (REP-001).
+        ctx.aces_outcome = outcome
         # Scope the post-start readiness checks to the profiles this scenario
         # actually started, not the global config flags. A curated bounded
         # scenario starts a subset, so a config-flag gate would wait on (and
@@ -1013,10 +1111,10 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             scenario_path=ctx.scenario_path,
         )
         return None
-    log.error("Lab start failed: %s", start_result.error)
+    log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
         success=False,
-        error=f"Lab start failed: {start_result.error}",
+        error=f"Lab start failed: {lab_result.error}",
     )
 
 
@@ -1208,6 +1306,8 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
             ),
         )
         return None
+    # Store snapshot for run record step (REP-001).
+    ctx.snapshot = snapshot
     log.info(
         "Range: %d containers, %d networks, %d services, %d SSH endpoints",
         len(snapshot.containers),
@@ -1216,6 +1316,190 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
         len(snapshot.ssh),
     )
     return None
+
+
+def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
+    """Write an ACES-aligned reproducibility record into the run archive (REP-001).
+
+    Non-fatal: a failure to write the record emits a WARNING diagnostic but
+    does not abort the lab start. The lab is already running at this point.
+    """
+    log.info("Step 11c: Writing run reproducibility record...")
+    if ctx.aces_outcome is None or ctx.snapshot is None:
+        log.warning(
+            "REP-001: Skipping run record — ACES outcome or range snapshot unavailable"
+        )
+        return None
+    try:
+        _write_run_record(ctx)
+    except Exception:
+        log.exception("REP-001: Run record write failed (non-fatal)")
+        _emit_diagnostic(
+            ctx,
+            step="write_run_record",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message="Run reproducibility record could not be written; run archive will lack REP-001 record",
+            operator_action=(
+                "Inspect lab logs; the lab is running but the run archive "
+                "will be missing its reproducibility record"
+            ),
+        )
+    return None
+
+
+def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
+    """Resolve the single (run_store, run_id) for this lab-start run (GAP 4).
+
+    Prefers the active scenario's trace-scoped run dir (``resolve_active_run_dir``)
+    so MCP-side and lab-side artifacts share one directory; otherwise mints a
+    filesystem-safe ``run_<UTC timestamp>`` id under the default run store base
+    dir. The minted id is shaped to pass ``runstore._validate_id``. Resolved
+    once and cached on ctx so orchestration and the run record agree.
+    """
+    from datetime import datetime, timezone
+
+    from aptl.core.runstore import LocalRunStore, resolve_active_run_dir
+
+    state_dir = ctx.project_dir / ".aptl"
+    active_run_dir = resolve_active_run_dir(state_dir)
+    if active_run_dir is not None:
+        return LocalRunStore(active_run_dir.parent), active_run_dir.name
+    run_id = datetime.now(timezone.utc).strftime("run_%Y%m%dT%H%M%SZ")
+    return LocalRunStore(state_dir / "runs"), run_id
+
+
+def _resolve_aces_snapshot(outcome: object) -> object:
+    """Return a valid RuntimeSnapshot from the ACES outcome, or a blank default."""
+    from aces_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
+
+    final_snapshot = getattr(outcome, "final_snapshot", None)
+    if final_snapshot is None or not isinstance(final_snapshot, _RuntimeSnapshot):
+        return _RuntimeSnapshot()
+    return final_snapshot
+
+
+def _assemble_container_image_digests(snapshot: object) -> dict[str, str]:
+    """Build the container-name → image-digest mapping from a RangeSnapshot."""
+    return {
+        c.name: c.image_digest
+        for c in snapshot.containers  # type: ignore[attr-defined]
+        if c.image_digest
+    }
+
+
+def _assemble_tool_versions(snapshot: object) -> dict[str, str]:
+    """Build the tool-name → version mapping from a RangeSnapshot.software."""
+    sw = snapshot.software  # type: ignore[attr-defined]
+    return {
+        k: v
+        for k, v in (
+            ("python", sw.python_version),
+            ("docker", sw.docker_version),
+            ("compose", sw.compose_version),
+            ("aptl", sw.aptl_version),
+            ("aces_sdl", sw.aces_sdl_version),
+        )
+        if v
+    }
+
+
+def _safe_dict(value: object) -> dict[str, Any]:
+    """Return value if it is a dict, else an empty dict."""
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value: object) -> list[str]:
+    """Return list(value) if value is truthy, else an empty list."""
+    return list(value) if value else []  # type: ignore[arg-type]
+
+
+def _scenario_display_name(scenario_path: Path | None) -> str:
+    """Return the scenario file name, or 'unknown' when path is absent."""
+    return str(scenario_path.name) if scenario_path else "unknown"
+
+
+def _write_run_record(ctx: _LabStartContext) -> None:
+    """Internal helper: build and persist the reproducibility record."""
+    from datetime import datetime, timezone
+
+    from aptl.backends.aces_repro import RunRecordInputs, build_reproducibility_record
+    from aptl.core.snapshot import RangeSnapshot, detection_content_digest
+
+    outcome = ctx.aces_outcome
+    snapshot = ctx.snapshot
+    if not isinstance(snapshot, RangeSnapshot):
+        log.warning("REP-001: ctx.snapshot is not a RangeSnapshot; skipping")
+        return
+
+    # GAP 4: reuse the run target resolved in _step_start_containers so the
+    # record and orchestration artifacts share one run_id; fall back to a
+    # fresh resolution only if the start step did not run (defensive).
+    if ctx.run_store is not None and ctx.run_id:
+        store: object = ctx.run_store
+        run_id = ctx.run_id
+    else:
+        store, run_id = _resolve_run_target(ctx)
+
+    store.create_run(run_id)
+
+    final_snapshot = _resolve_aces_snapshot(outcome)
+    now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    inputs = RunRecordInputs(
+        run_id=run_id,
+        backend_name="aptl",
+        started_at=snapshot.timestamp,
+        finished_at=now_str,
+        outcome="success",
+        final_snapshot=final_snapshot,
+        realization_details=_safe_dict(getattr(outcome, "realization_details", {})),
+        selected_profiles=_safe_list(getattr(outcome, "selected_profiles", [])),
+        scenario_path=getattr(outcome, "scenario_path", None),
+        scenario_display_name=_scenario_display_name(getattr(outcome, "scenario_path", None)),
+        range_snapshot_dict=snapshot.to_dict(),
+        config_digests=snapshot.config_hashes,
+        container_image_digests=_assemble_container_image_digests(snapshot),
+        detection_content_digest=detection_content_digest(ctx.project_dir),
+        tool_versions=_assemble_tool_versions(snapshot),
+        evidence_references=_collect_evidence_references(store, run_id),
+    )
+    record = build_reproducibility_record(inputs)
+    store.write_json(run_id, "manifest.json", record)
+    log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
+
+
+# Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each
+# existing file under these directories is referenced by its relative path;
+# bytes are never inlined into the record.
+_EVIDENCE_KINDS = ("orchestration", "mcp-side", "kali-side")
+
+
+def _collect_evidence_references(store: object, run_id: str) -> list[dict[str, str]]:
+    """Enumerate evidence artifacts that EXIST under the run dir (GAP 3).
+
+    References are RELATIVE to the run directory (never absolute) and the
+    manifest never inlines file bytes. On a bare lab start this may be just
+    orchestration artifacts (or empty), which is fine.
+    """
+    try:
+        run_dir = store.get_run_path(run_id)
+    except Exception:
+        return []
+    references: list[dict[str, str]] = []
+    for kind in _EVIDENCE_KINDS:
+        subtree = run_dir / kind
+        if not subtree.is_dir():
+            continue
+        for path in sorted(subtree.rglob("*")):
+            if path.is_file():
+                references.append(
+                    {
+                        "path": path.relative_to(run_dir).as_posix(),
+                        "kind": kind,
+                    }
+                )
+    return references
 
 
 def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
@@ -1490,6 +1774,7 @@ _LAB_START_STEPS = (
     _step_wait_for_services,
     _step_test_ssh,
     _step_capture_snapshot,
+    _step_write_run_record,
     _step_pin_terminal_host_keys,
     _step_build_mcps,
     _step_seed_soc,

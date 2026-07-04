@@ -63,6 +63,17 @@ class _NoStartBackend(object):
     """
 
     @staticmethod
+    def realize(realization: object, *, build: bool = True) -> LabResult:
+        """Acknowledge typed realization without starting Docker.
+
+        ACES target conformance probes submit provisioning through the runtime
+        control plane and require a mutated snapshot. The static gate validates
+        that APTL can interpret and represent the typed deployment, but it must
+        not actually start containers.
+        """
+        return LabResult(success=True, message="Static validation realization accepted")
+
+    @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:
         """Refuse to start the lab from a static validation gate."""
         raise RuntimeError("static validation gate must not start the lab")
@@ -135,6 +146,7 @@ def check_backend_conformance(
     profile: str,
     fixtures_root: Path | None,
     profiles_root: Path | None,
+    reference_scenario: Scenario | None = None,
 ) -> GateCheck:
     """Confirm APTL's canonical manifest passes target + published-CLI conformance."""
     try:
@@ -142,7 +154,11 @@ def check_backend_conformance(
             project_dir=project_dir, config=config, backend=_NoStartBackend()
         )
         report = run_target_conformance(
-            target, profile=profile, root=fixtures_root, profiles_root=profiles_root
+            target,
+            profile=profile,
+            root=fixtures_root,
+            profiles_root=profiles_root,
+            reference_scenario=reference_scenario,
         )
     # broad-except: ACES surfaces diverse errors
     except Exception as exc:

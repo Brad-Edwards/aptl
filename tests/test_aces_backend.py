@@ -17,6 +17,9 @@ from aces_contracts.runtime_state import RuntimeSnapshot
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONFORMANCE_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-defensive-min.sdl.yaml"
+
 
 def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
     lines = ["services:"]
@@ -286,7 +289,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert payload["capabilities"]["participant_runtime"] is not None
 
 
-def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
+def test_aptl_target_passes_provisioning_only_conformance():
     from aces_conformance.conformance import run_target_conformance
 
     from aptl.backends.aces import create_aptl_runtime_target
@@ -294,19 +297,23 @@ def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
     backend = MagicMock()
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
-        project_dir=tmp_path,
+        project_dir=PROJECT_ROOT,
         config=config,
         backend=backend,
     )
 
-    report = run_target_conformance(target, profile="provisioning-only")
+    report = run_target_conformance(
+        target,
+        profile="provisioning-only",
+        reference_scenario=CONFORMANCE_SCENARIO,
+    )
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
 
 
-def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
+def test_aptl_target_passes_orchestration_evaluation_conformance():
     from aces_conformance.conformance import run_target_conformance
 
     from aptl.backends.aces import create_aptl_runtime_target
@@ -314,12 +321,16 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
     backend = MagicMock()
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
-        project_dir=tmp_path,
+        project_dir=PROJECT_ROOT,
         config=config,
         backend=backend,
     )
 
-    report = run_target_conformance(target, profile="orchestration-evaluation")
+    report = run_target_conformance(
+        target,
+        profile="orchestration-evaluation",
+        reference_scenario=CONFORMANCE_SCENARIO,
+    )
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
@@ -331,7 +342,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
     ]
 
 
-def test_aptl_target_passes_full_remote_control_plane_conformance(tmp_path):
+def test_aptl_target_passes_full_remote_control_plane_conformance():
     from aces_conformance.conformance import run_target_conformance
 
     from aptl.backends.aces import create_aptl_runtime_target
@@ -339,12 +350,16 @@ def test_aptl_target_passes_full_remote_control_plane_conformance(tmp_path):
     backend = MagicMock()
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
-        project_dir=tmp_path,
+        project_dir=PROJECT_ROOT,
         config=config,
         backend=backend,
     )
 
-    report = run_target_conformance(target, profile="full-remote-control-plane")
+    report = run_target_conformance(
+        target,
+        profile="full-remote-control-plane",
+        reference_scenario=CONFORMANCE_SCENARIO,
+    )
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()

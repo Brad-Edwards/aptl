@@ -153,6 +153,7 @@ def validate_scenario(
             profile=opts.profile,
             fixtures_root=opts.fixtures_root,
             profiles_root=opts.profiles_root,
+            reference_scenario=scenario,
         )
     )
 

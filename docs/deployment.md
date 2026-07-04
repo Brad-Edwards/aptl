@@ -5,9 +5,15 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 aptl lab start
 ```
+
+The virtualenv keeps the editable install off the system Python, so it works
+on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
+[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
+`python3-venv` package (`sudo apt install python3-venv`).
 
 **Use the CLI.** Manual deployment is error-prone and takes longer.
 

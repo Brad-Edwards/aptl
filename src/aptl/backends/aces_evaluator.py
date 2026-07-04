@@ -45,7 +45,9 @@ from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotE
 from aptl.utils.redaction import redact
 
 EVALUATION_ADDRESS = "runtime.apply.evaluation"
-_OBSERVABLE_RESOURCE_TYPES = frozenset({"condition-binding", "objective"})
+_OBSERVABLE_RESOURCE_TYPES = frozenset(
+    {"condition-binding", "evaluation", "goal", "metric", "objective", "tlo"}
+)
 
 
 def _evaluation_diagnostic(code: str, address: str, message: str) -> Diagnostic:

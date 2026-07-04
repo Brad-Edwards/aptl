@@ -105,6 +105,12 @@ def _plan_for_nodes(*node_names: str) -> ProvisioningPlan:
     return _plan_for_resources(*map(_node_resource, node_names))
 
 
+def _realize_profiles(call) -> list[str]:
+    """Return profile names from a DeploymentRealizationSpec mock call."""
+
+    return list(call.args[0].profiles)
+
+
 def _plan_with_resource_type(resource_type: str) -> ProvisioningPlan:
     resource = PlannedResource(
         address=f"provision.{resource_type}.example",
@@ -435,6 +441,368 @@ def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path
     )
 
 
+def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
+    tmp_path,
+):
+    import subprocess
+
+    from aces_processor.compiler import compile_runtime_model
+    from aces_contracts.runtime_state import OperationState
+    from aces_runtime.control_plane import RuntimeControlPlane
+    from aces_runtime.manager import RuntimeManager
+    from aces_sdl import parse_sdl_file
+
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.aces_participant_actions import (
+        DEFAULT_PARTICIPANT_ACTIONS,
+        participant_action_specs_from_runtime_model,
+    )
+
+    participant_address = "participant.behavior.paper-agent"
+    action_contract_address = "participant.action-contract.probe-customer-portal-login"
+    observation_boundary_address = "participant.observation-boundary.paper-agent-view"
+
+    assert participant_address not in DEFAULT_PARTICIPANT_ACTIONS
+    assert not (
+        Path(__file__).resolve().parents[1]
+        / "src/aptl/backends/aces_paper_participant_actions.py"
+    ).exists()
+    backend = MagicMock()
+    backend.container_exec.return_value = subprocess.CompletedProcess(
+        args=["bash"],
+        returncode=0,
+        stdout=(
+            "portal_http_status=200\n"
+            "boundary_db=blocked\n"
+            "boundary_wazuh_api=blocked\n"
+        ),
+        stderr="",
+    )
+    project_root = Path(__file__).resolve().parents[1]
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    model = compile_runtime_model(scenario)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    plan_target = create_aptl_runtime_target(
+        project_dir=project_root,
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(plan_target).plan(scenario)
+    participant_action_specs = participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=plan.provisioning,
+        project_dir=project_root,
+        config=config,
+    )
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=config,
+        backend=backend,
+        participant_action_specs=participant_action_specs,
+    )
+    control_plane = RuntimeControlPlane(target)
+
+    receipt = control_plane.initialize_participant_episode(participant_address)
+    status = control_plane.get_operation(receipt.operation_id)
+
+    assert status is not None
+    assert status.state == OperationState.SUCCEEDED, status.diagnostics
+    backend.container_exec.assert_called_once()
+    container_name, command = backend.container_exec.call_args.args
+    assert container_name == "aptl-kali"
+    assert command[:2] == ["bash", "-lc"]
+    assert "172.20.1.20:8080/login" in command[2]
+    assert "172.20.2.11/5432" in command[2]
+    assert "172.20.2.30/55000" in command[2]
+    behavior = control_plane.snapshot.participant_behavior_history[participant_address]
+    assert behavior[0]["action_contract_address"] == action_contract_address
+    assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
+    assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
+    entries = control_plane.snapshot.entries
+    assert (
+        entries[participant_address].payload["participant_address"]
+        == participant_address
+    )
+    assert entries[action_contract_address].payload["action_name"] == (
+        "probe-customer-portal-login"
+    )
+    assert entries[observation_boundary_address].payload["boundary_name"] == (
+        "paper-agent-view"
+    )
+    assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
+    assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
+    shared_state_records = getattr(
+        control_plane.snapshot, "shared_state_records", {}
+    )
+    assert {
+        record["state_scope"] for record in shared_state_records.values()
+    } == {participant_address}
+    assert participant_action_specs[participant_address].target_refs == (
+        "container:aptl-kali",
+        "container:aptl-webapp",
+        "http://172.20.1.20:8080/login",
+        "boundary-negative:tcp:172.20.2.11:5432",
+        "boundary-negative:tcp:172.20.2.30:55000",
+    )
+
+
+def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
+    from aces_runtime.manager import RuntimeManager
+    from aces_sdl import parse_sdl_file
+
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_from_runtime_model,
+    )
+
+    class EmptyModel:
+        participant_behaviors = {}
+        action_contracts = {}
+        observation_boundaries = {}
+        content_placements = {}
+
+    project_root = Path(__file__).resolve().parents[1]
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
+    target = create_aptl_runtime_target(
+        project_dir=project_root,
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(target).plan(scenario)
+
+    assert (
+        participant_action_specs_from_runtime_model(
+            EmptyModel(),
+            provisioning_plan=plan.provisioning,
+            project_dir=project_root,
+            config=config,
+        )
+        == {}
+    )
+
+
+def test_start_helper_returns_specs_from_compiled_scenario(mocker):
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_for_scenario,
+    )
+
+    expected = {"participant.behavior.paper-agent": MagicMock()}
+    model = object()
+    scenario = object()
+    provisioning_plan = object()
+    project_dir = Path(__file__).resolve().parents[1]
+    config = AptlConfig(lab={"name": "test"})
+    compile_mock = mocker.patch(
+        "aptl.backends.aces_participant_actions.compile_runtime_model",
+        return_value=model,
+    )
+    spec_mock = mocker.patch(
+        "aptl.backends.aces_participant_actions."
+        "participant_action_specs_from_runtime_model",
+        return_value=expected,
+    )
+
+    assert (
+        participant_action_specs_for_scenario(
+            scenario,
+            provisioning_plan=provisioning_plan,
+            project_dir=project_dir,
+            config=config,
+        )
+        == expected
+    )
+    compile_mock.assert_called_once_with(scenario)
+    spec_mock.assert_called_once_with(
+        model,
+        provisioning_plan=provisioning_plan,
+        project_dir=project_dir,
+        config=config,
+    )
+
+
+def test_compose_alias_helpers_cover_string_builds_and_alpine_images():
+    from aptl.backends.aces_profiles import _build_aliases, _image_aliases
+
+    assert _image_aliases({"image": "docker.io/library/redis-alpine:7"}) == {
+        "redis",
+        "redis-alpine",
+    }
+    assert _build_aliases({"build": "containers/customer-portal"}) == {
+        "customer-portal"
+    }
+
+
+def test_container_name_and_single_value_helpers_handle_ambiguous_inputs():
+    from aptl.backends.aces_profiles import ComposeProfileIndex
+    from aptl.backends.aces_realization import _container_name
+    from aptl.backends.aces_realization_model import _single_or_none
+
+    assert _single_or_none(("webapp", "db")) is None
+    index = ComposeProfileIndex(
+        alias_to_profiles={},
+        alias_to_services={},
+        services={},
+    )
+    assert _container_name(index, frozenset({"missing"})) is None
+
+
+def _participant_admission_request(participant_address: str):
+    """Build a valid ParticipantActionAdmissionRequest for *participant_address*.
+
+    Mirrors the ACES participant implementation-binding contract shape (manifest
+    + selection + addresses) so admit_action can be exercised end-to-end.
+    """
+    from aces_contracts.contracts import (
+        ParticipantImplementationManifestModel,
+        ParticipantImplementationSelectionModel,
+    )
+    from aces_contracts.participant_binding import ParticipantActionAdmissionRequest
+
+    manifest = ParticipantImplementationManifestModel.model_validate(
+        {
+            "schema_version": "participant-implementation-manifest/v1",
+            "identity": {"name": "aptl-admit-probe", "version": "1.0.0"},
+            "implementation_kind": "agent",
+            "supported_contract_versions": [
+                "participant-implementation-manifest-v1",
+                "participant-implementation-provenance-v1",
+                "participant-episode-state-envelope-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "compatibility": {
+                "participant_runtimes": ["aptl"],
+                "processors": [],
+                "backends": [],
+            },
+            "concept_bindings": [
+                {"scope": "implementation_kind", "family": "apparatus-declarations"},
+                {
+                    "scope": "capabilities.supported_participant_contracts",
+                    "family": "apparatus-declarations",
+                },
+                {
+                    "scope": "capabilities.supported_decision_surface_modes",
+                    "family": "apparatus-declarations",
+                },
+                {
+                    "scope": "capabilities.tool_affordance_expectations",
+                    "family": "tools-and-artifacts",
+                },
+                {
+                    "scope": "capabilities.exposure_policy_kinds",
+                    "family": "provenance-and-evidence",
+                },
+            ],
+            "capabilities": {
+                "supported_participant_contracts": [
+                    "participant-episode-state-envelope-v1",
+                    "participant-behavior-history-event-stream-v1",
+                ],
+                "supported_decision_surface_modes": ["policy-directed"],
+                "tool_affordance_expectations": ["shell"],
+                "exposure_policy_kinds": ["task-statement"],
+            },
+        }
+    )
+    selection = ParticipantImplementationSelectionModel.model_validate(
+        {
+            "participant_address": participant_address,
+            "implementation_identity": {"name": "aptl-admit-probe", "version": "1.0.0"},
+            "manifest_ref": "registry://aptl-participant-implementation-manifest",
+            "manifest_digest": "sha256:" + "2" * 64,
+            "selected_decision_surface_mode": "policy-directed",
+            "participant_contract_versions": [
+                "participant-episode-state-envelope-v1",
+                "participant-behavior-history-event-stream-v1",
+            ],
+            "exposure_policy": {
+                "policy_id": "aptl-admit-probe-policy",
+                "exposure_policy_kinds": ["task-statement"],
+                "disclosed_refs": ["scenario.aptl-admit-probe"],
+            },
+        }
+    )
+    return ParticipantActionAdmissionRequest(
+        participant_address=participant_address,
+        action_contract_address="participant.action-contract.aptl-admit-probe",
+        observation_boundary_address="participant.observation-boundary.aptl-admit-probe",
+        action_instance_id="aptl-admit-probe-action",
+        implementation_manifest=manifest,
+        implementation_selection=selection,
+    )
+
+
+def _aptl_runtime_and_control_plane(tmp_path):
+    """Return (participant_runtime, control_plane) for an APTL runtime target."""
+    from aces_runtime.control_plane import RuntimeControlPlane
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        backend=MagicMock(),
+    )
+    return target.participant_runtime, RuntimeControlPlane(target)
+
+
+def test_admit_action_records_binding_events_on_live_episode(tmp_path):
+    """admit_action records the three binding events against a live episode."""
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+    control_plane.initialize_participant_episode(participant)
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is True
+    events = runtime.behavior_history()[participant]
+    assert [event["event_type"] for event in events] == [
+        "action_attempted",
+        "state_transition_recorded",
+        "observation_emitted",
+    ]
+
+
+def test_admit_action_fails_without_live_episode(tmp_path):
+    """admit_action fails closed when there is no initialized episode."""
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is False
+    assert participant not in runtime.behavior_history()
+
+
+def test_admit_action_fails_after_terminate(tmp_path):
+    """admit_action fails closed once the participant episode is terminated."""
+    from aces_contracts.participant_episode import ParticipantEpisodeTerminalReason
+
+    runtime, control_plane = _aptl_runtime_and_control_plane(tmp_path)
+    participant = "participant.behavior.aptl-admit-probe"
+    control_plane.initialize_participant_episode(participant)
+    control_plane.terminate_participant_episode(
+        participant, terminal_reason=ParticipantEpisodeTerminalReason.COMPLETED
+    )
+
+    result = runtime.admit_action(
+        _participant_admission_request(participant), control_plane.snapshot
+    )
+
+    assert result.success is False
+
+
 def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
     mocker,
     tmp_path,
@@ -465,7 +833,7 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"wazuh": True, "kali": True, "victim": False},
@@ -478,7 +846,7 @@ def test_start_aces_scenario_uses_parser_runtime_manager_and_backend(
         tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
     )
     assert calls == {"planned_scenario": scenario}
-    backend.start.assert_called_once_with(["wazuh", "kali", "otel"])
+    assert _realize_profiles(backend.realize.call_args) == ["wazuh", "kali", "otel"]
 
 
 def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
@@ -498,7 +866,7 @@ def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"wazuh": True})
     selected = tmp_path / "scenarios" / "custom.sdl.yaml"
 
@@ -608,7 +976,7 @@ def test_start_aces_scenario_submits_orchestration_for_workflow_scenario(
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
@@ -637,7 +1005,7 @@ def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=False, error="backend boom")
+    backend.realize.return_value = LabResult(success=False, error="backend boom")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
@@ -680,7 +1048,7 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
 
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
@@ -765,7 +1133,7 @@ def test_start_aces_scenario_submits_evaluation_for_objective_scenario(
     mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
     mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
@@ -834,7 +1202,9 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
                 orchestration=orchestration,
             )
 
-    def fake_create_target(*, project_dir, config, backend):
+    def fake_create_target(
+        *, project_dir, config, backend, participant_action_specs=None
+    ):
         from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 
         target = aces.RuntimeTarget(
@@ -855,7 +1225,7 @@ def test_start_aces_scenario_drives_workflows_after_registration(mocker, tmp_pat
     mocker.patch("aptl.backends.aces.RuntimeControlPlane", FakeControlPlane)
     mocker.patch("aptl.backends.aces.create_aptl_runtime_target", fake_create_target)
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
 
     result = aces.start_aces_scenario(tmp_path, config, backend)
@@ -901,7 +1271,7 @@ def test_start_aces_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_pa
 
     assert result.lab_result.success is False
     assert result.lab_result.error
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_start_aces_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp_path):
@@ -940,7 +1310,7 @@ def test_start_aces_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp
 
     assert result.lab_result.success is False
     assert result.lab_result.error
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
@@ -955,7 +1325,7 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"kali": True, "victim": True, "wazuh": False},
@@ -971,8 +1341,286 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
 
     assert first.success is True
     assert second.success is True
-    assert backend.start.call_args_list[0].args == (["kali", "otel"],)
-    assert backend.start.call_args_list[1].args == (["victim", "otel"],)
+    assert _realize_profiles(backend.realize.call_args_list[0]) == ["kali", "otel"]
+    assert _realize_profiles(backend.realize.call_args_list[1]) == ["victim", "otel"]
+
+
+def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose(
+        tmp_path,
+        {
+            "kali": ["kali"],
+            "aptl-otel-collector": ["otel"],
+        },
+    )
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"kali": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+    node = _node_resource("red-workbench")
+    node.payload["spec"]["infrastructure"]["links"] = ["redteam-net", "dmz-net"]
+
+    result = provisioner.apply(_plan_for_resources(node), RuntimeSnapshot())
+
+    assert result.success is True
+    spec = backend.realize.call_args.args[0]
+    assert list(spec.profiles) == ["kali", "otel"]
+    assert len(spec.nodes) == 1
+    assert spec.nodes[0].name == "red-workbench"
+    assert spec.nodes[0].service_name == "kali"
+    assert spec.nodes[0].container_name == "kali"
+    assert spec.nodes[0].networks == ("dmz-net", "redteam-net")
+
+
+def test_realization_resolves_digest_pinned_source_image(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    digest = "sha256:" + "a" * 64
+    _write_compose(tmp_path, {"db": ["enterprise"]})
+    node = _node_resource("db")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "postgres",
+        "version": f"postgres@{digest}",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["enterprise", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "pull"
+    assert image.service_name == "db"
+    assert image.image_ref == f"postgres@{digest}"
+    assert image.source_name == "postgres"
+    assert image.source_version == f"postgres@{digest}"
+
+
+def test_realization_uses_allowed_source_when_upstream_build_path_is_note(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"wazuh-manager": ["wazuh"]})
+    node = _node_resource("wazuh-manager")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "wazuh-manager",
+        "version": "4.x",
+        "build": {
+            "dockerfile_path": (
+                "upstream Wazuh manager Dockerfile not present in APTL checkout"
+            ),
+            "instructions": [{"instruction": "from", "arguments": ["amazonlinux"]}],
+        },
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"wazuh": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["wazuh", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "pull"
+    assert image.policy_rule == "allowed-source"
+    assert image.image_ref == "wazuh/wazuh-manager:4.12.0"
+
+
+def test_realization_resolves_project_build_provenance(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    dockerfile = tmp_path / "containers" / "custom" / "Dockerfile"
+    dockerfile.parent.mkdir(parents=True)
+    dockerfile.write_text("FROM scratch\n")
+    _write_compose(tmp_path, {"custom": ["enterprise"]})
+    node = _node_resource("custom")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "aptl-custom",
+        "version": "aptl-custom@sha256:" + "b" * 64,
+        "build": {
+            "dockerfile_path": "containers/custom/Dockerfile",
+            "instructions": [{"instruction": "from", "arguments": ["scratch"]}],
+            "layers": [{"digest": "sha256:" + "c" * 64}],
+            "source_inputs": [
+                {
+                    "source_path": "containers/custom/Dockerfile",
+                    "checksum": "d" * 64,
+                }
+            ],
+        },
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["enterprise", "otel"])
+    assert len(spec.images) == 1
+    image = spec.images[0]
+    assert image.mode == "build"
+    assert image.service_name == "custom"
+    assert image.image_ref == "aptl-custom:local"
+    assert image.dockerfile_path == "containers/custom/Dockerfile"
+    assert image.context_path == "."
+    assert image.provenance == {
+        "instructions": 1,
+        "layers": 1,
+        "source_inputs": 1,
+    }
+    assert realization.details()["nodes"][0]["image"]["mode"] == "build"
+
+
+def test_realization_rejects_untrusted_source_without_value_leakage(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"bad": ["enterprise"]})
+    node = _node_resource("bad")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "evil.example/secret-app",
+        "version": "latest",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    diagnostics = list(realization.diagnostics)
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in diagnostics
+    )
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "evil" not in rendered
+    assert "secret-app" not in rendered
+    assert "latest" not in rendered
+
+
+def test_realization_rejects_digest_ref_outside_allowed_source_policy(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    digest = "sha256:" + "e" * 64
+    _write_compose(tmp_path, {"db": ["enterprise"]})
+    node = _node_resource("db")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "postgres",
+        "version": f"evil.example/secret-db@{digest}",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    diagnostics = list(realization.diagnostics)
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in diagnostics
+    )
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "evil" not in rendered
+    assert "secret-db" not in rendered
+    assert digest not in rendered
+
+
+def test_realization_rejects_unresolved_source_without_default_fallback(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"custom": ["enterprise"]})
+    node = _node_resource("custom")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "unapproved-custom",
+        "version": "1.0",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert any(
+        diagnostic.code == "aptl.provisioner.image-policy-rejected"
+        for diagnostic in realization.diagnostics
+    )
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
+
+
+def test_realization_accepts_compose_owned_reference_source_without_override(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"customer-portal": ["enterprise"]})
+    node = _node_resource("customer-portal")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "customer-portal-app",
+        "version": "reference",
+        "build": None,
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    assert realization.deployment_spec(["enterprise", "otel"]).images == ()
+
+
+def test_realization_prefers_unique_node_alias_over_shared_source_alias(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "\n".join(
+            [
+                "services:",
+                "  wazuh-sidecar-db:",
+                "    profiles: [\"wazuh\"]",
+                "    image: aptl-wazuh-sidecar:local",
+                "    container_name: aptl-wazuh-sidecar-db",
+                "  wazuh-sidecar-suricata:",
+                "    profiles: [\"wazuh\"]",
+                "    image: aptl-wazuh-sidecar:local",
+                "    container_name: aptl-wazuh-sidecar-suricata",
+            ]
+        )
+    )
+    node = _node_resource("wazuh-sidecar-db")
+    node.payload["spec"]["node"]["source"] = {
+        "name": "aptl-wazuh-sidecar",
+        "version": "local",
+    }
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"wazuh": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    assert realization.nodes[0].backend_services == ("wazuh-sidecar-db",)
+    assert realization.nodes[0].container_name == "aptl-wazuh-sidecar-db"
 
 
 def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
@@ -988,7 +1636,7 @@ def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"enterprise": True, "soc": True, "wazuh": True},
@@ -1005,7 +1653,12 @@ def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
     )
 
     assert result.success is True
-    backend.start.assert_called_once_with(["wazuh", "enterprise", "soc", "otel"])
+    assert _realize_profiles(backend.realize.call_args) == [
+        "wazuh",
+        "enterprise",
+        "soc",
+        "otel",
+    ]
     assert result.details["realization"]["profiles"] == ["enterprise", "soc", "wazuh"]
 
 
@@ -1021,7 +1674,7 @@ def test_provisioner_treats_compose_network_dependency_as_network_support(tmp_pa
         networks={"webapp": ["internal-net"]},
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
@@ -1041,7 +1694,7 @@ def test_provisioner_treats_compose_network_dependency_as_network_support(tmp_pa
         diagnostic.code != "aptl.provisioner.dependency-unresolved"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_called_once_with(["enterprise", "otel"])
+    assert _realize_profiles(backend.realize.call_args) == ["enterprise", "otel"]
 
 
 def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
@@ -1056,7 +1709,7 @@ def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"enterprise": True, "wazuh": False},
@@ -1077,7 +1730,7 @@ def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
         diagnostic.code == "aptl.provisioner.dependency-profile-disabled"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_rejects_invalid_compose_project(tmp_path):
@@ -1086,7 +1739,7 @@ def test_provisioner_rejects_invalid_compose_project(tmp_path):
     workstation (enterprise) depends on wazuh-manager (wazuh). Selecting
     enterprise without wazuh hands `docker compose --profile` an invalid project
     even though only webapp is declared, because the profile activates every
-    enterprise service. The provisioner refuses before calling backend.start,
+    enterprise service. The provisioner refuses before calling backend.realize,
     and node-level dependency closure (which only walks declared nodes) does not
     catch it.
     """
@@ -1102,7 +1755,7 @@ def test_provisioner_rejects_invalid_compose_project(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"enterprise": True, "wazuh": False},
@@ -1122,7 +1775,7 @@ def test_provisioner_rejects_invalid_compose_project(tmp_path):
         diagnostic.code == "aptl.provisioner.compose-project-invalid"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_rejects_missing_declared_dependency(tmp_path):
@@ -1136,7 +1789,7 @@ def test_provisioner_rejects_missing_declared_dependency(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
@@ -1154,7 +1807,7 @@ def test_provisioner_rejects_missing_declared_dependency(tmp_path):
         diagnostic.code == "aptl.provisioner.dependency-unresolved"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_rejects_missing_compose_dependency(tmp_path):
@@ -1168,7 +1821,7 @@ def test_provisioner_rejects_missing_compose_dependency(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
@@ -1186,7 +1839,7 @@ def test_provisioner_rejects_missing_compose_dependency(tmp_path):
         diagnostic.code == "aptl.provisioner.compose-dependency-unresolved"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_rejects_ambiguous_declared_dependency(tmp_path):
@@ -1202,7 +1855,7 @@ def test_provisioner_rejects_ambiguous_declared_dependency(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"enterprise": True, "soc": True, "wazuh": True},
@@ -1223,7 +1876,7 @@ def test_provisioner_rejects_ambiguous_declared_dependency(tmp_path):
         diagnostic.code == "aptl.provisioner.dependency-ambiguous"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):
@@ -1238,7 +1891,7 @@ def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(
         lab={"name": "test"},
         containers={"kali": True, "victim": True, "wazuh": False},
@@ -1276,7 +1929,7 @@ def test_provisioner_rejects_missing_node_realization_even_with_techvault_metada
 
     _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
         config=AptlConfig(lab={"name": "test"}),
@@ -1301,7 +1954,7 @@ def test_provisioner_rejects_missing_node_realization_even_with_techvault_metada
         and diagnostic.address == resource.address
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_rejects_supported_placement_without_declared_target(tmp_path):
@@ -1309,7 +1962,7 @@ def test_provisioner_rejects_supported_placement_without_declared_target(tmp_pat
 
     _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
         config=AptlConfig(lab={"name": "test"}),
@@ -1335,7 +1988,7 @@ def test_provisioner_rejects_supported_placement_without_declared_target(tmp_pat
         and diagnostic.address == placement.address
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_provisioner_records_supported_placement_realizations(tmp_path):
@@ -1349,7 +2002,7 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         },
     )
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
         config=AptlConfig(lab={"name": "test"}),
@@ -1412,7 +2065,7 @@ def test_provisioner_rejects_unsupported_resource_type(tmp_path):
 
     _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
         config=AptlConfig(lab={"name": "test"}),
@@ -1428,7 +2081,7 @@ def test_provisioner_rejects_unsupported_resource_type(tmp_path):
         diagnostic.code == "aptl.provisioner.unsupported-resource-type"
         for diagnostic in result.diagnostics
     )
-    backend.start.assert_not_called()
+    backend.realize.assert_not_called()
 
 
 def test_aces_backend_does_not_import_legacy_sdl_parser():
@@ -1460,7 +2113,7 @@ def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
     )
 
     backend = _MagicMock()
-    backend.start.return_value = LabResult(success=True, message="ok")
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
 
     op_status = _MagicMock()

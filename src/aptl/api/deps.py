@@ -1,6 +1,7 @@
 """Dependency injection and shared constants for the APTL API."""
 
 import hmac
+import importlib.resources
 import os
 from pathlib import Path
 from typing import Annotated, Optional
@@ -11,27 +12,13 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.utils.placeholders import contains_placeholder
 
-# Trusted origins for CORS and WebSocket origin validation.
-# CORS middleware does not protect WebSocket upgrade requests, so
-# the terminal endpoint checks this set independently.
-# Override with APTL_ALLOWED_ORIGINS env var (comma-separated).
-_DEFAULT_ORIGINS = {"http://localhost:3000", "http://localhost:5173"}
-
-
-def _parse_allowed_origins(env_val: str) -> set[str]:
-    """Parse APTL_ALLOWED_ORIGINS env var into a set of allowed origins.
-
-    Returns the parsed set when non-empty, or the default dev origins otherwise.
-    Exposed as a module-level function so tests can call it directly instead of
-    duplicating the parsing expression.
-    """
-    parsed = {o.strip() for o in env_val.split(",") if o.strip()}
-    return parsed or _DEFAULT_ORIGINS
-
-
-ALLOWED_ORIGINS: set[str] = _parse_allowed_origins(
-    os.environ.get("APTL_ALLOWED_ORIGINS", "")
-)
+# UI-008a: cross-origin requests are gated by STRICT same-origin comparison
+# (Origin == the request's own origin), not an allow-list. An allow-list bypass
+# was a CSRF hole: a cookie is a host credential and SameSite ignores port, so a
+# trusted dev origin (e.g. http://localhost:3000) bound by a malicious local
+# process could drive cookie-authenticated mutating routes on the API port.
+# Same-origin holds through the dev/preview proxies because they preserve the
+# browser's Host (Caddy `header_up Host {host}`, vite `changeOrigin: false`).
 
 
 class WebAuthSettings(BaseModel):
@@ -156,6 +143,66 @@ def verify_ws_token(sec_websocket_protocol: str, settings: WebAuthSettings) -> b
     if not candidate:
         return False
     return hmac.compare_digest(candidate.encode(), settings.api_token.encode())
+
+
+def current_api_token() -> Optional[str]:
+    """Return the live API token from the auth singleton, or ``None`` when unconfigured.
+
+    Used by :class:`aptl.api.middleware.bff.BFFMiddleware` to inject a bearer
+    token into first-party browser requests so the browser never needs to store
+    the secret.
+    """
+    return _WEB_AUTH.api_token if _WEB_AUTH is not None else None
+
+
+def get_web_asset_root(explicit: Optional[str] = None) -> Optional[Path]:
+    """Resolve the web asset root directory.
+
+    Precedence (first candidate with a valid ``index.html`` wins):
+
+    1. *explicit* argument (passed directly, e.g. from ``--web-root`` CLI option)
+    2. ``APTL_WEB_ROOT`` environment variable
+    3. Packaged location: ``importlib.resources.files("aptl") / "web_static"``
+    4. Repo-relative fallback: ``<repo_root>/web/build``
+
+    Returns the resolved :class:`~pathlib.Path` when it exists and contains
+    ``index.html``; otherwise returns ``None``. A ``None`` result is fatal for
+    ``aptl web serve`` unless ``--api-only`` is passed (see the CLI): APTL ships
+    clone-and-run, so the GUI is delivered either by the Docker ``aptl-web-ui``
+    (Caddy) image or by a local ``cd web && npm run build`` that populates the
+    repo-relative ``web/build``. Candidate 3 (``aptl/web_static``) is forward-
+    compatible with a future combined-wheel delivery and resolves to nothing in
+    the current models; see ``docs/specs/web-gui-design.md`` (asset delivery
+    contract).
+    """
+    candidates: list[Path] = []
+
+    if explicit:
+        candidates.append(Path(explicit))
+
+    env_root = os.environ.get("APTL_WEB_ROOT")
+    if env_root:
+        candidates.append(Path(env_root))
+
+    try:
+        pkg_ref = importlib.resources.files("aptl").joinpath("web_static")
+        candidates.append(Path(str(pkg_ref)))
+    except Exception:
+        pass
+
+    # Repo-relative fallback: this file lives at src/aptl/api/deps.py.
+    # Walk up four levels: deps.py → api → aptl → src → repo root.
+    repo_root = Path(__file__).parent.parent.parent.parent
+    candidates.append(repo_root / "web" / "build")
+
+    for candidate in candidates:
+        try:
+            if candidate.is_dir() and (candidate / "index.html").exists():
+                return candidate
+        except Exception:
+            continue
+
+    return None
 
 
 def get_project_dir() -> Path:

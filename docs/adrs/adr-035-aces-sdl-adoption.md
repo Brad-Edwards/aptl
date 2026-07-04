@@ -2,15 +2,31 @@
 
 ## Status
 
-accepted
+accepted (amended 2026-06-29 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
 
 ## Date
 
-2026-05-18
+2026-05-18 (amended 2026-06-29)
 
 ## Last Updated
 
-2026-06-25
+2026-06-29
+
+## Status update—2026-06-29
+
+The realization model in this ADR (specifically the Parity Inventory Boundary's
+statement that topology, profiles, networks, static IPs, hostnames, volumes,
+health checks, published ports, and service dependencies come from
+`docker-compose.yml` and the `DeploymentBackend` inventory methods) is
+**superseded by [ADR-046](adr-046-dynamic-aces-scenario-realization.md)**.
+ADR-046 establishes that the compiled ACES `RuntimeModel`, interpreted through
+`interpret_provisioning_plan`, is the authoritative topology source;
+`docker-compose.yml` remains the realization vehicle selected by profile rather
+than the topology authority.
+
+What this ADR decided still stands: ACES SDL adoption as the canonical authoring
+surface, the backend-manifest and conformance model, the `DeploymentBackend`
+execution boundary, and the ACES backend integration guardrails are preserved.
 
 ## Context
 

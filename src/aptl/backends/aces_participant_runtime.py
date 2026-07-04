@@ -12,10 +12,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from aces_contracts.participant_binding import (
+    ParticipantActionAdmissionRequest,
+    participant_action_binding_events,
+    participant_behavior_event_payload,
+)
 from aces_contracts.participant_episode import (
     ParticipantEpisodeControlAction,
     ParticipantEpisodeExecutionState,
@@ -28,7 +32,7 @@ from aces_contracts.participant_episode import (
     ParticipantEpisodeTerminalReason,
     ParticipantEpisodeTerminateRequest,
 )
-from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
+from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
 from aptl.backends.aces_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
@@ -37,74 +41,17 @@ from aptl.backends.aces_participant_actions import (
     drive_participant_action,
     participant_action_diagnostic,
 )
+from aptl.backends.aces_participant_support import (
+    binding_post_state_digest,
+    build_snapshot,
+    terminal_event,
+    utc_now,
+)
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 PARTICIPANT_ACTION_ADDRESS = _PARTICIPANT_ACTION_ADDRESS
-
-
-def _utc_now() -> str:
-    """Return the current UTC instant as an ISO-8601 ``...Z`` string."""
-
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def _terminal_event(
-    reason: ParticipantEpisodeTerminalReason,
-) -> ParticipantEpisodeHistoryEventType:
-    """Map a terminal reason to the participant episode history event type."""
-
-    return {
-        ParticipantEpisodeTerminalReason.COMPLETED: (
-            ParticipantEpisodeHistoryEventType.EPISODE_COMPLETED
-        ),
-        ParticipantEpisodeTerminalReason.TIMED_OUT: (
-            ParticipantEpisodeHistoryEventType.EPISODE_TIMED_OUT
-        ),
-        ParticipantEpisodeTerminalReason.TRUNCATED: (
-            ParticipantEpisodeHistoryEventType.EPISODE_TRUNCATED
-        ),
-        ParticipantEpisodeTerminalReason.INTERRUPTED: (
-            ParticipantEpisodeHistoryEventType.EPISODE_INTERRUPTED
-        ),
-    }[reason]
-
-
-def _snapshot(
-    baseline: RuntimeSnapshot,
-    entries: Mapping[str, SnapshotEntry],
-    results: Mapping[str, dict[str, object]],
-    history: Mapping[str, list[dict[str, object]]],
-    behavior_history: Mapping[str, list[dict[str, object]]],
-    shared_state_records: Mapping[str, dict[str, object]] | None = None,
-    shared_state_history: Mapping[str, list[dict[str, object]]] | None = None,
-) -> RuntimeSnapshot:
-    """Return a snapshot with participant state dictionaries replaced."""
-
-    updates: dict[str, object] = {
-        "participant_episode_results": {
-            address: dict(result) for address, result in results.items()
-        },
-        "participant_episode_history": {
-            address: [dict(event) for event in events]
-            for address, events in history.items()
-        },
-        "participant_behavior_history": {
-            address: [dict(event) for event in events]
-            for address, events in behavior_history.items()
-        },
-    }
-    if shared_state_records is not None and hasattr(baseline, "shared_state_records"):
-        updates["shared_state_records"] = {
-            address: dict(record) for address, record in shared_state_records.items()
-        }
-    if shared_state_history is not None and hasattr(baseline, "shared_state_history"):
-        updates["shared_state_history"] = {
-            address: [dict(record) for record in records]
-            for address, records in shared_state_history.items()
-        }
-    return baseline.with_entries(dict(entries), **updates)
 
 
 @dataclass
@@ -137,7 +84,7 @@ class AptlParticipantRuntime:
         """Create a running episode and drive any configured proof action."""
 
         participant_address = request.participant_address
-        now = _utc_now()
+        now = utc_now()
         episode_id = request.episode_id or uuid4().hex
         state = ParticipantEpisodeExecutionState(
             participant_address=participant_address,
@@ -168,7 +115,7 @@ class AptlParticipantRuntime:
             self.action_specs,
             participant_address,
             state,
-            timestamp_factory=_utc_now,
+            timestamp_factory=utc_now,
         )
         if action_result is not None:
             self._behavior_history.setdefault(participant_address, []).extend(
@@ -181,7 +128,7 @@ class AptlParticipantRuntime:
                     for address, record in action_result.shared_state_records.items()
                 }
             )
-            next_snapshot = _snapshot(
+            next_snapshot = build_snapshot(
                 next_snapshot,
                 {**next_snapshot.entries, **action_result.snapshot_entries},
                 self._results,
@@ -285,7 +232,7 @@ class AptlParticipantRuntime:
                 request.participant_address,
                 "terminate requires an initialized episode",
             )
-        now = _utc_now()
+        now = utc_now()
         state = ParticipantEpisodeExecutionState(
             participant_address=current.participant_address,
             episode_id=current.episode_id,
@@ -299,7 +246,7 @@ class AptlParticipantRuntime:
             previous_episode_id=current.previous_episode_id,
         )
         event = self._episode_event(
-            _terminal_event(request.terminal_reason),
+            terminal_event(request.terminal_reason),
             now,
             state,
             None,
@@ -309,6 +256,66 @@ class AptlParticipantRuntime:
         next_snapshot, changed = self._store_episode(snapshot, state, [event])
         return ApplyResult(
             success=True, snapshot=next_snapshot, changed_addresses=changed
+        )
+
+    def admit_action(
+        self,
+        request: ParticipantActionAdmissionRequest,
+        snapshot: RuntimeSnapshot,
+    ) -> ApplyResult:
+        """Admit one implementation-bound participant action attempt.
+
+        Records the portable behavior-history events for an admitted action
+        (action attempted, state-transition recorded, observation emitted)
+        against the participant's live episode, per the ACES participant
+        implementation-binding contract. The action itself is compiled and
+        executed by the caller; this surface binds its result into the runtime's
+        behavior history. Fails closed when there is no live, non-terminal
+        episode to bind the action to.
+        """
+
+        address = request.participant_address
+        current = self._current_state(address, snapshot)
+        if current is None:
+            return self._failed(
+                snapshot,
+                address,
+                "cannot admit participant action: no initialized episode",
+            )
+        if current.status == ParticipantEpisodeStatus.TERMINATED:
+            return self._failed(
+                snapshot,
+                address,
+                "cannot admit participant action for a terminated participant",
+            )
+        now = utc_now()
+        post_state_digest = request.post_state_digest or binding_post_state_digest(
+            request
+        )
+        events = participant_action_binding_events(
+            request,
+            episode_id=current.episode_id,
+            timestamp=now,
+            post_state_digest=post_state_digest,
+        )
+        self._behavior_history.setdefault(address, []).extend(
+            participant_behavior_event_payload(event) for event in events
+        )
+        next_snapshot = build_snapshot(
+            snapshot,
+            snapshot.entries,
+            self._results,
+            self._history,
+            self._behavior_history,
+            self._shared_state_records,
+            self._shared_state_history,
+        )
+        return ApplyResult(
+            success=True,
+            snapshot=next_snapshot,
+            changed_addresses=[
+                f"runtime.snapshot.participant-behavior-history.{address}"
+            ],
         )
 
     def status(self) -> dict[str, object]:
@@ -352,7 +359,7 @@ class AptlParticipantRuntime:
     ) -> ApplyResult:
         """Advance an initialized episode to a replacement running episode."""
 
-        now = _utc_now()
+        now = utc_now()
         state = ParticipantEpisodeExecutionState(
             participant_address=current.participant_address,
             episode_id=episode_id,
@@ -388,7 +395,7 @@ class AptlParticipantRuntime:
         participant_address = state.participant_address
         self._results[participant_address] = state.to_payload()
         self._history.setdefault(participant_address, []).extend(events)
-        next_snapshot = _snapshot(
+        next_snapshot = build_snapshot(
             snapshot,
             snapshot.entries,
             self._results,

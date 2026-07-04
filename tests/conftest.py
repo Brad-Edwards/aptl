@@ -14,6 +14,18 @@ import yaml
 
 
 @pytest.fixture(autouse=True)
+def _allow_testclient_host(monkeypatch):
+    """Permit Starlette ``TestClient``'s default ``Host: testserver``.
+
+    The BFF Host gate (UI-008a, DNS-rebinding defence) rejects non-loopback
+    hosts on ``/api/*``. The test client sends ``Host: testserver``, so allow it
+    for the suite. Production defaults to loopback-only; tests that exercise the
+    gate's rejection path set an explicitly disallowed Host instead.
+    """
+    monkeypatch.setenv("APTL_ALLOWED_HOSTS", "testserver")
+
+
+@pytest.fixture(autouse=True)
 def _fast_soc_ca_keys(monkeypatch):
     """Shrink SOC-CA RSA key sizes for the whole test run.
 

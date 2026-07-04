@@ -1,0 +1,33 @@
+# UI-008a split dev/preview profile (aptl-web-ui).
+#
+# Serves the built static SPA and reverse-proxies /api/* to the FastAPI BFF
+# (aptl-web-api), which owns the entire auth/CSRF boundary. This container holds
+# no control-plane token and enforces no security logic of its own — it is a
+# dumb static server + same-origin proxy so the browser sees a single origin.
+#
+# The shipped operator delivery contract is `aptl web serve` (one FastAPI
+# process serving assets + API). This profile exists for dev/preview only.
+:3000 {
+	# /api/* (REST, SSE, and the terminal WebSocket — Caddy upgrades transparently)
+	# go to the BFF. The browser's Origin / Sec-Fetch-Site / Cookie headers are
+	# forwarded unchanged so the BFF's CSRF gate and session-cookie auth work.
+	# Preserve the browser's Host so the BFF's Host gate sees `localhost`, not the
+	# internal upstream name.
+	handle /api/* {
+		reverse_proxy aptl-web-api:8400 {
+			header_up Host {host}
+		}
+	}
+
+	# Everything else is the SPA: serve the requested file if it exists, else
+	# fall back to index.html for client-side routes.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		# Match the `aptl web serve` posture: enforce the SPA's
+		# frame-ancestors intent (a <meta> CSP cannot) and stop MIME sniffing.
+		header X-Frame-Options DENY
+		header X-Content-Type-Options nosniff
+		file_server
+	}
+}

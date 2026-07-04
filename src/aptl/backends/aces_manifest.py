@@ -120,7 +120,9 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # plan surface even though live score progression remains #514 follow-on work.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
-    supported_sections=frozenset({"conditions", "objectives", "goals", "evaluations"}),
+    supported_sections=frozenset(
+        {"conditions", "evaluations", "goals", "metrics", "objectives", "tlos"}
+    ),
     supports_scoring=True,
     supports_objectives=True,
 )

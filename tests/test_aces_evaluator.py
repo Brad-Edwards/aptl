@@ -1,5 +1,6 @@
 """Tests for the APTL ACES evaluation adapter (issue #312)."""
 
+from pathlib import Path
 from textwrap import dedent
 
 from aces_contracts.evaluation import EvaluationExecutionState, EvaluationResultStatus
@@ -7,10 +8,13 @@ from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 from aces_processor.compiler import compile_runtime_model
 from aces_processor.planner import plan
 from aces_runtime.evaluation_result_contracts import evaluation_result_contract_diagnostics
+from aces_sdl import parse_sdl_file
 from aces_sdl.parser import parse_sdl
 
 from aptl.backends.aces_evaluator import AptlEvaluator
 from aptl.backends.aces_manifest import create_aptl_manifest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 _EVALUATION_SCENARIO = dedent(
     """
@@ -83,6 +87,26 @@ def test_results_and_status_reflect_registered_evaluations():
     assert evaluator.results()
     assert evaluator.history()
     assert evaluator.status()["registered_evaluations"] == sorted(evaluator.results())
+
+
+def test_start_registers_paper_metric_and_tlo_resources():
+    scenario = parse_sdl_file(PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml")
+    evaluation = plan(
+        compile_runtime_model(scenario),
+        create_aptl_manifest(),
+    ).evaluation
+
+    result = AptlEvaluator().start(evaluation, RuntimeSnapshot())
+
+    assert result.success is True
+    assert (
+        "evaluation.metric.participant-evidence-complete"
+        in result.snapshot.evaluation_results
+    )
+    assert (
+        "evaluation.tlo.authored-runtime-handoff"
+        in result.snapshot.evaluation_results
+    )
 
 
 def test_start_preserves_existing_provisioning_entries():

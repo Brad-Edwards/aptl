@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from aces_contracts.diagnostics import Diagnostic, Severity
@@ -17,9 +18,14 @@ from aces_contracts.participant_behavior import (
     ParticipantRuntimeLifecyclePhase,
 )
 from aces_contracts.participant_episode import ParticipantEpisodeExecutionState
-from aces_contracts.planning import RuntimeDomain
+from aces_contracts.planning import ProvisioningPlan, RuntimeDomain
 from aces_contracts.runtime_state import SnapshotEntry
+from aces_processor.compiler import compile_runtime_model
 
+from aptl.backends.aces_participant_bindings import (
+    participant_action_specs_from_runtime_model as _binding_action_specs,
+)
+from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -32,7 +38,6 @@ PARTICIPANT_ACTION_CONTRACT_ADDRESS = (
 PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
     "participant.observation-boundary.aptl.kali-victim-ssh-probe"
 )
-PARTICIPANT_BEHAVIOR_ADDRESS = PARTICIPANT_ACTION_ADDRESS
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
 
@@ -97,6 +102,48 @@ DEFAULT_PARTICIPANT_ACTIONS = {
 }
 
 
+def participant_action_specs_from_runtime_model(
+    model: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
+) -> dict[str, ParticipantActionSpec]:
+    """Return APTL action bindings declared by compiled runtime artifacts."""
+
+    return cast(
+        dict[str, ParticipantActionSpec],
+        _binding_action_specs(
+            model,
+            provisioning_plan=provisioning_plan,
+            project_dir=project_dir,
+            config=config,
+            spec_factory=ParticipantActionSpec,
+        ),
+    )
+
+
+def participant_action_specs_for_scenario(
+    scenario: object,
+    *,
+    provisioning_plan: ProvisioningPlan,
+    project_dir: Path,
+    config: AptlConfig,
+) -> dict[str, ParticipantActionSpec]:
+    """Best-effort participant bindings from compiled runtime artifacts."""
+
+    try:
+        model = compile_runtime_model(scenario)
+    except Exception:
+        return {}
+    return participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=provisioning_plan,
+        project_dir=project_dir,
+        config=config,
+    )
+
+
 def participant_action_diagnostic(
     code: str, address: str, message: str
 ) -> Diagnostic:
@@ -151,10 +198,10 @@ def drive_participant_action(
         behavior_events=[attempted, observed],
         diagnostics=diagnostics,
         snapshot_entries=_action_snapshot_entries(
-            spec, action_instance_id, observation.success
+            participant_address, spec, action_instance_id, observation.success
         ),
         shared_state_records=_shared_state_records(
-            spec, action_instance_id, observation.success
+            participant_address, spec, action_instance_id, observation.success
         ),
     )
 
@@ -282,18 +329,22 @@ def _observation_event(
 
 
 def _action_snapshot_entries(
+    participant_address: str,
     spec: ParticipantActionSpec,
     action_instance_id: str,
     success: bool,
 ) -> dict[str, SnapshotEntry]:
     """Build participant snapshot entries for the action contract and result."""
 
+    action_name = _address_leaf(spec.action_contract_address)
+    boundary_name = _address_leaf(spec.observation_boundary_address)
     return {
-        PARTICIPANT_BEHAVIOR_ADDRESS: SnapshotEntry(
-            address=PARTICIPANT_BEHAVIOR_ADDRESS,
+        participant_address: SnapshotEntry(
+            address=participant_address,
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-behavior",
             payload={
+                "participant_address": participant_address,
                 "action_contract_addresses": [spec.action_contract_address],
                 "observation_boundary_addresses": [
                     spec.observation_boundary_address
@@ -306,8 +357,8 @@ def _action_snapshot_entries(
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-action-contract",
             payload={
-                "name": "APTL Kali victim SSH probe",
-                "action_name": "kali-victim-ssh-probe",
+                "name": f"APTL participant action {action_name}",
+                "action_name": action_name,
                 "semantic_version": "1.0.0",
                 "lifecycle_state": "active",
                 "behavioral_granularity": "single-command",
@@ -324,9 +375,9 @@ def _action_snapshot_entries(
             domain=RuntimeDomain.PARTICIPANT,
             resource_type="participant-observation-boundary",
             payload={
-                "name": "APTL Kali victim SSH observation boundary",
-                "boundary_name": "kali-victim-ssh-probe-output",
-                "projection_basis": "nmap grepable output excerpt",
+                "name": f"APTL participant observation boundary {boundary_name}",
+                "boundary_name": boundary_name,
+                "projection_basis": "terminal command output excerpt",
                 "observable_refs": list(spec.target_refs),
                 "evidence_refs": [action_instance_id],
                 "disclosed_refs": list(spec.target_refs),
@@ -353,6 +404,7 @@ def _action_snapshot_entries(
 
 
 def _shared_state_records(
+    participant_address: str,
     spec: ParticipantActionSpec,
     action_instance_id: str,
     success: bool,
@@ -367,7 +419,7 @@ def _shared_state_records(
         ).hexdigest()
         records[ref] = {
             "state_address": ref,
-            "state_scope": "aptl-techvault-live-range",
+            "state_scope": participant_address,
             "state_kind": state_kind,
             "ordering_basis": "participant-action-observation",
             "conflict_policy": "single-writer-observation",
@@ -384,3 +436,9 @@ def _shared_state_records(
             "evidence_refs": [action_instance_id],
         }
     return records
+
+
+def _address_leaf(address: str) -> str:
+    """Return the terminal address segment for a runtime artifact."""
+
+    return address.rsplit(".", 1)[-1] if address else "runtime-artifact"

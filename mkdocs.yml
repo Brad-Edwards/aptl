@@ -80,6 +80,7 @@ nav:
     - Networking: architecture/networking.md
     - Enterprise Infrastructure: architecture/enterprise-infrastructure.md
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
+    - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
@@ -104,6 +105,7 @@ nav:
     - TechVault Curated Live Validation Preflight: aces/techvault-curated-live-validation-preflight.md
     - TechVault Curated Live Validation Gate: aces/techvault-curated-live-validation-gate.md
     - TechVault SDL Classification Audit: aces/techvault-sdl-classification-audit.md
+    - Paper Scenario Realization: aces/paper-scenario-realization.md
     - Asset Inventory:
       - Methodology: aces/inventory/asset-inventory-methodology.md
       - Methodology Assurance Report: aces/inventory/methodology-assurance-report.md
@@ -152,6 +154,9 @@ nav:
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
     - Experiment Runs: reference/experiment-runs.md
     - SOC Feature Spec: specs/soc-feature-spec.md
+    - Web GUI Design Specification: specs/web-gui-design.md
+    - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
+    - Web Component Kit: specs/web-component-kit.md
   - Troubleshooting: troubleshooting/index.md
   - Records:
     - CI/CD Remote Deployment (removed): deployment/ci-cd-deploy.md
@@ -204,6 +209,10 @@ nav:
     - ADR-040 Terminal SSH Host-Key Verification: adrs/adr-040-terminal-ssh-host-key-verification.md
     - ADR-041 Kali Capture Sidecar Ownership Boundary: adrs/adr-041-kali-capture-sidecar-ownership-boundary.md
     - ADR-042 Sidecar-Owned PTY Master: adrs/adr-042-sidecar-owned-pty-master.md
+    - ADR-043 Suricata Runtime Config Ownership Boundary: adrs/adr-043-suricata-runtime-config-ownership-boundary.md
+    - ADR-044 ACES-Aligned Run Reproducibility Record: adrs/adr-044-aces-aligned-run-reproducibility-record.md
+    - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
+    - ADR-046 Dynamic ACES Scenario Realization: adrs/adr-046-dynamic-aces-scenario-realization.md
 
 extra:
   social:

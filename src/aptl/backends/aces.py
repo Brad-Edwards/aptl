@@ -1,16 +1,9 @@
-"""APTL ACES runtime target.
-
-This module is the handoff layer between the external ACES SDL/runtime
-packages and APTL's existing deployment primitives.  It intentionally keeps
-Docker/SSH details behind ``DeploymentBackend``; the ACES provisioner only
-translates a provisioning plan into the compose profiles APTL can already
-start.
-"""
+"""APTL ACES runtime target and deployment handoff."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +25,11 @@ from aptl.backends.aces_diagnostics import (
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.aces_evaluator import AptlEvaluator
 from aptl.backends.aces_orchestrator import AptlOrchestrator
+from aptl.backends.aces_participant_actions import (
+    DEFAULT_PARTICIPANT_ACTIONS,
+    ParticipantActionSpec,
+    participant_action_specs_for_scenario,
+)
 from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 from aptl.backends.aces_realization import (
     AptlRealization,
@@ -41,6 +39,7 @@ from aptl.backends.aces_profiles import (
     load_compose_profile_index,
     select_backend_profiles,
 )
+from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO, AcesStartOutcome
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -54,31 +53,13 @@ if TYPE_CHECKING:
 
 log = get_logger("aces-backend")
 
-DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
-
-
-@dataclass
-class AcesStartOutcome:
-    """Reference-holder for start_aces_scenario outputs (REP-001 / ADR-044).
-
-    Carries the lab result alongside ACES runtime facts captured during
-    _run_execution_plan so downstream steps can build a reproducibility
-    record without re-running ACES planning or calling Docker.
-    """
-
-    lab_result: LabResult
-    final_snapshot: RuntimeSnapshot
-    realization_details: dict[str, Any]
-    selected_profiles: list[str]
-    scenario_path: Path | None
-    manifest_payload: dict[str, Any] = field(default_factory=dict)
-
 
 def create_aptl_runtime_target(
     *,
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
+    participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
 ) -> RuntimeTarget:
     """Build the ACES runtime target for APTL."""
 
@@ -88,7 +69,13 @@ def create_aptl_runtime_target(
         deployment_backend=backend,
     )
     orchestrator = AptlOrchestrator()
-    participant_runtime = AptlParticipantRuntime(deployment_backend=backend)
+    action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
+    if participant_action_specs:
+        action_specs.update(participant_action_specs)
+    participant_runtime = AptlParticipantRuntime(
+        deployment_backend=backend,
+        action_specs=action_specs,
+    )
     return RuntimeTarget(
         name=APTL_ACES_TARGET_NAME,
         manifest=create_aptl_manifest(),
@@ -127,6 +114,19 @@ def start_aces_scenario(
             backend=backend,
         )
         execution_plan = RuntimeManager(target).plan(scenario)
+        participant_action_specs = participant_action_specs_for_scenario(
+            scenario,
+            provisioning_plan=execution_plan.provisioning,
+            project_dir=project_dir,
+            config=config,
+        )
+        if participant_action_specs:
+            target = create_aptl_runtime_target(
+                project_dir=project_dir,
+                config=config,
+                backend=backend,
+                participant_action_specs=participant_action_specs,
+            )
         return _run_execution_plan(
             target,
             execution_plan,
@@ -153,15 +153,7 @@ def selected_profiles_for_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> list[str]:
-    """Return the Compose profiles a scenario selects for the backend start.
-
-    Mirrors ``start_aces_scenario``'s selection path (parse -> plan -> interpret
-    -> select_backend_profiles) without side effects, so post-start readiness
-    checks can scope to the profiles the scenario actually started rather than
-    the global ``config.containers`` flags. A bounded curated scenario starts a
-    subset of the enabled profiles, so a config-flag gate would wait on services
-    the scenario never launched.
-    """
+    """Return the Compose profiles selected by a scenario without side effects."""
     resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
     if not resolved_scenario.is_absolute():
         resolved_scenario = project_dir / resolved_scenario
@@ -405,7 +397,8 @@ class AptlProvisioner(object):
                     "realization": realization.details(),
                 },
             )
-        start_result = self.deployment_backend.start(selected_profiles)
+        deployment_spec = realization.deployment_spec(selected_profiles)
+        start_result = self.deployment_backend.realize(deployment_spec)
         if not start_result.success:
             diagnostics.append(
                 diagnostic(

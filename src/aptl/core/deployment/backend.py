@@ -18,6 +18,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
@@ -42,6 +43,28 @@ class DeploymentBackend(Protocol):
 
         Args:
             profiles: List of profile names to activate.
+            build: If True, rebuild images before starting.
+
+        Returns:
+            LabResult indicating success or failure.
+        """
+        ...
+
+    def realize(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        build: bool = True,
+    ) -> LabResult:
+        """Realize a typed scenario deployment through the backend.
+
+        Implementations may use profiles as a vehicle for starting existing
+        services, but the declared nodes/networks in ``realization`` are the
+        topology authority for any follow-on side effects.
+
+        Args:
+            realization: Typed deployment realization emitted from ACES plan
+                resources.
             build: If True, rebuild images before starting.
 
         Returns:

@@ -72,6 +72,17 @@ scenarios:
     assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
 
 
+def test_repository_catalog_includes_paper_agent_loop():
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    project_root = Path(__file__).resolve().parents[1]
+    catalog = load_scenario_catalog(project_root)
+    entries = {entry.id: entry for entry in catalog.scenarios}
+
+    assert entries["paper-agent-loop"].path == "scenarios/paper-agent-loop.sdl.yaml"
+    assert (project_root / entries["paper-agent-loop"].path).exists()
+
+
 def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 
@@ -216,3 +227,139 @@ def test_rejects_selecting_both_id_and_path(tmp_path):
             scenario_id="custom",
             scenario_path=Path("scenarios/custom.sdl.yaml"),
         )
+
+
+def test_catalog_metadata_extension_parses(tmp_path):
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+    metadata:
+      mode: purple
+      difficulty: advanced
+      estimated_minutes: 60
+      tags: [web, detection]
+""",
+    )
+
+    entry = load_scenario_catalog(tmp_path).scenarios[0]
+
+    assert entry.metadata is not None
+    assert entry.metadata.mode == "purple"
+    assert entry.metadata.difficulty == "advanced"
+    assert entry.metadata.estimated_minutes == 60
+    assert entry.metadata.tags == ["web", "detection"]
+
+
+def test_catalog_metadata_is_optional(tmp_path):
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+""",
+    )
+
+    assert load_scenario_catalog(tmp_path).scenarios[0].metadata is None
+
+
+def test_catalog_metadata_rejects_nonpositive_minutes(tmp_path):
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+    metadata:
+      estimated_minutes: 0
+""",
+    )
+
+    with pytest.raises(ValueError, match="positive"):
+        load_scenario_catalog(tmp_path)
+
+
+def test_catalog_metadata_forbids_unknown_fields(tmp_path):
+    from aptl.core.scenario_catalog import load_scenario_catalog
+
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+    metadata:
+      bogus: value
+""",
+    )
+
+    with pytest.raises(ValueError):
+        load_scenario_catalog(tmp_path)
+
+
+def test_resolve_and_parse_unknown_id_raises_not_found(tmp_path):
+    from aptl.core.scenario_catalog import resolve_and_parse_scenario
+    from aptl.core.scenarios import ScenarioNotFoundError
+
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+""",
+    )
+
+    with pytest.raises(ScenarioNotFoundError):
+        resolve_and_parse_scenario(tmp_path, "nope")
+
+
+def test_resolve_and_parse_missing_catalog_raises_not_found(tmp_path):
+    from aptl.core.scenario_catalog import resolve_and_parse_scenario
+    from aptl.core.scenarios import ScenarioNotFoundError
+
+    with pytest.raises(ScenarioNotFoundError):
+        resolve_and_parse_scenario(tmp_path, "anything")
+
+
+def test_resolve_and_parse_returns_entry_and_scenario(tmp_path):
+    from aptl.core.scenario_catalog import resolve_and_parse_scenario
+
+    (tmp_path / "scenarios").mkdir(exist_ok=True)
+    (tmp_path / "scenarios" / "custom.sdl.yaml").write_text(
+        "name: custom\nnodes:\n  h:\n    type: vm\n    os: linux\n"
+    )
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+""",
+    )
+
+    entry, scenario = resolve_and_parse_scenario(tmp_path, "custom")
+
+    assert entry.id == "custom"
+    assert scenario.name == "custom"

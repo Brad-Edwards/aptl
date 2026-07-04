@@ -4,31 +4,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Mock EventSource for jsdom
-class MockEventSource extends EventTarget {
-	static CONNECTING = 0;
-	static OPEN = 1;
-	static CLOSED = 2;
-
-	url: string;
-	readyState = MockEventSource.OPEN;
-	onerror: ((event: Event) => void) | null = null;
-
-	constructor(url: string) {
-		super();
-		this.url = url;
-	}
-
-	close() {
-		this.readyState = MockEventSource.CLOSED;
-	}
+/**
+ * Build a minimal fetch Response whose body streams the given SSE chunks, for
+ * testing the fetch-based subscribeLabEvents (which replaced EventSource so the
+ * stream can carry the X-APTL-Session auth header).
+ */
+function sseResponse(chunks: string[]) {
+	let i = 0;
+	const encoder = new TextEncoder();
+	return {
+		ok: true,
+		body: {
+			getReader() {
+				return {
+					read() {
+						if (i < chunks.length) {
+							return Promise.resolve({ value: encoder.encode(chunks[i++]), done: false });
+						}
+						return Promise.resolve({ value: undefined, done: true });
+					},
+					cancel() {}
+				};
+			}
+		}
+	};
 }
-vi.stubGlobal('EventSource', MockEventSource);
 
 import {
 	getLabStatus,
 	startLab,
 	stopLab,
+	killLab,
 	getScenarios,
 	getScenario,
 	getConfig,
@@ -38,6 +44,7 @@ import {
 describe('API client', () => {
 	beforeEach(() => {
 		mockFetch.mockReset();
+		sessionStorage.clear();
 	});
 
 	it('getLabStatus fetches /api/lab/status', async () => {
@@ -49,7 +56,10 @@ describe('API client', () => {
 
 		const result = await getLabStatus();
 		expect(result).toEqual(data);
-		expect(mockFetch).toHaveBeenCalledWith('/api/lab/status', undefined);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/status',
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
 	});
 
 	it('startLab posts to /api/lab/start', async () => {
@@ -61,7 +71,10 @@ describe('API client', () => {
 
 		const result = await startLab();
 		expect(result).toEqual(data);
-		expect(mockFetch).toHaveBeenCalledWith('/api/lab/start', { method: 'POST' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/start',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
 	});
 
 	it('stopLab posts to /api/lab/stop', async () => {
@@ -73,7 +86,64 @@ describe('API client', () => {
 
 		const result = await stopLab();
 		expect(result).toEqual(data);
-		expect(mockFetch).toHaveBeenCalledWith('/api/lab/stop', { method: 'POST' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/stop',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
+	});
+
+	it('killLab posts to /api/lab/kill without stopping containers by default', async () => {
+		const data = {
+			success: true,
+			mcp_processes_killed: 3,
+			containers_stopped: false,
+			session_cleared: true,
+			errors: []
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(data)
+		});
+
+		const result = await killLab(false);
+		expect(result).toEqual(data);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/kill?containers=false',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
+	});
+
+	it('killLab passes containers=true to widen the blast radius', async () => {
+		const data = {
+			success: true,
+			mcp_processes_killed: 1,
+			containers_stopped: true,
+			session_cleared: true,
+			errors: []
+		};
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve(data)
+		});
+
+		const result = await killLab(true);
+		expect(result.containers_stopped).toBe(true);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/lab/kill?containers=true',
+			expect.objectContaining({ method: 'POST', headers: expect.any(Headers) })
+		);
+	});
+
+	it('killLab carries the session header', async () => {
+		sessionStorage.setItem('aptl_session', 'tok-kill');
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ success: true })
+		});
+
+		await killLab(false);
+		const headers = mockFetch.mock.calls[0][1].headers as Headers;
+		expect(headers.get('X-APTL-Session')).toBe('tok-kill');
 	});
 
 	it('startLab carries ADR-030 outcome + diagnostics through fetch', async () => {
@@ -171,7 +241,10 @@ describe('API client', () => {
 
 		const result = await getScenario('test-scenario');
 		expect(result).toEqual(data);
-		expect(mockFetch).toHaveBeenCalledWith('/api/scenarios/test-scenario', undefined);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/scenarios/test-scenario',
+			expect.objectContaining({ headers: expect.any(Headers) })
+		);
 	});
 
 	it('getScenario encodes the scenario ID', async () => {
@@ -183,43 +256,76 @@ describe('API client', () => {
 		await getScenario('has spaces/slashes');
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/scenarios/has%20spaces%2Fslashes',
-			undefined
+			expect.objectContaining({ headers: expect.any(Headers) })
 		);
 	});
 
-	it('subscribeLabEvents creates EventSource and relays messages', () => {
-		const onMessage = vi.fn();
-		const onError = vi.fn();
+	it('attaches the X-APTL-Session header when a session token is stored', async () => {
+		sessionStorage.setItem('aptl_session', 'tok-123');
+		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
-		const es = subscribeLabEvents(onMessage, onError);
+		await getConfig();
 
-		expect(es).toBeInstanceOf(EventSource);
-
-		// Simulate a lab_status SSE event
-		const statusData = { running: true, containers: [], error: null };
-		const event = new MessageEvent('lab_status', {
-			data: JSON.stringify(statusData)
-		});
-		es.dispatchEvent(event);
-
-		expect(onMessage).toHaveBeenCalledWith(statusData);
-
-		es.close();
+		const headers = mockFetch.mock.calls[0][1].headers as Headers;
+		expect(headers.get('X-APTL-Session')).toBe('tok-123');
 	});
 
-	it('subscribeLabEvents sets onerror handler when provided', () => {
-		const onMessage = vi.fn();
-		const onError = vi.fn();
+	it('omits the X-APTL-Session header when no token is stored', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
-		const es = subscribeLabEvents(onMessage, onError);
-		expect(es.onerror).toBe(onError);
-		es.close();
+		await getConfig();
+
+		const headers = mockFetch.mock.calls[0][1].headers as Headers;
+		expect(headers.has('X-APTL-Session')).toBe(false);
 	});
 
-	it('subscribeLabEvents works without error handler', () => {
+	it('subscribeLabEvents streams lab_status events to onMessage', async () => {
+		const status = { running: true, containers: [], error: null };
+		mockFetch.mockResolvedValueOnce(
+			sseResponse([`event: lab_status\ndata: ${JSON.stringify(status)}\n\n`])
+		);
 		const onMessage = vi.fn();
-		const es = subscribeLabEvents(onMessage);
-		expect(es.onerror).toBeNull();
-		es.close();
+
+		const sub = subscribeLabEvents(onMessage);
+		await vi.waitFor(() => expect(onMessage).toHaveBeenCalledWith(status));
+		sub.close();
+	});
+
+	it('subscribeLabEvents carries the session header on the stream request', async () => {
+		sessionStorage.setItem('aptl_session', 'tok-sse');
+		mockFetch.mockResolvedValueOnce(sseResponse([]));
+
+		const sub = subscribeLabEvents(vi.fn());
+		await vi.waitFor(() => expect(mockFetch).toHaveBeenCalled());
+		const headers = mockFetch.mock.calls[0][1].headers as Headers;
+		expect(headers.get('X-APTL-Session')).toBe('tok-sse');
+		sub.close();
+	});
+
+	it('subscribeLabEvents calls onError when the stream ends', async () => {
+		mockFetch.mockResolvedValueOnce(sseResponse([]));
+		const onError = vi.fn();
+
+		const sub = subscribeLabEvents(vi.fn(), onError);
+		await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+		sub.close();
+	});
+
+	it('subscribeLabEvents does not call onError after an explicit close', async () => {
+		let resolveRead: (v: { value: undefined; done: boolean }) => void = () => {};
+		const reader = {
+			read: vi.fn(() => new Promise((r) => (resolveRead = r))),
+			cancel: vi.fn()
+		};
+		mockFetch.mockResolvedValueOnce({ ok: true, body: { getReader: () => reader } });
+		const onError = vi.fn();
+
+		const sub = subscribeLabEvents(vi.fn(), onError);
+		await vi.waitFor(() => expect(reader.read).toHaveBeenCalled());
+		sub.close();
+		// Resolve the pending read as stream-end AFTER close; onError must stay silent.
+		resolveRead({ value: undefined, done: true });
+		await Promise.resolve();
+		expect(onError).not.toHaveBeenCalled();
 	});
 });

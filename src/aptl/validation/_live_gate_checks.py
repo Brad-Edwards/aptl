@@ -423,9 +423,7 @@ def check_run_archive_manifest(
                 "evaluation-result-envelope-v1",
                 "evaluation-history-event-stream-v1",
             ],
-            "execution_state_integration": (
-                "aptl.backends.aces_evaluator.AptlEvaluator"
-            ),
+            "execution_state_integration": "aptl.backends.aces_evaluator.AptlEvaluator",
         },
         "orchestrator_surfaces": {
             "profile": "orchestration-evaluation",

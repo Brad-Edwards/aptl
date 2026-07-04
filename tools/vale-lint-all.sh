@@ -18,5 +18,5 @@ fi
 
 cd "${REPO_ROOT}"
 git ls-files '*.md' \
-  | grep -vE '^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|docs/history/|docs/known-issues/|docs/components/mcp-smoke-test-results-)' \
+  | grep -vE '^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/)' \
   | xargs "${VALE_BIN}" --config=.vale.ini

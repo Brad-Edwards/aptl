@@ -63,6 +63,7 @@ aptl lab start
 - [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
 
 ### Reference
+- [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)
 - [Container Template Guide](containers/victim-template-guide.md)
@@ -70,8 +71,3 @@ aptl lab start
 ### Operations
 - [Deployment](deployment.md)
 - [Troubleshooting](troubleshooting/)
-- [Known Issues—UAT Findings](known-issues/uat-findings-2026-02-23.md)
-
-### History
-- [Smoke Test Results 2026-02-08](history/smoke-test-results-2026-02-08.md)
-- [MCP Smoke Test Results 2026-02-22](components/mcp-smoke-test-results-2026-02-22.md)

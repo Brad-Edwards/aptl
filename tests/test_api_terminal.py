@@ -705,6 +705,106 @@ class TestWsAcceptsTicketSubprotocol:
                     ws.receive_json()
 
 
+class TestTerminalRejectionContract:
+    """Lock the exact WS close reasons / error-frame messages the web UI maps.
+
+    ``web/src/lib/bff.ts`` (``describeTerminalClose`` / ``describeErrorFrame``)
+    surfaces these strings as narrow, accessible rejection categories. If the
+    backend ever renamed a reason or message, the frontend mapping would
+    silently fall back to a generic string — these tests fail loudly instead,
+    keeping the backend→frontend contract honest.
+    """
+
+    def test_unauthorized_close_reason(self, api_client):
+        """No token (valid origin) closes with code 1008 / reason 'Unauthorized'."""
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with api_client.websocket_connect(
+                "/api/terminal/ws/victim",
+                headers={**_VALID_ORIGIN},
+            ) as ws:
+                ws.receive_json()
+        assert exc.value.code == 1008
+        assert exc.value.reason == "Unauthorized"
+
+    def test_origin_not_allowed_close_reason(self, api_client):
+        """Valid token + bad origin closes with reason 'Origin not allowed'."""
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with api_client.websocket_connect(
+                "/api/terminal/ws/victim",
+                subprotocols=_VALID_WS_SUBPROTOCOLS,
+                headers={"origin": "http://evil.com"},
+            ) as ws:
+                ws.receive_json()
+        assert exc.value.code == 1008
+        assert exc.value.reason == "Origin not allowed"
+
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_unknown_container_close_reason(self, mock_status, api_client):
+        """An unknown container closes with reason 'Unknown container'."""
+        mock_status.return_value = _make_lab_status(running=True)
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with api_client.websocket_connect(
+                "/api/terminal/ws/nonexistent",
+                subprotocols=_VALID_WS_SUBPROTOCOLS,
+                headers={**_VALID_ORIGIN},
+            ) as ws:
+                ws.receive_json()
+        assert exc.value.code == 1008
+        assert exc.value.reason == "Unknown container"
+
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_lab_not_running_error_message_exact(self, mock_status, api_client):
+        """The lab-stopped error frame message is exactly 'Lab is not running'."""
+        mock_status.return_value = _make_lab_status(running=False)
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers={**_VALID_ORIGIN},
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg == {"type": "error", "message": "Lab is not running"}
+
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_container_not_available_error_message_exact(
+        self, mock_status, mock_endpoints, api_client, tmp_path
+    ):
+        """The unavailable-target error frame message is exact."""
+        mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {}
+        _pin_known_hosts(tmp_path)
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers={**_VALID_ORIGIN},
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg == {"type": "error", "message": "Container not available"}
+
+    @patch("aptl.api.routers.terminal.asyncssh")
+    @patch("aptl.api.routers.terminal.lab_terminal_ssh_endpoints")
+    @patch("aptl.api.routers.terminal.lab_status")
+    def test_host_keys_error_message_exact(
+        self, mock_status, mock_endpoints, mock_asyncssh, api_client, tmp_path
+    ):
+        """The unpinned-host-key error frame message is exact."""
+        mock_status.return_value = _make_lab_status(running=True)
+        mock_endpoints.return_value = {"victim": _VICTIM_ENDPOINT}
+        # Deliberately do NOT pin known_hosts.
+        mock_asyncssh.connect = AsyncMock()
+        mock_asyncssh.Error = Exception
+        with api_client.websocket_connect(
+            "/api/terminal/ws/victim",
+            subprotocols=_VALID_WS_SUBPROTOCOLS,
+            headers={**_VALID_ORIGIN},
+        ) as ws:
+            msg = ws.receive_json()
+            assert msg == {
+                "type": "error",
+                "message": "SSH host keys not pinned; restart the lab",
+            }
+
+
 class TestWsOriginAllowed:
     """_ws_origin_allowed enforces STRICT same-origin (Origin host == Host)."""
 

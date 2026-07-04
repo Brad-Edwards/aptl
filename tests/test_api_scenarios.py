@@ -1,6 +1,7 @@
 """Tests for the scenario catalog summary API endpoint (UI-008c)."""
 
 import json
+import logging
 
 import pytest
 
@@ -206,6 +207,15 @@ class TestScenarioDetailEndpoint:
     def test_detail_no_catalog_returns_404(self, api_client):
         response = api_client.get("/api/scenarios/anything")
         assert response.status_code == 404
+
+    def test_detail_does_not_log_user_controlled_id(self, api_client, caplog):
+        caplog.set_level(logging.INFO, logger="aptl.api.scenarios")
+
+        response = api_client.get("/api/scenarios/%0Aforged-entry")
+
+        assert response.status_code == 404
+        assert "GET /scenarios/{scenario_id}" in caplog.text
+        assert "forged-entry" not in caplog.text
 
     def test_detail_omits_internal_path(self, api_client, tmp_path):
         self._catalog_with_minimal(tmp_path)

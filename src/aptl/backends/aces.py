@@ -3,24 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aces_contracts.diagnostics import Diagnostic
-from aces_contracts.planning import ChangeAction, ProvisioningPlan
-from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+from aces_contracts.runtime_state import OperationState, RuntimeSnapshot
+from aces_processor.semantics.realization import realization_disclosure
 from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
 from aces_sdl import SDLError, parse_sdl_file
 
 from aptl.backends.aces_diagnostics import (
-    PROVISIONING_ADDRESS,
-    diagnostic,
-    has_error,
     render_aces_diagnostics,
-    snapshot_after_apply,
 )
 from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.aces_evaluator import AptlEvaluator
@@ -31,12 +25,11 @@ from aptl.backends.aces_participant_actions import (
     participant_action_specs_for_scenario,
 )
 from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
+from aptl.backends.aces_provisioner import AptlProvisioner
 from aptl.backends.aces_realization import (
-    AptlRealization,
     interpret_provisioning_plan,
 )
 from aptl.backends.aces_profiles import (
-    load_compose_profile_index,
     select_backend_profiles,
 )
 from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO, AcesStartOutcome
@@ -208,7 +201,7 @@ def _run_execution_plan(
     if failure is not None:
         return AcesStartOutcome(
             lab_result=failure,
-            final_snapshot=control_plane.get_snapshot(),
+            final_snapshot=_current_runtime_snapshot(control_plane),
             realization_details=realization_details,
             selected_profiles=selected_profiles,
             scenario_path=scenario_path,
@@ -218,7 +211,7 @@ def _run_execution_plan(
             success=True,
             message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
         ),
-        final_snapshot=control_plane.get_snapshot(),
+        final_snapshot=_current_runtime_snapshot(control_plane),
         realization_details=realization_details,
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
@@ -243,10 +236,59 @@ def _apply_provisioning_and_orchestration(
     the provisioner uses, so the reproducibility record carries real
     realization evidence rather than empty placeholders.
     """
-    realization_details, selected_profiles = _interpret_realization(target, execution_plan)
-    phases: list[Callable[[], object]] = [
+    realization_details, selected_profiles = _interpret_realization(
+        target, execution_plan
+    )
+    failure = _run_control_plane_phases(control_plane, execution_plan)
+    if failure is None:
+        evaluation_results = _evaluation_results(target, execution_plan)
+        failure = _drive_orchestrator_workflows(
+            target.orchestrator,
+            evaluation_results,
+            run_store=run_store,
+            run_id=run_id,
+        )
+    return failure, realization_details, selected_profiles
+
+
+def _run_control_plane_phases(
+    control_plane: RuntimeControlPlane,
+    execution_plan: "ExecutionPlan",
+) -> LabResult | None:
+    """Apply provisioning, disclosure, orchestration, and evaluation phases."""
+
+    failure = _apply_phase(
+        control_plane,
         lambda: control_plane.submit_provisioning(execution_plan.provisioning),
-    ]
+    )
+    if failure is None:
+        failure = _apply_realization_disclosure(control_plane, execution_plan)
+    if failure is None:
+        failure = _apply_optional_control_plane_phases(control_plane, execution_plan)
+    return failure
+
+
+def _apply_optional_control_plane_phases(
+    control_plane: RuntimeControlPlane,
+    execution_plan: "ExecutionPlan",
+) -> LabResult | None:
+    """Submit orchestration/evaluation phases only when the plan has work."""
+
+    failure = None
+    for submit in _optional_phase_submissions(control_plane, execution_plan):
+        failure = _apply_phase(control_plane, submit)
+        if failure is not None:
+            break
+    return failure
+
+
+def _optional_phase_submissions(
+    control_plane: RuntimeControlPlane,
+    execution_plan: "ExecutionPlan",
+) -> list[Callable[[], object]]:
+    """Build deferred submissions for optional ACES phases."""
+
+    phases: list[Callable[[], object]] = []
     if execution_plan.orchestration.actionable_operations:
         phases.append(
             lambda: control_plane.submit_orchestration(execution_plan.orchestration),
@@ -255,30 +297,131 @@ def _apply_provisioning_and_orchestration(
         phases.append(
             lambda: control_plane.submit_evaluation(execution_plan.evaluation),
         )
-    for submit in phases:
-        failure = _apply_phase(control_plane, submit)
-        if failure is not None:
-            return failure, realization_details, selected_profiles
-    evaluation_results: dict[str, dict[str, object]] = {}
+    return phases
+
+
+def _evaluation_results(
+    target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
+) -> dict[str, dict[str, object]]:
+    """Return evaluator results only when evaluation actions ran."""
+
+    results: dict[str, dict[str, object]] = {}
     if execution_plan.evaluation.actionable_operations and target.evaluator is not None:
-        evaluation_results = target.evaluator.results()
-    orchestrator = target.orchestrator
+        results = target.evaluator.results()
+    return results
+
+
+def _drive_orchestrator_workflows(
+    orchestrator: object,
+    evaluation_results: dict[str, dict[str, object]],
+    *,
+    run_store: RunStorageBackend | None = None,
+    run_id: str | None = None,
+) -> LabResult | None:
+    """Drive registered workflows and convert diagnostics to a lab failure."""
+
+    drive_diagnostics = []
     if isinstance(orchestrator, AptlOrchestrator) and orchestrator.results():
         drive_diagnostics = orchestrator.drive_workflows(
             evaluation_results=evaluation_results,
             run_store=run_store,
             run_id=run_id,
         )
-        if drive_diagnostics:
-            return (
-                LabResult(
-                    success=False,
-                    error=render_aces_diagnostics(drive_diagnostics),
-                ),
-                realization_details,
-                selected_profiles,
-            )
-    return None, realization_details, selected_profiles
+    failure = None
+    if drive_diagnostics:
+        failure = LabResult(
+            success=False,
+            error=render_aces_diagnostics(drive_diagnostics),
+        )
+    return failure
+
+
+def _current_runtime_snapshot(control_plane: object) -> RuntimeSnapshot:
+    """Return the current control-plane snapshot across ACES API shapes."""
+
+    snapshot = getattr(control_plane, "snapshot", None)
+    if not isinstance(snapshot, RuntimeSnapshot):
+        snapshot = _snapshot_from_getter(control_plane)
+    if not isinstance(snapshot, RuntimeSnapshot):
+        snapshot = RuntimeSnapshot()
+    return snapshot
+
+
+def _snapshot_from_getter(control_plane: object) -> RuntimeSnapshot | None:
+    """Read a runtime snapshot from legacy/getter ACES control-plane APIs."""
+
+    snapshot = None
+    get_snapshot = getattr(control_plane, "get_snapshot", None)
+    if callable(get_snapshot):
+        returned = get_snapshot()
+        if isinstance(returned, RuntimeSnapshot):
+            snapshot = returned
+        else:
+            snapshot = getattr(returned, "snapshot", None)
+    if not isinstance(snapshot, RuntimeSnapshot):
+        snapshot = None
+    return snapshot
+
+
+def _store_runtime_snapshot(control_plane: object, snapshot: RuntimeSnapshot) -> None:
+    """Persist a replacement snapshot when the control-plane object supports it."""
+
+    public_snapshot = getattr(control_plane, "snapshot", None)
+    if isinstance(public_snapshot, RuntimeSnapshot):
+        try:
+            setattr(control_plane, "snapshot", snapshot)
+        except AttributeError:
+            pass
+    if hasattr(control_plane, "_snapshot"):
+        setattr(control_plane, "_snapshot", snapshot)
+    store = getattr(control_plane, "_store", None)
+    save_snapshot = getattr(store, "save_snapshot", None)
+    if callable(save_snapshot):
+        save_snapshot(snapshot)
+
+
+def _realization_requirements(execution_plan: object) -> tuple[object, ...]:
+    """Return compiled SEM-218 realization requirements when present."""
+
+    model = getattr(execution_plan, "model", None)
+    requirements = getattr(model, "realization_requirements", ())
+    try:
+        return tuple(requirements or ())
+    except TypeError:
+        return ()
+
+
+def _apply_realization_disclosure(
+    control_plane: object,
+    execution_plan: object,
+) -> LabResult | None:
+    """Run ACES non-approximation disclosure after provisioning applies."""
+
+    requirements = _realization_requirements(execution_plan)
+    if not requirements:
+        return None
+    snapshot = _current_runtime_snapshot(control_plane)
+    diagnostics, provenance = realization_disclosure(
+        requirements,
+        execution_plan.provisioning,
+        snapshot,
+    )
+    if diagnostics:
+        return LabResult(
+            success=False,
+            error=render_aces_diagnostics(list(diagnostics)),
+        )
+    if provenance:
+        next_snapshot = snapshot.with_entries(
+            dict(snapshot.entries),
+            realization_provenance=(
+                *snapshot.realization_provenance,
+                *provenance,
+            ),
+        )
+        _store_runtime_snapshot(control_plane, next_snapshot)
+    return None
 
 
 def _interpret_realization(
@@ -321,171 +464,3 @@ def _apply_phase(
         list(status.diagnostics) if status is not None else list(receipt.diagnostics)
     )
     return LabResult(success=False, error=render_aces_diagnostics(diagnostics))
-
-
-@dataclass
-class AptlProvisioner(object):
-    """Provisioning-only ACES backend adapter for APTL."""
-
-    project_dir: Path
-    config: AptlConfig
-    deployment_backend: "DeploymentBackend"
-
-    def validate(self, plan: object) -> list[Diagnostic]:
-        """Validate that the ACES provisioning plan is APTL-realizable."""
-
-        if not isinstance(plan, ProvisioningPlan):
-            return [
-                diagnostic(
-                    "aptl.provisioner.invalid-plan",
-                    PROVISIONING_ADDRESS,
-                    "APTL provisioner expected an ACES ProvisioningPlan.",
-                )
-            ]
-
-        return list(self._realize_plan(plan).diagnostics)
-
-    def apply(self, plan: object, snapshot: object) -> ApplyResult:
-        """Apply an ACES provisioning plan via APTL's deployment backend."""
-
-        working_snapshot = (
-            snapshot if isinstance(snapshot, RuntimeSnapshot) else RuntimeSnapshot()
-        )
-        diagnostics = self._invalid_plan_diagnostics(plan)
-        result = ApplyResult(
-            success=False,
-            snapshot=working_snapshot,
-            diagnostics=diagnostics,
-        )
-        if isinstance(plan, ProvisioningPlan):
-            realization = self._realize_plan(plan)
-            diagnostics = list(realization.diagnostics)
-            if not has_error(diagnostics):
-                result = self._apply_valid_plan(
-                    plan,
-                    working_snapshot,
-                    diagnostics,
-                    realization,
-                )
-            else:
-                result = ApplyResult(
-                    success=False,
-                    snapshot=working_snapshot,
-                    diagnostics=diagnostics,
-                    details={"realization": realization.details()},
-                )
-        return result
-
-    def _apply_valid_plan(
-        self,
-        plan: ProvisioningPlan,
-        snapshot: RuntimeSnapshot,
-        diagnostics: list[Diagnostic],
-        realization: AptlRealization,
-    ) -> ApplyResult:
-        """Apply a validated ACES plan to the deployment backend."""
-        selected_profiles = select_backend_profiles(self.config, realization.profiles)
-        validity_diagnostics = self._compose_validity_diagnostics(selected_profiles)
-        if validity_diagnostics:
-            diagnostics.extend(validity_diagnostics)
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-                details={
-                    "profiles": selected_profiles,
-                    "realization": realization.details(),
-                },
-            )
-        deployment_spec = realization.deployment_spec(selected_profiles)
-        start_result = self.deployment_backend.realize(deployment_spec)
-        if not start_result.success:
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.backend-start-failed",
-                    PROVISIONING_ADDRESS,
-                    start_result.error or "APTL deployment backend failed.",
-                )
-            )
-            return ApplyResult(
-                success=False,
-                snapshot=snapshot,
-                diagnostics=diagnostics,
-                details={
-                    "profiles": selected_profiles,
-                    "realization": realization.details(),
-                },
-            )
-        return ApplyResult(
-            success=True,
-            snapshot=snapshot_after_apply(plan, snapshot),
-            diagnostics=diagnostics,
-            changed_addresses=_changed_addresses(plan),
-            details={
-                "profiles": selected_profiles,
-                "realization": realization.details(),
-            },
-        )
-
-    def _compose_validity_diagnostics(
-        self, selected_profiles: list[str]
-    ) -> list[Diagnostic]:
-        """Refuse to start when the selected profiles form an invalid project.
-
-        ``deployment_backend.start`` boots with ``docker compose --profile
-        <selected>``, which activates every service in each selected profile,
-        not just the declared ACES nodes. If an activated service depends on a
-        service the selection excludes, Compose rejects the project at ``up``
-        time. Catch that here so ``aptl lab start`` fails fast with an APTL
-        diagnostic instead of a raw Compose "undefined service" error.
-        """
-        try:
-            profile_index = load_compose_profile_index(self.project_dir)
-        except (OSError, ValueError) as exc:
-            return [
-                diagnostic(
-                    "aptl.provisioner.compose-profile-index-failed",
-                    PROVISIONING_ADDRESS,
-                    redact(str(exc)),
-                )
-            ]
-        gaps = profile_index.cross_profile_dependency_gaps(set(selected_profiles))
-        return [
-            diagnostic(
-                "aptl.provisioner.compose-project-invalid",
-                PROVISIONING_ADDRESS,
-                (
-                    "Selected APTL compose profiles form an invalid project: "
-                    f"service '{service_name}' depends on "
-                    f"{', '.join(dependencies)}, which the profile selection "
-                    "excludes. Declare the dependency's node or enable its "
-                    "profile."
-                ),
-            )
-            for service_name, dependencies in sorted(gaps.items())
-        ]
-
-    def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
-        """Interpret an ACES plan against APTL's supported contract."""
-        return interpret_provisioning_plan(
-            plan=plan,
-            project_dir=self.project_dir,
-            config=self.config,
-        )
-
-    @staticmethod
-    def _invalid_plan_diagnostics(plan: object) -> list[Diagnostic]:
-        if isinstance(plan, ProvisioningPlan):
-            return []
-        return [
-            diagnostic(
-                "aptl.provisioner.invalid-plan",
-                PROVISIONING_ADDRESS,
-                "APTL provisioner expected an ACES ProvisioningPlan.",
-            )
-        ]
-
-
-def _changed_addresses(plan: ProvisioningPlan) -> list[str]:
-    """Return addresses whose planned operation changes runtime state."""
-    return [op.address for op in plan.operations if op.action != ChangeAction.UNCHANGED]

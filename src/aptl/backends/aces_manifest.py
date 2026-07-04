@@ -117,7 +117,8 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # conditions (healthchecks realized during provisioning) and objectives through
 # the portable evaluation result/history contracts. Scoring sections are
 # declared because SCN-007 scoring resources compile into the same evaluation
-# plan surface even though live score progression remains #514 follow-on work.
+# plan surface; live score progression must come from real execution state, not
+# synthetic registration state.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
     supported_sections=frozenset(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,7 @@ from aptl.backends.aces_realization_values import (
     resolve_target_address as _resolve_target_address,
     resource_name as _resource_name,
     service_names as _service_names,
+    static_address_assignments as _static_address_assignments,
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
@@ -85,6 +87,7 @@ def interpret_provisioning_plan(
         profiles,
         diagnostics,
     )
+    _append_network_topology_diagnostics(nodes, networks, diagnostics)
     placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
     _append_profile_diagnostics(profiles, config, diagnostics)
 
@@ -314,6 +317,7 @@ def _realize_node(
         services=tuple(sorted(_service_names(node_spec))),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
+        static_address_assignments=_static_address_assignments(infra_spec),
         declared_health=_health_status(node_spec),
         image=resolve_node_image(
             resource=resource,
@@ -406,3 +410,210 @@ def _node_lookup(nodes: list[NodeRealization]) -> dict[str, str]:
             if normalized:
                 lookup[normalized] = node.address
     return lookup
+
+
+def _append_network_topology_diagnostics(
+    nodes: list[NodeRealization],
+    networks: list[NetworkRealization],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate provider-relevant network topology before backend side effects."""
+
+    parsed_networks = _parsed_networks(networks, diagnostics)
+    _append_network_name_diagnostics(networks, diagnostics)
+    seen_addresses: dict[tuple[str, str], str] = {}
+    for node in nodes:
+        linked_networks = set(node.networks)
+        for network_name, raw_address in node.static_address_assignments:
+            if network_name not in linked_networks:
+                diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.network-static-address-unlinked",
+                        node.address,
+                        (
+                            "ACES node static address references a network "
+                            "that is not declared in the node links."
+                        ),
+                    )
+                )
+            parsed_address = _parsed_static_address(
+                node.address,
+                raw_address,
+                diagnostics,
+            )
+            if parsed_address is None:
+                continue
+            network_key = _network_identity_key(network_name)
+            parsed_network = parsed_networks.get(network_key)
+            if parsed_network is not None and parsed_address not in parsed_network:
+                diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.network-static-address-out-of-range",
+                        node.address,
+                        (
+                            "ACES node static address is outside the "
+                            "declared network CIDR."
+                        ),
+                    )
+                )
+            owner_key = (network_key, str(parsed_address))
+            prior_owner = seen_addresses.get(owner_key)
+            if prior_owner is not None and prior_owner != node.address:
+                diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.network-static-address-duplicate",
+                        node.address,
+                        "ACES node static address duplicates another node.",
+                    )
+                )
+            else:
+                seen_addresses[owner_key] = node.address
+
+
+def _parsed_networks(
+    networks: list[NetworkRealization],
+    diagnostics: list[Diagnostic],
+) -> dict[str, IPv4Network]:
+    """Return parsed network CIDRs keyed by backend identity stem."""
+
+    parsed: dict[str, IPv4Network] = {}
+    for network in networks:
+        key = _network_identity_key(network.name)
+        parsed_network = _parsed_cidr(network, diagnostics)
+        if parsed_network is not None:
+            parsed[key] = parsed_network
+        _append_gateway_diagnostics(network, parsed_network, diagnostics)
+    return parsed
+
+
+def _parsed_cidr(
+    network: NetworkRealization,
+    diagnostics: list[Diagnostic],
+) -> IPv4Network | None:
+    """Parse a network CIDR and append a diagnostic on invalid input."""
+
+    if network.cidr is None:
+        return None
+    try:
+        parsed = ip_network(network.cidr, strict=True)
+    except ValueError:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-cidr-invalid",
+                network.address,
+                "ACES network CIDR is not a valid IPv4 network.",
+            )
+        )
+        return None
+    if not isinstance(parsed, IPv4Network):
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-cidr-invalid",
+                network.address,
+                "ACES network CIDR is not a valid IPv4 network.",
+            )
+        )
+        return None
+    return parsed
+
+
+def _append_gateway_diagnostics(
+    network: NetworkRealization,
+    parsed_network: IPv4Network | None,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate a network gateway, if one was authored."""
+
+    if network.gateway is None:
+        return
+    try:
+        parsed_gateway = ip_address(network.gateway)
+    except ValueError:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-gateway-invalid",
+                network.address,
+                "ACES network gateway is not a valid IPv4 address.",
+            )
+        )
+        return
+    if not isinstance(parsed_gateway, IPv4Address):
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-gateway-invalid",
+                network.address,
+                "ACES network gateway is not a valid IPv4 address.",
+            )
+        )
+        return
+    if parsed_network is not None and parsed_gateway not in parsed_network:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-gateway-out-of-range",
+                network.address,
+                "ACES network gateway is outside the declared CIDR.",
+            )
+        )
+
+
+def _parsed_static_address(
+    node_address: str,
+    raw_address: str,
+    diagnostics: list[Diagnostic],
+) -> IPv4Address | None:
+    """Parse a node static address and append a diagnostic on invalid input."""
+
+    try:
+        parsed = ip_address(raw_address)
+    except ValueError:
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-static-address-invalid",
+                node_address,
+                "ACES node static address is not a valid IPv4 address.",
+            )
+        )
+        return None
+    if not isinstance(parsed, IPv4Address):
+        diagnostics.append(
+            diagnostic(
+                "aptl.provisioner.network-static-address-invalid",
+                node_address,
+                "ACES node static address is not a valid IPv4 address.",
+            )
+        )
+        return None
+    return parsed
+
+
+def _append_network_name_diagnostics(
+    networks: list[NetworkRealization],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Report networks that normalize to the same backend identity stem."""
+
+    index: dict[str, NetworkRealization] = {}
+    for network in networks:
+        key = _network_identity_key(network.name)
+        prior = index.get(key)
+        if prior is not None and prior.address != network.address:
+            diagnostics.append(
+                diagnostic(
+                    "aptl.provisioner.network-name-ambiguous",
+                    network.address,
+                    "ACES network names normalize to the same backend network.",
+                )
+            )
+            continue
+        index[key] = network
+
+
+def _network_identity_key(name: str) -> str:
+    """Return the project-scoped backend network identity stem."""
+
+    normalized = normalize_identifier(name)
+    if normalized.endswith("-net"):
+        normalized = normalized.removesuffix("-net")
+    if normalized.startswith("aptl-"):
+        normalized = normalized.removeprefix("aptl-")
+    return normalized

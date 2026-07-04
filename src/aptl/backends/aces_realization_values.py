@@ -96,20 +96,38 @@ def dependency_names(infra_spec: Mapping[str, Any] | None) -> set[str]:
 def static_addresses(infra_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract static host addresses from infrastructure details."""
 
+    return {
+        address
+        for _, address in static_address_assignments(infra_spec)
+    }
+
+
+def static_address_assignments(
+    infra_spec: Mapping[str, Any] | None,
+) -> tuple[tuple[str, str], ...]:
+    """Extract static host addresses keyed by linked network."""
+
     if infra_spec is None:
-        return set()
+        return ()
     properties = infra_spec.get("properties")
-    addresses: set[str] = set()
+    assignments: dict[str, str] = {}
     if isinstance(properties, list):
         for item in properties:
             if isinstance(item, Mapping):
-                addresses.update(string_values(item.values()))
+                for network, address in item.items():
+                    if not isinstance(address, str) or not address.strip():
+                        continue
+                    network_name = str(network).strip()
+                    if network_name:
+                        assignments[network_name] = address
     elif isinstance(properties, Mapping):
         for key in ("address", "ip", "ipv4_address", "static_address"):
             value = properties.get(key)
             if isinstance(value, str) and value.strip():
-                addresses.add(value)
-    return addresses
+                network_values = sorted(network_names(infra_spec))
+                if len(network_values) == 1:
+                    assignments[network_values[0]] = value
+    return tuple(sorted(assignments.items()))
 
 
 def string_values(raw: object) -> set[str]:

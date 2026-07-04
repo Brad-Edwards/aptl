@@ -2,6 +2,14 @@
 
 Four Docker bridge networks providing segmented lab environment.
 
+This page describes the default TechVault / compatibility Docker Compose
+topology. For dynamic ACES scenarios, the compiled SDL infrastructure plan is
+the topology authority: networks, CIDR/gateway/IPAM, `internal` egress policy,
+and node attachments must be realized through typed `DeploymentBackend`
+operations as described in [ADR-046](../adrs/adr-046-dynamic-aces-scenario-realization.md).
+Do not treat the fixed `docker-compose.yml` network block below as the source
+of truth for a scenario whose compiled plan declares different segmentation.
+
 ## Networks
 
 | Network | Subnet | Purpose |
@@ -124,6 +132,12 @@ Three of the four networks use Docker's `internal: true` flag to prevent contain
 | aptl-dmz | **Yes** | Contains attack targets and Kali entry point |
 | aptl-internal | **Yes** | Contains AD, database, victim, workstation—all attack targets |
 | aptl-redteam | **Yes** | Kali command center; must not reach the real internet |
+
+For dynamic ACES realization, the equivalent safety property is carried by the
+authored network's `internal` property and the backend-created network must
+apply it directly. An `internal` network that is created without Docker's
+internal flag is a SAF-002 regression even if the fixed Compose topology still
+passes these tables.
 
 ### Multi-homed container egress
 

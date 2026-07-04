@@ -222,6 +222,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             log.error("Lab stop failed: %s", result.stderr)
             return LabResult(success=False, error=result.stderr)
 
+        network_failures = self.remove_project_networks()
+        if network_failures:
+            error = "; ".join(network_failures[:5])
+            log.error("Lab network cleanup failed: %s", error)
+            return LabResult(success=False, error=error)
+
         log.info("Lab stopped successfully")
         return LabResult(success=True, message="Lab stopped")
 
@@ -315,6 +321,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             )
         except OSError as exc:
             log.warning("docker compose down failed: %s", exc)
+
+        network_failures = self.remove_project_networks()
+        if network_failures:
+            error = "; ".join(network_failures[:5])
+            log.warning("network cleanup failed: %s", error)
+            return False, error
 
         if not kill_ok:
             return False, "docker compose kill returned non-zero"

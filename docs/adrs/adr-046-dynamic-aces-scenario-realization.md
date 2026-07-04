@@ -206,6 +206,61 @@ through `AptlRealization.details()`, `ApplyResult.details`, `LocalRunStore`, and
 store registry credentials, build secrets, raw environment values, or rendered
 secret-bearing config.
 
+## Network Realization Addendum
+
+Issue #575 realizes networks and node attachments from the compiled ACES
+provisioning plan. The source of truth is `NetworkRealization` plus each
+realized node's infrastructure links and declared static addresses; the
+hand-authored `docker-compose.yml` networks are only compatibility input for
+curated/profile-backed scenarios.
+
+Network side effects are backend responsibilities. The APTL ACES adapter may
+extend `DeploymentRealizationSpec` with a narrow typed attachment shape when
+the existing node/network tuples cannot preserve the authored
+network-to-address relationship, but it must not create a second SDL model, a
+second Compose topology parser, or an argv passthrough. Docker Compose and SSH
+Compose must implement the same typed backend operation through their existing
+runner, timeout, project-name, label-filtering, logging, redaction, and
+`LabResult` / `BackendTimeoutError` behavior.
+
+The backend must materialize each declared network with the authored CIDR,
+gateway, and `internal` flag when those values are present. `internal: true`
+maps to Docker's internal network semantics and is the dynamic-scenario parity
+for SAF-002. An authored `internal: false` is an explicit egress-allowed
+network; an omitted value is backend default and must not be silently converted
+into egress allowed when SEM-218 marks the concern exact or constrained. Docker
+network names must remain project-scoped and collision-resistant, and
+backend-created networks must carry the same project label used by
+`host_list_lab_networks()` so snapshots and cleanup do not leak across shared
+daemons.
+
+Static addresses are per attachment, not per node. Flattening
+`static_addresses` loses which network owns which address and breaks
+multi-homed nodes such as `wazuh-manager`, `suricata`, `dns`, `webapp`, and
+`kali`. The typed deployment input must preserve `(node, network, address)`
+provenance so the backend can call `docker network connect --ip ...` (or the
+provider equivalent), participant binding can resolve service hosts from the
+realized topology instead of stale Compose IPs, and run evidence can explain
+which authored link produced each address.
+
+APTL relies on ACES parser/compiler validation for SDL shape and SEM-218
+explicitness. Backend-side validation is limited to provider safety and
+faithful realization: parse CIDRs, gateways, and static IPs with typed IP
+parsers; reject gateways or static addresses outside their declared network;
+reject duplicate addresses on a network; reject ambiguous normalized network
+names; and fail before side effects when an exact authored value cannot be
+honored. Rejections are ACES diagnostics via
+`aptl.backends.aces_diagnostics.diagnostic()` / `render_aces_diagnostics()`,
+not raw Docker stderr, a new exception hierarchy, or English output scraping.
+
+Network realization evidence is non-secret topology data: authored network
+address, backend network name, CIDR, gateway, internal flag, node attachment,
+static IP, selected backend, and non-secret provenance rule. Persist it through
+`AptlRealization.details()`, `ApplyResult.details`, `LocalRunStore`, and
+`RangeSnapshot.to_dict()` as appropriate. Do not store raw backend stderr,
+rendered Compose overrides containing unrelated config, `.env` values, or
+secret-bearing service configuration.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -214,6 +269,7 @@ secret-bearing config.
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
 | Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
+| Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
 
@@ -232,7 +288,8 @@ The canonical incumbents this decision builds on are:
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
-  operation, including any future image pull/build/tag side effects.
+  operation, including any future image pull/build/tag and network/IPAM side
+  effects.
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
@@ -257,6 +314,13 @@ The design must stay parameterized by scenario identity and backend manifest
 version. It must not assume TechVault is the only scenario, that Docker Compose
 is the only possible realization vehicle, or that the current realization
 support mode is static.
+
+For networks, the parameterized seam is the typed attachment record:
+scenario network id, backend network id, optional CIDR/gateway/internal policy,
+node id, backend container/service id, optional static address, and provenance
+for the authored link. Future scenarios should be able to vary segmentation,
+addressing, and egress policy without editing the compatibility
+`docker-compose.yml` network block or branching on scenario names.
 
 For image realization, the extensibility seam is the tuple of ACES source
 identity, optional build provenance, image trust policy, resolved image

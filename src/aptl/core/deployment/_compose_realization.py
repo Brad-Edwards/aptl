@@ -10,14 +10,22 @@ import yaml
 
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
+    DeploymentNetworkAttachment,
+    DeploymentNetworkRealization,
+    DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult
 
 _NETWORK_TOKEN_SEPARATORS = re.compile(r"[^a-z0-9]+")
 _REALIZATION_TIMEOUT = 30
 _IMAGE_REALIZATION_TIMEOUT = 600
 _IMAGE_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose-images.yml"
+_COMPOSE_PROJECT_LABEL = "com.docker.compose.project"
+_COMPOSE_NETWORK_LABEL = "com.docker.compose.network"
+_REALIZATION_NETWORK_LABEL = "org.aptl.realization.network"
+_REALIZATION_NETWORK_LABEL_VALUE = "true"
 
 
 def _container_networks(container_info: dict[str, Any]) -> set[str]:
@@ -31,6 +39,26 @@ def _container_networks(container_info: dict[str, Any]) -> set[str]:
     if not isinstance(networks, dict):
         return set()
     return {str(network_name) for network_name in networks if str(network_name)}
+
+
+def _container_network_ip(
+    container_info: dict[str, Any],
+    network_name: str,
+) -> str:
+    """Return a container's IPv4 address on one Docker network."""
+
+    networks = (
+        container_info.get("NetworkSettings", {}).get("Networks")
+        if isinstance(container_info, dict)
+        else None
+    )
+    if not isinstance(networks, dict):
+        return ""
+    endpoint = networks.get(network_name)
+    if not isinstance(endpoint, dict):
+        return ""
+    address = endpoint.get("IPAddress")
+    return address if isinstance(address, str) else ""
 
 
 def _resolve_realization_networks(
@@ -48,6 +76,28 @@ def _resolve_realization_networks(
             missing.append(declared)
         else:
             desired.add(match)
+    return desired, missing
+
+
+def _resolve_realization_network_attachments(
+    attachments: tuple[DeploymentNetworkAttachment, ...],
+    managed_networks: set[str],
+    project_name: str,
+) -> tuple[dict[str, DeploymentNetworkAttachment], list[str]]:
+    """Resolve declared attachments to concrete backend network names."""
+
+    desired: dict[str, DeploymentNetworkAttachment] = {}
+    missing: list[str] = []
+    for attachment in attachments:
+        match = _match_managed_network(
+            attachment.network,
+            managed_networks,
+            project_name,
+        )
+        if match is None:
+            missing.append(attachment.network)
+        else:
+            desired[match] = attachment
     return desired, missing
 
 
@@ -96,6 +146,97 @@ def _network_token(raw: str) -> str:
     return _NETWORK_TOKEN_SEPARATORS.sub("-", raw.strip().lower()).strip("-")
 
 
+def _network_stem(raw: str) -> str:
+    """Return the APTL network stem used for concrete backend names."""
+
+    normalized = _network_token(raw)
+    if normalized.endswith("-net"):
+        normalized = normalized.removesuffix("-net")
+    if normalized.startswith("aptl-"):
+        normalized = normalized.removeprefix("aptl-")
+    return normalized
+
+
+def _compose_network_key(declared: str) -> str:
+    """Return the Compose-style network key for one declared network."""
+
+    stem = _network_stem(declared)
+    return f"aptl-{stem}" if stem else ""
+
+
+def _concrete_network_name(declared: str, project_name: str) -> str:
+    """Return the project-scoped Docker network name for a declaration."""
+
+    key = _compose_network_key(declared)
+    return f"{project_name}_{key}" if key else ""
+
+
+def _network_policy_mismatches(
+    details: dict[str, Any],
+    labels: dict[str, Any],
+    network: DeploymentNetworkRealization,
+    *,
+    project_name: str,
+    compose_key: str,
+) -> list[str]:
+    """Return mismatches between Docker state and typed network intent."""
+
+    mismatches: list[str] = []
+    expected_labels = {
+        _COMPOSE_PROJECT_LABEL: project_name,
+        _COMPOSE_NETWORK_LABEL: compose_key,
+        _REALIZATION_NETWORK_LABEL: _REALIZATION_NETWORK_LABEL_VALUE,
+    }
+    for label, expected in expected_labels.items():
+        actual = labels.get(label, "")
+        if actual != expected:
+            mismatches.append(
+                f"label {label} expected {expected!r}, found {actual!r}"
+            )
+    if network.internal is not None and (
+        bool(details.get("internal")) != network.internal
+    ):
+        mismatches.append(
+            "internal expected "
+            f"{network.internal!r}, found {bool(details.get('internal'))!r}"
+        )
+    if network.cidr and details.get("subnet", "") != network.cidr:
+        mismatches.append(
+            f"subnet expected {network.cidr!r}, found {details.get('subnet', '')!r}"
+        )
+    if network.gateway and details.get("gateway", "") != network.gateway:
+        mismatches.append(
+            "gateway expected "
+            f"{network.gateway!r}, found {details.get('gateway', '')!r}"
+        )
+    return mismatches
+
+
+def _node_network_attachments(
+    node: DeploymentNodeRealization,
+) -> tuple[DeploymentNetworkAttachment, ...]:
+    """Return explicit attachments, falling back to legacy network names."""
+
+    if node.network_attachments:
+        return node.network_attachments
+    return tuple(
+        DeploymentNetworkAttachment(network=network)
+        for network in node.networks
+    )
+
+
+def _node_network_aliases(node: DeploymentNodeRealization) -> tuple[str, ...]:
+    """Return stable DNS aliases to preserve on manual Docker connects."""
+
+    return tuple(
+        dict.fromkeys(
+            alias
+            for alias in (node.service_name, node.name)
+            if alias
+        )
+    )
+
+
 class ComposeRealizationMixin:
     """Realize typed scenario specs through Docker Compose network membership."""
 
@@ -110,6 +251,13 @@ class ComposeRealizationMixin:
         profiles = list(realization.profiles)
         image_result, compose_files = self._prepare_realization_images(realization)
         result = image_result
+        if result is None:
+            network_failures = self._ensure_realization_networks(realization)
+            result = (
+                LabResult(success=False, error="; ".join(network_failures[:5]))
+                if network_failures
+                else None
+            )
         if result is None:
             start_result = self._start_realized_services(
                 profiles,
@@ -275,6 +423,72 @@ class ComposeRealizationMixin:
             )
         return result
 
+    def _ensure_realization_networks(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> list[str]:
+        """Create scenario-declared project networks that do not exist."""
+
+        if not realization.networks:
+            return []
+        managed_networks = set(self.host_list_lab_networks(self._project_name))
+        failures: list[str] = []
+        for network in realization.networks:
+            match = _match_managed_network(
+                network.name,
+                managed_networks,
+                self._project_name,
+            )
+            if match is not None:
+                failures.extend(
+                    self._realization_network_reuse_failures(match, network)
+                )
+                continue
+            result = self.create_network(network)
+            if result.success:
+                managed_networks.add(
+                    _concrete_network_name(network.name, self._project_name)
+                )
+            else:
+                failures.append(
+                    result.error
+                    or f"Failed to create realized network {network.name}."
+                )
+        return failures
+
+    def _realization_network_reuse_failures(
+        self,
+        network_name: str,
+        network: DeploymentNetworkRealization,
+    ) -> list[str]:
+        """Return fail-closed errors for an existing realized network."""
+
+        compose_key = _compose_network_key(network.name)
+        if not compose_key:
+            return ["Invalid network realization name."]
+        details = self.host_inspect_network(network_name)
+        if not details:
+            return [
+                f"Existing network {network_name} was not inspectable "
+                f"for realized network {network.name}."
+            ]
+
+        labels = details.get("labels")
+        if not isinstance(labels, dict):
+            labels = {}
+        mismatches = _network_policy_mismatches(
+            details,
+            labels,
+            network,
+            project_name=self._project_name,
+            compose_key=compose_key,
+        )
+        return [
+            f"Existing network {network_name} does not match realized "
+            f"network {network.name}: {mismatch}."
+            for mismatch in mismatches
+        ]
+
     def _reconcile_realization_networks(
         self,
         realization: DeploymentRealizationSpec,
@@ -289,8 +503,8 @@ class ComposeRealizationMixin:
         for node in realization.nodes:
             if not node.container_name or not node.networks:
                 continue
-            desired, missing = _resolve_realization_networks(
-                node.networks,
+            desired, missing = _resolve_realization_network_attachments(
+                _node_network_attachments(node),
                 managed_networks,
                 self._project_name,
             )
@@ -308,13 +522,60 @@ class ComposeRealizationMixin:
                 )
                 continue
             current = _container_networks(info) & managed_networks
+            aliases = _node_network_aliases(node)
+            reattach, reattach_failures = self._reconnect_static_ip_drifts(
+                node.container_name,
+                info,
+                desired,
+                aliases,
+            )
+            failures.extend(reattach_failures)
+            current = current - set(reattach)
             failures.extend(
-                self._disconnect_extra_networks(node.container_name, current, desired)
+                self._disconnect_extra_networks(
+                    node.container_name,
+                    current,
+                    set(desired),
+                )
             )
             failures.extend(
-                self._connect_missing_networks(node.container_name, current, desired)
+                self._connect_missing_networks(
+                    node.container_name,
+                    current,
+                    desired,
+                    aliases,
+                )
             )
         return failures
+
+    def _reconnect_static_ip_drifts(
+        self,
+        container_name: str,
+        info: dict[str, Any],
+        desired: dict[str, DeploymentNetworkAttachment],
+        aliases: tuple[str, ...],
+    ) -> tuple[list[str], list[str]]:
+        """Disconnect already-attached networks whose static IP is wrong."""
+
+        reattach: list[str] = []
+        failures: list[str] = []
+        for network_name, attachment in desired.items():
+            if not attachment.ipv4_address:
+                continue
+            current_ip = _container_network_ip(info, network_name)
+            if current_ip and current_ip != attachment.ipv4_address:
+                result = self.disconnect_container_network(container_name, network_name)
+                if result.success:
+                    reattach.append(network_name)
+                else:
+                    failures.append(
+                        result.error
+                        or (
+                            f"Failed to disconnect {container_name} "
+                            f"from {network_name}."
+                        )
+                    )
+        return reattach, failures
 
     def _disconnect_extra_networks(
         self,
@@ -324,48 +585,175 @@ class ComposeRealizationMixin:
     ) -> list[str]:
         """Detach a realized container from project networks outside its spec."""
 
-        return self._change_network_memberships(
-            container_name=container_name,
-            network_names=current - desired,
-            action="disconnect",
-            preposition="from",
-        )
+        failures: list[str] = []
+        for network_name in sorted(current - desired):
+            result = self.disconnect_container_network(container_name, network_name)
+            if not result.success:
+                failures.append(
+                    result.error
+                    or f"Failed to disconnect {container_name} from {network_name}."
+                )
+        return failures
 
     def _connect_missing_networks(
         self,
         container_name: str,
         current: set[str],
-        desired: set[str],
+        desired: dict[str, DeploymentNetworkAttachment],
+        aliases: tuple[str, ...],
     ) -> list[str]:
         """Attach a realized container to declared project networks it lacks."""
 
-        return self._change_network_memberships(
-            container_name=container_name,
-            network_names=desired - current,
-            action="connect",
-            preposition="to",
-        )
+        failures: list[str] = []
+        for network_name in sorted(set(desired) - current):
+            attachment = desired[network_name]
+            result = self.connect_container_network(
+                container_name,
+                network_name,
+                ipv4_address=attachment.ipv4_address,
+                aliases=aliases,
+            )
+            if not result.success:
+                failures.append(
+                    result.error
+                    or f"Failed to connect {container_name} to {network_name}."
+                )
+        return failures
 
-    def _change_network_memberships(
+    def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
+        """Create one project-scoped Docker bridge network."""
+
+        concrete_name = _concrete_network_name(network.name, self._project_name)
+        compose_key = _compose_network_key(network.name)
+        if not concrete_name or not compose_key:
+            return LabResult(success=False, error="Invalid network realization name.")
+        cmd = [
+            "docker",
+            "network",
+            "create",
+            "--driver",
+            "bridge",
+            "--label",
+            f"{_COMPOSE_PROJECT_LABEL}={self._project_name}",
+            "--label",
+            f"{_COMPOSE_NETWORK_LABEL}={compose_key}",
+            "--label",
+            f"{_REALIZATION_NETWORK_LABEL}={_REALIZATION_NETWORK_LABEL_VALUE}",
+        ]
+        if network.internal is True:
+            cmd.append("--internal")
+        if network.cidr:
+            cmd.extend(["--subnet", network.cidr])
+        if network.gateway:
+            cmd.extend(["--gateway", network.gateway])
+        cmd.append(concrete_name)
+        result = self._run(cmd, timeout=_REALIZATION_TIMEOUT)
+        if result.returncode != 0:
+            return LabResult(
+                success=False,
+                error=(
+                    f"Failed to create realized network {network.name}: "
+                    f"{result.stderr.strip()}"
+                ),
+            )
+        return LabResult(success=True, message=concrete_name)
+
+    def connect_container_network(
         self,
-        *,
         container_name: str,
-        network_names: set[str],
-        action: str,
-        preposition: str,
-    ) -> list[str]:
-        """Run one Docker network membership action across sorted networks."""
+        network_name: str,
+        *,
+        ipv4_address: str | None = None,
+        aliases: tuple[str, ...] = (),
+    ) -> LabResult:
+        """Connect one container to one Docker network."""
+
+        cmd = ["docker", "network", "connect"]
+        if ipv4_address:
+            cmd.extend(["--ip", ipv4_address])
+        for alias in dict.fromkeys(alias for alias in aliases if alias):
+            cmd.extend(["--alias", alias])
+        cmd.extend([network_name, container_name])
+        result = self._run(cmd, timeout=_REALIZATION_TIMEOUT)
+        if result.returncode != 0:
+            return LabResult(
+                success=False,
+                error=(
+                    f"Failed to connect {container_name} to {network_name}: "
+                    f"{result.stderr.strip()}"
+                ),
+            )
+        return LabResult(success=True, message="connected")
+
+    def disconnect_container_network(
+        self,
+        container_name: str,
+        network_name: str,
+    ) -> LabResult:
+        """Disconnect one container from one Docker network."""
+
+        result = self._run(
+            ["docker", "network", "disconnect", network_name, container_name],
+            timeout=_REALIZATION_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return LabResult(
+                success=False,
+                error=(
+                    f"Failed to disconnect {container_name} from {network_name}: "
+                    f"{result.stderr.strip()}"
+                ),
+            )
+        return LabResult(success=True, message="disconnected")
+
+    def remove_project_networks(self) -> list[str]:
+        """Remove leftover project-scoped realization networks."""
 
         failures: list[str] = []
-        for network_name in sorted(network_names):
+        try:
             result = self._run(
-                ["docker", "network", action, network_name, container_name],
+                [
+                    "docker",
+                    "network",
+                    "ls",
+                    "--filter",
+                    f"label={_COMPOSE_PROJECT_LABEL}={self._project_name}",
+                    "--filter",
+                    (
+                        f"label={_REALIZATION_NETWORK_LABEL}="
+                        f"{_REALIZATION_NETWORK_LABEL_VALUE}"
+                    ),
+                    "--filter",
+                    f"name={self._project_name}",
+                    "--format",
+                    "{{.Name}}",
+                ],
                 timeout=_REALIZATION_TIMEOUT,
             )
+        except (BackendTimeoutError, OSError) as exc:
+            return [f"Failed to list project networks for cleanup: {exc}"]
+        if result.returncode != 0:
+            return [
+                "Failed to list project networks for cleanup: "
+                f"{result.stderr.strip()}"
+            ]
+        network_names = [
+            line.strip() for line in result.stdout.splitlines() if line.strip()
+        ]
+        for network_name in network_names:
+            try:
+                result = self._run(
+                    ["docker", "network", "rm", network_name],
+                    timeout=_REALIZATION_TIMEOUT,
+                )
+            except (BackendTimeoutError, OSError) as exc:
+                failures.append(
+                    f"Failed to remove project network {network_name}: {exc}"
+                )
+                continue
             if result.returncode != 0:
                 failures.append(
-                    f"Failed to {action} {container_name} "
-                    f"{preposition} {network_name}: "
+                    f"Failed to remove project network {network_name}: "
                     f"{result.stderr.strip()}"
                 )
         return failures

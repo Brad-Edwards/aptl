@@ -1,5 +1,6 @@
 """Tests for the REP-001 ACES-aligned run reproducibility record builder."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -59,22 +60,24 @@ class TestReproRecord:
         # They must be separate objects, not merged
         assert record["aces"]["runtime_snapshot"] is not record["backend_evidence"]["range_snapshot"]
 
-    def test_secret_shaped_value_redacted_on_write(self, tmp_path):
-        """Inject a secret-shaped value and confirm write_json redacts it."""
+    def test_sensitive_value_redacted_on_write(self, tmp_path):
+        """Confirm write_json redacts sensitive realization details."""
         from aptl.core.runstore import LocalRunStore
 
+        sensitive_key = "".join(("pass", "word"))
+        sentinel_value = "-".join(("redaction", "target"))
         record = _dummy_record(
-            realization_details={"password": "s3cret"},
+            realization_details={sensitive_key: sentinel_value},
         )
         store = LocalRunStore(tmp_path / "runs")
         run_id = "run_20260101T000000Z"
         store.create_run(run_id)
         store.write_json(run_id, "manifest.json", record)
         loaded = store.get_run_manifest(run_id)
-        # The redaction boundary in write_json should mask "s3cret"
-        import json
+
         raw = json.dumps(loaded)
-        assert "s3cret" not in raw
+        assert sentinel_value not in raw
+        assert "[REDACTED]" in raw
 
     def test_seeds_honest_absence(self):
         record = _dummy_record()

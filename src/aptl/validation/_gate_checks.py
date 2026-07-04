@@ -63,6 +63,11 @@ class _NoStartBackend(object):
     """
 
     @staticmethod
+    def realize(*args: object, **kwargs: object) -> LabResult:
+        """Accept typed realization input without starting Docker."""
+        return LabResult(success=True, message="static validation accepted")
+
+    @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:
         """Refuse to start the lab from a static validation gate."""
         raise RuntimeError("static validation gate must not start the lab")

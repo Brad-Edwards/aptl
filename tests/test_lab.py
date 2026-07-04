@@ -189,6 +189,14 @@ class TestLabStart:
 class TestLabStop:
     """Tests for lab stop logic."""
 
+    @staticmethod
+    def _compose_down_args(mock_subprocess):
+        for call in mock_subprocess.call_args_list:
+            cmd_args = call.args[0]
+            if "down" in cmd_args:
+                return cmd_args
+        raise AssertionError("docker compose down was not called")
+
     def test_stop_calls_compose_down(self, mock_subprocess):
         """stop_lab should invoke docker compose down."""
         from aptl.core.lab import stop_lab
@@ -198,7 +206,7 @@ class TestLabStop:
         result = stop_lab()
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "down" in cmd_args
 
     def test_stop_with_volumes_flag(self, mock_subprocess):
@@ -209,7 +217,7 @@ class TestLabStop:
 
         stop_lab(remove_volumes=True)
 
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "-v" in cmd_args
 
     def test_stop_returns_failure_on_error(self, mock_subprocess):
@@ -233,7 +241,7 @@ class TestLabStop:
         result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         # Should include all fallback profiles
         assert "wazuh" in cmd_args
         assert "victim" in cmd_args
@@ -254,7 +262,7 @@ class TestLabStop:
         result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
-        cmd_args = mock_subprocess.call_args[0][0]
+        cmd_args = self._compose_down_args(mock_subprocess)
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
 

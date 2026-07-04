@@ -24,6 +24,7 @@ from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
+    DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
@@ -37,6 +38,7 @@ __all__ = [
     "DeploymentBackend",
     "DockerComposeBackend",
     "DeploymentImageRealization",
+    "DeploymentNetworkAttachment",
     "DeploymentNetworkRealization",
     "DeploymentNodeRealization",
     "DeploymentRealizationSpec",

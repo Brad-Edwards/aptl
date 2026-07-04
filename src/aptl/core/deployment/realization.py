@@ -54,6 +54,14 @@ class DeploymentNetworkRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentNetworkAttachment(object):
+    """One node-to-network attachment requested by the scenario."""
+
+    network: str
+    ipv4_address: str | None = None
+
+
+@dataclass(frozen=True)
 class DeploymentNodeRealization(object):
     """One scenario-declared node bound to a backend-managed service."""
 
@@ -62,6 +70,7 @@ class DeploymentNodeRealization(object):
     service_name: str | None
     container_name: str | None
     networks: tuple[str, ...]
+    network_attachments: tuple[DeploymentNetworkAttachment, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -186,10 +186,15 @@ class ComposeQueryMixin(object):
             return {}
         ipam = (payload.get("IPAM", {}).get("Config") or [{}])[0]
         containers_map = payload.get("Containers", {})
+        labels = payload.get("Labels")
+        if not isinstance(labels, dict):
+            labels = {}
         return {
             "name": name,
+            "internal": bool(payload.get("Internal", False)),
             "subnet": ipam.get("Subnet", ""),
             "gateway": ipam.get("Gateway", ""),
+            "labels": {str(key): str(value) for key, value in labels.items()},
             "containers": sorted(c.get("Name", "") for c in containers_map.values()),
         }
 

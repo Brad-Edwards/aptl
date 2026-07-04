@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
@@ -222,6 +223,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             log.error("Lab stop failed: %s", result.stderr)
             return LabResult(success=False, error=result.stderr)
 
+        network_failures = self.remove_project_networks()
+        if network_failures:
+            error = "; ".join(network_failures[:5])
+            log.error("Lab network cleanup failed: %s", error)
+            return LabResult(success=False, error=error)
+
         log.info("Lab stopped successfully")
         return LabResult(success=True, message="Lab stopped")
 
@@ -275,52 +282,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             Tuple of (success, error_message).
         """
-        # Phase 1: docker compose kill (immediate SIGKILL)
-        kill_cmd = ["docker", "compose"]
-        for profile in profiles:
-            kill_cmd.extend(["--profile", profile])
-        kill_cmd.append("kill")
-
-        log.info("Running: %s", " ".join(kill_cmd))
-        kill_ok = False
-        try:
-            result = self._run(kill_cmd, timeout=_DOCKER_TIMEOUT)
-            kill_ok = result.returncode == 0
-            if not kill_ok:
-                log.warning(
-                    "docker compose kill stderr: %s", result.stderr.strip()
-                )
-        except BackendTimeoutError:
-            log.warning(
-                "docker compose kill timed out after %ds", _DOCKER_TIMEOUT
-            )
-        except OSError as exc:
-            msg = f"docker compose kill failed: {exc}"
-            log.error(msg)
-            return False, msg
-
-        # Phase 2: docker compose down (cleanup).  Treat non-zero exit as
-        # a warning -- the important work (SIGKILL) already happened above.
-        down_cmd = self._build_command("down", profiles=profiles)
-        log.info("Running: %s", " ".join(down_cmd))
-        try:
-            result = self._run(down_cmd, timeout=_DOCKER_TIMEOUT)
-            if result.returncode != 0:
-                log.warning(
-                    "docker compose down stderr: %s", result.stderr.strip()
-                )
-        except BackendTimeoutError:
-            log.warning(
-                "docker compose down timed out after %ds", _DOCKER_TIMEOUT
-            )
-        except OSError as exc:
-            log.warning("docker compose down failed: %s", exc)
-
-        if not kill_ok:
-            return False, "docker compose kill returned non-zero"
-
-        log.info("All lab containers stopped")
-        return True, ""
+        return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)
 
     def pull_images(self, images: list[str]) -> list[str]:
         """Pre-pull container images via docker pull.

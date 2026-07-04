@@ -150,6 +150,7 @@ nav:
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
+    - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
     - Experiment Runs: reference/experiment-runs.md
@@ -158,12 +159,6 @@ nav:
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md
     - Web Component Kit: specs/web-component-kit.md
   - Troubleshooting: troubleshooting/index.md
-  - Records:
-    - CI/CD Remote Deployment (removed): deployment/ci-cd-deploy.md
-    - Smoke Test Results (2026-02-08): history/smoke-test-results-2026-02-08.md
-    - MCP Smoke Test Results (2026-02-22): components/mcp-smoke-test-results-2026-02-22.md
-    - MCP Smoke Test Results (2026-02-22, run 2): components/mcp-smoke-test-results-2026-02-22-run2.md
-    - UAT Findings (2026-02-23): known-issues/uat-findings-2026-02-23.md
   - Decisions:
     - Index: adrs/README.md
     - ADR-000 Use ADRs: adrs/adr-000-use-adrs.md

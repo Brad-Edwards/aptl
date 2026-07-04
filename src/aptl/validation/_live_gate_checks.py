@@ -392,8 +392,8 @@ def check_run_archive_manifest(
 
     Writes through ``LocalRunStore``'s redacting boundary (ADR-029).
     Objective / scoring run surfaces are published through the portable
-    ACES evaluation contracts at the backend boundary; live outcome
-    progression from RTE-001 remains follow-on work tracked by #514.
+    ACES evaluation contracts at the backend boundary. Live evaluator
+    progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """
     realization = state.realization_details or {}
     manifest = {
@@ -423,7 +423,9 @@ def check_run_archive_manifest(
                 "evaluation-result-envelope-v1",
                 "evaluation-history-event-stream-v1",
             ],
-            "execution_state_integration": "#514",
+            "execution_state_integration": (
+                "aptl.backends.aces_evaluator.AptlEvaluator"
+            ),
         },
         "orchestrator_surfaces": {
             "profile": "orchestration-evaluation",

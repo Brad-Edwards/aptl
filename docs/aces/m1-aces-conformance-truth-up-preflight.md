@@ -132,6 +132,44 @@ validated descriptor or typed backend parameter, not editing a TechVault branch,
 forking the manifest generator, adding a new conformance runner, or copying
 ACES schemas into APTL.
 
+## Issue #606 Evaluator Live-Score Addendum
+
+Issue #606 is an evaluator truth-up on the already-declared
+`full-remote-control-plane` surface, not a manifest promotion and not a new
+score schema. `AptlEvaluator` remains the ACES adapter boundary, and the public
+DTOs remain `EvaluationExecutionState` plus `EvaluationHistoryEvent` records
+stored on `RuntimeSnapshot.evaluation_results` and
+`RuntimeSnapshot.evaluation_history`.
+
+Live score/progress must be derived from observed run state for the current
+evaluation address and run id. Registration state (`PENDING` plus
+`evaluation_started`) is truthful only before observation; it is not progress.
+When observation advances a run, the adapter may emit `RUNNING`, `READY`, or
+`FAILED` only with history events that match the compiled `execution_contract`.
+
+Score and pass/fail fields are controlled by the compiled `result_contract`,
+not by APTL convention. Metric resources may expose `score` only when
+`supports_score` is true, and a terminal ready metric with `fixed_max_score`
+must use that max score. Condition, objective, evaluation, TLO, and goal
+resources may expose `passed` only when `supports_passed` is true. Do not treat
+objective completion count, elapsed time, or workflow step count as a score
+unless the compiled evaluation contract says that resource is score-bearing.
+
+The conformance re-verification path for #606 is the existing one:
+`evaluation_result_contract_diagnostics()`, `run_target_conformance()` for
+`full-remote-control-plane`, the published `aces conformance backend --profile
+full-remote-control-plane`, and the live-gate run archive as evidence that the
+declared evaluator surface was exercised against live behavior. If persisted
+evidence is added, it must be referenced through `evidence_refs` and written via
+`LocalRunStore.write_json()` / `write_jsonl()` / `append_jsonl()`, never by
+embedding raw SOC payloads or backend stderr into result envelopes.
+
+The extensibility parameter for evaluator progression is the tuple
+`(evaluation_address, result_contract, execution_contract, observed_state,
+run_id)`. The next variation should be another metric, objective, scenario, or
+evidence source, not a TechVault branch, a hardcoded score curve, a duplicate
+validator, or a separate live-gate-only score model.
+
 ## Whole-Repo View
 
 - Canonical configs: `.ground-control.yaml`, `.gc/plan-rules.md`,

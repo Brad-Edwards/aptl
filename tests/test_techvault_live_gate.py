@@ -918,6 +918,10 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert manifest["aces_provenance"]["realization"]["nodes"]
     assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
     assert manifest["evaluator_surfaces"]["profile"] == "full-remote-control-plane"
+    assert (
+        manifest["evaluator_surfaces"]["execution_state_integration"]
+        == "aptl.backends.aces_evaluator.AptlEvaluator"
+    )
     assert manifest["participant_runtime_surfaces"]["contracts"] == [
         "participant-episode-state-envelope-v1",
         "participant-episode-history-event-stream-v1",

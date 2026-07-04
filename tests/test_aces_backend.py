@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from aces_contracts.planning import (
     ChangeAction,
     EvaluationPlan,
@@ -90,6 +92,47 @@ def _node_resource_with_dependencies(
     return resource
 
 
+def _network_resource(
+    network_name: str,
+    *,
+    cidr: str | None = None,
+    gateway: str | None = None,
+    internal: bool | None = None,
+) -> PlannedResource:
+    address = f"provision.network.{network_name}"
+    properties = {
+        key: value
+        for key, value in {
+            "cidr": cidr,
+            "gateway": gateway,
+            "internal": internal,
+        }.items()
+        if value is not None
+    }
+    return PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="network",
+        payload={
+            "name": network_name,
+            "spec": {"infrastructure": {"properties": properties}},
+        },
+    )
+
+
+def _node_with_static_address(
+    node_name: str,
+    *,
+    links: tuple[str, ...],
+    network: str,
+    address: str,
+) -> PlannedResource:
+    node = _node_resource(node_name)
+    node.payload["spec"]["infrastructure"]["links"] = list(links)
+    node.payload["spec"]["infrastructure"]["properties"] = [{network: address}]
+    return node
+
+
 def _plan_for_resources(*resources: PlannedResource) -> ProvisioningPlan:
     mapped = {resource.address: resource for resource in resources}
     operations = [
@@ -136,6 +179,24 @@ def _realize_profiles(call) -> list[str]:
     """Return profile names from a DeploymentRealizationSpec mock call."""
 
     return list(call.args[0].profiles)
+
+
+def _diagnostic_codes_for_resources(
+    tmp_path: Path,
+    *resources: PlannedResource,
+) -> set[str]:
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"kali": ["kali"], "victim": ["victim"]})
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(*resources),
+        project_dir=tmp_path,
+        config=AptlConfig(
+            lab={"name": "test"},
+            containers={"kali": True, "victim": True},
+        ),
+    )
+    return {diagnostic.code for diagnostic in realization.diagnostics}
 
 
 def _plan_with_resource_type(resource_type: str) -> ProvisioningPlan:
@@ -295,6 +356,7 @@ def test_aptl_target_passes_provisioning_only_conformance():
     from aptl.backends.aces import create_aptl_runtime_target
 
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
@@ -319,6 +381,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
     from aptl.backends.aces import create_aptl_runtime_target
 
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
@@ -348,6 +411,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
     from aptl.backends.aces import create_aptl_runtime_target
 
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
@@ -1415,6 +1479,197 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
     assert spec.nodes[0].service_name == "kali"
     assert spec.nodes[0].container_name == "kali"
     assert spec.nodes[0].networks == ("dmz-net", "redteam-net")
+
+
+def test_realization_preserves_network_static_address_assignments(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    node = _node_resource("red-workbench")
+    node.payload["spec"]["infrastructure"]["links"] = ["redteam-net", "dmz-net"]
+    node.payload["spec"]["infrastructure"]["properties"] = [
+        {"redteam-net": "172.20.4.30"},
+        {"dmz-net": "172.20.1.30"},
+    ]
+    dmz = _network_resource(
+        "dmz-net",
+        cidr="172.20.1.0/24",
+        gateway="172.20.1.1",
+        internal=True,
+    )
+    redteam = _network_resource(
+        "redteam-net",
+        cidr="172.20.4.0/24",
+        gateway="172.20.4.1",
+        internal=True,
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node, dmz, redteam),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+    )
+
+    assert [diagnostic.code for diagnostic in realization.diagnostics] == []
+    spec = realization.deployment_spec(["kali", "otel"])
+    assert [
+        (network.name, network.cidr, network.gateway, network.internal)
+        for network in spec.networks
+    ] == [
+        ("dmz-net", "172.20.1.0/24", "172.20.1.1", True),
+        ("redteam-net", "172.20.4.0/24", "172.20.4.1", True),
+    ]
+    assert [
+        (attachment.network, attachment.ipv4_address)
+        for attachment in spec.nodes[0].network_attachments
+    ] == [
+        ("dmz-net", "172.20.1.30"),
+        ("redteam-net", "172.20.4.30"),
+    ]
+    node_details = realization.details()["nodes"][0]
+    assert node_details["static_addresses"] == ["172.20.1.30", "172.20.4.30"]
+    assert node_details["static_address_assignments"] == [
+        {"network": "dmz-net", "ipv4_address": "172.20.1.30"},
+        {"network": "redteam-net", "ipv4_address": "172.20.4.30"},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("resources_factory", "diagnostic_code"),
+    [
+        pytest.param(
+            lambda: (_network_resource("dmz-net", cidr="not-a-cidr"),),
+            "aptl.provisioner.network-cidr-invalid",
+            id="cidr-invalid",
+        ),
+        pytest.param(
+            lambda: (
+                _network_resource(
+                    "dmz-net",
+                    cidr="172.20.1.0/24",
+                    gateway="not-an-ip",
+                ),
+            ),
+            "aptl.provisioner.network-gateway-invalid",
+            id="gateway-invalid",
+        ),
+        pytest.param(
+            lambda: (
+                _network_resource(
+                    "dmz-net",
+                    cidr="172.20.1.0/24",
+                    gateway="172.20.99.1",
+                ),
+            ),
+            "aptl.provisioner.network-gateway-out-of-range",
+            id="gateway-out-of-range",
+        ),
+        pytest.param(
+            lambda: (
+                _node_with_static_address(
+                    "red-workbench",
+                    links=("dmz-net",),
+                    network="dmz-net",
+                    address="not-an-ip",
+                ),
+                _network_resource("dmz-net", cidr="172.20.1.0/24"),
+            ),
+            "aptl.provisioner.network-static-address-invalid",
+            id="static-address-invalid",
+        ),
+        pytest.param(
+            lambda: (
+                _node_with_static_address(
+                    "red-workbench",
+                    links=("dmz-net",),
+                    network="dmz-net",
+                    address="172.20.99.30",
+                ),
+                _network_resource("dmz-net", cidr="172.20.1.0/24"),
+            ),
+            "aptl.provisioner.network-static-address-out-of-range",
+            id="static-address-out-of-range",
+        ),
+        pytest.param(
+            lambda: (
+                _node_with_static_address(
+                    "red-workbench",
+                    links=("dmz-net",),
+                    network="dmz-net",
+                    address="172.20.1.30",
+                ),
+                _node_with_static_address(
+                    "victim",
+                    links=("dmz-net",),
+                    network="dmz-net",
+                    address="172.20.1.30",
+                ),
+                _network_resource("dmz-net", cidr="172.20.1.0/24"),
+            ),
+            "aptl.provisioner.network-static-address-duplicate",
+            id="static-address-duplicate",
+        ),
+        pytest.param(
+            lambda: (
+                _node_with_static_address(
+                    "red-workbench",
+                    links=("redteam-net",),
+                    network="dmz-net",
+                    address="172.20.1.30",
+                ),
+                _network_resource("dmz-net", cidr="172.20.1.0/24"),
+                _network_resource("redteam-net", cidr="172.20.4.0/24"),
+            ),
+            "aptl.provisioner.network-static-address-unlinked",
+            id="static-address-unlinked",
+        ),
+        pytest.param(
+            lambda: (
+                _network_resource("dmz-net", cidr="172.20.1.0/24"),
+                _network_resource("aptl-dmz", cidr="172.20.2.0/24"),
+            ),
+            "aptl.provisioner.network-name-ambiguous",
+            id="network-name-ambiguous",
+        ),
+    ],
+)
+def test_realization_reports_network_topology_diagnostics(
+    tmp_path,
+    resources_factory,
+    diagnostic_code,
+):
+    assert diagnostic_code in _diagnostic_codes_for_resources(
+        tmp_path,
+        *resources_factory(),
+    )
+
+
+def test_realization_rejects_static_address_outside_declared_network(tmp_path):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    node = _node_resource("red-workbench")
+    node.payload["spec"]["infrastructure"]["links"] = ["dmz-net"]
+    node.payload["spec"]["infrastructure"]["properties"] = [
+        {"dmz-net": "172.20.99.30"}
+    ]
+    dmz = _network_resource(
+        "dmz-net",
+        cidr="172.20.1.0/24",
+        gateway="172.20.1.1",
+        internal=True,
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan_for_resources(node, dmz),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+    )
+
+    assert any(
+        diagnostic.code == "aptl.provisioner.network-static-address-out-of-range"
+        for diagnostic in realization.diagnostics
+    )
 
 
 def test_realization_resolves_digest_pinned_source_image(tmp_path):

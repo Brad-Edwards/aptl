@@ -8,6 +8,7 @@ from aces_contracts.diagnostics import Diagnostic
 
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
+    DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
@@ -27,6 +28,7 @@ class NodeRealization(object):
     services: tuple[str, ...]
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
+    static_address_assignments: tuple[tuple[str, str], ...] = ()
     declared_health: str | None = None
     image: DeploymentImageRealization | None = None
 
@@ -41,6 +43,10 @@ class NodeRealization(object):
             "services": list(self.services),
             "networks": list(self.networks),
             "static_addresses": list(self.static_addresses),
+            "static_address_assignments": [
+                {"network": network, "ipv4_address": address}
+                for network, address in self.static_address_assignments
+            ],
             "declared_health": self.declared_health,
         }
         if self.image is not None:
@@ -104,13 +110,7 @@ class AptlRealization(object):
         return DeploymentRealizationSpec(
             profiles=tuple(profiles),
             nodes=tuple(
-                DeploymentNodeRealization(
-                    address=node.address,
-                    name=node.name,
-                    service_name=_single_or_none(node.backend_services),
-                    container_name=node.container_name,
-                    networks=node.networks,
-                )
+                _deployment_node_realization(node)
                 for node in self.nodes
                 if node.backend_services or node.container_name
             ),
@@ -160,3 +160,25 @@ def _single_or_none(values: tuple[str, ...]) -> str | None:
     if len(values) == 1:
         return values[0]
     return None
+
+
+def _deployment_node_realization(
+    node: NodeRealization,
+) -> DeploymentNodeRealization:
+    """Return backend-facing node input with per-network static IPs."""
+
+    assignments = dict(node.static_address_assignments)
+    return DeploymentNodeRealization(
+        address=node.address,
+        name=node.name,
+        service_name=_single_or_none(node.backend_services),
+        container_name=node.container_name,
+        networks=node.networks,
+        network_attachments=tuple(
+            DeploymentNetworkAttachment(
+                network=network,
+                ipv4_address=assignments.get(network),
+            )
+            for network in node.networks
+        ),
+    )

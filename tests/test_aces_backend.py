@@ -328,7 +328,9 @@ def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
 
     from aptl.backends.aces import create_aptl_runtime_target
 
+    _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
@@ -348,7 +350,9 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
 
     from aptl.backends.aces import create_aptl_runtime_target
 
+    _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
@@ -373,7 +377,9 @@ def test_aptl_target_passes_full_remote_control_plane_conformance(tmp_path):
 
     from aptl.backends.aces import create_aptl_runtime_target
 
+    _write_compose(tmp_path, {"kali": ["kali"]})
     backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,

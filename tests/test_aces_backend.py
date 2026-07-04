@@ -262,20 +262,64 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert payload["capabilities"]["participant_runtime"] is not None
 
 
-def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
-    from aces_conformance.conformance import run_target_conformance
+# Minimal scenario APTL can realize: its single node maps to a compose service
+# carrying a public-start profile. Supplied to run_target_conformance as the
+# reference scenario (aces #663) so the live provisioning/snapshot probes drive
+# a scenario a fixed-topology backend can realize, instead of the generic
+# hard-coded default that maps to no APTL compose profile.
+_REALIZABLE_CONFORMANCE_SCENARIO = """
+name: conformance
+nodes:
+  vm:
+    type: vm
+    os: linux
+    resources: {ram: 1 gib, cpu: 1}
+    conditions: {health: ops}
+    roles: {ops: operator}
+conditions:
+  health: {command: /bin/true, interval: 15}
+entities:
+  blue: {role: blue}
+objectives:
+  validate: {entity: blue, success: {conditions: [health]}}
+workflows:
+  response:
+    start: run
+    steps:
+      run: {type: objective, objective: validate, on-success: finish}
+      finish: {type: end}
+"""
+
+
+def _conformance_target(tmp_path):
+    """Build an APTL runtime target that can realize the reference scenario.
+
+    Writes a compose file whose ``vm`` service carries a public-start profile so
+    the reference scenario's ``vm`` node maps to a realizable APTL profile.
+    """
 
     from aptl.backends.aces import create_aptl_runtime_target
 
+    _write_compose(tmp_path, {"vm": ["kali"]})
     backend = MagicMock()
-    config = AptlConfig(lab={"name": "test"})
-    target = create_aptl_runtime_target(
+    backend.start.return_value = LabResult(success=True)
+    return create_aptl_runtime_target(
         project_dir=tmp_path,
-        config=config,
+        config=AptlConfig(lab={"name": "test"}),
         backend=backend,
     )
 
-    report = run_target_conformance(target, profile="provisioning-only")
+
+def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
+    from aces_conformance.conformance import run_target_conformance
+
+    target = _conformance_target(tmp_path)
+
+    report = run_target_conformance(
+        target,
+        profile="provisioning-only",
+        reference_scenario=_REALIZABLE_CONFORMANCE_SCENARIO,
+    )
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
@@ -285,17 +329,13 @@ def test_aptl_target_passes_provisioning_only_conformance(tmp_path):
 def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
     from aces_conformance.conformance import run_target_conformance
 
-    from aptl.backends.aces import create_aptl_runtime_target
+    target = _conformance_target(tmp_path)
 
-    backend = MagicMock()
-    config = AptlConfig(lab={"name": "test"})
-    target = create_aptl_runtime_target(
-        project_dir=tmp_path,
-        config=config,
-        backend=backend,
+    report = run_target_conformance(
+        target,
+        profile="orchestration-evaluation",
+        reference_scenario=_REALIZABLE_CONFORMANCE_SCENARIO,
     )
-
-    report = run_target_conformance(target, profile="orchestration-evaluation")
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
@@ -310,17 +350,13 @@ def test_aptl_target_passes_orchestration_evaluation_conformance(tmp_path):
 def test_aptl_target_passes_full_remote_control_plane_conformance(tmp_path):
     from aces_conformance.conformance import run_target_conformance
 
-    from aptl.backends.aces import create_aptl_runtime_target
+    target = _conformance_target(tmp_path)
 
-    backend = MagicMock()
-    config = AptlConfig(lab={"name": "test"})
-    target = create_aptl_runtime_target(
-        project_dir=tmp_path,
-        config=config,
-        backend=backend,
+    report = run_target_conformance(
+        target,
+        profile="full-remote-control-plane",
+        reference_scenario=_REALIZABLE_CONFORMANCE_SCENARIO,
     )
-
-    report = run_target_conformance(target, profile="full-remote-control-plane")
 
     assert report.passed is True, [d.code for d in report.diagnostics]
     assert report.unsupported_contract_gaps == ()
@@ -472,9 +508,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         args=["bash"],
         returncode=0,
         stdout=(
-            "portal_http_status=200\n"
-            "boundary_db=blocked\n"
-            "boundary_wazuh_api=blocked\n"
+            "portal_http_status=200\nboundary_db=blocked\nboundary_wazuh_api=blocked\n"
         ),
         stderr="",
     )
@@ -534,12 +568,10 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     )
     assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
     assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
-    shared_state_records = getattr(
-        control_plane.snapshot, "shared_state_records", {}
-    )
-    assert {
-        record["state_scope"] for record in shared_state_records.values()
-    } == {participant_address}
+    shared_state_records = getattr(control_plane.snapshot, "shared_state_records", {})
+    assert {record["state_scope"] for record in shared_state_records.values()} == {
+        participant_address
+    }
     assert participant_action_specs[participant_address].target_refs == (
         "container:aptl-kali",
         "container:aptl-webapp",
@@ -1596,11 +1628,11 @@ def test_realization_prefers_unique_node_alias_over_shared_source_alias(tmp_path
             [
                 "services:",
                 "  wazuh-sidecar-db:",
-                "    profiles: [\"wazuh\"]",
+                '    profiles: ["wazuh"]',
                 "    image: aptl-wazuh-sidecar:local",
                 "    container_name: aptl-wazuh-sidecar-db",
                 "  wazuh-sidecar-suricata:",
-                "    profiles: [\"wazuh\"]",
+                '    profiles: ["wazuh"]',
                 "    image: aptl-wazuh-sidecar:local",
                 "    container_name: aptl-wazuh-sidecar-suricata",
             ]
@@ -2100,7 +2132,11 @@ def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
         EvaluationPlan,
         OrchestrationPlan,
     )
-    from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+    from aces_contracts.runtime_state import (
+        ApplyResult,
+        OperationState,
+        RuntimeSnapshot,
+    )
 
     from aptl.backends.aces import AcesStartOutcome, start_aces_scenario
     from aptl.core.config import AptlConfig
@@ -2289,7 +2325,10 @@ def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
 
     from aces_contracts.runtime_state import OperationState
 
-    from aptl.backends.aces import AptlProvisioner, _apply_provisioning_and_orchestration
+    from aptl.backends.aces import (
+        AptlProvisioner,
+        _apply_provisioning_and_orchestration,
+    )
     from aptl.core.config import AptlConfig
 
     _write_compose(tmp_path, {"victim": ["victim"]})

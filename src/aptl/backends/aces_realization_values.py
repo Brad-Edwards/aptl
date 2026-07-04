@@ -109,25 +109,79 @@ def static_address_assignments(
 
     if infra_spec is None:
         return ()
-    properties = infra_spec.get("properties")
-    assignments: dict[str, str] = {}
-    if isinstance(properties, list):
-        for item in properties:
-            if isinstance(item, Mapping):
-                for network, address in item.items():
-                    if not isinstance(address, str) or not address.strip():
-                        continue
-                    network_name = str(network).strip()
-                    if network_name:
-                        assignments[network_name] = address
-    elif isinstance(properties, Mapping):
-        for key in ("address", "ip", "ipv4_address", "static_address"):
-            value = properties.get(key)
-            if isinstance(value, str) and value.strip():
-                network_values = sorted(network_names(infra_spec))
-                if len(network_values) == 1:
-                    assignments[network_values[0]] = value
+    assignments = _static_assignments_from_properties(
+        infra_spec.get("properties"),
+        infra_spec,
+    )
     return tuple(sorted(assignments.items()))
+
+
+def _static_assignments_from_properties(
+    properties: object,
+    infra_spec: Mapping[str, Any],
+) -> dict[str, str]:
+    """Extract static assignments from ACES infrastructure properties."""
+
+    if isinstance(properties, list):
+        return _static_assignments_from_property_list(properties)
+    if isinstance(properties, Mapping):
+        return _static_assignments_from_property_mapping(properties, infra_spec)
+    return {}
+
+
+def _static_assignments_from_property_list(
+    properties: list[object],
+) -> dict[str, str]:
+    """Extract explicit network-to-address property entries."""
+
+    assignments: dict[str, str] = {}
+    for item in properties:
+        if isinstance(item, Mapping):
+            assignments.update(_static_assignments_from_property_item(item))
+    return assignments
+
+
+def _static_assignments_from_property_item(
+    item: Mapping[object, object],
+) -> dict[str, str]:
+    """Extract static addresses from one ACES network-property mapping."""
+
+    assignments: dict[str, str] = {}
+    for network, address in item.items():
+        network_name = str(network).strip()
+        address_value = _nonempty_string(address)
+        if network_name and address_value is not None:
+            assignments[network_name] = address_value
+    return assignments
+
+
+def _static_assignments_from_property_mapping(
+    properties: Mapping[str, Any],
+    infra_spec: Mapping[str, Any],
+) -> dict[str, str]:
+    """Extract a single static address from legacy scalar property forms."""
+
+    address = _first_static_address_value(properties)
+    network_values = sorted(network_names(infra_spec))
+    if address is not None and len(network_values) == 1:
+        return {network_values[0]: address}
+    return {}
+
+
+def _first_static_address_value(properties: Mapping[str, Any]) -> str | None:
+    """Return the first non-empty legacy static address property."""
+
+    for key in ("address", "ip", "ipv4_address", "static_address"):
+        value = _nonempty_string(properties.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _nonempty_string(value: object) -> str | None:
+    """Return a stripped string only when it carries content."""
+
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def string_values(raw: object) -> set[str]:

@@ -241,19 +241,19 @@ def _metric_max_score(
 def _state_truth_value(state: EvaluationExecutionState | None) -> bool | None:
     """Return True/False for ready/failed dependency states; None means wait."""
     value: bool | None = None
-    if state is None or state.status in {
+    waiting_statuses = {
         EvaluationResultStatus.PENDING,
         EvaluationResultStatus.RUNNING,
-    }:
-        pass
-    elif state.status == EvaluationResultStatus.FAILED:
-        value = False
-    elif state.passed is not None:
-        value = state.passed
-    elif state.score is not None and state.max_score is None:
-        value = bool(state.score)
-    elif state.score is not None:
-        value = float(state.score) >= float(state.max_score)
+    }
+    if state is not None and state.status not in waiting_statuses:
+        if state.status == EvaluationResultStatus.FAILED:
+            value = False
+        elif state.passed is not None:
+            value = state.passed
+        elif state.score is not None and state.max_score is None:
+            value = bool(state.score)
+        elif state.score is not None:
+            value = float(state.score) >= float(state.max_score)
     return value
 
 

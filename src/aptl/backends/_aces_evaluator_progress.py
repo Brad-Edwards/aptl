@@ -144,28 +144,27 @@ def append_progression(
         EvaluationResultStatus.PENDING,
         EvaluationResultStatus.RUNNING,
     }
-    if _should_keep_terminal_state(state, outcome):
-        pass
-    elif can_run and outcome.status == EvaluationResultStatus.RUNNING:
-        result = _append_running_state(
-            state,
-            events,
-            _next_timestamp(last_timestamp),
-            outcome.detail,
-        )
-    else:
-        if state.status == EvaluationResultStatus.PENDING:
+    if not _should_keep_terminal_state(state, outcome):
+        if can_run and outcome.status == EvaluationResultStatus.RUNNING:
             result = _append_running_state(
                 state,
                 events,
                 _next_timestamp(last_timestamp),
-                None,
+                outcome.detail,
             )
-            last_timestamp = result.updated_at
-        result = _append_terminal_state(
-            state,
-            outcome,
-            events,
-            _next_timestamp(last_timestamp),
-        )
+        else:
+            if state.status == EvaluationResultStatus.PENDING:
+                result = _append_running_state(
+                    state,
+                    events,
+                    _next_timestamp(last_timestamp),
+                    None,
+                )
+                last_timestamp = result.updated_at
+            result = _append_terminal_state(
+                state,
+                outcome,
+                events,
+                _next_timestamp(last_timestamp),
+            )
     return result

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import ChangeAction, ProvisioningPlan
 from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
+from aces_processor.semantics.realization import realization_disclosure
 from aces_runtime.control_plane import RuntimeControlPlane
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
@@ -208,7 +209,7 @@ def _run_execution_plan(
     if failure is not None:
         return AcesStartOutcome(
             lab_result=failure,
-            final_snapshot=control_plane.get_snapshot(),
+            final_snapshot=_current_runtime_snapshot(control_plane),
             realization_details=realization_details,
             selected_profiles=selected_profiles,
             scenario_path=scenario_path,
@@ -218,7 +219,7 @@ def _run_execution_plan(
             success=True,
             message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
         ),
-        final_snapshot=control_plane.get_snapshot(),
+        final_snapshot=_current_runtime_snapshot(control_plane),
         realization_details=realization_details,
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
@@ -244,9 +245,17 @@ def _apply_provisioning_and_orchestration(
     realization evidence rather than empty placeholders.
     """
     realization_details, selected_profiles = _interpret_realization(target, execution_plan)
-    phases: list[Callable[[], object]] = [
+    failure = _apply_phase(
+        control_plane,
         lambda: control_plane.submit_provisioning(execution_plan.provisioning),
-    ]
+    )
+    if failure is not None:
+        return failure, realization_details, selected_profiles
+    failure = _apply_realization_disclosure(control_plane, execution_plan)
+    if failure is not None:
+        return failure, realization_details, selected_profiles
+
+    phases: list[Callable[[], object]] = []
     if execution_plan.orchestration.actionable_operations:
         phases.append(
             lambda: control_plane.submit_orchestration(execution_plan.orchestration),
@@ -279,6 +288,83 @@ def _apply_provisioning_and_orchestration(
                 selected_profiles,
             )
     return None, realization_details, selected_profiles
+
+
+def _current_runtime_snapshot(control_plane: object) -> RuntimeSnapshot:
+    """Return the current control-plane snapshot across ACES API shapes."""
+
+    snapshot = getattr(control_plane, "snapshot", None)
+    if isinstance(snapshot, RuntimeSnapshot):
+        return snapshot
+    get_snapshot = getattr(control_plane, "get_snapshot", None)
+    if callable(get_snapshot):
+        returned = get_snapshot()
+        if isinstance(returned, RuntimeSnapshot):
+            return returned
+        envelope_snapshot = getattr(returned, "snapshot", None)
+        if isinstance(envelope_snapshot, RuntimeSnapshot):
+            return envelope_snapshot
+    return RuntimeSnapshot()
+
+
+def _store_runtime_snapshot(control_plane: object, snapshot: RuntimeSnapshot) -> None:
+    """Persist a replacement snapshot when the control-plane object supports it."""
+
+    public_snapshot = getattr(control_plane, "snapshot", None)
+    if isinstance(public_snapshot, RuntimeSnapshot):
+        try:
+            setattr(control_plane, "snapshot", snapshot)
+        except AttributeError:
+            pass
+    if hasattr(control_plane, "_snapshot"):
+        setattr(control_plane, "_snapshot", snapshot)
+    store = getattr(control_plane, "_store", None)
+    save_snapshot = getattr(store, "save_snapshot", None)
+    if callable(save_snapshot):
+        save_snapshot(snapshot)
+
+
+def _realization_requirements(execution_plan: object) -> tuple[object, ...]:
+    """Return compiled SEM-218 realization requirements when present."""
+
+    model = getattr(execution_plan, "model", None)
+    requirements = getattr(model, "realization_requirements", ())
+    try:
+        return tuple(requirements or ())
+    except TypeError:
+        return ()
+
+
+def _apply_realization_disclosure(
+    control_plane: object,
+    execution_plan: object,
+) -> LabResult | None:
+    """Run ACES non-approximation disclosure after provisioning applies."""
+
+    requirements = _realization_requirements(execution_plan)
+    if not requirements:
+        return None
+    snapshot = _current_runtime_snapshot(control_plane)
+    diagnostics, provenance = realization_disclosure(
+        requirements,
+        execution_plan.provisioning,
+        snapshot,
+    )
+    if diagnostics:
+        return LabResult(
+            success=False,
+            error=render_aces_diagnostics(list(diagnostics)),
+        )
+    if provenance:
+        next_snapshot = snapshot.with_entries(
+            dict(snapshot.entries),
+            realization_provenance=(
+                *snapshot.realization_provenance,
+                *provenance,
+            ),
+        )
+        _store_runtime_snapshot(control_plane, next_snapshot)
+    return None
 
 
 def _interpret_realization(

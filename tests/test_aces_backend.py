@@ -105,6 +105,30 @@ def _plan_for_nodes(*node_names: str) -> ProvisioningPlan:
     return _plan_for_resources(*map(_node_resource, node_names))
 
 
+def _execution_plan_with_realization_requirements():
+    from textwrap import dedent
+
+    from aces_processor.compiler import compile_runtime_model
+    from aces_processor.planner import plan
+    from aces_sdl.parser import parse_sdl
+
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: disclosure-test
+            nodes:
+              vm:
+                type: vm
+                os: linux
+                resources: {ram: 1 gib, cpu: 1}
+            """
+        )
+    )
+    return plan(compile_runtime_model(scenario), create_aptl_manifest())
+
+
 def _realize_profiles(call) -> list[str]:
     """Return profile names from a DeploymentRealizationSpec mock call."""
 
@@ -2331,3 +2355,87 @@ def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
     assert "nodes" in realization_details
     assert len(realization_details["nodes"]) >= 1
     assert "victim" in selected_profiles
+
+
+def test_apply_provisioning_fails_closed_on_vacuous_realization_snapshot():
+    """Exact SEM-218 requirements must not pass on an empty returned snapshot."""
+    from unittest.mock import MagicMock as _MagicMock
+
+    from aces_contracts.runtime_state import OperationState
+
+    from aptl.backends.aces import _apply_provisioning_and_orchestration
+
+    execution_plan = _execution_plan_with_realization_requirements()
+
+    receipt = _MagicMock()
+    receipt.operation_id = "op-prov"
+    op_status = _MagicMock()
+    op_status.state = OperationState.SUCCEEDED
+    op_status.diagnostics = []
+
+    mock_cp = _MagicMock()
+    mock_cp.submit_provisioning.return_value = receipt
+    mock_cp.get_operation.return_value = op_status
+    mock_cp.snapshot = RuntimeSnapshot()
+
+    mock_target = _MagicMock()
+    mock_target.orchestrator = None
+    mock_target.evaluator = None
+    mock_target.provisioner = None
+
+    failure, _, _ = _apply_provisioning_and_orchestration(
+        mock_cp, execution_plan, mock_target
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert "runtime.backend-contract-invalid" in (failure.error or "")
+
+
+def test_apply_provisioning_records_realization_provenance_when_honored():
+    """Honored exact requirements are disclosed on the runtime snapshot."""
+    from unittest.mock import MagicMock as _MagicMock
+
+    from aces_contracts.runtime_state import OperationState, SnapshotEntry
+
+    from aptl.backends.aces import _apply_provisioning_and_orchestration
+
+    execution_plan = _execution_plan_with_realization_requirements()
+    resource = next(iter(execution_plan.provisioning.resources.values()))
+    snapshot = RuntimeSnapshot(
+        entries={
+            resource.address: SnapshotEntry(
+                address=resource.address,
+                domain=resource.domain,
+                resource_type=resource.resource_type,
+                payload=resource.payload,
+            )
+        }
+    )
+
+    receipt = _MagicMock()
+    receipt.operation_id = "op-prov"
+    op_status = _MagicMock()
+    op_status.state = OperationState.SUCCEEDED
+    op_status.diagnostics = []
+
+    mock_cp = _MagicMock()
+    mock_cp.submit_provisioning.return_value = receipt
+    mock_cp.get_operation.return_value = op_status
+    mock_cp.snapshot = snapshot
+
+    mock_target = _MagicMock()
+    mock_target.orchestrator = None
+    mock_target.evaluator = None
+    mock_target.provisioner = None
+
+    failure, _, _ = _apply_provisioning_and_orchestration(
+        mock_cp, execution_plan, mock_target
+    )
+
+    assert failure is None
+    kinds = {
+        entry.requirement_kind
+        for entry in mock_cp.snapshot.realization_provenance
+    }
+    assert {"node-type", "os-family"} <= kinds

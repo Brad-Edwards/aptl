@@ -921,7 +921,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     ) as exc:
         # Narrow, redacted failure (ADR-043): name the artifact/exception
         # type, not raw Docker stderr.
-        log.error("Suricata volume seed failed: %s", type(exc).__name__)
+        log.exception("Suricata volume seed failed: %s", type(exc).__name__)
         return LabResult(
             success=False,
             error=f"Suricata runtime volume seeding failed: {exc}",

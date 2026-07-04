@@ -95,5 +95,5 @@ async def get_scenario_detail(
     project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> ScenarioDetailResponse:
     """Project one curated scenario into a backend-owned workbench detail."""
-    log.info("GET /scenarios/%s", scenario_id)
+    log.info("GET /scenarios/{scenario_id}")
     return await asyncio.to_thread(_load_scenario_detail, project_dir, scenario_id)

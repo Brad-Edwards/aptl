@@ -5,6 +5,7 @@ compose command construction, and full orchestration. All subprocess/docker
 calls are mocked.
 """
 
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -1533,7 +1534,7 @@ class TestSeedSuricataVolumesStep:
         suffixes = {s.volume_suffix for s in seeds}
         assert suffixes == {"suricata_config_seed", "suricata_misp_rules"}
 
-    def test_seed_error_aborts_lab_start_step(self, tmp_path):
+    def test_seed_error_aborts_lab_start_step(self, tmp_path, caplog):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import _step_seed_suricata_volumes
 
@@ -1542,6 +1543,7 @@ class TestSeedSuricataVolumesStep:
         backend.seed_named_volumes.side_effect = BackendSeedError(
             "Seeding named volume 'suricata_config_seed' failed"
         )
+        caplog.set_level(logging.ERROR, logger="aptl.lab")
 
         result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
 
@@ -1550,6 +1552,13 @@ class TestSeedSuricataVolumesStep:
         assert "suricata runtime volume seeding failed" in (
             result.error or ""
         ).lower()
+        seed_records = [
+            record
+            for record in caplog.records
+            if record.getMessage() == "Suricata volume seed failed: BackendSeedError"
+        ]
+        assert seed_records
+        assert seed_records[0].exc_info is not None
 
     def test_missing_source_aborts_step(self, tmp_path):
         from aptl.core.lab import _step_seed_suricata_volumes

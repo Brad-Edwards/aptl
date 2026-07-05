@@ -83,6 +83,28 @@ if TYPE_CHECKING:
 
 log = get_logger("lab")
 
+_STALE_NETWORK_RECOVERY_HINT = (
+    "Run `aptl lab stop` and retry, or `aptl lab stop -v` "
+    "if you need a clean lab."
+)
+
+
+def _looks_like_stale_realization_network_error(error: str) -> bool:
+    """Return True when Docker reports old APTL networks with stale labels."""
+
+    return (
+        "Existing network " in error
+        and " does not match realized network " in error
+        and "label org.aptl.realization.network expected 'true'" in error
+    )
+
+
+def _lab_start_failure_error(error: str) -> str:
+    message = f"Lab start failed: {error}"
+    if _looks_like_stale_realization_network_error(error):
+        return f"{message}\n{_STALE_NETWORK_RECOVERY_HINT}"
+    return message
+
 
 def start_aces_scenario(
     project_dir: Path,
@@ -1124,7 +1146,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
         success=False,
-        error=f"Lab start failed: {lab_result.error}",
+        error=_lab_start_failure_error(lab_result.error),
     )
 
 

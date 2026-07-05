@@ -893,6 +893,23 @@ class TestDockerComposeBackend:
         assert status.running is True
         assert len(status.containers) == 1
 
+    def test_status_uses_configured_project_name(self, tmp_path):
+        backend = self._make_backend(tmp_path / "aptl-workshop-main.h9Jare")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='[{"Name":"aptl-victim","State":"running"}]',
+                stderr="",
+            )
+            status = backend.status()
+
+        assert status.running is True
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:4] == ["docker", "compose", "-p", "test"]
+        assert cmd[-3:] == ["ps", "--format", "json"]
+        assert mock_run.call_args[1]["cwd"] == tmp_path / "aptl-workshop-main.h9Jare"
+
     def test_status_parses_ndjson(self, tmp_path):
         backend = self._make_backend(tmp_path)
         ndjson = (

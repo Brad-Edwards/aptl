@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.utils.curl_safe import curl_json as _curl_json
+from aptl.utils.curl_safe import basic_auth_header, curl_json as _curl_json
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -119,7 +119,7 @@ def collect_wazuh_alerts(
         url = f"{indexer_url}/wazuh-alerts-4.x-*/_search?scroll=2m"
         data = _curl_json(
             url,
-            auth=auth,
+            auth_header=basic_auth_header(*auth),
             body=query,
             insecure=True,
             timeout=_COLLECTOR_HTTP_TIMEOUT,
@@ -138,7 +138,7 @@ def collect_wazuh_alerts(
             scroll_url = f"{indexer_url}/_search/scroll"
             data = _curl_json(
                 scroll_url,
-                auth=auth,
+                auth_header=basic_auth_header(*auth),
                 body=scroll_body,
                 insecure=True,
                 timeout=_COLLECTOR_HTTP_TIMEOUT,

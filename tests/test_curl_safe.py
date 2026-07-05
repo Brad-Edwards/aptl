@@ -75,11 +75,13 @@ class TestCurlStatus:
         assert result is None
 
     def test_never_raises_on_transport_failure(self, monkeypatch):
-        """Never raise — matches the fault-tolerant curl_safe contract."""
-        try:
-            _, result = self._run(monkeypatch, side_effect=OSError("boom"))
-        except Exception as exc:  # pragma: no cover - failure path
-            pytest.fail(f"curl_status raised {exc!r} instead of returning None")
+        """Never raise — matches the fault-tolerant curl_safe contract.
+
+        The absence of a try/except here is deliberate: if ``curl_status``
+        regressed to letting the ``OSError`` propagate, this test would
+        error out naturally, which is the failure signal we want.
+        """
+        _, result = self._run(monkeypatch, side_effect=OSError("boom"))
         assert result is None
 
     def test_credentials_never_appear_in_argv(self, monkeypatch):
@@ -154,3 +156,24 @@ class TestCurlStatus:
         header_path = captured.get("header_path")
         assert header_path is not None
         assert not os.path.exists(header_path)
+
+
+class TestBasicAuthHeader:
+    """Tests for ``aptl.utils.curl_safe.basic_auth_header``."""
+
+    def test_encodes_credentials_as_basic_token(self):
+        import base64
+
+        from aptl.utils.curl_safe import basic_auth_header
+
+        header = basic_auth_header("admin", "SecretPassword")
+        assert header.startswith("Basic ")
+        token = header.removeprefix("Basic ")
+        assert base64.b64decode(token).decode() == "admin:SecretPassword"
+
+    def test_never_exposes_raw_password_in_the_header_value(self):
+        from aptl.utils.curl_safe import basic_auth_header
+
+        # The value is base64 of ``user:pass``; the cleartext password must
+        # not appear verbatim (that is the whole point of using a header).
+        assert "SecretPassword" not in basic_auth_header("admin", "SecretPassword")

@@ -11,8 +11,10 @@ Secret-safety:
     ``auth_header`` — is written to a 0600 temp file and passed to curl
     via ``-H @file`` rather than placed in argv. ``ps`` and
     ``/proc/<pid>/cmdline`` therefore cannot recover the token.
-  * Basic auth (``auth=(user, pass)``) goes through ``-u user:pass`` and
-    is visible in argv. Use ``auth_header`` for high-value tokens.
+  * Basic auth has no argv path here: build the header value with
+    :func:`basic_auth_header` and pass it as ``auth_header`` so the
+    credentials travel through the same 0600 temp file (ADR-029), never
+    ``-u user:pass`` in argv.
   * The request body, when provided, is written to a second 0600 temp
     file and passed via ``-d @file`` so any payload secret stays out of
     argv.
@@ -42,10 +44,21 @@ log = get_logger("curl_safe")
 DEFAULT_TIMEOUT_SECONDS = 30
 
 
+def basic_auth_header(username: str, password: str) -> str:
+    """Return an HTTP Basic ``Authorization`` header value for *username*/*password*.
+
+    The returned ``"Basic <base64>"`` string is meant to be passed as
+    ``auth_header`` to :func:`curl_json` / :func:`curl_status`, so the
+    credentials travel through a 0600 temp header file instead of curl's
+    argv-visible ``-u user:pass`` (ADR-029).
+    """
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return f"Basic {token}"
+
+
 def curl_json(
     url: str,
     *,
-    auth: tuple[str, str] | None = None,
     auth_header: str | None = None,
     body: dict | list | None = None,
     insecure: bool = False,
@@ -54,6 +67,10 @@ def curl_json(
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> Any | None:
     """Issue an HTTP request via curl and return parsed JSON, or ``None``.
+
+    Basic auth callers pass ``auth_header=basic_auth_header(user, pass)``
+    so the credentials go through the 0600 temp header file, never argv
+    (ADR-029).
 
     Returns ``None`` for: subprocess startup failures, command timeouts,
     non-zero curl exit codes (transport errors, HTTP >= 400), and JSON
@@ -67,13 +84,12 @@ def curl_json(
     if method:
         cmd += ["-X", method]
     cmd.append(url)
-    if auth is not None:
-        cmd += ["-u", f"{auth[0]}:{auth[1]}"]
     cmd += ["-H", "Content-Type: application/json"]
     cmd += ["-H", "Accept: application/json"]
 
     header_path: str | None = None
     body_path: str | None = None
+    parsed: Any | None = None
     try:
         if auth_header:
             header_path = _write_temp_0600("aptl-hdr-", "Authorization: " + auth_header + "\n")
@@ -83,26 +99,23 @@ def curl_json(
             body_path = _write_temp_0600("aptl-body-", json.dumps(body))
             cmd += ["-d", "@" + body_path]
 
+        # A single return keeps the three failure modes (transport error,
+        # non-zero exit, unparseable body) collapsing to the same ``None``
+        # without a separate return per branch.
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout
             )
+            if result.returncode != 0:
+                log.warning(
+                    "curl_safe: curl exit %d for %s", result.returncode, url
+                )
+            else:
+                parsed = json.loads(result.stdout)
         except (subprocess.TimeoutExpired, OSError) as exc:
             log.warning("curl_safe: subprocess failed: %s", exc.__class__.__name__)
-            return None
-
-        if result.returncode != 0:
-            log.warning(
-                "curl_safe: curl exit %d for %s",
-                result.returncode, url,
-            )
-            return None
-
-        try:
-            return json.loads(result.stdout)
         except ValueError:
             log.warning("curl_safe: response from %s was not valid JSON", url)
-            return None
     finally:
         for path in (header_path, body_path):
             if path is None:
@@ -111,6 +124,7 @@ def curl_json(
                 os.unlink(path)
             except OSError:
                 pass
+    return parsed
 
 
 def curl_status(
@@ -148,9 +162,8 @@ def curl_status(
     header_path: str | None = None
     try:
         if auth is not None:
-            token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
             header_path = _write_temp_0600(
-                "aptl-hdr-", f"Authorization: Basic {token}\n"
+                "aptl-hdr-", f"Authorization: {basic_auth_header(*auth)}\n"
             )
             cmd += ["-H", "@" + header_path]
 

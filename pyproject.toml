@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
@@ -60,6 +60,7 @@ dev = [
     "httpx>=0.27.0",
     "hypothesis>=6.0.0",
     "ruff>=0.15.0",
+    "towncrier>=23.11.0",
 ]
 docs = [
     "mkdocs-material>=9.5.0",
@@ -69,39 +70,11 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
 
-# Version source of truth = the git tag (ADR 0006). hatch-vcs turns the tag that
-# python-semantic-release creates into the built artifact's version; there is no
-# version string to hand-edit. The generated file is gitignored.
+# Version source of truth = the __version__ literal in the package __init__.
+# tools/release.py rewrites it when cutting a release; pyproject reads it here
+# so there is exactly one committed, human-readable version to keep in sync.
 [tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/aptl/_version.py"
-
-# Release automation (ADR 0006 blueprint, adopted from aces-scenario-packs):
-# python-semantic-release computes the next version from Conventional Commit
-# messages and creates the git tag. Tag-only (commit = false) so nothing is
-# pushed back to protected main; the changelog is emitted to the GitHub Release.
-[tool.semantic_release]
-tag_format = "v{version}"
-commit = false
-allow_zero_version = true
-major_on_zero = false
-build_command = "python -m pip install build && python -m build"
-
-[tool.semantic_release.branches.main]
-match = "main"
-
-# Map aptl's Keep-a-Changelog PR-title verbs to release levels so the version
-# actually bumps for them (PSR's default recognizes only feat/fix/perf). This
-# allowed set MUST stay in sync with CONVENTIONAL_TYPES in
-# tools/check_pr_title.py (asserted by tests/test_pr_title_guard.py); unmatched
-# types (chore/docs/refactor/test/ci/build) default to no release.
-[tool.semantic_release.commit_parser_options]
-allowed_tags = ["feat", "added", "changed", "removed", "deprecated", "fix", "perf", "fixed", "security", "revert", "chore", "docs", "refactor", "test", "ci", "build"]
-minor_tags = ["feat", "added", "changed", "removed", "deprecated"]
-patch_tags = ["fix", "perf", "fixed", "security", "revert"]
-other_allowed_tags = ["chore", "docs", "refactor", "test", "ci", "build"]
+path = "src/aptl/__init__.py"
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

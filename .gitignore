@@ -29,9 +29,6 @@ __pycache__/
 # C extensions
 *.so
 
-# hatch-vcs writes this at build time; the git tag is the version source of truth.
-src/aptl/_version.py
-
 # Distribution / packaging
 .Python
 build/

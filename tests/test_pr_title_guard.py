@@ -1,24 +1,19 @@
 """Tests for the repository-side PR title guard (tools/check_pr_title.py).
 
-The guard is loaded by path because it lives under ``tools/`` (outside the
-``src`` package) so the CI job can run it stdlib-only. Keeping these tests in
-the suite makes the guard's policy a first-class, drift-proof contract: the
-allowed type set here is asserted to match the release engine's
-``allowed_tags`` in ``pyproject.toml`` (ADR 0006).
+The guard lives under ``tools/`` (outside the ``src`` package) so the CI job can
+run it stdlib-only; these tests exercise its policy as a first-class contract.
 """
 
 from __future__ import annotations
 
 import sys
-import tomllib
 from pathlib import Path
 
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-# The guard lives under tools/ (outside the src package) so the CI job can run
-# it stdlib-only. Import it as a normal module so it is registered in
-# sys.modules (dataclasses introspection needs that).
+# Import the guard as a normal module (registered in sys.modules) so the
+# dataclass in it resolves correctly.
 sys.path.insert(0, str(_REPO_ROOT / "tools"))
 
 import check_pr_title  # noqa: E402
@@ -77,10 +72,3 @@ def test_rejects_uppercase_subject() -> None:
 def test_rejects_empty() -> None:
     assert any(v.rule_id == check_pr_title.RULE_EMPTY for v in validate_pr_title(""))
     assert any(v.rule_id == check_pr_title.RULE_EMPTY for v in validate_pr_title("   "))
-
-
-def test_guard_types_match_release_allowed_tags() -> None:
-    """The guard's allowed types must equal PSR's allowed_tags (no drift)."""
-    pyproject = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    allowed_tags = pyproject["tool"]["semantic_release"]["commit_parser_options"]["allowed_tags"]
-    assert set(check_pr_title.CONVENTIONAL_TYPES) == set(allowed_tags)

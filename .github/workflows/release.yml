@@ -1,87 +1,110 @@
 name: Release
 
-# Conventional-commit-driven release (ADR 0006 blueprint, adopted from
-# aces-scenario-packs). On every push to main, python-semantic-release inspects
-# the Conventional Commit messages since the last tag, computes the next SemVer,
-# creates the tag + GitHub Release (with generated notes), and builds the sdist
-# + wheel. It is tag-only — it never pushes a commit back to the protected main
-# branch. The job then attaches a CycloneDX SBOM and publishes to PyPI via OIDC
-# trusted publishing (no stored token).
+# Publish on merge to main. The version is the committed __version__ in
+# src/aptl/__init__.py (bumped by tools/release.py inside the release PR). When
+# main carries a version that has no matching v<version> tag yet, this workflow
+# tags it, builds the sdist+wheel, publishes to PyPI via OIDC trusted
+# publishing, and cuts a GitHub Release whose notes are the new CHANGELOG.md
+# section. A normal (non-release) merge leaves __version__ unchanged, its tag
+# already exists, and this is a no-op.
 #
-# workflow_dispatch bootstraps the first release and is the manual override: run
-# it with force=minor once after the first dev->main promotion to cut v0.1.0.
-#
-# Third-party actions are pinned to full commit SHAs (not tags/branches): this
-# job holds `id-token: write`, so a moved ref could mint the PyPI OIDC token.
-# Dependabot (.github/dependabot.yml) keeps the pins patched.
+# No commit is pushed to main — only a tag (tags are not branch-protected), so
+# the release needs no bot token, deploy key, or bypass. Third-party actions are
+# pinned to commit SHAs (Dependabot keeps them current).
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      force:
-        description: "Force a bump when no releasable commits exist (patch|minor|major)"
-        required: false
-        default: ""
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
+  decide:
+    name: Decide whether to release
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+      - id: decide
+        run: |
+          set -euo pipefail
+          version="$(grep -oP '^__version__\s*=\s*"\K[^"]+' src/aptl/__init__.py)"
+          if [[ -z "${version}" ]]; then
+            echo "::error::no __version__ in src/aptl/__init__.py" && exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "v${version} already tagged: nothing to release."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "v${version} is unreleased: will tag and publish."
+          fi
+
   release:
-    name: Release
+    name: Build, publish, and release
+    needs: [decide]
+    if: needs.decide.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write   # create the tag + GitHub Release
+      contents: write   # push the tag + create the GitHub Release
       id-token: write   # OIDC trusted publishing to PyPI
+    env:
+      V: ${{ needs.decide.outputs.version }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
-      - name: Python Semantic Release (version + tag + GitHub Release + build)
-        id: release
-        uses: python-semantic-release/python-semantic-release@37a30a7987cfebb6d49240bf1c4e9cd9817d0673 # v10.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          force: ${{ github.event.inputs.force }}
-
-      - name: Generate CycloneDX SBOM
-        if: steps.release.outputs.released == 'true'
+      - name: Create and push the release tag
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${V}" -m "Release v${V}"
+          git push origin "v${V}"
+
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Extract this version's CHANGELOG section
+        run: |
+          python - "${V}" > RELEASE_NOTES.md <<'PY'
+          import pathlib, re, sys
+          v = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          m = re.search(rf"(?ms)^##\s*\[{re.escape(v)}\].*?(?=^##\s*\[|\Z)", text)
+          sys.stdout.write(m.group(0).strip() if m else f"Release v{v}")
+          PY
+
+      - name: Generate CycloneDX SBOM
+        run: |
           python -m pip install dist/*.whl cyclonedx-bom
           mkdir -p sbom
-          cyclonedx-py environment \
-            --output-format JSON \
-            --output-file sbom/aptl.cdx.json
-
-      - name: Attach SBOM to the GitHub Release
-        if: steps.release.outputs.released == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.tag }}
-        run: gh release upload "${TAG}" sbom/aptl.cdx.json --clobber
+          cyclonedx-py environment --output-format JSON --output-file sbom/aptl.cdx.json
 
       - name: Publish to PyPI (OIDC trusted publishing)
-        if: steps.release.outputs.released == 'true'
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: dist
 
-      - name: Attach distributions to the GitHub Release
-        if: steps.release.outputs.released == 'true'
-        uses: python-semantic-release/publish-action@4f3c5d7f5caddf6535050c4bcb55f033f000a7dd # v10.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.release.outputs.tag }}
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${V}" dist/* sbom/* \
+            --title "v${V}" \
+            --notes-file RELEASE_NOTES.md

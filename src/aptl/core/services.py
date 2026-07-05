@@ -15,6 +15,7 @@ from aptl.utils.logging import get_logger
 log = get_logger("services")
 
 ProgressCallback = Callable[[str], None]
+_PROGRESS_INTERVAL_SECONDS = 30
 
 
 @dataclass
@@ -35,7 +36,6 @@ def wait_for_service(
     time_source: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     progress: ProgressCallback | None = None,
-    progress_interval: int = 30,
 ) -> ServiceResult:
     """Poll a service until it becomes ready or timeout is exceeded.
 
@@ -49,7 +49,6 @@ def wait_for_service(
             with an explicit value sequence instead of patching the module.
         sleep: Sleep function, injectable so tests don't actually block.
         progress: Optional callback for participant-facing progress updates.
-        progress_interval: Minimum seconds between progress messages.
 
     Returns:
         ServiceResult indicating whether the service became ready and
@@ -58,7 +57,7 @@ def wait_for_service(
     start = time_source()
     deadline = start + timeout
     next_progress_elapsed = 0.0
-    bounded_progress_interval = max(progress_interval, interval)
+    bounded_progress_interval = max(_PROGRESS_INTERVAL_SECONDS, interval)
 
     log.info("Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval)
 

@@ -165,7 +165,6 @@ class TestWaitForService:
             time_source=iter([0.0, 5.0, 20.0, 35.0, 45.0]).__next__,
             sleep=lambda _seconds: None,
             progress=progress,
-            progress_interval=30,
         )
 
         assert result.ready is True

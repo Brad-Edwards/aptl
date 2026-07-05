@@ -8,6 +8,7 @@ startup.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -38,6 +39,7 @@ from aptl.core.env import (
     EnvVars,
     env_vars_from_dict,
     find_placeholder_env_values,
+    hydrate_dotenv,
     load_dotenv,
 )
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
@@ -679,9 +681,17 @@ def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 1: Loading environment variables...")
     env_path = ctx.project_dir / ".env"
     try:
+        hydration = hydrate_dotenv(env_path)
+        if hydration.changed:
+            action = "created" if hydration.created else "updated"
+            log.info(
+                "%s .env with %d hydrated credential values",
+                action.capitalize(),
+                len(hydration.updated_keys),
+            )
         ctx.raw_env = load_dotenv(env_path)
         ctx.env = env_vars_from_dict(ctx.raw_env)
-    except (FileNotFoundError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         log.exception("Failed to load .env")
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
     return _validate_env_secrets(ctx.raw_env)
@@ -1686,6 +1696,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
             capture_output=True,
             text=True,
             cwd=ctx.project_dir,
+            env={**os.environ, **ctx.raw_env},
             timeout=1200,
         )
         if seed_result.returncode != 0:

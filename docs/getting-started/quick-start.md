@@ -8,7 +8,6 @@ cd aptl
 
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
 
@@ -18,8 +17,10 @@ on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
 `python3-venv` package (`sudo apt install python3-venv`); see
 [Prerequisites](prerequisites.md).
 
-`aptl lab start` refuses to run while `.env` still contains the
-`.env.example` placeholder values.
+`aptl lab start` creates `.env` automatically when it is missing and replaces
+template placeholder values with lab credentials that match the running
+containers. The startup output points to `.env` for passwords and tokens. Run
+`aptl lab info` later to reprint the same access summary.
 
 `aptl lab start` defaults to the curated TechVault operational ACES SDL. List
 the curated startup inputs with:
@@ -39,6 +40,7 @@ aptl lab start --scenario-path scenarios/techvault-operational.sdl.yaml
 
 ```bash
 aptl lab status   # Show running containers and health
+aptl lab info     # Show URLs, usernames, and .env credential references
 aptl lab stop     # Stop the lab
 aptl lab stop -v  # Stop and remove all volumes
 aptl kill         # Emergency: kill all MCP server processes immediately

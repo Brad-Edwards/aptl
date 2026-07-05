@@ -68,6 +68,27 @@ _DESTRUCTIVE_DATA_WARNING = (
 )
 
 
+def _emit_lab_access_summary(project_dir: Path) -> None:
+    """Print the credential locations and common lab entry points."""
+    env_path = project_dir / ".env"
+    typer.echo("")
+    typer.echo(f"Credentials file: {env_path}")
+    typer.echo(
+        "Keep this file for this temporary range; remove it before a fresh "
+        "credential reset."
+    )
+    typer.echo("")
+    typer.echo("Access:")
+    typer.echo("  Wazuh Dashboard: https://localhost:443")
+    typer.echo("    username: admin")
+    typer.echo("    password: see INDEXER_PASSWORD in .env")
+    typer.echo("  Grafana: http://localhost:3100")
+    typer.echo("    username: admin")
+    typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
+    typer.echo("  Reverse engineering SSH:")
+    typer.echo("    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027")
+
+
 def _confirm_destructive(skip_prompt: bool) -> bool:
     """Confirm a volume-destroying action; return False if the operator aborts.
 
@@ -187,8 +208,30 @@ def start(
         )
 
     _render_start_result(result)
+    if result.success:
+        _emit_lab_access_summary(project_dir)
     if not result.success:
         raise typer.Exit(code=1)
+
+
+@app.command("info")
+def info(
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+) -> None:
+    """Show lab access URLs and credential locations."""
+    env_path = project_dir / ".env"
+    if not env_path.exists():
+        typer.echo(
+            f"Credentials file not found at {env_path}; run `aptl lab start` first.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    _emit_lab_access_summary(project_dir)
 
 
 @app.command("scenarios")

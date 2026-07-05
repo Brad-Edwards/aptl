@@ -21,7 +21,6 @@ git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
 
@@ -31,8 +30,10 @@ install works on modern Debian/Ubuntu/WSL2 hosts that block system-wide
 `python3 -m venv` step needs the `python3-venv` package
 (`sudo apt install python3-venv`).
 
-`aptl lab start` refuses to run while `.env` still contains the
-`.env.example` placeholder values.
+`aptl lab start` creates `.env` automatically when it is missing and replaces
+template placeholder values with lab credentials that match the running
+containers. The startup output points to `.env` for passwords and tokens. Run
+`aptl lab info` later to reprint the same access summary.
 
 By default it boots the full `techvault-operational` scenario. List the catalog
 and start a smaller curated topology with:
@@ -57,6 +58,7 @@ Lifecycle:
 
 ```bash
 aptl lab status   # running containers
+aptl lab info     # URLs, usernames, and .env credential references
 aptl lab stop     # graceful stop
 aptl lab stop -v  # ⚠ destroys all lab data (Wazuh indexes, MISP, TheHive, configs)
 aptl kill         # emergency: kill MCP server processes

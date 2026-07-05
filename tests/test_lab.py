@@ -8,8 +8,14 @@ calls are mocked.
 import logging
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
+from uuid import uuid4
 
 import pytest
+
+
+def _env_key(*parts: str) -> str:
+    """Build env names for generated test values."""
+    return "_".join(parts)
 
 
 class TestLabImportContracts:
@@ -890,13 +896,28 @@ class TestOrchestrateLabStart:
         keys_dir.mkdir(parents=True)
 
         # Config dirs for credentials
+        template_values = {
+            "indexer": f"indexer-{uuid4().hex}",
+            "api": f"api-{uuid4().hex}",
+        }
+        mocks["template_values"] = template_values
         dashboard_dir = tmp_path / "config" / "wazuh_dashboard"
         dashboard_dir.mkdir(parents=True)
-        (dashboard_dir / "wazuh.yml").write_text('password: "old"')
+        (dashboard_dir / "wazuh.yml").write_text(
+            "hosts:\n"
+            "  - local:\n"
+            "      username: wazuh-wui\n"
+            f"      password: {template_values['api']}\n"
+        )
 
         manager_dir = tmp_path / "config" / "wazuh_cluster"
         manager_dir.mkdir(parents=True)
         (manager_dir / "wazuh_manager.conf").write_text('<key>old</key>')
+        (manager_dir / "filebeat_wazuh_module.yml").write_text(
+            "output.elasticsearch:\n"
+            "  username: admin\n"
+            f"  password: {template_values['indexer']}\n"
+        )
 
         # SSL certs exist already
         certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
@@ -1033,11 +1054,33 @@ class TestOrchestrateLabStart:
         mocks["start"].assert_called_once()
         assert mocks["start"].call_args.kwargs["scenario_path"] == selected
 
-    def test_stops_on_env_loading_failure(self, mocker, tmp_path):
-        """Should fail early if .env loading fails."""
+    def test_orchestrate_hydrates_missing_env(self, mocker, tmp_path):
+        """A fresh checkout can start without a hand-created .env."""
+        from aptl.core.env import find_placeholder_env_values, load_dotenv
         from aptl.core.lab import orchestrate_lab_start
 
-        # No .env file exists
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        (tmp_path / ".env").unlink()
+
+        result = orchestrate_lab_start(tmp_path)
+        env = load_dotenv(tmp_path / ".env")
+
+        assert result.success is True
+        assert find_placeholder_env_values(env) == []
+        assert env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
+        assert env[_env_key("API", "PASSWORD")] == mocks["template_values"]["api"]
+        mocks["dashboard_creds"].assert_called_once()
+        assert (
+            mocks["dashboard_creds"].call_args.args[1]
+            == env[_env_key("API", "PASSWORD")]
+        )
+        assert mocks["manager_creds"].call_args.args[1]
+
+    def test_stops_on_env_loading_failure(self, mocker, tmp_path):
+        """Should fail early if .env cannot be read or hydrated."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        (tmp_path / ".env").mkdir()
         # aptl.json still needed to not hit a different error first
         import json
         (tmp_path / "aptl.json").write_text(json.dumps({"lab": {"name": "test"}}))
@@ -2205,13 +2248,19 @@ class TestStartupClassificationWiring:
                 },
             ),
         )
+        misp_key = f"misp-{uuid4().hex}"
+        shuffle_key = f"shuffle-{uuid4().hex}"
+        ctx.raw_env = {
+            _env_key("MISP", "API", "KEY"): misp_key,
+            _env_key("SHUFFLE", "API", "KEY"): shuffle_key,
+        }
         scripts_dir = tmp_path / "scripts"
         scripts_dir.mkdir()
         seed_script = scripts_dir / "seed-prime.sh"
         seed_script.write_text("#!/bin/bash\nexit 1\n")
         seed_script.chmod(0o755)
 
-        mocker.patch(
+        run = mocker.patch(
             "aptl.core.lab.subprocess.run",
             return_value=MagicMock(
                 returncode=1,
@@ -2229,6 +2278,11 @@ class TestStartupClassificationWiring:
         assert diag.impact is DiagnosticImpact.CAPABILITY
         assert diag.severity is DiagnosticSeverity.WARNING
         assert "should-not-appear-in-diag" not in diag.message
+        assert run.call_args.kwargs["env"][_env_key("MISP", "API", "KEY")] == misp_key
+        assert (
+            run.call_args.kwargs["env"][_env_key("SHUFFLE", "API", "KEY")]
+            == shuffle_key
+        )
 
     def test_seed_soc_timeout_emits_capability_warning(self, tmp_path, mocker):
         import subprocess

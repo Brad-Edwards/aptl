@@ -7,7 +7,6 @@ git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env   # then replace every CHANGE_ME value
 aptl lab start
 ```
 
@@ -17,8 +16,10 @@ on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
 `python3-venv` package for the `python3 -m venv` step
 (`sudo apt install python3-venv`); see [Prerequisites](prerequisites.md).
 
-`aptl lab start` refuses to run while `.env` still contains the
-`.env.example` placeholder values.
+`aptl lab start` creates `.env` automatically when it is missing and replaces
+template placeholder values with lab credentials that match the running
+containers. The startup output points to `.env` for passwords and tokens. Run
+`aptl lab info` later to reprint the same access summary.
 
 The CLI handles SSH keys, SSL certificates, system requirements, image pulling, container startup, service readiness checks, and connection info generation.
 
@@ -54,6 +55,7 @@ See [MCP Integration](../components/mcp-integration.md) for configuration detail
 Access lab components:
 
 - Wazuh Dashboard: <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`)
+- Access summary: `aptl lab info`
 - Victim shell: `aptl container shell aptl-victim`
 - Kali shell: `aptl container shell aptl-kali`
 - Reverse engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`

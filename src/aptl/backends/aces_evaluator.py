@@ -11,107 +11,37 @@ The adapter is the ACES ``Evaluator`` component published on APTL's
 ``RuntimeTarget``. ``start()`` loads an ACES ``EvaluationPlan`` into runtime
 state: it registers every evaluation resource as an ACES ``SnapshotEntry`` and,
 for each observable evaluation resource, records a truthful
-``EvaluationExecutionState`` — the run is ``PENDING`` (registered and awaiting
-execution) with a single ``evaluation_started`` history event, because no
-objective or condition outcome has been observed yet. The adapter never reports
-``READY``/``FAILED`` outcomes or invents scores. Outcome progression is driven
-out-of-band by RTE-001; when that execution-state integration lands (tracked
-by #514), the same ``results()`` / ``history()`` surface will report the real
-``RUNNING`` → terminal transitions and ``EvaluationHistoryEvent`` streams.
-``stop()`` clears evaluation state.
+``EvaluationExecutionState`` and then advances observable resources from the
+runtime snapshot supplied by the ACES control plane. Conditions observe
+provisioning entries, conditional metrics score from those condition results,
+and aggregate resources report pass/fail from their compiled dependency
+addresses. The adapter never invents elapsed-time score curves; result values
+are emitted only when the compiled ACES contract allows them. ``stop()`` clears
+evaluation state.
 
 This keeps the full remote-control-plane evaluation claim honest: APTL
 publishes the evaluation result/history *contract* surface and the
-loaded/registered run state, not a synthetic in-memory result that never
-progresses.
+observed run state behind it, not synthetic in-memory progress.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from uuid import uuid4
 
-from aces_contracts.diagnostics import Diagnostic, Severity
-from aces_contracts.evaluation import (
-    EvaluationExecutionState,
-    EvaluationHistoryEvent,
-    EvaluationHistoryEventType,
-    EvaluationResultContract,
-    EvaluationResultStatus,
-)
+from aces_contracts.diagnostics import Diagnostic
+from aces_contracts.evaluation import EvaluationResultContract
 from aces_contracts.planning import ChangeAction, EvaluationPlan, RuntimeDomain
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotEntry
 
-from aptl.utils.redaction import redact
-
-EVALUATION_ADDRESS = "runtime.apply.evaluation"
-_OBSERVABLE_RESOURCE_TYPES = frozenset(
-    {"condition-binding", "evaluation", "goal", "metric", "objective", "tlo"}
+from aptl.backends._aces_evaluator_engine import (
+    EVALUATION_ADDRESS,
+    OBSERVABLE_RESOURCE_TYPES,
+    drive_evaluations,
+    evaluation_diagnostic,
+    existing_states,
+    register_evaluation,
+    utc_now,
 )
-
-
-def _evaluation_diagnostic(code: str, address: str, message: str) -> Diagnostic:
-    """Build a redacted evaluation-domain ACES error diagnostic."""
-    return Diagnostic(
-        code=code,
-        domain=RuntimeDomain.EVALUATION.value,
-        address=address,
-        message=redact(message),
-        severity=Severity.ERROR,
-    )
-
-
-def _utc_now() -> str:
-    """Return the current UTC instant as an ISO-8601 ``...Z`` string."""
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def _register_evaluation(
-    evaluation_address: str,
-    payload: dict[str, object],
-    registered_at: str,
-    results: dict[str, dict[str, object]],
-    history: dict[str, list[dict[str, object]]],
-) -> list[Diagnostic]:
-    """Record the truthful initial (``PENDING``) portable state for a run."""
-    result_contract_payload = payload.get("result_contract")
-    if not isinstance(result_contract_payload, dict):
-        return [
-            _evaluation_diagnostic(
-                "aptl.evaluator.evaluation-contract-missing",
-                evaluation_address,
-                "ACES evaluation resource is missing its compiled result_contract.",
-            )
-        ]
-    try:
-        result_contract = EvaluationResultContract.from_mapping(result_contract_payload)
-    except (TypeError, ValueError) as exc:
-        return [
-            _evaluation_diagnostic(
-                "aptl.evaluator.evaluation-contract-invalid",
-                evaluation_address,
-                f"ACES evaluation result_contract is invalid: {exc}",
-            )
-        ]
-
-    state = EvaluationExecutionState(
-        state_schema_version=result_contract.state_schema_version,
-        resource_type=result_contract.resource_type,
-        run_id=uuid4().hex,
-        status=EvaluationResultStatus.PENDING,
-        observed_at=registered_at,
-        updated_at=registered_at,
-    )
-    results[evaluation_address] = state.to_payload()
-    history[evaluation_address] = [
-        EvaluationHistoryEvent(
-            event_type=EvaluationHistoryEventType.EVALUATION_STARTED,
-            timestamp=registered_at,
-            status=EvaluationResultStatus.PENDING,
-        ).to_payload()
-    ]
-    return []
 
 
 @dataclass
@@ -129,7 +59,7 @@ class AptlEvaluator(object):
                 success=False,
                 snapshot=working_snapshot,
                 diagnostics=[
-                    _evaluation_diagnostic(
+                    evaluation_diagnostic(
                         "aptl.evaluator.invalid-plan",
                         EVALUATION_ADDRESS,
                         "APTL evaluator expected an ACES EvaluationPlan.",
@@ -138,19 +68,21 @@ class AptlEvaluator(object):
             )
 
         entries = dict(working_snapshot.entries)
-        results = dict(working_snapshot.evaluation_results)
+        states = existing_states(working_snapshot)
         history = {
             address: list(events)
             for address, events in working_snapshot.evaluation_history.items()
         }
+        contracts: dict[str, EvaluationResultContract] = {}
+        operation_payloads: dict[str, dict[str, object]] = {}
         diagnostics: list[Diagnostic] = []
         changed: list[str] = []
-        registered_at = _utc_now()
+        registered_at = utc_now()
 
         for op in plan.actionable_operations:
             if op.action == ChangeAction.DELETE:
                 entries.pop(op.address, None)
-                results.pop(op.address, None)
+                states.pop(op.address, None)
                 history.pop(op.address, None)
                 changed.append(op.address)
                 continue
@@ -164,15 +96,18 @@ class AptlEvaluator(object):
                 status="ready",
             )
             changed.append(op.address)
-            if op.resource_type in _OBSERVABLE_RESOURCE_TYPES:
-                evaluation_diagnostics = _register_evaluation(
+            if op.resource_type in OBSERVABLE_RESOURCE_TYPES:
+                contract, evaluation_diagnostics = register_evaluation(
                     op.address,
                     op.payload,
                     registered_at,
-                    results,
+                    states,
                     history,
                 )
                 diagnostics.extend(evaluation_diagnostics)
+                if contract is not None:
+                    contracts[op.address] = contract
+                    operation_payloads[op.address] = dict(op.payload)
 
         if diagnostics:
             return ApplyResult(
@@ -181,6 +116,15 @@ class AptlEvaluator(object):
                 diagnostics=diagnostics,
             )
 
+        drive_evaluations(
+            plan,
+            working_snapshot,
+            operation_payloads,
+            states,
+            history,
+            contracts,
+        )
+        results = {address: state.to_payload() for address, state in states.items()}
         self._results = {address: dict(result) for address, result in results.items()}
         self._history = {
             address: [dict(event) for event in events] for address, events in history.items()
@@ -196,7 +140,7 @@ class AptlEvaluator(object):
         )
 
     def status(self) -> dict[str, object]:
-        """Return current evaluation status (registered, pending-execution runs)."""
+        """Return current evaluation status."""
         return {
             "backend": "aptl",
             "registered_evaluations": sorted(self._results),

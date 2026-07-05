@@ -6,7 +6,7 @@ module, so a drift in the clock-call count fails loudly via StopIteration.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -149,6 +149,47 @@ class TestWaitForService:
         assert result.ready is False
         # Should have checked at most once before timing out
         assert check_fn.call_count <= 1
+
+    def test_emits_progress_on_bounded_cadence_when_requested(self):
+        """Optional progress reports should name the service and elapsed timeout."""
+        from aptl.core.services import wait_for_service
+
+        check_fn = MagicMock(side_effect=[False, False, False, True])
+        progress = MagicMock()
+
+        result = wait_for_service(
+            check_fn=check_fn,
+            timeout=120,
+            interval=10,
+            service_name="Wazuh Indexer",
+            time_source=iter([0.0, 5.0, 20.0, 35.0, 45.0]).__next__,
+            sleep=lambda _seconds: None,
+            progress=progress,
+            progress_interval=30,
+        )
+
+        assert result.ready is True
+        assert progress.call_args_list == [
+            call("Readiness: Wazuh Indexer still waiting (5/120s)."),
+            call("Readiness: Wazuh Indexer still waiting (35/120s)."),
+        ]
+
+    def test_progress_is_silent_by_default(self):
+        """The progress hook is opt-in for programmatic callers."""
+        from aptl.core.services import wait_for_service
+
+        check_fn = MagicMock(side_effect=[False, True])
+
+        result = wait_for_service(
+            check_fn=check_fn,
+            timeout=60,
+            interval=5,
+            service_name="test-service",
+            time_source=iter([0.0, 5.0, 10.0]).__next__,
+            sleep=lambda _seconds: None,
+        )
+
+        assert result.ready is True
 
 
 class TestCheckIndexerReady:

@@ -17,8 +17,7 @@ import json
 import os
 import subprocess
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.curl_safe import basic_auth_header, curl_json as _curl_json
@@ -93,7 +92,7 @@ def collect_wazuh_alerts(
     end_iso: str,
     indexer_url: str = "https://localhost:9200",
     auth: tuple[str, str] = ("admin", "SecretPassword"),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Query Wazuh Indexer for all alerts in the time window.
 
     Uses scroll API for pagination (1000 docs/page).
@@ -111,7 +110,7 @@ def collect_wazuh_alerts(
         "sort": [{"@timestamp": "asc"}],
     }
 
-    all_hits: list[dict] = []
+    all_hits: list[dict[str, Any]] = []
     scroll_id = None
 
     try:
@@ -160,7 +159,7 @@ def collect_suricata_eve(
     start_iso: str,
     end_iso: str,
     backend: "DeploymentBackend",
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Read Suricata EVE JSON entries from the suricata container."""
     try:
         result = backend.container_exec(
@@ -206,7 +205,7 @@ def collect_thehive_cases(
     url: str = "https://localhost:9000",
     api_key: str = "",
     ca_cert_path: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Query TheHive API for cases/alerts created during the run.
 
     SEC-006: defaults to HTTPS verified against the lab-managed CA. An
@@ -256,7 +255,7 @@ def collect_misp_events(
     url: str = "https://localhost:8443",
     api_key: str = "",
     ca_cert_path: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Query MISP API for events correlated during the run.
 
     SEC-006: verifies TLS against the lab-managed CA by default. The
@@ -322,7 +321,7 @@ def collect_shuffle_executions(
     url: str = "https://localhost:3443",
     api_key: str = "",
     ca_cert_path: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Query Shuffle API for workflow executions during the run.
 
     SEC-006: hits the lab-CA-signed Shuffle frontend (3443) over HTTPS
@@ -402,7 +401,7 @@ def collect_container_logs(
 def collect_traces(
     trace_id: str,
     tempo_url: str | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch all spans for a trace from Grafana Tempo.
 
     Queries the Tempo HTTP API by trace ID and returns the spans
@@ -430,7 +429,7 @@ def collect_traces(
 
     # Tempo returns { batches: [ { resource: {...}, scopeSpans: [...] } ] }
     # or { resourceSpans: [...] } depending on version. Normalize to span list.
-    spans: list[dict] = []
+    spans: list[dict[str, Any]] = []
     if isinstance(result, dict):
         # Tempo v2 format: batches -> scopeSpans -> spans
         for batch in result.get("batches", result.get("resourceSpans", [])):

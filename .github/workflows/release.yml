@@ -1,0 +1,83 @@
+name: Release
+
+# Conventional-commit-driven release (ADR 0006 blueprint, adopted from
+# aces-scenario-packs). On every push to main, python-semantic-release inspects
+# the Conventional Commit messages since the last tag, computes the next SemVer,
+# creates the tag + GitHub Release (with generated notes), and builds the sdist
+# + wheel. It is tag-only — it never pushes a commit back to the protected main
+# branch. The job then attaches a CycloneDX SBOM and publishes to PyPI via OIDC
+# trusted publishing (no stored token).
+#
+# workflow_dispatch bootstraps the first release and is the manual override: run
+# it with force=minor once after the first dev->main promotion to cut v0.1.0.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force a bump when no releasable commits exist (patch|minor|major)"
+        required: false
+        default: ""
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write   # create the tag + GitHub Release
+      id-token: write   # OIDC trusted publishing to PyPI
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python Semantic Release (version + tag + GitHub Release + build)
+        id: release
+        uses: python-semantic-release/python-semantic-release@v10.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: ${{ github.event.inputs.force }}
+
+      - name: Generate CycloneDX SBOM
+        if: steps.release.outputs.released == 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl cyclonedx-bom
+          mkdir -p sbom
+          cyclonedx-py environment \
+            --output-format JSON \
+            --output-file sbom/aptl.cdx.json
+
+      - name: Attach SBOM to the GitHub Release
+        if: steps.release.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release upload "${TAG}" sbom/aptl.cdx.json --clobber
+
+      - name: Publish to PyPI (OIDC trusted publishing)
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+
+      - name: Attach distributions to the GitHub Release
+        if: steps.release.outputs.released == 'true'
+        uses: python-semantic-release/publish-action@v10.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.tag }}

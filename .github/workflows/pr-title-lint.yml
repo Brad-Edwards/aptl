@@ -1,0 +1,52 @@
+name: PR Title Lint
+
+# Repository-side guard against agent-branded PR titles (e.g. `[codex] ...`) and
+# a check that titles follow the conventional shape the release engine reads
+# (ADR 0006). Feature PRs are squash-merged, so the PR title becomes the single
+# commit on the branch — this is what feeds the version + release decision
+# python-semantic-release makes on main. A PR whose title is not a valid
+# conventional type cannot merge (make this a required check on dev and main),
+# so the release contract can't be bypassed or forgotten.
+#
+# The PR title is untrusted event data, so it is read from $GITHUB_EVENT_PATH by
+# the checker (never shell-interpolated), the token is read-only, and this uses
+# `pull_request` (never `pull_request_target`). There is no exemption for PRs
+# targeting `dev`.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title-guard:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the BASE ref, not the PR head, so the policy executable is the
+      # trusted already-merged copy. A PR that edits or removes
+      # tools/check_pr_title.py must not be able to weaken its own required
+      # check. The shared validator is still exercised against the PR's own code
+      # by the test suite in checks.yml.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate PR title
+        # The checker reads the title from $GITHUB_EVENT_PATH (set automatically
+        # by the runner). It is stdlib-only, so no dependency install is needed.
+        run: |
+          if [ ! -f tools/check_pr_title.py ]; then
+            echo "::notice::tools/check_pr_title.py is not on the base ref yet; skipping (bootstrap for the PR that introduces the guard). Enforcement is active for every subsequent PR."
+            exit 0
+          fi
+          python tools/check_pr_title.py

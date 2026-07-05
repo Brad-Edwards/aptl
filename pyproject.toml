@@ -1,12 +1,24 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "aptl"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Advanced Purple Team Lab CLI"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Brad Edwards" }]
+keywords = ["purple-team", "security", "cyber-range", "wazuh", "kali", "mcp", "aces"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Intended Audience :: Developers",
+]
 dependencies = [
     "typer>=0.12.0",
     "pydantic>=2.0.0",
@@ -18,8 +30,13 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
-    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@dev#subdirectory=implementations/python",
+    "aces-sdl>=0.3.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Brad-Edwards/aptl"
+Repository = "https://github.com/Brad-Edwards/aptl"
+Issues = "https://github.com/Brad-Edwards/aptl/issues"
 
 [project.scripts]
 aptl = "aptl.cli.main:app"
@@ -52,8 +69,39 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
+# Version source of truth = the git tag (ADR 0006). hatch-vcs turns the tag that
+# python-semantic-release creates into the built artifact's version; there is no
+# version string to hand-edit. The generated file is gitignored.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/aptl/_version.py"
+
+# Release automation (ADR 0006 blueprint, adopted from aces-scenario-packs):
+# python-semantic-release computes the next version from Conventional Commit
+# messages and creates the git tag. Tag-only (commit = false) so nothing is
+# pushed back to protected main; the changelog is emitted to the GitHub Release.
+[tool.semantic_release]
+tag_format = "v{version}"
+commit = false
+allow_zero_version = true
+major_on_zero = false
+build_command = "python -m pip install build && python -m build"
+
+[tool.semantic_release.branches.main]
+match = "main"
+
+# Map aptl's Keep-a-Changelog PR-title verbs to release levels so the version
+# actually bumps for them (PSR's default recognizes only feat/fix/perf). This
+# allowed set MUST stay in sync with CONVENTIONAL_TYPES in
+# tools/check_pr_title.py (asserted by tests/test_pr_title_guard.py); unmatched
+# types (chore/docs/refactor/test/ci/build) default to no release.
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "added", "changed", "removed", "deprecated", "fix", "perf", "fixed", "security", "revert", "chore", "docs", "refactor", "test", "ci", "build"]
+minor_tags = ["feat", "added", "changed", "removed", "deprecated"]
+patch_tags = ["fix", "perf", "fixed", "security", "revert"]
+other_allowed_tags = ["chore", "docs", "refactor", "test", "ci", "build"]
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

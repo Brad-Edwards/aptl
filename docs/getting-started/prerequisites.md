@@ -2,7 +2,8 @@
 
 ## Requirements
 
-- 8GB RAM, 20GB disk
+- RAM: 8GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20GB
+- 20GB+ disk
 - Docker Engine 20.10+
 - Docker Compose 2.0+
 - Python 3.11+ (for CLI)

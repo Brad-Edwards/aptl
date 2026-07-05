@@ -337,6 +337,10 @@ class DeploymentBackend(Protocol):
         """List network names whose names start with ``name_prefix``."""
         ...
 
+    def host_list_networks(self) -> list[str]:
+        """List every network name visible to the deployment backend."""
+        ...
+
     def host_inspect_network(self, name: str) -> dict[str, Any]:
         """Return parsed network metadata.
 

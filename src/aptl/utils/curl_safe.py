@@ -28,6 +28,7 @@ TLS posture (priority order):
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -108,6 +109,70 @@ def curl_json(
                 continue
             try:
                 os.unlink(path)
+            except OSError:
+                pass
+
+
+def curl_status(
+    url: str,
+    *,
+    auth: tuple[str, str] | None = None,
+    insecure: bool = False,
+    ca_cert_path: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT_SECONDS,
+) -> int | None:
+    """Issue an HTTP request via curl and return the response status code.
+
+    Unlike :func:`curl_json`, this does not use ``-f``, so 4xx/5xx
+    responses are reported with their real status rather than treated
+    as errors — this is the classification probe used by callers that
+    need to distinguish "not listening yet" from "listening but
+    rejecting credentials".
+
+    Basic-auth credentials, when provided via ``auth``, are written to
+    a 0600 temp file as a base64-encoded ``Authorization: Basic`` header
+    and passed to curl via ``-H @file`` rather than placed in argv
+    (ADR-029) — unlike ``curl_json``'s ``-u user:pass``, which is
+    visible in argv.
+
+    Returns ``None`` for: subprocess startup failures, command
+    timeouts, unparseable output, and curl's ``000`` sentinel (no HTTP
+    response received at all). Never raises.
+    """
+    cmd: list[str] = ["curl", "-s", "-o", os.devnull, "-w", "%{http_code}"]
+    if insecure:
+        cmd.append("-k")
+    elif ca_cert_path:
+        cmd += ["--cacert", ca_cert_path]
+
+    header_path: str | None = None
+    try:
+        if auth is not None:
+            token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+            header_path = _write_temp_0600(
+                "aptl-hdr-", f"Authorization: Basic {token}\n"
+            )
+            cmd += ["-H", "@" + header_path]
+
+        cmd.append(url)
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            log.warning("curl_safe: subprocess failed: %s", exc.__class__.__name__)
+            return None
+
+        stdout = result.stdout.strip()
+        if not stdout.isdigit():
+            return None
+        code = int(stdout)
+        return code if code > 0 else None
+    finally:
+        if header_path is not None:
+            try:
+                os.unlink(header_path)
             except OSError:
                 pass
 

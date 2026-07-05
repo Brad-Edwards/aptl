@@ -54,6 +54,7 @@ from aptl.core.lab_types import (
 )
 from aptl.core.services import (
     check_indexer_ready,
+    check_indexer_status,
     check_manager_api_ready,
     test_ssh_connection,
     wait_for_service,
@@ -1170,10 +1171,11 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
+    indexer_url = "https://localhost:9200"
     indexer_result = wait_for_service(
         check_fn=partial(
             check_indexer_ready,
-            url="https://localhost:9200",
+            url=indexer_url,
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
         ),
@@ -1183,22 +1185,51 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     )
     if not indexer_result.ready:
         # Indexer is the SIEM store — without it, detections never land.
-        # Lab is up but telemetry is degraded.
-        _emit_diagnostic(
-            ctx,
-            step="wait_for_services",
-            component="wazuh_indexer",
-            impact=DiagnosticImpact.TELEMETRY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Wazuh Indexer did not become ready within "
-                f"{int(indexer_result.elapsed_seconds)}s"
-            ),
-            operator_action=(
-                "Check indexer container logs; SIEM ingest will not work "
-                "until indexer is healthy"
-            ),
+        # Lab is up but telemetry is degraded. A second, one-shot
+        # classification probe tells apart "still not listening" from
+        # "listening but rejecting the configured credentials" (#623) —
+        # the latter means the persisted indexer volume's admin password
+        # no longer matches .env, which is a distinct, actionable state.
+        final_status = check_indexer_status(
+            url=indexer_url,
+            username=ctx.env.indexer_username,
+            password=ctx.env.indexer_password,
         )
+        if final_status in (401, 403):
+            _emit_diagnostic(
+                ctx,
+                step="wait_for_services",
+                component="wazuh_indexer",
+                impact=DiagnosticImpact.TELEMETRY,
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    f"Wazuh Indexer rejected the configured INDEXER_PASSWORD "
+                    f"(HTTP {final_status}) while its listener was responding"
+                ),
+                operator_action=(
+                    "The persisted wazuh-indexer-data volume likely still holds a "
+                    "previous admin password, so the changed .env credentials no "
+                    "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
+                    "reset the indexer security state, or restore the original "
+                    "INDEXER_PASSWORD in .env."
+                ),
+            )
+        else:
+            _emit_diagnostic(
+                ctx,
+                step="wait_for_services",
+                component="wazuh_indexer",
+                impact=DiagnosticImpact.TELEMETRY,
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    "Wazuh Indexer did not become ready within "
+                    f"{int(indexer_result.elapsed_seconds)}s"
+                ),
+                operator_action=(
+                    "Check indexer container logs; SIEM ingest will not work "
+                    "until indexer is healthy"
+                ),
+            )
 
     manager_result = wait_for_service(
         check_fn=partial(

@@ -26,7 +26,7 @@ gh pr create --base main --title "chore: release vX.Y.Z" --fill
 Review and merge that PR into `main` (a normal PR — satisfies branch protection).
 On merge, `.github/workflows/release.yml`:
 
-1. reads `__version__`; if `vX.Y.Z` isn't tagged yet, proceeds;
+1. reads `__version__`; proceeds only if `vX.Y.Z` isn't tagged yet **and** no uncollated `changelog.d/` fragments remain (a prepared release has collated them via `tools/release.py`) — so an ordinary merge never publishes a half-built version;
 2. tags `vX.Y.Z` (a tag, not a commit — no protected-branch push);
 3. builds sdist + wheel, generates a CycloneDX SBOM;
 4. publishes to PyPI via OIDC trusted publishing;

@@ -40,12 +40,21 @@ jobs:
             echo "::error::no __version__ in src/aptl/__init__.py" && exit 1
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          # A real release is always prepared by tools/release.py, which
+          # collates (consumes) the changelog.d fragments. Uncollated fragments
+          # still present => this is an ordinary merge (or the un-prepared first
+          # release), NOT a prepared release. Skip, so we never publish a version
+          # whose CHANGELOG section was never built (half-baked-release footgun).
+          pending="$(find changelog.d -maxdepth 1 -type f -name '*.md' ! -name '_*' | wc -l)"
           if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
             echo "release=false" >> "$GITHUB_OUTPUT"
             echo "v${version} already tagged: nothing to release."
+          elif [ "${pending}" -gt 0 ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "${pending} uncollated changelog fragment(s) pending: not a prepared release, skipping."
           else
             echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "v${version} is unreleased: will tag and publish."
+            echo "v${version} is unreleased and fragments are collated: will tag and publish."
           fi
 
   release:

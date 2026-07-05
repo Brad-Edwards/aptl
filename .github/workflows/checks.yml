@@ -214,12 +214,14 @@ jobs:
           node-version: '22'
       - name: pip-audit (Python dependencies) — blocking
         # Install the project so pip-audit sees aptl's real runtime
-        # dependency tree, not just pip-audit's own. No `|| true`: a known
-        # advisory fails the job.
+        # dependency tree, not just pip-audit's own. --skip-editable drops the
+        # editable aptl checkout itself (not a published PyPI release, so
+        # --strict would otherwise error on it as unauditable). No `|| true`:
+        # a known advisory in a real dependency fails the job.
         run: |
           python -m pip install --upgrade pip
           pip install -e . pip-audit
-          pip-audit --strict --progress-spinner=off
+          pip-audit --strict --skip-editable --progress-spinner=off
       - name: npm audit (JS/TS workspaces)
         run: |
           set +e

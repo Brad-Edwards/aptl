@@ -369,9 +369,16 @@ class TestCleanBootLab:
 
         monkeypatch.setattr(lab, "stop_lab", lambda **k: LabResult(success=True))
 
-        def fake_start(project_dir, *, skip_seed=False, scenario_path=None):
+        def fake_start(
+            project_dir,
+            *,
+            skip_seed=False,
+            scenario_path=None,
+            progress=None,
+        ):
             captured["skip_seed"] = skip_seed
             captured["scenario_path"] = scenario_path
+            captured["progress"] = progress
             return LabResult(success=True, outcome=StartupOutcome.READY)
 
         monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
@@ -379,7 +386,33 @@ class TestCleanBootLab:
         scenario = tmp_path / "scenario.yaml"
         clean_boot_lab(tmp_path, skip_seed=True, scenario_path=scenario)
 
-        assert captured == {"skip_seed": True, "scenario_path": scenario}
+        assert captured == {
+            "skip_seed": True,
+            "scenario_path": scenario,
+            "progress": None,
+        }
+
+    def test_clean_boot_forwards_progress_to_start(self, monkeypatch, tmp_path):
+        """Clean boot should let CLI callers keep the same progress stream."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult, StartupOutcome
+
+        progress = MagicMock()
+        captured = {}
+
+        monkeypatch.setattr(lab, "stop_lab", lambda **k: LabResult(success=True))
+
+        def fake_start(project_dir, **kwargs):
+            captured["progress"] = kwargs["progress"]
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
+
+        clean_boot_lab(tmp_path, progress=progress)
+
+        assert captured["progress"] is progress
+        progress.assert_any_call("Stopping the existing lab before clean boot.")
 
     def test_clean_boot_remove_volumes_false_honored(self, monkeypatch, tmp_path):
         """The cleanup policy is a knob: remove_volumes=False is forwarded."""
@@ -1040,6 +1073,23 @@ class TestOrchestrateLabStart:
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
         mocks["capture_snapshot"].assert_called_once()
+
+    def test_orchestrate_emits_progress_when_requested(self, mocker, tmp_path):
+        """A supplied progress callback should receive user-facing startup phases."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        self._patch_all_steps(mocker, tmp_path)
+        progress = MagicMock()
+
+        result = orchestrate_lab_start(tmp_path, progress=progress)
+
+        assert result.success is True
+        progress.assert_any_call("Loading lab configuration.")
+        progress.assert_any_call(
+            "Starting containers with Docker Compose. First startup can take "
+            "several minutes while images build."
+        )
+        progress.assert_any_call("Waiting for Wazuh services to become ready.")
 
     def test_orchestrates_selected_scenario_path(self, mocker, tmp_path):
         """Selected ACES SDL paths should reach the startup handoff."""

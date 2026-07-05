@@ -89,6 +89,11 @@ def _emit_lab_access_summary(project_dir: Path) -> None:
     typer.echo("    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027")
 
 
+def _emit_lab_start_progress(message: str) -> None:
+    """Print participant-facing startup progress."""
+    typer.echo(f"[lab start] {message}")
+
+
 def _confirm_destructive(skip_prompt: bool) -> bool:
     """Confirm a volume-destroying action; return False if the operator aborts.
 
@@ -199,12 +204,14 @@ def start(
             remove_volumes=True,
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
+            progress=_emit_lab_start_progress,
         )
     else:
         result = orchestrate_lab_start(
             project_dir,
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
+            progress=_emit_lab_start_progress,
         )
 
     _render_start_result(result)

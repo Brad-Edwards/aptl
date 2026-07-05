@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from aptl.core.deployment._compose_network_conflicts import (
+    _network_subnet_conflicts,
+    _planned_networks_to_create,
+)
 from aptl.core.deployment._compose_realization_networks import (
     _COMPOSE_NETWORK_LABEL,
     _COMPOSE_PROJECT_LABEL,
@@ -42,6 +46,12 @@ class ComposeRealizationNetworkMixin:
         if not realization.networks:
             return []
         managed_networks = set(self.host_list_lab_networks(self._project_name))
+        conflicts = self._realization_network_subnet_conflicts(
+            realization,
+            managed_networks,
+        )
+        if conflicts:
+            return conflicts
         failures: list[str] = []
         for network in realization.networks:
             match = _match_managed_network(
@@ -65,6 +75,38 @@ class ComposeRealizationNetworkMixin:
                     or f"Failed to create realized network {network.name}."
                 )
         return failures
+
+    def _realization_network_subnet_conflicts(
+        self,
+        realization: DeploymentRealizationSpec,
+        managed_networks: set[str],
+    ) -> list[str]:
+        """Return preflight failures for Docker subnet overlaps."""
+
+        planned_networks = _planned_networks_to_create(
+            realization,
+            managed_networks,
+            self._project_name,
+        )
+        if not planned_networks:
+            return []
+        existing_networks = self._host_network_inspection_details()
+        if not existing_networks:
+            return []
+        return [
+            failure
+            for network in planned_networks
+            for failure in _network_subnet_conflicts(network, existing_networks)
+        ]
+
+    def _host_network_inspection_details(self) -> list[dict[str, Any]]:
+        """Return inspectable Docker network details for overlap checks."""
+
+        return [
+            details
+            for name in self.host_list_networks()
+            if (details := self.host_inspect_network(name))
+        ]
 
     def _realization_network_reuse_failures(
         self,

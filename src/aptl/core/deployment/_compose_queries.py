@@ -172,6 +172,21 @@ class ComposeQueryMixin(object):
             if line.strip()
         ]
 
+    def host_list_networks(self) -> list[str]:
+        """List every Docker network visible to the backend daemon."""
+
+        result = self._run(
+            ["docker", "network", "ls", "--format", "{{.Name}}"],
+            timeout=_HOST_INVENTORY_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return []
+        return [
+            line.strip()
+            for line in result.stdout.splitlines()
+            if line.strip()
+        ]
+
     def host_inspect_network(self, name: str) -> dict[str, Any]:
         result = self._run(
             ["docker", "network", "inspect", name],

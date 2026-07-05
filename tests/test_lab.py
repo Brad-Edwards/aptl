@@ -2675,6 +2675,33 @@ class TestLabOrchestrationContracts:
             selected,
         ]
 
+    def test_start_containers_hints_for_stale_realization_networks(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        stale_error = (
+            "ACES runtime handoff failed: aptl.provisioner.backend-start-failed "
+            "at runtime.apply.provisioning: Existing network aptl_aptl-dmz "
+            "does not match realized network dmz-net: label "
+            "org.aptl.realization.network expected 'true', found ''."
+        )
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=LabResult(success=False, error=stale_error),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "Lab start failed:" in result.error
+        assert "Run `aptl lab stop` and retry" in result.error
+        assert "`aptl lab stop -v`" in result.error
+
     # -- ssh_key_is_ready --------------------------------------------
 
     def test_test_ssh_without_ssh_key_raises_violation(self, tmp_path):

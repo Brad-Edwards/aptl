@@ -1819,6 +1819,11 @@ class TestStartupClassificationWiring:
     def test_wait_for_services_indexer_timeout_emits_telemetry_warning(
         self, tmp_path, mocker
     ):
+        """Generic timeout path: the classification probe also got no
+        HTTP response at all, so the diagnostic stays the plain
+        "did not become ready" message (issue #623 added a sibling
+        branch for the 401/403 stale-credential case; this covers the
+        pre-existing "still not listening" case)."""
         from aptl.core.lab import _step_wait_for_services
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
         from aptl.core.services import ServiceResult
@@ -1832,6 +1837,7 @@ class TestStartupClassificationWiring:
                 ServiceResult(ready=True, elapsed_seconds=12.0),
             ],
         )
+        mocker.patch("aptl.core.lab.check_indexer_status", return_value=None)
 
         result = _step_wait_for_services(ctx)
         assert result is None
@@ -1841,8 +1847,89 @@ class TestStartupClassificationWiring:
         assert indexer_diags[0].impact is DiagnosticImpact.TELEMETRY
         assert indexer_diags[0].severity is DiagnosticSeverity.WARNING
         assert indexer_diags[0].step == "wait_for_services"
+        assert "did not become ready" in indexer_diags[0].message
+        assert "HTTP" not in indexer_diags[0].message
         manager_diags = [d for d in ctx.diagnostics if d.component == "wazuh_manager"]
         assert manager_diags == []
+
+    def test_wait_for_services_indexer_stale_credentials_emits_401_diagnostic(
+        self, tmp_path, mocker
+    ):
+        """When the indexer's listener is up but rejects the configured
+        .env credentials (HTTP 401), the diagnostic must call that out
+        specifically and point the operator at `aptl lab stop -v`
+        recovery instead of the generic timeout message (issue #623)."""
+        from aptl.core.lab import _step_wait_for_services, derive_startup_outcome
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupOutcome,
+        )
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            side_effect=[
+                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
+                ServiceResult(ready=True, elapsed_seconds=12.0),
+            ],
+        )
+        mock_status = mocker.patch(
+            "aptl.core.lab.check_indexer_status", return_value=401
+        )
+
+        result = _step_wait_for_services(ctx)
+        assert result is None
+
+        mock_status.assert_called_once_with(
+            url="https://localhost:9200",
+            username=ctx.env.indexer_username,
+            password=ctx.env.indexer_password,
+        )
+
+        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
+        assert len(indexer_diags) == 1
+        diag = indexer_diags[0]
+        assert diag.impact is DiagnosticImpact.TELEMETRY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert diag.step == "wait_for_services"
+        assert "HTTP 401" in diag.message
+        assert "aptl lab stop -v" in diag.operator_action
+        # Never the password -- only the env KEY name and the int status.
+        assert ctx.env.indexer_password not in diag.message
+        assert ctx.env.indexer_password not in diag.operator_action
+
+        assert (
+            derive_startup_outcome(ctx.diagnostics, fatal=False)
+            is StartupOutcome.DEGRADED_USABLE
+        )
+
+    def test_wait_for_services_indexer_stale_credentials_403_also_flags(
+        self, tmp_path, mocker
+    ):
+        """403 is the other "listening but rejected" status some OpenSearch
+        security configurations return instead of 401."""
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            side_effect=[
+                ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
+                ServiceResult(ready=True, elapsed_seconds=12.0),
+            ],
+        )
+        mocker.patch("aptl.core.lab.check_indexer_status", return_value=403)
+
+        result = _step_wait_for_services(ctx)
+        assert result is None
+
+        indexer_diags = [d for d in ctx.diagnostics if d.component == "wazuh_indexer"]
+        assert len(indexer_diags) == 1
+        assert "HTTP 403" in indexer_diags[0].message
+        assert "aptl lab stop -v" in indexer_diags[0].operator_action
 
     def test_wait_for_services_manager_timeout_emits_telemetry_warning(
         self, tmp_path, mocker

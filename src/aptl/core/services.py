@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.utils.curl_safe import curl_status
 from aptl.utils.logging import get_logger
 
 log = get_logger("services")
@@ -89,10 +90,14 @@ def wait_for_service(
         sleep(interval)
 
 
-def check_indexer_ready(url: str, username: str, password: str) -> bool:
-    """Check if the Wazuh Indexer is responding to HTTPS requests.
+def check_indexer_status(url: str, username: str, password: str) -> int | None:
+    """Return the Wazuh Indexer's HTTP status, or ``None`` for no response.
 
-    Uses curl to make an insecure HTTPS request (self-signed certs).
+    This is the classification probe: it distinguishes "not listening
+    yet" (``None``) from "listening but rejecting the configured
+    credentials" (401/403), which a plain readiness boolean cannot.
+    Credentials are passed via a 0600 header temp file, never argv
+    (ADR-029) — see ``aptl.utils.curl_safe.curl_status``.
 
     Args:
         url: The indexer URL (e.g., ``https://localhost:9200``).
@@ -100,23 +105,28 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
         password: Authentication password.
 
     Returns:
-        True if the indexer responds successfully, False otherwise.
+        The HTTP status code, or ``None`` if the indexer gave no HTTP
+        response at all (transport failure, timeout, connection refused).
     """
-    try:
-        result = subprocess.run(
-            [
-                "curl", "-k", "-s", "-f",
-                url,
-                "-u", f"{username}:{password}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
-        log.debug("Indexer check failed: %s", exc)
-        return False
+    return curl_status(url, auth=(username, password), insecure=True, timeout=10)
+
+
+def check_indexer_ready(url: str, username: str, password: str) -> bool:
+    """Check if the Wazuh Indexer is responding to HTTPS requests.
+
+    Delegates to :func:`check_indexer_status`; ready means a 2xx status
+    was returned for the given credentials.
+
+    Args:
+        url: The indexer URL (e.g., ``https://localhost:9200``).
+        username: Authentication username.
+        password: Authentication password.
+
+    Returns:
+        True if the indexer responds with a 2xx status, False otherwise.
+    """
+    status = check_indexer_status(url, username, password)
+    return status is not None and 200 <= status < 300
 
 
 def check_manager_api_ready(container_name: str) -> bool:

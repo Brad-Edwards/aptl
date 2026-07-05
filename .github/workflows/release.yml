@@ -10,6 +10,10 @@ name: Release
 #
 # workflow_dispatch bootstraps the first release and is the manual override: run
 # it with force=minor once after the first dev->main promotion to cut v0.1.0.
+#
+# Third-party actions are pinned to full commit SHAs (not tags/branches): this
+# job holds `id-token: write`, so a moved ref could mint the PyPI OIDC token.
+# Dependabot (.github/dependabot.yml) keeps the pins patched.
 on:
   push:
     branches:
@@ -35,18 +39,18 @@ jobs:
       id-token: write   # OIDC trusted publishing to PyPI
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
       - name: Python Semantic Release (version + tag + GitHub Release + build)
         id: release
-        uses: python-semantic-release/python-semantic-release@v10.6.0
+        uses: python-semantic-release/python-semantic-release@37a30a7987cfebb6d49240bf1c4e9cd9817d0673 # v10.6.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           force: ${{ github.event.inputs.force }}
@@ -71,13 +75,13 @@ jobs:
 
       - name: Publish to PyPI (OIDC trusted publishing)
         if: steps.release.outputs.released == 'true'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           packages-dir: dist
 
       - name: Attach distributions to the GitHub Release
         if: steps.release.outputs.released == 'true'
-        uses: python-semantic-release/publish-action@v10.6.0
+        uses: python-semantic-release/publish-action@4f3c5d7f5caddf6535050c4bcb55f033f000a7dd # v10.6.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.release.outputs.tag }}

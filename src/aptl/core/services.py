@@ -10,9 +10,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.utils.curl_safe import curl_status
 from aptl.utils.logging import get_logger
 
 log = get_logger("services")
+
+ProgressCallback = Callable[[str], None]
+_PROGRESS_INTERVAL_SECONDS = 30
 
 
 @dataclass
@@ -32,6 +36,7 @@ def wait_for_service(
     *,
     time_source: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    progress: ProgressCallback | None = None,
 ) -> ServiceResult:
     """Poll a service until it becomes ready or timeout is exceeded.
 
@@ -44,6 +49,7 @@ def wait_for_service(
         time_source: Monotonic clock, injectable so tests drive the deadline
             with an explicit value sequence instead of patching the module.
         sleep: Sleep function, injectable so tests don't actually block.
+        progress: Optional callback for participant-facing progress updates.
 
     Returns:
         ServiceResult indicating whether the service became ready and
@@ -51,6 +57,8 @@ def wait_for_service(
     """
     start = time_source()
     deadline = start + timeout
+    next_progress_elapsed = 0.0
+    bounded_progress_interval = max(_PROGRESS_INTERVAL_SECONDS, interval)
 
     log.info("Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval)
 
@@ -64,8 +72,14 @@ def wait_for_service(
             log.debug("%s check raised %s: %s", service_name, type(exc).__name__, exc)
 
         now = time_source()
+        elapsed = max(0.0, now - start)
+        if progress is not None and elapsed >= next_progress_elapsed:
+            progress(
+                f"Readiness: {service_name} still waiting "
+                f"({int(elapsed)}/{timeout}s)."
+            )
+            next_progress_elapsed = elapsed + bounded_progress_interval
         if now >= deadline:
-            elapsed = now - start
             log.warning("%s timed out after %.1fs", service_name, elapsed)
             return ServiceResult(
                 ready=False,
@@ -76,10 +90,14 @@ def wait_for_service(
         sleep(interval)
 
 
-def check_indexer_ready(url: str, username: str, password: str) -> bool:
-    """Check if the Wazuh Indexer is responding to HTTPS requests.
+def check_indexer_status(url: str, username: str, password: str) -> int | None:
+    """Return the Wazuh Indexer's HTTP status, or ``None`` for no response.
 
-    Uses curl to make an insecure HTTPS request (self-signed certs).
+    This is the classification probe: it distinguishes "not listening
+    yet" (``None``) from "listening but rejecting the configured
+    credentials" (401/403), which a plain readiness boolean cannot.
+    Credentials are passed via a 0600 header temp file, never argv
+    (ADR-029) — see ``aptl.utils.curl_safe.curl_status``.
 
     Args:
         url: The indexer URL (e.g., ``https://localhost:9200``).
@@ -87,23 +105,28 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
         password: Authentication password.
 
     Returns:
-        True if the indexer responds successfully, False otherwise.
+        The HTTP status code, or ``None`` if the indexer gave no HTTP
+        response at all (transport failure, timeout, connection refused).
     """
-    try:
-        result = subprocess.run(
-            [
-                "curl", "-k", "-s", "-f",
-                url,
-                "-u", f"{username}:{password}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
-        log.debug("Indexer check failed: %s", exc)
-        return False
+    return curl_status(url, auth=(username, password), insecure=True, timeout=10)
+
+
+def check_indexer_ready(url: str, username: str, password: str) -> bool:
+    """Check if the Wazuh Indexer is responding to HTTPS requests.
+
+    Delegates to :func:`check_indexer_status`; ready means a 2xx status
+    was returned for the given credentials.
+
+    Args:
+        url: The indexer URL (e.g., ``https://localhost:9200``).
+        username: Authentication username.
+        password: Authentication password.
+
+    Returns:
+        True if the indexer responds with a 2xx status, False otherwise.
+    """
+    status = check_indexer_status(url, username, password)
+    return status is not None and 200 <= status < 300
 
 
 def check_manager_api_ready(container_name: str) -> bool:

@@ -70,6 +70,32 @@ must render the structured diagnostics. The implementation must characterize
 the current live behavior before changing classifications so existing
 "non-critical" steps are not silently promoted or demoted.
 
+### Amendment: Persisted Wazuh Credential Mismatch
+
+Wazuh Indexer authentication readiness crosses two existing states: the current
+run's intended credentials from `.env`/`EnvVars`, and the persisted OpenSearch
+security state inside the Compose-managed `wazuh-indexer-data` volume. Docker
+health only proves that the HTTP listener responds; it is not proof that the
+current `.env` credentials match the live security database.
+
+When the indexer auth probe fails with HTTP 401 while the indexer container is
+running/healthy, lab startup should emit a specific structured diagnostic on
+the existing `wait_for_services/wazuh_indexer` surface. The operator action
+should point to the existing clean-state recovery path (`aptl lab stop -v` or
+`aptl lab start --clean`) rather than introduce a second volume-reset workflow.
+The normal start path must not mutate the persisted Wazuh security database,
+rewrite `internal_users.yml`, or delete volumes to make `.env` and the old
+volume agree.
+
+Any probe that handles `.env` credentials must satisfy ADR-029: no password in
+process argv, logs, exception text, API envelopes, or diagnostics. If the
+existing readiness helper cannot distinguish HTTP status safely, extend the
+shared readiness / curl-safe boundary instead of adding one-off raw `curl`
+subprocesses. If a future credential fingerprint is stored to warn before live
+startup, it must be advisory, non-reversible, versioned service metadata under
+ignored state (for example `.aptl/`) and never a replacement for the live auth
+probe.
+
 ## Guardrails
 
 - Keep lab-start orchestration in `core.lab` as a flat sequence of `_step_*`

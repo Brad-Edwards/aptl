@@ -7,7 +7,7 @@ We test our CLI wiring, not typer internals.
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -214,6 +214,7 @@ class TestLabStartCommand:
             tmp_path,
             skip_seed=False,
             scenario_path=None,
+            progress=ANY,
         )
 
     def test_start_accepts_catalog_scenario_id(self, runner, mocker, tmp_path):
@@ -246,6 +247,7 @@ class TestLabStartCommand:
             tmp_path,
             skip_seed=False,
             scenario_path=selected,
+            progress=ANY,
         )
 
     def test_start_accepts_explicit_scenario_path(self, runner, mocker, tmp_path):
@@ -285,7 +287,28 @@ class TestLabStartCommand:
             tmp_path,
             skip_seed=False,
             scenario_path=selected,
+            progress=ANY,
         )
+
+    def test_start_prints_progress_updates(self, runner, mocker):
+        """The CLI should surface progress emitted by the startup path."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartupOutcome
+
+        def fake_orchestrate(_project_dir, **kwargs):
+            kwargs["progress"]("Starting containers with Docker Compose.")
+            return LabResult(success=True, outcome=StartupOutcome.READY)
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            side_effect=fake_orchestrate,
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "[lab start] Starting containers with Docker Compose." in result.stdout
 
     def test_start_rejects_both_scenario_selectors(self, runner, mocker, tmp_path):
         """Catalog id and explicit path selectors are mutually exclusive."""
@@ -335,6 +358,7 @@ class TestLabStartCommand:
             remove_volumes=True,
             skip_seed=False,
             scenario_path=None,
+            progress=ANY,
         )
 
     def test_start_clean_aborts_without_confirmation(self, runner, mocker, tmp_path):

@@ -100,6 +100,8 @@ def _looks_like_stale_realization_network_error(error: str) -> bool:
 
 
 def _lab_start_failure_error(error: str) -> str:
+    """Build the CLI-visible lab-start failure message with recovery hints."""
+
     message = f"Lab start failed: {error}"
     if _looks_like_stale_realization_network_error(error):
         return f"{message}\n{_STALE_NETWORK_RECOVERY_HINT}"

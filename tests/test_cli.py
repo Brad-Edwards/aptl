@@ -72,6 +72,13 @@ class TestLabCommands:
         result = runner.invoke(app, ["lab", "status", "--help"])
         assert result.exit_code == 0
 
+    def test_lab_info_exists(self, runner):
+        """aptl lab info should be a valid command."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["lab", "info", "--help"])
+        assert result.exit_code == 0
+
     def test_lab_continuity_audit_exists(self, runner):
         """aptl lab continuity-audit should be a valid command."""
         from aptl.cli.main import app
@@ -140,6 +147,30 @@ class TestLabStartCommand:
 
         assert result.exit_code == 0
         mock_orchestrate.assert_called_once()
+        assert "Credentials file: .env" in result.stdout
+        assert "Wazuh Dashboard: https://localhost:443" in result.stdout
+        assert "see INDEXER_PASSWORD in .env" in result.stdout
+
+    def test_lab_info_prints_access_summary(self, runner, tmp_path):
+        """lab info should reprint access URLs and credential locations."""
+        from aptl.cli.main import app
+
+        (tmp_path / ".env").touch()
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
+        assert "Grafana: http://localhost:3100" in result.stdout
+
+    def test_lab_info_fails_without_env(self, runner, tmp_path):
+        """lab info should tell users to start the lab before .env exists."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 1
+        assert "run `aptl lab start` first" in result.stderr
 
     def test_start_handles_failure_gracefully(self, runner, mocker):
         """start command should exit 1 and show error on failure.

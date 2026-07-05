@@ -15,6 +15,9 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("services")
 
+ProgressCallback = Callable[[str], None]
+_PROGRESS_INTERVAL_SECONDS = 30
+
 
 @dataclass
 class ServiceResult:
@@ -33,6 +36,7 @@ def wait_for_service(
     *,
     time_source: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    progress: ProgressCallback | None = None,
 ) -> ServiceResult:
     """Poll a service until it becomes ready or timeout is exceeded.
 
@@ -45,6 +49,7 @@ def wait_for_service(
         time_source: Monotonic clock, injectable so tests drive the deadline
             with an explicit value sequence instead of patching the module.
         sleep: Sleep function, injectable so tests don't actually block.
+        progress: Optional callback for participant-facing progress updates.
 
     Returns:
         ServiceResult indicating whether the service became ready and
@@ -52,6 +57,8 @@ def wait_for_service(
     """
     start = time_source()
     deadline = start + timeout
+    next_progress_elapsed = 0.0
+    bounded_progress_interval = max(_PROGRESS_INTERVAL_SECONDS, interval)
 
     log.info("Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval)
 
@@ -65,8 +72,14 @@ def wait_for_service(
             log.debug("%s check raised %s: %s", service_name, type(exc).__name__, exc)
 
         now = time_source()
+        elapsed = max(0.0, now - start)
+        if progress is not None and elapsed >= next_progress_elapsed:
+            progress(
+                f"Readiness: {service_name} still waiting "
+                f"({int(elapsed)}/{timeout}s)."
+            )
+            next_progress_elapsed = elapsed + bounded_progress_interval
         if now >= deadline:
-            elapsed = now - start
             log.warning("%s timed out after %.1fs", service_name, elapsed)
             return ServiceResult(
                 ready=False,

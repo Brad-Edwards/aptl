@@ -4,7 +4,10 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "aptl"
+      "package-name": "aptl",
+      "extra-files": [
+        "src/aptl/__init__.py"
+      ]
     }
   }
 }

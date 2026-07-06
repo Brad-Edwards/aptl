@@ -182,7 +182,7 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     try:
         from importlib.metadata import PackageNotFoundError, version
 
-        versions.aptl_version = version("aptl")
+        versions.aptl_version = version("aptl-labs")
     except PackageNotFoundError:
         versions.aptl_version = "dev"
 

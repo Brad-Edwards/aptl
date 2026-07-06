@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "aptl"
+name = "aptl-labs"
 version = "3.0.10"
 description = "Advanced Purple Team Lab CLI"
 readme = "README.md"

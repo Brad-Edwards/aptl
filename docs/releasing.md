@@ -24,6 +24,9 @@ Nobody runs a script, hand-edits the version, or edits `CHANGELOG.md`.
    checks enforced on the release PR).
 3. Merging tags `vX.Y.Z` and cuts the GitHub Release; the `publish` job then
    builds the sdist + wheel, generates an SBOM, and publishes to PyPI via OIDC.
+4. A `main`→`dev` **back-merge PR** is then opened automatically (main now has
+   the version bump + `CHANGELOG.md`). **Admin-merge it** (one click — dev's
+   required checks don't run on a bot-opened PR) to keep `dev` current.
 
 ## First release (one-time bootstrap)
 

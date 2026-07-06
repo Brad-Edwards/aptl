@@ -81,6 +81,7 @@ nav:
     - Enterprise Infrastructure: architecture/enterprise-infrastructure.md
     - RNG-001 Ephemeral Environments Preflight: architecture/rng-001-ephemeral-environments-preflight.md
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
+    - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md

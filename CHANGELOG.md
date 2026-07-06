@@ -9,6 +9,13 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.1.1](https://github.com/Brad-Edwards/aptl/compare/v4.1.0...v4.1.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* drop removed --workers flag from web-api container CMD ([#664](https://github.com/Brad-Edwards/aptl/issues/664)) ([8717e6a](https://github.com/Brad-Edwards/aptl/commit/8717e6a81e4eb6369b8b9ff9f35163f5e546115c))
+
 ## [4.1.0](https://github.com/Brad-Edwards/aptl/compare/v4.0.1...v4.1.0) (2026-07-06)
 
 

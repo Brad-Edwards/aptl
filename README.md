@@ -19,7 +19,7 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-pipx install aptl          # the released CLI, isolated in its own environment
+pipx install aptl-labs          # the released CLI, isolated in its own environment
 aptl lab start
 ```
 

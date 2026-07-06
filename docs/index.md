@@ -7,7 +7,7 @@ Docker-based purple team lab: Wazuh SIEM + enterprise infrastructure + Kali + AI
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-pipx install aptl
+pipx install aptl-labs
 aptl lab start
 ```
 

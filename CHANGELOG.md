@@ -9,6 +9,18 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.1.0](https://github.com/Brad-Edwards/aptl/compare/v4.0.1...v4.1.0) (2026-07-06)
+
+
+### Features
+
+* bundle lab assets so pipx install runs a lab without a clone ([#660](https://github.com/Brad-Edwards/aptl/issues/660)) ([00fe44b](https://github.com/Brad-Edwards/aptl/commit/00fe44bd9ddc33744648aeb22b76224162d39d5b))
+
+
+### Bug Fixes
+
+* correct grc.boundaries surfaces to GC adapter vocabulary ([#644](https://github.com/Brad-Edwards/aptl/issues/644)) ([471f381](https://github.com/Brad-Edwards/aptl/commit/471f381bbffd48ff623b9cd69f50900d5eb5f9e9)), closes [#634](https://github.com/Brad-Edwards/aptl/issues/634)
+
 ## [4.0.1](https://github.com/Brad-Edwards/aptl/compare/v4.0.0...v4.0.1) (2026-07-06)
 
 

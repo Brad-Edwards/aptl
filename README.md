@@ -16,27 +16,35 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 
 ## Quick Start
 
+Install the released CLI and materialize a lab, no clone required:
+
 ```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
 pipx install aptl-labs          # the released CLI, isolated in its own environment
+aptl lab init my-lab            # materialize the lab assets into ./my-lab
+cd my-lab
 aptl lab start
 ```
 
-You still clone the repo when you install the published package: `aptl lab
-start` reads the lab's Compose topology, scenarios, and config templates from
-the checkout. [pipx](https://pipx.pypa.io/) installs the CLI into its own
-virtualenv, so the system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
+`aptl lab init <dir>` copies the bundled lab assets (the Compose topology,
+scenarios, config templates, and container build contexts) out of the
+installed package into `<dir>`, which becomes your lab project directory. The
+published wheel ships those assets, so a PyPI install alone can run a lab.
+[pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
+system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
 ([PEP 668](https://peps.python.org/pep-0668/)) never applies. Install pipx with
 `sudo apt install pipx` if you do not have it.
 
-To run from source instead (for development), replace the `pipx` line with a
+To run from source instead (for development), clone the repo and use a
 virtualenv editable install (the `python3 -m venv` step needs `python3-venv` on
-Debian/Ubuntu):
+Debian/Ubuntu). The checkout is itself the project directory, so no `lab init`
+is needed:
 
 ```bash
+git clone https://github.com/Brad-Edwards/aptl.git
+cd aptl
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
+aptl lab start
 ```
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
@@ -117,7 +125,7 @@ flowchart TD
     Scenario -.->|logs / telemetry| SOC
 ```
 
-The scenario environment is whatever the SDL scenario defines—the default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+The scenario environment is whatever the SDL scenario defines. The default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
 
 ## Scenarios
 

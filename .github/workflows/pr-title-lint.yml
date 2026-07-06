@@ -1,23 +1,23 @@
 name: PR Title Lint
 
-# Repository-side guard against agent-branded PR titles (e.g. `[codex] ...`) and
-# a check that titles follow the conventional shape the release engine reads
-# (ADR 0006). Feature PRs are squash-merged, so the PR title becomes the single
-# commit on the branch — this is what feeds the version + release decision
-# python-semantic-release makes on main. A PR whose title is not a valid
-# conventional type cannot merge (make this a required check on dev and main),
-# so the release contract can't be bypassed or forgotten.
+# Repository-side guard on feature-PR titles: bans agent-branded prefixes
+# (e.g. `[codex] ...`) and requires a Conventional Commit title. Feature PRs are
+# squash-merged, so the title becomes the commit release-please reads on main to
+# compute the version + changelog. Make this a required check on `dev` only.
 #
-# The PR title is untrusted event data, so it is read from $GITHUB_EVENT_PATH by
-# the checker (never shell-interpolated), the token is read-only, and this uses
-# `pull_request` (never `pull_request_target`). There is no exemption for PRs
-# targeting `dev`. Actions are pinned to full commit SHAs.
+# It runs ONLY on PRs targeting `dev`. A `dev`->`main` promotion PR carries a
+# non-conventional (merge/promotion) title and would always fail this check, so
+# `main` is intentionally not gated — release-please reads the underlying feature
+# commits, not the promotion PR title.
+#
+# The PR title is untrusted event data, read from $GITHUB_EVENT_PATH by the
+# checker (never shell-interpolated), the token is read-only, and this uses
+# `pull_request` (never `pull_request_target`). Actions are pinned to commit SHAs.
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
     branches:
       - dev
-      - main
 
 permissions:
   contents: read

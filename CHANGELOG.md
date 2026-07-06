@@ -9,6 +9,13 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.0.1](https://github.com/Brad-Edwards/aptl/compare/v4.0.0...v4.0.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* publish under the aptl-labs distribution name ([#651](https://github.com/Brad-Edwards/aptl/issues/651)) ([8b9174a](https://github.com/Brad-Edwards/aptl/commit/8b9174a90f8be2677f07f4278a21a1e47fd912ae))
+
 ## [4.0.0](https://github.com/Brad-Edwards/aptl/compare/v3.0.10...v4.0.0) (2026-07-06)
 
 

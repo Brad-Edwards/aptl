@@ -237,6 +237,28 @@ def test_materialize_from_checkout_excludes_secrets(
     assert not list(target.rglob("node_modules"))
 
 
+def test_materialize_from_bundle_skips_pip_compiled_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pip byte-compiles the installed bundle; materialize must not copy .pyc."""
+    bundle = tmp_path / "pkg" / "_labdata"
+    (bundle / "src" / "aptl" / "__pycache__").mkdir(parents=True)
+    (bundle / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (bundle / "src" / "aptl" / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    (bundle / "src" / "aptl" / "__pycache__" / "mod.cpython-312.pyc").write_text(
+        "", encoding="utf-8"
+    )
+    monkeypatch.setattr(assets, "resolve_asset_source", lambda: (bundle, True))
+
+    target = tmp_path / "lab"
+    materialize(target)
+
+    assert (target / "docker-compose.yml").is_file()
+    assert (target / "src" / "aptl" / "mod.py").is_file()
+    assert not list(target.rglob("*.pyc"))
+    assert not list(target.rglob("__pycache__"))
+
+
 def test_real_repo_git_selection_ships_no_secrets() -> None:
     """The real repository's tracked asset set must never include secrets."""
     tracked = assets._git_tracked(REPO_ROOT)

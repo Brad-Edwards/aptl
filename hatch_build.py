@@ -23,7 +23,9 @@ itself only contains tracked files, so walking it yields the same set.
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -61,6 +63,10 @@ class CustomBuildHook(BuildHookInterface):
 
     PLUGIN_NAME = "custom"
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._staging_dir: Path | None = None
+
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
         # Editable installs (`pip install -e`) redirect imports to the source
         # tree via a .pth; they must not materialize the bundle into
@@ -79,11 +85,28 @@ class CustomBuildHook(BuildHookInterface):
         # the lab bundle into their wheel (issue #659 review).
         if not (root / _DISTRIBUTION_MARKER).is_file():
             return
+        # Stage assets into a temp dir so their *source* paths differ from the
+        # package's own files. hatchling dedupes force-include by source path,
+        # so mapping the real src/aptl/** files straight into aptl/_labdata
+        # would shadow the standard packages=["src/aptl"] mapping and drop the
+        # actual `aptl` package from the wheel (issue #659: `pipx install`
+        # produced a wheel with only aptl/_labdata and no aptl.cli/aptl.core).
+        # Staging keeps both mappings alive; finalize() removes the temp dir.
+        staging = Path(tempfile.mkdtemp(prefix="aptl-labdata-"))
+        self._staging_dir = staging
         force_include: dict[str, str] = build_data.setdefault("force_include", {})
         for rel in self._iter_asset_files(root):
-            source = root / rel
-            target = f"{_LABDATA_PREFIX}/{rel.as_posix()}"
-            force_include[str(source)] = target
+            staged = staging / rel
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / rel, staged)
+            force_include[str(staged)] = f"{_LABDATA_PREFIX}/{rel.as_posix()}"
+
+    def finalize(
+        self, version: str, build_data: dict[str, Any], artifact_path: str
+    ) -> None:
+        if self._staging_dir is not None:
+            shutil.rmtree(self._staging_dir, ignore_errors=True)
+            self._staging_dir = None
 
     def _iter_asset_files(self, root: Path) -> Iterator[Path]:
         tracked = self._git_tracked(root)

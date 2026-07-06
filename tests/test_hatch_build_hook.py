@@ -10,10 +10,12 @@ its exclusion of secrets) in the fast suite without a full wheel build.
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
-import types
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -96,9 +98,23 @@ def test_initialize_maps_assets_under_labdata(tmp_path: Path) -> None:
     assert "aptl/_labdata/containers/kali/Dockerfile" in targets
     assert not any("soc_certs" in t for t in targets)
     assert not any(t.endswith(".pyc") for t in targets)
-    # Sources are absolute paths inside the given root.
+    # Every target lives under aptl/_labdata/: none may collide with a real
+    # package path (e.g. aptl/cli/main.py), which would shadow the standard
+    # packages mapping and drop the package from the wheel (issue #659).
+    assert all(t.startswith("aptl/_labdata/") for t in targets)
+    # Sources are staged copies outside the project root (so hatchling does not
+    # dedupe them against the package's own src/aptl files by source path).
+    staging_dir = hook._staging_dir
+    assert staging_dir is not None
     for source in force_include:
-        assert str(tmp_path) in source
+        assert Path(source).is_file()
+        assert str(tmp_path) not in source
+        assert str(staging_dir) in source
+
+    # finalize() removes the staging directory.
+    hook.finalize("0", build_data, "unused.whl")
+    assert not staging_dir.exists()
+    assert hook._staging_dir is None
 
 
 def test_initialize_skips_minimal_context(tmp_path: Path) -> None:
@@ -136,3 +152,56 @@ def test_real_repo_git_selection_is_clean() -> None:
         assert "soc_certs" not in path
         assert "lab-ssh" not in path
         assert "wazuh_indexer_ssl_certs" not in path
+
+
+def _find_build_tool() -> list[str] | None:
+    """Return an argv prefix that builds a wheel, or None if unavailable."""
+    if shutil.which("uv"):
+        return ["uv", "build", "--wheel", "--out-dir"]
+    try:
+        import build  # noqa: F401
+    except ImportError:
+        return None
+    return [sys.executable, "-m", "build", "--wheel", "--outdir"]
+
+
+@pytest.mark.integration
+def test_built_wheel_has_both_package_and_bundle(tmp_path: Path) -> None:
+    """A real wheel build must ship the aptl package AND the lab bundle.
+
+    Regression guard for issue #659: force-including src/aptl into
+    aptl/_labdata shadowed the packages=["src/aptl"] mapping (hatchling
+    dedupes by source path), producing a wheel with only aptl/_labdata and
+    no importable aptl package. Only a real build catches this.
+    """
+    import subprocess
+    import zipfile
+
+    tool = _find_build_tool()
+    if tool is None:
+        pytest.skip("no wheel build tool (uv/build) available")
+
+    outdir = tmp_path / "dist"
+    subprocess.run(
+        [*tool, str(outdir)],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+    )
+    wheels = list(outdir.glob("*.whl"))
+    assert wheels, "no wheel produced"
+    names = zipfile.ZipFile(wheels[0]).namelist()
+
+    # Real, importable package.
+    assert "aptl/__init__.py" in names
+    assert "aptl/cli/main.py" in names
+    assert "aptl/core/assets.py" in names
+    # Lab bundle, secret-free.
+    assert "aptl/_labdata/docker-compose.yml" in names
+    assert any(n.startswith("aptl/_labdata/scenarios/") for n in names)
+    assert not any(
+        s in n
+        for n in names
+        for s in ("soc_certs", "lab-ssh", "wazuh_indexer_ssl_certs")
+    )
+    assert not any(n.endswith(".pyc") for n in names)

@@ -158,10 +158,19 @@ def _walk_checkout(root: Path) -> Iterator[Path]:
 
 
 def _iter_bundle_files(source: Path) -> Iterator[Path]:
-    """Yield every file under an already-filtered wheel bundle."""
+    """Yield files under a wheel bundle, skipping post-install artifacts.
+
+    The wheel ships a clean bundle, but pip byte-compiles the installed
+    ``.py`` files, so ``__pycache__``/``*.pyc`` appear next to them in
+    site-packages after install. Re-applying the exclusion denylist keeps a
+    materialized project free of that compiled noise.
+    """
     for path in sorted(source.rglob("*")):
-        if path.is_file():
-            yield path.relative_to(source)
+        if not path.is_file():
+            continue
+        rel = path.relative_to(source)
+        if not _is_excluded(rel):
+            yield rel
 
 
 def _iter_source_files(source: Path, from_bundle: bool) -> Iterator[Path]:

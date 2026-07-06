@@ -18,16 +18,25 @@ from __future__ import annotations
 
 # Top-level asset roots bundled into the wheel and materialized by
 # ``aptl lab init``. Each tracked file maps to the same relative path.
-# Derived from docker-compose.yml build contexts and bind mounts (issue
-# #659): several services build with ``context: .`` and
-# ``COPY pyproject.toml README.md src`` + ``pip install .`` (misp-suricata-sync,
-# web API), ``web/`` is its own build context, and ``scripts/`` is
-# bind-mounted. ``keys/`` and ``.aptl/`` are generated at lab start (zero
-# tracked files) and are intentionally absent.
+# Derived from docker-compose.yml build contexts and bind mounts plus the
+# host-side steps in ``aptl lab start`` (issue #659):
+#   - several services build with ``context: .`` and
+#     ``COPY pyproject.toml README.md src`` + ``pip install .``
+#     (misp-suricata-sync, web API), so those + ``hatch_build.py`` (a declared
+#     wheel build hook) are needed;
+#   - ``web/`` is its own build context and ``scripts/`` is bind-mounted;
+#   - ``mcp/`` holds ``build-all-mcps.sh`` and the MCP server sources that the
+#     ``build_mcps`` start step compiles (needs node/npm on the host);
+#   - ``.mcp.json.example`` seeds MCP client config; ``.dockerignore`` keeps
+#     build contexts lean.
+# ``keys/`` and ``.aptl/`` are generated at lab start (zero tracked files) and
+# are intentionally absent.
 ASSET_ROOTS: tuple[str, ...] = (
     "docker-compose.yml",
+    ".dockerignore",
     "generate-indexer-certs.yml",
     ".env.example",
+    ".mcp.json.example",
     "pyproject.toml",
     "README.md",
     "hatch_build.py",
@@ -37,6 +46,7 @@ ASSET_ROOTS: tuple[str, ...] = (
     "containers",
     "web",
     "scripts",
+    "mcp",
 )
 
 # Presence of this file marks a full lab-distribution build context. Minimal

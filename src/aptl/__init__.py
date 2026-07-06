@@ -8,4 +8,4 @@ try:
     __version__ = _version("aptl")
 except PackageNotFoundError:
     # Running from a source tree without installed package metadata.
-    __version__ = "0.0.0"
+    __version__ = "4.0.0"

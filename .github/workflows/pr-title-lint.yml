@@ -1,0 +1,53 @@
+name: PR Title Lint
+
+# Repository-side guard on feature-PR titles: bans agent-branded prefixes
+# (e.g. `[codex] ...`) and requires a Conventional Commit title. Feature PRs are
+# squash-merged, so the title becomes the commit release-please reads on main to
+# compute the version + changelog. Make this a required check on `dev` only.
+#
+# It runs ONLY on PRs targeting `dev`. A `dev`->`main` promotion PR carries a
+# non-conventional (merge/promotion) title and would always fail this check, so
+# `main` is intentionally not gated — release-please reads the underlying feature
+# commits, not the promotion PR title.
+#
+# The PR title is untrusted event data, read from $GITHUB_EVENT_PATH by the
+# checker (never shell-interpolated), the token is read-only, and this uses
+# `pull_request` (never `pull_request_target`). Actions are pinned to commit SHAs.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title-guard:
+    name: PR title lint
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the BASE ref, not the PR head, so the policy executable is the
+      # trusted already-merged copy. A PR that edits or removes
+      # tools/check_pr_title.py must not be able to weaken its own required
+      # check. The shared validator is still exercised against the PR's own code
+      # by the test suite in checks.yml.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Validate PR title
+        # The checker reads the title from $GITHUB_EVENT_PATH (set automatically
+        # by the runner). It is stdlib-only, so no dependency install is needed.
+        run: |
+          if [ ! -f tools/check_pr_title.py ]; then
+            echo "::notice::tools/check_pr_title.py is not on the base ref yet; skipping (bootstrap for the PR that introduces the guard). Enforcement is active for every subsequent PR."
+            exit 0
+          fi
+          python tools/check_pr_title.py

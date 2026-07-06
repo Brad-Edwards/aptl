@@ -5,16 +5,24 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+pipx install aptl
 aptl lab start
 ```
 
-The virtualenv keeps the editable install off the system Python, so it works
-on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
-[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
-`python3-venv` package for the `python3 -m venv` step
-(`sudo apt install python3-venv`); see [Prerequisites](prerequisites.md).
+Clone the repo even when you install the published package: `aptl lab start`
+reads the Compose topology, scenarios, and config templates from the checkout.
+[pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
+[PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
+Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it).
+
+To develop against the source tree, install it editable in a virtualenv
+instead of the `pipx` line (needs `python3-venv` on Debian/Ubuntu; see
+[Prerequisites](prerequisites.md)):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
 template placeholder values with lab credentials that match the running

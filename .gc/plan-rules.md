@@ -18,11 +18,9 @@ Mandatory constraints the `/implement` skill applies during plan phase.
   `config/` files MUST validate that a clean `aptl lab stop -v && aptl
   lab start` produces a healthy lab on a fresh machine — the lab is the
   primary product, not the codebase.
-- Plans with a user-visible change MUST add a fragment under
-  `changelog.d/<issue>.<type>.md`, where `<type>` is one of `security`,
-  `added`, `changed`, `deprecated`, `removed`, or `fixed`, instead of
-  editing `CHANGELOG.md` directly. `CHANGELOG.md` is collated from
-  fragments at release time by `uvx towncrier build`; fragments avoid
-  cross-PR changelog conflicts and the rebase / re-run-CI churn they
-  cause. See `changelog.d/README.md`. Pure refactors, CI-only changes,
-  and docs-only changes may legitimately ship without a fragment.
+- Plans MUST NOT edit `CHANGELOG.md` or the version. Releases are automated by
+  release-please from Conventional Commit PR titles: `feat:` (minor),
+  `fix:`/`perf:` (patch), `feat!:` or a `BREAKING CHANGE:` footer (major);
+  `docs`/`chore`/`refactor`/`test`/`ci`/`build` do not release. The PR title is
+  the changelog entry, so make it a clear Conventional Commit. See
+  `docs/releasing.md`.

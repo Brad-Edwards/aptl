@@ -54,6 +54,7 @@ from aptl.core.lab_types import (
 )
 from aptl.core.services import (
     check_indexer_ready,
+    check_indexer_status,
     check_manager_api_ready,
     test_ssh_connection,
     wait_for_service,
@@ -82,6 +83,32 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
+
+ProgressCallback = Callable[[str], None]
+
+_STALE_NETWORK_RECOVERY_HINT = (
+    "Run `aptl lab stop` and retry, or `aptl lab stop -v` "
+    "if you need a clean lab."
+)
+
+
+def _looks_like_stale_realization_network_error(error: str) -> bool:
+    """Return True when Docker reports old APTL networks with stale labels."""
+
+    return (
+        "Existing network " in error
+        and " does not match realized network " in error
+        and "label org.aptl.realization.network expected 'true'" in error
+    )
+
+
+def _lab_start_failure_error(error: str) -> str:
+    """Build the CLI-visible lab-start failure message with recovery hints."""
+
+    message = f"Lab start failed: {error}"
+    if _looks_like_stale_realization_network_error(error):
+        return f"{message}\n{_STALE_NETWORK_RECOVERY_HINT}"
+    return message
 
 
 def start_aces_scenario(
@@ -343,6 +370,7 @@ def clean_boot_lab(
     skip_seed: bool = False,
     scenario_path: Optional[Path] = None,
     backend: Optional["DeploymentBackend"] = None,
+    progress: ProgressCallback | None = None,
 ) -> LabResult:
     """Boot the lab into a guaranteed clean state (RNG-001).
 
@@ -373,11 +401,14 @@ def clean_boot_lab(
         scenario_path: Optional selected ACES SDL scenario path.
         backend: Optional pre-created deployment backend, forwarded to the
             teardown so callers that already resolved one avoid a re-create.
+        progress: Optional callback for participant-facing startup updates.
 
     Returns:
         LabResult — the boot outcome on success, or a fatal ``FAILED``
         result carrying the redacted cleanup error when teardown fails.
     """
+    if progress is not None:
+        progress("Stopping the existing lab before clean boot.")
     stop_result = stop_lab(
         remove_volumes=remove_volumes,
         project_dir=project_dir,
@@ -397,6 +428,7 @@ def clean_boot_lab(
         project_dir,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
+        progress=progress,
     )
 
 
@@ -556,6 +588,7 @@ class _LabStartContext(object):
     project_dir: Path
     skip_seed: bool
     scenario_path: Path | None = None
+    progress: ProgressCallback | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
     env: "EnvVars | None" = None
     config: "AptlConfig | None" = None
@@ -1124,7 +1157,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
         success=False,
-        error=f"Lab start failed: {lab_result.error}",
+        error=_lab_start_failure_error(lab_result.error),
     )
 
 
@@ -1146,35 +1179,66 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
+    indexer_url = "https://localhost:9200"
     indexer_result = wait_for_service(
         check_fn=partial(
             check_indexer_ready,
-            url="https://localhost:9200",
+            url=indexer_url,
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
         ),
         timeout=300,
         interval=10,
         service_name="Wazuh Indexer",
+        progress=ctx.progress,
     )
     if not indexer_result.ready:
         # Indexer is the SIEM store — without it, detections never land.
-        # Lab is up but telemetry is degraded.
-        _emit_diagnostic(
-            ctx,
-            step="wait_for_services",
-            component="wazuh_indexer",
-            impact=DiagnosticImpact.TELEMETRY,
-            severity=DiagnosticSeverity.WARNING,
-            message=(
-                "Wazuh Indexer did not become ready within "
-                f"{int(indexer_result.elapsed_seconds)}s"
-            ),
-            operator_action=(
-                "Check indexer container logs; SIEM ingest will not work "
-                "until indexer is healthy"
-            ),
+        # Lab is up but telemetry is degraded. A second, one-shot
+        # classification probe tells apart "still not listening" from
+        # "listening but rejecting the configured credentials" (#623) —
+        # the latter means the persisted indexer volume's admin password
+        # no longer matches .env, which is a distinct, actionable state.
+        final_status = check_indexer_status(
+            url=indexer_url,
+            username=ctx.env.indexer_username,
+            password=ctx.env.indexer_password,
         )
+        if final_status in (401, 403):
+            _emit_diagnostic(
+                ctx,
+                step="wait_for_services",
+                component="wazuh_indexer",
+                impact=DiagnosticImpact.TELEMETRY,
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    f"Wazuh Indexer rejected the configured INDEXER_PASSWORD "
+                    f"(HTTP {final_status}) while its listener was responding"
+                ),
+                operator_action=(
+                    "The persisted wazuh-indexer-data volume likely still holds a "
+                    "previous admin password, so the changed .env credentials no "
+                    "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
+                    "reset the indexer security state, or restore the original "
+                    "INDEXER_PASSWORD in .env."
+                ),
+            )
+        else:
+            _emit_diagnostic(
+                ctx,
+                step="wait_for_services",
+                component="wazuh_indexer",
+                impact=DiagnosticImpact.TELEMETRY,
+                severity=DiagnosticSeverity.WARNING,
+                message=(
+                    "Wazuh Indexer did not become ready within "
+                    f"{int(indexer_result.elapsed_seconds)}s"
+                ),
+                operator_action=(
+                    "Check indexer container logs; SIEM ingest will not work "
+                    "until indexer is healthy"
+                ),
+            )
 
     manager_result = wait_for_service(
         check_fn=partial(
@@ -1184,6 +1248,7 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         timeout=120,
         interval=5,
         service_name="Wazuh Manager API",
+        progress=ctx.progress,
     )
     if not manager_result.ready:
         _emit_diagnostic(
@@ -1264,6 +1329,7 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
             timeout=60,
             interval=5,
             service_name=f"SSH ({name})",
+            progress=ctx.progress,
         )
         if ssh_wait.ready:
             log.info("SSH to %s is ready", name)
@@ -1792,11 +1858,43 @@ _LAB_START_STEPS = (
     _step_sync_mcp_config,
 )
 
+_LAB_START_PROGRESS_MESSAGES = {
+    "_step_load_env": "Preparing environment and credentials.",
+    "_step_load_config": "Loading lab configuration.",
+    "_step_ensure_ssh_keys": "Preparing SSH keys.",
+    "_step_check_sysreqs": "Checking host requirements.",
+    "_step_sync_credentials": "Rendering service configuration.",
+    "_step_seed_suricata_volumes": "Preparing Suricata runtime volumes.",
+    "_step_generate_certs": "Preparing Wazuh Indexer certificates.",
+    "_step_generate_soc_certs": "Preparing SOC TLS certificates.",
+    "_step_check_bind_mounts": "Checking bind-mount sources.",
+    "_step_pull_images": "Pre-pulling high-latency SOC images.",
+    "_step_start_containers": (
+        "Starting containers with Docker Compose. First startup can take "
+        "several minutes while images build."
+    ),
+    "_step_wait_for_services": "Waiting for Wazuh services to become ready.",
+    "_step_test_ssh": "Testing SSH reachability.",
+    "_step_capture_snapshot": "Capturing a range snapshot.",
+    "_step_write_run_record": "Writing the run reproducibility record.",
+    "_step_pin_terminal_host_keys": "Pinning terminal SSH host keys.",
+    "_step_build_mcps": "Building local MCP server artifacts.",
+    "_step_seed_soc": "Seeding SOC tools.",
+    "_step_sync_mcp_config": "Refreshing MCP client configuration.",
+}
+
+
+def _emit_progress(ctx: _LabStartContext, message: str) -> None:
+    """Emit a participant-facing progress update when a caller opted in."""
+    if ctx.progress is not None:
+        ctx.progress(message)
+
 
 def orchestrate_lab_start(
     project_dir: Path,
     skip_seed: bool = False,
     scenario_path: Path | None = None,
+    progress: ProgressCallback | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -1810,6 +1908,7 @@ def orchestrate_lab_start(
         project_dir: Root directory of the APTL project.
         skip_seed: If True, skip SOC tool seeding (Step 13).
         scenario_path: Optional selected ACES SDL scenario path.
+        progress: Optional callback for participant-facing startup updates.
 
     Returns:
         LabResult indicating overall success or failure.
@@ -1819,9 +1918,13 @@ def orchestrate_lab_start(
         project_dir=project_dir,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
+        progress=progress,
     )
 
     for step in _LAB_START_STEPS:
+        progress_message = _LAB_START_PROGRESS_MESSAGES.get(step.__name__)
+        if progress_message:
+            _emit_progress(ctx, progress_message)
         try:
             result = step(ctx)
         except icontract.ViolationError:

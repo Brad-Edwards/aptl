@@ -221,6 +221,24 @@ class TestCollectWazuhAlerts:
         assert len(result) == 2
         assert result[0]["rule"]["id"] == "1"
 
+    @patch("aptl.core.collectors._curl_json")
+    def test_credentials_go_through_auth_header_not_argv(self, mock_curl):
+        """ADR-029: the indexer Basic credentials reach curl via a 0600
+        header file (``auth_header``), never the argv-visible ``auth``
+        (``-u user:pass``) path that ``curl_json`` no longer supports."""
+        mock_curl.return_value = {"hits": {"hits": []}}
+
+        collect_wazuh_alerts(
+            "2025-01-01T00:00:00+00:00",
+            "2025-01-01T23:59:59+00:00",
+            auth=("admin", "SecretPassword"),
+        )
+
+        kwargs = mock_curl.call_args[1]
+        assert "auth" not in kwargs
+        assert kwargs["auth_header"].startswith("Basic ")
+        assert "SecretPassword" not in kwargs["auth_header"]
+
 
 class TestCollectSuricataEve:
     """Tests for Suricata EVE collection."""

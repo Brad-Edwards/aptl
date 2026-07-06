@@ -238,7 +238,8 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             LabStatus with container information.
         """
-        cmd = ["docker", "compose", "ps", "--format", "json"]
+        cmd = self._build_command("ps", profiles=[])
+        cmd.extend(["--format", "json"])
 
         result = self._run(cmd)
 

@@ -417,6 +417,71 @@ class TestDockerComposeBackend:
             "aptl-webapp",
         ] in commands
 
+    def test_realize_reports_overlapping_external_network_before_create(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("enterprise",),
+            nodes=(),
+            networks=(
+                DeploymentNetworkRealization(
+                    name="dmz-net",
+                    cidr="172.20.1.0/24",
+                    gateway="172.20.1.1",
+                ),
+            ),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "IPAM": {
+                        "Config": [
+                            {
+                                "Subnet": "172.20.0.0/16",
+                                "Gateway": "172.20.0.1",
+                            }
+                        ]
+                    },
+                    "Containers": {},
+                    "Labels": {},
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "network", "ls"] and "--filter" in cmd:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout="aptl-workshop-main_default\n",
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is False
+        assert "dmz-net (172.20.1.0/24)" in result.error
+        assert "aptl-workshop-main_default" in result.error
+        assert "172.20.0.0/16" in result.error
+        assert "docker network rm aptl-workshop-main_default" in result.error
+        assert "aptl lab start" in result.error
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert all(
+            command[:3] != ["docker", "network", "create"]
+            for command in commands
+        )
+        assert all(
+            command[:4] != ["docker", "compose", "-p", "test"]
+            for command in commands
+        )
+
     def test_realize_reconnects_network_when_static_ip_drifts(self, tmp_path):
         backend = self._make_backend(tmp_path)
         spec = DeploymentRealizationSpec(
@@ -892,6 +957,23 @@ class TestDockerComposeBackend:
 
         assert status.running is True
         assert len(status.containers) == 1
+
+    def test_status_uses_configured_project_name(self, tmp_path):
+        backend = self._make_backend(tmp_path / "aptl-workshop-main.h9Jare")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='[{"Name":"aptl-victim","State":"running"}]',
+                stderr="",
+            )
+            status = backend.status()
+
+        assert status.running is True
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:4] == ["docker", "compose", "-p", "test"]
+        assert cmd[-3:] == ["ps", "--format", "json"]
+        assert mock_run.call_args[1]["cwd"] == tmp_path / "aptl-workshop-main.h9Jare"
 
     def test_status_parses_ndjson(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1372,6 +1454,26 @@ class TestDockerComposeBackendContainerInteraction:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
             assert backend.host_list_lab_networks("aptl") == []
+
+    def test_host_list_networks_returns_all_visible_networks(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="bridge\naptl-workshop-main_default\n",
+                stderr="",
+            )
+            nets = backend.host_list_networks()
+        assert nets == ["bridge", "aptl-workshop-main_default"]
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "network", "ls", "--format", "{{.Name}}"]
+        assert mock_run.call_args[1]["timeout"] == 15
+
+    def test_host_list_networks_returns_empty_on_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
+            assert backend.host_list_networks() == []
 
     def test_host_inspect_network_parses_subnet_and_containers(self, tmp_path):
         backend = self._make_backend(tmp_path)

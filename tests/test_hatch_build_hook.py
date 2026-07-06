@@ -116,6 +116,16 @@ def test_initialize_skips_minimal_context(tmp_path: Path) -> None:
     assert build_data.get("force_include", {}) == {}
 
 
+def test_initialize_skips_editable_build(tmp_path: Path) -> None:
+    """Editable installs must not materialize the bundle into site-packages."""
+    hatch_build = _load_hatch_build()
+    _make_fake_checkout(tmp_path)  # has docker-compose.yml, would otherwise bundle
+    hook = hatch_build.CustomBuildHook(str(tmp_path))
+    build_data: dict[str, object] = {}
+    hook.initialize("editable", build_data)
+    assert build_data.get("force_include", {}) == {}
+
+
 def test_real_repo_git_selection_is_clean() -> None:
     hatch_build = _load_hatch_build()
     tracked = hatch_build.CustomBuildHook._git_tracked(REPO_ROOT)

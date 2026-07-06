@@ -62,6 +62,15 @@ class CustomBuildHook(BuildHookInterface):
     PLUGIN_NAME = "custom"
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
+        # Editable installs (`pip install -e`) redirect imports to the source
+        # tree via a .pth; they must not materialize the bundle into
+        # site-packages, which would create a partial real `aptl/` package
+        # (only aptl/_labdata, no __init__.py/core) that shadows the editable
+        # redirect and breaks `import aptl.core` (issue #659). Dev/editable
+        # runtime resolves lab assets from the checkout via
+        # aptl.core.assets.checkout_root().
+        if version == "editable":
+            return
         root = Path(self.root)
         # Only bundle when building the full lab distribution. Service
         # container images (misp-suricata-sync, web API) build with a minimal

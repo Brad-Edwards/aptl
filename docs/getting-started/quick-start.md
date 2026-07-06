@@ -3,19 +3,22 @@
 ## Start Lab
 
 ```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
-
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+pipx install aptl-labs
+aptl lab init my-lab
+cd my-lab
 aptl lab start
 ```
 
-The virtualenv keeps the editable install off the system Python, so it works
-on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
-[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
-`python3-venv` package (`sudo apt install python3-venv`); see
-[Prerequisites](prerequisites.md).
+The published wheel bundles the lab assets, so a PyPI install alone can run a
+lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
+scenarios, and config templates out of the installed package into `<dir>`, your
+lab project directory. [pipx](https://pipx.pypa.io/) isolates the CLI in its own
+virtualenv, so the [PEP 668](https://peps.python.org/pep-0668/) system-`pip`
+block on modern Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx`
+to get it). To run from source instead, clone the repo and use a virtualenv
+editable install
+(`python3 -m venv .venv && source .venv/bin/activate && pip install -e .`; needs
+`python3-venv`). See [Prerequisites](prerequisites.md).
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
 template placeholder values with lab credentials that match the running

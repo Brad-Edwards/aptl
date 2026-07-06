@@ -16,6 +16,29 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 
 ## Quick Start
 
+Install the released CLI and materialize a lab, no clone required:
+
+```bash
+pipx install aptl-labs          # the released CLI, isolated in its own environment
+aptl lab init my-lab            # materialize the lab assets into ./my-lab
+cd my-lab
+aptl lab start
+```
+
+`aptl lab init <dir>` copies the bundled lab assets (the Compose topology,
+scenarios, config templates, and container build contexts) out of the
+installed package into `<dir>`, which becomes your lab project directory. The
+published wheel ships those assets, so a PyPI install alone can run a lab.
+[pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
+system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
+([PEP 668](https://peps.python.org/pep-0668/)) never applies. Install pipx with
+`sudo apt install pipx` if you do not have it.
+
+To run from source instead (for development), clone the repo and use a
+virtualenv editable install (the `python3 -m venv` step needs `python3-venv` on
+Debian/Ubuntu). The checkout is itself the project directory, so no `lab init`
+is needed:
+
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
@@ -23,12 +46,6 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 aptl lab start
 ```
-
-The virtualenv keeps the install off the system Python, so the editable
-install works on modern Debian/Ubuntu/WSL2 hosts that block system-wide
-`pip` under [PEP 668](https://peps.python.org/pep-0668/). On those hosts the
-`python3 -m venv` step needs the `python3-venv` package
-(`sudo apt install python3-venv`).
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
 template placeholder values with lab credentials that match the running
@@ -69,7 +86,8 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 
 - Docker + Docker Compose
 - Python 3.11+
-- 8 GB RAM, 20 GB disk
+- RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
+- 20 GB+ disk
 - Linux / macOS / WSL2
 - Open ports: 443, 2027, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
 
@@ -107,7 +125,7 @@ flowchart TD
     Scenario -.->|logs / telemetry| SOC
 ```
 
-The scenario environment is whatever the SDL scenario defines—the default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
+The scenario environment is whatever the SDL scenario defines. The default `techvault-operational` topology (AD, web, DB, file share, DNS, mail, victims) is one shape, and [other scenarios](#scenarios) compose different ones. Component-by-component breakdown: [docs/architecture/index.md](docs/architecture/index.md).
 
 ## Scenarios
 

@@ -43,7 +43,7 @@ this change, and that drift is out of scope for #325.
 | Local image config ID | `aptl-misp-suricata-sync@sha256:71fc6bcd3af6b6654a566b14139d1aa06b7063b12c0eb282d0d40d49361580fb` |
 | Base image | `python:3.11-slim` |
 | Runtime OS | Debian GNU/Linux 13 (trixie) |
-| Application | `aptl` 0.1.0 (pip; executed package `aptl.services.misp_suricata_sync`) on CPython 3.11.15 |
+| Application | `aptl` 4.0.0 (pip; executed package `aptl.services.misp_suricata_sync`) on CPython 3.11.15 |
 | Role | MISP-to-Suricata IOC sync (alert-only rules per ADR-019); runs as root for host-bind ownership compatibility |
 | Sync loop | tag filter `aptl:enforce`, interval 300 s, sid_base 99000000; `ioc_count=0` at the snapshot |
 | MISP target | `https://misp` (TCP/443), lab-CA TLS verification, MISP admin API key fixture |

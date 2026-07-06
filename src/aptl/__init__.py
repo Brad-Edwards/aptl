@@ -1,3 +1,6 @@
 """Advanced Purple Team Lab CLI."""
 
-__version__ = "0.1.0"
+# Version is managed by release-please, which bumps this literal in lockstep
+# with pyproject.toml on every release. A fresh clone therefore shows the last
+# released version.
+__version__ = "4.0.0"

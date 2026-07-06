@@ -3,10 +3,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "aptl"
-version = "0.1.0"
+name = "aptl-labs"
+version = "4.0.1"
 description = "Advanced Purple Team Lab CLI"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Brad Edwards" }]
+keywords = ["purple-team", "security", "cyber-range", "wazuh", "kali", "mcp", "aces"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Intended Audience :: Developers",
+]
+# Version is managed by release-please, which rewrites this string on release.
 dependencies = [
     "typer>=0.12.0",
     "pydantic>=2.0.0",
@@ -18,8 +31,13 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.33.0",
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
-    "aces-sdl @ git+https://github.com/Brad-Edwards/aces.git@dev#subdirectory=implementations/python",
+    "aces-sdl>=0.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Brad-Edwards/aptl"
+Repository = "https://github.com/Brad-Edwards/aptl"
+Issues = "https://github.com/Brad-Edwards/aptl/issues"
 
 [project.scripts]
 aptl = "aptl.cli.main:app"
@@ -52,8 +70,14 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
+# Bundle the git-tracked lab-asset tree (docker-compose.yml, scenarios/,
+# config/, containers/, web/, scripts/, and the source that container images
+# build from) into the wheel under aptl/_labdata/ so `pipx install aptl-labs`
+# + `aptl lab init` runs a lab without a git clone (issue #659 / DEP-008).
+# The hook ships only git-tracked files, which keeps generated secrets and
+# local state out of the distribution. See hatch_build.py.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
 
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and

@@ -26,7 +26,7 @@ pip 24.0 from /usr/local/lib/python3.11/site-packages/pip (python 3.11)
   },
   {
     "name": "aptl",
-    "version": "0.1.0"
+    "version": "4.0.0"
   },
   {
     "name": "asttokens",

@@ -2,11 +2,15 @@
 
 ## Requirements
 
-- 8GB RAM, 20GB disk
+- RAM: 8GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20GB
+- 20GB+ disk
 - Docker Engine 20.10+
 - Docker Compose 2.0+
-- Python 3.11+ (for CLI)
-- Git
+- Python 3.11+ (for the CLI)
+- Node.js 18+ and npm (for the MCP servers, the AI-agent control plane that
+  `aptl lab start` builds via `mcp/build-all-mcps.sh`; without them the lab
+  still boots but reports `degraded` with MCP servers unavailable)
+- Git (only for the from-source dev install; `pipx install aptl-labs` needs no clone)
 
 ## Install Docker
 

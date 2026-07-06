@@ -784,7 +784,7 @@ nodes:
       software_components:
       - component_id: aptl-misp-suricata-sync
         name: APTL MISP-to-Suricata sync service (aptl distribution)
-        version: 0.1.0
+        version: 4.0.0
         component_type: application
         provenance: package_manager
         package_manager: pip
@@ -792,7 +792,7 @@ nodes:
         - /usr/local/bin/aptl-misp-suricata-sync
         - /usr/local/lib/python3.11/site-packages/aptl
         hashes: []
-        description: aptl 0.1.0 (pip install of the repo package); the executed code path is aptl.services.misp_suricata_sync.
+        description: aptl 4.0.0 (pip install of the repo package); the executed code path is aptl.services.misp_suricata_sync.
           62 pip distributions in the dependency closure (language-manifests.txt; SBOM evidence covers the full set).
       - component_id: python
         name: CPython

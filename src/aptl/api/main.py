@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from aptl import __version__
 from aptl.api.deps import (
     get_web_asset_root,
     load_web_auth,
@@ -51,7 +52,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="APTL Web API",
         description="Advanced Purple Team Lab — Web Interface API",
-        version="0.1.0",
+        version=__version__,
     )
 
     # BFF middleware: Host gate + CSRF gate + session-cookie bearer injection for

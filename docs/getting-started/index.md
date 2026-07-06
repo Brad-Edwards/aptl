@@ -5,16 +5,18 @@
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+pipx install aptl-labs
 aptl lab start
 ```
 
-The virtualenv keeps the editable install off the system Python, so it works
-on modern Debian/Ubuntu/WSL2 hosts that block system-wide `pip` under
-[PEP 668](https://peps.python.org/pep-0668/). Those hosts need the
-`python3-venv` package (`sudo apt install python3-venv`); see
-[Prerequisites](prerequisites.md).
+Clone the repo even with the published package: `aptl lab start` reads the
+Compose topology, scenarios, and config templates from the checkout.
+[pipx](https://pipx.pypa.io/) isolates the CLI in its own virtualenv, so the
+[PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
+Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it). To
+run from source instead, use a virtualenv editable install
+(`python3 -m venv .venv && source .venv/bin/activate && pip install -e .`; needs
+`python3-venv`). See [Prerequisites](prerequisites.md).
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
 template placeholder values with lab credentials that match the running
@@ -45,7 +47,7 @@ Four isolated Docker networks:
 ## Prerequisites
 
 - Docker with Compose
-- 8GB+ RAM
+- 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
 - Linux/WSL2: `vm.max_map_count >= 262144`
 
 Check [prerequisites.md](prerequisites.md) for details.

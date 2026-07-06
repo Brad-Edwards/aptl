@@ -1,0 +1,23 @@
+# Keeps SHA-pinned GitHub Actions (and Python deps) patched. Without this,
+# the commit-SHA pins in the workflows silently rot (ADR 0006 / supply-chain
+# hardening). github-actions updates re-pin to the new upstream SHA with the
+# version in the PR title.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"

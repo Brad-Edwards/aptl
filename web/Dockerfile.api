@@ -17,6 +17,12 @@ RUN apt-get update && \
 
 # Install Python deps
 COPY pyproject.toml .
+COPY README.md .
+# hatch_build.py is a declared wheel build hook in pyproject.toml, so
+# `pip install .` requires it in the build context (issue #659). It no-ops
+# here (no docker-compose.yml in this context), so no lab assets are bundled
+# into the API image.
+COPY hatch_build.py .
 COPY src/ src/
 RUN pip install --no-cache-dir ".[web]" && \
     apt-get purge -y git && \

@@ -89,7 +89,7 @@ aptl runs path <run-id>
 # Export run as tar.gz archive
 aptl runs export <run-id>
 
-# Export to S3 (requires pip install aptl[s3])
+# Export to S3 (requires pip install aptl-labs[s3])
 aptl runs export <run-id> --s3-bucket my-bucket --s3-prefix runs/
 ```
 

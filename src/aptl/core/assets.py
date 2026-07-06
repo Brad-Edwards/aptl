@@ -135,6 +135,13 @@ def _git_tracked(root: Path) -> list[Path] | None:
     return rels or None
 
 
+def _is_excluded(rel: Path) -> bool:
+    """Return whether a relative path is a gitignored secret/artifact."""
+    if any(part in _EXCLUDED_DIR_NAMES for part in rel.parts):
+        return True
+    return rel.suffix in _EXCLUDED_SUFFIXES
+
+
 def _walk_checkout(root: Path) -> Iterator[Path]:
     """Yield asset files under ``root``, applying the exclusion denylist."""
     for entry in _ASSET_ROOTS:
@@ -145,28 +152,25 @@ def _walk_checkout(root: Path) -> Iterator[Path]:
         if not base.is_dir():
             continue
         for path in base.rglob("*"):
-            if not path.is_file():
-                continue
             rel = path.relative_to(root)
-            if any(part in _EXCLUDED_DIR_NAMES for part in rel.parts):
-                continue
-            if path.suffix in _EXCLUDED_SUFFIXES:
-                continue
-            yield rel
+            if path.is_file() and not _is_excluded(rel):
+                yield rel
+
+
+def _iter_bundle_files(source: Path) -> Iterator[Path]:
+    """Yield every file under an already-filtered wheel bundle."""
+    for path in sorted(source.rglob("*")):
+        if path.is_file():
+            yield path.relative_to(source)
 
 
 def _iter_source_files(source: Path, from_bundle: bool) -> Iterator[Path]:
     """Yield asset file paths (relative to ``source``) to materialize."""
     if from_bundle:
-        for path in sorted(source.rglob("*")):
-            if path.is_file():
-                yield path.relative_to(source)
+        yield from _iter_bundle_files(source)
         return
     tracked = _git_tracked(source)
-    if tracked is not None:
-        yield from tracked
-        return
-    yield from _walk_checkout(source)
+    yield from (tracked if tracked is not None else _walk_checkout(source))
 
 
 def _resolve_within(base: Path, relative: Path) -> Path:

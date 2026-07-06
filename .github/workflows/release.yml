@@ -5,14 +5,10 @@ name: Release
 # history). Merging that PR creates the git tag + GitHub Release; the publish
 # job then builds and uploads to PyPI via OIDC trusted publishing.
 #
-# workflow_dispatch is the one-time bootstrap that publishes the current
-# committed version (4.0.0) before release-please has cut anything.
-#
 # Third-party actions are pinned to commit SHAs (Dependabot keeps them current).
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 concurrency:
   group: release
@@ -23,7 +19,6 @@ permissions:
 
 jobs:
   release-please:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write        # create the release tag + GitHub Release
@@ -39,11 +34,11 @@ jobs:
 
   publish:
     needs: [release-please]
-    if: ${{ always() && (needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write   # bootstrap tag + upload release assets
+      contents: write   # upload release assets
       id-token: write   # OIDC trusted publishing to PyPI
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -52,26 +47,6 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
-
-      - name: Resolve version and ensure tag + release exist
-        id: v
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          version="$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          # release-please already made the tag + Release when it cut a release;
-          # on the manual bootstrap dispatch they don't exist yet, so create them.
-          if ! git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "v${version}" -m "Release v${version}"
-            git push origin "v${version}"
-          fi
-          if ! gh release view "v${version}" >/dev/null 2>&1; then
-            gh release create "v${version}" --title "v${version}" --notes "Release v${version}"
-          fi
 
       - name: Build sdist + wheel
         run: |
@@ -92,7 +67,7 @@ jobs:
       - name: Attach artifacts to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "v${{ steps.v.outputs.version }}" dist/* sbom/* --clobber
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/* sbom/* --clobber
 
   backmerge:
     name: Back-merge release into dev

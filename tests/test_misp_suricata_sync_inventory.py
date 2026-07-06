@@ -372,7 +372,7 @@ def test_techvault_sdl_encodes_misp_suricata_sync_node(legacy_scenario):
     assert fs["/var/run/suricata/suricata-command.socket"]["entry_type"] == "socket"
     assert "/etc/lab-ca/lab-ca.pem" in fs
     components = {c["component_id"]: c for c in runtime["software_components"]}
-    assert components["aptl-misp-suricata-sync"]["version"] == "0.1.0"
+    assert components["aptl-misp-suricata-sync"]["version"] == "4.0.0"
     assert components["python"]["version"].startswith("3.11.")
 
 

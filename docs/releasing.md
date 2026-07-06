@@ -38,6 +38,7 @@ hand-edited. There is no manual bootstrap step.
 
 ## PyPI trusted publisher (one-time)
 
-pypi.org → Account → Publishing → add pending publisher: project `aptl`, owner
-`Brad-Edwards`, repo `aptl`, workflow `release.yml`, environment `pypi`.
-`aces-sdl` must be on PyPI first (aptl depends on it).
+pypi.org → Account → Publishing → add pending publisher: project `aptl-labs`, owner
+`Brad-Edwards`, repo `aptl`, workflow `release-please.yml`, environment `pypi`.
+`aces-sdl` must be on PyPI first (aptl depends on it). The distribution is named
+`aptl-labs` because `aptl` is reserved on PyPI; the import package and CLI stay `aptl`.

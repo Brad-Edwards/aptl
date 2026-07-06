@@ -10,7 +10,7 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
-## [0.1.0] - 2026-07-06
+## [4.0.0] - 2026-07-06
 
 ### Security
 

@@ -6,7 +6,7 @@ name: Release
 # job then builds and uploads to PyPI via OIDC trusted publishing.
 #
 # workflow_dispatch is the one-time bootstrap that publishes the current
-# committed version (0.1.0) before release-please has cut anything.
+# committed version (4.0.0) before release-please has cut anything.
 #
 # Third-party actions are pinned to commit SHAs (Dependabot keeps them current).
 on:

@@ -325,7 +325,7 @@
       "source": "local:techvault/nodes/misp-redis.sdl.yaml"
     },
     {
-      "content_digest": "sha256:ba5abe7bc7c3c28ad69e9539ddf0dd294e4969b50c042eb9ae38fb0ccf6c1f13",
+      "content_digest": "sha256:035d5aed90fe4779949cee7dad0e70f8a87f638e9247f5b62acfe26243ff9c87",
       "export_hash": "0b2aa16ca30c1625eefeed96b36c0a16b8c7b4b6a1f5fa6a3efc51b838d42e85",
       "manifest_digest": "",
       "module_id": "techvault/nodes/misp-suricata-sync.sdl.yaml",

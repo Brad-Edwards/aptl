@@ -30,8 +30,8 @@ Nobody runs a script, hand-edits the version, or edits `CHANGELOG.md`.
 
 ## First release (one-time bootstrap)
 
-The current baseline is `0.1.0` and its `CHANGELOG.md` section already exists.
-release-please won't re-cut `0.1.0`, so publish it once manually:
+The current baseline is `4.0.0` and its `CHANGELOG.md` section already exists.
+release-please won't re-cut `4.0.0`, so publish it once manually:
 **Actions → Release → Run workflow** (`workflow_dispatch`). That builds and
 publishes the current committed version. Every release after that is
 release-please-driven.

@@ -37,6 +37,17 @@ rules:
 # eight trust boundaries of the aptl platform + contained cyber range, declared
 # so the in-loop /implement GRC screening reuses them. They were the basis of
 # the GRC baseline bootstrap (issue #597, GC-GRC-018).
+#
+# `surfaces` is adapter-routing metadata, NOT aptl's attack-surface ontology: each
+# token must be a Ground Control derivation-adapter surface so GRC screening can
+# derive facts. Registered adapters (code-verified against Ground Control, see
+# issue #634 / autarchy-ai/Ground-Control#1326): CodeQL -> `application`
+# (python/js/ts); IaC/pipeline & Boundary -> `dockerfile`, `docker-compose`,
+# `terraform`, `github-actions`. Each boundary lists only the surfaces its actual
+# `paths` content warrants. `config/**` (suricata, wazuh_*, cortex, thehive, otel)
+# and network topology have NO derivation adapter — they stay owned by their
+# boundary via `paths` but contribute no `surfaces` (accept-as-uncovered rather
+# than declaring a token that silently derives nothing).
 grc:
   boundaries:
     - key: range-perimeter
@@ -46,7 +57,9 @@ grc:
         - docker-compose.yml
         - src/aptl/core/**
         - config/suricata/**
-      surfaces: [network, config, iac]
+      # src/aptl/core (python) -> application; docker-compose.yml -> docker-compose;
+      # config/suricata uncovered.
+      surfaces: [application, docker-compose]
     - key: host-boundary
       name: Docker Host Boundary
       description: Docker host vs. range containers — kill switch (SAF-001), resource limits (INF-004), health checks (INF-003).
@@ -54,13 +67,17 @@ grc:
         - docker-compose.yml
         - containers/base/**
         - src/aptl/cli/**
-      surfaces: [iac, config]
+      # src/aptl/cli (python) -> application; docker-compose.yml -> docker-compose;
+      # containers/base/Dockerfile.* -> dockerfile.
+      surfaces: [application, docker-compose, dockerfile]
     - key: mcp-control-plane
       name: MCP Control Plane
       description: Red/blue MCP servers and orchestrator that AI agents drive — the agent authorization and command-filtering surface.
       paths:
         - mcp/**
-      surfaces: [code, config]
+      # mcp/** is first-party TypeScript -> application (Dockerfiles under mcp/ are
+      # vendored node_modules only).
+      surfaces: [application]
     - key: redteam-zone
       name: Red Team Zone (aptl-redteam)
       description: Attacker network hosting Kali and the reverse-engineering container.
@@ -68,7 +85,8 @@ grc:
         - containers/kali/**
         - containers/kali-capture/**
         - containers/reverse/**
-      surfaces: [network]
+      # kali / kali-capture / reverse Dockerfiles -> dockerfile.
+      surfaces: [dockerfile]
     - key: dmz-zone
       name: DMZ Zone (aptl-dmz)
       description: Semi-exposed victim network — webapp, mailserver, DNS.
@@ -76,7 +94,8 @@ grc:
         - containers/webapp/**
         - containers/mailserver/**
         - containers/dns/**
-      surfaces: [network]
+      # webapp app/ (python) -> application; webapp + dns Dockerfiles -> dockerfile.
+      surfaces: [application, dockerfile]
     - key: internal-zone
       name: Internal Zone (aptl-internal)
       description: Internal enterprise network — Active Directory, PostgreSQL, SMB fileshare, victim/workstation hosts.
@@ -87,7 +106,8 @@ grc:
         - containers/victim/**
         - containers/workstation/**
         - containers/windows-victim/**
-      surfaces: [network]
+      # ad / fileshare / victim / workstation Dockerfiles -> dockerfile.
+      surfaces: [dockerfile]
     - key: security-zone
       name: Security/SOC Zone (aptl-security)
       description: Defensive stack — Wazuh, Suricata, MISP, TheHive, Cortex, Shuffle; zone isolation via multi-homing only (NET-005).
@@ -99,7 +119,8 @@ grc:
         - config/thehive/**
         - config/wazuh_dashboard/**
         - config/wazuh_indexer/**
-      surfaces: [network, config]
+      # wazuh-sidecar / misp-suricata-sync Dockerfiles -> dockerfile; config/* uncovered.
+      surfaces: [dockerfile]
     - key: observability-plane
       name: Observability Plane
       description: OpenTelemetry collector, Tempo, Grafana, and the aptl web API/UI experiment-observability surface.
@@ -107,4 +128,6 @@ grc:
         - config/otel/**
         - web/**
         - src/aptl/api/**
-      surfaces: [code, network]
+      # web/** (ts/svelte) + src/aptl/api (python) -> application; web/Dockerfile* ->
+      # dockerfile; config/otel uncovered.
+      surfaces: [application, dockerfile]

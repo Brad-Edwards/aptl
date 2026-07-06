@@ -156,5 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [DEP-008 Self-Contained Lab Assets](dep-008-self-contained-lab-assets-preflight.md)
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)
 - [DEP-003 Ephemeral Lifecycle Policy](dep-003-ephemeral-lifecycle-preflight.md)
+- [GRC Boundary Surface Vocabulary](grc-boundary-surface-vocabulary-preflight.md)

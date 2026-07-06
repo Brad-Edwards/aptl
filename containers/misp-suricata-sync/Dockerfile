@@ -14,6 +14,11 @@ WORKDIR /app
 
 COPY pyproject.toml /app/
 COPY README.md /app/
+# hatch_build.py is a declared wheel build hook in pyproject.toml, so
+# `pip install .` requires it in the build context (issue #659). It no-ops
+# here because this minimal context has no docker-compose.yml, so no lab
+# assets are bundled into the service image.
+COPY hatch_build.py /app/
 COPY src /app/src
 
 RUN pip install --no-cache-dir . \

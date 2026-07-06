@@ -70,6 +70,15 @@ docs = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
 
+# Bundle the git-tracked lab-asset tree (docker-compose.yml, scenarios/,
+# config/, containers/, web/, scripts/, and the source that container images
+# build from) into the wheel under aptl/_labdata/ so `pipx install aptl-labs`
+# + `aptl lab init` runs a lab without a git clone (issue #659 / DEP-008).
+# The hook ships only git-tracked files, which keeps generated secrets and
+# local state out of the distribution. See hatch_build.py.
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
 [tool.ruff]
 # Lint only the Python control-plane source. Tests, generated files, and
 # the (TypeScript) MCP / web trees are out of scope for this check.

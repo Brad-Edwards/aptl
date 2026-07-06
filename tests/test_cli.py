@@ -25,9 +25,11 @@ class TestMainApp:
         """--version should print the package version."""
         from aptl.cli.main import app
 
+        import aptl
+
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.stdout
+        assert aptl.__version__ in result.stdout
 
     def test_help_shows_subcommands(self, runner):
         """Help output should list the major subcommands."""

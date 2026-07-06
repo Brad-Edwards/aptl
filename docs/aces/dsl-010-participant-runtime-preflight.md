@@ -81,7 +81,7 @@ promotes APTL from an `orchestration-evaluation` backend to a
   ADR-023, ADR-029, ADR-030, ADR-031, ADR-036, ADR-037, ADR-039, and ADR-040.
 - Repo gates: `pytest`, `pre-commit run --all-files`, manual
   `aces-scenario-gate`, live-gate integration marker, `.gc/plan-rules.md`, and
-  the docs-only exception to changelog fragments.
+  Conventional Commit PR titles (release-please drives releases).
 
 ## Security And Validation Layers
 

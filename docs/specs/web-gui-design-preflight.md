@@ -191,8 +191,8 @@ Tailwind surface, not a parallel design system.
   preferences seam behind one helper/store. Persist only the non-secret keys
   allowed by `web-gui-design.md`; never persist auth material, terminal I/O,
   raw SIEM custom queries, copied command history, hints viewed, or notes.
-- A user-visible kit change needs a `changelog.d/<issue>.<type>.md` fragment.
-  Docs-only preflight changes do not.
+- A user-visible kit change needs a Conventional Commit PR title (release-please
+  generates the changelog). Docs-only preflight changes use `docs:`.
 
 ## UI-008c Lab Home Guardrails
 

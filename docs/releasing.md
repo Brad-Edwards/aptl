@@ -28,13 +28,13 @@ Nobody runs a script, hand-edits the version, or edits `CHANGELOG.md`.
    the version bump + `CHANGELOG.md`). **Admin-merge it** (one click; dev's
    required checks don't run on a bot-opened PR) to keep `dev` current.
 
-## First release (one-time bootstrap)
+## Baseline
 
-The current baseline is `0.1.0` and its `CHANGELOG.md` section already exists.
-release-please won't re-cut `0.1.0`, so publish it once manually:
-**Actions → Release → Run workflow** (`workflow_dispatch`). That builds and
-publishes the current committed version. Every release after that is
-release-please-driven.
+The released baseline is `3.0.10` (the last git tag `v3.0.10`), recorded in
+`.release-please-manifest.json` and `pyproject.toml`. release-please computes the
+next version from that baseline plus the Conventional Commits merged since, so a
+`feat!:` change cuts `4.0.0`, and no version or `CHANGELOG.md` is ever
+hand-edited. There is no manual bootstrap step.
 
 ## PyPI trusted publisher (one-time)
 

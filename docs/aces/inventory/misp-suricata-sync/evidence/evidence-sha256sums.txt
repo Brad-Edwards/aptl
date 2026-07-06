@@ -15,7 +15,7 @@ b36f5346fbc3c3655bcc3c8086a51b11dca27ead2139c794cd91dc8862357a47  docs/aces/inve
 a4cfa7b3701780af6595006d515bbe44a6db21c6099fcf65e92222ef3640d684  docs/aces/inventory/misp-suricata-sync/evidence/docker-volume.suricata_misp_rules.json
 92aeca109d1664bbc1380601497ce8c0df728fd2a1dd650f71c021369580bc96  docs/aces/inventory/misp-suricata-sync/evidence/filesystem-checksums.txt.xz
 c2085e370a6dc63398662d7abd8233807fc3a1e6378dcfa330bf6cb1f9d78868  docs/aces/inventory/misp-suricata-sync/evidence/filesystem-tree.txt.gz
-1f860ecfa1607c6639a260547dbd70e76bab9e2ab066f3bacbfe7780eded351c  docs/aces/inventory/misp-suricata-sync/evidence/language-manifests.txt
+848ddb4ee073b0d1c3f5f9120311baee60cef5c27a9453e35859c751fb24078d  docs/aces/inventory/misp-suricata-sync/evidence/language-manifests.txt
 6ffb154e21c7976c5beb468f753cc168cfeba8b59e6c38e2957c65a4b34fd67f  docs/aces/inventory/misp-suricata-sync/evidence/observer-discovery.suricata.txt
 5a16d6535c8737617a110406098fde44f96455db112279305847fbceee1b95c1  docs/aces/inventory/misp-suricata-sync/evidence/os-packages.txt
 9e58642ff525c09d997b2b86e0ce451629a86cb2e6f99ec38826ba2938a7edec  docs/aces/inventory/misp-suricata-sync/evidence/osquery-apt-sources.json

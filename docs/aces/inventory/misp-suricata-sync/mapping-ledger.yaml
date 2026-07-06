@@ -345,7 +345,7 @@ facts:
     rationale: Current ACES SDL node runtime.local_identity carries the local identity surface directly.
 - id: misp-suricata-sync.application.software-versions
   category: runtime
-  summary: aptl 0.1.0 (pip; console script aptl-misp-suricata-sync) on CPython 3.11.15 are the application components; 62
+  summary: aptl 4.0.0 (pip; console script aptl-misp-suricata-sync) on CPython 3.11.15 are the application components; 62
     pip distributions form the dependency closure.
   evidence:
   - path: evidence/language-manifests.txt

@@ -1,4 +1,3 @@
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -9,6 +8,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This file is maintained by [release-please](https://github.com/googleapis/release-please)
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
+
+## [4.0.0](https://github.com/Brad-Edwards/aptl/compare/v3.0.10...v4.0.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* aptl is now distributed as the aptl PyPI package (pipx install aptl) and its aces-sdl dependency resolves from PyPI instead of a git URL; the release and version workflow is now release-please-driven.
+
+### Features
+
+* add ACES scenario startup selector ([fc2446b](https://github.com/Brad-Edwards/aptl/commit/fc2446b89fd430130448377ad0afd561119e3f00))
+* add ad aces inventory ([7305ded](https://github.com/Brad-Edwards/aptl/commit/7305ded2d45aa47e7182032e542321dfa541c5cc))
+* add ephemeral lifecycle policy enforcement (DEP-003) ([7441702](https://github.com/Brad-Edwards/aptl/commit/7441702ed21dd837d9d5ca71d4371fb0c867d93f))
+* add Lab Home kill control, readiness headline, and scenario catalog API ([93cba4b](https://github.com/Brad-Edwards/aptl/commit/93cba4b0c2db0e6308cf82221ebd1c3f9ee8295f))
+* add SCN-010F live validation gate for ACES-driven TechVault deployment ([0791991](https://github.com/Brad-Edwards/aptl/commit/07919913180fba531feeac8b98d19fe04f40291a))
+* add TechVault db ACES inventory ([a1f84e1](https://github.com/Brad-Edwards/aptl/commit/a1f84e1230f1799fb3929f614c909cf51624c70a))
+* add TechVault db ACES inventory ([f8309c6](https://github.com/Brad-Edwards/aptl/commit/f8309c6692ae6810dc443c1c7508a126c5b60c16))
+* capture ACES-aligned run reproducibility record on lab start (REP-001) ([3a5194e](https://github.com/Brad-Edwards/aptl/commit/3a5194e2ec1840a7861757b3c83a13d55cf05927))
+* promote ACES backend to orchestration-capable profile ([b7cca12](https://github.com/Brad-Edwards/aptl/commit/b7cca1207a2692d25459d3ef18611b2c9c1c3c75))
+* publish aptl 4.0.0 as an installable PyPI package ([#643](https://github.com/Brad-Edwards/aptl/issues/643)) ([f205031](https://github.com/Brad-Edwards/aptl/commit/f205031fb6107d0a3a913ca3b9ddab266a5edafa))
+* realize scenario network topology ([e168c08](https://github.com/Brad-Edwards/aptl/commit/e168c082373a3d22af6372e5268f000f3d7b60c6))
+* upgrade aptl backend conformance to orchestration-evaluation profile ([dbbe593](https://github.com/Brad-Edwards/aptl/commit/dbbe5936c48cf507e7fb50347e2f34ca1dc70c96))
+
+
+### Bug Fixes
+
+* add stale network lab start hint ([ee8c136](https://github.com/Brad-Edwards/aptl/commit/ee8c136d57a3ffe6cda15351b0caa014d8bab3cf))
+* address lab ssh targets by container ip, not localhost port ([75ea77a](https://github.com/Brad-Edwards/aptl/commit/75ea77a9589d50a4869c9742d8dce9270907ace7))
+* Batch C review follow-ups — frontend 3001:80, opensearch mounts/components/internal-users, capability evidence ([#405](https://github.com/Brad-Edwards/aptl/issues/405)) ([8619d87](https://github.com/Brad-Edwards/aptl/commit/8619d87e0cba204bd9adecd62a8b9621896cfe0e))
+* classify secret-named exposed field ([b73d1d4](https://github.com/Brad-Edwards/aptl/commit/b73d1d4d2df7cf90b33e64ea1011a08a67565ed0))
+* correct thehive-es framing — TheHive uses local Lucene, not this ES ([e35a987](https://github.com/Brad-Edwards/aptl/commit/e35a987a76d5452c2b4f3bdcc169aa2747b0848d))
+* derive paper participant evidence surfaces ([82225bc](https://github.com/Brad-Edwards/aptl/commit/82225bc2edb541bc2df2fd332b4ace44f25c40c6))
+* detect stale wazuh indexer credentials on lab start ([4cd4052](https://github.com/Brad-Edwards/aptl/commit/4cd40524ffc9b34466be3b6355eb10242be340e5))
+* evaluator live score progression ([7a26fa7](https://github.com/Brad-Edwards/aptl/commit/7a26fa7f6ffe63c8331d164876dee8c2cd996937))
+* harden scenario query boundaries with icontract guards ([d3ed305](https://github.com/Brad-Edwards/aptl/commit/d3ed3051abd00cc61a2df4e718c1100be0e21cbc))
+* hydrate lab env on start ([47e5bf0](https://github.com/Brad-Edwards/aptl/commit/47e5bf078eb7ad02f7a952e35a761c90c0f02ce5))
+* install pinned flare-floss/flare-capa on the reverse box, not bare floss/capa ([67c580e](https://github.com/Brad-Edwards/aptl/commit/67c580eecce488964323efd198207cb36af736ea))
+* **lab:** make ownership hook CI-importable and clear Sonar findings ([19f4b7e](https://github.com/Brad-Edwards/aptl/commit/19f4b7edb322e70e657d424a613f4d23affe28ad))
+* **lab:** restore Suricata config source ownership for pre-commit ([82aaa24](https://github.com/Brad-Edwards/aptl/commit/82aaa240296275981da272f6eb946d83496ca946))
+* make profile-gated reverse service boot systemd ([020794a](https://github.com/Brad-Edwards/aptl/commit/020794a0c318db1a133fcd63a47a46edbd7cb26f))
+* **mcp:** scope API client auth to configured service origin ([f4c6688](https://github.com/Brad-Edwards/aptl/commit/f4c66887a88864f1d6051b32be3b0cec5f7edbf0))
+* **mcp:** scope API client auth to configured service origin ([0efb475](https://github.com/Brad-Edwards/aptl/commit/0efb475635976684d875fd85b3b04ba04bc47eb2))
+* pin lab status compose project ([a1f5564](https://github.com/Brad-Edwards/aptl/commit/a1f5564cfb321ebd550fdf5e5eabafb641cfca4e))
+* preserve captured scenario fixture values ([c048860](https://github.com/Brad-Edwards/aptl/commit/c048860769126c59b7067586765ecd5b23bb4bcb))
+* raise reverse memory limit to 2g for first-boot tools build ([7cf11cd](https://github.com/Brad-Edwards/aptl/commit/7cf11cde375d5e462a6f19d3df15294572a374e5))
+* reap kali container children and gate readiness on a healthcheck ([e6c4e4d](https://github.com/Brad-Edwards/aptl/commit/e6c4e4d8b17903602390199d308a2d5d6ecae584))
+* resolve techvault sdl classification audit ([3864802](https://github.com/Brad-Edwards/aptl/commit/38648028a605b6ad702763c0392cb49f76478eb3))
+* show lab start progress ([eeac8a3](https://github.com/Brad-Edwards/aptl/commit/eeac8a316ee039f2c210440ef03f8ea3065a1ab6))
+* **sonar:** suppress Python-2 S1722 instead of object-base regression ([9ef5cae](https://github.com/Brad-Edwards/aptl/commit/9ef5cae7dd163ddbf0eb09124f6f5475250a9f1c))
+* surface effective session mode and await remote SSH close ([57fa064](https://github.com/Brad-Edwards/aptl/commit/57fa064997120ffc2fb59259069932175e9c4e95))
+* use aces secret validator fix ([7b5376d](https://github.com/Brad-Edwards/aptl/commit/7b5376ded7f47122783d29ec0bb0d12fc9acd725))
+
+
+### Documentation
+
+* **aces:** preserve TechVault SDL authoring preflight on dev ([1b2eb6e](https://github.com/Brad-Edwards/aptl/commit/1b2eb6e78269fc58abac3c6d710759931f4fc64f))
+* add ADR-032 for conversation surface hardening ([aa0fd71](https://github.com/Brad-Edwards/aptl/commit/aa0fd715f7ee05ebe9431f7b2078f9419bb8db26))
+* add ADR-042 sidecar-owned PTY master for tamper-proof kali transcripts ([79c36da](https://github.com/Brad-Edwards/aptl/commit/79c36da6ded6b12bf967482e90e0ceda3f4f731d))
+* add ADR-042 sidecar-owned PTY master for tamper-proof kali transcripts ([5538087](https://github.com/Brad-Edwards/aptl/commit/5538087b3a6899541720efd11fbeeb894a7a0eeb))
+* add ADR-046 dynamic ACES scenario realization ([a1fa389](https://github.com/Brad-Edwards/aptl/commit/a1fa38977d1ba9ec2ff8a5f6c33f44ba1d5da781))
+* add SecTor Arsenal 2026 acceptance to README ([b0ec4ed](https://github.com/Brad-Edwards/aptl/commit/b0ec4edd9b92f84b0895267df7032fc8bf1b4a40))
+* add SecTor Arsenal 2026 acceptance to README ([957317f](https://github.com/Brad-Edwards/aptl/commit/957317fb8e9912888d64dec1585083eb308ee560)), closes [#398](https://github.com/Brad-Edwards/aptl/issues/398)
+* add web GUI design specification ([465bdbe](https://github.com/Brad-Edwards/aptl/commit/465bdbe5759aabf1c92bf3ea5104e8fb3644c86b))
+* adr-037 docker compose backend cohesion ([6bbc638](https://github.com/Brad-Edwards/aptl/commit/6bbc638af4ca94669ec082cac658054e2306485c))
+* harden conversation surface against external interaction ([d8a8145](https://github.com/Brad-Edwards/aptl/commit/d8a8145a2d20dcd0ddd44944ccadee2ed07dfa30))
+* lead quick-start with a virtualenv to survive PEP 668 ([f663b25](https://github.com/Brad-Edwards/aptl/commit/f663b25685bf50d088549ff991e41285f6232e4e))
+* lead quick-start with a virtualenv to survive PEP 668 ([e4481f8](https://github.com/Brad-Edwards/aptl/commit/e4481f899685800fd8c10f89c7f8ecd099129693))
+* refresh webapp inventory evidence ([bfc83cd](https://github.com/Brad-Edwards/aptl/commit/bfc83cd40e3d4ba80c01620e1776aea62f5b59de))
 
 ## [Unreleased]
 

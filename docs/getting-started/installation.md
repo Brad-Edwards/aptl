@@ -3,25 +3,31 @@
 ## Python CLI (Recommended)
 
 ```bash
-git clone https://github.com/Brad-Edwards/aptl.git
-cd aptl
 pipx install aptl-labs
+aptl lab init my-lab
+cd my-lab
 aptl lab start
 ```
 
-Clone the repo even when you install the published package: `aptl lab start`
-reads the Compose topology, scenarios, and config templates from the checkout.
+The published wheel bundles the lab assets, so a PyPI install alone can run a
+lab, no clone required. `aptl lab init <dir>` copies the Compose topology,
+scenarios, config templates, and container build contexts out of the installed
+package into `<dir>`, which becomes your lab project directory.
 [pipx](https://pipx.pypa.io/) installs the CLI into its own virtualenv, so the
 [PEP 668](https://peps.python.org/pep-0668/) system-`pip` block on modern
 Debian/Ubuntu/WSL2 hosts never applies (`sudo apt install pipx` to get it).
 
-To develop against the source tree, install it editable in a virtualenv
-instead of the `pipx` line (needs `python3-venv` on Debian/Ubuntu; see
-[Prerequisites](prerequisites.md)):
+To develop against the source tree, clone the repo and install it editable in a
+virtualenv (needs `python3-venv` on Debian/Ubuntu; see
+[Prerequisites](prerequisites.md)). The checkout is itself the project
+directory, so no `lab init` is needed:
 
 ```bash
+git clone https://github.com/Brad-Edwards/aptl.git
+cd aptl
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
+aptl lab start
 ```
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces

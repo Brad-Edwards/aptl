@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from typer.testing import CliRunner
+from typer.main import get_command
 
 from aptl.cli.web import app
 
@@ -30,9 +30,17 @@ def _dockerfile_cmd_flags() -> list[str]:
 
 
 def _valid_serve_flags() -> set[str]:
-    result = CliRunner().invoke(app, ["serve", "--help"])
-    assert result.exit_code == 0, result.output
-    return set(re.findall(r"--[a-z0-9][a-z0-9-]+", result.output))
+    # Introspect the Click command the CLI actually builds, rather than scraping
+    # --help text (whose rich rendering varies by terminal/env). This is the
+    # authoritative option surface of `aptl web serve`.
+    command = get_command(app)
+    serve = getattr(command, "commands", {}).get("serve", command)
+    return {
+        opt
+        for param in serve.params
+        for opt in param.opts
+        if opt.startswith("--")
+    }
 
 
 def test_web_api_dockerfile_cmd_uses_only_valid_serve_flags() -> None:

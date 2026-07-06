@@ -19,16 +19,25 @@ One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, D
 ```bash
 git clone https://github.com/Brad-Edwards/aptl.git
 cd aptl
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+pipx install aptl          # the released CLI, isolated in its own environment
 aptl lab start
 ```
 
-The virtualenv keeps the install off the system Python, so the editable
-install works on modern Debian/Ubuntu/WSL2 hosts that block system-wide
-`pip` under [PEP 668](https://peps.python.org/pep-0668/). On those hosts the
-`python3 -m venv` step needs the `python3-venv` package
-(`sudo apt install python3-venv`).
+You still clone the repo when you install the published package: `aptl lab
+start` reads the lab's Compose topology, scenarios, and config templates from
+the checkout. [pipx](https://pipx.pypa.io/) installs the CLI into its own
+virtualenv, so the system-`pip` block on modern Debian/Ubuntu/WSL2 hosts
+([PEP 668](https://peps.python.org/pep-0668/)) never applies. Install pipx with
+`sudo apt install pipx` if you do not have it.
+
+To run from source instead (for development), replace the `pipx` line with a
+virtualenv editable install (the `python3 -m venv` step needs `python3-venv` on
+Debian/Ubuntu):
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
 
 `aptl lab start` creates `.env` automatically when it is missing and replaces
 template placeholder values with lab credentials that match the running
@@ -69,7 +78,8 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 
 - Docker + Docker Compose
 - Python 3.11+
-- 8 GB RAM, 20 GB disk
+- RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
+- 20 GB+ disk
 - Linux / macOS / WSL2
 - Open ports: 443, 2027, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
 

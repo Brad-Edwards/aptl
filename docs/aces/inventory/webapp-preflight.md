@@ -86,5 +86,5 @@ backend boundary, not in this evidence pass.
   SDL deletion, scenario archive move, or public start-path routing.
 - Do not add a second scenario model, second inventory validator, or
   TechVault-name-dispatch shortcut.
-- Do not edit `CHANGELOG.md`; if this becomes user-visible executable source
-  work, add a towncrier fragment instead.
+- Do not edit `CHANGELOG.md`; release-please generates it from the Conventional
+  Commit PR title.

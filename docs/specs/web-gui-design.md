@@ -864,7 +864,7 @@ The implementation issue can use this checklist:
 - Every new API DTO has a Svelte mirror and tests.
 - Every new source path has pytest or vitest coverage as required by
   `.gc/plan-rules.md`.
-- Documentation and changelog fragments describe the shipped behavior.
+- Documentation and the Conventional Commit PR title describe the shipped behavior.
 
 ## Requirement Mapping
 

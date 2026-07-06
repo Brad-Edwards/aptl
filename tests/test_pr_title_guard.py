@@ -26,10 +26,10 @@ validate_pr_title = check_pr_title.validate_pr_title
     [
         "feat: add pipx install path",
         "fix(env): hydrate placeholder secrets",
-        "added: new curated scenario",
-        "changed: bump wazuh image",
-        "security: rotate lab ca",
-        "ci: add pypi release automation",
+        "perf: cache scenario parse",
+        "docs: document the release flow",
+        "chore: bump dependency pins",
+        "ci: add release automation",
         "feat!: drop legacy realization fields",
     ],
 )

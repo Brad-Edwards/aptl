@@ -6,9 +6,8 @@ Single source of truth for aptl pull-request title policy. Both the
 ``tests/test_pr_title_guard.py`` tests call ``validate_pr_title`` here, so the
 policy cannot drift between the workflow YAML and local enforcement.
 
-The allowed type list mirrors the towncrier changelog fragment types plus the
-standard conventional-commit types, so PR titles stay consistent with the
-changelog categories used at release time.
+The allowed type list is the standard Conventional Commit types, which
+release-please reads to compute the version bump and changelog.
 
 Policy:
   * Reject agent/tool advertising bracketed prefixes such as ``[codex] ...``,
@@ -40,25 +39,19 @@ from dataclasses import dataclass
 #: Agent/tool advertising prefixes banned as a bracketed title prefix.
 BRANDED_PREFIXES: tuple[str, ...] = ("codex", "claude", "openai", "chatgpt")
 
-#: Allowed PR-title types: the towncrier changelog fragment types
-#: (security/added/changed/deprecated/removed/fixed) plus the standard
-#: conventional-commit types.
+#: Allowed PR-title types: the standard Conventional Commit types release-please
+#: recognizes (feat/fix drive the bump; the rest are no-release changelog types).
 CONVENTIONAL_TYPES: tuple[str, ...] = (
-    "security",
-    "added",
-    "changed",
-    "deprecated",
-    "removed",
-    "fixed",
     "feat",
     "fix",
-    "chore",
+    "perf",
     "docs",
+    "chore",
     "refactor",
     "test",
     "ci",
     "build",
-    "perf",
+    "style",
     "revert",
 )
 

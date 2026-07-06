@@ -1,5 +1,10 @@
 """Advanced Purple Team Lab CLI."""
 
-# Single source of truth for the version. pyproject.toml reads this literal via
-# [tool.hatch.version] path; tools/release.py rewrites it when cutting a release.
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    # Version lives in pyproject.toml (managed by release-please); read it from
+    # installed metadata so there is one source of truth.
+    __version__ = _version("aptl")
+except PackageNotFoundError:  # running from a source tree without installed metadata
+    __version__ = "0.0.0"

@@ -282,7 +282,7 @@ If SOC stack is enabled:
 | Service | URL | Check |
 |---|---|---|
 | MISP | https://localhost:8443 | Login page loads |
-| TheHive | http://localhost:9000 | Status API returns 200 |
+| TheHive | https://localhost:9000 | Status API returns 200 |
 | Shuffle | http://localhost:3443 | Frontend loads |
 
 ### 5. Network Connectivity

@@ -143,7 +143,7 @@ Verify every container starts and passes its health check.
 |----|------|----------|-----|
 | SVC-30 | MISP container running | Status: running, HTTPS on 8443 | `curl -ks https://localhost:8443/users/login \| head -5` |
 | SVC-31 | MISP DB healthy | MariaDB running | `docker inspect aptl-misp-db --format '{{.State.Health.Status}}'` |
-| SVC-32 | TheHive running | API responds on port 9000 | `curl -sf http://localhost:9000/api/v1/status` |
+| SVC-32 | TheHive running | API responds on port 9000 | `curl -ksf https://localhost:9000/api/status` |
 | SVC-33 | TheHive Cassandra healthy | Status: healthy | `docker inspect aptl-thehive-cassandra --format '{{.State.Health.Status}}'` |
 | SVC-34 | TheHive ES healthy | Status: healthy | `docker inspect aptl-thehive-es --format '{{.State.Health.Status}}'` |
 | SVC-35 | Shuffle backend running | API responds on 5001 | `curl -sf http://localhost:5001/api/v1/health` |
@@ -424,7 +424,7 @@ Notes:
 - **Startup time**: The full stack (wazuh + enterprise + soc) takes 10-15 minutes for all services to become healthy. TheHive and MISP are the slowest. Don't start testing section 4 until SVC-30 through SVC-38 all pass.
 - **Order matters**: Section 3 (red team) should run before section 4 (blue team) because the blue team tests verify that attacks were detected. The Infrastructure Tester and Red Team Tester should work sequentially, not in parallel, for sections 2-3. Blue Team Tester can start section 4a/4c while red team finishes.
 - **MISP first-run**: MISP takes a long time on first boot (database migration). MCP-01 and MCP-02 may need to be retried after 5-10 minutes.
-- **TheHive first-run**: TheHive requires initial admin setup (create org + user + API key) before the MCP server can authenticate. The tester should create the admin account via the UI at `http://localhost:9000` first, then set `THEHIVE_API_KEY` in the environment.
+- **TheHive first-run**: TheHive requires initial admin setup (create org + user + API key) before the MCP server can authenticate. The tester should create the admin account via the UI at `https://localhost:9000` first, then set `THEHIVE_API_KEY` in the environment.
 - **Shuffle first-run**: Shuffle needs initial login and API key creation at `https://localhost:3443`. Set `SHUFFLE_API_KEY` after initial setup.
 - **Section 5 tests**: These require stopping the lab, changing `aptl.json`, and restarting. Run them last to avoid disrupting other tests.
 - **Kali tool availability**: Some Kali tools (ldapsearch, psql, smbclient) may need to be installed if not in the base image. The Red Team Tester should check and install as needed: `apt-get install -y ldap-utils postgresql-client smbclient`.

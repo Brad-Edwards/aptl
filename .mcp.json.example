@@ -61,7 +61,7 @@
       "command": "./tools/bin/thehivemcp",
       "args": ["--transport", "stdio"],
       "env": {
-        "THEHIVE_URL": "http://localhost:9000",
+        "THEHIVE_URL": "https://localhost:9000",
         "THEHIVE_API_KEY": "<run scripts/thehive-apikey.sh>",
         "THEHIVE_ORGANISATION": "APTL"
       }

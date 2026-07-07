@@ -760,10 +760,16 @@ services:
     domainname: techvault.local
     restart: unless-stopped
     ports:
-      - "25:25"
-      - "143:143"
-      - "587:587"
-      - "993:993"
+      # Loopback-only (ADR-039): the mailserver holds fixture credentials
+      # (known lab password), so its SMTP/IMAP ports must not be published on
+      # 0.0.0.0 where an exposed host would become an open, known-cred relay.
+      # In-range traffic (kali phishing -> victims) uses the docker networks
+      # below, not these host publishes; these exist only for operator access
+      # from the host itself.
+      - "127.0.0.1:25:25"
+      - "127.0.0.1:143:143"
+      - "127.0.0.1:587:587"
+      - "127.0.0.1:993:993"
     environment:
       - ENABLE_SPAMASSASSIN=0
       - ENABLE_CLAMAV=0

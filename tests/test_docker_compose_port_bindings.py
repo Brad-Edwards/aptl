@@ -37,6 +37,15 @@ MANAGEMENT_SURFACES = [
     ("aptl-otel-collector", 4317),
     ("aptl-otel-collector", 4318),
     ("aptl-tempo", 3200),
+    # mailserver holds fixture credentials (a known lab password), so its
+    # SMTP/IMAP host publishes must NOT be reachable on 0.0.0.0 where an
+    # exposed host becomes an open, known-cred relay (issue #668). The in-range
+    # phishing path (kali -> victims) uses the docker networks, not these host
+    # publishes, so loopback binding does not reduce attack realism.
+    ("mailserver", 25),
+    ("mailserver", 143),
+    ("mailserver", 587),
+    ("mailserver", 993),
 ]
 
 # Deliberate victim / attack-surface targets that MUST remain reachable on all

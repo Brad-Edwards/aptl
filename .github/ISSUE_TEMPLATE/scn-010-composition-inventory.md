@@ -166,7 +166,7 @@ Completion checklist:
   issues filed, linked from this issue.
 - `pytest tests/ -q -k "not integration"` passes.
 - `pre-commit run --all-files` passes.
-- Traceability link added in Ground Control: SCN-010 ←
+- Traceability link added in the GRC workflow platform: SCN-010 ←
   `docs/aces/inventory/_composition/`.
 - Parity inventory rows for composition-level surfaces updated where
   they move categories.

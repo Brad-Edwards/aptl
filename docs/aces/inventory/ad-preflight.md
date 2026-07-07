@@ -1,7 +1,7 @@
 # AD ACES Inventory Preflight
 
 This note records the local architecture preflight for SCN-010 / issue #332.
-The Ground Control `gc_codex_architecture_preflight` call completed and wrote
+The GRC workflow platform's `gc_codex_architecture_preflight` call completed and wrote
 the issue phase marker, but the tool did not create a repo-local note file.
 
 ## Binding Guardrails

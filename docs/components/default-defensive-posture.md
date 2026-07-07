@@ -662,7 +662,7 @@ Read it as design intent, not as documentation of today's behavior.
 ### Per-run mode-gated posture (SCN-001)
 
 [SCN-001](https://github.com/Brad-Edwards/aptl/issues/263)'s statement
-in Ground Control describes a `mode (red/blue/purple)` field on each
+in the GRC workflow platform describes a `mode (red/blue/purple)` field on each
 scenario YAML that would gate which posture defaults apply per run.
 
 **Today's reality is ACES-only for supported startup:**

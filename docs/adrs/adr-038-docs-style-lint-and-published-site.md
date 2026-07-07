@@ -18,7 +18,7 @@ and the docs were not published, despite a fully configured
 mkdocs-material theme. Prose quality drifted unchecked because nothing
 gated it, and nav drift went unnoticed because nothing built the site.
 
-The Ground-Control repository already runs a proven apparatus for this:
+An upstream workflow platform already runs a proven apparatus for this:
 a pinned, checksum-verified Vale install script, a pre-commit wrapper
 hook, the Google style package at error level, and a small house-style
 overlay. Porting it is cheaper and better-tested than inventing a new
@@ -83,5 +83,5 @@ Pages, gated by a strict mkdocs build.
 ## References
 
 - Issue [#407](https://github.com/Brad-Edwards/aptl/issues/407), requirement DOC-001
-- Ground-Control ADR-054 (Vale gate) and ADR-055 (style exclusions), the ported pattern
+- The upstream workflow platform's ADR-054 (Vale gate) and ADR-055 (style exclusions), the ported pattern
 - [ADR-026](adr-026-advisory-ci-vulnerability-scanning.md): the checks.yml advisory/blocking job split this docs job slots into

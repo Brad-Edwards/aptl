@@ -318,7 +318,7 @@ Lands in one PR:
   shared session/continuity exception types.
 - `aces conformance backend --profile orchestration-capable` switches from
   advisory to enforced (pre-push gate).
-- Ground Control reconciliation in the same PR:
+- GRC workflow platform reconciliation in the same PR:
   - DSL-001 → DEPRECATED
   - SCN-001 → DEPRECATED
   - DSL-002..DSL-009 → DEPRECATED (no per-item cross-links)
@@ -359,7 +359,7 @@ deprecations across releases.
   upstream-coordination become real workflow concerns.
 - Backend conformance becomes a pre-push gate; failing conformance
   blocks merge. This is the intended quality contract.
-- DSL-001 / SCN-001 deprecation cascades through Ground Control
+- DSL-001 / SCN-001 deprecation cascades through the GRC workflow platform
   traceability—every link from those requirements must be reconciled
   in the cutover PR.
 

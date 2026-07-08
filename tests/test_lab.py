@@ -1007,6 +1007,14 @@ class TestOrchestrateLabStart:
             "aptl.core.deployment.docker_compose."
             "DockerComposeBackend.seed_named_volumes",
         )
+        # The seed step also runs the legacy source-ownership repair, which
+        # now probes hostenv (docker info). Stub it so the orchestration
+        # tests stay hermetic (#678).
+        from aptl.core.suricata_seed import SuricataSourceOwnershipResult
+        mocks["suricata_ownership"] = mocker.patch(
+            "aptl.core.suricata_seed.ensure_suricata_config_source_ownership",
+            return_value=SuricataSourceOwnershipResult(success=True),
+        )
 
         # Mock certs
         from aptl.core.certs import CertResult

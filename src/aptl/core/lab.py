@@ -939,7 +939,9 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 
     # ctx.backend is narrowed to the local Compose backend by the caller's guard.
     assert ctx.backend is not None
-    ownership = ensure_suricata_config_source_ownership(ctx.project_dir)
+    ownership = ensure_suricata_config_source_ownership(
+        ctx.project_dir, SURICATA_IMAGE
+    )
     if not ownership.success:
         log.error(
             "Suricata config source ownership restore failed: %s",

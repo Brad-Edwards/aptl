@@ -31,6 +31,17 @@ the Docker VM; configure memory in Docker Desktop instead. The commands in this
 walkthrough use POSIX shell syntax. On Windows, run them from WSL2 or Git Bash,
 or use equivalent PowerShell commands for simple file reads.
 
+If you use Homebrew Docker with Colima on macOS instead of Docker Desktop,
+install the Docker Buildx CLI plugin before starting the lab:
+
+```bash
+brew install docker-buildx
+mkdir -p ~/.docker/cli-plugins
+ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" \
+  ~/.docker/cli-plugins/docker-buildx
+docker buildx version
+```
+
 [Playbook: Before you start]
 
 ## 1. Install and stand up the range [2]

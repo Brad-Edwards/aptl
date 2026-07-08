@@ -16,7 +16,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TextIO
 
 from aptl.core.config import (
     AptlConfig,
@@ -54,7 +54,8 @@ log = get_logger("lifecycle_enforce")
 
 try:
     import fcntl
-except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
+except ModuleNotFoundError:
+    # Windows does not provide POSIX flock; lifecycle locks become in-process.
     fcntl = None
 
 
@@ -120,7 +121,7 @@ def _single_owner_lock(project_dir: Path) -> Iterator[None]:
         handle.close()
 
 
-def _try_lock_lifecycle(handle) -> None:
+def _try_lock_lifecycle(handle: TextIO) -> None:
     """Acquire the lifecycle owner lock on POSIX hosts."""
     if fcntl is None:
         return
@@ -132,7 +133,7 @@ def _try_lock_lifecycle(handle) -> None:
         ) from exc
 
 
-def _unlock_lifecycle(handle) -> None:
+def _unlock_lifecycle(handle: TextIO) -> None:
     """Release the lifecycle owner lock on POSIX hosts."""
     if fcntl is not None:
         fcntl.flock(handle, fcntl.LOCK_UN)

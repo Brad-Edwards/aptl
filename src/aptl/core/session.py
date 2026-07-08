@@ -21,7 +21,8 @@ log = get_logger("session")
 
 try:
     import fcntl
-except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
+except ModuleNotFoundError:
+    # Windows does not provide POSIX flock; session locks become in-process.
     fcntl = None
 
 _SESSION_FILENAME = "session.json"

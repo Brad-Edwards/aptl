@@ -3126,6 +3126,70 @@ class TestLabOrchestrationContracts:
             selected,
         ]
 
+    def test_start_containers_restarts_wazuh_manager_when_stuck_between_attempts(
+        self, mocker, tmp_path
+    ):
+        """When the first compose up fails and the SOC retry path fires,
+        aptl inspects wazuh-manager. On Colima/macOS it can be Up but
+        with zero wazuh-* daemons alive (#732). One `docker restart`
+        clears the state; do it once, before the retry, so compose is
+        not asked to `up` against a broken container."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "running"},
+        }
+        # Stub the /proc walk that counts wazuh-* daemons — 0 alive.
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
+
+    def test_start_containers_skips_restart_when_wazuh_daemons_alive(
+        self, mocker, tmp_path
+    ):
+        """Daemons alive inside the container: the retry is likely
+        succeeding for a different reason; do NOT restart wazuh-manager."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "running"},
+        }
+        # 9 wazuh-* processes alive => watchdog stays quiet.
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="9\n")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+
+        backend.container_restart.assert_not_called()
+
     def test_start_containers_hints_for_stale_realization_networks(
         self, mocker, tmp_path
     ):

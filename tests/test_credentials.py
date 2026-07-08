@@ -757,17 +757,46 @@ def _write_suricata_sources(project_dir):
 class TestEnsureSuricataConfigSourceOwnership:
     """Legacy pre-ADR-043 bind mounts could leave seed sources unwritable."""
 
-    def test_no_op_when_sources_owned_by_current_user(self, tmp_path):
+    _IMAGE = "jasonish/suricata:7.0"
+
+    def _force_linux_native(self, monkeypatch):
+        """Force the native-Linux branch (#678) so the repair logic runs."""
+        monkeypatch.setattr(
+            "aptl.core.suricata_seed.hostenv.needs_host_ownership_fix",
+            lambda: True,
+        )
+
+    def test_no_op_when_sources_owned_by_current_user(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is True
         assert result.repaired == ()
 
-    def test_restores_foreign_owned_sources_with_sudo(self, tmp_path, monkeypatch):
+    def test_skipped_on_non_linux_engine(self, tmp_path, monkeypatch):
+        """#678: no-op (no os.getuid, no subprocess) off a native Linux engine."""
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        monkeypatch.setattr(
+            "aptl.core.suricata_seed.hostenv.needs_host_ownership_fix",
+            lambda: False,
+        )
+        # os.getuid must never be reached (it does not exist on Windows).
+        monkeypatch.setattr(
+            os,
+            "getuid",
+            lambda: (_ for _ in ()).throw(AssertionError("getuid called")),
+        )
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
+        assert result.success is True
+        assert result.repaired == ()
+
+    def test_restores_foreign_owned_sources_with_container(self, tmp_path, monkeypatch):
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
+
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
         rules_path = tmp_path / "config" / "suricata" / "rules" / "local.rules"
@@ -797,17 +826,22 @@ class TestEnsureSuricataConfigSourceOwnership:
         )
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is True
         assert set(result.repaired) == {
             "config/suricata/suricata.yaml",
             "config/suricata/rules/local.rules",
         }
-        assert calls[0][:4] == ["sudo", "-n", "chown", f"{os.getuid()}:{os.getgid()}"]
+        # Container-based chown, never host sudo.
+        assert calls[0][0] == "docker"
+        assert "run" in calls[0] and "--entrypoint" in calls[0] and "chown" in calls[0]
+        assert "sudo" not in calls[0]
+        assert self._IMAGE in calls[0]
 
-    def test_reports_actionable_error_when_sudo_unavailable(self, tmp_path, monkeypatch):
+    def test_reports_error_when_container_repair_fails(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
 
@@ -826,15 +860,14 @@ class TestEnsureSuricataConfigSourceOwnership:
         )
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(
-                cmd, 1, "", "sudo: a password is required",
-            )
+            return subprocess.CompletedProcess(cmd, 1, "", "chown: operation not permitted")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is False
-        assert "passwordless sudo" in result.error
+        assert "not permitted" in result.error
+        assert "sudo" not in result.error
 
 
 class TestBuildSuricataVolumeSeeds:

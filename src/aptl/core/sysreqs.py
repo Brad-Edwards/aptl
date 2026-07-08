@@ -51,6 +51,7 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
 
 
 def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:
+    """Run and evaluate the Linux-native vm.max_map_count check."""
     sysctl_result = _run_max_map_count_sysctl(minimum)
     if isinstance(sysctl_result, SysReqResult):
         return sysctl_result
@@ -58,6 +59,7 @@ def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:
 
 
 def _run_max_map_count_sysctl(minimum: int) -> subprocess.CompletedProcess | SysReqResult:
+    """Run sysctl or return a not-applicable result when it is unavailable."""
     try:
         return subprocess.run(
             ["sysctl", "vm.max_map_count"],
@@ -72,6 +74,7 @@ def _evaluate_sysctl_result(
     result: subprocess.CompletedProcess,
     minimum: int,
 ) -> SysReqResult:
+    """Translate a sysctl process result into a requirement result."""
     if result.returncode != 0:
         return _failed_sysctl_result(result.stderr, minimum)
 
@@ -90,6 +93,7 @@ def _evaluate_sysctl_result(
 
 
 def _failed_sysctl_result(stderr: str, minimum: int) -> SysReqResult:
+    """Return a failed or not-applicable result for nonzero sysctl output."""
     error_msg = stderr.strip() or "sysctl command failed"
     if _sysctl_not_applicable(error_msg):
         return _not_applicable_result(
@@ -105,6 +109,7 @@ def _failed_sysctl_result(stderr: str, minimum: int) -> SysReqResult:
 
 
 def _parse_sysctl_value(stdout: str) -> int:
+    """Extract the integer value from ``sysctl vm.max_map_count`` output."""
     # Parse output: "vm.max_map_count = 262144"
     parts = stdout.split("=")
     if len(parts) != 2:
@@ -113,6 +118,7 @@ def _parse_sysctl_value(stdout: str) -> int:
 
 
 def _max_map_count_result(current_value: int, minimum: int) -> SysReqResult:
+    """Build the final result for a parsed vm.max_map_count value."""
     passed = current_value >= minimum
     if passed:
         log.info("vm.max_map_count is adequate (%d >= %d)", current_value, minimum)

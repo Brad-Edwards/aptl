@@ -6,7 +6,6 @@ provides methods to record hints, objective completions, and session
 lifecycle events.
 """
 
-import fcntl
 import json
 import os
 from dataclasses import asdict, dataclass, field
@@ -19,6 +18,12 @@ from aptl.core.scenarios import ScenarioStateError
 from aptl.utils.logging import get_logger
 
 log = get_logger("session")
+
+try:
+    import fcntl
+except ModuleNotFoundError:
+    # Windows does not provide POSIX flock; session locks become in-process.
+    fcntl = None
 
 _SESSION_FILENAME = "session.json"
 
@@ -153,7 +158,7 @@ class ScenarioSession(object):
             return None
 
         with open(self._session_path, "r", encoding="utf-8") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            _lock_shared(f.fileno())
             raw = f.read().strip()
         if not raw:
             return None
@@ -383,9 +388,21 @@ class ScenarioSession(object):
             str(self._session_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         )
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            _lock_exclusive(fd)
             os.write(fd, payload.encode("utf-8"))
         finally:
             # `os.close(fd)` releases the LOCK_EX as a side effect.
             os.close(fd)
         log.debug("Wrote session to %s", self._session_path)
+
+
+def _lock_shared(fd: int) -> None:
+    """Take a shared file lock where the host OS supports POSIX flock."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_SH)
+
+
+def _lock_exclusive(fd: int) -> None:
+    """Take an exclusive file lock where the host OS supports POSIX flock."""
+    if fcntl is not None:
+        fcntl.flock(fd, fcntl.LOCK_EX)

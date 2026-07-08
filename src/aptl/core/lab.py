@@ -1710,12 +1710,9 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
         )
         return None
     try:
-        mcp_result = subprocess.run(
-            [str(mcp_script)],
-            capture_output=True,
-            text=True,
-            cwd=ctx.project_dir,
-        )
+        from aptl.utils.shell import run_shell_script
+
+        mcp_result = run_shell_script(mcp_script, cwd=ctx.project_dir)
         if mcp_result.returncode != 0:
             # Raw stderr stays in the log (existing redaction owns it);
             # the structured diagnostic carries only a narrow summary.
@@ -1833,10 +1830,10 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
 def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
     """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
-        seed_result = subprocess.run(
-            [str(seed_script)],
-            capture_output=True,
-            text=True,
+        from aptl.utils.shell import run_shell_script
+
+        seed_result = run_shell_script(
+            seed_script,
             cwd=ctx.project_dir,
             env={**os.environ, **ctx.raw_env},
             timeout=1200,

@@ -47,5 +47,9 @@ containers/keys/* text eol=lf
 
 scripts/**/*.sh text eol=lf
 
+# `aptl lab start` runs mcp/build-all-mcps.sh through a POSIX shell (Git Bash on
+# Windows), which fails on CRLF-mangled lines, so keep the MCP build scripts LF.
+mcp/**/*.sh text eol=lf
+
 .aptl/config/** text eol=lf
 .aptl/realization/** text eol=lf

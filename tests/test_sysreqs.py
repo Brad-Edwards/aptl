@@ -11,6 +11,16 @@ import pytest
 class TestCheckMaxMapCount:
     """Tests for vm.max_map_count checking."""
 
+    @pytest.fixture(autouse=True)
+    def _linux_native_docker(self, mocker):
+        """Default existing tests to the only mode that enforces sysctl."""
+        from aptl.core import hostenv
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
+
     def test_passes_when_value_meets_minimum(self, mocker):
         """Should pass when vm.max_map_count >= required minimum."""
         from aptl.core.sysreqs import check_max_map_count
@@ -76,7 +86,7 @@ class TestCheckMaxMapCount:
             return_value=MagicMock(
                 returncode=1,
                 stdout="",
-                stderr="sysctl: command not found",
+                stderr="sysctl: permission denied",
             ),
         )
 
@@ -84,7 +94,43 @@ class TestCheckMaxMapCount:
 
         assert result.passed is False
         assert result.current_value == 0
-        assert "sysctl" in result.error.lower() or "command" in result.error.lower()
+        assert "permission denied" in result.error.lower()
+
+    def test_skips_on_docker_desktop(self, mocker):
+        """Docker Desktop manages the setting inside its Linux VM."""
+        from aptl.core import hostenv
+        from aptl.core.sysreqs import check_max_map_count
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_DESKTOP,
+        )
+        mock_run = mocker.patch("aptl.core.sysreqs.subprocess.run")
+
+        result = check_max_map_count()
+
+        assert result.passed is True
+        assert result.applicable is False
+        assert result.current_value == 0
+        assert "Docker VM" in result.error
+        mock_run.assert_not_called()
+
+    def test_skips_when_docker_mode_unknown(self, mocker):
+        """Unknown Docker mode is not treated as a host sysctl failure."""
+        from aptl.core import hostenv
+        from aptl.core.sysreqs import check_max_map_count
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_UNKNOWN,
+        )
+        mock_run = mocker.patch("aptl.core.sysreqs.subprocess.run")
+
+        result = check_max_map_count()
+
+        assert result.passed is True
+        assert result.applicable is False
+        mock_run.assert_not_called()
 
     def test_handles_malformed_sysctl_output(self, mocker):
         """Should return failure when sysctl output can't be parsed."""
@@ -147,7 +193,7 @@ class TestCheckMaxMapCount:
         assert result_pass.current_value == 100000
 
     def test_handles_subprocess_exception(self, mocker):
-        """Should handle subprocess raising an exception."""
+        """Missing sysctl is not applicable, not a startup failure."""
         from aptl.core.sysreqs import check_max_map_count
 
         mocker.patch(
@@ -157,9 +203,33 @@ class TestCheckMaxMapCount:
 
         result = check_max_map_count()
 
-        assert result.passed is False
+        assert result.passed is True
+        assert result.applicable is False
         assert result.current_value == 0
         assert "not found" in result.error.lower()
+
+    def test_oid_absent_is_not_applicable(self, mocker):
+        """Hosts without this OID should not fail lab startup."""
+        from aptl.core.sysreqs import check_max_map_count
+
+        mocker.patch(
+            "aptl.core.sysreqs.subprocess.run",
+            return_value=MagicMock(
+                returncode=1,
+                stdout="",
+                stderr=(
+                    "sysctl: cannot stat /proc/sys/vm/max_map_count: "
+                    "No such file or directory"
+                ),
+            ),
+        )
+
+        result = check_max_map_count()
+
+        assert result.passed is True
+        assert result.applicable is False
+        assert result.current_value == 0
+        assert "not applicable" in result.error.lower()
 
     def test_sysctl_called_with_correct_args(self, mocker):
         """Should call sysctl with vm.max_map_count."""

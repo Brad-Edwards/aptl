@@ -129,6 +129,26 @@ class TestEnsureSSHKeys:
         assert result.success is False
         assert "permission denied" in result.error
 
+    def test_missing_ssh_keygen_returns_error(self, tmp_path, mocker):
+        """Missing ssh-keygen should not crash lab startup."""
+        from aptl.core.ssh import ensure_ssh_keys
+
+        host_ssh_dir = tmp_path / ".ssh"
+        host_ssh_dir.mkdir()
+        keys_dir = tmp_path / "keys"
+        keys_dir.mkdir()
+
+        mocker.patch(
+            "aptl.core.ssh.subprocess.run",
+            side_effect=FileNotFoundError("ssh-keygen"),
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
+
+        assert result.success is False
+        assert "ssh-keygen" in result.error
+
     def test_sets_correct_file_permissions(self, tmp_path, mocker):
         """Should set 600 on private key and 644 on public key."""
         from aptl.core.ssh import ensure_ssh_keys
@@ -157,6 +177,71 @@ class TestEnsureSSHKeys:
 
         assert (str(key_path), 0o600) in paths_and_modes
         assert (str(pub_path), 0o644) in paths_and_modes
+
+    def test_windows_hardens_private_key_with_icacls(self, tmp_path, mocker):
+        """Windows OpenSSH key privacy uses NTFS ACLs, not POSIX chmod."""
+        from aptl.core.ssh import ensure_ssh_keys
+
+        host_ssh_dir = tmp_path / ".ssh"
+        host_ssh_dir.mkdir()
+        keys_dir = tmp_path / "keys"
+        keys_dir.mkdir()
+
+        key_path = host_ssh_dir / "aptl_lab_key"
+        pub_path = host_ssh_dir / "aptl_lab_key.pub"
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "ssh-keygen":
+                key_path.write_text("private-key")
+                pub_path.write_text("public-key")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=True)
+        mocker.patch("aptl.core.ssh.getpass.getuser", return_value="alice")
+        mock_run = mocker.patch("aptl.core.ssh.subprocess.run", side_effect=fake_run)
+        mock_chmod = mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
+
+        assert result.success is True
+        mock_chmod.assert_not_called()
+        assert [
+            "icacls",
+            str(key_path),
+            "/inheritance:r",
+            "/grant:r",
+            "alice:R",
+        ] in [call_args.args[0] for call_args in mock_run.call_args_list]
+
+    def test_windows_icacls_failure_returns_error(self, tmp_path, mocker):
+        """A failed Windows ACL hardening step should be explicit."""
+        from aptl.core.ssh import ensure_ssh_keys
+
+        host_ssh_dir = tmp_path / ".ssh"
+        host_ssh_dir.mkdir()
+        keys_dir = tmp_path / "keys"
+        keys_dir.mkdir()
+
+        key_path = host_ssh_dir / "aptl_lab_key"
+        pub_path = host_ssh_dir / "aptl_lab_key.pub"
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "ssh-keygen":
+                key_path.write_text("private-key")
+                pub_path.write_text("public-key")
+                return MagicMock(returncode=0, stdout="", stderr="")
+            return MagicMock(returncode=1, stdout="", stderr="Access is denied.")
+
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=True)
+        mocker.patch("aptl.core.ssh.getpass.getuser", return_value="alice")
+        mocker.patch("aptl.core.ssh.subprocess.run", side_effect=fake_run)
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
+
+        assert result.success is False
+        assert "icacls" in result.error
+        assert "Access is denied" in result.error
 
     def test_copies_pub_to_both_locations(self, tmp_path, mocker):
         """Should copy .pub to both aptl_lab_key.pub and authorized_keys in keys_dir."""
@@ -323,6 +408,21 @@ class TestEnsurePivotKey:
         assert result.success is False
         assert "disk full" in result.error
 
+    def test_missing_pivot_ssh_keygen_returns_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        mocker.patch(
+            "aptl.core.ssh.subprocess.run",
+            side_effect=FileNotFoundError("ssh-keygen"),
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "ssh-keygen" in result.error
+
     def test_pivot_key_is_separate_from_control_plane_key(self, tmp_path, mocker):
         """The pivot key must never be the control-plane key name."""
         from aptl.core.ssh import ensure_pivot_key
@@ -341,3 +441,34 @@ class TestEnsurePivotKey:
 
         assert result.key_path.name == "kali_pivot_key"
         assert not (pivot_dir / "aptl_lab_key").exists()
+
+    def test_windows_pivot_key_uses_icacls_not_chmod(self, tmp_path, mocker):
+        """The Windows host never calls POSIX chmod for the pivot key."""
+        from aptl.core.ssh import ensure_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        key_path = pivot_dir / "kali_pivot_key"
+        pub_path = pivot_dir / "kali_pivot_key.pub"
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "ssh-keygen":
+                key_path.write_text("priv")
+                pub_path.write_text("pub")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=True)
+        mocker.patch("aptl.core.ssh.getpass.getuser", return_value="alice")
+        mock_run = mocker.patch("aptl.core.ssh.subprocess.run", side_effect=fake_run)
+        mock_chmod = mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is True
+        mock_chmod.assert_not_called()
+        assert [
+            "icacls",
+            str(key_path),
+            "/inheritance:r",
+            "/grant:r",
+            "alice:R",
+        ] in [call_args.args[0] for call_args in mock_run.call_args_list]

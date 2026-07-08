@@ -11,13 +11,12 @@ is a thin single-owner loop over it. See ADR-045.
 
 from __future__ import annotations
 
-import fcntl
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TextIO
 
 from aptl.core.config import (
     AptlConfig,
@@ -52,6 +51,12 @@ if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lifecycle_enforce")
+
+try:
+    import fcntl
+except ModuleNotFoundError:
+    # Windows does not provide POSIX flock; lifecycle locks become in-process.
+    fcntl = None
 
 
 # ---------------------------------------------------------------------------
@@ -107,18 +112,31 @@ def _single_owner_lock(project_dir: Path) -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("w")
     try:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            raise LifecycleBusyError(
-                "another lifecycle owner is active (enforce/monitor lock held)"
-            ) from exc
+        _try_lock_lifecycle(handle)
         try:
             yield
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            _unlock_lifecycle(handle)
     finally:
         handle.close()
+
+
+def _try_lock_lifecycle(handle: TextIO) -> None:
+    """Acquire the lifecycle owner lock on POSIX hosts."""
+    if fcntl is None:
+        return
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        raise LifecycleBusyError(
+            "another lifecycle owner is active (enforce/monitor lock held)"
+        ) from exc
+
+
+def _unlock_lifecycle(handle: TextIO) -> None:
+    """Release the lifecycle owner lock on POSIX hosts."""
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 # ---------------------------------------------------------------------------

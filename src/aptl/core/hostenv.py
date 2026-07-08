@@ -75,6 +75,7 @@ def docker_mode() -> str:
 
 
 def _docker_operating_system() -> str | None:
+    """Return Docker's reported operating system, or None when unavailable."""
     try:
         result = _run_docker_info()
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -92,6 +93,7 @@ def _docker_operating_system() -> str | None:
 
 
 def _run_docker_info() -> subprocess.CompletedProcess[str]:
+    """Run the Docker CLI probe used for engine-mode detection."""
     return subprocess.run(
         ["docker", "info", "--format", "{{.OperatingSystem}}"],
         capture_output=True,
@@ -101,6 +103,7 @@ def _run_docker_info() -> subprocess.CompletedProcess[str]:
 
 
 def _docker_mode_from_operating_system(operating_system: str | None) -> str:
+    """Classify a Docker operating-system string into an aptl Docker mode."""
     mode = DOCKER_UNKNOWN
     if operating_system == "Docker Desktop":
         mode = DOCKER_DESKTOP

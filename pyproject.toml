@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aptl-labs"
-version = "4.2.1"
+version = "4.2.2"
 description = "Advanced Purple Team Lab CLI"
 readme = "README.md"
 requires-python = ">=3.11"

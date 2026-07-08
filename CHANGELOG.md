@@ -9,6 +9,18 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.2.2](https://github.com/Brad-Edwards/aptl/compare/v4.2.1...v4.2.2) (2026-07-08)
+
+
+### Bug Fixes
+
+* enable full SOC lab in default config so init+start works ([#727](https://github.com/Brad-Edwards/aptl/issues/727)) ([0d18d7d](https://github.com/Brad-Edwards/aptl/commit/0d18d7d27b42de2f49b408a4c4a8d23a06fe8389))
+
+
+### Documentation
+
+* **troubleshooting:** triage 'Up (unhealthy)' containers — memory-tight vs daemons-crashed ([#726](https://github.com/Brad-Edwards/aptl/issues/726)) ([46b7b3e](https://github.com/Brad-Edwards/aptl/commit/46b7b3eaed0942f478f965db0b889914c205766b))
+
 ## [4.2.1](https://github.com/Brad-Edwards/aptl/compare/v4.2.0...v4.2.1) (2026-07-08)
 
 

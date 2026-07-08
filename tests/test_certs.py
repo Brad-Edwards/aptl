@@ -33,6 +33,7 @@ def _successful_generator(mocker, certs_dir):
         generated_key = certs_dir / "wazuh.manager-key.pem"
         generated_key.write_text("fake-key")
         generated_key.chmod(0o400)
+        certs_dir.chmod(0o500)
         return MagicMock(returncode=0, stdout="", stderr="")
 
     return mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
@@ -78,6 +79,7 @@ class TestEnsureSSLCerts:
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
         assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
         assert (certs_dir / "wazuh.manager-key.pem").stat().st_mode & 0o200
+        assert certs_dir.stat().st_mode & 0o200
         assert mock_run.call_count == 1
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert generator_cmd == [
@@ -112,6 +114,7 @@ class TestEnsureSSLCerts:
         assert result.generated is True
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
         assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
+        assert certs_dir.stat().st_mode & 0o200
 
     def test_docker_desktop_generator_does_not_request_host_uid(
         self, tmp_path, mocker
@@ -134,6 +137,7 @@ class TestEnsureSSLCerts:
         assert generator_cmd[-1] == "generator"
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
         assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
+        assert certs_dir.stat().st_mode & 0o200
         getuid.assert_not_called()
         getgid.assert_not_called()
 

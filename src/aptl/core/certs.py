@@ -101,6 +101,7 @@ def _ensure_manager_root_ca_alias(certs_dir: Path) -> str | None:
     if not source.exists():
         return f"Missing generated CA certificate: {source}"
     try:
+        certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
         shutil.copyfile(source, target)
     except OSError as exc:
         return f"Failed to prepare manager root CA certificate: {exc}"
@@ -115,6 +116,10 @@ def _ensure_user_writable_certs(certs_dir: Path) -> None:
     cleanup even when the files map back to the host user. This is a
     best-effort host-side chmod and never escalates privileges.
     """
+    try:
+        certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
+    except OSError as exc:
+        log.warning("Could not make generated cert directory writable (%s): %s", certs_dir, exc)
     for path in certs_dir.iterdir():
         if not path.is_file():
             continue

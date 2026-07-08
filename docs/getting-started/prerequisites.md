@@ -72,7 +72,7 @@ You do not have to free these by hand: `aptl lab start` probes every published
 host port and, if a default is already in use (Windows reserves UDP 5353 for
 mDNS; an editor's automatic port-forwarding may hold others), publishes that
 service on a free port instead and prints the real ports under "Host port
-remaps" in the start summary. Use the reported ports (e.g. the Wazuh Dashboard
+remaps" in the start summary. Use the reported ports (for example, the Wazuh Dashboard
 URL, or `dig @localhost -p <reported-port> techvault.local SOA`). Pin a specific
 port with the matching `APTL_HP_*` / `APTL_DNS_HOST_PORT` variable to override.
 
@@ -86,7 +86,7 @@ block system-wide `pip` under [PEP 668](https://peps.python.org/pep-0668/), so
 
 For released installs on any OS, prefer `pipx install aptl-labs`.
 
-**macOS gotcha — pipx bound to the system Python 3.9.** `aptl-labs` requires
+**macOS gotcha—pipx bound to the system Python 3.9.** `aptl-labs` requires
 Python 3.11+ (declared in `pyproject.toml`). If your `pipx` was installed
 against the Command Line Tools Python (`/usr/bin/python3`, which is 3.9),
 `pipx install aptl-labs` fails with:
@@ -96,7 +96,7 @@ ERROR: Could not find a version that satisfies the requirement aptl-labs (from v
 ```
 
 The real cause is the "Ignored the following versions that require a
-different python version" line further up in pip's output — every published
+different python version" line further up in pip's output—every published
 `aptl-labs` release is filtered out by the Python-version gate. Recover with
 a scoped standalone Python that pipx fetches just for this venv:
 

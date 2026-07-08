@@ -985,7 +985,16 @@ class TestOrchestrateLabStart:
             ),
         )
 
-        # Mock sysreqs
+        # Mock sysreqs. The sysreqs step is now gated on host/Docker mode
+        # (#680): force a native-Linux engine so the orchestration tests
+        # exercise the check_max_map_count path without shelling out to
+        # `docker info`.
+        mocks["is_docker_desktop"] = mocker.patch(
+            "aptl.core.lab.hostenv.is_docker_desktop", return_value=False
+        )
+        mocks["is_linux"] = mocker.patch(
+            "aptl.core.lab.hostenv.is_linux", return_value=True
+        )
         from aptl.core.sysreqs import SysReqResult
         mocks["sysreqs"] = mocker.patch(
             "aptl.core.lab.check_max_map_count",
@@ -1174,6 +1183,47 @@ class TestOrchestrateLabStart:
         assert "map_count" in result.error.lower() or "sysreq" in result.error.lower()
         # Should not have tried to start lab
         mocks["start"].assert_not_called()
+
+    def test_sysreqs_skipped_on_docker_desktop(self, mocker):
+        """#680: vm.max_map_count is not enforced under Docker Desktop."""
+        from aptl.core.lab import _step_check_sysreqs
+
+        mocker.patch("aptl.core.lab.hostenv.is_docker_desktop", return_value=True)
+        mocker.patch("aptl.core.lab.hostenv.is_linux", return_value=True)
+        check = mocker.patch("aptl.core.lab.check_max_map_count")
+
+        assert _step_check_sysreqs(mocker.Mock()) is None
+        check.assert_not_called()
+
+    def test_sysreqs_skipped_on_non_linux(self, mocker):
+        """#680: vm.max_map_count is not enforced on macOS/Windows hosts."""
+        from aptl.core.lab import _step_check_sysreqs
+
+        mocker.patch("aptl.core.lab.hostenv.is_docker_desktop", return_value=False)
+        mocker.patch("aptl.core.lab.hostenv.is_linux", return_value=False)
+        check = mocker.patch("aptl.core.lab.check_max_map_count")
+
+        assert _step_check_sysreqs(mocker.Mock()) is None
+        check.assert_not_called()
+
+    def test_sysreqs_enforced_on_linux_native(self, mocker):
+        """#680: the check still runs (and can fail) on a native Linux engine."""
+        from aptl.core.lab import _step_check_sysreqs
+        from aptl.core.sysreqs import SysReqResult
+
+        mocker.patch("aptl.core.lab.hostenv.is_docker_desktop", return_value=False)
+        mocker.patch("aptl.core.lab.hostenv.is_linux", return_value=True)
+        check = mocker.patch(
+            "aptl.core.lab.check_max_map_count",
+            return_value=SysReqResult(
+                passed=False, current_value=65530, required_value=262144
+            ),
+        )
+
+        result = _step_check_sysreqs(mocker.Mock())
+
+        assert result is not None and result.success is False
+        check.assert_called_once()
 
     def test_stops_on_ssh_key_generation_failure(self, mocker, tmp_path):
         """Should fail if SSH key generation fails."""

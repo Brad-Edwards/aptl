@@ -72,6 +72,7 @@ from aptl.core.snapshot import (
     list_container_snapshots,
 )
 from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
+from aptl.core import hostenv
 from aptl.core.sysreqs import check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -779,7 +780,21 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
-    """Validate host kernel settings required by Wazuh."""
+    """Validate host kernel settings required by Wazuh.
+
+    ``vm.max_map_count`` is a Linux kernel parameter that only applies to a
+    native Linux Docker engine. On Docker Desktop (any host OS) the setting
+    lives inside the Docker VM, which ships an adequate default, and on
+    macOS/Windows the ``sysctl`` OID does not exist at all. Enforcing the
+    check there would abort ``lab start`` for a setting the host cannot own,
+    so it is skipped (not failed) whenever we are not on a native Linux engine.
+    """
+    if hostenv.is_docker_desktop() or not hostenv.is_linux():
+        log.info(
+            "Step 4: Skipping vm.max_map_count check "
+            "(handled by the Docker VM on Docker Desktop / non-Linux hosts)."
+        )
+        return None
     log.info("Step 4: Checking system requirements...")
     sysreq_result = check_max_map_count()
     if sysreq_result.passed:

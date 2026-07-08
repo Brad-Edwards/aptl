@@ -1820,6 +1820,29 @@ class TestSeedSuricataVolumesStep:
         suffixes = {s.volume_suffix for s in seeds}
         assert suffixes == {"suricata_config_seed", "suricata_misp_rules"}
 
+    def test_seeder_image_pulled_before_ownership_and_seed(self, tmp_path):
+        """Pre-pull surfaces registry failures before opaque `exit 125` from
+        the seeder container (both the ownership repair and seed step
+        implicitly pull the same image via `docker run`)."""
+        from aptl.core.lab import SURICATA_IMAGE, _step_seed_suricata_volumes
+
+        _write_suricata_seed_sources(tmp_path)
+        backend = MagicMock()
+        backend.pull_images.return_value = []
+
+        result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
+
+        assert result is None
+        backend.pull_images.assert_called_once_with([SURICATA_IMAGE])
+        # Pull happens before the seed hand-off.
+        pull_call = next(
+            i for i, c in enumerate(backend.mock_calls) if c[0] == "pull_images"
+        )
+        seed_call = next(
+            i for i, c in enumerate(backend.mock_calls) if c[0] == "seed_named_volumes"
+        )
+        assert pull_call < seed_call
+
     def test_seed_error_aborts_lab_start_step(self, tmp_path, caplog):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import _step_seed_suricata_volumes

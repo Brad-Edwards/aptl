@@ -989,6 +989,14 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 
     # ctx.backend is narrowed to the local Compose backend by the caller's guard.
     assert ctx.backend is not None
+    # Pull the seeder image up front. Both the ownership repair and the seed
+    # container implicitly pull it via `docker run`, and on a fresh host a
+    # failed/slow implicit pull can surface as an opaque `exit 125` from the
+    # seeder with no docker stderr in the redacted log path — pulling here
+    # keeps registry failures at a stage the user can reason about (a
+    # `Failed to pull ...` warning) instead of a bare seed-exit code.
+    for pull_warning in ctx.backend.pull_images([SURICATA_IMAGE]):
+        log.warning(pull_warning)
     ownership = ensure_suricata_config_source_ownership(ctx.project_dir, SURICATA_IMAGE)
     if not ownership.success:
         log.error(

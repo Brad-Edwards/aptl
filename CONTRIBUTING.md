@@ -87,6 +87,14 @@ cd web && npm test
 When changing files under `mcp/aptl-mcp-common`, rebuild the common package and
 run tests for dependent MCP servers because they consume the local package.
 
+CI also runs the non-Docker Python suite plus `aptl --help` and
+`aptl lab init` on Ubuntu and macOS. Windows runs the portable Python contract
+suite plus the same CLI smoke commands, excluding POSIX-only file-mode,
+ownership, signal, and Unix-socket tests. Hosted runners do not provide the
+Docker Desktop/nested-virtualization environment needed to prove full lab boot
+on macOS or Windows, so `aptl lab start` remains a manual platform-validation
+gate.
+
 When changing `docker-compose.yml`, container Dockerfiles, or files under
 `config/`, validate the lab from a clean state:
 

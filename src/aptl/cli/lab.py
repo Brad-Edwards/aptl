@@ -76,6 +76,74 @@ def _resolved_port(
     return default
 
 
+def _live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
+    """Reconstruct a ResolvedPort list from docker's runtime state.
+
+    `_emit_lab_access_summary` needs a ResolvedPort list to print live URLs;
+    `lab start` passes the one it computed at port-resolution time. Later
+    commands (`aptl lab info`) run against a running lab and have to ask
+    docker what actually got published — otherwise the URLs default to
+    the compile-time constants, and any host with a taken default port
+    (Cursor's tunnels, k8s port-forward, AirPlay on 3100, etc.) sees a
+    URL that goes to the wrong service (#737).
+
+    Best-effort: any exception returns an empty list, and the caller
+    falls back to the compile-time defaults.
+    """
+    try:
+        from aptl.cli._common import resolve_config_for_cli
+        from aptl.core.deployment import get_backend
+
+        config, project_root = resolve_config_for_cli(project_dir)
+        backend = get_backend(config, project_root)
+    except Exception:  # noqa: BLE001 — never let info abort
+        return []
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:  # noqa: BLE001
+        return []
+    resolved: list[ResolvedPort] = []
+    for entry in containers:
+        service = entry.get("Service") or ""
+        name = (entry.get("Name") or "").lstrip("/")
+        if not service or not name:
+            continue
+        try:
+            info = backend.container_inspect(name)
+        except Exception:  # noqa: BLE001
+            continue
+        ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
+        if not isinstance(ports, dict):
+            continue
+        for container_port_proto, bindings in ports.items():
+            if not bindings:
+                continue
+            container_port_str, _, proto = container_port_proto.partition("/")
+            try:
+                default_port = int(container_port_str)
+            except ValueError:
+                continue
+            for binding in bindings:
+                try:
+                    host_port = int(binding.get("HostPort", 0))
+                except (TypeError, ValueError):
+                    continue
+                if host_port == 0:
+                    continue
+                resolved.append(
+                    ResolvedPort(
+                        service=service,
+                        env_var=None,
+                        default_port=default_port,
+                        resolved_port=host_port,
+                        protos=(proto or "tcp",),
+                        host_ip=binding.get("HostIp"),
+                        remapped=(host_port != default_port),
+                    )
+                )
+    return resolved
+
+
 # SOC services whose MCP server config (mcp/<name>/docker-lab-config.json)
 # hardcodes the host port on localhost. If one of these is remapped, the MCP
 # server config still points at the default port, so flag it for the operator.
@@ -269,7 +337,9 @@ def info(
             err=True,
         )
         raise typer.Exit(code=1)
-    _emit_lab_access_summary(project_dir)
+    # Reconstruct the ResolvedPort list from docker's runtime state so the
+    # printed URLs reflect the actual published ports (#737).
+    _emit_lab_access_summary(project_dir, _live_resolved_ports(project_dir))
 
 
 @app.command("scenarios")

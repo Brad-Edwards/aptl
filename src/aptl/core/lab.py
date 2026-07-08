@@ -1233,7 +1233,21 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
-    indexer_url = "https://localhost:9200"
+    # Use the actual published host port for the indexer. If port 9200 was
+    # already in use on the host (Cursor / another OpenSearch / a k8s
+    # port-forward), `_step_resolve_host_ports` remapped the publish; probing
+    # the literal 9200 in that case reaches whatever else is on 9200 and
+    # falsely reports the indexer as unready. `ctx.resolved_ports` carries
+    # the post-remap answer.
+    indexer_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == "wazuh.indexer"
+        ),
+        9200,
+    )
+    indexer_url = f"https://localhost:{indexer_port}"
     indexer_result = wait_for_service(
         check_fn=partial(
             check_indexer_ready,

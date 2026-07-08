@@ -2172,6 +2172,68 @@ class TestStartupClassificationWiring:
         assert "HTTP 403" in indexer_diags[0].message
         assert "aptl lab stop -v" in indexer_diags[0].operator_action
 
+    def test_wait_for_services_probes_the_resolved_indexer_port_not_9200(
+        self, tmp_path, mocker
+    ):
+        """When 9200 is already in use on the host, `_step_resolve_host_ports`
+        remaps the indexer publish; the readiness probe must follow the
+        remap or it hits whatever else is on 9200 and reports the SIEM
+        store as unready even though it is fully healthy on the remapped
+        port."""
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        ctx.resolved_ports = [
+            ResolvedPort(
+                service="wazuh.indexer",
+                env_var="APTL_HP_WAZUH_INDEXER_9200",
+                default_port=9200,
+                resolved_port=20015,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=True,
+            ),
+        ]
+        mock_wait = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
+        )
+
+        _step_wait_for_services(ctx)
+
+        # First wait_for_service call is the indexer wait; its check_fn is a
+        # partial(check_indexer_ready, url=..., ...) — assert the resolved
+        # port made it through.
+        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
+        assert indexer_call_kwargs["service_name"] == "Wazuh Indexer"
+        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
+            "https://localhost:20015"
+        )
+
+    def test_wait_for_services_falls_back_to_9200_when_no_remap(
+        self, tmp_path, mocker
+    ):
+        """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
+        case where 9200 was free) keeps the historical URL."""
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        # resolved_ports left as the default empty list.
+        mock_wait = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
+        )
+
+        _step_wait_for_services(ctx)
+
+        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
+        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
+            "https://localhost:9200"
+        )
+
     def test_wait_for_services_manager_timeout_emits_telemetry_warning(
         self, tmp_path, mocker
     ):

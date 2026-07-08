@@ -158,7 +158,7 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
         )
         error_msg = "Certificate generation timed out after 300s"
     except OSError as exc:
-        log.error("Failed to run docker compose: %s", exc)
+        log.exception("Failed to run docker compose")
         error_msg = str(exc)
     else:
         if result.returncode != 0:

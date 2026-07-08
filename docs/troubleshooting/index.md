@@ -164,6 +164,47 @@ sudo lsof -i :443
 # Disable in System Preferences → Sharing
 ```
 
+### A container is `Up` but reports `unhealthy`, blocking `aptl lab start`
+
+When `aptl lab start` fails with `dependency <name> failed to start:
+container aptl-<name> is unhealthy` and `docker ps` shows the container
+as `Up (unhealthy)`, there are two very different failure modes worth
+distinguishing before assuming the tool is broken:
+
+**1. Memory too tight—the service is being kernel-killed during warm-up.**
+Check the deploy limit vs the service's needs:
+
+```bash
+docker inspect aptl-<name> --format 'Mem={{.HostConfig.Memory}} OOMKilled={{.State.OOMKilled}} RestartCount={{.RestartCount}}'
+docker logs --tail 30 aptl-<name>
+```
+
+Signs: `RestartCount` climbing, entrypoint lines like `Killed  su ... bin/<service>`,
+`OOMKilled` may stay `false` if the JVM/child was killed outside docker's
+tracking. The fix is to raise `deploy.resources.limits.memory` on that
+service in `docker-compose.yml`. Cortex 3.1.8 at 512m was one confirmed
+case ([#723](https://github.com/Brad-Edwards/aptl/issues/723), fixed on
+`dev`); watch for similar behavior on any service whose limit is 128m /
+256m / 512m if its images are non-trivial (JVM, Play, Elasticsearch,
+Cassandra, etc.).
+
+**2. Container is running but the intended daemons have died silently.**
+The container's PID 1 (often `s6` or a shell) survives, so docker still
+reports `Up`, but the workload processes are gone and the healthcheck
+port is closed.
+
+```bash
+docker exec aptl-<name> sh -c 'ls /proc/[0-9]*/comm | while read f; do read n < "$f"; echo "$(basename $(dirname $f)) $n"; done | sort -k2'
+```
+
+Compare the live process list against what the container is supposed to
+run (for example, wazuh-manager should show `wazuh-analysisd`, `wazuh-modulesd`,
+`wazuh-execd`, and a python API process—not just `s6-supervise` +
+`filebeat`). If the intended daemons are missing, check the service's
+own log directory (for example, `/var/ossec/logs/ossec.log` for Wazuh) for the
+crash cause. Wazuh-manager silent-crash after startup is tracked in
+[#725](https://github.com/Brad-Edwards/aptl/issues/725).
+
 ### `aptl lab start` fails with "Existing network aptl_aptl-... does not match realized network"
 
 Symptom on a machine that has run an older aptl-labs release before the

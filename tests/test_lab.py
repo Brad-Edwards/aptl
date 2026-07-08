@@ -1183,6 +1183,26 @@ class TestOrchestrateLabStart:
         # Should not have tried to start lab
         mocks["start"].assert_not_called()
 
+    def test_continues_when_sysreqs_not_applicable(self, mocker, tmp_path):
+        """Docker Desktop and non-Linux hosts skip host-only sysreq checks."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+
+        from aptl.core.sysreqs import SysReqResult
+        mocks["sysreqs"].return_value = SysReqResult(
+            passed=True,
+            current_value=0,
+            required_value=262144,
+            error="vm.max_map_count is managed inside the Docker VM",
+            applicable=False,
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is True
+        mocks["start"].assert_called_once()
+
     def test_stops_on_ssh_key_generation_failure(self, mocker, tmp_path):
         """Should fail if SSH key generation fails."""
         from aptl.core.lab import orchestrate_lab_start

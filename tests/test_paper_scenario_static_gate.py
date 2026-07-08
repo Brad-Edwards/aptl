@@ -89,3 +89,22 @@ def test_paper_scenario_realizes_declared_topology_and_evaluator_surfaces():
         "evaluation.metric.boundary-evidence-complete",
         "evaluation.tlo.authored-runtime-handoff",
     }
+    content = {
+        placement.address: (placement.container_name, placement.target_path)
+        for placement in realization.content_placements
+    }
+    assert content == {
+        "provision.content.aptl-participant-runtime-binding": (
+            "aptl-kali",
+            "/scenario/aptl-participant-runtime-binding.yaml",
+        ),
+        "provision.content.evaluator-notes": (
+            "aptl-wazuh-manager",
+            "/scenario/evaluator-notes.md",
+        ),
+        "provision.content.task-brief": ("aptl-kali", "/scenario/task.md"),
+    }
+    assert all(
+        placement.content_type == "file"
+        for placement in realization.content_placements
+    )

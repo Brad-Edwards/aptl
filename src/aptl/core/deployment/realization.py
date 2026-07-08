@@ -8,6 +8,8 @@ from typing import Literal
 
 ImageRealizationMode = Literal["pull", "build"]
 
+ContentPlacementType = Literal["file", "directory", "dataset"]
+
 
 @dataclass(frozen=True)
 class DeploymentImageRealization(object):
@@ -74,6 +76,65 @@ class DeploymentNodeRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentContentPlacement(object):
+    """One content-placement operation resolved from scenario content.
+
+    The backend materializes the authored content onto a running container:
+    a ``directory`` is created at ``target_path``; a ``file`` or ``dataset``
+    is written from ``content_text`` (inline text or a deterministic dataset
+    representation) or copied from a project-contained ``source_path``. Raw
+    bytes travel only in memory / a contained temp file; :meth:`details`
+    persists non-secret identity and provenance only.
+    """
+
+    address: str
+    content_type: ContentPlacementType
+    container_name: str
+    target_path: str
+    content_text: str | None = None
+    source_path: str | None = None
+    digest: str | None = None
+    sensitive: bool = False
+    source_name: str | None = None
+    source_version: str | None = None
+    item_count: int | None = None
+    content_format: str | None = None
+
+    def materialization(self) -> str:
+        """Return the non-secret label for how this content is materialized."""
+
+        if self.content_type == "directory":
+            return "directory"
+        if self.source_path is not None:
+            return "source"
+        if self.item_count is not None:
+            return "dataset-render"
+        return "inline"
+
+    def details(self) -> dict[str, object]:
+        """Return non-secret realization evidence (never raw content bytes)."""
+
+        details: dict[str, object] = {
+            "address": self.address,
+            "content_type": self.content_type,
+            "container_name": self.container_name,
+            "target_path": self.target_path,
+            "materialization": self.materialization(),
+            "sensitive": self.sensitive,
+        }
+        for key, value in (
+            ("digest", self.digest),
+            ("source_name", self.source_name),
+            ("source_version", self.source_version),
+            ("item_count", self.item_count),
+            ("content_format", self.content_format),
+        ):
+            if value is not None:
+                details[key] = value
+        return details
+
+
+@dataclass(frozen=True)
 class DeploymentRealizationSpec(object):
     """Portable input for typed deployment backend realization."""
 
@@ -81,3 +142,4 @@ class DeploymentRealizationSpec(object):
     nodes: tuple[DeploymentNodeRealization, ...]
     networks: tuple[DeploymentNetworkRealization, ...]
     images: tuple[DeploymentImageRealization, ...] = ()
+    content: tuple[DeploymentContentPlacement, ...] = ()

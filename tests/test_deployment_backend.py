@@ -14,6 +14,7 @@ import pytest
 from aptl.core.config import AptlConfig, DeploymentConfig
 from aptl.core.deployment import (
     DockerComposeBackend,
+    DeploymentContentPlacement,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
@@ -29,7 +30,20 @@ from aptl.core.deployment._compose_realization import (
 )
 from aptl.core.deployment._compose_queries import _select_shell
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.core.lab import LabResult, LabStatus
+from aptl.core.lab import LabResult
+
+
+def _content_realize_run(cmd, **kwargs):
+    """Fake ``subprocess.run`` that makes ``realize`` reach content placement.
+
+    ``realize`` reconciles managed networks after start, which lists project
+    networks; return one so reconciliation passes and content copy runs.
+    """
+
+    del kwargs
+    if cmd[:3] == ["docker", "network", "ls"]:
+        return MagicMock(returncode=0, stdout="test_aptl-net\n", stderr="")
+    return MagicMock(returncode=0, stdout="", stderr="")
 
 
 def _network_inspect_payload(
@@ -880,6 +894,178 @@ class TestDockerComposeBackend:
         assert "custom:" in override
         assert "image: aptl-custom:local" in override
         assert "build: null" in override
+
+    def test_realize_places_inline_file_content_via_docker_cp(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(),
+            networks=(),
+            content=(
+                DeploymentContentPlacement(
+                    address="provision.content.task-brief",
+                    content_type="file",
+                    container_name="aptl-kali",
+                    target_path="/scenario/task.md",
+                    content_text="probe the portal\n",
+                    digest="sha256:" + "c" * 64,
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        captured: dict[str, str] = {}
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(returncode=0, stdout="test_aptl-net\n", stderr="")
+            if cmd[:2] == ["docker", "cp"]:
+                captured["src"] = cmd[2]
+                captured["content"] = Path(cmd[2]).read_text()
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "exec",
+            "aptl-kali",
+            "mkdir",
+            "-p",
+            "/scenario",
+        ] in commands
+        staged = tmp_path / ".aptl" / "realization" / "content" / ("sha256:" + "c" * 64)
+        # Content is copied from the staged file, which is then removed so no
+        # authored content persists in the project tree after realization.
+        assert captured["src"] == str(staged)
+        assert captured["content"] == "probe the portal\n"
+        assert not staged.exists()
+        assert [
+            "docker",
+            "cp",
+            str(staged),
+            "aptl-kali:/scenario/task.md",
+        ] in commands
+
+    def test_realize_creates_directory_content(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(),
+            networks=(),
+            content=(
+                DeploymentContentPlacement(
+                    address="provision.content.workspace",
+                    content_type="directory",
+                    container_name="aptl-kali",
+                    target_path="/scenario/workspace",
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        with patch("subprocess.run", side_effect=_content_realize_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "exec",
+            "aptl-kali",
+            "mkdir",
+            "-p",
+            "/scenario/workspace",
+        ] in commands
+        assert not any(command[:2] == ["docker", "cp"] for command in commands)
+
+    def test_realize_copies_source_backed_content(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        source = tmp_path / "seed" / "notes.txt"
+        source.parent.mkdir(parents=True)
+        source.write_text("authored seed\n")
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(),
+            networks=(),
+            content=(
+                DeploymentContentPlacement(
+                    address="provision.content.notes",
+                    content_type="file",
+                    container_name="aptl-kali",
+                    target_path="/opt/notes.txt",
+                    source_path="seed/notes.txt",
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        with patch("subprocess.run", side_effect=_content_realize_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "cp",
+            str(source),
+            "aptl-kali:/opt/notes.txt",
+        ] in commands
+
+    def test_realize_content_copy_failure_returns_error(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(),
+            networks=(),
+            content=(
+                DeploymentContentPlacement(
+                    address="provision.content.task-brief",
+                    content_type="file",
+                    container_name="aptl-kali",
+                    target_path="/scenario/task.md",
+                    content_text="probe the portal\n",
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(returncode=0, stdout="test_aptl-net\n", stderr="")
+            if cmd[:2] == ["docker", "cp"]:
+                return MagicMock(returncode=1, stdout="", stderr="boom")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = backend.realize(spec, build=False)
+
+        assert result.success is False
+        assert "provision.content.task-brief" in result.error
+        assert "boom" not in result.error
+
+    def test_realize_without_content_places_nothing(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(profiles=("kali",), nodes=(), networks=())
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        with patch("subprocess.run", side_effect=_content_realize_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(command[:2] == ["docker", "cp"] for command in commands)
+
+    def test_ssh_backend_inherits_content_realization(self, tmp_path):
+        backend = SSHComposeBackend(
+            project_dir=tmp_path, host="example.com", user="lab"
+        )
+        assert hasattr(backend, "_realize_content")
 
     def test_stop_calls_compose_down(self, tmp_path):
         backend = self._make_backend(tmp_path)

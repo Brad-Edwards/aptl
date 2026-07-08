@@ -261,6 +261,73 @@ static IP, selected backend, and non-secret provenance rule. Persist it through
 rendered Compose overrides containing unrelated config, `.env` values, or
 secret-bearing service configuration.
 
+## Content Placement Realization Addendum
+
+Issue #576 realizes ACES `content-placement` resources onto already-realized
+containers. This is part of the dynamic realization driver, not a scenario
+catalog feature and not a post-run evidence collector.
+
+APTL consumes the ACES compiled `ContentPlacement` payload and the SDL
+`Content` schema carried under each resource's `spec`. Do not define an
+APTL-local content schema, content-type vocabulary, sensitivity taxonomy, or
+dataset model. The interpreter may extract backend-facing fields from the ACES
+payload, but the source of truth remains the ACES parser/compiler and the
+`ProvisioningPlan`.
+
+Content placement has three backend-visible forms:
+
+- **File.** A `type: file` resource materializes file content at the authored
+  `path`. Inline `text` may become file bytes. Source-backed files must resolve
+  through an explicit project-contained source-materialization boundary before
+  backend copy; a descriptor-only surrogate is not realization.
+- **Directory.** A `type: directory` resource materializes the authored
+  directory at `destination`. Empty-directory realization is still a side
+  effect and must be testable.
+- **Dataset.** A `type: dataset` resource materializes the authored dataset as
+  real target-container content, either from source-backed material or from a
+  deterministic dataset representation derived from `items` and `format`.
+  Merely writing `/etc/aces/content/*.json` metadata does not satisfy APTL's
+  claimed `supported_content_types`.
+
+All side effects route through `DeploymentBackend`. Extend
+`DeploymentRealizationSpec` with a narrow typed content-placement shape, and
+have Docker Compose and SSH Compose realize it through their shared runner,
+timeout, project-name, logging, redaction, and `LabResult` /
+`BackendTimeoutError` behavior. Do not call `docker cp`, `docker exec`,
+`tar`, `ssh`, or `docker compose` directly from the ACES adapter, and do not add
+a generic backend argv passthrough.
+
+Scenario-authored content is less trusted than code-defined named-volume seed
+specs. The existing `seed_named_volumes` shell-copy pattern is only valid for
+code-owned relpaths. Content placement must validate authored container paths
+before side effects: require absolute POSIX target paths, reject empty paths,
+NUL bytes, parent traversal, ambiguous directory/file targets, and unsafe
+metadata-derived filename components. If a shell is unavoidable inside a
+container, pass opaque content through stdin, temporary files, or an encoded
+payload boundary rather than interpolating authored content or paths into shell
+text.
+
+Sensitivity is metadata and policy input, not a logging exemption. ACES
+`sensitive`, SEM-218 explicitness/provenance, and APTL's ADR-029 secret classes
+must stay distinct: designed vulnerable target content may be written into the
+target container when authored, but control-plane/operator secrets must never be
+sourced from `.env`, generated config, host private keys, registry credentials,
+or operator state. Realization evidence stores non-secret identity only:
+resource address, content type, target node/container, target path/destination,
+source reference or digest/checksum, item count/format, sensitivity class, and
+realization provenance. Persist evidence through `AptlRealization.details()`,
+`ApplyResult.details`, `LocalRunStore`, and `RangeSnapshot.to_dict()`. Do not
+store raw sensitive file bytes, dataset rows, source package bytes, backend
+stderr, generated config, `.env` values, or rendered secret-bearing content.
+
+Rejection is a structured ACES diagnostic, not a raw backend error. Diagnostics
+may name the content resource address, target node/container, content type, and
+validation reason code. They must not echo raw content text, dataset rows,
+source bytes, credential-shaped values, raw backend stderr, or host paths that
+reveal operator-private state. Use `aptl.backends.aces_diagnostics.diagnostic()`
+and `render_aces_diagnostics()` so redaction and operation-status contracts
+stay intact.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -270,6 +337,7 @@ secret-bearing service configuration.
 | Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
+| Content placement gate | Files, datasets, and directories come from ACES `content-placement` resources and are materialized through typed `DeploymentBackend` operations after target-path/source validation. APTL may extract backend input from ACES payloads, but must not mirror the ACES content schema or fall back to descriptor-only records. |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
 
@@ -288,8 +356,8 @@ The canonical incumbents this decision builds on are:
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
-  operation, including any future image pull/build/tag and network/IPAM side
-  effects.
+  operation, including image pull/build/tag, network/IPAM side effects, and
+  content copy/write side effects.
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
@@ -328,6 +396,15 @@ reference/digest, backend provider, and platform/build context. The next likely
 change is multi-architecture images, registry authentication, SBOM/attestation
 checks, or another backend provider. Those should add policy fields or typed
 backend parameters, not scenario branches or Compose-service rewrites.
+
+For content placement, the extensibility seam is the typed content-placement
+record: ACES content address/name, content type, target node/container, target
+path or destination, source reference or inline/item-derived materialization
+input, sensitivity class, digest/checksum, permissions/owner when ACES grows
+that contract, and realization provenance. Future changes such as binary
+source packages, per-file mode/owner, generated datasets, DB-specific importers,
+or another backend provider should add fields to that typed seam, not a
+scenario branch, duplicate content schema, or raw backend command string.
 
 ## Consequences
 
@@ -388,6 +465,16 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Echoing disallowed image refs, registry credentials, build arg values,
   rendered Dockerfile text, or backend stderr in diagnostics, logs, snapshots,
   API responses, or run records.
+- Treating content placements as interpreted records only, descriptor-only
+  metadata, run evidence, volume seeds, or participant observations instead of
+  target-container state.
+- Reusing named-volume seed shell snippets for scenario-authored content without
+  a stricter authored-path/content boundary.
+- Materializing control-plane/operator secrets from `.env`, generated config,
+  host private keys, registry credentials, or operator state as authored
+  content.
+- Storing raw content bytes, dataset rows, source packages, backend stderr, or
+  secret-bearing rendered content in realization evidence.
 - Re-evaluating SEM-218 explicitness classes with a local model rather than
   consuming `realization_requirements` and the planner gate.
 - Adding a second topology authority, a duplicate compose parser, or a local
@@ -415,6 +502,7 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Related issues: [#554](https://github.com/Brad-Edwards/aptl/issues/554),
   [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded paper
   scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
+  [#576](https://github.com/Brad-Edwards/aptl/issues/576),
   [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and
   [aces#600](https://github.com/Brad-Edwards/aces/issues/600); DSL-008 /
   [#422](https://github.com/Brad-Edwards/aptl/issues/422).

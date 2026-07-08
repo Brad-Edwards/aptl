@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from aces_contracts.diagnostics import Diagnostic
 
 from aptl.core.deployment.realization import (
+    DeploymentContentPlacement,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
@@ -103,6 +104,7 @@ class AptlRealization(object):
     networks: tuple[NetworkRealization, ...]
     placements: tuple[PlacementRealization, ...]
     diagnostics: tuple[Diagnostic, ...]
+    content_placements: tuple[DeploymentContentPlacement, ...] = ()
 
     def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this ACES realization."""
@@ -124,6 +126,7 @@ class AptlRealization(object):
                 for network in self.networks
             ),
             images=tuple(node.image for node in self.nodes if node.image is not None),
+            content=self.content_placements,
         )
 
     def details(self) -> dict[str, object]:
@@ -151,6 +154,9 @@ class AptlRealization(object):
             "nodes": [node.details() for node in self.nodes],
             "networks": [network.details() for network in self.networks],
             "placements": [placement.details() for placement in self.placements],
+            "content_placements": [
+                content.details() for content in self.content_placements
+            ],
         }
 
 

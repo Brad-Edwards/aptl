@@ -2321,6 +2321,7 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
             "name": "payload",
             "content_name": "payload.exe",
             "target_address": node.address,
+            "spec": {"type": "dataset", "items": [{"name": "row-1"}]},
         },
     )
     account = PlannedResource(
@@ -2390,10 +2391,6 @@ def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
     """start_aces_scenario returns AcesStartOutcome, not just LabResult."""
     from unittest.mock import patch as _patch, MagicMock as _MagicMock
 
-    from aces_contracts.planning import (
-        EvaluationPlan,
-        OrchestrationPlan,
-    )
     from aces_contracts.runtime_state import ApplyResult, OperationState, RuntimeSnapshot
 
     from aptl.backends.aces import AcesStartOutcome, start_aces_scenario
@@ -2709,3 +2706,234 @@ def test_apply_provisioning_records_realization_provenance_when_honored():
         for entry in mock_cp.snapshot.realization_provenance
     }
     assert {"node-type", "os-family"} <= kinds
+
+
+def _content_resource(spec: dict, *, target: str = "scenario.kali") -> PlannedResource:
+    return PlannedResource(
+        address="provision.content.payload",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload={
+            "name": "payload",
+            "content_name": "payload",
+            "target_address": f"provision.node.{target}",
+            "spec": spec,
+        },
+    )
+
+
+def _content_realization(tmp_path, spec, *, source_files=None):
+    from aptl.backends.aces_realization import interpret_provisioning_plan
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    for name, text in (source_files or {}).items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    return interpret_provisioning_plan(
+        plan=_plan_for_resources(_node_resource("scenario.kali"), _content_resource(spec)),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+    )
+
+
+def test_content_placement_inline_file_is_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "file", "path": "/scenario/task.md", "text": "probe\n"},
+    )
+
+    assert realization.diagnostics == ()
+    assert len(realization.content_placements) == 1
+    content = realization.content_placements[0]
+    assert content.content_type == "file"
+    assert content.container_name == "kali"
+    assert content.target_path == "/scenario/task.md"
+    assert content.content_text == "probe\n"
+    assert content.materialization() == "inline"
+    assert content.digest is not None
+
+
+def test_content_placement_directory_is_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "directory", "path": "/scenario/workspace"},
+    )
+
+    assert realization.diagnostics == ()
+    assert len(realization.content_placements) == 1
+    content = realization.content_placements[0]
+    assert content.content_type == "directory"
+    assert content.target_path == "/scenario/workspace"
+    assert content.content_text is None
+
+
+def test_content_placement_pathless_dataset_is_recorded_not_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "dataset", "items": [{"name": "row-1"}], "tags": ["evidence"]},
+    )
+
+    assert realization.diagnostics == ()
+    assert realization.content_placements == ()
+    recorded = realization.details()["placements"]
+    assert any(
+        item["resource_type"] == "content-placement" for item in recorded
+    )
+
+
+def test_content_placement_dataset_with_path_renders_items(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {
+            "type": "dataset",
+            "path": "/scenario/data.json",
+            "items": [{"name": "row-1"}, {"name": "row-0"}],
+        },
+    )
+
+    assert realization.diagnostics == ()
+    assert len(realization.content_placements) == 1
+    content = realization.content_placements[0]
+    assert content.content_type == "dataset"
+    assert content.item_count == 2
+    assert content.materialization() == "dataset-render"
+    assert content.content_text is not None
+    assert "row-0" in content.content_text
+
+
+def test_content_placement_repo_source_is_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {
+            "type": "file",
+            "path": "/etc/app.conf",
+            "source": {"name": "seed/app.conf", "version": "sha256:" + "a" * 64},
+        },
+        source_files={"seed/app.conf": "seeded\n"},
+    )
+
+    assert realization.diagnostics == ()
+    assert len(realization.content_placements) == 1
+    content = realization.content_placements[0]
+    assert content.source_path == "seed/app.conf"
+    assert content.materialization() == "source"
+    assert content.digest == "sha256:" + "a" * 64
+
+
+def _assert_content_recorded_only(realization) -> None:
+    """Assert non-materializable-but-safe content records without a diagnostic."""
+
+    assert realization.content_placements == ()
+    assert not any(
+        item.code == "aptl.provisioner.content-placement-rejected"
+        for item in realization.diagnostics
+    )
+
+
+def test_content_placement_runtime_observed_source_is_recorded_not_materialized(
+    tmp_path,
+):
+    realization = _content_realization(
+        tmp_path,
+        {
+            "type": "file",
+            "path": "/etc/krb5.conf",
+            "source": {"name": "runtime-observed:/etc/krb5.conf"},
+        },
+    )
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_missing_spec_is_recorded_not_materialized(tmp_path):
+    realization = _content_realization(tmp_path, None)
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_unsupported_type_is_recorded_not_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "binary", "path": "/scenario/blob", "text": "x"},
+    )
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_file_without_target_path_is_recorded_not_materialized(
+    tmp_path,
+):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "file", "text": "probe\n"},
+    )
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_missing_repo_source_is_recorded_not_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {
+            "type": "file",
+            "path": "/etc/app.conf",
+            "source": {"name": "seed/absent.conf"},
+        },
+    )
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_empty_file_body_is_recorded_not_materialized(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {"type": "file", "path": "/scenario/task.md"},
+    )
+
+    _assert_content_recorded_only(realization)
+
+
+def test_content_placement_unsafe_path_is_rejected(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose(tmp_path, {"kali": ["kali"]})
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
+        deployment_backend=backend,
+    )
+    content = _content_resource(
+        {"type": "file", "path": "/scenario/../../etc/passwd", "text": "x"}
+    )
+
+    result = provisioner.apply(
+        _plan_for_resources(_node_resource("scenario.kali"), content),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        diagnostic.code == "aptl.provisioner.content-placement-rejected"
+        for diagnostic in result.diagnostics
+    )
+    backend.realize.assert_not_called()
+
+
+def test_content_placement_unsafe_source_path_is_rejected(tmp_path):
+    realization = _content_realization(
+        tmp_path,
+        {
+            "type": "file",
+            "path": "/etc/app.conf",
+            "source": {"name": "../../etc/shadow"},
+        },
+    )
+
+    assert realization.content_placements == ()
+    assert any(
+        item.code == "aptl.provisioner.content-placement-rejected"
+        for item in realization.diagnostics
+    )

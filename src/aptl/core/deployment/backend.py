@@ -63,7 +63,9 @@ class DeploymentBackend(Protocol):
 
         Implementations may use profiles as a vehicle for starting existing
         services, but the declared nodes/networks in ``realization`` are the
-        topology authority for any follow-on side effects.
+        topology authority for any follow-on side effects. Declared content
+        placements in ``realization.content`` are materialized onto their
+        target containers after the services start (ADR-046 content addendum).
 
         Args:
             realization: Typed deployment realization emitted from ACES plan

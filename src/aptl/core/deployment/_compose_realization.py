@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from aptl.core.deployment._compose_content_realization import (
+    ComposeRealizationContentMixin,
+)
 from aptl.core.deployment._compose_image_realization import (
     ComposeRealizationImageMixin,
 )
@@ -27,6 +30,7 @@ __all__ = [
 class ComposeRealizationMixin(
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
+    ComposeRealizationContentMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -67,9 +71,11 @@ class ComposeRealizationMixin(
         result = start_result
         if start_result.success:
             failures = self._reconcile_realization_networks(realization)
-            result = (
-                LabResult(success=False, error="; ".join(failures[:5]))
-                if failures
-                else LabResult(success=True, message="Lab realized")
-            )
+            if failures:
+                result = LabResult(success=False, error="; ".join(failures[:5]))
+            else:
+                content_result = self._realize_content(realization)
+                result = content_result or LabResult(
+                    success=True, message="Lab realized"
+                )
         return result

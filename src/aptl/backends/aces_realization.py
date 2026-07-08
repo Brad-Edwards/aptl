@@ -24,9 +24,9 @@ from aptl.backends.aces_profiles import (
     explicit_compose_profile_hints,
     load_compose_profile_index,
     node_aliases,
-    normalize_identifier,
     public_start_profiles,
 )
+from aptl.backends.aces_realization_content import realize_placements
 from aptl.backends.aces_realization_networks import (
     append_network_topology_diagnostics,
 )
@@ -38,25 +38,19 @@ from aptl.backends.aces_realization_model import (
     _single_or_none,
 )
 from aptl.backends.aces_realization_values import (
-    first_nonempty_string as _first_nonempty_string,
     health_status as _health_status,
     mapping as _mapping,
     network_names as _network_names,
     optional_bool as _optional_bool,
     optional_string as _optional_string,
-    placement_target_values as _placement_target_values,
-    resolve_target_address as _resolve_target_address,
     resource_name as _resource_name,
     service_names as _service_names,
     static_address_assignments as _static_address_assignments,
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment.realization import DeploymentContentPlacement
 from aptl.utils.redaction import redact
-
-PLACEMENT_RESOURCE_TYPES = frozenset(
-    {"feature-binding", "content-placement", "account-placement"}
-)
 
 
 def interpret_provisioning_plan(
@@ -91,10 +85,14 @@ def interpret_provisioning_plan(
         diagnostics,
     )
     append_network_topology_diagnostics(nodes, networks, diagnostics)
-    placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
+    placements, content_placements = realize_placements(
+        payload_resources, nodes, project_dir, diagnostics
+    )
     _append_profile_diagnostics(profiles, config, diagnostics)
 
-    return _realization_from_parts(nodes, networks, placements, profiles, diagnostics)
+    return _realization_from_parts(
+        nodes, networks, placements, content_placements, profiles, diagnostics
+    )
 
 
 def _load_profile_index(
@@ -185,27 +183,6 @@ def _append_node_profile_diagnostic(
     )
 
 
-def _realize_placements(
-    payload_resources: list[PlannedResource],
-    node_lookup: dict[str, str],
-    diagnostics: list[Diagnostic],
-) -> list[PlacementRealization]:
-    """Resolve supported placement resources against realized nodes."""
-
-    placements: list[PlacementRealization] = []
-    for resource in payload_resources:
-        if resource.resource_type in PLACEMENT_RESOURCE_TYPES:
-            placement, placement_diagnostics = _realize_placement(
-                resource,
-                resource.payload,
-                node_lookup,
-            )
-            diagnostics.extend(placement_diagnostics)
-            if placement is not None:
-                placements.append(placement)
-    return placements
-
-
 def _append_profile_diagnostics(
     profiles: set[str],
     config: AptlConfig,
@@ -243,6 +220,7 @@ def _realization_from_parts(
     nodes: list[NodeRealization],
     networks: list[NetworkRealization],
     placements: list[PlacementRealization],
+    content_placements: list[DeploymentContentPlacement],
     profiles: set[str],
     diagnostics: list[Diagnostic],
 ) -> AptlRealization:
@@ -253,6 +231,9 @@ def _realization_from_parts(
         nodes=tuple(sorted(nodes, key=lambda item: item.address)),
         networks=tuple(sorted(networks, key=lambda item: item.address)),
         placements=tuple(sorted(placements, key=lambda item: item.address)),
+        content_placements=tuple(
+            sorted(content_placements, key=lambda item: item.address)
+        ),
         diagnostics=tuple(diagnostics),
     )
 
@@ -265,6 +246,7 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
         nodes=(),
         networks=(),
         placements=(),
+        content_placements=(),
         diagnostics=tuple(diagnostics),
     )
 
@@ -432,54 +414,3 @@ def _realize_network(
         gateway=_optional_string(properties, "gateway"),
         internal=_optional_bool(properties, "internal"),
     )
-
-
-def _realize_placement(
-    resource: PlannedResource,
-    payload: Mapping[str, Any],
-    node_lookup: dict[str, str],
-) -> tuple[PlacementRealization | None, list[Diagnostic]]:
-    """Realize a placement resource or return its diagnostics."""
-
-    target_values = _placement_target_values(resource.resource_type, payload)
-    target_address = _resolve_target_address(target_values, node_lookup)
-    if target_address is None:
-        return (
-            None,
-            [
-                diagnostic(
-                    "aptl.provisioner.binding-target-unresolved",
-                    resource.address,
-                    (
-                        "ACES provisioning binding does not target a "
-                        "declared APTL-realizable node."
-                    ),
-                )
-            ],
-        )
-    return (
-        PlacementRealization(
-            address=resource.address,
-            resource_type=resource.resource_type,
-            name=_resource_name(resource.address, payload),
-            target_address=target_address,
-            target_node=_first_nonempty_string(target_values),
-        ),
-        [],
-    )
-
-
-def _node_lookup(nodes: list[NodeRealization]) -> dict[str, str]:
-    """Index node addresses and aliases for placement target resolution."""
-
-    lookup: dict[str, str] = {}
-    for node in nodes:
-        values = {node.address, node.name, *node.aliases}
-        for value in values:
-            if not value:
-                continue
-            lookup[value] = node.address
-            normalized = normalize_identifier(value)
-            if normalized:
-                lookup[normalized] = node.address
-    return lookup

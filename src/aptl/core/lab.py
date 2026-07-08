@@ -607,7 +607,7 @@ class _LabStartContext(object):
     selected_profiles: set[str] = field(default_factory=set)
     # Published host ports after conflict resolution (host_ports.ResolvedPort),
     # so the access summary can report the real port each service landed on.
-    resolved_ports: list = field(default_factory=list)
+    resolved_ports: list[object] = field(default_factory=list)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
     # REP-001: ACES start outcome and range snapshot for run record writing.
     # Use object to avoid circular imports; typed at use sites.

@@ -75,15 +75,21 @@ def check_docker_buildx() -> ToolReqResult:
             text=True,
             timeout=15,
         )
-    except FileNotFoundError as exc:
-        return _failed_buildx_result(command, str(exc))
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return _failed_buildx_result(command, str(exc))
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        requirement = _failed_buildx_result(command, str(exc))
+    else:
+        requirement = _buildx_result_from_process(command, result)
+    return requirement
 
+
+def _buildx_result_from_process(
+    command: str,
+    result: subprocess.CompletedProcess,
+) -> ToolReqResult:
+    """Translate a Docker Buildx probe process result."""
     if result.returncode == 0:
         log.info("Docker Buildx is available: %s", result.stdout.strip())
         return ToolReqResult(passed=True, command=command)
-
     detail = (result.stderr or result.stdout).strip() or "docker buildx failed"
     return _failed_buildx_result(command, detail)
 
@@ -100,25 +106,26 @@ def _failed_buildx_result(command: str, detail: str) -> ToolReqResult:
 
 def _docker_buildx_install_hint() -> str:
     """Return concise, platform-specific Buildx install guidance."""
-    os_name = hostenv.host_os()
-    if os_name == hostenv.OS_MACOS:
-        return (
+    hints = {
+        hostenv.OS_MACOS: (
             "Install or update Docker Desktop, or for Homebrew Docker/Colima run: "
             "brew install docker-buildx && mkdir -p ~/.docker/cli-plugins && "
             "ln -sf $(brew --prefix docker-buildx)/bin/docker-buildx "
             "~/.docker/cli-plugins/docker-buildx"
-        )
-    if os_name == hostenv.OS_WINDOWS:
-        return (
+        ),
+        hostenv.OS_WINDOWS: (
             "Install or update Docker Desktop, then verify "
             "`docker buildx version` from the same shell that runs aptl."
-        )
-    if os_name == hostenv.OS_LINUX:
-        return (
+        ),
+        hostenv.OS_LINUX: (
             "Install the Docker Buildx plugin, for example your distro's "
             "docker-buildx-plugin package, then verify `docker buildx version`."
-        )
-    return "Install Docker Buildx, then verify `docker buildx version`."
+        ),
+    }
+    return hints.get(
+        hostenv.host_os(),
+        "Install Docker Buildx, then verify `docker buildx version`.",
+    )
 
 
 def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:

@@ -16,8 +16,9 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-import yaml
-
+from aptl.core.deployment._compose_build_dedupe import (
+    write_duplicate_build_override,
+)
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
@@ -39,35 +40,11 @@ _DOCKER_TIMEOUT = 30
 # chain), so the margin is deliberately generous.
 _SEED_TIMEOUT = 600
 
-# Runtime-only Compose override used to avoid building the same local tag from
-# identical service build recipes twice during one ``compose up --build``.
-_BUILD_DEDUPE_OVERRIDE = Path(".aptl") / "compose-build-dedupe.yml"
-
 # Seed file relpaths come from code-defined specs (never operator input),
 # but they are embedded in the seed container's shell command, so they are
 # validated defensively: a strict charset, no leading separator, and no
 # parent-traversal component, so nothing can escape /src or /dest.
 _SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-
-
-class _ComposeReset:
-    """Sentinel rendered as Compose's ``!reset null`` merge directive."""
-
-
-class _ComposeDumper(yaml.SafeDumper):
-    """YAML dumper with Docker Compose merge-tag support."""
-
-
-def _represent_compose_reset(
-    dumper: yaml.Dumper,
-    value: _ComposeReset,
-) -> yaml.nodes.ScalarNode:
-    """Represent a Compose reset tag for removing overridden attributes."""
-    return dumper.represent_scalar("!reset", "null")
-
-
-_ComposeDumper.add_representer(_ComposeReset, _represent_compose_reset)
-_COMPOSE_RESET = _ComposeReset()
 
 
 class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
@@ -229,78 +206,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     def _start_compose_files(self, *, build: bool) -> tuple[Path, ...] | None:
         """Return Compose files for startup, adding build dedupe when needed."""
 
-        override = self._write_duplicate_build_override() if build else None
+        override = write_duplicate_build_override(self._project_dir) if build else None
         return (
             (self._project_dir / "docker-compose.yml", override)
             if override is not None
             else None
         )
-
-    def _write_duplicate_build_override(self) -> Path | None:
-        """Disable duplicate builds that target the same local image tag."""
-
-        compose_path = self._project_dir / "docker-compose.yml"
-        services = self._load_compose_services(compose_path)
-        duplicate_overrides = self._duplicate_build_overrides(services)
-        override_path = None
-        if duplicate_overrides:
-            override_path = self._project_dir / _BUILD_DEDUPE_OVERRIDE
-            override_path.parent.mkdir(parents=True, exist_ok=True)
-            override_text = yaml.dump(
-                {"services": duplicate_overrides},
-                Dumper=_ComposeDumper,
-                sort_keys=True,
-            )
-            override_path.write_text(
-                override_text.replace("!reset 'null'", "!reset null"),
-                encoding="utf-8",
-                newline="\n",
-            )
-        return override_path
-
-    def _load_compose_services(self, compose_path: Path) -> dict[str, Any]:
-        """Load service definitions from the project Compose file."""
-
-        try:
-            compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            log.debug("Could not inspect compose build definitions: %s", exc)
-            return {}
-        if not isinstance(compose, dict):
-            return {}
-        services = compose.get("services")
-        return services if isinstance(services, dict) else {}
-
-    @staticmethod
-    def _duplicate_build_overrides(
-        services: dict[str, Any],
-    ) -> dict[str, dict[str, Any]]:
-        """Return service overrides for repeated local image build recipes."""
-
-        seen: dict[tuple[str, str], str] = {}
-        overrides: dict[str, dict[str, Any]] = {}
-        for name, service in services.items():
-            if not isinstance(service, dict):
-                continue
-            identity = DockerComposeBackend._build_identity(service)
-            if identity is None:
-                continue
-            if identity in seen:
-                overrides[name] = {"build": _COMPOSE_RESET, "pull_policy": "never"}
-            else:
-                seen[identity] = name
-        return overrides
-
-    @staticmethod
-    def _build_identity(service: dict[str, Any]) -> tuple[str, str] | None:
-        """Return the local image/build identity for a buildable service."""
-
-        image = service.get("image")
-        build = service.get("build")
-        if not isinstance(image, str) or build in (None, False):
-            return None
-        build_key = yaml.safe_dump(build, sort_keys=True)
-        return image, build_key
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.

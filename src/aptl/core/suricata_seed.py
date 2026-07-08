@@ -17,6 +17,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.core import hostenv
 from aptl.core.credentials import (
     PathContainmentError,
     _canonical_generated_path,
@@ -105,30 +106,37 @@ def _chown_direct(paths: list[Path], uid: int, gid: int) -> list[Path]:
     return [p for p in paths if p.stat().st_uid != uid]
 
 
-def _sudo_chown_error(stderr: str, paths_arg: list[str], uid: int, gid: int) -> str:
-    """Build the actionable error message for a failed ``sudo chown``."""
-    stderr = stderr.strip()
-    if "a password is required" in stderr or "sudo:" in stderr:
-        hint = f"sudo chown {uid}:{gid} " + " ".join(paths_arg)
-        return (
-            f"Suricata config sources are not writable — run "
-            f"'{hint}' manually or configure passwordless sudo for chown"
-        )
-    return stderr or "Suricata config ownership restore failed"
-
-
-def _restore_via_sudo(
-    still_foreign: list[Path], uid: int, gid: int, project_dir: Path,
+def _restore_via_container(
+    still_foreign: list[Path],
+    uid: int,
+    gid: int,
+    project_dir: Path,
+    seeder_image: str,
 ) -> SuricataSourceOwnershipResult:
-    """Escalate the ownership repair through passwordless ``sudo chown``."""
-    paths_arg = [str(p) for p in still_foreign]
+    """Chown the still-foreign sources from inside a root container.
+
+    Repairs ownership without escalating on the host: a throwaway container
+    runs as root and chowns the bind-mounted files to the invoking user. No
+    host ``sudo`` — silent under passwordless sudo, absent on Windows, and
+    unnecessary on Docker Desktop. Reuses the Suricata seeder image, which is
+    already present at this step.
+    """
+    rel_targets = [
+        f"/project/{p.relative_to(project_dir).as_posix()}" for p in still_foreign
+    ]
     try:
         perm_result = subprocess.run(
-            ["sudo", "-n", "chown", f"{uid}:{gid}", *paths_arg],
+            [
+                "docker", "run", "--rm",
+                "--entrypoint", "chown",
+                "-v", f"{project_dir}:/project",
+                seeder_image,
+                f"{uid}:{gid}", *rel_targets,
+            ],
             capture_output=True,
             text=True,
             cwd=project_dir,
-            timeout=30,
+            timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return SuricataSourceOwnershipResult(
@@ -142,12 +150,15 @@ def _restore_via_sudo(
     if perm_result.returncode != 0:
         return SuricataSourceOwnershipResult(
             success=False,
-            error=_sudo_chown_error(perm_result.stderr, paths_arg, uid, gid),
+            error=(
+                perm_result.stderr.strip()
+                or "Suricata config ownership restore failed"
+            ),
         )
 
     repaired = tuple(str(p.relative_to(project_dir)) for p in still_foreign)
     log.info(
-        "Restored Suricata config source ownership via sudo: %s",
+        "Restored Suricata config source ownership via container: %s",
         ", ".join(repaired),
     )
     return SuricataSourceOwnershipResult(success=True, repaired=repaired)
@@ -155,6 +166,7 @@ def _restore_via_sudo(
 
 def ensure_suricata_config_source_ownership(
     project_dir: Path,
+    seeder_image: str,
 ) -> SuricataSourceOwnershipResult:
     """Return checked-in Suricata seed sources to the invoking operator's uid/gid.
 
@@ -166,7 +178,14 @@ def ensure_suricata_config_source_ownership(
     write (EOF fixer). This is a narrow, idempotent repair — it only
     touches the two canonical seed sources when their owner is not the
     current uid.
+
+    The UID-991 trap only occurs on a native Linux Docker engine; on Docker
+    Desktop and macOS/Windows there are no foreign-owned sources (and
+    ``os.getuid`` does not exist on Windows), so the repair is skipped there.
     """
+    if not hostenv.needs_host_ownership_fix():
+        return SuricataSourceOwnershipResult(success=True)
+
     uid = os.getuid()
     gid = os.getgid()
     try:
@@ -177,7 +196,9 @@ def ensure_suricata_config_source_ownership(
     foreign = _foreign_owned_sources(source_files, uid)
     still_foreign = _chown_direct(foreign, uid, gid) if foreign else []
     if still_foreign:
-        return _restore_via_sudo(still_foreign, uid, gid, project_dir)
+        return _restore_via_container(
+            still_foreign, uid, gid, project_dir, seeder_image
+        )
 
     repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
     if repaired:

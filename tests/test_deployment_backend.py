@@ -842,6 +842,16 @@ class TestDockerComposeBackend:
             ),
         )
         (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+        real_write_text = Path.write_text
+
+        def write_text_with_windows_default(
+            path, data, encoding=None, errors=None, newline=None,
+        ):
+            if newline is None:
+                newline = "\r\n"
+            return real_write_text(
+                path, data, encoding=encoding, errors=errors, newline=newline,
+            )
 
         def fake_run(cmd, **kwargs):
             del kwargs
@@ -849,7 +859,10 @@ class TestDockerComposeBackend:
                 return MagicMock(returncode=0, stdout="test_aptl-internal\n", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+        with (
+            patch.object(Path, "write_text", new=write_text_with_windows_default),
+            patch("subprocess.run", side_effect=fake_run) as mock_run,
+        ):
             result = backend.realize(spec, build=False)
 
         assert result.success is True
@@ -880,6 +893,7 @@ class TestDockerComposeBackend:
         assert "custom:" in override
         assert "image: aptl-custom:local" in override
         assert "build: null" in override
+        assert b"\r\n" not in override_path.read_bytes()
 
     def test_stop_calls_compose_down(self, tmp_path):
         backend = self._make_backend(tmp_path)

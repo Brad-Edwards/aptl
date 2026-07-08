@@ -4,3 +4,48 @@
 # `union` concatenates both sides of append-only conflicts instead of
 # producing conflict markers. See `changelog.d/README.md`.
 CHANGELOG.md merge=union
+
+# Linux containers consume these files through bind mounts or Docker/Compose
+# parsers. Keep shipped templates and generated artifact paths LF-normalized
+# even when the checkout happens on a Windows host.
+docker-compose*.yml text eol=lf
+aptl.json text eol=lf
+.env.example text eol=lf
+.mcp.json.example text eol=lf
+
+config/**/*.conf text eol=lf
+config/**/*.env text eol=lf
+config/**/*.list text eol=lf
+config/**/*.py text eol=lf
+config/**/*.rules text eol=lf
+config/**/*.xml text eol=lf
+config/**/*.yaml text eol=lf
+config/**/*.yml text eol=lf
+config/wazuh_cluster/custom-shuffle text eol=lf
+config/wazuh_cluster/etc/lists/active-response-whitelist text eol=lf
+
+containers/**/Dockerfile* text eol=lf
+containers/**/*.conf text eol=lf
+containers/**/*.css text eol=lf
+containers/**/*.html text eol=lf
+containers/**/*.json text eol=lf
+containers/**/*.md text eol=lf
+containers/**/*.ps1 text eol=lf
+containers/**/*.py text eol=lf
+containers/**/*.rules text eol=lf
+containers/**/*.service text eol=lf
+containers/**/*.sh text eol=lf
+containers/**/*.sql text eol=lf
+containers/**/*.template text eol=lf
+containers/**/*.txt text eol=lf
+containers/**/*.yaml text eol=lf
+containers/**/*.yml text eol=lf
+containers/**/*.zone text eol=lf
+containers/dns/zones/172.20.rev text eol=lf
+containers/kali/scripts/* text eol=lf
+containers/keys/* text eol=lf
+
+scripts/**/*.sh text eol=lf
+
+.aptl/config/** text eol=lf
+.aptl/realization/** text eol=lf

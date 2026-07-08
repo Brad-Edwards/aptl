@@ -4,6 +4,20 @@ import os
 from uuid import uuid4
 
 
+def _patch_windows_default_fdopen(mocker, module_path):
+    """Make text writes default to CRLF unless the caller pins newlines."""
+    real_fdopen = os.fdopen
+
+    def fdopen_with_windows_default(fd, mode="r", *args, **kwargs):
+        if "b" not in mode and "newline" not in kwargs:
+            kwargs["newline"] = "\r\n"
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    return mocker.patch(
+        f"{module_path}.os.fdopen", side_effect=fdopen_with_windows_default
+    )
+
+
 def _write_wazuh_templates(project_dir):
     """Create minimal Wazuh templates used by dotenv hydration."""
     values = {
@@ -68,6 +82,19 @@ class TestHydrateDotenv:
         assert find_placeholder_env_values(env) == []
         if os.name == "posix":
             assert env_path.stat().st_mode & 0o777 == 0o600
+
+    def test_created_env_uses_lf_when_host_default_is_crlf(self, tmp_path, mocker):
+        from aptl.core.env import hydrate_dotenv
+
+        _write_wazuh_templates(tmp_path)
+        env_path = tmp_path / ".env"
+        _patch_windows_default_fdopen(mocker, "aptl.core.env")
+
+        hydrate_dotenv(env_path)
+
+        raw = env_path.read_bytes()
+        assert b"\r\n" not in raw
+        assert raw.endswith(b"\n")
 
     def test_replaces_placeholders_and_appends_missing_values(self, tmp_path):
         from aptl.core.env import find_placeholder_env_values, hydrate_dotenv, load_dotenv

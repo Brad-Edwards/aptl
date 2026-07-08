@@ -129,6 +129,16 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         else:
             kwargs["capture_output"] = True
             kwargs["text"] = True
+            # Decode captured docker/compose output as UTF-8 explicitly.
+            # Without this, `text=True` decodes with the host's locale
+            # codec, which on Windows is cp1252 and cannot decode the
+            # non-ASCII bytes BuildKit emits (progress glyphs, box-drawing) —
+            # the reader thread raises UnicodeDecodeError mid-build, the
+            # compose call is seen as failed, and the 60s retry then
+            # collides with the containers the first attempt already started.
+            # `errors="replace"` keeps a stray byte from ever aborting a read.
+            kwargs["encoding"] = "utf-8"
+            kwargs["errors"] = "replace"
         if timeout is not None:
             kwargs["timeout"] = timeout
         return kwargs

@@ -80,7 +80,12 @@ def _run_cmd(
     """Run a command, returning None on failure."""
     try:
         return subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         log.warning("Command failed: %s: %s", " ".join(cmd[:3]), e)

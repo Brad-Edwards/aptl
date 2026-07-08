@@ -1020,6 +1020,11 @@ class TestOrchestrateLabStart:
             ),
         )
 
+        # Keep the host-port resolution step inert so orchestration tests do
+        # not probe/remap real host ports (its behaviour is covered by
+        # TestResolveHostPortsStep and the host_ports unit tests).
+        mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[])
+
         # Mock credentials sync
         mocks["dashboard_creds"] = mocker.patch("aptl.core.lab.sync_dashboard_config")
         mocks["manager_creds"] = mocker.patch("aptl.core.lab.sync_manager_config")
@@ -1699,6 +1704,79 @@ def _write_suricata_seed_sources(tmp_path):
     ):
         (config_dir / "rules" / "misp" / name).write_text(f"# {name}\n")
     return config_dir
+
+
+class TestResolveHostPortsStep:
+    """`_step_resolve_host_ports` remaps in-use published ports before Compose.
+
+    The step delegates probing/remap to ``host_ports.resolve_host_ports`` and
+    stashes the result on the context so the access summary can report where
+    each service landed. The resolver's own probing logic is covered by the
+    host_ports unit tests; here we pin the wiring: it passes the loaded .env as
+    reserved keys, records the resolution, and announces remaps via progress.
+    """
+
+    def _ctx(self, tmp_path, raw_env=None, progress=None):
+        from aptl.core.lab import _LabStartContext
+
+        return _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            raw_env=raw_env or {},
+            progress=progress,
+        )
+
+    def test_stores_resolution_and_passes_reserved_env(self, mocker, tmp_path):
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import _step_resolve_host_ports
+
+        resolution = [
+            ResolvedPort(
+                service="cortex",
+                env_var="APTL_HP_CORTEX_9001",
+                default_port=9001,
+                resolved_port=9001,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=False,
+            )
+        ]
+        resolve = mocker.patch(
+            "aptl.core.host_ports.resolve_host_ports", return_value=resolution
+        )
+        ctx = self._ctx(tmp_path, raw_env={"APTL_DNS_HOST_PORT": "9"})
+
+        result = _step_resolve_host_ports(ctx)
+
+        assert result is None
+        assert ctx.resolved_ports is resolution
+        resolve.assert_called_once_with(
+            tmp_path, reserved_env={"APTL_DNS_HOST_PORT"}
+        )
+
+    def test_announces_remaps_via_progress(self, mocker, tmp_path):
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import _step_resolve_host_ports
+
+        remapped = ResolvedPort(
+            service="wazuh.dashboard",
+            env_var="APTL_HP_WAZUH_DASHBOARD_5601",
+            default_port=443,
+            resolved_port=20009,
+            protos=("tcp",),
+            host_ip="127.0.0.1",
+            remapped=True,
+        )
+        mocker.patch(
+            "aptl.core.host_ports.resolve_host_ports", return_value=[remapped]
+        )
+        progress = MagicMock()
+
+        _step_resolve_host_ports(self._ctx(tmp_path, progress=progress))
+
+        notes = " ".join(c.args[0] for c in progress.call_args_list)
+        assert "wazuh.dashboard" in notes
+        assert "443" in notes and "20009" in notes
 
 
 class TestSeedSuricataVolumesStep:

@@ -104,7 +104,12 @@ def curl_json(
         # without a separate return per branch.
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
             )
             if result.returncode != 0:
                 log.warning(
@@ -171,7 +176,12 @@ def curl_status(
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
             )
         except (subprocess.TimeoutExpired, OSError) as exc:
             log.warning("curl_safe: subprocess failed: %s", exc.__class__.__name__)
@@ -194,7 +204,14 @@ def _write_temp_0600(prefix: str, content: str) -> str:
     """Write *content* to a 0600 temp file and return its path."""
     fd, path = tempfile.mkstemp(prefix=prefix, text=True)
     try:
-        os.fchmod(fd, 0o600)
+        # Restrict to owner before writing the sensitive header. os.fchmod
+        # is POSIX-only; on Windows fall back to a path-based chmod (mkstemp
+        # already creates the file in the user's private temp dir with an
+        # owner-scoped ACL), so this never breaks the control plane there.
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        else:
+            os.chmod(path, 0o600)
         with os.fdopen(fd, "w") as fh:
             fh.write(content)
     except Exception:

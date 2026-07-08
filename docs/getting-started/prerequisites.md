@@ -36,8 +36,8 @@ engine. It behaves like the macOS/Windows Docker VM for host sysctls.
 ## System Config
 
 `aptl lab start` enforces `vm.max_map_count` only when Docker is a native Linux
-engine. Docker Desktop on macOS, Windows, WSL2, or Linux manages the setting
-inside its Linux VM, so there is no host `sysctl` step for those platforms.
+engine. Docker Desktop on macOS, Windows, or WSL2 manages the setting inside its
+Linux VM, so there is no host `sysctl` step for those platforms.
 
 **Native Linux Docker Engine:**
 ```bash

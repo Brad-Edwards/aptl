@@ -77,7 +77,7 @@ def docker_mode() -> str:
 def _docker_operating_system() -> str | None:
     try:
         result = _run_docker_info()
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         log.warning("Could not probe docker info: %s", exc)
         return None
     if result.returncode != 0:

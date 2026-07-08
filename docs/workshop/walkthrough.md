@@ -15,15 +15,23 @@ Two ways drive the attack and investigate steps:
 
 ## 0. Prerequisites, once, at home
 
-On Linux or WSL2, raise the memory-map limit that OpenSearch needs:
+You need Docker running, Python 3.11 or newer, `pipx`, Node.js 18 or newer for
+the MCP servers, and an AI agent of your choice such as Cursor or Claude Code.
+The full TechVault workshop stack needs more than 20GB of Docker memory.
+
+On native Linux Docker Engine only, raise the memory-map limit that OpenSearch
+needs:
 
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
 
-You also need Docker running, Python 3.11 or newer, `pipx`, Node.js 18 or
-newer for the MCP servers, and an AI agent of your choice such as Cursor or
-Claude Code. [Playbook: Before you start]
+Docker Desktop on macOS, Windows, WSL2, or Linux manages that setting inside
+the Docker VM; configure memory in Docker Desktop instead. The commands in this
+walkthrough use POSIX shell syntax. On Windows, run them from WSL2 or Git Bash,
+or use equivalent PowerShell commands for simple file reads.
+
+[Playbook: Before you start]
 
 ## 1. Install and stand up the range [2]
 

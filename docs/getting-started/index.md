@@ -25,8 +25,6 @@ containers. The startup output points to `.env` for passwords and tokens. Run
 
 The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
 
-**Note**: First run requires sudo password for SSL certificate permissions.
-
 ## Lab Components
 
 | Component | Access | Credentials |
@@ -49,8 +47,8 @@ Four isolated Docker networks:
 - Docker with Compose
 - 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
-- Docker Desktop on macOS, Windows, or WSL2: `aptl lab start` skips the host
-  `sysctl` check because Docker manages it inside the Linux VM
+- Docker Desktop on macOS, Windows, WSL2, or Linux: `aptl lab start` skips the
+  host `sysctl` check because Docker manages it inside the Linux VM
 
 Check [prerequisites.md](prerequisites.md) for details.
 

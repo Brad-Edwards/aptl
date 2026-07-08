@@ -75,7 +75,7 @@ def check_docker_buildx() -> ToolReqResult:
             text=True,
             timeout=15,
         )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         requirement = _failed_buildx_result(command, str(exc))
     else:
         requirement = _buildx_result_from_process(command, result)

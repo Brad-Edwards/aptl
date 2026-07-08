@@ -39,15 +39,27 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
         SysReqResult indicating whether the check passed, plus current
         and required values.
     """
-    docker_mode = hostenv.docker_mode()
-    if docker_mode != hostenv.DOCKER_LINUX_NATIVE:
-        return _not_applicable_result(
+    mode = hostenv.docker_mode()
+    if mode == hostenv.DOCKER_LINUX_NATIVE:
+        result = _check_linux_native_max_map_count(minimum)
+    else:
+        result = _not_applicable_result(
             minimum,
-            f"vm.max_map_count is managed inside the Docker VM ({docker_mode})",
+            f"vm.max_map_count is managed inside the Docker VM ({mode})",
         )
+    return result
 
+
+def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:
+    sysctl_result = _run_max_map_count_sysctl(minimum)
+    if isinstance(sysctl_result, SysReqResult):
+        return sysctl_result
+    return _evaluate_sysctl_result(sysctl_result, minimum)
+
+
+def _run_max_map_count_sysctl(minimum: int) -> subprocess.CompletedProcess | SysReqResult:
     try:
-        result = subprocess.run(
+        return subprocess.run(
             ["sysctl", "vm.max_map_count"],
             capture_output=True,
             text=True,
@@ -55,29 +67,18 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
     except (FileNotFoundError, OSError) as exc:
         return _not_applicable_result(minimum, str(exc))
 
-    if result.returncode != 0:
-        error_msg = result.stderr.strip() or "sysctl command failed"
-        if _sysctl_not_applicable(error_msg):
-            return _not_applicable_result(
-                minimum, f"vm.max_map_count sysctl not applicable: {error_msg}"
-            )
-        log.error("sysctl returned non-zero: %s", error_msg)
-        return SysReqResult(
-            passed=False,
-            current_value=0,
-            required_value=minimum,
-            error=error_msg,
-        )
 
-    # Parse output: "vm.max_map_count = 262144"
+def _evaluate_sysctl_result(
+    result: subprocess.CompletedProcess,
+    minimum: int,
+) -> SysReqResult:
+    if result.returncode != 0:
+        return _failed_sysctl_result(result.stderr, minimum)
+
     stdout = result.stdout.strip()
     try:
-        # Split on '=' and take the numeric part
-        parts = stdout.split("=")
-        if len(parts) != 2:
-            raise ValueError(f"Unexpected format: {stdout}")
-        current_value = int(parts[1].strip())
-    except (ValueError, IndexError) as exc:
+        current_value = _parse_sysctl_value(stdout)
+    except ValueError as exc:
         log.error("Failed to parse sysctl output '%s': %s", stdout, exc)
         return SysReqResult(
             passed=False,
@@ -85,15 +86,38 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
             required_value=minimum,
             error=f"Failed to parse sysctl output: {stdout}",
         )
+    return _max_map_count_result(current_value, minimum)
 
+
+def _failed_sysctl_result(stderr: str, minimum: int) -> SysReqResult:
+    error_msg = stderr.strip() or "sysctl command failed"
+    if _sysctl_not_applicable(error_msg):
+        return _not_applicable_result(
+            minimum, f"vm.max_map_count sysctl not applicable: {error_msg}"
+        )
+    log.error("sysctl returned non-zero: %s", error_msg)
+    return SysReqResult(
+        passed=False,
+        current_value=0,
+        required_value=minimum,
+        error=error_msg,
+    )
+
+
+def _parse_sysctl_value(stdout: str) -> int:
+    # Parse output: "vm.max_map_count = 262144"
+    parts = stdout.split("=")
+    if len(parts) != 2:
+        raise ValueError(f"Unexpected format: {stdout}")
+    return int(parts[1].strip())
+
+
+def _max_map_count_result(current_value: int, minimum: int) -> SysReqResult:
     passed = current_value >= minimum
-
     if passed:
         log.info("vm.max_map_count is adequate (%d >= %d)", current_value, minimum)
     else:
-        log.warning(
-            "vm.max_map_count is too low (%d < %d)", current_value, minimum
-        )
+        log.warning("vm.max_map_count is too low (%d < %d)", current_value, minimum)
 
     return SysReqResult(
         passed=passed,

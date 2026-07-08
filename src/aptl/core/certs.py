@@ -1,6 +1,7 @@
 """SSL certificate generation for Wazuh Indexer."""
 
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,8 @@ log = get_logger("certs")
 
 _CERTS_SUBDIR = "config/wazuh_indexer_ssl_certs"
 _CERT_COMPOSE_FILE = "generate-indexer-certs.yml"
+_ROOT_CA = "root-ca.pem"
+_MANAGER_ROOT_CA = "root-ca-manager.pem"
 
 
 @dataclass
@@ -42,9 +45,17 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
         and the path to the certs directory.
     """
     certs_dir = project_dir / _CERTS_SUBDIR
-    root_ca = certs_dir / "root-ca.pem"
+    root_ca = certs_dir / _ROOT_CA
 
     if certs_dir.exists() and root_ca.exists():
+        alias_error = _ensure_manager_root_ca_alias(certs_dir)
+        if alias_error is not None:
+            return CertResult(
+                success=False,
+                generated=False,
+                certs_dir=certs_dir,
+                error=alias_error,
+            )
         log.info("SSL certificates already exist at %s", certs_dir)
         return CertResult(
             success=True,
@@ -61,9 +72,37 @@ def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
     error = _run_cert_generator(project_dir, certs_dir)
     result = error
     if result is None:
+        alias_error = _ensure_manager_root_ca_alias(certs_dir)
+        if alias_error is not None:
+            return CertResult(
+                success=False,
+                generated=False,
+                certs_dir=certs_dir,
+                error=alias_error,
+            )
         log.info("SSL certificates generated successfully at %s", certs_dir)
         result = CertResult(success=True, generated=True, certs_dir=certs_dir)
     return result
+
+
+def _ensure_manager_root_ca_alias(certs_dir: Path) -> str | None:
+    """Ensure the Wazuh manager CA mount source exists.
+
+    The upstream Wazuh cert generator emits ``root-ca.pem``. The manager
+    service mounts the same CA as ``root-ca-manager.pem`` so Filebeat can read
+    it at ``/etc/ssl/root-ca.pem`` without sharing the indexer path contract.
+    """
+    source = certs_dir / _ROOT_CA
+    target = certs_dir / _MANAGER_ROOT_CA
+    if target.exists():
+        return None
+    if not source.exists():
+        return f"Missing generated CA certificate: {source}"
+    try:
+        shutil.copyfile(source, target)
+    except OSError as exc:
+        return f"Failed to prepare manager root CA certificate: {exc}"
+    return None
 
 
 def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:

@@ -99,6 +99,7 @@ VARIANTS = (
             {
                 "kali",
                 "kali-capture",
+                "kali-ssh-proxy",
                 "victim",
                 "wazuh.manager",
                 "wazuh.indexer",
@@ -106,7 +107,13 @@ VARIANTS = (
             }
         ),
         expected_networks=frozenset(
-            {"aptl-security", "aptl-dmz", "aptl-internal", "aptl-redteam"}
+            {
+                "aptl-security",
+                "aptl-dmz",
+                "aptl-internal",
+                "aptl-redteam",
+                "aptl-control",
+            }
         ),
     ),
 )

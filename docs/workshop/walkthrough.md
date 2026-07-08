@@ -31,6 +31,17 @@ the Docker VM; configure memory in Docker Desktop instead. The commands in this
 walkthrough use POSIX shell syntax. On Windows, run them from WSL2 or Git Bash,
 or use equivalent PowerShell commands for simple file reads.
 
+If you use Homebrew Docker with Colima on macOS instead of Docker Desktop,
+install the Docker Buildx CLI plugin before starting the lab:
+
+```bash
+brew install docker-buildx
+mkdir -p ~/.docker/cli-plugins
+ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" \
+  ~/.docker/cli-plugins/docker-buildx
+docker buildx version
+```
+
 [Playbook: Before you start]
 
 ## 1. Install and stand up the range [2]
@@ -65,22 +76,26 @@ aptl lab status
 docker exec aptl-wazuh-manager /var/ossec/bin/agent_control -l | grep -c Active
 ```
 
-Expect "Lab is running" with about 30 healthy containers and roughly 9 active
-Wazuh agents. Name the parts out loud: `aptl-kali` is the attacker, the victim
-and enterprise hosts are targets, and the `aptl-wazuh-*`, Suricata, MISP,
-TheHive, Cortex, and Shuffle containers form the SOC.
+Expect "Lab is running" with about 30 healthy containers. Active Wazuh agent
+counts can vary by platform and startup timing; 7 to 9 active agents is normal
+for a fresh workshop run. Name the parts out loud: `aptl-kali` is the attacker,
+the victim and enterprise hosts are targets, and the `aptl-wazuh-*`, Suricata,
+MISP, TheHive, Cortex, and Shuffle containers form the SOC.
 
 ## 3. Wire your agent [3]
 
 In the `workshop` directory, create `.mcp.json` (copy it from
 `.mcp.json.example`). The minimum set for the workshop is the red tool, which
-drives Kali, and the indexer tool, which queries the SOC:
+drives Kali, and the indexer tool, which queries the SOC. The red MCP reaches
+Kali through the loopback-only SSH proxy on `localhost:2023`, so the same
+configuration works on Linux Docker, Docker Desktop, Colima, and WSL2 without
+host routing to Compose bridge IPs:
 
 ```jsonc
 { "mcpServers": {
-  "kali-red-team": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
+  "kali-ssh": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
     "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } },
-  "soc-indexer": { "command": "node", "args": ["./mcp/mcp-indexer/build/index.js"],
+  "indexer": { "command": "node", "args": ["./mcp/mcp-indexer/build/index.js"],
     "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
              "INDEXER_USERNAME": "admin",
              "INDEXER_PASSWORD": "<from grep '^INDEXER_PASSWORD=' .env>" } } } }
@@ -280,6 +295,9 @@ Each of these held true on the last fresh-box run:
 - If no alert appears yet, wait for the roughly 15-second ingestion lag and run
   the query again. Rule 5710 (SSH) and rule 302011 (SQL injection) are the
   reliable pair, so lead with them.
+- If the active Wazuh agent count is below 9 on Docker Desktop, Colima, or WSL2,
+  continue with the attack and alert checks. The required proof is that the
+  5710 and 302011 alerts appear from the Kali source addresses.
 - The attacker address shows as `172.20.2.35` or `172.20.1.30`, not a single
   value, because Kali is multi-homed across the internal and DMZ paths. That is
   a good teaching moment.

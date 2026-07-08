@@ -67,8 +67,18 @@ def test_docker_mode_desktop(monkeypatch) -> None:
 
 
 def test_docker_mode_linux_native(monkeypatch) -> None:
+    monkeypatch.setattr(hostenv.sys, "platform", "linux")
     _patch_docker(monkeypatch, stdout="Ubuntu 24.04.4 LTS\n")
     assert hostenv.docker_mode() == hostenv.DOCKER_LINUX_NATIVE
+    assert hostenv.is_docker_desktop() is False
+
+
+@pytest.mark.parametrize("sys_platform", ["darwin", "win32"])
+def test_docker_mode_non_linux_vm(monkeypatch, sys_platform) -> None:
+    """A Linux engine string is host-native only when the host is Linux."""
+    monkeypatch.setattr(hostenv.sys, "platform", sys_platform)
+    _patch_docker(monkeypatch, stdout="Ubuntu 24.04.4 LTS\n")
+    assert hostenv.docker_mode() == hostenv.DOCKER_VM
     assert hostenv.is_docker_desktop() is False
 
 
@@ -98,12 +108,20 @@ def test_docker_mode_unknown_on_timeout(monkeypatch) -> None:
 # needs_host_ownership_fix — True only for a native Linux engine
 # --------------------------------------------------------------------------- #
 def test_ownership_fix_only_for_linux_native(monkeypatch) -> None:
+    monkeypatch.setattr(hostenv.sys, "platform", "linux")
     _patch_docker(monkeypatch, stdout="Ubuntu 24.04.4 LTS")
     assert hostenv.needs_host_ownership_fix() is True
 
 
 def test_ownership_fix_skipped_on_desktop(monkeypatch) -> None:
     _patch_docker(monkeypatch, stdout="Docker Desktop")
+    assert hostenv.needs_host_ownership_fix() is False
+
+
+@pytest.mark.parametrize("sys_platform", ["darwin", "win32"])
+def test_ownership_fix_skipped_on_non_linux_vm(monkeypatch, sys_platform) -> None:
+    monkeypatch.setattr(hostenv.sys, "platform", sys_platform)
+    _patch_docker(monkeypatch, stdout="Ubuntu 24.04.4 LTS")
     assert hostenv.needs_host_ownership_fix() is False
 
 

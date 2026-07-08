@@ -64,6 +64,7 @@ from aptl.validation.techvault_gate import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
 
 
 @pytest.fixture(scope="module")
@@ -132,7 +133,8 @@ def test_operational_scenario_matches_public_start_profiles_and_services():
     missing = {
         service: aliases
         for service, aliases in expected_services.items()
-        if not set(aliases) & realized_aliases
+        if service not in PROFILE_INFRASTRUCTURE_SERVICES
+        and not set(aliases) & realized_aliases
     }
     assert missing == {}
 

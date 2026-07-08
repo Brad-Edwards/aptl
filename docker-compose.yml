@@ -1200,11 +1200,10 @@ services:
         ipv4_address: 172.20.1.30
       aptl-internal:
         ipv4_address: 172.20.2.35
-    # No host port published: kali is attached only to internal-only
-    # networks (aptl-redteam / aptl-dmz / aptl-internal), and Docker
-    # does not publish host ports for internal-only containers. The
-    # MCP / control plane reaches kali by container IP over the bridge
-    # — see endpoints.py select_ssh_host (issue #293).
+    # Kali stays attached only to internal lab networks. Host-run MCP
+    # clients reach sshd through the loopback-only kali-ssh-proxy service
+    # below, which keeps Docker VM backends working without giving Kali a
+    # non-internal network attachment.
     environment:
       - VICTIM_IP=172.20.2.20
     extra_hosts:
@@ -1257,6 +1256,46 @@ services:
       resources:
         limits:
           memory: 1g
+
+  # Host-side Kali SSH bridge for MCP clients.
+  #
+  # Docker Desktop, Colima, and WSL2 do not route Compose bridge IPs from the
+  # host. Publishing a port directly on a service attached only to
+  # internal:true networks is also not made reachable by those backends. Keep
+  # Kali isolated and put the host publication on this tiny proxy instead:
+  # host localhost:2023 -> proxy -> aptl-kali:22 on aptl-redteam.
+  kali-ssh-proxy:
+    profiles: ["kali"]
+    build:
+      context: ./containers/kali-ssh-proxy
+      dockerfile: Dockerfile
+    container_name: aptl-kali-ssh-proxy
+    restart: unless-stopped
+    environment:
+      - APTL_PROXY_TARGET_HOST=172.20.4.30
+      - APTL_PROXY_TARGET_PORT=22
+    ports:
+      - "127.0.0.1:2023:2023"
+    networks:
+      aptl-control:
+      aptl-redteam:
+    depends_on:
+      kali:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import socket; s=socket.create_connection(('127.0.0.1', 2023), 2); s.close()"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
   # ---------------------------------------------------------------------------
   # ADR-041 / issue #305: Kali Capture Sidecar
@@ -1495,6 +1534,15 @@ services:
 # ==========================================================================
 
 networks:
+  # Host-published control-plane proxy network. This network is intentionally
+  # not attached to Kali; it exists so loopback-only host publications work on
+  # Docker VM backends without adding an egress-capable interface to Kali.
+  aptl-control:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.5.0/24
+
   # Security / Management network - Wazuh, SOC tools
   aptl-security:
     driver: bridge

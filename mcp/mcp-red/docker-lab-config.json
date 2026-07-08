@@ -16,10 +16,10 @@
     "kali": {
       "container_name": "aptl-kali",
       "capture_container_name": "aptl-kali-capture",
-      "container_ip": "172.20.4.30",
+      "container_ip": "localhost",
       "ssh_key": "~/.ssh/aptl_lab_key",
       "ssh_user": "kali",
-      "ssh_port": 22,
+      "ssh_port": 2023,
       "enabled": true
     }
   }

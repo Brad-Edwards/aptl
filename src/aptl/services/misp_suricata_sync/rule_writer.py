@@ -33,7 +33,7 @@ def write_if_changed(target: Path, content: str) -> bool:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(content)
             fh.flush()
             os.fsync(fh.fileno())

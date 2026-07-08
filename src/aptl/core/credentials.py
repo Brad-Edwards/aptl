@@ -231,7 +231,7 @@ def _atomic_write_secure(target: Path, content: str) -> None:
             f"Temp render path {tmp} escapes its output directory {parent}"
         )
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(content)
             fh.flush()
             os.fsync(fh.fileno())
@@ -290,7 +290,7 @@ def _render_secure(
     if not source_path.exists():
         raise FileNotFoundError(f"Config template not found: {source_path}")
 
-    rendered = transform(source_path.read_text())
+    rendered = transform(source_path.read_text(encoding="utf-8"))
 
     # Reject a symlinked generated path *before* we mkdir/chmod through
     # it (a symlink at .aptl/config or the output file could otherwise

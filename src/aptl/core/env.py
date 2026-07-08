@@ -239,7 +239,7 @@ def _write_dotenv(path: Path, content: str) -> None:
     )
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as tmp:
             tmp.write(content)
         os.replace(tmp_path, path)
         if os.name == "posix":

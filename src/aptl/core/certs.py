@@ -56,6 +56,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
                 certs_dir=certs_dir,
                 error=alias_error,
             )
+        _ensure_user_writable_certs(certs_dir)
         log.info("SSL certificates already exist at %s", certs_dir)
         return CertResult(
             success=True,
@@ -80,6 +81,7 @@ def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
                 certs_dir=certs_dir,
                 error=alias_error,
             )
+        _ensure_user_writable_certs(certs_dir)
         log.info("SSL certificates generated successfully at %s", certs_dir)
         result = CertResult(success=True, generated=True, certs_dir=certs_dir)
     return result
@@ -103,6 +105,23 @@ def _ensure_manager_root_ca_alias(certs_dir: Path) -> str | None:
     except OSError as exc:
         return f"Failed to prepare manager root CA certificate: {exc}"
     return None
+
+
+def _ensure_user_writable_certs(certs_dir: Path) -> None:
+    """Make generated cert files removable by the invoking host user.
+
+    The upstream generator emits read-only PEM files. On some Docker VM file
+    sharing layers, notably macOS-backed mounts, that can prevent ordinary
+    cleanup even when the files map back to the host user. This is a
+    best-effort host-side chmod and never escalates privileges.
+    """
+    for path in certs_dir.iterdir():
+        if not path.is_file():
+            continue
+        try:
+            path.chmod(path.stat().st_mode | 0o600)
+        except OSError as exc:
+            log.warning("Could not make generated cert writable (%s): %s", path, exc)
 
 
 def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:

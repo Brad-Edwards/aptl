@@ -27,7 +27,12 @@ def linux_native(mocker):
 def _successful_generator(mocker, certs_dir):
     def fake_run(cmd, **kwargs):
         certs_dir.mkdir(parents=True, exist_ok=True)
-        (certs_dir / "root-ca.pem").write_text("fake-cert")
+        root_ca = certs_dir / "root-ca.pem"
+        root_ca.write_text("fake-cert")
+        root_ca.chmod(0o400)
+        generated_key = certs_dir / "wazuh.manager-key.pem"
+        generated_key.write_text("fake-key")
+        generated_key.chmod(0o400)
         return MagicMock(returncode=0, stdout="", stderr="")
 
     return mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
@@ -52,6 +57,7 @@ class TestEnsureSSLCerts:
         assert result.generated is False
         assert result.certs_dir == certs_dir
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
+        assert (certs_dir / "root-ca-manager.pem").stat().st_mode & 0o200
         mock_run.assert_not_called()
 
     def test_linux_native_generator_runs_as_host_user(
@@ -70,6 +76,8 @@ class TestEnsureSSLCerts:
         assert result.generated is True
         assert result.certs_dir == certs_dir
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
+        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
+        assert (certs_dir / "wazuh.manager-key.pem").stat().st_mode & 0o200
         assert mock_run.call_count == 1
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert generator_cmd == [
@@ -103,6 +111,7 @@ class TestEnsureSSLCerts:
         assert result.success is True
         assert result.generated is True
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
+        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
 
     def test_docker_desktop_generator_does_not_request_host_uid(
         self, tmp_path, mocker
@@ -124,6 +133,7 @@ class TestEnsureSSLCerts:
         assert "--user" not in generator_cmd
         assert generator_cmd[-1] == "generator"
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
+        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
         getuid.assert_not_called()
         getgid.assert_not_called()
 
@@ -135,6 +145,7 @@ class TestEnsureSSLCerts:
         certs_dir.mkdir(parents=True)
         (certs_dir / "root-ca.pem").write_text("new-cert")
         (certs_dir / "root-ca-manager.pem").write_text("existing-cert")
+        (certs_dir / "root-ca-manager.pem").chmod(0o400)
         mock_run = mocker.patch("aptl.core.certs.subprocess.run")
 
         result = ensure_ssl_certs(tmp_path)
@@ -142,6 +153,7 @@ class TestEnsureSSLCerts:
         assert result.success is True
         assert result.generated is False
         assert (certs_dir / "root-ca-manager.pem").read_text() == "existing-cert"
+        assert (certs_dir / "root-ca-manager.pem").stat().st_mode & 0o200
         mock_run.assert_not_called()
 
     def test_missing_generated_root_ca_is_reported(self, tmp_path, mocker):

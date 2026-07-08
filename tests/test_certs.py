@@ -9,23 +9,25 @@ import pytest
 @pytest.fixture(autouse=True)
 def no_native_ownership_fix_by_default(mocker):
     """Avoid probing the real Docker engine in unit tests."""
-    mocker.patch(
-        "aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=False
-    )
+    mocker.patch("aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=False)
 
 
 @pytest.fixture
 def linux_native(mocker):
     """Force native-Linux generation with a fixed uid/gid."""
-    mocker.patch(
-        "aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=True
-    )
+    mocker.patch("aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=True)
     mocker.patch("aptl.core.certs.os.getuid", return_value=1000)
     mocker.patch("aptl.core.certs.os.getgid", return_value=1000)
 
 
 def _successful_generator(mocker, certs_dir):
     def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["docker", "run"]:
+            certs_dir.chmod(0o700)
+            for path in certs_dir.iterdir():
+                path.chmod(0o600)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
         certs_dir.mkdir(parents=True, exist_ok=True)
         root_ca = certs_dir / "root-ca.pem"
         root_ca.write_text("fake-cert")
@@ -61,10 +63,10 @@ class TestEnsureSSLCerts:
         assert (certs_dir / "root-ca-manager.pem").stat().st_mode & 0o200
         mock_run.assert_not_called()
 
-    def test_linux_native_generator_runs_as_host_user(
+    def test_linux_native_generator_runs_as_root_then_repairs_ownership(
         self, tmp_path, mocker, linux_native
     ):
-        """Native Linux should generate certs as the invoking host user."""
+        """Native Linux should repair root-owned generator output afterward."""
         from aptl.core.certs import ensure_ssl_certs
 
         (tmp_path / "config").mkdir()
@@ -80,7 +82,7 @@ class TestEnsureSSLCerts:
         assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
         assert (certs_dir / "wazuh.manager-key.pem").stat().st_mode & 0o200
         assert certs_dir.stat().st_mode & 0o200
-        assert mock_run.call_count == 1
+        assert mock_run.call_count == 2
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert generator_cmd == [
             "docker",
@@ -89,10 +91,20 @@ class TestEnsureSSLCerts:
             "generate-indexer-certs.yml",
             "run",
             "--rm",
-            "--user",
-            "1000:1000",
             "generator",
         ]
+        repair_cmd = mock_run.call_args_list[1][0][0]
+        assert repair_cmd[:6] == [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/bin/sh",
+            "-v",
+        ]
+        assert repair_cmd[6] == f"{certs_dir.resolve()}:/certificates"
+        assert repair_cmd[7] == "wazuh/wazuh-certs-generator:0.0.2"
+        assert "chown -R 1000:1000 /certificates" in repair_cmd[-1]
 
     def test_linux_native_precreates_output_dir(self, tmp_path, mocker, linux_native):
         """Precreating the bind mount avoids Docker making a root-owned dir."""
@@ -106,7 +118,7 @@ class TestEnsureSSLCerts:
             (certs_dir / "root-ca.pem").write_text("fake-cert")
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
+        mock_run = mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
 
         result = ensure_ssl_certs(tmp_path)
 
@@ -115,10 +127,10 @@ class TestEnsureSSLCerts:
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
         assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
         assert certs_dir.stat().st_mode & 0o200
+        generator_cmd = mock_run.call_args_list[0][0][0]
+        assert "--user" not in generator_cmd
 
-    def test_docker_desktop_generator_does_not_request_host_uid(
-        self, tmp_path, mocker
-    ):
+    def test_docker_desktop_generator_does_not_request_host_uid(self, tmp_path, mocker):
         """Docker Desktop should rely on file sharing, not POSIX uid/gid."""
         from aptl.core.certs import ensure_ssl_certs
 
@@ -140,6 +152,31 @@ class TestEnsureSSLCerts:
         assert certs_dir.stat().st_mode & 0o200
         getuid.assert_not_called()
         getgid.assert_not_called()
+
+    def test_linux_native_reports_permission_repair_failure(
+        self, tmp_path, mocker, linux_native
+    ):
+        """Native Linux must fail clearly when generated certs cannot be repaired."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        (tmp_path / "config").mkdir()
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "compose", "-f"]:
+                certs_dir.mkdir(parents=True, exist_ok=True)
+                (certs_dir / "root-ca.pem").write_text("fake-cert")
+                return MagicMock(returncode=0, stdout="", stderr="")
+            return MagicMock(returncode=1, stdout="", stderr="chown failed")
+
+        mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is False
+        assert result.generated is False
+        assert "permission repair" in result.error
+        assert "chown failed" in result.error
 
     def test_existing_manager_root_ca_alias_is_preserved(self, tmp_path, mocker):
         """Existing CA alias should not be rewritten on repeat starts."""

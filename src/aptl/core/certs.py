@@ -31,10 +31,10 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
     If the certificates directory already exists, this is a no-op. Otherwise,
-    runs the docker compose cert generator. On native Linux Docker, the
-    generator runs as the invoking host user so bind-mounted certificates are
-    user-owned from creation. Docker Desktop does not need that override because
-    its file-sharing layer maps ownership back to the host user.
+    runs the docker compose cert generator. On native Linux Docker, generated
+    certificates are repaired back to the invoking host user after generation.
+    Docker Desktop does not need that repair because its file-sharing layer maps
+    ownership back to the host user.
 
     Args:
         project_dir: Root directory of the APTL project (where
@@ -73,6 +73,14 @@ def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
     error = _run_cert_generator(project_dir, certs_dir)
     result = error
     if result is None:
+        repair_error = _repair_native_linux_cert_ownership(certs_dir)
+        if repair_error is not None:
+            return CertResult(
+                success=False,
+                generated=False,
+                certs_dir=certs_dir,
+                error=repair_error,
+            )
         alias_error = _ensure_manager_root_ca_alias(certs_dir)
         if alias_error is not None:
             return CertResult(
@@ -120,7 +128,9 @@ def _ensure_user_writable_certs(certs_dir: Path) -> None:
     try:
         certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
     except OSError as exc:
-        log.warning("Could not make generated cert directory writable (%s): %s", certs_dir, exc)
+        log.warning(
+            "Could not make generated cert directory writable (%s): %s", certs_dir, exc
+        )
     for path in certs_dir.iterdir():
         if not path.is_file():
             continue
@@ -168,22 +178,72 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
 
 def _cert_generator_command(certs_dir: Path) -> list[str]:
     """Build the Docker Compose command for the certificate generator."""
-    command = [
-        "docker", "compose",
-        "-f", _CERT_COMPOSE_FILE,
-        "run", "--rm",
-    ]
-    user = _native_linux_user()
-    if user is not None:
+    if _native_linux_user() is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
-        command += ["--user", user]
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        _CERT_COMPOSE_FILE,
+        "run",
+        "--rm",
+    ]
     command.append("generator")
     return command
 
 
-def _native_linux_user() -> str | None:
-    """Return the host uid/gid override required by native Linux Docker."""
+def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:
+    """Repair root-owned generator output on native Linux Docker.
+
+    The upstream Wazuh cert generator image must run as root because its
+    entrypoint is not executable by an arbitrary host uid. Native Linux Docker
+    then leaves bind-mounted output root-owned. Use Docker itself, not host
+    sudo, to chown the generated files back to the invoking user.
+    """
+    user = _native_linux_user()
+    if user is None:
+        return None
+
+    result = subprocess.run(
+        _cert_ownership_repair_command(certs_dir, user),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode == 0:
+        return None
+
+    detail = result.stderr.strip() or result.stdout.strip()
+    if not detail:
+        detail = "permission repair container failed"
+    return f"Certificate permission repair failed: {detail}"
+
+
+def _cert_ownership_repair_command(certs_dir: Path, user: tuple[int, int]) -> list[str]:
+    """Build the Docker command that restores native-Linux host ownership."""
+    uid, gid = user
+    script = (
+        f"chown -R {uid}:{gid} /certificates && "
+        "find /certificates -type d -exec chmod u+rwx {} + && "
+        "find /certificates -type f -exec chmod u+rw {} +"
+    )
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--entrypoint",
+        "/bin/sh",
+        "-v",
+        f"{certs_dir.resolve()}:/certificates",
+        "wazuh/wazuh-certs-generator:0.0.2",
+        "-c",
+        script,
+    ]
+
+
+def _native_linux_user() -> tuple[int, int] | None:
+    """Return the host uid/gid that native Linux Docker output should use."""
     user = None
     if hostenv.needs_host_ownership_fix():
-        user = f"{os.getuid()}:{os.getgid()}"
+        user = (os.getuid(), os.getgid())
     return user

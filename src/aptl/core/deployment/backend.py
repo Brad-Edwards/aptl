@@ -306,6 +306,17 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def container_restart(self, name: str, *, timeout: int | None = None) -> None:
+        """Restart a running container (docker restart <name>).
+
+        Used by the wazuh-manager watchdog (#732) between compose retry
+        attempts on hosts (Colima on macOS is the reproducible case) where
+        s6-supervise gets stuck reporting EACCES on executable service
+        `run` scripts and no wazuh daemon ever spawns — a docker-level
+        restart clears the state.
+        """
+        ...
+
     # Host inventory (CLI-004 / ADR-023) ----------------------------------
     #
     # These return parsed host-level information instead of exposing a

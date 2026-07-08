@@ -5,6 +5,7 @@ SSHComposeBackend, config model, and factory function.
 """
 
 import json
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1340,6 +1341,29 @@ class TestDockerComposeBackendContainerInteraction:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
             backend.container_exec("aptl-victim", ["true"], timeout=5)
         assert mock_run.call_args[1]["timeout"] == 5
+
+    # container_restart ----------------------------------------------------
+
+    def test_container_restart_issues_docker_restart(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.container_restart("aptl-wazuh-manager")
+        cmd = mock_run.call_args[0][0]
+        assert cmd == ["docker", "restart", "aptl-wazuh-manager"]
+
+    def test_container_restart_logs_warning_on_nonzero_exit(self, tmp_path, caplog):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="No such container: whatever"
+            )
+            caplog.set_level(logging.WARNING, logger="aptl")
+            backend.container_restart("aptl-wazuh-manager")
+        # Best-effort — no exception raised, but the failure is logged.
+        assert any(
+            "docker restart" in rec.getMessage() for rec in caplog.records
+        )
 
     # container_inspect ----------------------------------------------------
 

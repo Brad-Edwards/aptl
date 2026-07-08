@@ -171,7 +171,7 @@ container aptl-<name> is unhealthy` and `docker ps` shows the container
 as `Up (unhealthy)`, there are two very different failure modes worth
 distinguishing before assuming the tool is broken:
 
-**1. Memory too tight — the service is being kernel-killed during warm-up.**
+**1. Memory too tight—the service is being kernel-killed during warm-up.**
 Check the deploy limit vs the service's needs:
 
 ```bash
@@ -198,10 +198,10 @@ docker exec aptl-<name> sh -c 'ls /proc/[0-9]*/comm | while read f; do read n < 
 ```
 
 Compare the live process list against what the container is supposed to
-run (e.g. wazuh-manager should show `wazuh-analysisd`, `wazuh-modulesd`,
-`wazuh-execd`, and a python API process — not just `s6-supervise` +
+run (for example, wazuh-manager should show `wazuh-analysisd`, `wazuh-modulesd`,
+`wazuh-execd`, and a python API process—not just `s6-supervise` +
 `filebeat`). If the intended daemons are missing, check the service's
-own log directory (e.g. `/var/ossec/logs/ossec.log` for Wazuh) for the
+own log directory (for example, `/var/ossec/logs/ossec.log` for Wazuh) for the
 crash cause. Wazuh-manager silent-crash after startup is tracked in
 [#725](https://github.com/Brad-Edwards/aptl/issues/725).
 

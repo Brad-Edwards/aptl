@@ -164,6 +164,32 @@ sudo lsof -i :443
 # Disable in System Preferences → Sharing
 ```
 
+### `aptl lab start` fails with "Existing network aptl_aptl-... does not match realized network"
+
+Symptom on a machine that has run an older aptl-labs release before the
+`org.aptl.realization.network=true` label was introduced:
+
+```
+Lab start failed: ACES runtime handoff failed: ...
+  Existing network aptl_aptl-dmz does not match realized network dmz-net:
+  label org.aptl.realization.network expected 'true', found ''.
+```
+
+The stale networks were created without the label the current version
+expects. `aptl lab stop` (graceful) does not always remove them. Remove
+by name and retry:
+
+```bash
+aptl lab stop
+docker network ls --filter name=aptl \
+  --format '{{.Name}}\t{{.Labels}}' \
+  | awk '/org\.aptl\.realization\.network=true/{next} $1 ~ /^aptl_aptl-/ {print $1}' \
+  | xargs -r docker network rm
+aptl lab start
+```
+
+Tracked in [#722](https://github.com/Brad-Edwards/Aptl/issues/722).
+
 ### macOS: Docker Desktop uninstall leftovers
 
 If you uninstalled Docker Desktop and switched to Colima (or brew-installed

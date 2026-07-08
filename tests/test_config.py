@@ -62,11 +62,11 @@ _EXPECTED_CONTAINER_DEFAULTS = {
     "victim": True,
     "kali": True,
     "reverse": False,
-    "enterprise": False,
-    "soc": False,
+    "enterprise": True,
+    "soc": True,
     "mail": False,
-    "fileshare": False,
-    "dns": False,
+    "fileshare": True,
+    "dns": True,
 }
 
 
@@ -104,7 +104,19 @@ class TestContainerSettings:
         """
         from aptl.core.config import ContainerSettings
 
-        settings = ContainerSettings(wazuh=True, victim=False, kali=True, reverse=False)
+        # Set every field explicitly so this exercises enabled_profiles() itself
+        # rather than the model defaults.
+        settings = ContainerSettings(
+            wazuh=True,
+            victim=False,
+            kali=True,
+            reverse=False,
+            enterprise=False,
+            soc=False,
+            mail=False,
+            fileshare=False,
+            dns=False,
+        )
         assert set(settings.enabled_profiles()) == {"wazuh", "kali"}
 
 

@@ -96,16 +96,17 @@ def _ensure_manager_root_ca_alias(certs_dir: Path) -> str | None:
     """
     source = certs_dir / _ROOT_CA
     target = certs_dir / _MANAGER_ROOT_CA
-    if target.exists():
-        return None
-    if not source.exists():
-        return f"Missing generated CA certificate: {source}"
-    try:
-        certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
-        shutil.copyfile(source, target)
-    except OSError as exc:
-        return f"Failed to prepare manager root CA certificate: {exc}"
-    return None
+    error = None
+    if not target.exists():
+        if not source.exists():
+            error = f"Missing generated CA certificate: {source}"
+        else:
+            try:
+                certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
+                shutil.copyfile(source, target)
+            except OSError as exc:
+                error = f"Failed to prepare manager root CA certificate: {exc}"
+    return error
 
 
 def _ensure_user_writable_certs(certs_dir: Path) -> None:

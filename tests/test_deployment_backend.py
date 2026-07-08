@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from aptl.core.config import AptlConfig, DeploymentConfig
 from aptl.core.deployment import (
@@ -239,6 +240,51 @@ class TestDockerComposeBackend:
         assert result.success is True
         cmd = mock_run.call_args[0][0]
         assert "--build" not in cmd
+
+    def test_start_dedupes_duplicate_local_build_tags(self, tmp_path):
+        (tmp_path / "docker-compose.yml").write_text(
+            """
+services:
+  sidecar-one:
+    image: aptl-sidecar:local
+    build:
+      context: .
+      dockerfile: containers/sidecar/Dockerfile
+  sidecar-two:
+    image: aptl-sidecar:local
+    build:
+      context: .
+      dockerfile: containers/sidecar/Dockerfile
+  unique:
+    image: aptl-unique:local
+    build:
+      context: .
+      dockerfile: containers/unique/Dockerfile
+""",
+            encoding="utf-8",
+        )
+        backend = self._make_backend(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            result = backend.start(["soc"])
+
+        assert result.success is True
+        override_path = tmp_path / ".aptl" / "compose-build-dedupe.yml"
+        override = yaml.safe_load(override_path.read_text(encoding="utf-8"))
+        assert override == {
+            "services": {
+                "sidecar-two": {
+                    "build": None,
+                    "pull_policy": "never",
+                }
+            }
+        }
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:4] == ["docker", "compose", "-p", "test"]
+        assert ["-f", str(tmp_path / "docker-compose.yml")] == cmd[4:6]
+        assert ["-f", str(override_path)] == cmd[6:8]
+        assert "--build" in cmd
 
     def test_start_returns_failure_on_error(self, tmp_path):
         backend = self._make_backend(tmp_path)

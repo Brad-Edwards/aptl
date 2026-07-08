@@ -1609,27 +1609,26 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11b: Pinning terminal SSH host keys...")
     if ctx.backend is None or ctx.ssh_key_path is None:
         log.debug("Skipping host-key pinning: backend or ssh key unavailable")
-        return None
-    if _docker_vm_hides_bridge_ips():
+    elif _docker_vm_hides_bridge_ips():
         log.info(
             "Skipping host-key pinning: Docker VM mode does not expose "
             "Compose bridge IPs to the host"
         )
-        return None
-    try:
-        endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
-        result = pin_terminal_host_keys(
-            ctx.project_dir, endpoints, ctx.ssh_key_path
-        )
-    # Observability only: pinning failures are never fatal to lab start.
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Terminal SSH host-key pinning failed: %s", exc)
-        return None
-    if result.failed:
-        log.warning(
-            "Terminal SSH host keys not pinned for: %s",
-            ", ".join(result.failed),
-        )
+    else:
+        try:
+            endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
+            result = pin_terminal_host_keys(
+                ctx.project_dir, endpoints, ctx.ssh_key_path
+            )
+        # Observability only: pinning failures are never fatal to lab start.
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Terminal SSH host-key pinning failed: %s", exc)
+        else:
+            if result.failed:
+                log.warning(
+                    "Terminal SSH host keys not pinned for: %s",
+                    ", ".join(result.failed),
+                )
     return None
 
 

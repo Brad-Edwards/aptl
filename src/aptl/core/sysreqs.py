@@ -7,6 +7,7 @@ APTL lab (e.g., vm.max_map_count for OpenSearch/Wazuh Indexer).
 import subprocess
 from dataclasses import dataclass
 
+from aptl.core import hostenv
 from aptl.utils.logging import get_logger
 
 log = get_logger("sysreqs")
@@ -22,6 +23,7 @@ class SysReqResult:
     current_value: int
     required_value: int
     error: str = ""
+    applicable: bool = True
 
 
 def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
@@ -37,6 +39,13 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
         SysReqResult indicating whether the check passed, plus current
         and required values.
     """
+    docker_mode = hostenv.docker_mode()
+    if docker_mode != hostenv.DOCKER_LINUX_NATIVE:
+        return _not_applicable_result(
+            minimum,
+            f"vm.max_map_count is managed inside the Docker VM ({docker_mode})",
+        )
+
     try:
         result = subprocess.run(
             ["sysctl", "vm.max_map_count"],
@@ -44,16 +53,14 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
             text=True,
         )
     except (FileNotFoundError, OSError) as exc:
-        log.error("Failed to run sysctl: %s", exc)
-        return SysReqResult(
-            passed=False,
-            current_value=0,
-            required_value=minimum,
-            error=str(exc),
-        )
+        return _not_applicable_result(minimum, str(exc))
 
     if result.returncode != 0:
         error_msg = result.stderr.strip() or "sysctl command failed"
+        if _sysctl_not_applicable(error_msg):
+            return _not_applicable_result(
+                minimum, f"vm.max_map_count sysctl not applicable: {error_msg}"
+            )
         log.error("sysctl returned non-zero: %s", error_msg)
         return SysReqResult(
             passed=False,
@@ -92,4 +99,30 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
         passed=passed,
         current_value=current_value,
         required_value=minimum,
+    )
+
+
+def _not_applicable_result(minimum: int, reason: str) -> SysReqResult:
+    """Return a passing result for a host check that does not apply."""
+    log.info("Skipping vm.max_map_count host check: %s", reason)
+    return SysReqResult(
+        passed=True,
+        current_value=0,
+        required_value=minimum,
+        error=reason,
+        applicable=False,
+    )
+
+
+def _sysctl_not_applicable(error_msg: str) -> bool:
+    """Return whether sysctl output means the key is unavailable on this host."""
+    normalized = error_msg.lower()
+    return any(
+        phrase in normalized
+        for phrase in (
+            "unknown oid",
+            "no such file or directory",
+            "not found",
+            "cannot stat",
+        )
     )

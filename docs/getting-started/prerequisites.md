@@ -22,9 +22,26 @@ sudo usermod -aG docker $USER
 
 Sign out and back in after changing Docker group membership.
 
-**macOS:** Install Docker Desktop and allocate enough memory in
-Settings -> Resources. The full `techvault-operational` stack needs more than
-20GB.
+**macOS (Docker Desktop):** Install Docker Desktop and allocate enough memory
+in Settings -> Resources. The full `techvault-operational` stack needs more
+than 20GB.
+
+**macOS (Colima alternative, no Docker Desktop):** If you cannot use Docker
+Desktop (licensing, corporate policy, or preference), Colima runs the same
+Docker Engine in a `lima` VM and APTL supports it directly. The APTL host
+check calls out this path when Docker Buildx is missing; the full setup is:
+
+```bash
+brew install docker docker-buildx docker-compose colima
+mkdir -p ~/.docker/cli-plugins
+ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" ~/.docker/cli-plugins/docker-buildx
+ln -sf "$(brew --prefix docker-compose)/bin/docker-compose" ~/.docker/cli-plugins/docker-compose
+colima start --cpu 4 --memory 8 --disk 60
+```
+
+Bump the resources for the full `techvault-operational` stack (see the
+RAM/disk requirements above). `colima start` also sets the active `docker`
+context to `colima`; verify with `docker context ls`.
 
 **Windows:** Install Docker Desktop with the WSL2 backend enabled. Run APTL from
 PowerShell, Windows Terminal, Git Bash, or a WSL2 shell; keep Docker Desktop
@@ -68,6 +85,26 @@ block system-wide `pip` under [PEP 668](https://peps.python.org/pep-0668/), so
 `error: externally-managed-environment`.
 
 For released installs on any OS, prefer `pipx install aptl-labs`.
+
+**macOS gotcha — pipx bound to the system Python 3.9.** `aptl-labs` requires
+Python 3.11+ (declared in `pyproject.toml`). If your `pipx` was installed
+against the Command Line Tools Python (`/usr/bin/python3`, which is 3.9),
+`pipx install aptl-labs` fails with:
+
+```
+ERROR: Could not find a version that satisfies the requirement aptl-labs (from versions: none)
+```
+
+The real cause is the "Ignored the following versions that require a
+different python version" line further up in pip's output — every published
+`aptl-labs` release is filtered out by the Python-version gate. Recover with
+a scoped standalone Python that pipx fetches just for this venv:
+
+```bash
+pipx install --python 3.12 --fetch-missing-python aptl-labs
+```
+
+Alternatively, `brew install python@3.12` and use that interpreter.
 
 For source installs, create a virtualenv. On Debian/Ubuntu/WSL2, install the
 `venv` module first (Debian ships it separately from `python3`):

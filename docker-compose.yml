@@ -682,7 +682,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          # 512m was too small: the Play/Scala JVM was kernel-killed during
+          # warm-up before the /api/status healthcheck could turn green,
+          # blocking the ACES handoff for the whole operational scenario.
+          # 2g matches thehive-es next to it and is enough headroom to
+          # boot + serve healthchecks in the lab (StrangeBee's guidance
+          # for production is 4g, but the lab does not need that).
+          memory: 2g
     depends_on:
       thehive-es:
         condition: service_healthy

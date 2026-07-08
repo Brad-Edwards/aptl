@@ -56,6 +56,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
 
 
 def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
+    """Run certificate generation and convert the generator outcome."""
     log.info("Generating SSL certificates...")
     error = _run_cert_generator(project_dir, certs_dir)
     result = error
@@ -66,6 +67,7 @@ def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
 
 
 def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:
+    """Run the compose cert generator, returning a failure result when needed."""
     error_msg = None
     try:
         result = subprocess.run(
@@ -101,6 +103,7 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
 
 
 def _cert_generator_command(certs_dir: Path) -> list[str]:
+    """Build the Docker Compose command for the certificate generator."""
     command = [
         "docker", "compose",
         "-f", _CERT_COMPOSE_FILE,
@@ -115,6 +118,7 @@ def _cert_generator_command(certs_dir: Path) -> list[str]:
 
 
 def _native_linux_user() -> str | None:
+    """Return the host uid/gid override required by native Linux Docker."""
     user = None
     if hostenv.needs_host_ownership_fix():
         user = f"{os.getuid()}:{os.getgid()}"

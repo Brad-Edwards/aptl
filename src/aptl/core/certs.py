@@ -9,12 +9,16 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.core import hostenv
 from aptl.utils.logging import get_logger
 
 log = get_logger("certs")
 
 _CERTS_SUBDIR = "config/wazuh_indexer_ssl_certs"
 _CERT_COMPOSE_FILE = "generate-indexer-certs.yml"
+# Reused (already pulled) to chown the bind-mounted certs from inside a
+# container, so ownership is repaired without escalating on the host.
+_CERT_GENERATOR_IMAGE = "wazuh/wazuh-certs-generator:0.0.2"
 
 
 @dataclass
@@ -98,29 +102,69 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             error=error_msg,
         )
 
-    log.info("Fixing certificate permissions...")
+    ownership_error = _fix_cert_ownership(certs_dir, project_dir)
+    if ownership_error is not None:
+        return ownership_error
 
-    # Fix ownership: chown -R $(id -u):$(id -g)
+    log.info("SSL certificates generated successfully at %s", certs_dir)
+    return CertResult(
+        success=True,
+        generated=True,
+        certs_dir=certs_dir,
+    )
+
+
+def _fix_cert_ownership(certs_dir: Path, project_dir: Path) -> CertResult | None:
+    """Repair ownership of container-generated certs without host sudo.
+
+    A native Linux Docker engine writes the bind-mounted certificates as
+    root. Instead of escalating on the host with ``sudo`` (which silently
+    runs under passwordless sudo, breaks on Windows, and is unnecessary on
+    Docker Desktop), chown the files back to the invoking user from *inside*
+    a throwaway container — root within the container, no host privilege.
+
+    Docker Desktop's file-sharing layer already maps ownership to the user,
+    and an unknown/absent engine must not trigger any privileged action, so
+    the fix runs only for a native Linux engine (see
+    :func:`hostenv.needs_host_ownership_fix`).
+
+    Returns ``None`` on success (or when no fix is needed), or a failing
+    :class:`CertResult` describing the problem.
+    """
+    if not hostenv.needs_host_ownership_fix():
+        log.info(
+            "Skipping certificate ownership fix "
+            "(not a native Linux Docker engine)."
+        )
+        return None
+
     uid = os.getuid()
     gid = os.getgid()
+    log.info("Repairing certificate ownership via container (uid=%d gid=%d)...", uid, gid)
     try:
         perm_result = subprocess.run(
-            ["sudo", "-n", "chown", "-R", f"{uid}:{gid}", str(certs_dir)],
+            [
+                "docker", "run", "--rm",
+                "--entrypoint", "chown",
+                "-v", f"{certs_dir}:/certificates",
+                _CERT_GENERATOR_IMAGE,
+                "-R", f"{uid}:{gid}", "/certificates",
+            ],
             capture_output=True,
             text=True,
             cwd=project_dir,
-            timeout=30,
+            timeout=60,
         )
     except subprocess.TimeoutExpired:
-        log.error("Permission fix timed out after 30s")
+        log.error("Ownership repair timed out after 60s")
         return CertResult(
             success=False,
             generated=True,
             certs_dir=certs_dir,
-            error="Permission fix timed out after 30s",
+            error="Certificate ownership repair timed out after 60s",
         )
     except (FileNotFoundError, OSError) as exc:
-        log.error("Failed to fix certificate permissions: %s", exc)
+        log.error("Failed to repair certificate ownership: %s", exc)
         return CertResult(
             success=False,
             generated=True,
@@ -129,16 +173,8 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
         )
 
     if perm_result.returncode != 0:
-        stderr = perm_result.stderr.strip()
-        if "a password is required" in stderr or "sudo:" in stderr:
-            error_msg = (
-                f"sudo requires a password — run "
-                f"'sudo chown -R {uid}:{gid} {certs_dir}' manually "
-                f"or configure passwordless sudo for chown"
-            )
-        else:
-            error_msg = stderr or "Permission fix failed"
-        log.error("Failed to fix permissions: %s", error_msg)
+        error_msg = perm_result.stderr.strip() or "Certificate ownership repair failed"
+        log.error("Failed to repair certificate ownership: %s", error_msg)
         return CertResult(
             success=False,
             generated=True,
@@ -146,9 +182,4 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             error=error_msg,
         )
 
-    log.info("SSL certificates generated successfully at %s", certs_dir)
-    return CertResult(
-        success=True,
-        generated=True,
-        certs_dir=certs_dir,
-    )
+    return None

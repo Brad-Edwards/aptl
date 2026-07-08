@@ -9,6 +9,39 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.2.0](https://github.com/Brad-Edwards/aptl/compare/v4.1.2...v4.2.0) (2026-07-08)
+
+
+### Features
+
+* add host platform detection layer ([#693](https://github.com/Brad-Edwards/aptl/issues/693)) ([aa4a2b5](https://github.com/Brad-Edwards/aptl/commit/aa4a2b54cd5090a961e7f0ca277c8fe95b61a679))
+* auto-remap in-use host ports and report real URLs on lab start ([#706](https://github.com/Brad-Edwards/aptl/issues/706)) ([75055b2](https://github.com/Brad-Edwards/aptl/commit/75055b262d230766865a3cecdee7d96142391c0f))
+
+
+### Bug Fixes
+
+* bind mailserver ports to loopback (ADR-034/ADR-039) ([#674](https://github.com/Brad-Edwards/aptl/issues/674)) ([e11a327](https://github.com/Brad-Edwards/aptl/commit/e11a3272c99ce9ae9ed0923dcbfd10f4876c468c))
+* generate certs as host user on native Docker ([#694](https://github.com/Brad-Edwards/aptl/issues/694)) ([a75b5f3](https://github.com/Brad-Edwards/aptl/commit/a75b5f37ada87481ede224510376f0b48447c08f))
+* harden SSH keys on Windows ([#698](https://github.com/Brad-Edwards/aptl/issues/698)) ([60fbeb3](https://github.com/Brad-Edwards/aptl/commit/60fbeb31b0f0fb032592b11e40e2e3b5ae3574b2))
+* point TheHive references at https (it serves HTTPS on 9000) ([#675](https://github.com/Brad-Edwards/aptl/issues/675)) ([700ab31](https://github.com/Brad-Edwards/aptl/commit/700ab31c1e913c14785c4ad1699b5faf6cdcaa51))
+* preserve LF line endings for rendered configs ([25290f0](https://github.com/Brad-Edwards/aptl/commit/25290f0e2e62d1ef47cf10d49ffc9fee1d8a9afe))
+* preserve LF rendered configs ([#701](https://github.com/Brad-Edwards/aptl/issues/701)) ([25290f0](https://github.com/Brad-Edwards/aptl/commit/25290f0e2e62d1ef47cf10d49ffc9fee1d8a9afe))
+* repair Suricata seed ownership without host sudo ([#695](https://github.com/Brad-Edwards/aptl/issues/695)) ([4cc3987](https://github.com/Brad-Edwards/aptl/commit/4cc39873fdb524f63b1c8e4f7726e7c95b20ade7))
+* satisfy release sonar gate ([#708](https://github.com/Brad-Edwards/aptl/issues/708)) ([9fbe0c5](https://github.com/Brad-Edwards/aptl/commit/9fbe0c572878fda3a87359ca93f747d1cab2228a))
+* skip vm max map count check off native Docker ([#697](https://github.com/Brad-Edwards/aptl/issues/697)) ([6c9fd2e](https://github.com/Brad-Edwards/aptl/commit/6c9fd2e740248d652c0f3e8da6fc7a6c8e1ba41e))
+* use exception logging for cert generator ([#704](https://github.com/Brad-Edwards/aptl/issues/704)) ([958009c](https://github.com/Brad-Edwards/aptl/commit/958009c15770de8f7a0c8462fbefdb40ab903c02))
+* use exception logging for sysreq parse errors ([#705](https://github.com/Brad-Edwards/aptl/issues/705)) ([b0fc394](https://github.com/Brad-Edwards/aptl/commit/b0fc394b4bdbe7571bbb8f198a849022dd136177))
+* validate m8 cross-platform blockers ([#702](https://github.com/Brad-Edwards/aptl/issues/702)) ([122c4bf](https://github.com/Brad-Edwards/aptl/commit/122c4bff3f8f3339948cc22999d350cece81a1c7))
+
+
+### Documentation
+
+* add per-OS prerequisites ([#700](https://github.com/Brad-Edwards/aptl/issues/700)) ([7882e29](https://github.com/Brad-Edwards/aptl/commit/7882e290ae6f1c09b9666fda0b8b75a289366344))
+* add workshop playbook + lab walkthrough ([c8ae705](https://github.com/Brad-Edwards/aptl/commit/c8ae70512766a4b06214863afd5e57aaaf9879b9))
+* add workshop playbook and lab walkthrough ([#687](https://github.com/Brad-Edwards/aptl/issues/687)) ([c8ae705](https://github.com/Brad-Edwards/aptl/commit/c8ae70512766a4b06214863afd5e57aaaf9879b9))
+* genericize private workflow-platform references ([239f369](https://github.com/Brad-Edwards/aptl/commit/239f369531467d27324dda977d7be70dc8cd1953))
+* genericize private workflow-platform references in public docs ([#673](https://github.com/Brad-Edwards/aptl/issues/673)) ([239f369](https://github.com/Brad-Edwards/aptl/commit/239f369531467d27324dda977d7be70dc8cd1953))
+
 ## [4.1.2](https://github.com/Brad-Edwards/aptl/compare/v4.1.1...v4.1.2) (2026-07-06)
 
 

@@ -1166,8 +1166,9 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
     This helper is best-effort: any failure to inspect or restart is
     logged and ignored (the caller retries the compose up regardless).
     """
-    if ctx.backend is None:
-        return
+    # Caller (`_step_start_containers`) is icontract-guarded so
+    # `ctx.backend is not None` — no defensive check needed here.
+    assert ctx.backend is not None
     try:
         info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
     except Exception:  # noqa: BLE001 — never let diagnostics abort start

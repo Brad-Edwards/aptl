@@ -3190,6 +3190,150 @@ class TestLabOrchestrationContracts:
 
         backend.container_restart.assert_not_called()
 
+    def test_start_containers_skips_restart_when_wazuh_manager_not_running(
+        self, mocker, tmp_path
+    ):
+        """State.Status != 'running' means the container is gone / dead /
+        being recreated by compose itself — restarting would race
+        compose. Skip."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "exited"},
+        }
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+
+        backend.container_restart.assert_not_called()
+        backend.container_exec.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_probe_exceptions(
+        self, mocker, tmp_path
+    ):
+        """The watchdog is best-effort: exceptions from container_inspect
+        or container_exec must not abort the retry. Also covers the
+        `int()` ValueError branch when the /proc walk emits garbage."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.side_effect = RuntimeError("boom")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        # Should complete without raising; retry still runs.
+        result = _step_start_containers(ctx)
+        assert result is None
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_exec_failures(
+        self, mocker, tmp_path
+    ):
+        """A nonzero exec probe (or non-int stdout) blocks the restart —
+        we do not know the process state, so refuse to restart rather
+        than guess wrong."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(
+            returncode=1, stdout="", stderr="probe failed"
+        )
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_restart_failure(
+        self, mocker, tmp_path
+    ):
+        """`container_restart` raising is logged and swallowed — the
+        retry proceeds regardless."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
+        backend.container_restart.side_effect = RuntimeError("daemon down")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+        assert result is None
+        # We tried, we failed, we did not raise.
+        backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
+
+    def test_start_containers_watchdog_handles_non_numeric_daemon_count(
+        self, mocker, tmp_path
+    ):
+        """If /proc walk returns non-numeric output (e.g. a sh error line),
+        the ValueError branch keeps the retry going with no restart."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(
+            returncode=0, stdout="not-a-number\n"
+        )
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+        backend.container_restart.assert_not_called()
+
     def test_start_containers_hints_for_stale_realization_networks(
         self, mocker, tmp_path
     ):

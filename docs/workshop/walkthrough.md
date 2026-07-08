@@ -65,10 +65,11 @@ aptl lab status
 docker exec aptl-wazuh-manager /var/ossec/bin/agent_control -l | grep -c Active
 ```
 
-Expect "Lab is running" with about 30 healthy containers and roughly 9 active
-Wazuh agents. Name the parts out loud: `aptl-kali` is the attacker, the victim
-and enterprise hosts are targets, and the `aptl-wazuh-*`, Suricata, MISP,
-TheHive, Cortex, and Shuffle containers form the SOC.
+Expect "Lab is running" with about 30 healthy containers. Active Wazuh agent
+counts can vary by platform and startup timing; 7 to 9 active agents is normal
+for a fresh workshop run. Name the parts out loud: `aptl-kali` is the attacker,
+the victim and enterprise hosts are targets, and the `aptl-wazuh-*`, Suricata,
+MISP, TheHive, Cortex, and Shuffle containers form the SOC.
 
 ## 3. Wire your agent [3]
 
@@ -283,6 +284,9 @@ Each of these held true on the last fresh-box run:
 - If no alert appears yet, wait for the roughly 15-second ingestion lag and run
   the query again. Rule 5710 (SSH) and rule 302011 (SQL injection) are the
   reliable pair, so lead with them.
+- If the active Wazuh agent count is below 9 on Docker Desktop, Colima, or WSL2,
+  continue with the attack and alert checks. The required proof is that the
+  5710 and 302011 alerts appear from the Kali source addresses.
 - The attacker address shows as `172.20.2.35` or `172.20.1.30`, not a single
   value, because Kali is multi-homed across the internal and DMZ paths. That is
   a good teaching moment.

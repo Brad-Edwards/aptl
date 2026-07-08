@@ -46,7 +46,7 @@ _PORT_ENTRY = re.compile(
     r"(?P<container>\d+)"
     r"(?:/(?P<proto>\w+))?$"
 )
-_VAR_REF = re.compile(r"^\$\{(?P<var>[A-Za-z_][A-Za-z0-9_]*)(?::-(?P<default>\d+))?\}$")
+_VAR_REF = re.compile(r"^\$\{(?P<var>[A-Za-z_]\w*)(?::-(?P<default>\d+))?\}$", re.ASCII)
 
 # Where to start scanning for a replacement port when a default is taken. Kept
 # above the ephemeral/registered ranges the lab itself uses so a remap does not
@@ -64,7 +64,8 @@ class PortSpec:
     default_port: int
     container_port: int
     proto: str
-    host_ip: str | None  # None => all interfaces
+    # None => all interfaces
+    host_ip: str | None
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class ResolvedPort:
 
 
 def _proto_socktype(proto: str) -> int:
+    """Return the socket type used to probe a published-port protocol."""
     return socket.SOCK_DGRAM if proto.lower() == "udp" else socket.SOCK_STREAM
 
 
@@ -129,6 +131,7 @@ def port_available(port: int, proto: str, host_ip: str | None) -> bool:
 
 
 def _group_available(port: int, protos: tuple[str, ...], host_ip: str | None) -> bool:
+    """Return True when *port* is available for every protocol in a group."""
     return all(port_available(port, proto, host_ip) for proto in protos)
 
 
@@ -144,6 +147,17 @@ def _find_free_port(
     return None
 
 
+def _parse_host_port_ref(host: str) -> tuple[str | None, int] | None:
+    """Parse a host-port token into ``(env_var, default_port)``."""
+    var_match = _VAR_REF.match(host)
+    if var_match is None:
+        return None, int(host)
+    default_raw = var_match.group("default")
+    if default_raw is None:
+        return None
+    return var_match.group("var"), int(default_raw)
+
+
 def _parse_entry(service: str, entry: object) -> PortSpec | None:
     """Parse one compose ``ports`` entry into a :class:`PortSpec`.
 
@@ -151,22 +165,14 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     dict-form entries and anything unparseable are skipped — they simply are
     not eligible for automatic remapping.
     """
-    if not isinstance(entry, str):
-        return None
-    match = _PORT_ENTRY.match(entry.strip())
+    match = _PORT_ENTRY.match(entry.strip()) if isinstance(entry, str) else None
     if match is None:
         return None
-    host = match.group("host")
-    env_var: str | None = None
-    var_match = _VAR_REF.match(host)
-    if var_match is not None:
-        env_var = var_match.group("var")
-        default_raw = var_match.group("default")
-        if default_raw is None:
-            return None  # ${VAR} with no default — leave to the operator
-        default_port = int(default_raw)
-    else:
-        default_port = int(host)
+    parsed_host = _parse_host_port_ref(match.group("host"))
+    if parsed_host is None:
+        # ${VAR} with no default: leave to the operator.
+        return None
+    env_var, default_port = parsed_host
     return PortSpec(
         service=service,
         env_var=env_var,
@@ -177,7 +183,7 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
-def parse_published_ports(compose: dict) -> list[PortSpec]:
+def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
     """Return every published host port declared in a compose mapping."""
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
@@ -190,7 +196,8 @@ def parse_published_ports(compose: dict) -> list[PortSpec]:
     return specs
 
 
-def _load_compose(project_dir: Path) -> dict | None:
+def _load_compose(project_dir: Path) -> dict[str, object] | None:
+    """Load the project compose file if it exists and is a mapping."""
     compose_path = project_dir / _COMPOSE_FILENAME
     if not compose_path.exists():
         return None
@@ -200,6 +207,63 @@ def _load_compose(project_dir: Path) -> dict | None:
         log.warning("Could not parse %s for port resolution: %s", compose_path, exc)
         return None
     return loaded if isinstance(loaded, dict) else None
+
+
+def _resolved_for_pinned(
+    first: PortSpec,
+    env_var: str,
+    default_port: int,
+    protos: tuple[str, ...],
+) -> ResolvedPort:
+    """Return the operator-selected mapping for an explicitly pinned env var."""
+    pinned = os.environ.get(env_var)
+    resolved_port = int(pinned) if pinned and pinned.isdigit() else default_port
+    return ResolvedPort(
+        service=first.service,
+        env_var=env_var,
+        default_port=default_port,
+        resolved_port=resolved_port,
+        protos=protos,
+        host_ip=first.host_ip,
+        remapped=False,
+    )
+
+
+def _resolve_group(
+    env_var: str,
+    specs: list[PortSpec],
+    reserved: set[str],
+    taken: set[int],
+) -> ResolvedPort:
+    """Resolve one env-var port group and update environment overrides."""
+    first = specs[0]
+    protos = tuple(sorted({s.proto for s in specs}))
+    default_port = first.default_port
+    if env_var in reserved or env_var in os.environ:
+        return _resolved_for_pinned(first, env_var, default_port, protos)
+
+    if _group_available(default_port, protos, first.host_ip):
+        return _resolved(first, env_var, default_port, default_port, protos)
+
+    free = _find_free_port(protos, first.host_ip, taken)
+    if free is None:
+        log.warning(
+            "No free host port found to remap %s (default %d); leaving default.",
+            first.service,
+            default_port,
+        )
+        return _resolved(first, env_var, default_port, default_port, protos)
+
+    taken.add(free)
+    os.environ[env_var] = str(free)
+    log.info(
+        "Host port %d for %s is in use; publishing on %d instead (%s).",
+        default_port,
+        first.service,
+        free,
+        env_var,
+    )
+    return _resolved(first, env_var, default_port, free, protos)
 
 
 def resolve_host_ports(
@@ -228,64 +292,9 @@ def resolve_host_ports(
         groups.setdefault(spec.env_var, []).append(spec)
 
     resolved: list[ResolvedPort] = []
-    taken: set[int] = {
-        s.default_port
-        for specs in groups.values()
-        for s in specs
-    }
+    taken: set[int] = {s.default_port for specs in groups.values() for s in specs}
     for env_var, specs in sorted(groups.items()):
-        first = specs[0]
-        protos = tuple(sorted({s.proto for s in specs}))
-        default_port = first.default_port
-        host_ip = first.host_ip
-
-        operator_pinned = env_var in reserved or env_var in os.environ
-        if operator_pinned:
-            pinned = os.environ.get(env_var)
-            resolved_port = int(pinned) if pinned and pinned.isdigit() else default_port
-            # An operator-pinned value is a deliberate choice, not a
-            # conflict-driven remap — never flag it as remapped.
-            resolved.append(
-                ResolvedPort(
-                    service=first.service,
-                    env_var=env_var,
-                    default_port=default_port,
-                    resolved_port=resolved_port,
-                    protos=protos,
-                    host_ip=host_ip,
-                    remapped=False,
-                )
-            )
-            continue
-
-        if _group_available(default_port, protos, host_ip):
-            resolved.append(
-                _resolved(first, env_var, default_port, default_port, protos)
-            )
-            continue
-
-        free = _find_free_port(protos, host_ip, taken)
-        if free is None:
-            log.warning(
-                "No free host port found to remap %s (default %d); leaving default.",
-                first.service,
-                default_port,
-            )
-            resolved.append(
-                _resolved(first, env_var, default_port, default_port, protos)
-            )
-            continue
-
-        taken.add(free)
-        os.environ[env_var] = str(free)
-        log.info(
-            "Host port %d for %s is in use; publishing on %d instead (%s).",
-            default_port,
-            first.service,
-            free,
-            env_var,
-        )
-        resolved.append(_resolved(first, env_var, default_port, free, protos))
+        resolved.append(_resolve_group(env_var, specs, reserved, taken))
 
     return resolved
 
@@ -297,6 +306,7 @@ def _resolved(
     resolved_port: int,
     protos: tuple[str, ...],
 ) -> ResolvedPort:
+    """Build a resolved-port record from a compose port spec."""
     return ResolvedPort(
         service=spec.service,
         env_var=env_var,

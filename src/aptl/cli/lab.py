@@ -8,14 +8,15 @@ import typer
 
 from aptl.cli import lab_init, lifecycle
 from aptl.cli.continuity import continuity_audit
+from aptl.cli.lab_render import render_start_result
+from aptl.core.host_ports import ResolvedPort
 from aptl.core.lab import (
-    LabResult,
     clean_boot_lab,
     lab_status,
     orchestrate_lab_start,
     stop_lab,
 )
-from aptl.core.lab_types import LabStatus, StartupDiagnostic, StartupOutcome
+from aptl.core.lab_types import LabStatus
 from aptl.core.scenario_catalog import (
     load_scenario_catalog,
     resolve_scenario_selection,
@@ -39,24 +40,6 @@ lab_init.register(app)
 # this module stays focused; register them under `lab` (no UX change:
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
-
-
-# Headline phrasing per outcome — kept beside the renderer so the CLI's
-# user-visible classification stays in one place (ADR-030 anti-pattern:
-# never reclassify based on English text). Values are the same stable
-# wire strings as the StartupOutcome enum so an operator (or a parser)
-# can grep for them.
-_OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
-    StartupOutcome.READY: "Lab is ready.",
-    StartupOutcome.DEGRADED_USABLE: (
-        "Lab is degraded_usable — telemetry/cosmetic warnings, scenarios "
-        "should still run."
-    ),
-    StartupOutcome.DEGRADED_UNUSABLE: (
-        "Lab is degraded_unusable — some capabilities or SSH targets are not reachable."
-    ),
-    StartupOutcome.FAILED: "Lab start failed.",
-}
 
 
 # Shared destructive-data warning. Both `stop --volumes` and
@@ -83,7 +66,9 @@ _GRAFANA_DEFAULT = 3100
 _REVERSE_DEFAULT = 2027
 
 
-def _resolved_port(resolved_ports: list, service: str, default: int) -> int:
+def _resolved_port(
+    resolved_ports: list[ResolvedPort], service: str, default: int
+) -> int:
     """Return the actual published host port for *service* (default if unknown)."""
     for entry in resolved_ports or ():
         if getattr(entry, "service", None) == service:
@@ -104,7 +89,7 @@ _MCP_BACKED_SERVICES = {
 }
 
 
-def _emit_host_port_remaps(resolved_ports: list) -> None:
+def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
     """List any ports that were remapped off an in-use default."""
     remapped = [r for r in (resolved_ports or ()) if getattr(r, "remapped", False)]
     if not remapped:
@@ -134,7 +119,7 @@ def _emit_host_port_remaps(resolved_ports: list) -> None:
 
 
 def _emit_lab_access_summary(
-    project_dir: Path, resolved_ports: list | None = None
+    project_dir: Path, resolved_ports: list[ResolvedPort] | None = None
 ) -> None:
     """Print the credential locations and common lab entry points.
 
@@ -164,9 +149,7 @@ def _emit_lab_access_summary(
     typer.echo("    username: admin")
     typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
     typer.echo("  Reverse engineering SSH:")
-    typer.echo(
-        f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
-    )
+    typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}")
     _emit_host_port_remaps(resolved_ports)
 
 
@@ -189,39 +172,6 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
         typer.echo("Aborted.")
         return False
     return True
-
-
-def _render_start_result(result: LabResult) -> None:
-    """Print a structured summary of a lab-start result.
-
-    Always emits the outcome value (stable wire string from
-    ``StartupOutcome``) so automation can parse a single line instead of
-    scraping the diagnostic list. Diagnostics are grouped by impact so
-    an operator can scan for ``readiness`` / ``capability`` rows when
-    triaging a partial-readiness lab.
-    """
-    typer.echo(_OUTCOME_HEADLINES[result.outcome])
-    if result.outcome is StartupOutcome.FAILED and result.error:
-        typer.echo(f"  error: {result.error}")
-    if not result.diagnostics:
-        return
-    typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
-    # Group by impact so a scanning operator sees all readiness rows
-    # together, then capability, telemetry, cosmetic. Iteration order
-    # below follows the severity hierarchy from worst to least-worst.
-    impacts_in_order = ["readiness", "capability", "telemetry", "cosmetic"]
-    grouped: dict[str, list[StartupDiagnostic]] = {}
-    for diag in result.diagnostics:
-        grouped.setdefault(diag.impact.value, []).append(diag)
-    for impact in impacts_in_order:
-        for diag in grouped.get(impact, []):
-            label = f"{diag.step}/{diag.component}" if diag.component else diag.step
-            typer.echo(
-                f"    [{diag.impact.value}|{diag.severity.value}] "
-                f"{label} — {diag.message}"
-            )
-            if diag.operator_action:
-                typer.echo(f"      action: {diag.operator_action}")
 
 
 @app.command()
@@ -295,7 +245,7 @@ def start(
             progress=_emit_lab_start_progress,
         )
 
-    _render_start_result(result)
+    render_start_result(result)
     if result.success:
         _emit_lab_access_summary(project_dir, result.resolved_ports)
     if not result.success:

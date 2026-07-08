@@ -116,7 +116,7 @@ class LabResult:
     # Published host ports after conflict resolution (host_ports.ResolvedPort),
     # populated on lab start so the CLI can report the real host port each
     # service landed on when a default was already in use. Empty for other ops.
-    resolved_ports: list = field(default_factory=list)
+    resolved_ports: list[object] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Make the invariant total: ``outcome`` is the authoritative
@@ -138,5 +138,5 @@ class LabStatus:
     """Current status of the lab environment."""
 
     running: bool
-    containers: list[dict] = field(default_factory=list)
+    containers: list[dict[str, object]] = field(default_factory=list)
     error: str = ""

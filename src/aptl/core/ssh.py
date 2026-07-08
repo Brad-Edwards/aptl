@@ -4,13 +4,14 @@ Generates ed25519 SSH key pairs for lab container access and copies
 public keys to the container keys directory for authorized_keys setup.
 """
 
+import getpass
 import os
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from aptl.core import hostenv
 from aptl.utils.logging import get_logger
 
 log = get_logger("ssh")
@@ -57,26 +58,9 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
 
     if not private_key.exists():
         log.info("Generating new SSH key pair at %s", private_key)
-        result = subprocess.run(
-            [
-                "ssh-keygen",
-                "-t", "ed25519",
-                "-f", str(private_key),
-                "-N", "",
-                "-C", "aptl-local-lab",
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip()
-            log.error("ssh-keygen failed: %s", error_msg)
-            return SSHKeyResult(
-                success=False,
-                generated=False,
-                error=error_msg,
-            )
+        error_msg = _run_ssh_keygen(private_key, "aptl-local-lab", "ssh-keygen")
+        if error_msg:
+            return SSHKeyResult(success=False, generated=False, error=error_msg)
 
         generated = True
         log.info("SSH key pair generated successfully")
@@ -92,9 +76,12 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
             error=f"Public key not found at {public_key}",
         )
 
-    # Set permissions on key files
-    os.chmod(private_key, 0o600)
-    os.chmod(public_key, 0o644)
+    permission_error = _harden_private_key(private_key)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=generated, error=permission_error)
+    permission_error = _set_public_key_mode(public_key)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=generated, error=permission_error)
 
     # Copy public key to keys_dir for container authorized_keys
     pub_content = public_key.read_text()
@@ -141,26 +128,11 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
 
     if not private_key.exists():
         log.info("Generating kali pivot key pair at %s", private_key)
-        result = subprocess.run(
-            [
-                "ssh-keygen",
-                "-t", "ed25519",
-                "-f", str(private_key),
-                "-N", "",
-                "-C", "aptl-kali-pivot",
-            ],
-            capture_output=True,
-            text=True,
+        error_msg = _run_ssh_keygen(
+            private_key, "aptl-kali-pivot", "ssh-keygen (pivot)"
         )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip()
-            log.error("ssh-keygen (pivot) failed: %s", error_msg)
-            return SSHKeyResult(
-                success=False,
-                generated=False,
-                error=error_msg,
-            )
+        if error_msg:
+            return SSHKeyResult(success=False, generated=False, error=error_msg)
 
         generated = True
         log.info("Kali pivot key pair generated successfully")
@@ -178,10 +150,88 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
     # Lock the private half to owner-only. The public half keeps ssh-keygen's
     # default world-readable mode (it is a public key, bound read-only into the
     # targets), so it is left as generated rather than re-chmod'd here.
-    os.chmod(private_key, 0o600)
+    permission_error = _harden_private_key(private_key)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=generated, error=permission_error)
 
     return SSHKeyResult(
         success=True,
         generated=generated,
         key_path=private_key,
     )
+
+
+def _run_ssh_keygen(private_key: Path, comment: str, label: str) -> str:
+    """Generate an ed25519 key pair and return an error string on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "ssh-keygen",
+                "-t",
+                "ed25519",
+                "-f",
+                str(private_key),
+                "-N",
+                "",
+                "-C",
+                comment,
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        error_msg = f"{label} failed: {exc}"
+        log.error(error_msg)
+        return error_msg
+
+    if result.returncode == 0:
+        return ""
+    error_msg = result.stderr.strip() or result.stdout.strip() or f"{label} failed"
+    log.error("%s failed: %s", label, error_msg)
+    return error_msg
+
+
+def _harden_private_key(path: Path) -> str:
+    """Restrict a private key to the current host user."""
+    if hostenv.is_windows():
+        return _harden_private_key_windows(path)
+    return _chmod_key(path, 0o600, "private key")
+
+
+def _set_public_key_mode(path: Path) -> str:
+    """Set a public-key mode where POSIX modes apply."""
+    if hostenv.is_windows():
+        return ""
+    return _chmod_key(path, 0o644, "public key")
+
+
+def _chmod_key(path: Path, mode: int, label: str) -> str:
+    """Apply a POSIX mode to a key file and return an error string on failure."""
+    try:
+        os.chmod(path, mode)
+    except (OSError, NotImplementedError) as exc:
+        return f"Could not set {label} permissions on {path}: {exc}"
+    return ""
+
+
+def _harden_private_key_windows(path: Path) -> str:
+    """Restrict a Windows private key with NTFS ACLs for OpenSSH."""
+    account = getpass.getuser()
+    try:
+        result = subprocess.run(
+            [
+                "icacls",
+                str(path),
+                "/inheritance:r",
+                "/grant:r",
+                f"{account}:R",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        return f"icacls failed for {path}: {exc}"
+    if result.returncode != 0:
+        details = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        return f"icacls failed for {path}: {details}"
+    return ""

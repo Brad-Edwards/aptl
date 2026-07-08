@@ -56,7 +56,6 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
 
     generated, error_msg = _ensure_keypair(
         private_key=private_key,
-        public_key=public_key,
         comment="aptl-local-lab",
         label="ssh-keygen",
     )
@@ -101,7 +100,6 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
 
     generated, error_msg = _ensure_keypair(
         private_key=private_key,
-        public_key=public_key,
         comment="aptl-kali-pivot",
         label="ssh-keygen (pivot)",
     )
@@ -118,7 +116,6 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
 
 def _ensure_keypair(
     private_key: Path,
-    public_key: Path,
     comment: str,
     label: str,
 ) -> tuple[bool, str]:

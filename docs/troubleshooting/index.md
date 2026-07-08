@@ -164,6 +164,41 @@ sudo lsof -i :443
 # Disable in System Preferences → Sharing
 ```
 
+### macOS: Docker Desktop uninstall leftovers
+
+If you uninstalled Docker Desktop and switched to Colima (or brew-installed
+Docker), two leftover pieces silently break `aptl lab start`:
+
+**Dead CLI plugin symlinks** in `~/.docker/cli-plugins/*` still point at
+`/Applications/Docker.app/Contents/Resources/cli-plugins/...`. `docker
+buildx` and `docker compose` then fail with `unknown command` even after
+`brew install docker-buildx docker-compose`. Repoint them at the brew
+binaries and drop the other dead symlinks:
+
+```bash
+ln -sf "$(brew --prefix docker-buildx)/bin/docker-buildx" ~/.docker/cli-plugins/docker-buildx
+ln -sf "$(brew --prefix docker-compose)/bin/docker-compose" ~/.docker/cli-plugins/docker-compose
+for f in ~/.docker/cli-plugins/*; do [ -L "$f" ] && [ ! -e "$f" ] && rm "$f"; done
+```
+
+**Stale `credsStore` in `~/.docker/config.json`.** Docker Desktop's
+installer sets `"credsStore": "desktop"`, and `docker pull` on any image
+requiring a credential lookup then fails with:
+
+```
+error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH
+```
+
+Remove that key from `~/.docker/config.json`. A minimal working config after
+switching to Colima looks like:
+
+```json
+{
+  "auths": {},
+  "currentContext": "colima"
+}
+```
+
 ### WSL2
 ```bash
 # Restart WSL2

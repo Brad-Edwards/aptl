@@ -24,7 +24,11 @@ sudo usermod -aG docker $USER
 
 ## System Config
 
-**Linux/WSL2:**
+`aptl lab start` enforces `vm.max_map_count` only when Docker is a native Linux
+engine. Docker Desktop on macOS, Windows, or WSL2 manages the setting inside its
+Linux VM, so there is no host `sysctl` step for those platforms.
+
+**Native Linux Docker Engine:**
 ```bash
 # Required for OpenSearch
 sudo sysctl -w vm.max_map_count=262144

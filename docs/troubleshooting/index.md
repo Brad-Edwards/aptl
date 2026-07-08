@@ -38,10 +38,13 @@ free -h
 # Increase Docker memory in Docker Desktop settings
 ```
 
-**vm.max_map_count (Linux/WSL2):**
+**vm.max_map_count (native Linux Docker Engine):**
 ```bash
 sudo sysctl -w vm.max_map_count=262144
 ```
+
+Docker Desktop on macOS, Windows, and WSL2 manages this setting inside the
+Linux VM. On those platforms, `aptl lab start` skips the host sysctl check.
 
 ### SSH access fails
 

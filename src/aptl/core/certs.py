@@ -1,14 +1,11 @@
-"""SSL certificate generation for Wazuh Indexer.
-
-Runs the docker compose cert generator if certificates do not already
-exist, then fixes file permissions for container consumption.
-"""
+"""SSL certificate generation for Wazuh Indexer."""
 
 import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.core import hostenv
 from aptl.utils.logging import get_logger
 
 log = get_logger("certs")
@@ -30,9 +27,11 @@ class CertResult:
 def ensure_ssl_certs(project_dir: Path) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
-    If the certificates directory already exists, this is a no-op.
-    Otherwise, runs the docker compose cert generator and fixes
-    file permissions.
+    If the certificates directory already exists, this is a no-op. Otherwise,
+    runs the docker compose cert generator. On native Linux Docker, the
+    generator runs as the invoking host user so bind-mounted certificates are
+    user-owned from creation. Docker Desktop does not need that override because
+    its file-sharing layer maps ownership back to the host user.
 
     Args:
         project_dir: Root directory of the APTL project (where
@@ -53,16 +52,24 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
         )
 
-    log.info("Generating SSL certificates...")
+    return _generate_ssl_certs(project_dir, certs_dir)
 
-    # Run cert generator via docker compose
+
+def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
+    log.info("Generating SSL certificates...")
+    error = _run_cert_generator(project_dir, certs_dir)
+    result = error
+    if result is None:
+        log.info("SSL certificates generated successfully at %s", certs_dir)
+        result = CertResult(success=True, generated=True, certs_dir=certs_dir)
+    return result
+
+
+def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:
+    error_msg = None
     try:
         result = subprocess.run(
-            [
-                "docker", "compose",
-                "-f", _CERT_COMPOSE_FILE,
-                "run", "--rm", "generator",
-            ],
+            _cert_generator_command(certs_dir),
             capture_output=True,
             text=True,
             cwd=project_dir,
@@ -73,82 +80,42 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             "Certificate generation timed out after 300s. "
             "This may indicate a stuck container or slow image pull."
         )
-        return CertResult(
-            success=False,
-            generated=False,
-            certs_dir=certs_dir,
-            error="Certificate generation timed out after 300s",
-        )
-    except (FileNotFoundError, OSError) as exc:
+        error_msg = "Certificate generation timed out after 300s"
+    except OSError as exc:
         log.error("Failed to run docker compose: %s", exc)
-        return CertResult(
-            success=False,
-            generated=False,
-            certs_dir=certs_dir,
-            error=str(exc),
-        )
+        error_msg = str(exc)
+    else:
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or "Certificate generation failed"
+            log.error("Certificate generation failed: %s", error_msg)
 
-    if result.returncode != 0:
-        error_msg = result.stderr.strip() or "Certificate generation failed"
-        log.error("Certificate generation failed: %s", error_msg)
-        return CertResult(
+    failure = None
+    if error_msg is not None:
+        failure = CertResult(
             success=False,
             generated=False,
             certs_dir=certs_dir,
             error=error_msg,
         )
+    return failure
 
-    log.info("Fixing certificate permissions...")
 
-    # Fix ownership: chown -R $(id -u):$(id -g)
-    uid = os.getuid()
-    gid = os.getgid()
-    try:
-        perm_result = subprocess.run(
-            ["sudo", "-n", "chown", "-R", f"{uid}:{gid}", str(certs_dir)],
-            capture_output=True,
-            text=True,
-            cwd=project_dir,
-            timeout=30,
-        )
-    except subprocess.TimeoutExpired:
-        log.error("Permission fix timed out after 30s")
-        return CertResult(
-            success=False,
-            generated=True,
-            certs_dir=certs_dir,
-            error="Permission fix timed out after 30s",
-        )
-    except (FileNotFoundError, OSError) as exc:
-        log.error("Failed to fix certificate permissions: %s", exc)
-        return CertResult(
-            success=False,
-            generated=True,
-            certs_dir=certs_dir,
-            error=str(exc),
-        )
+def _cert_generator_command(certs_dir: Path) -> list[str]:
+    command = [
+        "docker", "compose",
+        "-f", _CERT_COMPOSE_FILE,
+        "run", "--rm",
+    ]
+    user = _native_linux_user()
+    if user is not None:
+        certs_dir.mkdir(parents=True, exist_ok=True)
+        command += ["--user", user]
+    command.append("generator")
+    return command
 
-    if perm_result.returncode != 0:
-        stderr = perm_result.stderr.strip()
-        if "a password is required" in stderr or "sudo:" in stderr:
-            error_msg = (
-                f"sudo requires a password — run "
-                f"'sudo chown -R {uid}:{gid} {certs_dir}' manually "
-                f"or configure passwordless sudo for chown"
-            )
-        else:
-            error_msg = stderr or "Permission fix failed"
-        log.error("Failed to fix permissions: %s", error_msg)
-        return CertResult(
-            success=False,
-            generated=True,
-            certs_dir=certs_dir,
-            error=error_msg,
-        )
 
-    log.info("SSL certificates generated successfully at %s", certs_dir)
-    return CertResult(
-        success=True,
-        generated=True,
-        certs_dir=certs_dir,
-    )
+def _native_linux_user() -> str | None:
+    user = None
+    if hostenv.needs_host_ownership_fix():
+        user = f"{os.getuid()}:{os.getgid()}"
+    return user

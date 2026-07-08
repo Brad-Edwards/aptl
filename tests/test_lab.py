@@ -901,7 +901,20 @@ class TestOrchestrateLabStart:
 
         return AptlConfig(
             lab={"name": "test-lab"},
-            containers={"wazuh": True, "victim": True, "kali": True, "reverse": False},
+            # Explicit minimal profile set: these orchestration tests assert
+            # behavior for a wazuh/victim/kali lab, so pin every flag rather
+            # than inheriting the (now SOC-enabled) config defaults.
+            containers={
+                "wazuh": True,
+                "victim": True,
+                "kali": True,
+                "reverse": False,
+                "enterprise": False,
+                "soc": False,
+                "mail": False,
+                "fileshare": False,
+                "dns": False,
+            },
         )
 
     def _patch_all_steps(self, mocker, tmp_path):
@@ -931,11 +944,19 @@ class TestOrchestrateLabStart:
             json.dumps(
                 {
                     "lab": {"name": "test-lab"},
+                    # Pin every profile: these orchestration tests assert the
+                    # outcome/diagnostics of a wazuh/victim/kali lab, so the
+                    # written config must not inherit the SOC-enabled defaults.
                     "containers": {
                         "wazuh": True,
                         "victim": True,
                         "kali": True,
                         "reverse": False,
+                        "enterprise": False,
+                        "soc": False,
+                        "mail": False,
+                        "fileshare": False,
+                        "dns": False,
                     },
                 }
             )
@@ -1923,11 +1944,19 @@ class TestStartupClassificationWiring:
 
         return AptlConfig(
             lab={"name": "test-lab"},
+            # Pin the SOC/enterprise/dns/fileshare flags off: these wiring tests
+            # assert diagnostics for a wazuh/victim/kali lab, so don't inherit
+            # the (now SOC-enabled) config defaults.
             containers={
                 "wazuh": wazuh,
                 "victim": victim,
                 "kali": kali,
                 "reverse": reverse,
+                "enterprise": False,
+                "soc": False,
+                "mail": False,
+                "fileshare": False,
+                "dns": False,
             },
         )
 

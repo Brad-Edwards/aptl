@@ -45,15 +45,23 @@ class ContainerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Defaults match the full DEFAULT_ACES_SCENARIO (techvault-operational) that
+    # `aptl lab start` provisions when no scenario is given, so a plain
+    # `aptl lab init` + `aptl lab start` brings up the complete lab the
+    # walkthrough documents. With soc/enterprise/dns/fileshare off, Compose only
+    # created the wazuh/victim/kali subset while the ACES handoff still tried to
+    # wire the scenario's ad/dns/cortex/db nodes, so start failed with
+    # "No such container". `reverse` and `mail` stay off — they are not part of
+    # that scenario.
     wazuh: bool = True
     victim: bool = True
     kali: bool = True
     reverse: bool = False
-    enterprise: bool = False
-    soc: bool = False
+    enterprise: bool = True
+    soc: bool = True
     mail: bool = False
-    fileshare: bool = False
-    dns: bool = False
+    fileshare: bool = True
+    dns: bool = True
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""

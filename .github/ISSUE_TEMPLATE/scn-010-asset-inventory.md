@@ -193,7 +193,7 @@ Completion checklist:
   needs to consume them.
 - `pytest tests/ -q -k "not integration"` passes.
 - `pre-commit run --all-files` passes.
-- Traceability link added in Ground Control: SCN-010 ← `docs/aces/inventory/<ASSET>/`.
+- Traceability link added in the GRC workflow platform: SCN-010 ← `docs/aces/inventory/<ASSET>/`.
 - The SCN-010 parity inventory at `docs/aces/parity-inventory.yaml` is
   updated where rows for this asset move between categories (e.g.
   `aces_schema_profile_gap` → `aces_sdl` once a corresponding ACES

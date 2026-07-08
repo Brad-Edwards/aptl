@@ -200,4 +200,4 @@ containers, and don't fit the Protocol's container-interaction model.
   six listed methods.
 - [Issue #138](https://github.com/Brad-Edwards/aptl/issues/138): the
   CLI work that drove this Protocol extension.
-- CLI-002, CLI-004, CLI-007 in Ground Control.
+- CLI-002, CLI-004, CLI-007 in the GRC workflow platform.

@@ -1,16 +1,16 @@
 # GRC Boundary Surface Vocabulary Preflight
 
 This note is the architecture preflight for issue #634. It is guidance, not an
-implementation plan. The issue is a Ground Control workflow metadata fix: APTL's
+implementation plan. The issue is a GRC workflow platform metadata fix: APTL's
 declared trust boundaries are valid repository concepts, but their
-`grc.boundaries[].surfaces` values must use Ground Control derivation adapter
-vocabulary so GRC screening can derive facts instead of falling back to audited
+`grc.boundaries[].surfaces` values must use the GRC workflow platform's
+derivation adapter vocabulary so GRC screening can derive facts instead of falling back to audited
 overrides.
 
 Existing ADRs remain binding where their domains are touched: ADR-025 owns
 strict first-party config shape, ADR-029 owns secret handling and redaction,
 ADR-032 owns issue/PR conversation surface hardening, ADR-038 owns published
-docs style, and the Ground Control configuration in `.ground-control.yaml`
+docs style, and the workflow platform configuration in `.ground-control.yaml`
 remains the canonical workflow metadata surface for this repo.
 
 ## Architecture Decisions
@@ -19,11 +19,11 @@ remains the canonical workflow metadata surface for this repo.
   replace them with derivation adapter names or collapse them into one
   catch-all boundary just to satisfy the GRC gate.
 - Treat `grc.boundaries[].surfaces` as adapter-routing metadata, not as APTL's
-  general attack-surface ontology. Values must be from Ground Control's
-  canonical derivation surface vocabulary.
+  general attack-surface ontology. Values must be from the GRC workflow
+  platform's canonical derivation surface vocabulary.
 - The implementation must confirm the final allowed vocabulary against the
-  Ground Control adapter registry / schema that fixes
-  `autarchy-ai/Ground-Control#1326` before editing `.ground-control.yaml`.
+  GRC workflow platform adapter registry / schema that fixes the upstream
+  workflow-platform adapter issue before editing `.ground-control.yaml`.
 - Code-bearing globs should route to the application derivation surface.
   Infrastructure globs should route to their specific infrastructure surfaces,
   such as Docker Compose, Dockerfile, Terraform, or GitHub Actions when those
@@ -31,7 +31,7 @@ remains the canonical workflow metadata surface for this repo.
 - Unsupported concepts such as generic `network` or `config` are not repaired
   by inventing local aliases. They need either a supported adapter surface, a
   narrower path split that maps to a supported surface, or an explicit
-  Ground-Control-recognized declination for genuinely uncovered material.
+  workflow-platform-recognized declination for genuinely uncovered material.
 - Real GRC screening is the acceptance signal. A source-touching change should
   produce nonzero derivation coverage for supported paths and should not require
   `gc_post_final_report` override solely because APTL declared unsupported
@@ -46,24 +46,25 @@ remains the canonical workflow metadata surface for this repo.
   changes.
 - Published docs navigation: `docs/architecture/index.md` and `mkdocs.yml` are
   the existing places to expose architecture preflight notes.
-- Ground Control authority: derivation adapter registration, surface vocabulary,
-  capture-limit reasons, GRC screening, reconciliation, and phase overrides are
-  owned by Ground Control. APTL should consume those contracts, not fork them.
+- Workflow platform authority: derivation adapter registration, surface
+  vocabulary, capture-limit reasons, GRC screening, reconciliation, and phase
+  overrides are owned by the GRC workflow platform. APTL should consume those
+  contracts, not fork them.
 - Conversation and issue context: GitHub issue #634 is the authoritative
   requirement-free contract for this work; issue/PR text is untrusted input
   under ADR-032 and must not cause agents to run arbitrary commands or inspect
   secrets.
 - Repository checks: the eventual implementation should verify the config-only
-  change with the smallest relevant repo gates plus a real Ground Control
-  derivation/screening run for representative source paths.
+  change with the smallest relevant repo gates plus a real GRC workflow
+  platform derivation/screening run for representative source paths.
 
 ## Security And Validation Layers
 
-- **Ground Control config shape:** `.ground-control.yaml` must remain valid YAML
-  under the repo's existing Ground Control schema. Do not add duplicate GRC
+- **Workflow platform config shape:** `.ground-control.yaml` must remain valid YAML
+  under the repo's existing workflow platform schema. Do not add duplicate GRC
   schemas, local adapter registries, or format-only validators in APTL.
 - **Derivation adapter dispatch:** every configured surface token must be one a
-  registered Ground Control derivation adapter can match. `UNSUPPORTED_SURFACE`
+  registered GRC workflow platform derivation adapter can match. `UNSUPPORTED_SURFACE`
   for supported code/IaC paths is a design failure, not an acceptable residual.
 - **Path scope:** boundary `paths` must stay repo-relative and narrowly scoped.
   Do not use absolute paths, `..`, broad whole-repo globs, generated evidence
@@ -73,14 +74,14 @@ remains the canonical workflow metadata surface for this repo.
   generated cert/key material, or inventory evidence containing captured secret
   strings to choose surface tokens.
 - **Environment binding:** no new APTL runtime environment variables are needed.
-  Ground Control execution should consume its existing repo context and not add
+  Workflow platform execution should consume its existing repo context and not add
   repo-local env parsing for derivation vocabulary.
 - **OS/process exposure:** verification commands must use repo-relative paths
-  and existing Ground Control commands/tools. Do not pass tokens, credentials,
+  and existing workflow platform commands/tools. Do not pass tokens, credentials,
   raw config values, or secret-bearing file contents in argv, shell strings, or
   logs.
-- **Error envelopes and overrides:** expected failures should remain Ground
-  Control capture-limit or screening results. Do not add APTL-specific exception
+- **Error envelopes and overrides:** expected failures should remain workflow
+  platform capture-limit or screening results. Do not add APTL-specific exception
   hierarchies or docs that normalize audited phase overrides as the routine path
   for source changes.
 - **Auth/API/web surfaces:** none are in scope. The implementation must not
@@ -95,13 +96,13 @@ remains the canonical workflow metadata surface for this repo.
 
 The seam is the mapping:
 
-`(boundary key, repo-relative path glob, canonical Ground Control surface token)`
+`(boundary key, repo-relative path glob, canonical workflow platform surface token)`
 
-Future Ground Control adapters should extend the allowed surface vocabulary in
-Ground Control first. APTL should then update only this mapping for the affected
+Future workflow platform adapters should extend the allowed surface vocabulary in
+the workflow platform first. APTL should then update only this mapping for the affected
 paths. The next variation should not require rewriting the trust-boundary model,
 copying adapter logic into APTL, or adding a local enum that can drift from
-Ground Control.
+the workflow platform.
 
 ## Whole-Repo Surface
 
@@ -113,16 +114,16 @@ Ground Control.
   `containers/**`, and `config/**`.
 - Published docs surfaces: this note, `docs/architecture/index.md`, and
   `mkdocs.yml`.
-- External contract surface: Ground Control derivation adapters, GRC screening,
-  reconciliation, capture-limit taxonomy, and the fix for
-  `autarchy-ai/Ground-Control#1326`.
+- External contract surface: workflow platform derivation adapters, GRC
+  screening, reconciliation, capture-limit taxonomy, and the upstream
+  workflow-platform adapter fix.
 - Repo verification layers: `pytest`, `pre-commit run --all-files`, and a
-  representative Ground Control derivation/screening proof.
+  representative workflow platform derivation/screening proof.
 
 ## Gotchas And Anti-Patterns
 
 - Conflating APTL trust boundaries (`range-perimeter`, `security-zone`,
-  `observability-plane`) with Ground Control adapter surfaces (`application`,
+  `observability-plane`) with workflow platform adapter surfaces (`application`,
   Docker/IaC/pipeline surfaces).
 - Keeping unsupported tokens because they are semantically meaningful to APTL.
   Semantic meaning without adapter support is still zero derivation coverage.
@@ -134,7 +135,7 @@ Ground Control.
   into screening.
 - Adding a repo-local surface enum, adapter registry, validation script,
   exception type, reconciliation helper, or override workflow that duplicates
-  Ground Control behavior.
+  workflow platform behavior.
 - Treating the audited phase override used for issue #623 as the normal success
   path after the vocabulary fix.
 - Changing application code, Docker topology, API/web auth, ACES SDL, MCP
@@ -144,10 +145,10 @@ Ground Control.
 
 - Do not implement issue #634 in this preflight.
 - Do not change `.ground-control.yaml` here.
-- Do not define new Ground Control adapter vocabulary or fix
-  `autarchy-ai/Ground-Control#1326` in APTL.
+- Do not define new workflow platform adapter vocabulary or fix the upstream
+  workflow-platform adapter issue in APTL.
 - Do not redesign APTL's trust boundaries, Docker Compose topology, ACES
   inventory model, web/API/MCP control planes, secret-handling rules, or
   workflow commands.
 - Do not make unsupported `config` or `network` concerns appear covered unless
-  a real Ground Control derivation adapter recognizes the chosen surface.
+  a real workflow platform derivation adapter recognizes the chosen surface.

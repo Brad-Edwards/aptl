@@ -90,4 +90,6 @@ def test_prime_seed_provisions_and_persists_cortex_key():
     assert "aptl-cortex aptl-thehive aptl-misp aptl-shuffle-frontend" in text
     assert 'CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh"' in text
     assert 'update_env_var CORTEX_API_KEY "$CORTEX_API_KEY"' in text
+    assert "sed -i" not in text
+    assert 'mktemp "${ENV_FILE}.tmp.XXXXXX"' in text
     assert "Cortex API key: provisioned for TheHive connector" in text

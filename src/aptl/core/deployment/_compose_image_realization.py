@@ -120,6 +120,7 @@ class ComposeRealizationImageMixin:
         override_path.write_text(
             yaml.safe_dump({"services": services}, sort_keys=True),
             encoding="utf-8",
+            newline="\n",
         )
         return override_path
 

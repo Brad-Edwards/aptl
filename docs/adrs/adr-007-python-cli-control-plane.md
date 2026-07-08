@@ -71,7 +71,7 @@ src/aptl/
 │   ├── certs.py      # SSL certificate generation via Docker
 │   ├── credentials.py # Wazuh credential synchronization
 │   ├── services.py   # Health checks, readiness probes
-│   ├── sysreqs.py    # System requirements (vm.max_map_count)
+│   ├── sysreqs.py    # Platform-aware system requirements
 │   ├── snapshot.py   # Range snapshot capture
 │   └── scenario.py   # Scenario engine
 └── utils/
@@ -90,7 +90,8 @@ The separation between `cli/` and `core/` is intentional—the core domain logic
 
 1. Load and validate configuration (`aptl.json`)
 2. Load environment variables (`.env`)
-3. Check system requirements (`vm.max_map_count >= 262144`)
+3. Check system requirements (including `vm.max_map_count >= 262144` on native
+   Linux Docker Engine)
 4. Generate SSH keys (Ed25519, if not present)
 5. Generate SSL certificates (via Docker container, if not present)
 6. Synchronize credentials to Wazuh config files

@@ -10,7 +10,7 @@
 
 ## Context
 
-APTL's scenario format was an ad-hoc YAML schema validated only by Pydantic structural checks. The DSL-001 requirement called for a formal specification language with a documented grammar, parser, and semantic validation. Research across 12 cybersecurity SDLs, 10 adjacent DSLs, 6 security standards, and 6 agent evaluation frameworks (documented in `Kepler/research/dsl/`) identified the Open Cyber Range (OCR) SDL as the closest existing precedent.
+APTL's scenario format was an ad-hoc YAML schema validated only by Pydantic structural checks. The DSL-001 requirement called for a formal specification language with a documented grammar, parser, and semantic validation. Research across 12 cybersecurity SDLs, 10 adjacent DSLs, 6 security standards, and 6 agent evaluation frameworks (documented in internal research notes) identified the Open Cyber Range (OCR) SDL as the closest existing precedent.
 
 The OCR SDL is a YAML-based language with 14 sections (nodes, infrastructure, features, conditions, vulnerabilities, metrics/evaluations/TLOs/goals, entities, injects/events/scripts/stories) parsed by a Rust library. It separates logical topology from physical deployment and includes a full scoring pipeline and exercise orchestration model.
 

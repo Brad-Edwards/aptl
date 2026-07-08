@@ -31,12 +31,25 @@ update_env_var() {
     local key="$1"
     local value="$2"
     ensure_env_file
-    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-        # update in place using sed; escape | in value (none of ours have it)
-        sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
-    else
-        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-    fi
+    local tmp
+    tmp=$(mktemp "${ENV_FILE}.tmp.XXXXXX")
+    awk -v key="$key" -v value="$value" '
+        BEGIN { updated = 0 }
+        index($0, key "=") == 1 {
+            print key "=" value
+            updated = 1
+            next
+        }
+        { print }
+        END {
+            if (!updated) {
+                print key "=" value
+            }
+        }
+    ' "$ENV_FILE" > "$tmp"
+    cat "$tmp" > "$ENV_FILE"
+    rm -f "$tmp"
+    chmod 600 "$ENV_FILE"
 }
 
 echo "============================================="

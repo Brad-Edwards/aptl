@@ -22,10 +22,10 @@ services:
       # surfaces bind 127.0.0.1 so they are not reachable from other hosts on
       # the operator's LAN. Container-side ports and the security-net addresses
       # are unchanged; in-cluster agents reach the manager over the Docker net.
-      - "127.0.0.1:1514:1514"
-      - "127.0.0.1:1515:1515"
-      - "127.0.0.1:514:514/udp"
-      - "127.0.0.1:55000:55000"
+      - "127.0.0.1:${APTL_HP_WAZUH_MANAGER_1514:-1514}:1514"
+      - "127.0.0.1:${APTL_HP_WAZUH_MANAGER_1515:-1515}:1515"
+      - "127.0.0.1:${APTL_HP_WAZUH_MANAGER_514:-514}:514/udp"
+      - "127.0.0.1:${APTL_HP_WAZUH_MANAGER_55000:-55000}:55000"
     environment:
       - INDEXER_URL=https://wazuh.indexer:9200
       - INDEXER_USERNAME=${INDEXER_USERNAME}
@@ -98,7 +98,7 @@ services:
     restart: always
     ports:
       # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
-      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:${APTL_HP_WAZUH_INDEXER_9200:-9200}:9200"
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
     ulimits:
@@ -140,7 +140,7 @@ services:
     restart: always
     ports:
       # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
-      - "127.0.0.1:443:5601"
+      - "127.0.0.1:${APTL_HP_WAZUH_DASHBOARD_5601:-443}:5601"
     environment:
       - INDEXER_USERNAME=${INDEXER_USERNAME}
       - INDEXER_PASSWORD=${INDEXER_PASSWORD}
@@ -246,7 +246,7 @@ services:
     restart: unless-stopped
     ports:
       # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
-      - "127.0.0.1:8443:443"
+      - "127.0.0.1:${APTL_HP_MISP_443:-8443}:443"
     environment:
       - MYSQL_HOST=misp-db
       - MYSQL_DATABASE=misp
@@ -388,7 +388,7 @@ services:
     restart: unless-stopped
     ports:
       # ADR-034 Host Exposure Amendment (issue #416): loopback-only.
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:${APTL_HP_THEHIVE_9000:-9000}:9000"
     environment:
       - JVM_OPTS=-Xms512m -Xmx512m
     # SEC-006 / ADR-034: keystore password loaded from the env_file
@@ -553,11 +553,11 @@ services:
       # in-container nginx config overlay terminates TLS using the
       # lab-CA-signed cert. ADR-034 Host Exposure Amendment (issue #416):
       # loopback-only.
-      - "127.0.0.1:3443:443"
+      - "127.0.0.1:${APTL_HP_SHUFFLE_FRONTEND_443:-3443}:443"
       # Host port 3001 → container 80 (HTTP). The in-container nginx
       # listens on 80/443 only; the previous 3001:3001 mapping pointed at
       # a port nothing listens on (issue #405). Loopback-only (issue #416).
-      - "127.0.0.1:3001:80"
+      - "127.0.0.1:${APTL_HP_SHUFFLE_FRONTEND_80:-3001}:80"
     environment:
       - BACKEND_HOSTNAME=shuffle-backend
     volumes:
@@ -661,7 +661,7 @@ services:
       # ADR-034 Host Exposure Amendment (issue #416): Cortex holds the host
       # docker.sock; loopback-binding removes the LAN-reachable management
       # surface. (Socket-proxy hardening is a separate follow-up.)
-      - "127.0.0.1:9001:9001"
+      - "127.0.0.1:${APTL_HP_CORTEX_9001:-9001}:9001"
     environment:
       - job_directory=/opt/cortex/jobs
     volumes:
@@ -706,7 +706,7 @@ services:
     hostname: webapp
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${APTL_HP_WEBAPP_8080:-8080}:8080"
     environment:
       - DB_HOST=172.20.2.11
       - DB_PORT=5432
@@ -760,10 +760,16 @@ services:
     domainname: techvault.local
     restart: unless-stopped
     ports:
-      - "25:25"
-      - "143:143"
-      - "587:587"
-      - "993:993"
+      # Loopback-only (ADR-039): the mailserver holds fixture credentials
+      # (known lab password), so its SMTP/IMAP ports must not be published on
+      # 0.0.0.0 where an exposed host would become an open, known-cred relay.
+      # In-range traffic (kali phishing -> victims) uses the docker networks
+      # below, not these host publishes; these exist only for operator access
+      # from the host itself.
+      - "127.0.0.1:${APTL_HP_MAILSERVER_25:-25}:25"
+      - "127.0.0.1:${APTL_HP_MAILSERVER_143:-143}:143"
+      - "127.0.0.1:${APTL_HP_MAILSERVER_587:-587}:587"
+      - "127.0.0.1:${APTL_HP_MAILSERVER_993:-993}:993"
     environment:
       - ENABLE_SPAMASSASSIN=0
       - ENABLE_CLAMAV=0
@@ -801,8 +807,8 @@ services:
     hostname: ns1.techvault.local
     restart: unless-stopped
     ports:
-      - "5353:53/tcp"
-      - "5353:53/udp"
+      - "${APTL_DNS_HOST_PORT:-5353}:53/tcp"
+      - "${APTL_DNS_HOST_PORT:-5353}:53/udp"
     environment:
       # In-process Wazuh agent (issue #248) — replaces wazuh-sidecar-dns.
       - WAZUH_MANAGER=wazuh.manager
@@ -1194,11 +1200,10 @@ services:
         ipv4_address: 172.20.1.30
       aptl-internal:
         ipv4_address: 172.20.2.35
-    # No host port published: kali is attached only to internal-only
-    # networks (aptl-redteam / aptl-dmz / aptl-internal), and Docker
-    # does not publish host ports for internal-only containers. The
-    # MCP / control plane reaches kali by container IP over the bridge
-    # — see endpoints.py select_ssh_host (issue #293).
+    # Kali stays attached only to internal lab networks. Host-run MCP
+    # clients reach sshd through the loopback-only kali-ssh-proxy service
+    # below, which keeps Docker VM backends working without giving Kali a
+    # non-internal network attachment.
     environment:
       - VICTIM_IP=172.20.2.20
     extra_hosts:
@@ -1251,6 +1256,50 @@ services:
       resources:
         limits:
           memory: 1g
+
+  # Host-side Kali SSH bridge for MCP clients.
+  #
+  # Docker Desktop, Colima, and WSL2 do not route Compose bridge IPs from the
+  # host. Publishing a port directly on a service attached only to
+  # internal:true networks is also not made reachable by those backends. Keep
+  # Kali isolated and put the host publication on this tiny proxy instead:
+  # host localhost:2023 -> proxy -> aptl-kali:22 on aptl-redteam.
+  kali-ssh-proxy:
+    profiles: ["kali"]
+    build:
+      context: ./containers/kali-ssh-proxy
+      dockerfile: Dockerfile
+    container_name: aptl-kali-ssh-proxy
+    restart: unless-stopped
+    environment:
+      - APTL_PROXY_TARGET_HOST=172.20.4.30
+      - APTL_PROXY_TARGET_PORT=22
+    ports:
+      # Default host port 2023 matches the MCP red config's pinned ssh_port
+      # (mcp/mcp-red/docker-lab-config.json). `aptl lab start` may remap it if
+      # 2023 is in use; the start summary then flags that the MCP client needs
+      # the reported port. The default parity is enforced by test_consistency.
+      - "127.0.0.1:${APTL_HP_KALI_SSH_PROXY_2023:-2023}:2023"
+    networks:
+      aptl-control:
+      aptl-redteam:
+    depends_on:
+      kali:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import socket; s=socket.create_connection(('127.0.0.1', 2023), 2); s.close()"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 64m
 
   # ---------------------------------------------------------------------------
   # ADR-041 / issue #305: Kali Capture Sidecar
@@ -1322,7 +1371,7 @@ services:
       aptl-security:
         ipv4_address: 172.20.0.27
     ports:
-      - "2027:22"    # SSH access
+      - "${APTL_HP_REVERSE_22:-2027}:22"    # SSH access
     environment:
       - SIEM_IP=172.20.0.10  # wazuh.manager
       - LABADMIN_SSH_KEY_FILE=/keys/aptl_lab_key.pub
@@ -1368,7 +1417,7 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach this port (ADR-039).
-      - "127.0.0.1:8400:8400"
+      - "127.0.0.1:${APTL_HP_APTL_WEB_API_8400:-8400}:8400"
     environment:
       - APTL_PROJECT_DIR=/project
       # Validated by the API at runtime. Do not use `${VAR:?}` here: Compose
@@ -1399,7 +1448,7 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only: only the operator's machine can reach the UI (ADR-039).
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${APTL_HP_APTL_WEB_UI_3000:-3000}:3000"
     # UI-008a: serves the built static SPA and reverse-proxies /api/* (incl. the
     # terminal WebSocket) to aptl-web-api, which owns the entire auth/CSRF
     # boundary (the FastAPI BFF). The control-plane token is NOT present in this
@@ -1425,8 +1474,8 @@ services:
     image: otel/opentelemetry-collector-contrib:0.123.0
     restart: unless-stopped
     ports:
-      - "127.0.0.1:4317:4317"
-      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4317:-4317}:4317"
+      - "127.0.0.1:${APTL_HP_APTL_OTEL_COLLECTOR_4318:-4318}:4318"
     volumes:
       - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     healthcheck:
@@ -1450,7 +1499,7 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     ports:
-      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:${APTL_HP_APTL_TEMPO_3200:-3200}:3200"
     volumes:
       - ./config/otel/tempo-config.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
@@ -1468,7 +1517,7 @@ services:
     image: grafana/grafana:11.6.0
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3100:3000"
+      - "127.0.0.1:${APTL_HP_APTL_GRAFANA_OTEL_3000:-3100}:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -1489,6 +1538,15 @@ services:
 # ==========================================================================
 
 networks:
+  # Host-published control-plane proxy network. This network is intentionally
+  # not attached to Kali; it exists so loopback-only host publications work on
+  # Docker VM backends without adding an egress-capable interface to Kali.
+  aptl-control:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.5.0/24
+
   # Security / Management network - Wazuh, SOC tools
   aptl-security:
     driver: bridge

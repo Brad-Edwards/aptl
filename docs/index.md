@@ -23,8 +23,8 @@ run from source instead, use a virtualenv editable install
 **Access:**
 
 - Wazuh Dashboard: <https://localhost:443> (admin/SecretPassword)
-- Victim SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2022`
-- Kali SSH: `ssh -i ~/.ssh/aptl_lab_key kali@localhost -p 2023`
+- Victim shell: `aptl container shell aptl-victim`
+- Kali shell: `aptl container shell aptl-kali`
 
 ## Requirements
 

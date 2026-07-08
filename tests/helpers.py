@@ -429,7 +429,10 @@ def workstation_exec(
 
 def container_running(name: str) -> bool:
     """Check if a Docker container is running."""
-    result = run_cmd(["docker", "inspect", "-f", "{{.State.Status}}", name])
+    try:
+        result = run_cmd(["docker", "inspect", "-f", "{{.State.Status}}", name])
+    except FileNotFoundError:
+        return False
     return result.returncode == 0 and result.stdout.strip() == "running"
 
 

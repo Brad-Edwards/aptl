@@ -718,7 +718,7 @@ conditions:
     interval: 15
 
   thehive-health:
-    command: "curl -sf http://localhost:9000/api/status || exit 1"
+    command: "curl -ksf https://localhost:9000/api/status || exit 1"
     interval: 30
 
   cassandra-health:

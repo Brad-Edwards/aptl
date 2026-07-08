@@ -161,8 +161,8 @@ def _evaluate_sysctl_result(
     stdout = result.stdout.strip()
     try:
         current_value = _parse_sysctl_value(stdout)
-    except ValueError as exc:
-        log.error("Failed to parse sysctl output '%s': %s", stdout, exc)
+    except ValueError:
+        log.exception("Failed to parse sysctl output '%s'", stdout)
         return SysReqResult(
             passed=False,
             current_value=0,

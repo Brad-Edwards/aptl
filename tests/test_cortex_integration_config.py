@@ -88,6 +88,8 @@ def test_prime_seed_provisions_and_persists_cortex_key():
     text = SEED_PRIME_SCRIPT.read_text(encoding="utf-8")
 
     assert "aptl-cortex aptl-thehive aptl-misp aptl-shuffle-frontend" in text
+    assert 'INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"' in text
+    assert 'INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"' in text
     assert 'CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh"' in text
     assert 'update_env_var CORTEX_API_KEY "$CORTEX_API_KEY"' in text
     assert "sed -i" not in text

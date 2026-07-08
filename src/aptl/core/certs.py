@@ -56,7 +56,7 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
                 certs_dir=certs_dir,
                 error=alias_error,
             )
-        _ensure_user_writable_certs(certs_dir)
+        _ensure_container_readable_certs(certs_dir)
         log.info("SSL certificates already exist at %s", certs_dir)
         return CertResult(
             success=True,
@@ -89,7 +89,7 @@ def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
                 certs_dir=certs_dir,
                 error=alias_error,
             )
-        _ensure_user_writable_certs(certs_dir)
+        _ensure_container_readable_certs(certs_dir)
         log.info("SSL certificates generated successfully at %s", certs_dir)
         result = CertResult(success=True, generated=True, certs_dir=certs_dir)
     return result
@@ -117,27 +117,28 @@ def _ensure_manager_root_ca_alias(certs_dir: Path) -> str | None:
     return error
 
 
-def _ensure_user_writable_certs(certs_dir: Path) -> None:
-    """Make generated cert files removable by the invoking host user.
+def _ensure_container_readable_certs(certs_dir: Path) -> None:
+    """Make generated cert files readable through non-root bind mounts.
 
-    The upstream generator emits read-only PEM files. On some Docker VM file
-    sharing layers, notably macOS-backed mounts, that can prevent ordinary
-    cleanup even when the files map back to the host user. This is a
-    best-effort host-side chmod and never escalates privileges.
+    The upstream generator emits owner-only PEM files. Wazuh Indexer and Wazuh
+    Dashboard run as non-root uid 1000 inside the container, which may not match
+    the host uid that ran ``aptl lab start``. Keep the host-side directory
+    private while widening the mounted files so the container processes can read
+    them.
     """
     try:
-        certs_dir.chmod(certs_dir.stat().st_mode | 0o700)
+        certs_dir.chmod(0o700)
     except OSError as exc:
         log.warning(
-            "Could not make generated cert directory writable (%s): %s", certs_dir, exc
+            "Could not make generated cert directory private (%s): %s", certs_dir, exc
         )
     for path in certs_dir.iterdir():
         if not path.is_file():
             continue
         try:
-            path.chmod(path.stat().st_mode | 0o600)
+            path.chmod(0o644)
         except OSError as exc:
-            log.warning("Could not make generated cert writable (%s): %s", path, exc)
+            log.warning("Could not make generated cert readable (%s): %s", path, exc)
 
 
 def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:
@@ -231,8 +232,8 @@ def _cert_ownership_repair_command(certs_dir: Path, user: tuple[int, int]) -> li
     uid, gid = user
     script = (
         f"chown -R {uid}:{gid} /certificates && "
-        "find /certificates -type d -exec chmod u+rwx {} + && "
-        "find /certificates -type f -exec chmod u+rw {} +"
+        "find /certificates -type d -exec chmod 700 {} + && "
+        "find /certificates -type f -exec chmod 644 {} +"
     )
     return [
         "docker",

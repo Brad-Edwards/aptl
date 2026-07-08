@@ -224,7 +224,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1g
+          # 1g was too small: the container OOM-killed (exit 137) shortly
+          # after loading the full ~52k signature set (default + local +
+          # MISP + suricata_rules + falco + ad + webapp + database +
+          # samba + postgresql). Colima on macOS reproduced this
+          # consistently with 18 restarts before compose gave up. 3g
+          # leaves headroom for signature reloads and packet buffers
+          # without dominating the 24 GB Colima footprint.
+          memory: 3g
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.50

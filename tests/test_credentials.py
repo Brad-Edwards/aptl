@@ -32,6 +32,20 @@ _skip_no_posix_modes = pytest.mark.skipif(
 )
 
 
+def _patch_windows_default_fdopen(mocker, module_path: str):
+    """Make text writes default to CRLF unless the caller pins newlines."""
+    real_fdopen = os.fdopen
+
+    def fdopen_with_windows_default(fd, mode="r", *args, **kwargs):
+        if "b" not in mode and "newline" not in kwargs:
+            kwargs["newline"] = "\r\n"
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    return mocker.patch(
+        f"{module_path}.os.fdopen", side_effect=fdopen_with_windows_default
+    )
+
+
 def _layout_dashboard(project_dir: Path, content: str) -> Path:
     target = project_dir / _DASHBOARD_SOURCE_RELPATH
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -178,6 +192,26 @@ class TestSyncDashboardConfig:
         rendered_dir = _rendered_dashboard(tmp_path).parent
         assert not list(rendered_dir.glob("*.tmp"))
 
+    def test_rendered_dashboard_config_is_lf_even_from_crlf_template(
+        self, tmp_path, mocker,
+    ):
+        from aptl.core.credentials import sync_dashboard_config
+
+        source = tmp_path / _DASHBOARD_SOURCE_RELPATH
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(
+            b"hosts:\r\n"
+            b"  - default:\r\n"
+            b'      password: "placeholder"\r\n'
+        )
+        _patch_windows_default_fdopen(mocker, "aptl.core.credentials")
+
+        sync_dashboard_config(tmp_path, "a-real-secret")
+
+        rendered = _rendered_dashboard(tmp_path).read_bytes()
+        assert b"\r\n" not in rendered
+        assert b'password: "a-real-secret"\n' in rendered
+
 
 class TestSyncManagerConfig:
     """Tests for manager (wazuh_manager.conf) cluster key rendering."""
@@ -219,6 +253,28 @@ class TestSyncManagerConfig:
         assert source.read_bytes() == before
         assert "real-cluster-secret" not in source.read_text()
         assert '<key>real-cluster-secret</key>' in _rendered_manager(tmp_path).read_text()
+
+    def test_rendered_manager_config_is_lf_even_from_crlf_template(
+        self, tmp_path, mocker,
+    ):
+        from aptl.core.credentials import sync_manager_config
+
+        source = tmp_path / _MANAGER_SOURCE_RELPATH
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(
+            b"<ossec_config>\r\n"
+            b"  <cluster>\r\n"
+            b"    <key>placeholder_cluster_key</key>\r\n"
+            b"  </cluster>\r\n"
+            b"</ossec_config>\r\n"
+        )
+        _patch_windows_default_fdopen(mocker, "aptl.core.credentials")
+
+        sync_manager_config(tmp_path, "real-cluster-secret")
+
+        rendered = _rendered_manager(tmp_path).read_bytes()
+        assert b"\r\n" not in rendered
+        assert b"<key>real-cluster-secret</key>\n" in rendered
 
     def test_preserves_surrounding_xml_content(self, tmp_path):
         from aptl.core.credentials import sync_manager_config

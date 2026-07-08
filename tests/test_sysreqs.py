@@ -115,6 +115,25 @@ class TestCheckMaxMapCount:
         assert "Docker VM" in result.error
         mock_run.assert_not_called()
 
+    def test_skips_on_non_linux_docker_vm(self, mocker):
+        """Colima/Lima-style engines manage sysctls inside their Linux VM."""
+        from aptl.core import hostenv
+        from aptl.core.sysreqs import check_max_map_count
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_VM,
+        )
+        mock_run = mocker.patch("aptl.core.sysreqs.subprocess.run")
+
+        result = check_max_map_count()
+
+        assert result.passed is True
+        assert result.applicable is False
+        assert result.current_value == 0
+        assert "docker_vm" in result.error
+        mock_run.assert_not_called()
+
     def test_skips_when_docker_mode_unknown(self, mocker):
         """Unknown Docker mode is not treated as a host sysctl failure."""
         from aptl.core import hostenv

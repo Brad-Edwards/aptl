@@ -10,6 +10,8 @@ Nobody runs a script, hand-edits the version, or edits `CHANGELOG.md`.
   Bump rules: `feat:` → minor, `fix:` / `perf:` → patch, `feat!:` or a
   `BREAKING CHANGE:` footer → major (demoted to minor while `0.x`). Other types
   (`docs`, `chore`, `refactor`, `test`, `ci`, `build`) → no release.
+- Use one Conventional Commit type and scope only; compound titles such as
+  `fix(...) + docs:` are not parseable by release-please.
 - **Do not** edit `CHANGELOG.md` or the version; release-please owns both.
   Because feature PRs never touch `CHANGELOG.md`, concurrent PRs never conflict
   on it.

@@ -188,7 +188,7 @@ docker network ls --filter name=aptl \
 aptl lab start
 ```
 
-Tracked in [#722](https://github.com/Brad-Edwards/Aptl/issues/722).
+Tracked in [#722](https://github.com/Brad-Edwards/aptl/issues/722).
 
 ### macOS: Docker Desktop uninstall leftovers
 

@@ -9,6 +9,7 @@ the lab functions monkeypatched, so the whole module runs in the fast
 """
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -246,6 +247,7 @@ class TestState:
         lp.save_state(tmp_path, state)
         assert lp.load_state(tmp_path) == state
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX file modes are unavailable")
     def test_state_file_is_owner_only(self, tmp_path):
         lp.save_state(tmp_path, lp.LifecycleState())
         mode = lp.state_path(tmp_path).stat().st_mode & 0o777

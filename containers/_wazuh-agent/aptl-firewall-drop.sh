@@ -60,6 +60,12 @@ _log() {
         >> "${LOG}" 2>/dev/null || true
 }
 
+_quote_for_log() {
+    # Use Bash-3-compatible quoting. macOS still ships /bin/bash 3.2,
+    # which does not support Bash 4's parameter-transform quoting.
+    printf '%q' "$1"
+}
+
 # Read one JSON object from stdin. Wazuh 4.x sends one object per
 # invocation as a single line; the trailing newline is optional. The
 # `|| [ -n "$line" ]` clause catches the no-final-newline case, where
@@ -108,7 +114,7 @@ SRCIP=$(_extract '.parameters.alert.data.srcip')
 # Sanity check: the IPv4 validator runs after parsing so a malformed
 # srcip never reaches the whitelist match or the iptables call.
 if ! _is_valid_ipv4 "${SRCIP}"; then
-    _log "rejecting invalid srcip: ${SRCIP@Q}"
+    _log "rejecting invalid srcip: $(_quote_for_log "${SRCIP}")"
     exit 0
 fi
 
@@ -165,7 +171,7 @@ case "${COMMAND}" in
         fi
         ;;
     *)
-        _log "unknown command: ${COMMAND@Q}"
+        _log "unknown command: $(_quote_for_log "${COMMAND}")"
         exit 1
         ;;
 esac

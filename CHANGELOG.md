@@ -9,6 +9,14 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [4.2.1](https://github.com/Brad-Edwards/aptl/compare/v4.2.0...v4.2.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* **release:** document release-please title parsing ([a92119d](https://github.com/Brad-Edwards/aptl/commit/a92119dad58a513bf4e3bbc4a577d65ad3e86221))
+* **release:** document release-please title parsing ([#717](https://github.com/Brad-Edwards/aptl/issues/717)) ([e2746f3](https://github.com/Brad-Edwards/aptl/commit/e2746f356fbb1e842bf4126f08e3ac1d2f6133c2))
+
 ## [4.2.0](https://github.com/Brad-Edwards/aptl/compare/v4.1.2...v4.2.0) (2026-07-08)
 
 

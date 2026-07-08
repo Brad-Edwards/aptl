@@ -6,4 +6,4 @@
 # pyproject.toml, not this src-layout __init__.py). Keep the annotation comment
 # on the same line as the literal, and keep the literal equal to pyproject's
 # `version` — test_version_consistency.py enforces the latter.
-__version__ = "4.2.0"  # x-release-please-version
+__version__ = "4.2.1"  # x-release-please-version

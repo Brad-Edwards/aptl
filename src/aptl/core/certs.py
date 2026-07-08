@@ -148,6 +148,11 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
             _cert_generator_command(certs_dir),
             capture_output=True,
             text=True,
+            # Decode as UTF-8 (not the host locale codec) so Docker's image
+            # pull/build glyphs don't raise UnicodeDecodeError on Windows,
+            # where `text=True` would otherwise decode as cp1252.
+            encoding="utf-8",
+            errors="replace",
             cwd=project_dir,
             timeout=300,
         )
@@ -208,6 +213,8 @@ def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:
         _cert_ownership_repair_command(certs_dir, user),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=120,
     )
     if result.returncode == 0:

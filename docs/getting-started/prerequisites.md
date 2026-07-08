@@ -51,6 +51,14 @@ echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
 netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"
 ```
 
+You do not have to free these by hand: `aptl lab start` probes every published
+host port and, if a default is already in use (Windows reserves UDP 5353 for
+mDNS; an editor's automatic port-forwarding may hold others), publishes that
+service on a free port instead and prints the real ports under "Host port
+remaps" in the start summary. Use the reported ports (e.g. the Wazuh Dashboard
+URL, or `dig @localhost -p <reported-port> techvault.local SOA`). Pin a specific
+port with the matching `APTL_HP_*` / `APTL_DNS_HOST_PORT` variable to override.
+
 ## Python environment
 
 Install the CLI into a virtualenv, not the system Python. Modern

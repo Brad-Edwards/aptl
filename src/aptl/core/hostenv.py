@@ -102,6 +102,8 @@ def _run_docker_info() -> subprocess.CompletedProcess[str]:
         ["docker", "info", "--format", "{{.OperatingSystem}}"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=15,
     )
 

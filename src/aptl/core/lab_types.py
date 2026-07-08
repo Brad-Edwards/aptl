@@ -113,6 +113,10 @@ class LabResult:
     error: str = ""
     outcome: "StartupOutcome" = StartupOutcome.READY
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
+    # Published host ports after conflict resolution (host_ports.ResolvedPort),
+    # populated on lab start so the CLI can report the real host port each
+    # service landed on when a default was already in use. Empty for other ops.
+    resolved_ports: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Make the invariant total: ``outcome`` is the authoritative

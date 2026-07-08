@@ -605,6 +605,9 @@ class _LabStartContext(object):
     backend: "DeploymentBackend | None" = None
     ssh_key_path: Path | None = None
     selected_profiles: set[str] = field(default_factory=set)
+    # Published host ports after conflict resolution (host_ports.ResolvedPort),
+    # so the access summary can report the real port each service landed on.
+    resolved_ports: list = field(default_factory=list)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
     # REP-001: ACES start outcome and range snapshot for run record writing.
     # Use object to avoid circular imports; typed at use sites.
@@ -736,6 +739,33 @@ def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
         log.exception("Failed to load .env")
         return LabResult(success=False, error=f"Failed to load .env: {exc}")
     return _validate_env_secrets(ctx.raw_env)
+
+
+def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
+    """Remap any published host port that is already in use before Compose runs.
+
+    Docker Compose aborts the whole ``up`` if it cannot bind a requested host
+    port, and on Windows/macOS other software routinely holds ports the lab
+    wants (mDNS on 5353, an editor's port-forwarding, etc.). This probes each
+    published port and, for any that are taken, exports a free alternate through
+    the ``${VAR:-default}`` indirection Compose reads from the environment — so
+    startup succeeds and the access summary can report the real port. Ports the
+    operator pinned in ``.env`` / the environment are honoured as-is; Linux
+    hosts with nothing on the defaults see no change.
+    """
+    from aptl.core import host_ports
+
+    ctx.resolved_ports = host_ports.resolve_host_ports(
+        ctx.project_dir, reserved_env=set(ctx.raw_env)
+    )
+    for resolved in ctx.resolved_ports:
+        if resolved.remapped:
+            _emit_progress(
+                ctx,
+                f"Host port {resolved.default_port} for {resolved.service} is "
+                f"in use; publishing on {resolved.resolved_port} instead.",
+            )
+    return None
 
 
 def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
@@ -1859,6 +1889,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 # stay aligned.
 _LAB_START_STEPS = (
     _step_load_env,
+    _step_resolve_host_ports,
     _step_load_config,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
@@ -1881,6 +1912,7 @@ _LAB_START_STEPS = (
 
 _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
+    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_load_config": "Loading lab configuration.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
@@ -1990,6 +2022,7 @@ def orchestrate_lab_start(
         message=message,
         outcome=outcome,
         diagnostics=list(ctx.diagnostics),
+        resolved_ports=list(ctx.resolved_ports),
     )
 
 

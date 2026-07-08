@@ -37,6 +37,7 @@ MANAGEMENT_SURFACES = [
     ("aptl-otel-collector", 4317),
     ("aptl-otel-collector", 4318),
     ("aptl-tempo", 3200),
+    ("kali-ssh-proxy", 2023),
     # mailserver holds fixture credentials (a known lab password), so its
     # SMTP/IMAP host publishes must NOT be reachable on 0.0.0.0 where an
     # exposed host becomes an open, known-cred relay (issue #668). The in-range

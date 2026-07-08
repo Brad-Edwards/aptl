@@ -74,13 +74,16 @@ TheHive, Cortex, and Shuffle containers form the SOC.
 
 In the `workshop` directory, create `.mcp.json` (copy it from
 `.mcp.json.example`). The minimum set for the workshop is the red tool, which
-drives Kali, and the indexer tool, which queries the SOC:
+drives Kali, and the indexer tool, which queries the SOC. The red MCP reaches
+Kali through the loopback-only SSH proxy on `localhost:2023`, so the same
+configuration works on Linux Docker, Docker Desktop, Colima, and WSL2 without
+host routing to Compose bridge IPs:
 
 ```jsonc
 { "mcpServers": {
-  "kali-red-team": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
+  "kali-ssh": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
     "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } },
-  "soc-indexer": { "command": "node", "args": ["./mcp/mcp-indexer/build/index.js"],
+  "indexer": { "command": "node", "args": ["./mcp/mcp-indexer/build/index.js"],
     "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
              "INDEXER_USERNAME": "admin",
              "INDEXER_PASSWORD": "<from grep '^INDEXER_PASSWORD=' .env>" } } } }

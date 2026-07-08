@@ -25,8 +25,6 @@ containers. The startup output points to `.env` for passwords and tokens. Run
 
 The CLI handles SSH keys, SSL certificates, system requirements, and container startup.
 
-**Note**: First run requires sudo password for SSL certificate permissions.
-
 ## Lab Components
 
 | Component | Access | Credentials |

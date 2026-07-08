@@ -88,7 +88,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 - Python 3.11+
 - RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
 - 20 GB+ disk
-- Linux / macOS / WSL2
+- Linux, macOS, or Windows with Docker Desktop/WSL2
 - Open ports: 443, 2027, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
 
 ## Architecture

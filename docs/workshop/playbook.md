@@ -13,9 +13,10 @@ commands and agent prompts for every hands-on step.
 
 ## Before you start
 
-Students, beforehand: boot the lab with `aptl lab start`, confirm health with
-`aptl lab status`, and wire the agent to the lab's MCP servers. Facilitator:
-bring your own lab up and open the dashboards on the projector.
+Students, beforehand: complete the per-OS prerequisites in the
+[Lab Walkthrough](walkthrough.md), boot the lab with `aptl lab start`, confirm
+health with `aptl lab status`, and wire the agent to the lab's MCP servers.
+Facilitator: bring your own lab up and open the dashboards on the projector.
 
 ## 1. Intro (about 5 min)
 

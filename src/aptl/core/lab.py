@@ -65,6 +65,7 @@ from aptl.core.endpoints import (
     terminal_ssh_endpoints,
 )
 from aptl.core.host_keys import pin_terminal_host_keys
+from aptl.core import hostenv
 from aptl.core.snapshot import (
     SSHEndpoint,
     capture_snapshot,
@@ -1289,6 +1290,12 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         and ctx.ssh_key_path is not None
         and ctx.backend is not None
     )
+    if _docker_vm_hides_bridge_ips():
+        log.info(
+            "Skipping host SSH probes: Docker VM mode does not expose "
+            "Compose bridge IPs to the host"
+        )
+        return None
     # Probe only the interactive targets the scenario actually started. Gating
     # on the selected profiles (not config flags) keeps a bounded scenario from
     # warning about targets it intentionally omitted.
@@ -1354,6 +1361,14 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
             ),
         )
     return None
+
+
+def _docker_vm_hides_bridge_ips() -> bool:
+    """Return True when host-side probes cannot route to container IPs."""
+    return hostenv.docker_mode() in {
+        hostenv.DOCKER_DESKTOP,
+        hostenv.DOCKER_VM,
+    }
 
 
 @_runtime_require(
@@ -1594,6 +1609,12 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11b: Pinning terminal SSH host keys...")
     if ctx.backend is None or ctx.ssh_key_path is None:
         log.debug("Skipping host-key pinning: backend or ssh key unavailable")
+        return None
+    if _docker_vm_hides_bridge_ips():
+        log.info(
+            "Skipping host-key pinning: Docker VM mode does not expose "
+            "Compose bridge IPs to the host"
+        )
         return None
     try:
         endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))

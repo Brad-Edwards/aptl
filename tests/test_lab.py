@@ -2075,6 +2075,25 @@ class TestStartupClassificationWiring:
         assert diag.component == "ssh:kali"
         assert diag.severity is DiagnosticSeverity.WARNING
 
+    def test_test_ssh_skips_host_bridge_probe_on_docker_vm(self, tmp_path, mocker):
+        from aptl.core import hostenv
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_VM,
+        )
+        networks = mocker.patch("aptl.core.lab.container_networks")
+        wait = mocker.patch("aptl.core.lab.wait_for_service")
+
+        result = _step_test_ssh(ctx)
+
+        assert result is None
+        assert ctx.diagnostics == []
+        networks.assert_not_called()
+        wait.assert_not_called()
+
     def test_test_ssh_probes_container_ip_on_port_22(self, tmp_path, mocker):
         # Regression for issue #293: the SSH probe must target the
         # container IP on port 22, not localhost on a (never-published)
@@ -3337,6 +3356,24 @@ class TestTerminalHostKeyPinningStep:
         mock_pin.assert_called_once_with(
             tmp_path, build_ssh_endpoints(snapshots), ctx.ssh_key_path
         )
+
+    @patch("aptl.core.lab.pin_terminal_host_keys")
+    @patch("aptl.core.lab.list_container_snapshots")
+    def test_step_skips_pin_on_docker_vm(self, mock_list, mock_pin, tmp_path, mocker):
+        from aptl.core import hostenv
+        from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
+
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_VM,
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.backend = MagicMock()
+        ctx.ssh_key_path = tmp_path / "key"
+
+        assert _step_pin_terminal_host_keys(ctx) is None
+        mock_list.assert_not_called()
+        mock_pin.assert_not_called()
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     def test_step_noop_without_backend(self, mock_pin, tmp_path):

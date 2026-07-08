@@ -54,47 +54,22 @@ def ensure_ssh_keys(keys_dir: Path, host_ssh_dir: Path) -> SSHKeyResult:
     private_key = host_ssh_dir / _KEY_NAME
     public_key = host_ssh_dir / f"{_KEY_NAME}.pub"
 
-    generated = False
-
-    if not private_key.exists():
-        log.info("Generating new SSH key pair at %s", private_key)
-        error_msg = _run_ssh_keygen(private_key, "aptl-local-lab", "ssh-keygen")
-        if error_msg:
-            return SSHKeyResult(success=False, generated=False, error=error_msg)
-
-        generated = True
-        log.info("SSH key pair generated successfully")
-    else:
-        log.debug("SSH key already exists at %s", private_key)
-
-    # Verify public key exists before proceeding
-    if not public_key.exists():
-        log.error("Public key not found at %s after keygen", public_key)
-        return SSHKeyResult(
-            success=False,
-            generated=generated,
-            error=f"Public key not found at {public_key}",
-        )
-
-    permission_error = _harden_private_key(private_key)
-    if permission_error:
-        return SSHKeyResult(success=False, generated=generated, error=permission_error)
-    permission_error = _set_public_key_mode(public_key)
-    if permission_error:
-        return SSHKeyResult(success=False, generated=generated, error=permission_error)
-
-    # Copy public key to keys_dir for container authorized_keys
-    pub_content = public_key.read_text()
-    (keys_dir / f"{_KEY_NAME}.pub").write_text(pub_content)
-    (keys_dir / "authorized_keys").write_text(pub_content)
-
-    log.debug("Public key distributed to %s", keys_dir)
-
-    return SSHKeyResult(
-        success=True,
-        generated=generated,
-        key_path=private_key,
+    generated, error_msg = _ensure_keypair(
+        private_key=private_key,
+        public_key=public_key,
+        comment="aptl-local-lab",
+        label="ssh-keygen",
     )
+    if error_msg:
+        result = SSHKeyResult(success=False, generated=generated, error=error_msg)
+    else:
+        result = _finish_control_plane_key_setup(
+            private_key=private_key,
+            public_key=public_key,
+            keys_dir=keys_dir,
+            generated=generated,
+        )
+    return result
 
 
 def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
@@ -124,41 +99,94 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
     private_key = pivot_dir / _PIVOT_KEY_NAME
     public_key = pivot_dir / f"{_PIVOT_KEY_NAME}.pub"
 
-    generated = False
-
-    if not private_key.exists():
-        log.info("Generating kali pivot key pair at %s", private_key)
-        error_msg = _run_ssh_keygen(
-            private_key, "aptl-kali-pivot", "ssh-keygen (pivot)"
-        )
-        if error_msg:
-            return SSHKeyResult(success=False, generated=False, error=error_msg)
-
-        generated = True
-        log.info("Kali pivot key pair generated successfully")
+    generated, error_msg = _ensure_keypair(
+        private_key=private_key,
+        public_key=public_key,
+        comment="aptl-kali-pivot",
+        label="ssh-keygen (pivot)",
+    )
+    if error_msg:
+        result = SSHKeyResult(success=False, generated=generated, error=error_msg)
     else:
-        log.debug("Kali pivot key already exists at %s", private_key)
+        result = _finish_pivot_key_setup(
+            private_key=private_key,
+            public_key=public_key,
+            generated=generated,
+        )
+    return result
 
+
+def _ensure_keypair(
+    private_key: Path,
+    public_key: Path,
+    comment: str,
+    label: str,
+) -> tuple[bool, str]:
+    """Ensure a keypair exists, returning ``(generated, error)``."""
+    if private_key.exists():
+        log.debug("SSH key already exists at %s", private_key)
+        return False, ""
+
+    log.info("Generating SSH key pair at %s", private_key)
+    error_msg = _run_ssh_keygen(private_key, comment, label)
+    if error_msg:
+        return False, error_msg
+
+    log.info("SSH key pair generated successfully")
+    return True, ""
+
+
+def _finish_control_plane_key_setup(
+    private_key: Path,
+    public_key: Path,
+    keys_dir: Path,
+    generated: bool,
+) -> SSHKeyResult:
+    """Harden and distribute the operator control-plane public key."""
     if not public_key.exists():
-        log.error("Pivot public key not found at %s after keygen", public_key)
+        return SSHKeyResult(
+            success=False,
+            generated=generated,
+            error=f"Public key not found at {public_key}",
+        )
+
+    permission_error = _harden_key_files(private_key, public_key)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=generated, error=permission_error)
+
+    pub_content = public_key.read_text()
+    (keys_dir / f"{_KEY_NAME}.pub").write_text(pub_content)
+    (keys_dir / "authorized_keys").write_text(pub_content)
+    log.debug("Public key distributed to %s", keys_dir)
+    return SSHKeyResult(success=True, generated=generated, key_path=private_key)
+
+
+def _finish_pivot_key_setup(
+    private_key: Path,
+    public_key: Path,
+    generated: bool,
+) -> SSHKeyResult:
+    """Harden the kali pivot private key."""
+    if not public_key.exists():
         return SSHKeyResult(
             success=False,
             generated=generated,
             error=f"Pivot public key not found at {public_key}",
         )
 
-    # Lock the private half to owner-only. The public half keeps ssh-keygen's
-    # default world-readable mode (it is a public key, bound read-only into the
-    # targets), so it is left as generated rather than re-chmod'd here.
     permission_error = _harden_private_key(private_key)
     if permission_error:
         return SSHKeyResult(success=False, generated=generated, error=permission_error)
 
-    return SSHKeyResult(
-        success=True,
-        generated=generated,
-        key_path=private_key,
-    )
+    return SSHKeyResult(success=True, generated=generated, key_path=private_key)
+
+
+def _harden_key_files(private_key: Path, public_key: Path) -> str:
+    """Apply host-appropriate key permissions and return an error string."""
+    permission_error = _harden_private_key(private_key)
+    if permission_error:
+        return permission_error
+    return _set_public_key_mode(public_key)
 
 
 def _run_ssh_keygen(private_key: Path, comment: str, label: str) -> str:
@@ -179,7 +207,7 @@ def _run_ssh_keygen(private_key: Path, comment: str, label: str) -> str:
             capture_output=True,
             text=True,
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         error_msg = f"{label} failed: {exc}"
         log.error(error_msg)
         return error_msg
@@ -229,7 +257,7 @@ def _harden_private_key_windows(path: Path) -> str:
             capture_output=True,
             text=True,
         )
-    except (FileNotFoundError, OSError) as exc:
+    except OSError as exc:
         return f"icacls failed for {path}: {exc}"
     if result.returncode != 0:
         details = result.stderr.strip() or result.stdout.strip() or "unknown error"

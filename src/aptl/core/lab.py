@@ -42,6 +42,7 @@ from aptl.core.env import (
     hydrate_dotenv,
     load_dotenv,
 )
+
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
 # The leaf has no back-edges, so this is a normal top-level import.
 from aptl.core.lab_types import (
@@ -73,7 +74,7 @@ from aptl.core.snapshot import (
     list_container_snapshots,
 )
 from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
-from aptl.core.sysreqs import check_max_map_count
+from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
@@ -88,8 +89,7 @@ log = get_logger("lab")
 ProgressCallback = Callable[[str], None]
 
 _STALE_NETWORK_RECOVERY_HINT = (
-    "Run `aptl lab stop` and retry, or `aptl lab stop -v` "
-    "if you need a clean lab."
+    "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
 
 
@@ -163,7 +163,9 @@ def selected_profiles_for_scenario(
         )
 
         return set(
-            _selected_profiles(project_dir, config, backend, scenario_path=scenario_path)
+            _selected_profiles(
+                project_dir, config, backend, scenario_path=scenario_path
+            )
         )
     # broad-except: resolving selected profiles is best-effort enrichment for
     # the readiness steps. The lab already started; any failure (import,
@@ -201,6 +203,7 @@ def _runtime_require(
        message via the `error=` callback so the contract is secret-safe
        at the *source*, not just at the orchestrator edge.
     """
+
     # icontract introspects the error callable's signature and tries to
     # resolve every named parameter against the condition's bound
     # kwargs. A no-arg factory sidesteps that check entirely: icontract
@@ -231,8 +234,15 @@ SURICATA_IMAGE = "jasonish/suricata:7.0"
 # unavailable (e.g. stop_lab, kill switch).  Keep in sync with
 # docker-compose.yml profile definitions.
 ALL_KNOWN_PROFILES = [
-    "wazuh", "victim", "kali", "reverse",
-    "enterprise", "soc", "mail", "fileshare", "dns",
+    "wazuh",
+    "victim",
+    "kali",
+    "reverse",
+    "enterprise",
+    "soc",
+    "mail",
+    "fileshare",
+    "dns",
     "otel",
 ]
 
@@ -419,8 +429,7 @@ def clean_boot_lab(
         return LabResult(
             success=False,
             error=redact(
-                "clean-state cleanup failed; lab not booted: "
-                f"{stop_result.error}"
+                f"clean-state cleanup failed; lab not booted: {stop_result.error}"
             ),
             outcome=StartupOutcome.FAILED,
         )
@@ -624,9 +633,7 @@ _DEGRADING_SEVERITIES = frozenset(
 # Impacts that drag the outcome to DEGRADED_UNUSABLE rather than
 # DEGRADED_USABLE. Lab is partially up but the named capability/SSH
 # reach is missing for the operator's intended use.
-_UNUSABLE_IMPACTS = frozenset(
-    {DiagnosticImpact.CAPABILITY, DiagnosticImpact.READINESS}
-)
+_UNUSABLE_IMPACTS = frozenset({DiagnosticImpact.CAPABILITY, DiagnosticImpact.READINESS})
 
 
 def derive_startup_outcome(
@@ -762,9 +769,7 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
             success=False,
             error=f"SSH key generation failed: {ssh_result.error}",
         )
-    ctx.ssh_key_path = ssh_result.key_path or (
-        Path.home() / ".ssh" / "aptl_lab_key"
-    )
+    ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
@@ -780,23 +785,35 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
-    """Validate host kernel settings required by Wazuh."""
+    """Validate host requirements before Compose starts building images."""
     log.info("Step 4: Checking system requirements...")
     sysreq_result = check_max_map_count()
-    if sysreq_result.passed:
+    if not sysreq_result.passed:
+        log.error(
+            "vm.max_map_count too low (%d < %d). "
+            "Run: sudo sysctl -w vm.max_map_count=262144",
+            sysreq_result.current_value,
+            sysreq_result.required_value,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                f"vm.max_map_count too low ({sysreq_result.current_value} < "
+                f"{sysreq_result.required_value}). "
+                "Run: sudo sysctl -w vm.max_map_count=262144"
+            ),
+        )
+
+    buildx_result = check_docker_buildx()
+    if buildx_result.passed:
         return None
-    log.error(
-        "vm.max_map_count too low (%d < %d). "
-        "Run: sudo sysctl -w vm.max_map_count=262144",
-        sysreq_result.current_value,
-        sysreq_result.required_value,
-    )
+    log.error("Docker Buildx unavailable: %s", buildx_result.error)
     return LabResult(
         success=False,
         error=(
-            f"vm.max_map_count too low ({sysreq_result.current_value} < "
-            f"{sysreq_result.required_value}). "
-            "Run: sudo sysctl -w vm.max_map_count=262144"
+            "Docker Buildx is required to build the APTL lab images "
+            f"({buildx_result.command} failed: {buildx_result.error}). "
+            f"{buildx_result.install_hint}"
         ),
     )
 
@@ -855,6 +872,7 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # through the deployment backend is the proper fix and is tracked
     # separately. See ADR-028 § Non-Goals.
     from aptl.core.deployment import SSHComposeBackend
+
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
@@ -907,6 +925,7 @@ def _step_seed_suricata_volumes(
     """
     log.info("Step 5b: Seeding Suricata runtime volumes...")
     from aptl.core.deployment import SSHComposeBackend
+
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
@@ -940,9 +959,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 
     # ctx.backend is narrowed to the local Compose backend by the caller's guard.
     assert ctx.backend is not None
-    ownership = ensure_suricata_config_source_ownership(
-        ctx.project_dir, SURICATA_IMAGE
-    )
+    ownership = ensure_suricata_config_source_ownership(ctx.project_dir, SURICATA_IMAGE)
     if not ownership.success:
         log.error(
             "Suricata config source ownership restore failed: %s",
@@ -951,8 +968,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
         return LabResult(
             success=False,
             error=(
-                "Suricata config source ownership restore failed: "
-                f"{ownership.error}"
+                f"Suricata config source ownership restore failed: {ownership.error}"
             ),
         )
     try:
@@ -1019,6 +1035,7 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
         # on another host whose bind mounts cannot see them — same shape as
         # `_step_sync_credentials` (ADR-028).
         from aptl.core.deployment import SSHComposeBackend
+
         if isinstance(ctx.backend, SSHComposeBackend):
             result = LabResult(
                 success=False,
@@ -1034,15 +1051,10 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
         else:
             cert_result = ensure_soc_certs(ctx.project_dir)
             if not cert_result.success:
-                log.error(
-                    "SOC certificate generation failed: %s", cert_result.error
-                )
+                log.error("SOC certificate generation failed: %s", cert_result.error)
                 result = LabResult(
                     success=False,
-                    error=(
-                        "SOC certificate generation failed: "
-                        f"{cert_result.error}"
-                    ),
+                    error=(f"SOC certificate generation failed: {cert_result.error}"),
                 )
     return result
 
@@ -1133,6 +1145,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             "initializing). Waiting 60s and retrying..."
         )
         import time
+
         time.sleep(60)
         outcome = start_aces_scenario(
             ctx.project_dir,
@@ -1351,10 +1364,7 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
             component=f"ssh:{name}",
             impact=DiagnosticImpact.READINESS,
             severity=DiagnosticSeverity.WARNING,
-            message=(
-                f"SSH to {name} not ready after "
-                f"{int(ssh_wait.elapsed_seconds)}s"
-            ),
+            message=(f"SSH to {name} not ready after {int(ssh_wait.elapsed_seconds)}s"),
             operator_action=(
                 f"Check the {name} container's sshd; scenarios cannot "
                 "drive this target until SSH is reachable"
@@ -1379,9 +1389,7 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     """Capture a non-fatal inventory snapshot of the started range."""
     log.info("Step 11: Capturing range snapshot...")
     try:
-        snapshot = capture_snapshot(
-            config_dir=ctx.project_dir, backend=ctx.backend
-        )
+        snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
     except Exception:
         # Snapshot is the run-archive inventory; its loss is observability
         # debt, not a hard failure (ADR-030). Keep exception detail in
@@ -1549,7 +1557,9 @@ def _write_run_record(ctx: _LabStartContext) -> None:
         realization_details=_safe_dict(getattr(outcome, "realization_details", {})),
         selected_profiles=_safe_list(getattr(outcome, "selected_profiles", [])),
         scenario_path=getattr(outcome, "scenario_path", None),
-        scenario_display_name=_scenario_display_name(getattr(outcome, "scenario_path", None)),
+        scenario_display_name=_scenario_display_name(
+            getattr(outcome, "scenario_path", None)
+        ),
         range_snapshot_dict=snapshot.to_dict(),
         config_digests=snapshot.config_hashes,
         container_image_digests=_assemble_container_image_digests(snapshot),
@@ -1644,9 +1654,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="MCP build script not found; MCP servers will not be available",
-            operator_action=(
-                "Verify mcp/build-all-mcps.sh exists in the project tree"
-            ),
+            operator_action=("Verify mcp/build-all-mcps.sh exists in the project tree"),
         )
         return None
     try:
@@ -1666,9 +1674,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
                 impact=DiagnosticImpact.CAPABILITY,
                 severity=DiagnosticSeverity.WARNING,
                 message="MCP build returned non-zero exit; see lab logs",
-                operator_action=(
-                    "Inspect mcp/build-all-mcps.sh output in the lab log"
-                ),
+                operator_action=("Inspect mcp/build-all-mcps.sh output in the lab log"),
             )
         else:
             log.info("MCP servers built successfully")
@@ -1680,9 +1686,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="MCP build could not run; see lab logs",
-            operator_action=(
-                "Inspect mcp/build-all-mcps.sh permissions and tooling"
-            ),
+            operator_action=("Inspect mcp/build-all-mcps.sh permissions and tooling"),
         )
     return None
 
@@ -1755,9 +1759,7 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
     """Run ``seed-prime.sh`` and convert soft failures to diagnostics."""
     seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
     if not seed_script.exists():
-        log.warning(
-            "SOC profile enabled but seed script not found at %s", seed_script
-        )
+        log.warning("SOC profile enabled but seed script not found at %s", seed_script)
         _emit_diagnostic(
             ctx,
             step="seed_soc",
@@ -1817,9 +1819,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="SOC seeding could not run; see lab logs",
-            operator_action=(
-                "Inspect scripts/seed-prime.sh permissions and tooling"
-            ),
+            operator_action=("Inspect scripts/seed-prime.sh permissions and tooling"),
         )
 
 
@@ -1848,8 +1848,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
                 "authenticate without manual key wiring"
             ),
             operator_action=(
-                "Inspect .mcp.json env blocks against .env after a "
-                "fresh lab start"
+                "Inspect .mcp.json env blocks against .env after a fresh lab start"
             ),
         )
     return None
@@ -1962,8 +1961,7 @@ def orchestrate_lab_start(
             return LabResult(
                 success=False,
                 error=(
-                    f"Lab orchestration contract violated at "
-                    f"step '{step.__name__}'"
+                    f"Lab orchestration contract violated at step '{step.__name__}'"
                 ),
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
@@ -2008,8 +2006,7 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
     mcp_path = project_dir / ".mcp.json"
     env_path = project_dir / ".env"
     if not mcp_path.exists() or not env_path.exists():
-        log.debug("MCP sync: missing %s or %s, skipping",
-                  mcp_path.name, env_path.name)
+        log.debug("MCP sync: missing %s or %s, skipping", mcp_path.name, env_path.name)
         return
 
     # Use the canonical .env parser so quoted values, `export` prefixes,
@@ -2017,8 +2014,7 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
     try:
         env_vals = load_dotenv(env_path)
     except FileNotFoundError:
-        log.debug("MCP sync: %s vanished between checks; skipping",
-                  env_path.name)
+        log.debug("MCP sync: %s vanished between checks; skipping", env_path.name)
         return
 
     # server name -> env keys it expects
@@ -2043,7 +2039,6 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
 
     if updated:
         mcp_path.write_text(json.dumps(cfg, indent=2) + "\n")
-        log.info("MCP sync: refreshed %s in %s",
-                 ", ".join(updated), mcp_path.name)
+        log.info("MCP sync: refreshed %s in %s", ", ".join(updated), mcp_path.name)
     else:
         log.debug("MCP sync: no changes needed")

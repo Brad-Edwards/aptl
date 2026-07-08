@@ -50,6 +50,26 @@ _BUILD_DEDUPE_OVERRIDE = Path(".aptl") / "compose-build-dedupe.yml"
 _SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
+class _ComposeReset:
+    """Sentinel rendered as Compose's ``!reset null`` merge directive."""
+
+
+class _ComposeDumper(yaml.SafeDumper):
+    """YAML dumper with Docker Compose merge-tag support."""
+
+
+def _represent_compose_reset(
+    dumper: yaml.Dumper,
+    value: _ComposeReset,
+) -> yaml.nodes.ScalarNode:
+    """Represent a Compose reset tag for removing overridden attributes."""
+    return dumper.represent_scalar("!reset", "null")
+
+
+_ComposeDumper.add_representer(_ComposeReset, _represent_compose_reset)
+_COMPOSE_RESET = _ComposeReset()
+
+
 class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     """Docker Compose deployment backend.
 
@@ -226,11 +246,13 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         if duplicate_overrides:
             override_path = self._project_dir / _BUILD_DEDUPE_OVERRIDE
             override_path.parent.mkdir(parents=True, exist_ok=True)
+            override_text = yaml.dump(
+                {"services": duplicate_overrides},
+                Dumper=_ComposeDumper,
+                sort_keys=True,
+            )
             override_path.write_text(
-                yaml.safe_dump(
-                    {"services": duplicate_overrides},
-                    sort_keys=True,
-                ),
+                override_text.replace("!reset 'null'", "!reset null"),
                 encoding="utf-8",
                 newline="\n",
             )
@@ -264,7 +286,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             if identity is None:
                 continue
             if identity in seen:
-                overrides[name] = {"build": None, "pull_policy": "never"}
+                overrides[name] = {"build": _COMPOSE_RESET, "pull_policy": "never"}
             else:
                 seen[identity] = name
         return overrides
@@ -280,9 +302,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         build_key = yaml.safe_dump(build, sort_keys=True)
         return image, build_key
 
-    def stop(
-        self, profiles: list[str], *, remove_volumes: bool = False
-    ) -> LabResult:
+    def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.
 
         Args:
@@ -339,15 +359,11 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
                 containers = json.loads(stripped)
             else:
                 containers = [
-                    json.loads(line)
-                    for line in stripped.splitlines()
-                    if line.strip()
+                    json.loads(line) for line in stripped.splitlines() if line.strip()
                 ]
         except json.JSONDecodeError:
             log.warning("Could not parse compose ps output")
-            return LabStatus(
-                running=False, error="Failed to parse container status"
-            )
+            return LabStatus(running=False, error="Failed to parse container status")
 
         running = len(containers) > 0
         return LabStatus(running=running, containers=containers)
@@ -409,20 +425,26 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             self._retire_legacy_seed_path(seed, seeder_image)
             self._seed_one_named_volume(seed, seeder_image)
 
-    def _seed_one_named_volume(
-        self, seed: NamedVolumeSeed, seeder_image: str
-    ) -> None:
+    def _seed_one_named_volume(self, seed: NamedVolumeSeed, seeder_image: str) -> None:
         """Copy a seed's files into its project-scoped named volume."""
         # Project scoping (ADR-037): the real volume name is derived from
         # the configured compose project, never set as an explicit global.
         volume = f"{self._project_name}_{seed.volume_suffix}"
         cmd = [
-            "docker", "run", "--rm", "--user", "0:0",
-            "--entrypoint", "/bin/sh",
-            "-v", f"{seed.source_dir}:/src:ro",
-            "-v", f"{volume}:/dest",
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "0:0",
+            "--entrypoint",
+            "/bin/sh",
+            "-v",
+            f"{seed.source_dir}:/src:ro",
+            "-v",
+            f"{volume}:/dest",
             seeder_image,
-            "-c", self._build_seed_script(seed),
+            "-c",
+            self._build_seed_script(seed),
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
@@ -430,7 +452,8 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             # raised message and is surfaced through the redacted log line.
             log.error(
                 "Seed of volume %s failed (exit %s)",
-                seed.volume_suffix, result.returncode,
+                seed.volume_suffix,
+                result.returncode,
             )
             raise BackendSeedError(
                 f"Seeding named volume '{seed.volume_suffix}' failed"
@@ -473,27 +496,32 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         name = legacy.name
         self._assert_safe_relpath(name)
         cmd = [
-            "docker", "run", "--rm", "--user", "0:0",
-            "--entrypoint", "rm",
-            "-v", f"{legacy.parent}:/legacy",
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "0:0",
+            "--entrypoint",
+            "rm",
+            "-v",
+            f"{legacy.parent}:/legacy",
             seeder_image,
-            "-rf", f"/legacy/{name}",
+            "-rf",
+            f"/legacy/{name}",
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
             log.error(
                 "Retire of legacy seed path %s failed (exit %s)",
-                legacy, result.returncode,
+                legacy,
+                result.returncode,
             )
-            raise BackendSeedError(
-                f"Retiring legacy seed path '{name}' failed"
-            )
+            raise BackendSeedError(f"Retiring legacy seed path '{name}' failed")
 
     @staticmethod
     def _assert_safe_relpath(relpath: str) -> None:
         """Reject a seed relpath that is unsafe to embed in the seed command."""
-        if (
-            ".." in PurePosixPath(relpath).parts
-            or not _SAFE_SEED_RELPATH.match(relpath)
+        if ".." in PurePosixPath(relpath).parts or not _SAFE_SEED_RELPATH.match(
+            relpath
         ):
             raise BackendSeedError(f"Unsafe seed relpath rejected: {relpath!r}")

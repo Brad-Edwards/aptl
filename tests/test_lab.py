@@ -260,10 +260,14 @@ class TestLabStop:
         import json
         from aptl.core.lab import stop_lab
 
-        (tmp_path / "aptl.json").write_text(json.dumps({
-            "lab": {"name": "test"},
-            "containers": {"victim": True, "kali": False, "wazuh": True},
-        }))
+        (tmp_path / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "containers": {"victim": True, "kali": False, "wazuh": True},
+                }
+            )
+        )
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         result = stop_lab(project_dir=tmp_path)
@@ -327,8 +331,10 @@ class TestCleanBootLab:
         monkeypatch.setattr(
             lab,
             "orchestrate_lab_start",
-            lambda *a, **k: started.append(1)
-            or LabResult(success=True, outcome=StartupOutcome.READY),
+            lambda *a, **k: (
+                started.append(1)
+                or LabResult(success=True, outcome=StartupOutcome.READY)
+            ),
         )
 
         result = clean_boot_lab(tmp_path)
@@ -485,9 +491,7 @@ class TestLabStatus:
         """If no containers are returned, status should indicate not running."""
         from aptl.core.lab import lab_status
 
-        mock_subprocess.return_value = MagicMock(
-            returncode=0, stdout="[]", stderr=""
-        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
 
         status = lab_status()
 
@@ -502,9 +506,7 @@ class TestLabStatus:
             '{"Name":"aptl-victim","State":"running","Health":"healthy"}\n'
             '{"Name":"aptl-kali","State":"running","Health":"healthy"}'
         )
-        mock_subprocess.return_value = MagicMock(
-            returncode=0, stdout=ndjson, stderr=""
-        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout=ndjson, stderr="")
 
         status = lab_status()
 
@@ -515,9 +517,7 @@ class TestLabStatus:
         """lab_status should handle empty output."""
         from aptl.core.lab import lab_status
 
-        mock_subprocess.return_value = MagicMock(
-            returncode=0, stdout="", stderr=""
-        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         status = lab_status()
 
@@ -563,10 +563,7 @@ class TestCheckBindMounts:
         from aptl.core.lab import _check_bind_mounts
 
         (tmp_path / "docker-compose.yml").write_text(
-            "services:\n"
-            "  web:\n"
-            "    volumes:\n"
-            "      - ./config:/etc/config\n"
+            "services:\n  web:\n    volumes:\n      - ./config:/etc/config\n"
         )
         (tmp_path / "config").mkdir()
 
@@ -576,10 +573,7 @@ class TestCheckBindMounts:
         from aptl.core.lab import _check_bind_mounts
 
         (tmp_path / "docker-compose.yml").write_text(
-            "services:\n"
-            "  web:\n"
-            "    volumes:\n"
-            "      - ./missing_dir:/etc/config\n"
+            "services:\n  web:\n    volumes:\n      - ./missing_dir:/etc/config\n"
         )
 
         errors = _check_bind_mounts(tmp_path)
@@ -591,10 +585,7 @@ class TestCheckBindMounts:
         from aptl.core.lab import _check_bind_mounts
 
         (tmp_path / "docker-compose.yml").write_text(
-            "services:\n"
-            "  web:\n"
-            "    volumes:\n"
-            "      - named_volume:/data\n"
+            "services:\n  web:\n    volumes:\n      - named_volume:/data\n"
         )
 
         assert _check_bind_mounts(tmp_path) == []
@@ -726,9 +717,7 @@ class TestStartupClassificationTypes:
         set consistently; normalization must be a no-op in that case."""
         from aptl.core.lab_types import LabResult, StartupOutcome
 
-        r = LabResult(
-            success=False, error="x", outcome=StartupOutcome.FAILED
-        )
+        r = LabResult(success=False, error="x", outcome=StartupOutcome.FAILED)
         assert r.success is False
         assert r.outcome is StartupOutcome.FAILED
 
@@ -784,7 +773,11 @@ class TestStartupOutcomeDerivation:
         assert outcome is StartupOutcome.READY
 
     def test_only_info_diagnostics_yields_ready(self):
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupOutcome,
+        )
         from aptl.core.lab import derive_startup_outcome
 
         outcome = derive_startup_outcome(
@@ -823,7 +816,11 @@ class TestStartupOutcomeDerivation:
 
         Parameterized so the table is the source of truth — adding a new
         bucket means adding one row, not copy-pasting a test method."""
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupOutcome,
+        )
         from aptl.core.lab import derive_startup_outcome
 
         impact = DiagnosticImpact[impact_name]
@@ -838,7 +835,11 @@ class TestStartupOutcomeDerivation:
 
     def test_mixed_telemetry_and_capability_yields_degraded_unusable(self):
         """The most severe bucket wins."""
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupOutcome,
+        )
         from aptl.core.lab import derive_startup_outcome
 
         outcome = derive_startup_outcome(
@@ -853,7 +854,11 @@ class TestStartupOutcomeDerivation:
     def test_fatal_true_always_yields_failed(self):
         """A fatal short-circuit overrides any diagnostics — failure
         must be distinguishable from degraded_unusable per ADR-030."""
-        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity, StartupOutcome
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupOutcome,
+        )
         from aptl.core.lab import derive_startup_outcome
 
         outcome = derive_startup_outcome(
@@ -868,7 +873,9 @@ class TestStartupOutcomeDerivation:
         from aptl.core.lab_types import StartupOutcome
         from aptl.core.lab import derive_startup_outcome
 
-        assert derive_startup_outcome(diagnostics=[], fatal=True) is StartupOutcome.FAILED
+        assert (
+            derive_startup_outcome(diagnostics=[], fatal=True) is StartupOutcome.FAILED
+        )
 
 
 class TestOrchestrateLabStart:
@@ -884,7 +891,7 @@ class TestOrchestrateLabStart:
             api_username="wazuh-wui",
             api_password="apisecret",
             dashboard_username="kibanaserver",
-            dashboard_password="kibanapass",
+            dashboard_password="test",
             wazuh_cluster_key="clusterkey",
         )
 
@@ -907,22 +914,32 @@ class TestOrchestrateLabStart:
         # .env file
         env_file = tmp_path / ".env"
         env_file.write_text(
-            'INDEXER_USERNAME=admin\n'
-            'INDEXER_PASSWORD=secret\n'
-            'API_USERNAME=wazuh-wui\n'
-            'API_PASSWORD=apisecret\n'
-            'DASHBOARD_USERNAME=kibanaserver\n'
-            'DASHBOARD_PASSWORD=kibanapass\n'
-            'WAZUH_CLUSTER_KEY=clusterkey\n'
+            "INDEXER_USERNAME=admin\n"
+            "INDEXER_PASSWORD=secret\n"
+            "API_USERNAME=wazuh-wui\n"
+            "API_PASSWORD=apisecret\n"
+            "DASHBOARD_USERNAME=kibanaserver\n"
+            "DASHBOARD_PASSWORD=test\n"
+            "WAZUH_CLUSTER_KEY=clusterkey\n"
         )
 
         # aptl.json config
         import json
+
         config_file = tmp_path / "aptl.json"
-        config_file.write_text(json.dumps({
-            "lab": {"name": "test-lab"},
-            "containers": {"wazuh": True, "victim": True, "kali": True, "reverse": False},
-        }))
+        config_file.write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test-lab"},
+                    "containers": {
+                        "wazuh": True,
+                        "victim": True,
+                        "kali": True,
+                        "reverse": False,
+                    },
+                }
+            )
+        )
 
         # SSH keys dir
         keys_dir = tmp_path / "containers" / "keys"
@@ -945,7 +962,7 @@ class TestOrchestrateLabStart:
 
         manager_dir = tmp_path / "config" / "wazuh_cluster"
         manager_dir.mkdir(parents=True)
-        (manager_dir / "wazuh_manager.conf").write_text('<key>old</key>')
+        (manager_dir / "wazuh_manager.conf").write_text("<key>old</key>")
         (manager_dir / "filebeat_wazuh_module.yml").write_text(
             "output.elasticsearch:\n"
             "  username: admin\n"
@@ -965,6 +982,7 @@ class TestOrchestrateLabStart:
 
         # Mock SSH key generation
         from aptl.core.ssh import SSHKeyResult
+
         mocks["ssh"] = mocker.patch(
             "aptl.core.lab.ensure_ssh_keys",
             return_value=SSHKeyResult(
@@ -986,10 +1004,20 @@ class TestOrchestrateLabStart:
         )
 
         # Mock sysreqs
-        from aptl.core.sysreqs import SysReqResult
+        from aptl.core.sysreqs import SysReqResult, ToolReqResult
+
         mocks["sysreqs"] = mocker.patch(
             "aptl.core.lab.check_max_map_count",
-            return_value=SysReqResult(passed=True, current_value=262144, required_value=262144),
+            return_value=SysReqResult(
+                passed=True, current_value=262144, required_value=262144
+            ),
+        )
+        mocks["buildx"] = mocker.patch(
+            "aptl.core.lab.check_docker_buildx",
+            return_value=ToolReqResult(
+                passed=True,
+                command="docker buildx version",
+            ),
         )
 
         # Mock credentials sync
@@ -1011,6 +1039,7 @@ class TestOrchestrateLabStart:
         # now probes hostenv (docker info). Stub it so the orchestration
         # tests stay hermetic (#678).
         from aptl.core.suricata_seed import SuricataSourceOwnershipResult
+
         mocks["suricata_ownership"] = mocker.patch(
             "aptl.core.suricata_seed.ensure_suricata_config_source_ownership",
             return_value=SuricataSourceOwnershipResult(success=True),
@@ -1018,6 +1047,7 @@ class TestOrchestrateLabStart:
 
         # Mock certs
         from aptl.core.certs import CertResult
+
         mocks["certs"] = mocker.patch(
             "aptl.core.lab.ensure_ssl_certs",
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
@@ -1025,6 +1055,7 @@ class TestOrchestrateLabStart:
 
         # Mock ACES runtime handoff start
         from aptl.core.lab import LabResult
+
         mocks["start"] = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             return_value=LabResult(success=True, message="Lab started"),
@@ -1040,6 +1071,7 @@ class TestOrchestrateLabStart:
 
         # Mock service waiting
         from aptl.core.services import ServiceResult
+
         mocks["wait_indexer"] = mocker.patch(
             "aptl.core.lab.wait_for_service",
             return_value=ServiceResult(ready=True, elapsed_seconds=10.0),
@@ -1047,6 +1079,7 @@ class TestOrchestrateLabStart:
 
         # Mock snapshot capture
         from aptl.core.snapshot import RangeSnapshot
+
         mocks["capture_snapshot"] = mocker.patch(
             "aptl.core.lab.capture_snapshot",
             return_value=RangeSnapshot(),
@@ -1078,6 +1111,7 @@ class TestOrchestrateLabStart:
         assert result.success is True
         mocks["ssh"].assert_called_once()
         mocks["sysreqs"].assert_called_once()
+        mocks["buildx"].assert_called_once()
         mocks["certs"].assert_called_once()
         mocks["start"].assert_called_once()
         mocks["capture_snapshot"].assert_called_once()
@@ -1125,7 +1159,9 @@ class TestOrchestrateLabStart:
 
         assert result.success is True
         assert find_placeholder_env_values(env) == []
-        assert env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
+        assert (
+            env[_env_key("INDEXER", "PASSWORD")] == mocks["template_values"]["indexer"]
+        )
         assert env[_env_key("API", "PASSWORD")] == mocks["template_values"]["api"]
         mocks["dashboard_creds"].assert_called_once()
         assert (
@@ -1141,6 +1177,7 @@ class TestOrchestrateLabStart:
         (tmp_path / ".env").mkdir()
         # aptl.json still needed to not hit a different error first
         import json
+
         (tmp_path / "aptl.json").write_text(json.dumps({"lab": {"name": "test"}}))
 
         result = orchestrate_lab_start(tmp_path)
@@ -1154,10 +1191,10 @@ class TestOrchestrateLabStart:
 
         # .env exists but no aptl.json
         (tmp_path / ".env").write_text(
-            'INDEXER_USERNAME=admin\n'
-            'INDEXER_PASSWORD=secret\n'
-            'API_USERNAME=wazuh-wui\n'
-            'API_PASSWORD=apisecret\n'
+            "INDEXER_USERNAME=admin\n"
+            "INDEXER_PASSWORD=secret\n"
+            "API_USERNAME=wazuh-wui\n"
+            "API_PASSWORD=apisecret\n"
         )
 
         result = orchestrate_lab_start(tmp_path)
@@ -1172,6 +1209,7 @@ class TestOrchestrateLabStart:
         mocks = self._patch_all_steps(mocker, tmp_path)
 
         from aptl.core.sysreqs import SysReqResult
+
         mocks["sysreqs"].return_value = SysReqResult(
             passed=False, current_value=65530, required_value=262144
         )
@@ -1181,6 +1219,29 @@ class TestOrchestrateLabStart:
         assert result.success is False
         assert "map_count" in result.error.lower() or "sysreq" in result.error.lower()
         # Should not have tried to start lab
+        mocks["buildx"].assert_not_called()
+        mocks["start"].assert_not_called()
+
+    def test_stops_on_missing_docker_buildx(self, mocker, tmp_path):
+        """Should fail early when Docker Buildx is unavailable."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+
+        from aptl.core.sysreqs import ToolReqResult
+
+        mocks["buildx"].return_value = ToolReqResult(
+            passed=False,
+            command="docker buildx version",
+            error="docker: 'buildx' is not a docker command.",
+            install_hint="brew install docker-buildx",
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "docker buildx" in result.error.lower()
+        assert "brew install docker-buildx" in result.error
         mocks["start"].assert_not_called()
 
     def test_continues_when_sysreqs_not_applicable(self, mocker, tmp_path):
@@ -1190,6 +1251,7 @@ class TestOrchestrateLabStart:
         mocks = self._patch_all_steps(mocker, tmp_path)
 
         from aptl.core.sysreqs import SysReqResult
+
         mocks["sysreqs"].return_value = SysReqResult(
             passed=True,
             current_value=0,
@@ -1210,6 +1272,7 @@ class TestOrchestrateLabStart:
         mocks = self._patch_all_steps(mocker, tmp_path)
 
         from aptl.core.ssh import SSHKeyResult
+
         mocks["ssh"].return_value = SSHKeyResult(
             success=False, generated=False, error="Permission denied"
         )
@@ -1272,6 +1335,7 @@ class TestOrchestrateLabStart:
 
         mocks["suricata_seeds"].assert_called_once_with(tmp_path)
         from aptl.core.lab import SURICATA_IMAGE
+
         mocks["suricata_seed_volumes"].assert_called_once_with(
             (), seeder_image=SURICATA_IMAGE
         )
@@ -1283,6 +1347,7 @@ class TestOrchestrateLabStart:
         mocks = self._patch_all_steps(mocker, tmp_path)
 
         from aptl.core.certs import CertResult
+
         mocks["certs"].return_value = CertResult(
             success=False, generated=False, error="docker not found"
         )
@@ -1299,6 +1364,7 @@ class TestOrchestrateLabStart:
         mocks = self._patch_all_steps(mocker, tmp_path)
 
         from aptl.core.lab import LabResult
+
         mocks["start"].return_value = LabResult(
             success=False, error="compose up failed"
         )
@@ -1341,9 +1407,7 @@ class TestOrchestrateLabStart:
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is False
-        assert "suricata runtime volume seeding failed" in (
-            result.error or ""
-        ).lower()
+        assert "suricata runtime volume seeding failed" in (result.error or "").lower()
         mocks["certs"].assert_not_called()
         mocks["start"].assert_not_called()
 
@@ -1355,14 +1419,25 @@ class TestOrchestrateLabStart:
 
         # Override config to disable all containers
         import json
+
         config_file = tmp_path / "aptl.json"
-        config_file.write_text(json.dumps({
-            "lab": {"name": "test-lab"},
-            "containers": {"wazuh": False, "victim": False, "kali": False, "reverse": False},
-        }))
+        config_file.write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test-lab"},
+                    "containers": {
+                        "wazuh": False,
+                        "victim": False,
+                        "kali": False,
+                        "reverse": False,
+                    },
+                }
+            )
+        )
 
         # Re-mock ACES handoff and wait_for_service since config changes
         from aptl.core.lab import LabResult
+
         mocks["start"].return_value = LabResult(success=True, message="Lab started")
 
         result = orchestrate_lab_start(tmp_path)
@@ -1400,8 +1475,12 @@ class TestOrchestrateLabStart:
         assert result.success is True
         # The mcp_subprocess mock also catches the docker pull calls
         pull_calls = [
-            c for c in mocks["mcp_subprocess"].call_args_list
-            if len(c[0]) > 0 and len(c[0][0]) > 1 and c[0][0][0] == "docker" and c[0][0][1] == "pull"
+            c
+            for c in mocks["mcp_subprocess"].call_args_list
+            if len(c[0]) > 0
+            and len(c[0][0]) > 1
+            and c[0][0][0] == "docker"
+            and c[0][0][1] == "pull"
         ]
         assert len(pull_calls) >= 1
 
@@ -1426,8 +1505,10 @@ class TestSyncCredentialsStep:
             project_dir=tmp_path,
             skip_seed=False,
             env=EnvVars(
-                indexer_username="x", indexer_password="x",
-                api_username="x", api_password="api_pw",
+                indexer_username="x",
+                indexer_password="x",
+                api_username="x",
+                api_password="api_pw",
                 wazuh_cluster_key="cluster_key",
             ),
             backend=MagicMock(),
@@ -1583,7 +1664,9 @@ class TestSyncCredentialsStep:
         dashboard_before = dashboard_src.read_bytes()
         manager_before = manager_src.read_bytes()
 
-        ctx = self._ctx(mocker, tmp_path)  # env has api_password="api_pw", cluster_key="cluster_key"
+        ctx = self._ctx(
+            mocker, tmp_path
+        )  # env has api_password="api_pw", cluster_key="cluster_key"
 
         result = _step_sync_credentials(ctx)
 
@@ -1592,8 +1675,12 @@ class TestSyncCredentialsStep:
         assert dashboard_src.read_bytes() == dashboard_before
         assert manager_src.read_bytes() == manager_before
         # Rendered copies exist under .aptl/config/ with the real secrets.
-        rendered_dashboard = tmp_path / ".aptl" / "config" / "wazuh_dashboard" / "wazuh.yml"
-        rendered_manager = tmp_path / ".aptl" / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+        rendered_dashboard = (
+            tmp_path / ".aptl" / "config" / "wazuh_dashboard" / "wazuh.yml"
+        )
+        rendered_manager = (
+            tmp_path / ".aptl" / "config" / "wazuh_cluster" / "wazuh_manager.conf"
+        )
         assert 'password: "api_pw"' in rendered_dashboard.read_text()
         assert "<key>cluster_key</key>" in rendered_manager.read_text()
 
@@ -1670,9 +1757,7 @@ class TestSeedSuricataVolumesStep:
 
         assert result is not None
         assert result.success is False
-        assert "suricata runtime volume seeding failed" in (
-            result.error or ""
-        ).lower()
+        assert "suricata runtime volume seeding failed" in (result.error or "").lower()
         seed_records = [
             record
             for record in caplog.records
@@ -1700,9 +1785,7 @@ class TestSeedSuricataVolumesStep:
         from aptl.core.lab import _step_seed_suricata_volumes
 
         _write_suricata_seed_sources(tmp_path)
-        backend = SSHComposeBackend(
-            tmp_path, host="lab.example.com", user="deploy"
-        )
+        backend = SSHComposeBackend(tmp_path, host="lab.example.com", user="deploy")
 
         result = _step_seed_suricata_volumes(self._ctx(tmp_path, backend))
 
@@ -1730,7 +1813,7 @@ class TestStartupClassificationWiring:
             api_username="wazuh-wui",
             api_password="apisecret",
             dashboard_username="kibanaserver",
-            dashboard_password="kibanapass",
+            dashboard_password="test",
             wazuh_cluster_key="clusterkey",
         )
 
@@ -2005,7 +2088,9 @@ class TestStartupClassificationWiring:
         ctx = self._ctx(tmp_path, config=self._make_config(wazuh=False))
         wait_mock = mocker.patch(
             "aptl.core.lab.wait_for_service",
-            return_value=ServiceResult(ready=False, elapsed_seconds=300.0, error="timed out"),
+            return_value=ServiceResult(
+                ready=False, elapsed_seconds=300.0, error="timed out"
+            ),
         )
 
         result = _step_wait_for_services(ctx)
@@ -2120,9 +2205,7 @@ class TestStartupClassificationWiring:
             assert check_fn.keywords["host"] == "172.20.4.30"
             assert check_fn.keywords["port"] == 22
 
-    def test_test_ssh_unresolvable_ip_emits_readiness_warning(
-        self, tmp_path, mocker
-    ):
+    def test_test_ssh_unresolvable_ip_emits_readiness_warning(self, tmp_path, mocker):
         # A target whose container has no resolvable network IP cannot
         # be probed — surface it as a readiness diagnostic rather than
         # silently skipping (issue #293).
@@ -2202,9 +2285,7 @@ class TestStartupClassificationWiring:
         assert diag.severity is DiagnosticSeverity.WARNING
         assert "script" in diag.message.lower()
 
-    def test_build_mcps_nonzero_exit_emits_capability_warning(
-        self, tmp_path, mocker
-    ):
+    def test_build_mcps_nonzero_exit_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_build_mcps
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
 
@@ -2263,18 +2344,14 @@ class TestStartupClassificationWiring:
 
         ctx = self._ctx(tmp_path)
         ctx.backend = MagicMock()
-        mocker.patch(
-            "aptl.core.lab.capture_snapshot", return_value=RangeSnapshot()
-        )
+        mocker.patch("aptl.core.lab.capture_snapshot", return_value=RangeSnapshot())
 
         result = _step_capture_snapshot(ctx)
         assert result is None
 
         assert ctx.diagnostics == []
 
-    def test_capture_snapshot_failure_emits_telemetry_warning(
-        self, tmp_path, mocker
-    ):
+    def test_capture_snapshot_failure_emits_telemetry_warning(self, tmp_path, mocker):
         """Snapshot is the run-archive inventory — its loss is observability
         debt, not a hard failure. ADR-030 lists snapshot capture among the
         late startup checks that must surface as structured diagnostics."""
@@ -2570,9 +2647,7 @@ class TestStartupClassificationWiring:
 
     # -- mcp_config_sync (capability) ----------------------------------
 
-    def test_mcp_config_sync_exception_emits_capability_warning(
-        self, tmp_path, mocker
-    ):
+    def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
         from aptl.core.lab import _step_sync_mcp_config
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
 
@@ -2713,9 +2788,7 @@ class TestLabOrchestrationContracts:
 
         defaults = {"wazuh": True, "victim": True, "kali": True}
         defaults.update(container_overrides)
-        return AptlConfig(
-            lab={"name": "test-lab"}, containers=defaults
-        )
+        return AptlConfig(lab={"name": "test-lab"}, containers=defaults)
 
     # -- env_is_loaded ------------------------------------------------
 
@@ -2834,7 +2907,9 @@ class TestLabOrchestrationContracts:
         assert ctx.run_store is not None
         assert ctx.run_id
 
-    def test_start_containers_preserves_scenario_path_on_soc_retry(self, mocker, tmp_path):
+    def test_start_containers_preserves_scenario_path_on_soc_retry(
+        self, mocker, tmp_path
+    ):
         from aptl.core.lab import LabResult, _step_start_containers
 
         ctx = self._ctx(tmp_path)
@@ -3104,9 +3179,7 @@ class TestStopLabCleanupIsContractFree:
         from aptl.core.lab import LabResult, stop_lab
 
         backend = MagicMock()
-        backend.stop.return_value = LabResult(
-            success=True, message="stopped"
-        )
+        backend.stop.return_value = LabResult(success=True, message="stopped")
 
         result = stop_lab(project_dir=tmp_path, backend=backend)
 
@@ -3141,9 +3214,7 @@ class TestSeedSocPrimeProfileDiagnostic:
                 api_username="u",
                 api_password="p",
             ),
-            config=AptlConfig(
-                lab={"name": "t"}, containers=containers
-            ),
+            config=AptlConfig(lab={"name": "t"}, containers=containers),
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
@@ -3186,8 +3257,7 @@ class TestSeedSocPrimeProfileDiagnostic:
         # one (tmp_path has no scripts/seed-prime.sh); the prime-profile
         # diagnostic must not have fired.
         prime_diags = [
-            d for d in ctx.diagnostics
-            if "prime profile" in d.message.lower()
+            d for d in ctx.diagnostics if "prime profile" in d.message.lower()
         ]
         assert prime_diags == []
 
@@ -3406,9 +3476,7 @@ class TestSuricataSeederImagePin:
 
         from aptl.core.lab import SURICATA_IMAGE
 
-        compose = yaml.safe_load(
-            Path("docker-compose.yml").read_text(encoding="utf-8")
+        compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
+        assert compose["services"]["suricata"]["image"] == SURICATA_IMAGE, (
+            "SURICATA_IMAGE drifted from the suricata service image"
         )
-        assert (
-            compose["services"]["suricata"]["image"] == SURICATA_IMAGE
-        ), "SURICATA_IMAGE drifted from the suricata service image"

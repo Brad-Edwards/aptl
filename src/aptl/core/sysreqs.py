@@ -26,6 +26,16 @@ class SysReqResult:
     applicable: bool = True
 
 
+@dataclass
+class ToolReqResult:
+    """Result of a required host tool check."""
+
+    passed: bool
+    command: str
+    error: str = ""
+    install_hint: str = ""
+
+
 def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
     """Check that vm.max_map_count meets the required minimum.
 
@@ -50,6 +60,67 @@ def check_max_map_count(minimum: int = _DEFAULT_MIN_MAP_COUNT) -> SysReqResult:
     return result
 
 
+def check_docker_buildx() -> ToolReqResult:
+    """Check that Docker Buildx is available to the Docker CLI.
+
+    Several lab Dockerfiles use BuildKit-only syntax such as ``COPY --chmod``.
+    Docker Desktop ships Buildx, but Homebrew Docker plus Colima does not expose
+    it unless the ``docker-buildx`` plugin is installed.
+    """
+    command = "docker buildx version"
+    try:
+        result = subprocess.run(
+            ["docker", "buildx", "version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except FileNotFoundError as exc:
+        return _failed_buildx_result(command, str(exc))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _failed_buildx_result(command, str(exc))
+
+    if result.returncode == 0:
+        log.info("Docker Buildx is available: %s", result.stdout.strip())
+        return ToolReqResult(passed=True, command=command)
+
+    detail = (result.stderr or result.stdout).strip() or "docker buildx failed"
+    return _failed_buildx_result(command, detail)
+
+
+def _failed_buildx_result(command: str, detail: str) -> ToolReqResult:
+    """Build a failed Buildx requirement result with platform guidance."""
+    return ToolReqResult(
+        passed=False,
+        command=command,
+        error=detail,
+        install_hint=_docker_buildx_install_hint(),
+    )
+
+
+def _docker_buildx_install_hint() -> str:
+    """Return concise, platform-specific Buildx install guidance."""
+    os_name = hostenv.host_os()
+    if os_name == hostenv.OS_MACOS:
+        return (
+            "Install or update Docker Desktop, or for Homebrew Docker/Colima run: "
+            "brew install docker-buildx && mkdir -p ~/.docker/cli-plugins && "
+            "ln -sf $(brew --prefix docker-buildx)/bin/docker-buildx "
+            "~/.docker/cli-plugins/docker-buildx"
+        )
+    if os_name == hostenv.OS_WINDOWS:
+        return (
+            "Install or update Docker Desktop, then verify "
+            "`docker buildx version` from the same shell that runs aptl."
+        )
+    if os_name == hostenv.OS_LINUX:
+        return (
+            "Install the Docker Buildx plugin, for example your distro's "
+            "docker-buildx-plugin package, then verify `docker buildx version`."
+        )
+    return "Install Docker Buildx, then verify `docker buildx version`."
+
+
 def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:
     """Run and evaluate the Linux-native vm.max_map_count check."""
     sysctl_result = _run_max_map_count_sysctl(minimum)
@@ -58,7 +129,9 @@ def _check_linux_native_max_map_count(minimum: int) -> SysReqResult:
     return _evaluate_sysctl_result(sysctl_result, minimum)
 
 
-def _run_max_map_count_sysctl(minimum: int) -> subprocess.CompletedProcess | SysReqResult:
+def _run_max_map_count_sysctl(
+    minimum: int,
+) -> subprocess.CompletedProcess | SysReqResult:
     """Run sysctl or return a not-applicable result when it is unavailable."""
     try:
         return subprocess.run(

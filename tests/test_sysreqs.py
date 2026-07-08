@@ -269,3 +269,84 @@ class TestCheckMaxMapCount:
         cmd = mock_run.call_args[0][0]
         assert "sysctl" in cmd
         assert "vm.max_map_count" in cmd
+
+
+class TestCheckDockerBuildx:
+    """Tests for Docker Buildx availability checks."""
+
+    def test_passes_when_buildx_version_succeeds(self, mocker):
+        """Should pass when Docker Buildx is available."""
+        from aptl.core.sysreqs import check_docker_buildx
+
+        mocker.patch(
+            "aptl.core.sysreqs.subprocess.run",
+            return_value=MagicMock(
+                returncode=0,
+                stdout="github.com/docker/buildx v0.35.0\n",
+                stderr="",
+            ),
+        )
+
+        result = check_docker_buildx()
+
+        assert result.passed is True
+        assert result.command == "docker buildx version"
+        assert result.error == ""
+
+    def test_fails_with_macos_homebrew_colima_hint(self, mocker):
+        """Homebrew Docker/Colima users need the separate Buildx plugin."""
+        from aptl.core import hostenv
+        from aptl.core.sysreqs import check_docker_buildx
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.host_os",
+            return_value=hostenv.OS_MACOS,
+        )
+        mocker.patch(
+            "aptl.core.sysreqs.subprocess.run",
+            return_value=MagicMock(
+                returncode=1,
+                stdout="",
+                stderr="docker: 'buildx' is not a docker command.\n",
+            ),
+        )
+
+        result = check_docker_buildx()
+
+        assert result.passed is False
+        assert "buildx" in result.error
+        assert "brew install docker-buildx" in result.install_hint
+        assert "~/.docker/cli-plugins/docker-buildx" in result.install_hint
+
+    def test_fails_with_linux_plugin_hint(self, mocker):
+        """Linux users should get distro-plugin guidance."""
+        from aptl.core import hostenv
+        from aptl.core.sysreqs import check_docker_buildx
+
+        mocker.patch(
+            "aptl.core.sysreqs.hostenv.host_os",
+            return_value=hostenv.OS_LINUX,
+        )
+        mocker.patch(
+            "aptl.core.sysreqs.subprocess.run",
+            return_value=MagicMock(returncode=127, stdout="", stderr="not found"),
+        )
+
+        result = check_docker_buildx()
+
+        assert result.passed is False
+        assert "docker-buildx-plugin" in result.install_hint
+
+    def test_fails_when_docker_cli_is_missing(self, mocker):
+        """A missing Docker CLI should surface as a Buildx requirement failure."""
+        from aptl.core.sysreqs import check_docker_buildx
+
+        mocker.patch(
+            "aptl.core.sysreqs.subprocess.run",
+            side_effect=FileNotFoundError("docker"),
+        )
+
+        result = check_docker_buildx()
+
+        assert result.passed is False
+        assert "docker" in result.error

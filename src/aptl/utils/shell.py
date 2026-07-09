@@ -27,8 +27,17 @@ _IS_WINDOWS = sys.platform.startswith("win")
 
 
 def _looks_like_wsl(path: Path) -> bool:
-    """True for the WSL launcher shim under System32 (not a real POSIX shell)."""
-    parts = {p.lower() for p in path.parts}
+    """True for the WSL launcher shim under System32 (not a real POSIX shell).
+
+    Robust to both path-separator styles: on POSIX, ``Path(r"C:\\Windows\\...")``
+    keeps the whole thing as one component (Path does not split ``\\`` on
+    non-Windows), so relying on ``path.parts`` misses the marker. Splitting on
+    both ``/`` and ``\\`` after lowercasing makes this work regardless of the
+    running interpreter, which the ``test_looks_like_wsl_flags_system32``
+    coverage exercises on Linux/macOS CI.
+    """
+    text = str(path).lower().replace("\\", "/")
+    parts = set(text.split("/"))
     return "system32" in parts or "windowsapps" in parts
 
 

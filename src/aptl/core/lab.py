@@ -1318,7 +1318,10 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
         ),
-        timeout=300,
+        # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
+        # formation + security index) can run long when the whole SOC stack and
+        # MCP builds start at once.
+        timeout=600,
         interval=10,
         service_name="Wazuh Indexer",
         progress=ctx.progress,

@@ -8,8 +8,11 @@ import typer
 
 from aptl.cli import lab_init, lifecycle
 from aptl.cli.continuity import continuity_audit
-from aptl.cli.lab_render import render_start_result
-from aptl.core.host_ports import ResolvedPort
+from aptl.cli.lab_render import (
+    emit_lab_access_summary,
+    live_resolved_ports,
+    render_start_result,
+)
 from aptl.core.lab import (
     clean_boot_lab,
     lab_status,
@@ -53,172 +56,6 @@ _DESTRUCTIVE_DATA_WARNING = (
     "    - Shuffle SOAR workflows\n"
     "    - All container logs and state\n"
 )
-
-
-# Service (compose name) -> its default host port. Used to look up the actual
-# published port from a lab-start resolution so the access summary always shows
-# where a service really is, even after an in-use default was remapped.
-_WAZUH_DASHBOARD_SVC = "wazuh.dashboard"
-_GRAFANA_SVC = "aptl-grafana-otel"
-_REVERSE_SVC = "reverse"
-_WAZUH_DASHBOARD_DEFAULT = 443
-_GRAFANA_DEFAULT = 3100
-_REVERSE_DEFAULT = 2027
-
-
-def _resolved_port(
-    resolved_ports: list[ResolvedPort], service: str, default: int
-) -> int:
-    """Return the actual published host port for *service* (default if unknown)."""
-    for entry in resolved_ports or ():
-        if getattr(entry, "service", None) == service:
-            return getattr(entry, "resolved_port", default)
-    return default
-
-
-def _live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
-    """Reconstruct a ResolvedPort list from docker's runtime state.
-
-    `_emit_lab_access_summary` needs a ResolvedPort list to print live URLs;
-    `lab start` passes the one it computed at port-resolution time. Later
-    commands (`aptl lab info`) run against a running lab and have to ask
-    docker what actually got published — otherwise the URLs default to
-    the compile-time constants, and any host with a taken default port
-    (Cursor's tunnels, k8s port-forward, AirPlay on 3100, etc.) sees a
-    URL that goes to the wrong service (#737).
-
-    Best-effort: any exception returns an empty list, and the caller
-    falls back to the compile-time defaults.
-    """
-    try:
-        from aptl.cli._common import resolve_config_for_cli
-        from aptl.core.deployment import get_backend
-
-        config, project_root = resolve_config_for_cli(project_dir)
-        backend = get_backend(config, project_root)
-    except Exception:  # noqa: BLE001 — never let info abort
-        return []
-    try:
-        containers = backend.container_list(all_containers=False)
-    except Exception:  # noqa: BLE001
-        return []
-    resolved: list[ResolvedPort] = []
-    for entry in containers:
-        service = entry.get("Service") or ""
-        name = (entry.get("Name") or "").lstrip("/")
-        if not service or not name:
-            continue
-        try:
-            info = backend.container_inspect(name)
-        except Exception:  # noqa: BLE001
-            continue
-        ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
-        if not isinstance(ports, dict):
-            continue
-        for container_port_proto, bindings in ports.items():
-            if not bindings:
-                continue
-            container_port_str, _, proto = container_port_proto.partition("/")
-            try:
-                default_port = int(container_port_str)
-            except ValueError:
-                continue
-            for binding in bindings:
-                try:
-                    host_port = int(binding.get("HostPort", 0))
-                except (TypeError, ValueError):
-                    continue
-                if host_port == 0:
-                    continue
-                resolved.append(
-                    ResolvedPort(
-                        service=service,
-                        env_var=None,
-                        default_port=default_port,
-                        resolved_port=host_port,
-                        protos=(proto or "tcp",),
-                        host_ip=binding.get("HostIp"),
-                        remapped=(host_port != default_port),
-                    )
-                )
-    return resolved
-
-
-# SOC services whose MCP server config (mcp/<name>/docker-lab-config.json)
-# hardcodes the host port on localhost. If one of these is remapped, the MCP
-# server config still points at the default port, so flag it for the operator.
-_MCP_BACKED_SERVICES = {
-    "wazuh.indexer",
-    "wazuh.manager",
-    "thehive",
-    "misp",
-    "shuffle-frontend",
-    "kali-ssh-proxy",
-}
-
-
-def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
-    """List any ports that were remapped off an in-use default."""
-    remapped = [r for r in (resolved_ports or ()) if getattr(r, "remapped", False)]
-    if not remapped:
-        return
-    typer.echo("")
-    typer.echo(
-        "Host port remaps (a default was already in use on this host, so the "
-        "service is published on a free port instead):"
-    )
-    mcp_affected = []
-    for entry in sorted(remapped, key=lambda r: r.service):
-        protos = "/".join(entry.protos)
-        typer.echo(
-            f"  {entry.service}: {entry.default_port} -> "
-            f"{entry.resolved_port} ({protos})"
-        )
-        if entry.service in _MCP_BACKED_SERVICES:
-            mcp_affected.append(entry)
-    if mcp_affected:
-        typer.echo("")
-        typer.echo(
-            "  Note: these services are consumed by MCP servers that pin the "
-            "default host port in mcp/<name>/docker-lab-config.json. If you "
-            "use those MCP servers, point them at the remapped port above (or "
-            "free the default port and restart)."
-        )
-
-
-def _emit_lab_access_summary(
-    project_dir: Path, resolved_ports: list[ResolvedPort] | None = None
-) -> None:
-    """Print the credential locations and common lab entry points.
-
-    ``resolved_ports`` (host_ports.ResolvedPort list from a lab-start run) makes
-    the printed URLs reflect the real published ports — important on hosts where
-    a default port was in use and the service was remapped to a free one.
-    """
-    resolved_ports = resolved_ports or []
-    env_path = project_dir / ".env"
-    dashboard_port = _resolved_port(
-        resolved_ports, _WAZUH_DASHBOARD_SVC, _WAZUH_DASHBOARD_DEFAULT
-    )
-    grafana_port = _resolved_port(resolved_ports, _GRAFANA_SVC, _GRAFANA_DEFAULT)
-    reverse_port = _resolved_port(resolved_ports, _REVERSE_SVC, _REVERSE_DEFAULT)
-    typer.echo("")
-    typer.echo(f"Credentials file: {env_path}")
-    typer.echo(
-        "Keep this file for this temporary range; remove it before a fresh "
-        "credential reset."
-    )
-    typer.echo("")
-    typer.echo("Access:")
-    typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
-    typer.echo("    username: admin")
-    typer.echo("    password: see INDEXER_PASSWORD in .env")
-    typer.echo(f"  Grafana: http://localhost:{grafana_port}")
-    typer.echo("    username: admin")
-    typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
-    typer.echo("  Reverse engineering SSH:")
-    typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}")
-    _emit_host_port_remaps(resolved_ports)
 
 
 def _emit_lab_start_progress(message: str) -> None:
@@ -315,7 +152,7 @@ def start(
 
     render_start_result(result)
     if result.success:
-        _emit_lab_access_summary(project_dir, result.resolved_ports)
+        emit_lab_access_summary(project_dir, result.resolved_ports)
     if not result.success:
         raise typer.Exit(code=1)
 
@@ -339,7 +176,7 @@ def info(
         raise typer.Exit(code=1)
     # Reconstruct the ResolvedPort list from docker's runtime state so the
     # printed URLs reflect the actual published ports (#737).
-    _emit_lab_access_summary(project_dir, _live_resolved_ports(project_dir))
+    emit_lab_access_summary(project_dir, live_resolved_ports(project_dir))
 
 
 @app.command("scenarios")

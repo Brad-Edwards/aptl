@@ -17,7 +17,7 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from aptl.utils.logging import get_logger
 
@@ -28,7 +28,7 @@ _IS_WINDOWS = sys.platform.startswith("win")
 
 def _looks_like_wsl(path: Path) -> bool:
     """True for the WSL launcher shim under System32 (not a real POSIX shell)."""
-    parts = str(path).lower().replace("\\", "/").split("/")
+    parts = {p.lower() for p in PureWindowsPath(path).parts}
     return "system32" in parts or "windowsapps" in parts
 
 

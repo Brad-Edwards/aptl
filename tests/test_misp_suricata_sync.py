@@ -710,6 +710,11 @@ class _FakeSocket:
         self.close()
 
 
+@pytest.mark.skipif(
+    not hasattr(socket, "AF_UNIX"),
+    reason="SuricataReloader talks to suricata over a Unix domain socket; "
+    "AF_UNIX is POSIX-only and the reloader runs in the Linux suricata sidecar",
+)
 class TestSuricataReloader:
     def test_handshake_then_reload_command(self, mocker, tmp_path: Path):
         from aptl.services.misp_suricata_sync.suricata_reloader import (
@@ -911,7 +916,10 @@ class TestMispClient:
         "verify_ssl, ca_cert, want_insecure, want_ca_str",
         [
             (False, None, True, None),
-            (True, Path("/etc/aptl/lab-ca.pem"), False, "/etc/aptl/lab-ca.pem"),
+            # want_ca_str via str(Path(...)) so the separator matches the host:
+            # the client passes str(ca_cert_path), backslashed on Windows and
+            # forward-slashed on the Linux sidecar where this actually runs.
+            (True, Path("/etc/aptl/lab-ca.pem"), False, str(Path("/etc/aptl/lab-ca.pem"))),
             (True, None, False, None),
         ],
         ids=["insecure", "verify_with_ca", "verify_system_trust"],

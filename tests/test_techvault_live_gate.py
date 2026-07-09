@@ -38,7 +38,6 @@ from aptl.validation.techvault_live_gate import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-FULL_INVENTORY_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 
 
 # --------------------------------------------------------------------------- #
@@ -504,13 +503,6 @@ def test_boot_inputs_pass_for_custom_scenario_when_profile_matches():
     other = PROJECT_ROOT / "scenarios" / "other.sdl.yaml"
     check = lgc.check_boot_inputs_match_public_path(
         other, project_dir=PROJECT_ROOT, options=LiveGateOptions()
-    )
-    assert check.passed
-
-
-def test_boot_inputs_pass_for_full_inventory_scenario_when_profile_matches():
-    check = lgc.check_boot_inputs_match_public_path(
-        FULL_INVENTORY_SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
     )
     assert check.passed
 

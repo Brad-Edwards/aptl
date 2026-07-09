@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
 DEFAULT_PROFILE = "full-remote-control-plane"
-DEFAULT_SCENARIO = Path("scenarios") / "techvault.sdl.yaml"
+DEFAULT_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
 DEFAULT_PARITY_INVENTORY = Path("docs") / "aces" / "parity-inventory.yaml"
 
 PHASE_A = "phase_a"

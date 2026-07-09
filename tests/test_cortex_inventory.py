@@ -1,16 +1,21 @@
 """Checks for the SCN-010 cortex steady-state inventory bundle."""
 
-from pathlib import Path
 import gzip
 import hashlib
 import json
 import lzma
+import os
 import re
+from pathlib import Path
 
 import pytest
 
+from aptl.core.aces_inventory import (
+    gap_report,
+    load_mapping_ledger,
+    validate_mapping_ledger,
+)
 from tests.techvault_sdl import load_legacy_techvault_sdl
-from aptl.core.aces_inventory import gap_report, load_mapping_ledger, validate_mapping_ledger
 
 pytestmark = pytest.mark.integration
 
@@ -75,7 +80,7 @@ def test_cortex_capture_script_pins_toolchain_and_probes():
     required = ("aquasec/trivy@sha256:be1190afcb28352bfddc4ddeb71470835d16462af68d310f9f4bca710961a41e", "anchore/syft@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6", "osquery/osquery@sha256:f8ec3300048158292df2d4bb0d1d7804af358f530005828c3387553f23c796cd", "cortex-state.txt", "thehive-cortex-auth-current-user.json", "evidence-sha256sums.txt")
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
-    assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
+    assert os.name != "posix" or (CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111)
 
 
 def test_cortex_mapping_ledger_validates_without_gaps():
@@ -123,7 +128,7 @@ def test_cortex_evidence_sha256_manifest_matches_files():
         if not path.is_file() or path.name == "evidence-sha256sums.txt":
             continue
         asset_relative = str(path.relative_to(ASSET_DIR))
-        repo_relative = str(path.relative_to(PROJECT_ROOT))
+        repo_relative = path.relative_to(PROJECT_ROOT).as_posix()
         if asset_relative not in manifest_entries and repo_relative not in manifest_entries:
             missing.add(asset_relative)
     assert not missing, f"Evidence files missing from checksum manifest: {missing}"

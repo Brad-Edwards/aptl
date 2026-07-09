@@ -1,22 +1,21 @@
 """Checks for the SCN-010 fileshare steady-state inventory bundle."""
 
-from collections import Counter
-from pathlib import Path
 import hashlib
 import json
+import os
 import re
+from collections import Counter
+from pathlib import Path
 
 import pytest
 import yaml
-
-from tests.techvault_sdl import load_legacy_techvault_sdl
 
 from aptl.core.aces_inventory import (
     gap_report,
     load_mapping_ledger,
     validate_mapping_ledger,
 )
-
+from tests.techvault_sdl import load_legacy_techvault_sdl
 
 pytestmark = pytest.mark.integration
 
@@ -152,7 +151,7 @@ def test_fileshare_capture_script_pins_reproducible_toolchain_and_normalizer():
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
-    assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
+    assert os.name != "posix" or (CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111)
 
 
 def test_fileshare_mapping_ledger_validates_without_gaps():
@@ -205,7 +204,7 @@ def test_fileshare_evidence_sha256_manifest_matches_files():
             offenders[relative_path] = {"expected": expected, "actual": actual}
     assert not offenders, f"Evidence checksum mismatches: {offenders}"
     evidence_files = {
-        str(path.relative_to(PROJECT_ROOT))
+        path.relative_to(PROJECT_ROOT).as_posix()
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and path.name != "evidence-sha256sums.txt"
     }

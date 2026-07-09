@@ -1,9 +1,10 @@
 """Checks for the SCN-010 TechVault composition inventory bundle."""
 
-from pathlib import Path
 import hashlib
 import json
+import os
 import re
+from pathlib import Path
 
 import pytest
 import yaml
@@ -77,7 +78,7 @@ def test_composition_capture_script_records_snapshot_evidence_without_secrets():
     assert not missing, f"Capture script missing composition evidence outputs: {missing}"
     assert "printenv" not in text
     assert "env >" not in text
-    assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
+    assert os.name != "posix" or (CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111)
 
 
 def test_composition_mapping_ledger_validates_without_gaps():
@@ -128,7 +129,7 @@ def test_composition_evidence_sha256_manifest_matches_files():
             offenders[relative_path] = {"expected": expected, "actual": actual}
     assert not offenders, f"Evidence checksum mismatches: {offenders}"
     evidence_files = {
-        str(path.relative_to(PROJECT_ROOT))
+        path.relative_to(PROJECT_ROOT).as_posix()
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and path.name != "evidence-sha256sums.txt"
     }

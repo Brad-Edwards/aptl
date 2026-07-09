@@ -5,11 +5,12 @@ carries two ``blocked_by_aces_gap`` facts (ACES #429 monitoring posture, #430
 typed IDS/NDR family) alongside the cleanly-encoded runtime surfaces.
 """
 
-from pathlib import Path
 import gzip
 import hashlib
 import json
+import os
 import re
+from pathlib import Path
 
 import pytest
 import yaml
@@ -192,7 +193,7 @@ def test_suricata_capture_script_pins_reproducible_toolchain_and_passive_probe()
     )
     missing = [needle for needle in required if needle not in text]
     assert not missing, f"Capture script missing reproducibility markers: {missing}"
-    assert CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111
+    assert os.name != "posix" or (CAPTURE_SCRIPT_PATH.stat().st_mode & 0o111)
 
 
 def test_suricata_mapping_ledger_validates_with_no_remaining_gaps():
@@ -247,7 +248,7 @@ def test_suricata_evidence_sha256_manifest_matches_files():
             offenders[relative_path] = {"expected": expected, "actual": actual}
     assert not offenders, f"Evidence checksum mismatches: {offenders}"
     evidence_files = {
-        str(path.relative_to(PROJECT_ROOT))
+        path.relative_to(PROJECT_ROOT).as_posix()
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and path.name != "evidence-sha256sums.txt"
     }

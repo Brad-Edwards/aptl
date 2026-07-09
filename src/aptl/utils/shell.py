@@ -28,7 +28,7 @@ _IS_WINDOWS = sys.platform.startswith("win")
 
 def _looks_like_wsl(path: Path) -> bool:
     """True for the WSL launcher shim under System32 (not a real POSIX shell)."""
-    parts = {p.lower() for p in path.parts}
+    parts = str(path).lower().replace("\\", "/").split("/")
     return "system32" in parts or "windowsapps" in parts
 
 

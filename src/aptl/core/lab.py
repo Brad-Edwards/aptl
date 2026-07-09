@@ -1154,6 +1154,38 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
 _WAZUH_MANAGER_CONTAINER = "aptl-wazuh-manager"
 
 
+def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
+    """Return the number of live ``wazuh-*`` daemons in the manager container.
+
+    Returns ``None`` when the count can't be determined — the container is not
+    running, or the inspect/exec probe failed. Best-effort: it swallows the
+    inspect/exec failure modes so a diagnostics probe can never abort lab start.
+    """
+    from aptl.core.deployment.errors import BackendTimeoutError
+
+    assert ctx.backend is not None
+    # Amazon Linux 2023 in the manager image ships without `ps`, so walk
+    # /proc directly to count the live wazuh-* daemons.
+    probe = ["sh", "-c",
+             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
+             "done | sort -u | wc -l"]
+    try:
+        info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
+        if (info.get("State") or {}).get("Status") != "running":
+            return None
+        result = ctx.backend.container_exec(
+            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
+        )
+        return (
+            int((result.stdout or "0").strip())
+            if result.returncode == 0
+            else None
+        )
+    except (BackendTimeoutError, OSError, ValueError):
+        return None
+
+
 def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
     """Restart wazuh-manager if it is Up but its daemons never spawned (#732).
 
@@ -1166,43 +1198,22 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
     This helper is best-effort: any failure to inspect or restart is
     logged and ignored (the caller retries the compose up regardless).
     """
+    from aptl.core.deployment.errors import BackendTimeoutError
+
     # Caller (`_step_start_containers`) is icontract-guarded so
     # `ctx.backend is not None` — no defensive check needed here.
     assert ctx.backend is not None
-    try:
-        info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
-    except Exception:  # noqa: BLE001 — never let diagnostics abort start
+    count = _wazuh_manager_daemon_count(ctx)
+    # Daemons are alive, or their state could not be determined: nothing to do.
+    if count is None or count > 0:
         return
-    state = info.get("State") or {}
-    if state.get("Status") != "running":
-        return
-    # Ask the container what wazuh daemons are alive. Amazon Linux 2023 in
-    # the manager image ships without `ps`, so we walk /proc directly.
-    probe = ["sh", "-c",
-             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
-             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
-             "done | sort -u | wc -l"]
-    try:
-        result = ctx.backend.container_exec(
-            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
-        )
-    except Exception:  # noqa: BLE001
-        return
-    if result.returncode != 0:
-        return
-    try:
-        daemon_count = int((result.stdout or "0").strip())
-    except ValueError:
-        return
-    if daemon_count > 0:
-        return  # daemons are alive; nothing to do
     log.warning(
         "wazuh-manager is Up but has 0 wazuh-* daemons; restarting once "
         "before compose retry (see issue #732)."
     )
     try:
         ctx.backend.container_restart(_WAZUH_MANAGER_CONTAINER)
-    except Exception as exc:  # noqa: BLE001
+    except (BackendTimeoutError, OSError) as exc:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 

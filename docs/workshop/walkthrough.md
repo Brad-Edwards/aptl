@@ -8,8 +8,9 @@ matching playbook section.
 Two ways drive the attack and investigate steps:
 
 - Path A, the agent, is the point of the workshop. A student's AI agent calls
-  the MCP tools (`kali_run_command` and `indexer_query`). Each step gives a
-  prompt.
+  the MCP tools. The minimum workshop path uses `kali_run_command` and
+  `indexer_query`; the full SOC path also uses Wazuh, network IDS, MISP,
+  TheHive, and Shuffle MCP tools. Each step gives a prompt.
 - Path B, direct, is a facilitator fallback. It shows the raw `docker exec` or
   `curl` that the agent runs underneath. Use it if an agent gets stuck.
 
@@ -103,6 +104,22 @@ host routing to Compose bridge IPs:
 
 Point the agent at this directory and confirm it lists `kali_run_command` and
 `indexer_query`.
+
+For the full SOC workshop, register the additional API MCP servers only when
+their backing services are enabled and healthy:
+
+| MCP server | Entrypoint | Smoke-test tool |
+| ---------- | ---------- | --------------- |
+| `wazuh` | `./mcp/mcp-wazuh/build/index.js` | `wazuh_query_alerts` |
+| `network` | `./mcp/mcp-network/build/index.js` | `network_query_ids_alerts` |
+| `threatintel` | `./mcp/mcp-threatintel/build/index.js` | `threatintel_search_iocs` |
+| `cases` | `./mcp/mcp-casemgmt/build/index.js` | `cases_list_cases` |
+| `soar` | `./mcp/mcp-soar/build/index.js` | `soar_list_workflows` |
+
+The SOC MCPs read service credentials from `.env`. Provision or renew service
+API keys before registering them, especially TheHive. Do not register
+`reverse` unless the reverse-engineering container is enabled in `aptl.json`
+and visible in `aptl lab status`.
 
 ## 4. Confirm the agent can reach Kali [3, 5]
 

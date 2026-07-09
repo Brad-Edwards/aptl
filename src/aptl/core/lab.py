@@ -1158,11 +1158,9 @@ def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
     """Return the number of live ``wazuh-*`` daemons in the manager container.
 
     Returns ``None`` when the count can't be determined — the container is not
-    running, or the inspect/exec probe failed. Best-effort: it swallows the
-    inspect/exec failure modes so a diagnostics probe can never abort lab start.
+    running, or the inspect/exec probe failed. Best-effort: it swallows every
+    inspect/exec failure so a diagnostics probe can never abort lab start.
     """
-    from aptl.core.deployment.errors import BackendTimeoutError
-
     assert ctx.backend is not None
     # Amazon Linux 2023 in the manager image ships without `ps`, so walk
     # /proc directly to count the live wazuh-* daemons.
@@ -1182,7 +1180,9 @@ def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
             if result.returncode == 0
             else None
         )
-    except (BackendTimeoutError, OSError, ValueError):
+    except Exception:
+        # Deliberately broad: this watchdog must never let an inspect/exec
+        # failure abort lab start (covered by the swallow-exceptions tests).
         return None
 
 
@@ -1198,8 +1198,6 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
     This helper is best-effort: any failure to inspect or restart is
     logged and ignored (the caller retries the compose up regardless).
     """
-    from aptl.core.deployment.errors import BackendTimeoutError
-
     # Caller (`_step_start_containers`) is icontract-guarded so
     # `ctx.backend is not None` — no defensive check needed here.
     assert ctx.backend is not None
@@ -1213,7 +1211,8 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
     )
     try:
         ctx.backend.container_restart(_WAZUH_MANAGER_CONTAINER)
-    except (BackendTimeoutError, OSError) as exc:
+    except Exception as exc:
+        # Deliberately broad: a failed restart attempt must not abort start.
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 

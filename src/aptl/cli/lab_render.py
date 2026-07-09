@@ -1,12 +1,18 @@
 """Rendering helpers for lab lifecycle CLI output."""
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from aptl.core.host_ports import ResolvedPort
 from aptl.core.lab import LabResult
 from aptl.core.lab_types import StartupDiagnostic, StartupOutcome
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 # Service (compose name) -> its default host port. Used to look up the actual
 # published port from a lab-start resolution so the access summary always shows
@@ -79,7 +85,7 @@ def _resolved_port(
     return default
 
 
-def _cli_backend(project_dir: Path):
+def _cli_backend(project_dir: Path) -> DeploymentBackend | None:
     """Resolve the deployment backend for a CLI query, or None on any failure.
 
     Best-effort: a missing/invalid project config must not abort the command.
@@ -95,7 +101,7 @@ def _cli_backend(project_dir: Path):
 
 
 def _binding_to_resolved_port(
-    service: str, default_port: int, proto: str, binding: dict
+    service: str, default_port: int, proto: str, binding: dict[str, str]
 ) -> ResolvedPort | None:
     """Turn one docker port binding into a ResolvedPort, or None if unusable."""
     try:
@@ -115,7 +121,9 @@ def _binding_to_resolved_port(
     )
 
 
-def _container_resolved_ports(backend, name: str, service: str) -> list[ResolvedPort]:
+def _container_resolved_ports(
+    backend: DeploymentBackend, name: str, service: str
+) -> list[ResolvedPort]:
     """Return the published ResolvedPorts for one running container."""
     try:
         info = backend.container_inspect(name)

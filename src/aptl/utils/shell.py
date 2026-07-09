@@ -27,9 +27,15 @@ _IS_WINDOWS = sys.platform.startswith("win")
 
 
 def _looks_like_wsl(path: Path) -> bool:
-    """True for the WSL launcher shim under System32 (not a real POSIX shell)."""
-    parts = {p.lower() for p in path.parts}
-    return "system32" in parts or "windowsapps" in parts
+    """True for the WSL launcher shim under System32 / WindowsApps.
+
+    Matches on the normalized path string rather than ``path.parts`` so the
+    classification is independent of which OS's path flavour is parsing it: on
+    a non-Windows host ``Path`` does not split a ``C:\\...\\bash.exe`` string
+    into components, which would otherwise miss the ``System32`` segment.
+    """
+    text = str(path).replace("\\", "/").lower()
+    return "/system32/" in text or "/windowsapps/" in text
 
 
 def _git_bash_from_git() -> Path | None:
@@ -41,12 +47,14 @@ def _git_bash_from_git() -> Path | None:
     git = shutil.which("git")
     if not git:
         return None
-    root = Path(git).resolve().parent.parent  # <root>/cmd/git.exe -> <root>
+    # <root>/cmd/git.exe -> <root>
+    root = Path(git).resolve().parent.parent
     candidate = root / "bin" / "bash.exe"
     return candidate if candidate.is_file() else None
 
 
 def _git_bash_from_known_locations() -> Path | None:
+    """Return Git Bash from a default Git-for-Windows install dir, or None."""
     for base in (
         os.environ.get("ProgramFiles", r"C:\Program Files"),
         os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),

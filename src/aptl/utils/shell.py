@@ -47,12 +47,14 @@ def _git_bash_from_git() -> Path | None:
     git = shutil.which("git")
     if not git:
         return None
-    root = Path(git).resolve().parent.parent  # <root>/cmd/git.exe -> <root>
+    # <root>/cmd/git.exe -> <root>
+    root = Path(git).resolve().parent.parent
     candidate = root / "bin" / "bash.exe"
     return candidate if candidate.is_file() else None
 
 
 def _git_bash_from_known_locations() -> Path | None:
+    """Return Git Bash from a default Git-for-Windows install dir, or None."""
     for base in (
         os.environ.get("ProgramFiles", r"C:\Program Files"),
         os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),

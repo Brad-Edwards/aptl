@@ -123,9 +123,9 @@ jobs:
   aces-scenario-gate:
     name: ACES scenario validation gate (advisory, Phase A)
     runs-on: ubuntu-latest
-    # SCN-010E / #322. The full-scenario static validation gate parses
-    # TechVault's large SDL tree and runs `aces sdl verify-imports` (minutes
-    # each), so it is integration-marked and runs here rather than in the fast
+    # SCN-010E / #322. The static validation gate parses the authoritative
+    # techvault-operational SDL and spawns the `aces conformance backend` CLI,
+    # so it is integration-marked and runs here rather than in the fast
     # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
     # failures on the PR without blocking merge; the Phase B cutover PR removes
     # `continue-on-error` to make the gate blocking. The gate needs only the
@@ -142,10 +142,10 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,web]"
-      - name: ACES static validation gate (TechVault, orchestration-evaluation)
-        # -n auto runs the heavy parse / verify-imports / conformance checks in
-        # parallel via pytest-xdist. No coverage is collected here, so xdist
-        # worker measurement is not a concern.
+      - name: ACES static validation gate (techvault-operational)
+        # -n auto runs the parse / compile / conformance-CLI checks in parallel
+        # via pytest-xdist. No coverage is collected here, so xdist worker
+        # measurement is not a concern.
         run: python -m pytest tests/test_techvault_static_gate.py -q -m integration -n auto
 
   mcp-tests:

@@ -1,13 +1,15 @@
 """Static validation gate tests (SCN-010E / issue #322).
 
 These exercise the scenario-generic gate composed in
-``aptl.validation.techvault_gate``: the TechVault happy path, fail-loud on a
-missing ACES corpus, the parity-manifest represented/deferred contract, Phase B
-cutover strictness, and the anti-collapse / anti-preset proofs that the
-realization is driven by declared content, not by the scenario id.
+``aptl.validation.techvault_gate``: the authoritative operational scenario gate,
+fail-loud on a missing ACES corpus, the parity-manifest represented/deferred
+contract, Phase B cutover strictness, and the anti-collapse / anti-preset proofs
+that the realization is driven by declared content, not by the scenario id.
 
-The gate spawns ``aces`` subprocesses and compiles the full scenario; the
-TechVault happy-path report is computed once per module.
+``techvault-operational.sdl.yaml`` is the authoritative driving scenario the
+gate validates; the parity-manifest checks below cover the represented/deferred
+contract as reusable logic without imposing the full-surface parity of the
+retired capture inventory on the operational contract.
 """
 
 import subprocess
@@ -62,50 +64,46 @@ from aptl.validation.techvault_gate import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
 
 
-@pytest.fixture(scope="module")
-def techvault_report():
-    # The fast inner-loop gate: the slow `aces sdl verify-imports` step
-    # (~4.5 min on TechVault) is owned by the dedicated CI job / pre-push hook
-    # and the integration-marked test below.
-    config = AptlConfig(lab={"name": "techvault"})
-    return validate_scenario(
-        SCENARIO,
+# --------------------------------------------------------------------------- #
+# Authoritative operational scenario gate (integration: backend_conformance
+# spawns the `aces conformance backend` CLI). This is the driving-SDL completion
+# gate — it validates that techvault-operational parses, compiles, conforms to
+# the canonical backend-manifest-v2, and realizes into a provisioning plan. The
+# full-surface parity_manifest of the retired capture inventory is not imposed
+# on the operational contract; its represented/deferred logic is covered by the
+# unit tests further below.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.integration
+def test_operational_gate_passes():
+    config = load_config(PROJECT_ROOT / "aptl.json")
+
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed, parse_check.diagnostics
+    assert scenario is not None
+
+    compile_check = check_compile(scenario)
+    assert compile_check.passed, compile_check.diagnostics
+
+    conformance_check = check_backend_conformance(
         project_dir=PROJECT_ROOT,
         config=config,
-        options=GateOptions(check_imports=False),
+        profile="full-remote-control-plane",
+        fixtures_root=None,
+        profiles_root=None,
+        reference_scenario=scenario,
     )
+    assert conformance_check.passed, conformance_check.diagnostics
 
-
-# --------------------------------------------------------------------------- #
-# Full-scenario happy path (integration: parsing TechVault is ~4.5 min, so this
-# runs under `pytest -m integration` and the dedicated CI gate job, not the
-# fast inner-loop suite — matching test_parity_inventory / composition tests).
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.integration
-def test_gate_passes_on_techvault(techvault_report):
-    assert techvault_report.passed, techvault_report.render()
-
-
-@pytest.mark.integration
-def test_gate_runs_every_fast_stage(techvault_report):
-    assert {check.name for check in techvault_report.checks} == {
-        "parse",
-        "compile",
-        "backend_conformance",
-        "provisioning_realization",
-        "parity_manifest",
-    }
-
-
-def test_committed_lockfile_exists():
-    assert (SCENARIO.with_name("aces.lock.json")).exists()
+    _details, realization_check = check_provisioning_realization(
+        scenario=scenario, project_dir=PROJECT_ROOT, config=config
+    )
+    assert realization_check.passed, realization_check.diagnostics
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():
@@ -137,15 +135,6 @@ def test_operational_scenario_matches_public_start_profiles_and_services():
         and not set(aliases) & realized_aliases
     }
     assert missing == {}
-
-
-@pytest.mark.integration
-def test_import_lock_verifies_committed_lockfile():
-    # Slow (~4.5 min): re-hashes TechVault's full module tree. Runs under
-    # `pytest -m integration` and the dedicated CI / pre-push gate, not the
-    # fast inner-loop suite.
-    check = check_import_lock(SCENARIO)
-    assert check.passed, check.diagnostics
 
 
 # --------------------------------------------------------------------------- #

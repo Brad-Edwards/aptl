@@ -148,11 +148,11 @@ repos:
         files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|docs/aces/parity-inventory\.yaml)$
 
       - id: aces-scenario-gate
-        name: ACES scenario validation gate (manual; slow — TechVault parse + verify-imports)
-        # SCN-010E / #322. The full-scenario gate parses TechVault's large SDL
-        # tree and runs `aces sdl verify-imports` (~minutes each), so it is a
-        # manual-stage hook, not part of the per-commit path. Run it before
-        # pushing a scenario/manifest/parity change:
+        name: ACES scenario validation gate (manual; techvault-operational)
+        # SCN-010E / #322. The static gate validates the authoritative
+        # techvault-operational SDL and spawns the `aces conformance backend`
+        # CLI, so it is a manual-stage hook rather than part of the per-commit
+        # path. Run it before pushing a scenario/manifest/parity change:
         #   pre-commit run aces-scenario-gate --hook-stage manual
         # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'

@@ -188,7 +188,7 @@ class TestLabStartCommand:
 
         # Bypass config load — return a stub list directly.
         mocker.patch(
-            "aptl.cli.lab._live_resolved_ports",
+            "aptl.cli.lab.live_resolved_ports",
             return_value=[
                 ResolvedPort(
                     service="aptl-grafana-otel",
@@ -215,18 +215,18 @@ class TestLabStartCommand:
     def test_live_resolved_ports_returns_empty_when_config_missing(self, tmp_path):
         """Best-effort: no aptl.json / no backend / any error path just
         returns []; info falls back to compile-time defaults."""
-        from aptl.cli.lab import _live_resolved_ports
+        from aptl.cli.lab_render import live_resolved_ports
 
         # tmp_path has neither aptl.json nor a running lab, so
         # resolve_config_for_cli raises and the helper swallows it.
-        assert _live_resolved_ports(tmp_path) == []
+        assert live_resolved_ports(tmp_path) == []
 
     def test_live_resolved_ports_extracts_binding_from_docker_inspect(
         self, tmp_path, mocker
     ):
         """Walks compose ps + docker inspect and builds a ResolvedPort
         entry for each published port."""
-        from aptl.cli.lab import _live_resolved_ports
+        from aptl.cli.lab_render import live_resolved_ports
         from aptl.core.host_ports import ResolvedPort
 
         backend = mocker.MagicMock()
@@ -248,7 +248,7 @@ class TestLabStartCommand:
             "aptl.core.deployment.get_backend", return_value=backend
         )
 
-        result = _live_resolved_ports(tmp_path)
+        result = live_resolved_ports(tmp_path)
 
         assert len(result) == 1
         entry = result[0]

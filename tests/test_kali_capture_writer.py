@@ -3,10 +3,17 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import os
 import stat
 from pathlib import Path
 
 import pytest
+
+# The capture writer runs inside the (Linux) kali container; its 0o700/0o600
+# hardening is unenforceable on a Windows host, where st_mode reads 0o666/0o777.
+_skip_no_posix_modes = pytest.mark.skipif(
+    os.name != "posix", reason="POSIX file modes are unenforced on Windows"
+)
 
 # Load writer module from containers/kali-capture/writer.py
 _WRITER_PATH = Path(__file__).parent.parent / "containers/kali-capture/writer.py"
@@ -97,6 +104,7 @@ class TestMessageParsing:
 
 
 class TestSessionDirs:
+    @_skip_no_posix_modes
     def test_session_start_creates_dirs(self, writer_mod, tmp_path):
         capture_root = str(tmp_path / "captures")
         state = writer_mod.WriterState(capture_root=capture_root)
@@ -139,6 +147,7 @@ class TestSessionDirs:
         state.handle_session_end("sessC", _OWNER_A)
         assert "sessC" not in state.active_sessions
 
+    @_skip_no_posix_modes
     def test_typescript_file_mode_0600(self, writer_mod, tmp_path):
         capture_root = str(tmp_path / "captures")
         state = writer_mod.WriterState(capture_root=capture_root)

@@ -31,6 +31,17 @@ def _paper_plan():
     return model, RuntimeManager(target).plan(scenario), config
 
 
+def _assert_paper_scoring_chain_is_not_supported(plan) -> None:
+    diagnostics = {(d.code, d.address) for d in plan.diagnostics}
+    assert diagnostics == {
+        ("evaluator.unsupported-section", "evaluation.metrics"),
+        ("evaluator.unsupported-section", "evaluation.evaluations"),
+        ("evaluator.unsupported-section", "evaluation.tlos"),
+        ("evaluator.unsupported-section", "evaluation.goals"),
+        ("evaluator.scoring-unsupported", "evaluation.scoring"),
+    }
+
+
 def test_paper_scenario_compiles_with_participant_runtime_artifacts():
     model, plan, _config = _paper_plan()
 
@@ -47,14 +58,15 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
         "participant.observation-boundary.paper-agent-view"
         in model.observation_boundaries
     )
-    assert plan.diagnostics == []
+    _assert_paper_scoring_chain_is_not_supported(plan)
     assert not (
         PROJECT_ROOT / "src/aptl/backends/aces_paper_participant_actions.py"
     ).exists()
 
 
-def test_paper_scenario_realizes_declared_topology_and_evaluator_surfaces():
+def test_paper_scenario_realizes_declared_topology_and_supported_evaluator_surface():
     _model, plan, config = _paper_plan()
+    _assert_paper_scoring_chain_is_not_supported(plan)
 
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
@@ -84,8 +96,8 @@ def test_paper_scenario_realizes_declared_topology_and_evaluator_surfaces():
         ),
     }
     assert set(plan.evaluation.resources) >= {
-        "evaluation.metric.participant-evidence-complete",
-        "evaluation.metric.wazuh-evidence-complete",
-        "evaluation.metric.boundary-evidence-complete",
-        "evaluation.tlo.authored-runtime-handoff",
+        "evaluation.condition.red-workbench.participant-observation-recorded",
+        "evaluation.condition.red-workbench.boundary-checks-recorded",
+        "evaluation.condition.wazuh-manager.wazuh-evidence-recorded",
+        "evaluation.objective.demonstrate-handoff",
     }

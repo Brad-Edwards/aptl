@@ -23,9 +23,10 @@ record boundary. This note narrows the guardrails for making APTL's
   live infrastructure or a contract-clean control-plane path. Conformance is a
   verification boundary, not an assertion boundary.
 - Evaluation progression must be truthful. `AptlEvaluator` may publish
-  `PENDING`, `RUNNING`, terminal outcome, and score/progress fields only when
-  those values are driven from real RTE-001 objective/evaluation execution or
-  from an upstream ACES evaluation contract that defines the field.
+  `PENDING`, `RUNNING`, and terminal condition/objective outcomes only when
+  those values are driven from real RTE-001 observations or from an upstream
+  ACES evaluation contract that defines the field. APTL does not declare the
+  deprecated SDL scoring chain as a runtime capability.
 - Participant runtime live actions must be compiled-artifact and realization
   driven. The legacy `DEFAULT_PARTICIPANT_ACTIONS` TechVault probe can remain a
   compatibility fallback, but new live conformance behavior must use
@@ -132,28 +133,28 @@ validated descriptor or typed backend parameter, not editing a TechVault branch,
 forking the manifest generator, adding a new conformance runner, or copying
 ACES schemas into APTL.
 
-## Issue #606 Evaluator Live-Score Addendum
+## Issue #606 Evaluator Surface Addendum
 
 Issue #606 is an evaluator truth-up on the already-declared
 `full-remote-control-plane` surface, not a manifest promotion and not a new
-score schema. `AptlEvaluator` remains the ACES adapter boundary, and the public
-DTOs remain `EvaluationExecutionState` plus `EvaluationHistoryEvent` records
-stored on `RuntimeSnapshot.evaluation_results` and
+score schema. After ACES ADR-073, APTL narrows that surface to conditions and
+objectives: SDL `metrics`, `evaluations`, `tlos`, and `goals` are not declared
+runtime capabilities. `AptlEvaluator` remains the ACES adapter boundary, and the
+public DTOs remain `EvaluationExecutionState` plus `EvaluationHistoryEvent`
+records stored on `RuntimeSnapshot.evaluation_results` and
 `RuntimeSnapshot.evaluation_history`.
 
-Live score/progress must be derived from observed run state for the current
-evaluation address and run id. Registration state (`PENDING` plus
+Live evaluator progression must be derived from observed run state for the
+current evaluation address and run id. Registration state (`PENDING` plus
 `evaluation_started`) is truthful only before observation; it is not progress.
-When observation advances a run, the adapter may emit `RUNNING`, `READY`, or
-`FAILED` only with history events that match the compiled `execution_contract`.
+When observation advances a supported condition or objective, the adapter may
+emit `RUNNING`, `READY`, or `FAILED` only with history events that match the
+compiled `execution_contract`.
 
-Score and pass/fail fields are controlled by the compiled `result_contract`,
-not by APTL convention. Metric resources may expose `score` only when
-`supports_score` is true, and a terminal ready metric with `fixed_max_score`
-must use that max score. Condition, objective, evaluation, TLO, and goal
-resources may expose `passed` only when `supports_passed` is true. Do not treat
-objective completion count, elapsed time, or workflow step count as a score
-unless the compiled evaluation contract says that resource is score-bearing.
+Pass/fail fields are controlled by the compiled `result_contract`, not by APTL
+convention. Condition and objective resources may expose `passed` only when
+`supports_passed` is true. Do not treat objective completion count, elapsed
+time, workflow step count, metric totals, or thresholds as an APTL score.
 
 The conformance re-verification path for #606 is the existing one:
 `evaluation_result_contract_diagnostics()`, `run_target_conformance()` for
@@ -166,7 +167,7 @@ embedding raw SOC payloads or backend stderr into result envelopes.
 
 The extensibility parameter for evaluator progression is the tuple
 `(evaluation_address, result_contract, execution_contract, observed_state,
-run_id)`. The next variation should be another metric, objective, scenario, or
+run_id)`. The next variation should be another condition/objective scenario or
 evidence source, not a TechVault branch, a hardcoded score curve, a duplicate
 validator, or a separate live-gate-only score model.
 
@@ -195,7 +196,7 @@ validator, or a separate live-gate-only score model.
   publishes them upstream.
 - Keeping adapter docstrings or docs that still describe APTL as merely
   orchestration-capable without a historical label.
-- Treating evaluator registration as live score progression.
+- Treating evaluator registration as live evaluation progression.
 - Treating participant episode lifecycle calls as lab start/stop operations.
 - Extending `DEFAULT_PARTICIPANT_ACTIONS` as the primary design instead of
   using runtime-derived action bindings.
@@ -218,7 +219,7 @@ validator, or a separate live-gate-only score model.
   Docker Compose topology, startup ordering, generated config, SOC TLS, web
   auth, terminal relay, snapshot registry, or run archive layout.
 - Do not make participant runtime a general shell-execution API.
-- Do not make evaluator scoring a simulated state machine detached from real
-  objective/evaluation observations.
+- Do not make evaluator progression a simulated state machine detached from real
+  condition/objective observations.
 - Do not replace the static/live gates with a new M1-specific gate. Extend the
   existing gate owners and profile parameters when implementation begins.

@@ -6,6 +6,7 @@ SSHComposeBackend, config model, and factory function.
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,6 +33,17 @@ from aptl.core.deployment._compose_realization import (
 from aptl.core.deployment._compose_queries import _select_shell
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
+
+# SSHComposeBackend validates the *local* ssh identity path with
+# Path.is_absolute(), which is platform-specific: a POSIX "/home/..." path is
+# not absolute on Windows (it lacks a drive), and vice versa. Use a host-
+# appropriate absolute path so the validation is exercised on every platform
+# instead of tripping the absolute-path guard with the wrong path flavour.
+_IS_WINDOWS = os.name == "nt"
+_ABS_SSH_KEY = "C:\\Users\\user\\.ssh\\lab_key" if _IS_WINDOWS else "/home/user/.ssh/lab_key"
+_ABS_SSH_KEY_TRAVERSAL = (
+    "C:\\Users\\..\\etc\\passwd" if _IS_WINDOWS else "/home/../etc/passwd"
+)
 
 
 def _network_inspect_payload(
@@ -1709,7 +1721,7 @@ class TestSSHComposeBackend:
         assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
 
     def test_run_sets_ssh_identity_when_key_provided(self, tmp_path):
-        backend = self._make_backend(tmp_path, ssh_key="/home/user/.ssh/lab_key")
+        backend = self._make_backend(tmp_path, ssh_key=_ABS_SSH_KEY)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -1717,7 +1729,7 @@ class TestSSHComposeBackend:
 
         call_kwargs = mock_run.call_args[1]
         env = call_kwargs["env"]
-        assert env["DOCKER_SSH_IDENTITY"] == "/home/user/.ssh/lab_key"
+        assert env["DOCKER_SSH_IDENTITY"] == _ABS_SSH_KEY
 
     def test_inherits_start_behavior(self, tmp_path):
         """SSH backend start should produce same command structure."""
@@ -1798,12 +1810,12 @@ class TestSSHComposeBackend:
         assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
 
     def test_container_logs_streaming_injects_ssh_identity(self, tmp_path):
-        backend = self._make_backend(tmp_path, ssh_key="/home/user/.ssh/lab_key")
+        backend = self._make_backend(tmp_path, ssh_key=_ABS_SSH_KEY)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             backend.container_logs("aptl-victim")
         env = mock_run.call_args[1]["env"]
-        assert env["DOCKER_SSH_IDENTITY"] == "/home/user/.ssh/lab_key"
+        assert env["DOCKER_SSH_IDENTITY"] == _ABS_SSH_KEY
 
     def test_container_exec_uses_ssh_path(self, tmp_path):
         """container_exec is captured; verify it inherits the _run override."""
@@ -1896,7 +1908,7 @@ class TestGetBackend:
                 "provider": "ssh-compose",
                 "ssh_host": "server",
                 "ssh_user": "admin",
-                "ssh_key": "/path/to/key",
+                "ssh_key": _ABS_SSH_KEY,
                 "ssh_port": 2222,
                 "remote_dir": "/opt/aptl",
             },
@@ -2049,7 +2061,7 @@ class TestSSHComposeBackendValidation:
                 tmp_path,
                 host="example.com",
                 user="deploy",
-                ssh_key="/home/../etc/passwd",
+                ssh_key=_ABS_SSH_KEY_TRAVERSAL,
             )
 
     def test_accepts_valid_ipv6_host(self, tmp_path):
@@ -2065,7 +2077,7 @@ class TestSSHComposeBackendValidation:
             tmp_path,
             host="example.com",
             user="deploy",
-            ssh_key="/home/user/.ssh/id_rsa",
+            ssh_key=_ABS_SSH_KEY,
         )
         assert backend.docker_host == "ssh://deploy@example.com"
 
@@ -2123,8 +2135,10 @@ class TestSeedNamedVolumes:
             "/bin/sh",
         ]
         # Source is read-only (checked-in files can never be chowned),
-        # dest is the Compose project-scoped volume name.
-        assert "/proj/config/suricata:/src:ro" in cmd
+        # dest is the Compose project-scoped volume name. The host source is
+        # rendered with the platform separator (str(Path(...))): a real Windows
+        # run gets a real Windows source path, which Docker Desktop accepts.
+        assert f"{Path('/proj/config/suricata')}:/src:ro" in cmd
         assert "test_suricata_config_seed:/dest" in cmd
         assert cmd[-3] == "img:1"
         assert cmd[-2] == "-c"
@@ -2148,7 +2162,7 @@ class TestSeedNamedVolumes:
         retire, seed = calls
         assert retire[:5] == ["docker", "run", "--rm", "--user", "0:0"]
         assert retire[5:7] == ["--entrypoint", "rm"]
-        assert "/proj/.aptl/suricata/rules:/legacy" in retire
+        assert f"{Path('/proj/.aptl/suricata/rules')}:/legacy" in retire
         assert retire[-2:] == ["-rf", "/legacy/misp"]
         # Seed runs after the retire.
         assert "test_suricata_misp_rules:/dest" in seed

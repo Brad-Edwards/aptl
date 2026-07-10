@@ -8,10 +8,19 @@ import json
 import os
 import signal
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+
+# The SIGTERM->SIGKILL escalation these exercise is POSIX-only: Windows has no
+# SIGKILL, and os.kill there maps every non-CTRL_* signal to the same forceful
+# TerminateProcess, so there is no distinct force signal to assert ordering on.
+_skip_no_sigkill = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="SIGKILL escalation is POSIX-only (Windows uses TerminateProcess)",
+)
 
 
 class TestFindMcpProcesses:
@@ -210,6 +219,7 @@ class TestKillMcpProcesses:
         assert killed == 1
         assert errors == []
 
+    @_skip_no_sigkill
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")
     @patch("aptl.core.kill._verify_mcp_process", return_value=True)
@@ -241,6 +251,7 @@ class TestKillMcpProcesses:
         assert term_idx < kill_idx, "SIGTERM must precede SIGKILL"
         assert killed == 1
 
+    @_skip_no_sigkill
     @patch("aptl.core.kill.find_mcp_processes")
     @patch("aptl.core.kill.os.kill")
     @patch("aptl.core.kill._verify_mcp_process", return_value=False)

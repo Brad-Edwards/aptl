@@ -69,6 +69,11 @@ run from source instead, use a virtualenv editable install
 - [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context
 - [Web GUI Design Specification](specs/web-gui-design.md): v1 product scope, route map, interaction design, component inventory, and implementation hand-off
 
+### Workshops
+- [Workshop Playbook](workshop/playbook.md): Facilitator guide for the TechVault workshop
+- [Lab Walkthrough](workshop/walkthrough.md): Runnable command and prompt companion to the playbook
+- [Emergency Rollout Runbook](workshop/emergency-rollout.md): Hosted-fleet fallback, student claim-page pattern, and teardown checklist
+
 ### Testing
 - [Smoke Test Plan](testing/smoke-test-plan.md): Historical full-stack plan for the pre-SDL scenario engine
 

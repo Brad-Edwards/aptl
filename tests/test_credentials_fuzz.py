@@ -62,13 +62,13 @@ _MANAGER_RENDERED_RELPATH = Path(".aptl/config/wazuh_cluster/wazuh_manager.conf"
 def _layout_dashboard_template(project_dir: Path, content: str) -> None:
     target = project_dir / _DASHBOARD_SOURCE_RELPATH
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content)
+    target.write_text(content, encoding="utf-8")
 
 
 def _layout_manager_template(project_dir: Path, content: str) -> None:
     target = project_dir / _MANAGER_SOURCE_RELPATH
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content)
+    target.write_text(content, encoding="utf-8")
 
 
 _VALID_DASHBOARD_TEMPLATE = (
@@ -154,7 +154,7 @@ def test_sync_dashboard_config_bounded_outcomes(tmp_path, api_password):
     expected_path = (tmp_path / _DASHBOARD_RENDERED_RELPATH).resolve()
     assert isinstance(out, Path)
     assert out == expected_path
-    rendered = out.read_text()
+    rendered = out.read_text(encoding="utf-8")
     # Positive structural check: the rendered file carries the password
     # in its documented YAML-escaped form. This already proves the
     # substitution happened — a separate ``"placeholder" not in
@@ -197,7 +197,7 @@ def test_sync_manager_config_bounded_outcomes(tmp_path, cluster_key):
     expected_path = (tmp_path / _MANAGER_RENDERED_RELPATH).resolve()
     assert isinstance(out, Path)
     assert out == expected_path
-    rendered = out.read_text()
+    rendered = out.read_text(encoding="utf-8")
     # Positive structural check (see dashboard test for rationale): a
     # standalone ``placeholder not in rendered`` would false-positive
     # when Hypothesis generates a cluster_key whose XML-escaped value
@@ -286,7 +286,7 @@ def test_sync_manager_config_preserves_ssl_key_paths(
 
     sync_manager_config(tmp_path, cluster_key)
 
-    rendered = (tmp_path / _MANAGER_RENDERED_RELPATH).read_text()
+    rendered = (tmp_path / _MANAGER_RENDERED_RELPATH).read_text(encoding="utf-8")
     # Two positive structural checks. Together they prove the #183
     # invariant: the SSL element keeps its byte-equal value AND the
     # cluster element carries the new XML-escaped value. A separate

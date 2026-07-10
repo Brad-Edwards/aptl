@@ -13,6 +13,18 @@ import pytest
 class TestEnsureSSHKeys:
     """Tests for SSH key generation and distribution."""
 
+    @pytest.fixture(autouse=True)
+    def _default_posix_hardening(self, mocker):
+        """Default key-hardening to the POSIX (os.chmod) path.
+
+        On a Windows host the product hardens keys with ``icacls`` instead of
+        ``chmod``; these tests assert the POSIX mechanics, so pin the gate to
+        POSIX by default. The dedicated ``test_windows_*`` cases re-patch
+        ``is_windows`` to ``True`` and that later patch wins for their duration.
+        On Linux this is a no-op (``is_windows`` is already False).
+        """
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=False)
+
     def test_existing_key_does_not_call_keygen(self, tmp_path, mocker):
         """When key already exists, ssh-keygen should not be called."""
         from aptl.core.ssh import ensure_ssh_keys
@@ -344,6 +356,13 @@ class TestEnsureSSHKeys:
 
 class TestEnsurePivotKey:
     """Tests for the kali pivot key (scenario content) — SEC #417."""
+
+    @pytest.fixture(autouse=True)
+    def _default_posix_hardening(self, mocker):
+        """Default key-hardening to the POSIX (os.chmod) path; the
+        ``test_windows_*`` case re-patches ``is_windows`` to True. See the
+        matching fixture on TestEnsureSSHKeys for the full rationale."""
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=False)
 
     def test_generates_pivot_key_when_missing(self, tmp_path, mocker):
         from aptl.core.ssh import ensure_pivot_key

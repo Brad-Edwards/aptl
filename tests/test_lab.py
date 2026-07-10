@@ -2319,11 +2319,19 @@ class TestStartupClassificationWiring:
     def test_test_ssh_per_target_timeout_emits_readiness_warning(
         self, tmp_path, mocker
     ):
+        from aptl.core import hostenv
         from aptl.core.lab import _step_test_ssh
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
         from aptl.core.services import ServiceResult
 
         ctx = self._ctx(tmp_path)
+        # Force native docker mode so the host-bridge probe path runs; on a
+        # Docker Desktop / VM host (e.g. Windows) the step intentionally skips
+        # bridge-IP probes, which would otherwise mask this readiness assertion.
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         # Targets are addressed by container IP (issue #293), not a
         # published host port — resolve a stub IP for every target.
         mocker.patch(
@@ -2401,10 +2409,17 @@ class TestStartupClassificationWiring:
         # A target whose container has no resolvable network IP cannot
         # be probed — surface it as a readiness diagnostic rather than
         # silently skipping (issue #293).
+        from aptl.core import hostenv
         from aptl.core.lab import _step_test_ssh
         from aptl.core.lab_types import DiagnosticImpact
 
         ctx = self._ctx(tmp_path)
+        # Force native docker mode so the probe path runs even on a Docker
+        # Desktop / VM host (which otherwise skips host-bridge probes).
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         mocker.patch("aptl.core.lab.container_networks", return_value={})
         wait = mocker.patch("aptl.core.lab.wait_for_service")
 
@@ -3803,12 +3818,19 @@ class TestTerminalHostKeyPinningStep:
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     @patch("aptl.core.lab.list_container_snapshots")
-    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path):
+    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path, mocker):
+        from aptl.core import hostenv
         from aptl.core.host_keys import HostKeyPinResult
         from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
 
         from aptl.core.endpoints import build_ssh_endpoints
 
+        # Force native docker mode so pinning runs; a Docker Desktop / VM host
+        # (e.g. Windows) intentionally skips this step (bridge IPs unreachable).
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         snapshots = []
         mock_list.return_value = snapshots
         mock_pin.return_value = HostKeyPinResult(

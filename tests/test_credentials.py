@@ -810,6 +810,11 @@ def _write_suricata_sources(project_dir):
         (misp / name).write_text(f"# {name}\n")
 
 
+@pytest.mark.skipif(
+    not _POSIX_MODES,
+    reason="native-Linux ownership repair; os.getuid/getgid/chown are POSIX-only "
+    "and the product skips this branch on Windows (needs_host_ownership_fix False)",
+)
 class TestEnsureSuricataConfigSourceOwnership:
     """Legacy pre-ADR-043 bind mounts could leave seed sources unwritable."""
 

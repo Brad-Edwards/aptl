@@ -18,6 +18,12 @@ Students, beforehand: complete the per-OS prerequisites in the
 health with `aptl lab status`, and wire the agent to the lab's MCP servers.
 Facilitator: bring your own lab up and open the dashboards on the projector.
 
+If students cannot run Docker locally, use the
+[Emergency Workshop Rollout Runbook](emergency-rollout.md) to prepare a
+short-lived hosted fleet. Treat that path as a contingency: prove every host
+with the same walkthrough before students use it, and tear down cloud resources
+immediately after the event.
+
 ## 1. Intro (about 5 min)
 
 Set the frame and the hook.

@@ -287,7 +287,7 @@ def test_evidence_sha256_manifest_matches_files():
             offenders[relative_path] = {"expected": expected, "actual": actual}
     assert not offenders, f"Evidence checksum mismatches: {offenders}"
     evidence_files = {
-        str(path.relative_to(PROJECT_ROOT))
+        path.relative_to(PROJECT_ROOT).as_posix()
         for path in EVIDENCE_DIR.iterdir()
         if path.is_file() and path.name != "evidence-sha256sums.txt"
     }

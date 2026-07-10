@@ -7,6 +7,7 @@ mock, only filesystem behaviour to assert.
 
 from __future__ import annotations
 
+import os
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -168,6 +169,11 @@ class TestFirstRunGeneration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX file modes are unenforced on Windows (st_mode is 0o666/0o777); "
+    "these certs are consumed by Linux containers where the modes apply",
+)
 class TestPermissions:
     """Permission contract (ADR-029 § Secret at rest).
 

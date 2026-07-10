@@ -455,7 +455,10 @@ class TestSSHConnection:
         cmd = mock_run.call_args[0][0]
         assert "ssh" in cmd
         assert "-i" in cmd
-        assert "/home/user/.ssh/aptl_lab_key" in " ".join(cmd)
+        # Compare via str(Path(...)) so the separator matches the host: the
+        # product passes str(key_path), which is backslashed on Windows and
+        # forward-slashed on POSIX. OpenSSH accepts either on its platform.
+        assert str(Path("/home/user/.ssh/aptl_lab_key")) in " ".join(cmd)
         assert "-p" in cmd
         assert "2022" in " ".join(str(x) for x in cmd)
         assert "labadmin@localhost" in cmd

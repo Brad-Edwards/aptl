@@ -6,6 +6,7 @@ endpoints from Docker runtime state.
 """
 
 import json
+import os
 import stat
 from dataclasses import asdict
 from pathlib import Path
@@ -142,6 +143,10 @@ class TestStatusCLIJsonOutput:
         assert data["timestamp"] == "2026-03-08T00:00:00+00:00"
 
     @patch("aptl.core.snapshot.capture_snapshot")
+    @pytest.mark.skipif(
+        os.name != "posix",
+        reason="0o600 chmod is a POSIX no-op on Windows (st_mode reads 0o666)",
+    )
     def test_output_file_has_restricted_permissions(self, mock_capture, tmp_path):
         from typer.testing import CliRunner
         from aptl.cli.lab import app

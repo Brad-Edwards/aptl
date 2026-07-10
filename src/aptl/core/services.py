@@ -153,6 +153,8 @@ def check_manager_api_ready(container_name: str) -> bool:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
         # Any HTTP response means the API is listening
@@ -191,6 +193,8 @@ def test_ssh_connection(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
         )
         return result.returncode == 0

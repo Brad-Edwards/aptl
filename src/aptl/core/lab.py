@@ -42,6 +42,7 @@ from aptl.core.env import (
     hydrate_dotenv,
     load_dotenv,
 )
+
 # Re-export the lifecycle DTO types from the leaf module (#266 + ADR-030).
 # The leaf has no back-edges, so this is a normal top-level import.
 from aptl.core.lab_types import (
@@ -65,6 +66,7 @@ from aptl.core.endpoints import (
     terminal_ssh_endpoints,
 )
 from aptl.core.host_keys import pin_terminal_host_keys
+from aptl.core import hostenv
 from aptl.core.snapshot import (
     SSHEndpoint,
     capture_snapshot,
@@ -72,7 +74,7 @@ from aptl.core.snapshot import (
     list_container_snapshots,
 )
 from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
-from aptl.core.sysreqs import check_max_map_count
+from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
@@ -87,8 +89,7 @@ log = get_logger("lab")
 ProgressCallback = Callable[[str], None]
 
 _STALE_NETWORK_RECOVERY_HINT = (
-    "Run `aptl lab stop` and retry, or `aptl lab stop -v` "
-    "if you need a clean lab."
+    "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
 
 
@@ -162,7 +163,9 @@ def selected_profiles_for_scenario(
         )
 
         return set(
-            _selected_profiles(project_dir, config, backend, scenario_path=scenario_path)
+            _selected_profiles(
+                project_dir, config, backend, scenario_path=scenario_path
+            )
         )
     # broad-except: resolving selected profiles is best-effort enrichment for
     # the readiness steps. The lab already started; any failure (import,
@@ -200,6 +203,7 @@ def _runtime_require(
        message via the `error=` callback so the contract is secret-safe
        at the *source*, not just at the orchestrator edge.
     """
+
     # icontract introspects the error callable's signature and tries to
     # resolve every named parameter against the condition's bound
     # kwargs. A no-arg factory sidesteps that check entirely: icontract
@@ -230,8 +234,15 @@ SURICATA_IMAGE = "jasonish/suricata:7.0"
 # unavailable (e.g. stop_lab, kill switch).  Keep in sync with
 # docker-compose.yml profile definitions.
 ALL_KNOWN_PROFILES = [
-    "wazuh", "victim", "kali", "reverse",
-    "enterprise", "soc", "mail", "fileshare", "dns",
+    "wazuh",
+    "victim",
+    "kali",
+    "reverse",
+    "enterprise",
+    "soc",
+    "mail",
+    "fileshare",
+    "dns",
     "otel",
 ]
 
@@ -418,8 +429,7 @@ def clean_boot_lab(
         return LabResult(
             success=False,
             error=redact(
-                "clean-state cleanup failed; lab not booted: "
-                f"{stop_result.error}"
+                f"clean-state cleanup failed; lab not booted: {stop_result.error}"
             ),
             outcome=StartupOutcome.FAILED,
         )
@@ -595,6 +605,9 @@ class _LabStartContext(object):
     backend: "DeploymentBackend | None" = None
     ssh_key_path: Path | None = None
     selected_profiles: set[str] = field(default_factory=set)
+    # Published host ports after conflict resolution (host_ports.ResolvedPort),
+    # so the access summary can report the real port each service landed on.
+    resolved_ports: list[object] = field(default_factory=list)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
     # REP-001: ACES start outcome and range snapshot for run record writing.
     # Use object to avoid circular imports; typed at use sites.
@@ -623,9 +636,7 @@ _DEGRADING_SEVERITIES = frozenset(
 # Impacts that drag the outcome to DEGRADED_UNUSABLE rather than
 # DEGRADED_USABLE. Lab is partially up but the named capability/SSH
 # reach is missing for the operator's intended use.
-_UNUSABLE_IMPACTS = frozenset(
-    {DiagnosticImpact.CAPABILITY, DiagnosticImpact.READINESS}
-)
+_UNUSABLE_IMPACTS = frozenset({DiagnosticImpact.CAPABILITY, DiagnosticImpact.READINESS})
 
 
 def derive_startup_outcome(
@@ -730,6 +741,33 @@ def _step_load_env(ctx: _LabStartContext) -> LabResult | None:
     return _validate_env_secrets(ctx.raw_env)
 
 
+def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
+    """Remap any published host port that is already in use before Compose runs.
+
+    Docker Compose aborts the whole ``up`` if it cannot bind a requested host
+    port, and on Windows/macOS other software routinely holds ports the lab
+    wants (mDNS on 5353, an editor's port-forwarding, etc.). This probes each
+    published port and, for any that are taken, exports a free alternate through
+    the ``${VAR:-default}`` indirection Compose reads from the environment — so
+    startup succeeds and the access summary can report the real port. Ports the
+    operator pinned in ``.env`` / the environment are honoured as-is; Linux
+    hosts with nothing on the defaults see no change.
+    """
+    from aptl.core import host_ports
+
+    ctx.resolved_ports = host_ports.resolve_host_ports(
+        ctx.project_dir, reserved_env=set(ctx.raw_env)
+    )
+    for resolved in ctx.resolved_ports:
+        if resolved.remapped:
+            _emit_progress(
+                ctx,
+                f"Host port {resolved.default_port} for {resolved.service} is "
+                f"in use; publishing on {resolved.resolved_port} instead.",
+            )
+    return None
+
+
 def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
     """Load aptl.json and initialize the configured deployment backend."""
     log.info("Step 2: Loading configuration...")
@@ -761,9 +799,7 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
             success=False,
             error=f"SSH key generation failed: {ssh_result.error}",
         )
-    ctx.ssh_key_path = ssh_result.key_path or (
-        Path.home() / ".ssh" / "aptl_lab_key"
-    )
+    ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
@@ -779,23 +815,35 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
-    """Validate host kernel settings required by Wazuh."""
+    """Validate host requirements before Compose starts building images."""
     log.info("Step 4: Checking system requirements...")
     sysreq_result = check_max_map_count()
-    if sysreq_result.passed:
+    if not sysreq_result.passed:
+        log.error(
+            "vm.max_map_count too low (%d < %d). "
+            "Run: sudo sysctl -w vm.max_map_count=262144",
+            sysreq_result.current_value,
+            sysreq_result.required_value,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                f"vm.max_map_count too low ({sysreq_result.current_value} < "
+                f"{sysreq_result.required_value}). "
+                "Run: sudo sysctl -w vm.max_map_count=262144"
+            ),
+        )
+
+    buildx_result = check_docker_buildx()
+    if buildx_result.passed:
         return None
-    log.error(
-        "vm.max_map_count too low (%d < %d). "
-        "Run: sudo sysctl -w vm.max_map_count=262144",
-        sysreq_result.current_value,
-        sysreq_result.required_value,
-    )
+    log.error("Docker Buildx unavailable: %s", buildx_result.error)
     return LabResult(
         success=False,
         error=(
-            f"vm.max_map_count too low ({sysreq_result.current_value} < "
-            f"{sysreq_result.required_value}). "
-            "Run: sudo sysctl -w vm.max_map_count=262144"
+            "Docker Buildx is required to build the APTL lab images "
+            f"({buildx_result.command} failed: {buildx_result.error}). "
+            f"{buildx_result.install_hint}"
         ),
     )
 
@@ -854,6 +902,7 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # through the deployment backend is the proper fix and is tracked
     # separately. See ADR-028 § Non-Goals.
     from aptl.core.deployment import SSHComposeBackend
+
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
@@ -906,6 +955,7 @@ def _step_seed_suricata_volumes(
     """
     log.info("Step 5b: Seeding Suricata runtime volumes...")
     from aptl.core.deployment import SSHComposeBackend
+
     if isinstance(ctx.backend, SSHComposeBackend):
         return LabResult(
             success=False,
@@ -939,7 +989,15 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 
     # ctx.backend is narrowed to the local Compose backend by the caller's guard.
     assert ctx.backend is not None
-    ownership = ensure_suricata_config_source_ownership(ctx.project_dir)
+    # Pull the seeder image up front. Both the ownership repair and the seed
+    # container implicitly pull it via `docker run`, and on a fresh host a
+    # failed/slow implicit pull can surface as an opaque `exit 125` from the
+    # seeder with no docker stderr in the redacted log path — pulling here
+    # keeps registry failures at a stage the user can reason about (a
+    # `Failed to pull ...` warning) instead of a bare seed-exit code.
+    for pull_warning in ctx.backend.pull_images([SURICATA_IMAGE]):
+        log.warning(pull_warning)
+    ownership = ensure_suricata_config_source_ownership(ctx.project_dir, SURICATA_IMAGE)
     if not ownership.success:
         log.error(
             "Suricata config source ownership restore failed: %s",
@@ -948,8 +1006,7 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
         return LabResult(
             success=False,
             error=(
-                "Suricata config source ownership restore failed: "
-                f"{ownership.error}"
+                f"Suricata config source ownership restore failed: {ownership.error}"
             ),
         )
     try:
@@ -1016,6 +1073,7 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
         # on another host whose bind mounts cannot see them — same shape as
         # `_step_sync_credentials` (ADR-028).
         from aptl.core.deployment import SSHComposeBackend
+
         if isinstance(ctx.backend, SSHComposeBackend):
             result = LabResult(
                 success=False,
@@ -1031,15 +1089,10 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
         else:
             cert_result = ensure_soc_certs(ctx.project_dir)
             if not cert_result.success:
-                log.error(
-                    "SOC certificate generation failed: %s", cert_result.error
-                )
+                log.error("SOC certificate generation failed: %s", cert_result.error)
                 result = LabResult(
                     success=False,
-                    error=(
-                        "SOC certificate generation failed: "
-                        f"{cert_result.error}"
-                    ),
+                    error=(f"SOC certificate generation failed: {cert_result.error}"),
                 )
     return result
 
@@ -1098,6 +1151,71 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+_WAZUH_MANAGER_CONTAINER = "aptl-wazuh-manager"
+
+
+def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
+    """Return the number of live ``wazuh-*`` daemons in the manager container.
+
+    Returns ``None`` when the count can't be determined — the container is not
+    running, or the inspect/exec probe failed. Best-effort: it swallows every
+    inspect/exec failure so a diagnostics probe can never abort lab start.
+    """
+    assert ctx.backend is not None
+    # Amazon Linux 2023 in the manager image ships without `ps`, so walk
+    # /proc directly to count the live wazuh-* daemons.
+    probe = ["sh", "-c",
+             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
+             "done | sort -u | wc -l"]
+    try:
+        info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
+        if (info.get("State") or {}).get("Status") != "running":
+            return None
+        result = ctx.backend.container_exec(
+            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
+        )
+        return (
+            int((result.stdout or "0").strip())
+            if result.returncode == 0
+            else None
+        )
+    except Exception:
+        # Deliberately broad: this watchdog must never let an inspect/exec
+        # failure abort lab start (covered by the swallow-exceptions tests).
+        return None
+
+
+def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
+    """Restart wazuh-manager if it is Up but its daemons never spawned (#732).
+
+    Colima on macOS reproducibly gets s6-supervise into a state where
+    every attempt to exec the (executable) `run` scripts returns EACCES
+    and the wazuh daemons never spawn. The container itself stays Up
+    because PID 1 (s6-svscan) survives, so docker's own restart policy
+    never fires. A single `docker restart` clears the state cleanly.
+
+    This helper is best-effort: any failure to inspect or restart is
+    logged and ignored (the caller retries the compose up regardless).
+    """
+    # Caller (`_step_start_containers`) is icontract-guarded so
+    # `ctx.backend is not None` — no defensive check needed here.
+    assert ctx.backend is not None
+    count = _wazuh_manager_daemon_count(ctx)
+    # Daemons are alive, or their state could not be determined: nothing to do.
+    if count is None or count > 0:
+        return
+    log.warning(
+        "wazuh-manager is Up but has 0 wazuh-* daemons; restarting once "
+        "before compose retry (see issue #732)."
+    )
+    try:
+        ctx.backend.container_restart(_WAZUH_MANAGER_CONTAINER)
+    except Exception as exc:
+        # Deliberately broad: a failed restart attempt must not abort start.
+        log.warning("wazuh-manager restart attempt failed: %s", exc)
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1130,7 +1248,16 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             "initializing). Waiting 60s and retrying..."
         )
         import time
+
         time.sleep(60)
+        # Colima on macOS reproducibly leaves the wazuh-manager container
+        # in a state where s6-supervise reports EACCES on the (executable)
+        # `run` scripts and the wazuh daemons never spawn (#732). The
+        # container stays Up so docker's own restart policy never fires,
+        # but no wazuh-* processes exist inside. A single `docker restart`
+        # clears the state; do that before the retry so compose isn't
+        # forced to try running `up` against a broken container instance.
+        _restart_wazuh_manager_if_stuck(ctx)
         outcome = start_aces_scenario(
             ctx.project_dir,
             ctx.config,
@@ -1179,7 +1306,21 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
-    indexer_url = "https://localhost:9200"
+    # Use the actual published host port for the indexer. If port 9200 was
+    # already in use on the host (Cursor / another OpenSearch / a k8s
+    # port-forward), `_step_resolve_host_ports` remapped the publish; probing
+    # the literal 9200 in that case reaches whatever else is on 9200 and
+    # falsely reports the indexer as unready. `ctx.resolved_ports` carries
+    # the post-remap answer.
+    indexer_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == "wazuh.indexer"
+        ),
+        9200,
+    )
+    indexer_url = f"https://localhost:{indexer_port}"
     indexer_result = wait_for_service(
         check_fn=partial(
             check_indexer_ready,
@@ -1187,7 +1328,10 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
         ),
-        timeout=300,
+        # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
+        # formation + security index) can run long when the whole SOC stack and
+        # MCP builds start at once.
+        timeout=600,
         interval=10,
         service_name="Wazuh Indexer",
         progress=ctx.progress,
@@ -1287,6 +1431,12 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
         and ctx.ssh_key_path is not None
         and ctx.backend is not None
     )
+    if _docker_vm_hides_bridge_ips():
+        log.info(
+            "Skipping host SSH probes: Docker VM mode does not expose "
+            "Compose bridge IPs to the host"
+        )
+        return None
     # Probe only the interactive targets the scenario actually started. Gating
     # on the selected profiles (not config flags) keeps a bounded scenario from
     # warning about targets it intentionally omitted.
@@ -1342,16 +1492,21 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
             component=f"ssh:{name}",
             impact=DiagnosticImpact.READINESS,
             severity=DiagnosticSeverity.WARNING,
-            message=(
-                f"SSH to {name} not ready after "
-                f"{int(ssh_wait.elapsed_seconds)}s"
-            ),
+            message=(f"SSH to {name} not ready after {int(ssh_wait.elapsed_seconds)}s"),
             operator_action=(
                 f"Check the {name} container's sshd; scenarios cannot "
                 "drive this target until SSH is reachable"
             ),
         )
     return None
+
+
+def _docker_vm_hides_bridge_ips() -> bool:
+    """Return True when host-side probes cannot route to container IPs."""
+    return hostenv.docker_mode() in {
+        hostenv.DOCKER_DESKTOP,
+        hostenv.DOCKER_VM,
+    }
 
 
 @_runtime_require(
@@ -1362,9 +1517,7 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
     """Capture a non-fatal inventory snapshot of the started range."""
     log.info("Step 11: Capturing range snapshot...")
     try:
-        snapshot = capture_snapshot(
-            config_dir=ctx.project_dir, backend=ctx.backend
-        )
+        snapshot = capture_snapshot(config_dir=ctx.project_dir, backend=ctx.backend)
     except Exception:
         # Snapshot is the run-archive inventory; its loss is observability
         # debt, not a hard failure (ADR-030). Keep exception detail in
@@ -1532,7 +1685,9 @@ def _write_run_record(ctx: _LabStartContext) -> None:
         realization_details=_safe_dict(getattr(outcome, "realization_details", {})),
         selected_profiles=_safe_list(getattr(outcome, "selected_profiles", [])),
         scenario_path=getattr(outcome, "scenario_path", None),
-        scenario_display_name=_scenario_display_name(getattr(outcome, "scenario_path", None)),
+        scenario_display_name=_scenario_display_name(
+            getattr(outcome, "scenario_path", None)
+        ),
         range_snapshot_dict=snapshot.to_dict(),
         config_digests=snapshot.config_hashes,
         container_image_digests=_assemble_container_image_digests(snapshot),
@@ -1592,21 +1747,26 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 11b: Pinning terminal SSH host keys...")
     if ctx.backend is None or ctx.ssh_key_path is None:
         log.debug("Skipping host-key pinning: backend or ssh key unavailable")
-        return None
-    try:
-        endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
-        result = pin_terminal_host_keys(
-            ctx.project_dir, endpoints, ctx.ssh_key_path
+    elif _docker_vm_hides_bridge_ips():
+        log.info(
+            "Skipping host-key pinning: Docker VM mode does not expose "
+            "Compose bridge IPs to the host"
         )
-    # Observability only: pinning failures are never fatal to lab start.
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Terminal SSH host-key pinning failed: %s", exc)
-        return None
-    if result.failed:
-        log.warning(
-            "Terminal SSH host keys not pinned for: %s",
-            ", ".join(result.failed),
-        )
+    else:
+        try:
+            endpoints = build_ssh_endpoints(list_container_snapshots(ctx.backend))
+            result = pin_terminal_host_keys(
+                ctx.project_dir, endpoints, ctx.ssh_key_path
+            )
+        # Observability only: pinning failures are never fatal to lab start.
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Terminal SSH host-key pinning failed: %s", exc)
+        else:
+            if result.failed:
+                log.warning(
+                    "Terminal SSH host keys not pinned for: %s",
+                    ", ".join(result.failed),
+                )
     return None
 
 
@@ -1622,18 +1782,13 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="MCP build script not found; MCP servers will not be available",
-            operator_action=(
-                "Verify mcp/build-all-mcps.sh exists in the project tree"
-            ),
+            operator_action=("Verify mcp/build-all-mcps.sh exists in the project tree"),
         )
         return None
     try:
-        mcp_result = subprocess.run(
-            [str(mcp_script)],
-            capture_output=True,
-            text=True,
-            cwd=ctx.project_dir,
-        )
+        from aptl.utils.shell import run_shell_script
+
+        mcp_result = run_shell_script(mcp_script, cwd=ctx.project_dir)
         if mcp_result.returncode != 0:
             # Raw stderr stays in the log (existing redaction owns it);
             # the structured diagnostic carries only a narrow summary.
@@ -1644,9 +1799,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
                 impact=DiagnosticImpact.CAPABILITY,
                 severity=DiagnosticSeverity.WARNING,
                 message="MCP build returned non-zero exit; see lab logs",
-                operator_action=(
-                    "Inspect mcp/build-all-mcps.sh output in the lab log"
-                ),
+                operator_action=("Inspect mcp/build-all-mcps.sh output in the lab log"),
             )
         else:
             log.info("MCP servers built successfully")
@@ -1658,9 +1811,7 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="MCP build could not run; see lab logs",
-            operator_action=(
-                "Inspect mcp/build-all-mcps.sh permissions and tooling"
-            ),
+            operator_action=("Inspect mcp/build-all-mcps.sh permissions and tooling"),
         )
     return None
 
@@ -1733,9 +1884,7 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
     """Run ``seed-prime.sh`` and convert soft failures to diagnostics."""
     seed_script = ctx.project_dir / "scripts" / "seed-prime.sh"
     if not seed_script.exists():
-        log.warning(
-            "SOC profile enabled but seed script not found at %s", seed_script
-        )
+        log.warning("SOC profile enabled but seed script not found at %s", seed_script)
         _emit_diagnostic(
             ctx,
             step="seed_soc",
@@ -1757,10 +1906,10 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
 def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
     """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
-        seed_result = subprocess.run(
-            [str(seed_script)],
-            capture_output=True,
-            text=True,
+        from aptl.utils.shell import run_shell_script
+
+        seed_result = run_shell_script(
+            seed_script,
             cwd=ctx.project_dir,
             env={**os.environ, **ctx.raw_env},
             timeout=1200,
@@ -1795,9 +1944,7 @@ def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
             impact=DiagnosticImpact.CAPABILITY,
             severity=DiagnosticSeverity.WARNING,
             message="SOC seeding could not run; see lab logs",
-            operator_action=(
-                "Inspect scripts/seed-prime.sh permissions and tooling"
-            ),
+            operator_action=("Inspect scripts/seed-prime.sh permissions and tooling"),
         )
 
 
@@ -1826,8 +1973,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
                 "authenticate without manual key wiring"
             ),
             operator_action=(
-                "Inspect .mcp.json env blocks against .env after a "
-                "fresh lab start"
+                "Inspect .mcp.json env blocks against .env after a fresh lab start"
             ),
         )
     return None
@@ -1838,6 +1984,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 # stay aligned.
 _LAB_START_STEPS = (
     _step_load_env,
+    _step_resolve_host_ports,
     _step_load_config,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
@@ -1860,6 +2007,7 @@ _LAB_START_STEPS = (
 
 _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
+    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_load_config": "Loading lab configuration.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
@@ -1940,8 +2088,7 @@ def orchestrate_lab_start(
             return LabResult(
                 success=False,
                 error=(
-                    f"Lab orchestration contract violated at "
-                    f"step '{step.__name__}'"
+                    f"Lab orchestration contract violated at step '{step.__name__}'"
                 ),
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
@@ -1970,6 +2117,7 @@ def orchestrate_lab_start(
         message=message,
         outcome=outcome,
         diagnostics=list(ctx.diagnostics),
+        resolved_ports=list(ctx.resolved_ports),
     )
 
 
@@ -1986,8 +2134,7 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
     mcp_path = project_dir / ".mcp.json"
     env_path = project_dir / ".env"
     if not mcp_path.exists() or not env_path.exists():
-        log.debug("MCP sync: missing %s or %s, skipping",
-                  mcp_path.name, env_path.name)
+        log.debug("MCP sync: missing %s or %s, skipping", mcp_path.name, env_path.name)
         return
 
     # Use the canonical .env parser so quoted values, `export` prefixes,
@@ -1995,8 +2142,7 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
     try:
         env_vals = load_dotenv(env_path)
     except FileNotFoundError:
-        log.debug("MCP sync: %s vanished between checks; skipping",
-                  env_path.name)
+        log.debug("MCP sync: %s vanished between checks; skipping", env_path.name)
         return
 
     # server name -> env keys it expects
@@ -2021,7 +2167,6 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
 
     if updated:
         mcp_path.write_text(json.dumps(cfg, indent=2) + "\n")
-        log.info("MCP sync: refreshed %s in %s",
-                 ", ".join(updated), mcp_path.name)
+        log.info("MCP sync: refreshed %s in %s", ", ".join(updated), mcp_path.name)
     else:
         log.debug("MCP sync: no changes needed")

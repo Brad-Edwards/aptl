@@ -8,14 +8,15 @@ import typer
 
 from aptl.cli import lab_init, lifecycle
 from aptl.cli.continuity import continuity_audit
+from aptl.cli.lab_render import render_start_result
+from aptl.core.host_ports import ResolvedPort
 from aptl.core.lab import (
-    LabResult,
     clean_boot_lab,
     lab_status,
     orchestrate_lab_start,
     stop_lab,
 )
-from aptl.core.lab_types import LabStatus, StartupDiagnostic, StartupOutcome
+from aptl.core.lab_types import LabStatus
 from aptl.core.scenario_catalog import (
     load_scenario_catalog,
     resolve_scenario_selection,
@@ -41,24 +42,6 @@ lab_init.register(app)
 lifecycle.register(app)
 
 
-# Headline phrasing per outcome — kept beside the renderer so the CLI's
-# user-visible classification stays in one place (ADR-030 anti-pattern:
-# never reclassify based on English text). Values are the same stable
-# wire strings as the StartupOutcome enum so an operator (or a parser)
-# can grep for them.
-_OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
-    StartupOutcome.READY: "Lab is ready.",
-    StartupOutcome.DEGRADED_USABLE: (
-        "Lab is degraded_usable — telemetry/cosmetic warnings, scenarios "
-        "should still run."
-    ),
-    StartupOutcome.DEGRADED_UNUSABLE: (
-        "Lab is degraded_unusable — some capabilities or SSH targets are not reachable."
-    ),
-    StartupOutcome.FAILED: "Lab start failed.",
-}
-
-
 # Shared destructive-data warning. Both `stop --volumes` and
 # `start --clean` remove Compose-managed volumes, so the operator sees one
 # canonical statement of what gets destroyed.
@@ -72,9 +55,153 @@ _DESTRUCTIVE_DATA_WARNING = (
 )
 
 
-def _emit_lab_access_summary(project_dir: Path) -> None:
-    """Print the credential locations and common lab entry points."""
+# Service (compose name) -> its default host port. Used to look up the actual
+# published port from a lab-start resolution so the access summary always shows
+# where a service really is, even after an in-use default was remapped.
+_WAZUH_DASHBOARD_SVC = "wazuh.dashboard"
+_GRAFANA_SVC = "aptl-grafana-otel"
+_REVERSE_SVC = "reverse"
+_WAZUH_DASHBOARD_DEFAULT = 443
+_GRAFANA_DEFAULT = 3100
+_REVERSE_DEFAULT = 2027
+
+
+def _resolved_port(
+    resolved_ports: list[ResolvedPort], service: str, default: int
+) -> int:
+    """Return the actual published host port for *service* (default if unknown)."""
+    for entry in resolved_ports or ():
+        if getattr(entry, "service", None) == service:
+            return getattr(entry, "resolved_port", default)
+    return default
+
+
+def _live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
+    """Reconstruct a ResolvedPort list from docker's runtime state.
+
+    `_emit_lab_access_summary` needs a ResolvedPort list to print live URLs;
+    `lab start` passes the one it computed at port-resolution time. Later
+    commands (`aptl lab info`) run against a running lab and have to ask
+    docker what actually got published — otherwise the URLs default to
+    the compile-time constants, and any host with a taken default port
+    (Cursor's tunnels, k8s port-forward, AirPlay on 3100, etc.) sees a
+    URL that goes to the wrong service (#737).
+
+    Best-effort: any exception returns an empty list, and the caller
+    falls back to the compile-time defaults.
+    """
+    try:
+        from aptl.cli._common import resolve_config_for_cli
+        from aptl.core.deployment import get_backend
+
+        config, project_root = resolve_config_for_cli(project_dir)
+        backend = get_backend(config, project_root)
+    except Exception:  # noqa: BLE001 — never let info abort
+        return []
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:  # noqa: BLE001
+        return []
+    resolved: list[ResolvedPort] = []
+    for entry in containers:
+        service = entry.get("Service") or ""
+        name = (entry.get("Name") or "").lstrip("/")
+        if not service or not name:
+            continue
+        try:
+            info = backend.container_inspect(name)
+        except Exception:  # noqa: BLE001
+            continue
+        ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
+        if not isinstance(ports, dict):
+            continue
+        for container_port_proto, bindings in ports.items():
+            if not bindings:
+                continue
+            container_port_str, _, proto = container_port_proto.partition("/")
+            try:
+                default_port = int(container_port_str)
+            except ValueError:
+                continue
+            for binding in bindings:
+                try:
+                    host_port = int(binding.get("HostPort", 0))
+                except (TypeError, ValueError):
+                    continue
+                if host_port == 0:
+                    continue
+                resolved.append(
+                    ResolvedPort(
+                        service=service,
+                        env_var=None,
+                        default_port=default_port,
+                        resolved_port=host_port,
+                        protos=(proto or "tcp",),
+                        host_ip=binding.get("HostIp"),
+                        remapped=(host_port != default_port),
+                    )
+                )
+    return resolved
+
+
+# SOC services whose MCP server config (mcp/<name>/docker-lab-config.json)
+# hardcodes the host port on localhost. If one of these is remapped, the MCP
+# server config still points at the default port, so flag it for the operator.
+_MCP_BACKED_SERVICES = {
+    "wazuh.indexer",
+    "wazuh.manager",
+    "thehive",
+    "misp",
+    "shuffle-frontend",
+    "kali-ssh-proxy",
+}
+
+
+def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
+    """List any ports that were remapped off an in-use default."""
+    remapped = [r for r in (resolved_ports or ()) if getattr(r, "remapped", False)]
+    if not remapped:
+        return
+    typer.echo("")
+    typer.echo(
+        "Host port remaps (a default was already in use on this host, so the "
+        "service is published on a free port instead):"
+    )
+    mcp_affected = []
+    for entry in sorted(remapped, key=lambda r: r.service):
+        protos = "/".join(entry.protos)
+        typer.echo(
+            f"  {entry.service}: {entry.default_port} -> "
+            f"{entry.resolved_port} ({protos})"
+        )
+        if entry.service in _MCP_BACKED_SERVICES:
+            mcp_affected.append(entry)
+    if mcp_affected:
+        typer.echo("")
+        typer.echo(
+            "  Note: these services are consumed by MCP servers that pin the "
+            "default host port in mcp/<name>/docker-lab-config.json. If you "
+            "use those MCP servers, point them at the remapped port above (or "
+            "free the default port and restart)."
+        )
+
+
+def _emit_lab_access_summary(
+    project_dir: Path, resolved_ports: list[ResolvedPort] | None = None
+) -> None:
+    """Print the credential locations and common lab entry points.
+
+    ``resolved_ports`` (host_ports.ResolvedPort list from a lab-start run) makes
+    the printed URLs reflect the real published ports — important on hosts where
+    a default port was in use and the service was remapped to a free one.
+    """
+    resolved_ports = resolved_ports or []
     env_path = project_dir / ".env"
+    dashboard_port = _resolved_port(
+        resolved_ports, _WAZUH_DASHBOARD_SVC, _WAZUH_DASHBOARD_DEFAULT
+    )
+    grafana_port = _resolved_port(resolved_ports, _GRAFANA_SVC, _GRAFANA_DEFAULT)
+    reverse_port = _resolved_port(resolved_ports, _REVERSE_SVC, _REVERSE_DEFAULT)
     typer.echo("")
     typer.echo(f"Credentials file: {env_path}")
     typer.echo(
@@ -83,14 +210,15 @@ def _emit_lab_access_summary(project_dir: Path) -> None:
     )
     typer.echo("")
     typer.echo("Access:")
-    typer.echo("  Wazuh Dashboard: https://localhost:443")
+    typer.echo(f"  Wazuh Dashboard: https://localhost:{dashboard_port}")
     typer.echo("    username: admin")
     typer.echo("    password: see INDEXER_PASSWORD in .env")
-    typer.echo("  Grafana: http://localhost:3100")
+    typer.echo(f"  Grafana: http://localhost:{grafana_port}")
     typer.echo("    username: admin")
     typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
     typer.echo("  Reverse engineering SSH:")
-    typer.echo("    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027")
+    typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}")
+    _emit_host_port_remaps(resolved_ports)
 
 
 def _emit_lab_start_progress(message: str) -> None:
@@ -112,39 +240,6 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
         typer.echo("Aborted.")
         return False
     return True
-
-
-def _render_start_result(result: LabResult) -> None:
-    """Print a structured summary of a lab-start result.
-
-    Always emits the outcome value (stable wire string from
-    ``StartupOutcome``) so automation can parse a single line instead of
-    scraping the diagnostic list. Diagnostics are grouped by impact so
-    an operator can scan for ``readiness`` / ``capability`` rows when
-    triaging a partial-readiness lab.
-    """
-    typer.echo(_OUTCOME_HEADLINES[result.outcome])
-    if result.outcome is StartupOutcome.FAILED and result.error:
-        typer.echo(f"  error: {result.error}")
-    if not result.diagnostics:
-        return
-    typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
-    # Group by impact so a scanning operator sees all readiness rows
-    # together, then capability, telemetry, cosmetic. Iteration order
-    # below follows the severity hierarchy from worst to least-worst.
-    impacts_in_order = ["readiness", "capability", "telemetry", "cosmetic"]
-    grouped: dict[str, list[StartupDiagnostic]] = {}
-    for diag in result.diagnostics:
-        grouped.setdefault(diag.impact.value, []).append(diag)
-    for impact in impacts_in_order:
-        for diag in grouped.get(impact, []):
-            label = f"{diag.step}/{diag.component}" if diag.component else diag.step
-            typer.echo(
-                f"    [{diag.impact.value}|{diag.severity.value}] "
-                f"{label} — {diag.message}"
-            )
-            if diag.operator_action:
-                typer.echo(f"      action: {diag.operator_action}")
 
 
 @app.command()
@@ -218,9 +313,9 @@ def start(
             progress=_emit_lab_start_progress,
         )
 
-    _render_start_result(result)
+    render_start_result(result)
     if result.success:
-        _emit_lab_access_summary(project_dir)
+        _emit_lab_access_summary(project_dir, result.resolved_ports)
     if not result.success:
         raise typer.Exit(code=1)
 
@@ -242,7 +337,9 @@ def info(
             err=True,
         )
         raise typer.Exit(code=1)
-    _emit_lab_access_summary(project_dir)
+    # Reconstruct the ResolvedPort list from docker's runtime state so the
+    # printed URLs reflect the actual published ports (#737).
+    _emit_lab_access_summary(project_dir, _live_resolved_ports(project_dir))
 
 
 @app.command("scenarios")

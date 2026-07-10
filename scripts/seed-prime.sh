@@ -31,12 +31,25 @@ update_env_var() {
     local key="$1"
     local value="$2"
     ensure_env_file
-    if grep -q "^${key}=" "$ENV_FILE" 2>/dev/null; then
-        # update in place using sed; escape | in value (none of ours have it)
-        sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
-    else
-        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
-    fi
+    local tmp
+    tmp=$(mktemp "${ENV_FILE}.tmp.XXXXXX")
+    awk -v key="$key" -v value="$value" '
+        BEGIN { updated = 0 }
+        index($0, key "=") == 1 {
+            print key "=" value
+            updated = 1
+            next
+        }
+        { print }
+        END {
+            if (!updated) {
+                print key "=" value
+            }
+        }
+    ' "$ENV_FILE" > "$tmp"
+    cat "$tmp" > "$ENV_FILE"
+    rm -f "$tmp"
+    chmod 600 "$ENV_FILE"
 }
 
 echo "============================================="
@@ -134,7 +147,8 @@ fi
 echo ""
 echo "[3/7] Waiting for Wazuh Indexer to be healthy..."
 
-INDEXER_URL="${INDEXER_URL:-https://localhost:9200}"
+INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"
+INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"
 INDEXER_USER="${INDEXER_USERNAME:-admin}"
 INDEXER_PASS="${INDEXER_PASSWORD:-SecretPassword}"
 

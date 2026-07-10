@@ -193,16 +193,24 @@ class TestEndToEndCapture:
     SSH_KEY = "keys/aptl_lab_key"
     SSH_USER = "kali"
 
-    def _kali_ip(self) -> str:
-        """Resolve aptl-kali's container IP.
+    def _kali_ssh_endpoint(self) -> tuple[str, int]:
+        """Resolve the host-reachable Kali SSH endpoint.
 
-        kali sits only on internal-only networks and publishes no host
-        port (issue #293), so the host reaches it by container IP over
-        the bridge — the same path the control plane uses. Any of
-        kali's bridge IPs is reachable; the lowest is taken for a
-        deterministic target.
+        Prefer the loopback-only published port used by mcp-red. Older
+        native-Linux labs may not have that port yet, so keep the bridge-IP
+        fallback for compatibility with already-running developer labs.
         """
         import subprocess as sp
+
+        port = sp.run(
+            ["docker", "port", "aptl-kali", "22/tcp"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        for line in port.stdout.splitlines():
+            if line.endswith(":2023"):
+                return ("localhost", 2023)
 
         r = sp.run(
             [
@@ -219,7 +227,7 @@ class TestEndToEndCapture:
         ips = sorted(ip for ip in r.stdout.split() if ip)
         if not ips:
             pytest.skip("could not resolve aptl-kali container IP")
-        return ips[0]
+        return (ips[0], 22)
 
     def _ssh_with_env(self, run_id: str, session_id: str, command: str) -> str:
         """SSH into kali with APTL_* env vars and return stdout."""
@@ -231,6 +239,7 @@ class TestEndToEndCapture:
             pytest.skip(f"SSH key {self.SSH_KEY} not present")
         if not shutil.which("ssh"):
             pytest.skip("ssh client not installed")
+        host, port = self._kali_ssh_endpoint()
         argv = [
             "ssh",
             "-i",
@@ -241,7 +250,9 @@ class TestEndToEndCapture:
             "UserKnownHostsFile=/dev/null",
             "-o",
             "SendEnv=APTL_SESSION_ID APTL_RUN_ID APTL_TRACE_ID",
-            f"{self.SSH_USER}@{self._kali_ip()}",
+            "-p",
+            str(port),
+            f"{self.SSH_USER}@{host}",
             command,
         ]
         env = {

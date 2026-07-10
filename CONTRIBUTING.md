@@ -87,6 +87,14 @@ cd web && npm test
 When changing files under `mcp/aptl-mcp-common`, rebuild the common package and
 run tests for dependent MCP servers because they consume the local package.
 
+CI also runs the non-Docker Python suite plus `aptl --help` and
+`aptl lab init` on Ubuntu and macOS. Windows runs the portable Python contract
+suite plus the same CLI smoke commands, excluding POSIX-only file-mode,
+ownership, signal, and Unix-socket tests. Hosted runners do not provide the
+Docker Desktop/nested-virtualization environment needed to prove full lab boot
+on macOS or Windows, so `aptl lab start` remains a manual platform-validation
+gate.
+
 When changing `docker-compose.yml`, container Dockerfiles, or files under
 `config/`, validate the lab from a clean state:
 
@@ -106,6 +114,15 @@ permission to test.
 The repository contains intentional test credentials for lab functionality.
 Those are not production secrets. New credentials should be dummy values unless
 the design explicitly renders or generates them at runtime.
+
+## Host Privilege Escalation
+
+Host-side APTL code must not silently escalate privileges. Do not add `sudo -n`,
+passwordless-sudo assumptions, or hidden sudo repair paths. If a host action
+truly needs elevated privileges, either prompt for explicit consent before
+running it or stop and print the exact command for the user to run. Scenario
+containers may still model sudo behavior as lab content; that is separate from
+operator host escalation.
 
 ## Changelog
 

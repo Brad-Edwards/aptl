@@ -12,10 +12,23 @@ so a future edit cannot silently re-expose a SOC management port nor
 accidentally loopback-bind a victim target.
 """
 
+import re
 from pathlib import Path
 
 import pytest
 import yaml
+
+# Compose variable references (``${VAR}`` / ``${VAR:-default}``) can appear in a
+# port mapping — published host ports are parameterized so `aptl lab start` can
+# remap an in-use default to a free port. Resolve to the default (the binding
+# used when the operator sets no override) so the policy below is checked
+# against the value the stack publishes out of the box.
+_COMPOSE_VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+
+def _resolve_compose_vars(text: str) -> str:
+    return _COMPOSE_VAR.sub(lambda m: m.group(2) or "", text)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yml"
@@ -37,6 +50,7 @@ MANAGEMENT_SURFACES = [
     ("aptl-otel-collector", 4317),
     ("aptl-otel-collector", 4318),
     ("aptl-tempo", 3200),
+    ("kali-ssh-proxy", 2023),
     # mailserver holds fixture credentials (a known lab password), so its
     # SMTP/IMAP host publishes must NOT be reachable on 0.0.0.0 where an
     # exposed host becomes an open, known-cred relay (issue #668). The in-range
@@ -73,6 +87,7 @@ def _parse_port(entry) -> tuple[str | None, int | None, str]:
     proto = "tcp"
     if "/" in text:
         text, proto = text.rsplit("/", 1)
+    text = _resolve_compose_vars(text)
     parts = text.split(":")
     if len(parts) == 3:
         host_ip, host_port, _container = parts

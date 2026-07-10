@@ -157,9 +157,9 @@ def ensure_soc_certs(project_dir: Path) -> CertResult:
     returns ``generated=True``.
 
     The CA private key, each service private key, and each PKCS#12
-    passphrase are written with mode ``0o600``. Public certs are ``0o644``
-    so a container process running as a non-root UID can still read them
-    across a bind mount.
+    passphrase are written with mode ``0o600``. Public certs and PKCS#12
+    keystores are ``0o644`` so a container process running as a non-root UID
+    can still read them across a bind mount.
 
     Never logs PEM content, key paths, or passphrases. Failure messages
     cite only the SOC tool name and the affected layer.
@@ -278,14 +278,12 @@ def _generate_all(output_dir: Path) -> None:
       host-side access control. No other local user can traverse in.
     - Public certs (``lab-ca.pem``, ``server.pem``) are ``0o644`` so
       bind-mounts and operator inspection work without root.
-    - Private keys (``lab-ca.key``, ``server.key``), PKCS#12 keystores,
-      and the env_file keystore-password blobs are ``0o600``. The SOC
-      service containers each have been verified live to read the
-      private material at this mode (MISP nginx, TheHive Play, Shuffle
-      nginx all run as the host UID 1000 in the lab images we ship);
-      tightening the mode keeps an unprivileged process *inside* the
-      container — different from the service user — from reading the
-      private material via the bind mount.
+    - Private keys (``lab-ca.key``, ``server.key``) and the env_file
+      keystore-password blobs are ``0o600``.
+    - PKCS#12 keystores are ``0o644`` because TheHive's non-root process reads
+      the bind-mounted file as a container UID that may not match the host user
+      that ran ``aptl lab start``. The owner-only parent directory remains the
+      host-side access control.
 
     Symlink containment (ADR-029 § Secret at rest): each per-service
     subdirectory is verified to be a real directory under ``output_dir``
@@ -407,7 +405,7 @@ def _ensure_service_keystore(
         _invalidate_keystore(svc_dir)
     elif ks_path.is_file() and pw_path.is_file():
         # Reuse-path permission reapply (codex cycle-3 sec).
-        _enforce_mode(ks_path, 0o600, kind="file")
+        _enforce_mode(ks_path, 0o644, kind="file")
         _enforce_mode(pw_path, 0o600, kind="file")
     if not (ks_path.is_file() and pw_path.is_file()):
         password = secrets.token_urlsafe(24)
@@ -420,7 +418,7 @@ def _ensure_service_keystore(
                 password.encode()
             ),
         )
-        _atomic_write(ks_path, ks_bytes, mode=0o600)
+        _atomic_write(ks_path, ks_bytes, mode=0o644)
         # Write the password in Docker Compose ``env_file`` format
         # (``KEY=value``) so the TheHive/Cortex services can
         # consume it via ``env_file:`` rather than baking the

@@ -639,6 +639,19 @@ class TestWazuhActiveResponseSource:
         missing = [ip for ip in KALI_IPS if ip not in ip_lines]
         assert not missing, f"Kali IPs missing from source whitelist: {missing}"
 
+    def test_wrapper_script_is_compatible_with_macos_system_bash(self) -> None:
+        """The wrapper must avoid Bash 4+ parameter transformations.
+
+        macOS ships /bin/bash 3.2 by default, and the hosted macOS
+        smoke job runs this source-level suite before any lab
+        containers are involved.
+        """
+        content = SRC_WRAPPER.read_text()
+        assert "@Q}" not in content, (
+            "Wrapper uses Bash 4+ ${var@Q} quoting; use printf %q so "
+            "source-level tests run under macOS /bin/bash 3.2."
+        )
+
     def _run_wrapper(self, tmp_path: Path, payload: str, iptables: str = "/bin/true") -> tuple[subprocess.CompletedProcess, Path]:
         """Helper: run the source wrapper with a temp whitelist + log
         and a mock iptables. Returns (result, log_path)."""

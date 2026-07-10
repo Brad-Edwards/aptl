@@ -6,6 +6,7 @@ The translator MUST never emit ``drop``/``reject`` regardless of input.
 
 from __future__ import annotations
 
+import builtins
 import json
 import logging
 import socket
@@ -600,13 +601,31 @@ class TestRenderHashListFile:
 class TestWriteIfChanged:
     """Tests for the atomic, idempotent rule-file writer."""
 
-
     def test_creates_file_when_missing(self, tmp_path: Path):
         from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
 
         target = tmp_path / "misp-iocs.rules"
         assert write_if_changed(target, "hello\n") is True
         assert target.read_text() == "hello\n"
+
+    def test_writes_lf_when_host_default_is_crlf(self, tmp_path: Path, mocker):
+        from aptl.services.misp_suricata_sync.rule_writer import write_if_changed
+
+        real_open = builtins.open
+
+        def open_with_windows_default(file, mode="r", *args, **kwargs):
+            if "b" not in mode and "w" in mode and "newline" not in kwargs:
+                kwargs["newline"] = "\r\n"
+            return real_open(file, mode, *args, **kwargs)
+
+        mocker.patch("builtins.open", side_effect=open_with_windows_default)
+        target = tmp_path / "misp-iocs.rules"
+
+        assert write_if_changed(target, "alert\nsecond\n") is True
+
+        raw = target.read_bytes()
+        assert b"\r\n" not in raw
+        assert raw == b"alert\nsecond\n"
 
     def test_returns_false_when_content_identical(self, tmp_path: Path):
         from aptl.services.misp_suricata_sync.rule_writer import write_if_changed

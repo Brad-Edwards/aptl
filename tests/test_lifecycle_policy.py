@@ -8,8 +8,8 @@ the lab functions monkeypatched, so the whole module runs in the fast
 (non-integration) suite.
 """
 
-import fcntl
 import json
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -26,6 +26,11 @@ from aptl.core.lab_types import LabResult, LabStatus, StartupOutcome
 
 
 UTC = timezone.utc
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # pragma: no cover - exercised on Windows CI
+    fcntl = None
 
 
 def _now(year=2026, month=6, day=28, hour=12, minute=0):
@@ -242,6 +247,7 @@ class TestState:
         lp.save_state(tmp_path, state)
         assert lp.load_state(tmp_path) == state
 
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX file modes are unavailable")
     def test_state_file_is_owner_only(self, tmp_path):
         lp.save_state(tmp_path, lp.LifecycleState())
         mode = lp.state_path(tmp_path).stat().st_mode & 0o777
@@ -377,6 +383,7 @@ class TestEnforceOnce:
         # stale provisioned_at is cleared when the lab is observed down
         assert lp.load_state(tmp_path).provisioned_at is None
 
+    @pytest.mark.skipif(fcntl is None, reason="POSIX flock is unavailable")
     def test_raises_busy_when_lock_held(self, tmp_path, monkeypatch):
         _write_policy_config(tmp_path, {"ttl_minutes": 60})
         monkeypatch.setattr(le, "lab_status", lambda **k: LabStatus(running=False))

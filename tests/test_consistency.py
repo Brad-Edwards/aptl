@@ -12,6 +12,15 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# Published host ports are parameterized (`${VAR:-default}`) so `aptl lab start`
+# can remap an in-use default to a free port. Resolve to the default so these
+# static checks compare against the value the stack publishes out of the box.
+_COMPOSE_VAR = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*(?::-([^}]*))?\}")
+
+
+def _resolve_compose_vars(text: str) -> str:
+    return _COMPOSE_VAR.sub(lambda m: m.group(1) or "", text)
+
 
 @pytest.fixture
 def compose_config():
@@ -203,6 +212,46 @@ class TestKaliContainerLifecycle:
             f"which verifies sshd + the ForceCommand wrapper + the boot "
             f"readiness marker — not just an open port; got: {test!r}"
         )
+
+    def test_kali_loopback_ssh_proxy_matches_mcp_red(self, compose_config):
+        """mcp-red must use a host-routable Kali SSH endpoint.
+
+        Docker VM backends do not route Compose bridge IPs back to the host,
+        so the SSH-based MCP server needs the loopback-only proxy published
+        by docker-compose.yml.
+        """
+        services = compose_config["services"]
+        kali = services["kali"]
+        assert "aptl-control" not in kali.get("networks", {}), (
+            "kali must not attach to aptl-control; only the SSH proxy should "
+            "publish a host-routable control endpoint"
+        )
+
+        proxy = services["kali-ssh-proxy"]
+        assert proxy["container_name"] == "aptl-kali-ssh-proxy"
+        resolved_ports = [
+            _resolve_compose_vars(str(p)) for p in proxy.get("ports", [])
+        ]
+        assert "127.0.0.1:2023:2023" in resolved_ports, (
+            "kali-ssh-proxy must publish 127.0.0.1:2023 by default so host-run "
+            "MCP clients work on Docker Desktop, Colima, and WSL2"
+        )
+        assert set(proxy.get("networks", {})) == {
+            "aptl-control",
+            "aptl-redteam",
+        }, (
+            "kali-ssh-proxy should bridge only the host-published control "
+            "network and Kali's red-team network"
+        )
+
+        mcp_config = json.loads(
+            (PROJECT_ROOT / "mcp/mcp-red/docker-lab-config.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        kali_mcp = mcp_config["containers"]["kali"]
+        assert kali_mcp["container_ip"] == "localhost"
+        assert kali_mcp["ssh_port"] == 2023
 
 
 class TestCodeReferencesMatchCompose:

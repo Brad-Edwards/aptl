@@ -75,6 +75,9 @@ nav:
     - Prerequisites: getting-started/prerequisites.md
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
+  - Workshop:
+    - Playbook: workshop/playbook.md
+    - Lab Walkthrough: workshop/walkthrough.md
   - Architecture:
     - Overview: architecture/index.md
     - Networking: architecture/networking.md

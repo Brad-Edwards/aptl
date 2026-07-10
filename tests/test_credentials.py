@@ -32,6 +32,20 @@ _skip_no_posix_modes = pytest.mark.skipif(
 )
 
 
+def _patch_windows_default_fdopen(mocker, module_path: str):
+    """Make text writes default to CRLF unless the caller pins newlines."""
+    real_fdopen = os.fdopen
+
+    def fdopen_with_windows_default(fd, mode="r", *args, **kwargs):
+        if "b" not in mode and "newline" not in kwargs:
+            kwargs["newline"] = "\r\n"
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    return mocker.patch(
+        f"{module_path}.os.fdopen", side_effect=fdopen_with_windows_default
+    )
+
+
 def _layout_dashboard(project_dir: Path, content: str) -> Path:
     target = project_dir / _DASHBOARD_SOURCE_RELPATH
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -178,6 +192,26 @@ class TestSyncDashboardConfig:
         rendered_dir = _rendered_dashboard(tmp_path).parent
         assert not list(rendered_dir.glob("*.tmp"))
 
+    def test_rendered_dashboard_config_is_lf_even_from_crlf_template(
+        self, tmp_path, mocker,
+    ):
+        from aptl.core.credentials import sync_dashboard_config
+
+        source = tmp_path / _DASHBOARD_SOURCE_RELPATH
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(
+            b"hosts:\r\n"
+            b"  - default:\r\n"
+            b'      password: "placeholder"\r\n'
+        )
+        _patch_windows_default_fdopen(mocker, "aptl.core.credentials")
+
+        sync_dashboard_config(tmp_path, "a-real-secret")
+
+        rendered = _rendered_dashboard(tmp_path).read_bytes()
+        assert b"\r\n" not in rendered
+        assert b'password: "a-real-secret"\n' in rendered
+
 
 class TestSyncManagerConfig:
     """Tests for manager (wazuh_manager.conf) cluster key rendering."""
@@ -219,6 +253,28 @@ class TestSyncManagerConfig:
         assert source.read_bytes() == before
         assert "real-cluster-secret" not in source.read_text()
         assert '<key>real-cluster-secret</key>' in _rendered_manager(tmp_path).read_text()
+
+    def test_rendered_manager_config_is_lf_even_from_crlf_template(
+        self, tmp_path, mocker,
+    ):
+        from aptl.core.credentials import sync_manager_config
+
+        source = tmp_path / _MANAGER_SOURCE_RELPATH
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(
+            b"<ossec_config>\r\n"
+            b"  <cluster>\r\n"
+            b"    <key>placeholder_cluster_key</key>\r\n"
+            b"  </cluster>\r\n"
+            b"</ossec_config>\r\n"
+        )
+        _patch_windows_default_fdopen(mocker, "aptl.core.credentials")
+
+        sync_manager_config(tmp_path, "real-cluster-secret")
+
+        rendered = _rendered_manager(tmp_path).read_bytes()
+        assert b"\r\n" not in rendered
+        assert b"<key>real-cluster-secret</key>\n" in rendered
 
     def test_preserves_surrounding_xml_content(self, tmp_path):
         from aptl.core.credentials import sync_manager_config
@@ -757,17 +813,46 @@ def _write_suricata_sources(project_dir):
 class TestEnsureSuricataConfigSourceOwnership:
     """Legacy pre-ADR-043 bind mounts could leave seed sources unwritable."""
 
-    def test_no_op_when_sources_owned_by_current_user(self, tmp_path):
+    _IMAGE = "jasonish/suricata:7.0"
+
+    def _force_linux_native(self, monkeypatch):
+        """Force the native-Linux branch (#678) so the repair logic runs."""
+        monkeypatch.setattr(
+            "aptl.core.suricata_seed.hostenv.needs_host_ownership_fix",
+            lambda: True,
+        )
+
+    def test_no_op_when_sources_owned_by_current_user(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is True
         assert result.repaired == ()
 
-    def test_restores_foreign_owned_sources_with_sudo(self, tmp_path, monkeypatch):
+    def test_skipped_on_non_linux_engine(self, tmp_path, monkeypatch):
+        """#678: no-op (no os.getuid, no subprocess) off a native Linux engine."""
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        monkeypatch.setattr(
+            "aptl.core.suricata_seed.hostenv.needs_host_ownership_fix",
+            lambda: False,
+        )
+        # os.getuid must never be reached (it does not exist on Windows).
+        monkeypatch.setattr(
+            os,
+            "getuid",
+            lambda: (_ for _ in ()).throw(AssertionError("getuid called")),
+        )
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
+        assert result.success is True
+        assert result.repaired == ()
+
+    def test_restores_foreign_owned_sources_with_container(self, tmp_path, monkeypatch):
+        from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
+
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
         rules_path = tmp_path / "config" / "suricata" / "rules" / "local.rules"
@@ -797,17 +882,22 @@ class TestEnsureSuricataConfigSourceOwnership:
         )
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is True
         assert set(result.repaired) == {
             "config/suricata/suricata.yaml",
             "config/suricata/rules/local.rules",
         }
-        assert calls[0][:4] == ["sudo", "-n", "chown", f"{os.getuid()}:{os.getgid()}"]
+        # Container-based chown, never host sudo.
+        assert calls[0][0] == "docker"
+        assert "run" in calls[0] and "--entrypoint" in calls[0] and "chown" in calls[0]
+        assert "sudo" not in calls[0]
+        assert self._IMAGE in calls[0]
 
-    def test_reports_actionable_error_when_sudo_unavailable(self, tmp_path, monkeypatch):
+    def test_reports_error_when_container_repair_fails(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
 
+        self._force_linux_native(monkeypatch)
         _write_suricata_sources(tmp_path)
         yaml_path = tmp_path / "config" / "suricata" / "suricata.yaml"
 
@@ -826,15 +916,14 @@ class TestEnsureSuricataConfigSourceOwnership:
         )
 
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(
-                cmd, 1, "", "sudo: a password is required",
-            )
+            return subprocess.CompletedProcess(cmd, 1, "", "chown: operation not permitted")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        result = ensure_suricata_config_source_ownership(tmp_path)
+        result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is False
-        assert "passwordless sudo" in result.error
+        assert "not permitted" in result.error
+        assert "sudo" not in result.error
 
 
 class TestBuildSuricataVolumeSeeds:

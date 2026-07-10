@@ -6,7 +6,7 @@ fail_fast: true
 # that open files for write. ADR-043 seeds from named volumes instead; the
 # local ownership-restore hook (first repo below) repairs legacy checkouts
 # before those hooks run. ``local.rules`` keeps a per-hook ``exclude:`` as
-# belt-and-suspenders for hosts that cannot passwordless-sudo chown.
+# a fallback when ownership repair cannot make the file writable first.
 repos:
   - repo: local
     hooks:

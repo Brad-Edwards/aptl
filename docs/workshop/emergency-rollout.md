@@ -30,8 +30,8 @@ found during a fallback should become a release or docs issue after the event.
 ## Capacity Model
 
 Size the fleet from the instance vCPU count, not the instance count. For
-example, 25 `m7i.2xlarge` hosts consume 200 Standard On-Demand vCPUs because
-each host has 8 vCPUs. Keep quota headroom for canaries and replacement hosts.
+example, `m7i.2xlarge` hosts consume 8 Standard On-Demand vCPUs each. Keep
+quota headroom for canaries and replacement hosts.
 
 Before launch, check:
 

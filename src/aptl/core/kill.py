@@ -28,6 +28,12 @@ if TYPE_CHECKING:
 
 log = get_logger("kill")
 
+# Windows has no SIGKILL. There, os.kill maps any non-CTRL_* signal to
+# TerminateProcess, which is itself an uncatchable, forceful kill -- the
+# SIGKILL equivalent -- so SIGTERM is the correct escalation target. On POSIX
+# this resolves to the real SIGKILL and behaviour is unchanged.
+_FORCE_KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
+
 
 class McpProcess(TypedDict):
     """A discovered MCP server process."""
@@ -209,7 +215,7 @@ def _sigkill_survivors(pids: list[int]) -> list[str]:
             log.warning("PID %d is no longer an MCP process, skipping SIGKILL", pid)
             continue
         try:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(pid, _FORCE_KILL_SIGNAL)
             log.warning("Sent SIGKILL to pid=%d (did not exit after SIGTERM)", pid)
         except ProcessLookupError:
             pass

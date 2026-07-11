@@ -391,7 +391,7 @@ def check_run_archive_manifest(
     """Persist scenario identity + ACES provenance + validation evidence.
 
     Writes through ``LocalRunStore``'s redacting boundary (ADR-029).
-    Objective / scoring run surfaces are published through the portable
+    Objective and condition run surfaces are published through the portable
     ACES evaluation contracts at the backend boundary. Live evaluator
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """

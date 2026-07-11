@@ -13,7 +13,6 @@ from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot, SnapshotE
 from aces_processor.compiler import compile_runtime_model
 from aces_processor.planner import plan
 from aces_runtime.evaluation_result_contracts import evaluation_result_contract_diagnostics
-from aces_sdl import parse_sdl_file
 from aces_sdl.parser import parse_sdl
 
 from aptl.backends.aces_evaluator import AptlEvaluator
@@ -51,65 +50,8 @@ _EVALUATION_SCENARIO = dedent(
     """
 )
 
-_SCORING_SCENARIO = dedent(
-    """
-    name: evaluator-score-test
-    nodes:
-      vm:
-        type: vm
-        os: linux
-        resources: {ram: 1 gib, cpu: 1}
-        conditions: {health: ops}
-        roles: {ops: operator}
-    conditions:
-      health: {command: /bin/true, interval: 15}
-    entities:
-      blue: {role: blue}
-    metrics:
-      uptime:
-        type: conditional
-        max-score: 10
-        condition: health
-    evaluations:
-      overall:
-        metrics: [uptime]
-        min-score: {absolute: 10}
-    tlos:
-      service-live:
-        evaluation: overall
-    goals:
-      verify:
-        tlos: [service-live]
-    objectives:
-      validate:
-        entity: blue
-        success:
-          conditions: [health]
-          metrics: [uptime]
-          evaluations: [overall]
-          tlos: [service-live]
-          goals: [verify]
-    workflows:
-      response:
-        start: run
-        steps:
-          run:
-            type: objective
-            objective: validate
-            on-success: finish
-          finish: {type: end}
-    """
-)
-
-
 def _evaluation_plan():
     scenario = parse_sdl(_EVALUATION_SCENARIO)
-    execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
-    return execution_plan.evaluation
-
-
-def _scoring_plan():
-    scenario = parse_sdl(_SCORING_SCENARIO)
     execution_plan = plan(compile_runtime_model(scenario), create_aptl_manifest())
     return execution_plan.evaluation
 
@@ -157,9 +99,9 @@ def test_start_reports_running_until_observed_state_is_available():
         assert history[-1]["status"] == EvaluationResultStatus.RUNNING.value
 
 
-def test_start_derives_scores_from_observed_condition_state():
+def test_start_derives_condition_and_objective_pass_from_observed_state():
     result = AptlEvaluator().start(
-        _scoring_plan(),
+        _evaluation_plan(),
         _snapshot_with_node_status("ready"),
     )
 
@@ -168,42 +110,42 @@ def test_start_derives_scores_from_observed_condition_state():
     assert diagnostics == [], [d.message for d in diagnostics]
 
     results = result.snapshot.evaluation_results
+    assert sorted(results) == [
+        "evaluation.condition.vm.health",
+        "evaluation.objective.validate",
+    ]
     condition = EvaluationExecutionState.from_payload(
         results["evaluation.condition.vm.health"]
     )
-    metric = EvaluationExecutionState.from_payload(results["evaluation.metric.uptime"])
-    evaluation = EvaluationExecutionState.from_payload(
-        results["evaluation.evaluation.overall"]
-    )
-    tlo = EvaluationExecutionState.from_payload(results["evaluation.tlo.service-live"])
-    goal = EvaluationExecutionState.from_payload(results["evaluation.goal.verify"])
     objective = EvaluationExecutionState.from_payload(
         results["evaluation.objective.validate"]
     )
 
     assert condition.status == EvaluationResultStatus.READY
     assert condition.passed is True
-    assert metric.status == EvaluationResultStatus.READY
-    assert metric.score == 10
-    assert metric.max_score == 10
-    assert evaluation.passed is True
-    assert tlo.passed is True
-    assert goal.passed is True
+    assert condition.score is None
+    assert condition.max_score is None
+    assert objective.status == EvaluationResultStatus.READY
     assert objective.passed is True
+    assert objective.score is None
+    assert objective.max_score is None
 
-    metric_history = result.snapshot.evaluation_history["evaluation.metric.uptime"]
-    assert _event_types(metric_history) == [
+    objective_history = result.snapshot.evaluation_history[
+        "evaluation.objective.validate"
+    ]
+    assert _event_types(objective_history) == [
         EvaluationHistoryEventType.EVALUATION_STARTED.value,
         EvaluationHistoryEventType.EVALUATION_UPDATED.value,
         EvaluationHistoryEventType.EVALUATION_READY.value,
     ]
-    assert metric_history[1]["status"] == EvaluationResultStatus.RUNNING.value
-    assert metric_history[-1]["score"] == 10
-    assert metric_history[-1]["max_score"] == 10
+    assert objective_history[1]["status"] == EvaluationResultStatus.RUNNING.value
+    assert objective_history[-1]["passed"] is True
+    assert objective_history[-1].get("score") is None
+    assert objective_history[-1].get("max_score") is None
 
 
-def test_start_keeps_unobserved_scores_running_without_placeholder_values():
-    result = AptlEvaluator().start(_scoring_plan(), RuntimeSnapshot())
+def test_start_keeps_unobserved_evaluations_running_without_placeholder_values():
+    result = AptlEvaluator().start(_evaluation_plan(), RuntimeSnapshot())
 
     assert result.success is True
     diagnostics = evaluation_result_contract_diagnostics(result.snapshot)
@@ -213,15 +155,19 @@ def test_start_keeps_unobserved_scores_running_without_placeholder_values():
     condition = EvaluationExecutionState.from_payload(
         results["evaluation.condition.vm.health"]
     )
-    metric = EvaluationExecutionState.from_payload(results["evaluation.metric.uptime"])
+    objective = EvaluationExecutionState.from_payload(
+        results["evaluation.objective.validate"]
+    )
 
     assert condition.status == EvaluationResultStatus.RUNNING
     assert condition.passed is None
-    assert metric.status == EvaluationResultStatus.RUNNING
-    assert metric.score is None
-    assert metric.max_score is None
+    assert condition.score is None
+    assert objective.status == EvaluationResultStatus.RUNNING
+    assert objective.passed is None
+    assert objective.score is None
+    assert objective.max_score is None
     assert _event_types(
-        result.snapshot.evaluation_history["evaluation.metric.uptime"]
+        result.snapshot.evaluation_history["evaluation.objective.validate"]
     ) == [
         EvaluationHistoryEventType.EVALUATION_STARTED.value,
         EvaluationHistoryEventType.EVALUATION_UPDATED.value,
@@ -230,20 +176,20 @@ def test_start_keeps_unobserved_scores_running_without_placeholder_values():
 
 def test_start_preserves_existing_run_history_when_observation_advances():
     evaluator = AptlEvaluator()
-    initial = evaluator.start(_scoring_plan(), RuntimeSnapshot())
+    initial = evaluator.start(_evaluation_plan(), RuntimeSnapshot())
     assert initial.success is True
 
-    metric_address = "evaluation.metric.uptime"
-    initial_metric = EvaluationExecutionState.from_payload(
-        initial.snapshot.evaluation_results[metric_address]
+    objective_address = "evaluation.objective.validate"
+    initial_objective = EvaluationExecutionState.from_payload(
+        initial.snapshot.evaluation_results[objective_address]
     )
-    initial_history = list(initial.snapshot.evaluation_history[metric_address])
+    initial_history = list(initial.snapshot.evaluation_history[objective_address])
     ready_node = _snapshot_with_node_status("ready").entries["provision.node.vm"]
     observed_entries = dict(initial.snapshot.entries)
     observed_entries[ready_node.address] = ready_node
 
     advanced = evaluator.start(
-        _scoring_plan(),
+        _evaluation_plan(),
         initial.snapshot.with_entries(
             observed_entries,
             evaluation_results=initial.snapshot.evaluation_results,
@@ -252,11 +198,11 @@ def test_start_preserves_existing_run_history_when_observation_advances():
     )
 
     assert advanced.success is True
-    advanced_metric = EvaluationExecutionState.from_payload(
-        advanced.snapshot.evaluation_results[metric_address]
+    advanced_objective = EvaluationExecutionState.from_payload(
+        advanced.snapshot.evaluation_results[objective_address]
     )
-    advanced_history = advanced.snapshot.evaluation_history[metric_address]
-    assert advanced_metric.run_id == initial_metric.run_id
+    advanced_history = advanced.snapshot.evaluation_history[objective_address]
+    assert advanced_objective.run_id == initial_objective.run_id
     assert advanced_history[: len(initial_history)] == initial_history
     assert _event_types(advanced_history) == [
         EvaluationHistoryEventType.EVALUATION_STARTED.value,
@@ -264,19 +210,19 @@ def test_start_preserves_existing_run_history_when_observation_advances():
         EvaluationHistoryEventType.EVALUATION_READY.value,
     ]
 
-    repeated = evaluator.start(_scoring_plan(), advanced.snapshot)
+    repeated = evaluator.start(_evaluation_plan(), advanced.snapshot)
 
     assert repeated.success is True
-    repeated_metric = EvaluationExecutionState.from_payload(
-        repeated.snapshot.evaluation_results[metric_address]
+    repeated_objective = EvaluationExecutionState.from_payload(
+        repeated.snapshot.evaluation_results[objective_address]
     )
-    assert repeated_metric.run_id == initial_metric.run_id
-    assert repeated.snapshot.evaluation_history[metric_address] == advanced_history
+    assert repeated_objective.run_id == initial_objective.run_id
+    assert repeated.snapshot.evaluation_history[objective_address] == advanced_history
 
 
-def test_start_scores_failed_condition_as_observed_zero():
+def test_start_marks_failed_condition_and_objective_failed():
     result = AptlEvaluator().start(
-        _scoring_plan(),
+        _evaluation_plan(),
         _snapshot_with_node_status("failed"),
     )
 
@@ -288,21 +234,15 @@ def test_start_scores_failed_condition_as_observed_zero():
     condition = EvaluationExecutionState.from_payload(
         results["evaluation.condition.vm.health"]
     )
-    metric = EvaluationExecutionState.from_payload(results["evaluation.metric.uptime"])
-    evaluation = EvaluationExecutionState.from_payload(
-        results["evaluation.evaluation.overall"]
-    )
     objective = EvaluationExecutionState.from_payload(
         results["evaluation.objective.validate"]
     )
 
     assert condition.status == EvaluationResultStatus.READY
     assert condition.passed is False
-    assert metric.status == EvaluationResultStatus.READY
-    assert metric.score == 0
-    assert metric.max_score == 10
-    assert evaluation.passed is False
+    assert condition.score is None
     assert objective.passed is False
+    assert objective.score is None
 
 
 def test_start_output_is_evaluation_contract_clean():
@@ -323,26 +263,6 @@ def test_results_and_status_reflect_registered_evaluations():
     assert evaluator.results()
     assert evaluator.history()
     assert evaluator.status()["registered_evaluations"] == sorted(evaluator.results())
-
-
-def test_start_registers_paper_metric_and_tlo_resources():
-    scenario = parse_sdl_file(PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml")
-    evaluation = plan(
-        compile_runtime_model(scenario),
-        create_aptl_manifest(),
-    ).evaluation
-
-    result = AptlEvaluator().start(evaluation, RuntimeSnapshot())
-
-    assert result.success is True
-    assert (
-        "evaluation.metric.participant-evidence-complete"
-        in result.snapshot.evaluation_results
-    )
-    assert (
-        "evaluation.tlo.authored-runtime-handoff"
-        in result.snapshot.evaluation_results
-    )
 
 
 def test_start_preserves_existing_provisioning_entries():
@@ -425,6 +345,67 @@ def test_start_fails_closed_on_invalid_result_contract():
 
     assert result.success is False
     assert any(d.code == "aptl.evaluator.evaluation-contract-invalid" for d in result.diagnostics)
+
+
+def test_start_fails_closed_on_scoring_chain_resource():
+    from aces_contracts.planning import EvaluationPlan
+
+    op = _evaluation_op(
+        "evaluation.metric.uptime",
+        {
+            "name": "uptime",
+            "result_contract": {
+                "state_schema_version": "evaluation-result-state/v1",
+                "resource_type": "metric",
+                "supports_passed": False,
+                "supports_score": True,
+                "fixed_max_score": 10,
+            },
+        },
+        resource_type="metric",
+    )
+
+    result = AptlEvaluator().start(
+        EvaluationPlan(resources={}, operations=[op]),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert result.snapshot.evaluation_results == {}
+    assert any(
+        d.code == "aptl.evaluator.unsupported-scoring-section"
+        for d in result.diagnostics
+    )
+
+
+def test_start_fails_closed_on_score_bearing_condition_contract():
+    from aces_contracts.planning import EvaluationPlan
+
+    op = _evaluation_op(
+        "evaluation.condition.vm.health",
+        {
+            "name": "health",
+            "result_contract": {
+                "state_schema_version": "evaluation-result-state/v1",
+                "resource_type": "condition-binding",
+                "supports_passed": True,
+                "supports_score": True,
+                "fixed_max_score": 10,
+            },
+        },
+        resource_type="condition-binding",
+    )
+
+    result = AptlEvaluator().start(
+        EvaluationPlan(resources={}, operations=[op]),
+        RuntimeSnapshot(),
+    )
+
+    assert result.success is False
+    assert any(
+        d.code == "aptl.evaluator.unsupported-score-contract"
+        for d in result.diagnostics
+    )
 
 
 def test_start_handles_delete_operation():

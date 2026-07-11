@@ -18,7 +18,8 @@ condition evaluation through ``evaluation-result-envelope-v1`` and
 ``evaluation-history-event-stream-v1`` (see
 ``aptl.backends.aces_evaluator.AptlEvaluator``), and exposes a narrow red
 participant runtime through the participant episode and behavior-history
-contracts.
+contracts. It does not declare the deprecated SDL scoring chain
+(``metrics``/``evaluations``/``tlos``/``goals``) as an APTL runtime capability.
 """
 
 from __future__ import annotations
@@ -115,16 +116,13 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 
 # Evaluator capability declaration. APTL's RTE-001 runtime evaluates scenario
 # conditions (healthchecks realized during provisioning) and objectives through
-# the portable evaluation result/history contracts. Scoring sections are
-# declared because SCN-007 scoring resources compile into the same evaluation
-# plan surface; live score progression must come from real execution state, not
-# synthetic registration state.
+# the portable evaluation result/history contracts. ACES ADR-073 moves graded
+# scoring out of the authored SDL surface, so the manifest deliberately does not
+# claim support for the OCR scoring chain (`metrics`/`evaluations`/`tlos`/`goals`).
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
-    supported_sections=frozenset(
-        {"conditions", "evaluations", "goals", "metrics", "objectives", "tlos"}
-    ),
-    supports_scoring=True,
+    supported_sections=frozenset({"conditions", "objectives"}),
+    supports_scoring=False,
     supports_objectives=True,
 )
 

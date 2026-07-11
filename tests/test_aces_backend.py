@@ -342,6 +342,12 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert required <= set(payload["supported_contract_versions"])
     assert manifest.has_orchestrator is True
     assert manifest.has_evaluator is True
+    assert manifest.evaluator is not None
+    assert manifest.evaluator.supported_sections == frozenset(
+        {"conditions", "objectives"}
+    )
+    assert manifest.evaluator.supports_scoring is False
+    assert manifest.evaluator.supports_objectives is True
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None
     assert manifest.participant_runtime.supported_participant_roles == frozenset(

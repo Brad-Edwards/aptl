@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from aces_contracts.diagnostics import Diagnostic
 
 from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
+    DeploymentContentRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
@@ -83,15 +85,22 @@ class PlacementRealization(object):
     name: str
     target_address: str
     target_node: str | None
+    content: DeploymentContentRealization | None = None
+    account: DeploymentAccountRealization | None = None
 
     def details(self) -> dict[str, object]:
-        return {
+        details: dict[str, object] = {
             "address": self.address,
             "resource_type": self.resource_type,
             "name": self.name,
             "target_address": self.target_address,
             "target_node": self.target_node,
         }
+        if self.content is not None:
+            details["content"] = self.content.details()
+        if self.account is not None:
+            details["account"] = self.account.details()
+        return details
 
 
 @dataclass(frozen=True)
@@ -124,6 +133,16 @@ class AptlRealization(object):
                 for network in self.networks
             ),
             images=tuple(node.image for node in self.nodes if node.image is not None),
+            content=tuple(
+                placement.content
+                for placement in self.placements
+                if placement.content is not None
+            ),
+            accounts=tuple(
+                placement.account
+                for placement in self.placements
+                if placement.account is not None
+            ),
         )
 
     def details(self) -> dict[str, object]:

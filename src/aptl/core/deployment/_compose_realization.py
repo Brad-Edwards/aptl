@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from aptl.core.deployment._compose_content_realization import (
+    CONTENT_SEEDER_IMAGE,
+    ComposeRealizationContentMixin,
+)
 from aptl.core.deployment._compose_image_realization import (
     ComposeRealizationImageMixin,
 )
@@ -13,6 +17,7 @@ from aptl.core.deployment._compose_realization_networks import (
     _network_name_candidates,
     _resolve_realization_networks,
 )
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
@@ -27,6 +32,7 @@ __all__ = [
 class ComposeRealizationMixin(
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
+    ComposeRealizationContentMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -49,6 +55,8 @@ class ComposeRealizationMixin(
                 else None
             )
         if result is None:
+            result = self._realize_content(realization)
+        if result is None:
             start_result = self._start_realized_services(
                 profiles,
                 build=build,
@@ -56,6 +64,28 @@ class ComposeRealizationMixin(
             )
             result = self._realization_result(start_result, realization)
         return result
+
+    def _realize_content(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Materialize typed content placements; fail closed on any seed error.
+
+        Returns ``None`` on success (or when there is nothing to realize) so
+        the caller's ``result is None`` chain continues to the next step,
+        matching the existing image/network step shape.
+        """
+
+        if not realization.content:
+            return None
+        try:
+            self.realize_content(realization.content, seeder_image=CONTENT_SEEDER_IMAGE)
+        except (BackendSeedError, BackendTimeoutError) as exc:
+            return LabResult(
+                success=False,
+                error=f"Content placement realization failed: {exc}",
+            )
+        return None
 
     def _realization_result(
         self,

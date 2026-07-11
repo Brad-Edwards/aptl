@@ -174,4 +174,14 @@ def validate_scenario(
         )
     )
 
+    # 7. Account provisioner parity — every SDL account is a real,
+    # clean-start-realized fixture, not a phantom declaration (#689).
+    from aptl.validation import _account_parity
+
+    results.append(
+        _account_parity.check_account_provisioner_parity(
+            scenario=scenario, project_dir=project_dir
+        )
+    )
+
     return GateReport(str(scenario_path), opts.profile, opts.phase, tuple(results))

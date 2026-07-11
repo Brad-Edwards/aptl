@@ -19,6 +19,7 @@ from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.deployment.realization import (
+    DeploymentContentRealization,
     DeploymentNetworkRealization,
     DeploymentRealizationSpec,
 )
@@ -182,6 +183,35 @@ class DeploymentBackend(Protocol):
 
         Raises:
             BackendSeedError: if a seed or retire container exits non-zero.
+            BackendTimeoutError: if a seed container exceeds its timeout.
+        """
+        ...
+
+    def realize_content(
+        self,
+        content: Sequence[DeploymentContentRealization],
+        *,
+        seeder_image: str,
+    ) -> None:
+        """Materialize typed ACES content placements (issue #689).
+
+        Mirrors :meth:`seed_named_volumes`: each realized content item is
+        lowered into a project-scoped named-volume seed (inline text is
+        rendered into the ignored ``.aptl/content/`` state tree first;
+        project-contained sources are bound read-only from their resolved,
+        containment-checked location) and materialized by the same
+        root one-off seed container mechanism, so content realization gets
+        the identical idempotency, project-scoping, and redaction behavior
+        as ADR-043 volume seeding without a second Docker-copy mechanism.
+
+        Args:
+            content: The typed content realizations to materialize, in
+                order.
+            seeder_image: Image used to run the copy containers (an image
+                already in the lab's supply chain).
+
+        Raises:
+            BackendSeedError: if a seed container exits non-zero.
             BackendTimeoutError: if a seed container exceeds its timeout.
         """
         ...

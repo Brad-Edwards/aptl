@@ -74,7 +74,57 @@ def test_paper_scenario_realizes_declared_topology_and_supported_evaluator_surfa
         config=config,
     )
 
-    assert realization.diagnostics == ()
+    # #689 makes content-placement realization real (fail closed) instead of
+    # the prior count-only behavior. The paper scenario's `content:` entries
+    # are either evaluator-evidence contracts (`dataset` type: consumed by
+    # the evaluator through `plan.evaluation`, never planted as file/dir
+    # content) or a Kali-targeted task brief/runtime binding with no
+    # registered APTL content mount — none of them are project-contained
+    # file/directory content backed by a typed backend volume, so every one
+    # now correctly fails closed with a diagnostic rather than being
+    # silently counted as realized (the exact anti-pattern ADR-046 removes).
+    # Non-content diagnostics still must be empty.
+    content_diagnostics = {
+        d.address: d
+        for d in realization.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    }
+    assert set(content_diagnostics) == {
+        "provision.content.task-brief",
+        "provision.content.participant-observation",
+        "provision.content.aptl-participant-runtime-binding",
+        "provision.content.wazuh-evidence",
+        "provision.content.boundary-check-evidence",
+        "provision.content.evaluator-notes",
+    }
+    assert all(d.is_error for d in content_diagnostics.values())
+    assert [d for d in realization.diagnostics if d.address not in content_diagnostics] == []
+    assert (
+        "dataset-not-realizable"
+        in content_diagnostics["provision.content.participant-observation"].message
+    )
+    assert (
+        "dataset-not-realizable"
+        in content_diagnostics["provision.content.wazuh-evidence"].message
+    )
+    assert (
+        "dataset-not-realizable"
+        in content_diagnostics["provision.content.boundary-check-evidence"].message
+    )
+    assert (
+        "destination-without-backing-mount"
+        in content_diagnostics["provision.content.task-brief"].message
+    )
+    assert (
+        "destination-without-backing-mount"
+        in content_diagnostics[
+            "provision.content.aptl-participant-runtime-binding"
+        ].message
+    )
+    assert (
+        "destination-without-backing-mount"
+        in content_diagnostics["provision.content.evaluator-notes"].message
+    )
     assert select_backend_profiles(config, realization.profiles) == [
         "wazuh",
         "kali",

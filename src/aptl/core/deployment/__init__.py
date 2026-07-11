@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
+    DeploymentContentRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
@@ -37,6 +39,8 @@ if TYPE_CHECKING:
 __all__ = [
     "DeploymentBackend",
     "DockerComposeBackend",
+    "DeploymentAccountRealization",
+    "DeploymentContentRealization",
     "DeploymentImageRealization",
     "DeploymentNetworkAttachment",
     "DeploymentNetworkRealization",

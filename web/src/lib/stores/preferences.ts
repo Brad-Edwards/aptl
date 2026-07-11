@@ -215,9 +215,10 @@ function persist(prefs: Preferences): void {
 export function applyPreferenceEffects(prefs: Preferences): void {
 	const el = globalThis.document?.documentElement;
 	if (!el) return;
-	el.setAttribute('data-color-mode', prefs.colorMode);
-	el.setAttribute('data-density', prefs.density);
-	el.setAttribute('data-motion', prefs.motion);
+	// `dataset` writes the same `data-*` attributes app.css keys off of.
+	el.dataset.colorMode = prefs.colorMode;
+	el.dataset.density = prefs.density;
+	el.dataset.motion = prefs.motion;
 }
 
 /** The live preferences store. Loaded from storage; persisted + applied on change. */

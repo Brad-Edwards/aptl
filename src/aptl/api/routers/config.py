@@ -3,6 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
@@ -54,7 +55,7 @@ def _load_config_response(project_dir: Path) -> ConfigResponse:
 
 @router.get("/config")
 async def get_config_endpoint(
-    project_dir: Path = Depends(get_project_dir),
+    project_dir: Annotated[Path, Depends(get_project_dir)],
 ) -> ConfigResponse:
     """Get the current APTL configuration."""
     log.info("GET /config")

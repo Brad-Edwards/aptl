@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -60,6 +61,15 @@ _RUNTIME_OBSERVED_PREFIX = "runtime-observed:"
 _SAFE_DEST_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
+@dataclass(frozen=True)
+class _ContentPlacementInputs(object):
+    """Validated content-placement fields ready for file/directory dispatch."""
+
+    content_type: str
+    source_name: str | None
+    volume_suffix: str
+
+
 def resolve_content_placement(
     *,
     resource: PlannedResource,
@@ -71,52 +81,72 @@ def resolve_content_placement(
     """Lower one content-placement resource or return fail-closed diagnostics."""
 
     spec = _placement_spec(payload)
-    if spec is None:
-        return None, [_reject(resource.address, "invalid-content-spec")]
-
     content_name = (
         _optional_string(payload, "content_name")
         or _optional_string(payload, "name")
         or resource.address
     )
+    inputs, reason = _content_placement_inputs(spec, target_service)
 
-    content_type = spec.get("type")
-    if content_type == "dataset":
-        return None, [_reject(resource.address, "dataset-not-realizable")]
-    if content_type not in ("file", "directory"):
-        return None, [_reject(resource.address, "unknown-content-type")]
-
-    source_name = _content_source_name(spec)
-    if source_name is not None and source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
-        return None, [_reject(resource.address, "runtime-observed-source")]
-
-    volume_suffix = (
-        _CONTENT_REALIZABLE_SERVICES.get(target_service)
-        if target_service is not None
-        else None
-    )
-    if volume_suffix is None:
-        return None, [_reject(resource.address, "destination-without-backing-mount")]
-
-    if content_type == "file":
-        return _resolve_file_content(
+    content: DeploymentContentRealization | None = None
+    diagnostics: list[Diagnostic] = []
+    if inputs is None:
+        diagnostics = [_reject(resource.address, reason)]
+    else:
+        resolver = (
+            _resolve_file_content
+            if inputs.content_type == "file"
+            else _resolve_directory_content
+        )
+        content, diagnostics = resolver(
             resource=resource,
             spec=spec,
             content_name=content_name,
             target_address=target_address,
-            source_name=source_name,
-            volume_suffix=volume_suffix,
+            source_name=inputs.source_name,
+            volume_suffix=inputs.volume_suffix,
             project_dir=project_dir,
         )
-    return _resolve_directory_content(
-        resource=resource,
-        spec=spec,
-        content_name=content_name,
-        target_address=target_address,
-        source_name=source_name,
-        volume_suffix=volume_suffix,
-        project_dir=project_dir,
-    )
+    return content, diagnostics
+
+
+def _content_placement_inputs(
+    spec: Mapping[str, Any] | None,
+    target_service: str | None,
+) -> tuple[_ContentPlacementInputs | None, str | None]:
+    """Validate content-placement type/source/target fields for dispatch.
+
+    Returns the validated fields on success, or the fail-closed rejection
+    reason (with no fields) on the first policy violation.
+    """
+
+    inputs = None
+    reason = None
+    if spec is None:
+        reason = "invalid-content-spec"
+    else:
+        content_type = spec.get("type")
+        source_name = _content_source_name(spec)
+        volume_suffix = (
+            _CONTENT_REALIZABLE_SERVICES.get(target_service)
+            if target_service is not None
+            else None
+        )
+        if content_type == "dataset":
+            reason = "dataset-not-realizable"
+        elif content_type not in ("file", "directory"):
+            reason = "unknown-content-type"
+        elif source_name is not None and source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
+            reason = "runtime-observed-source"
+        elif volume_suffix is None:
+            reason = "destination-without-backing-mount"
+        else:
+            inputs = _ContentPlacementInputs(
+                content_type=content_type,
+                source_name=source_name,
+                volume_suffix=volume_suffix,
+            )
+    return inputs, reason
 
 
 def _resolve_file_content(
@@ -132,43 +162,72 @@ def _resolve_file_content(
     """Lower a `type: file` content spec."""
 
     dest_relpath = _optional_string(spec, "path")
+    content: DeploymentContentRealization | None = None
+    diagnostics: list[Diagnostic] = []
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
-        return None, [_reject(resource.address, "unsafe-destination-path")]
+        diagnostics = [_reject(resource.address, "unsafe-destination-path")]
+    else:
+        text = _content_text(spec)
+        if text is not None:
+            content = DeploymentContentRealization(
+                address=resource.address,
+                target_address=target_address,
+                content_name=content_name,
+                volume_suffix=volume_suffix,
+                dest_relpath=dest_relpath,
+                source_kind="inline-text",
+                inline_text=text,
+                sensitive=_is_sensitive(spec),
+            )
+        else:
+            content, diagnostics = _resolve_file_content_from_source(
+                resource=resource,
+                content_name=content_name,
+                target_address=target_address,
+                dest_relpath=dest_relpath,
+                source_name=source_name,
+                volume_suffix=volume_suffix,
+                project_dir=project_dir,
+                sensitive=_is_sensitive(spec),
+            )
+    return content, diagnostics
 
-    text = _content_text(spec)
-    if text is not None:
-        content = DeploymentContentRealization(
-            address=resource.address,
-            target_address=target_address,
-            content_name=content_name,
-            volume_suffix=volume_suffix,
-            dest_relpath=dest_relpath,
-            source_kind="inline-text",
-            inline_text=text,
-            sensitive=_is_sensitive(spec),
-        )
-        return content, []
 
+def _resolve_file_content_from_source(
+    *,
+    resource: PlannedResource,
+    content_name: str,
+    target_address: str,
+    dest_relpath: str,
+    source_name: str | None,
+    volume_suffix: str,
+    project_dir: Path,
+    sensitive: bool,
+) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+    """Resolve a project-sourced `type: file` content spec (no inline text)."""
+
+    content: DeploymentContentRealization | None = None
     if source_name is None:
-        return None, [_reject(resource.address, "file-content-missing-source")]
-
-    resolved, diagnostics = _resolve_project_source(resource.address, source_name, project_dir)
-    if resolved is None:
-        return None, diagnostics
-    if not resolved.is_file():
-        return None, [_reject(resource.address, "source-file-missing")]
-
-    content = DeploymentContentRealization(
-        address=resource.address,
-        target_address=target_address,
-        content_name=content_name,
-        volume_suffix=volume_suffix,
-        dest_relpath=dest_relpath,
-        source_kind="project-file",
-        source_relpath=source_name,
-        sensitive=_is_sensitive(spec),
-    )
-    return content, []
+        diagnostics = [_reject(resource.address, "file-content-missing-source")]
+    else:
+        resolved, diagnostics = _resolve_project_source(
+            resource.address, source_name, project_dir
+        )
+        if resolved is not None:
+            if not resolved.is_file():
+                diagnostics = [_reject(resource.address, "source-file-missing")]
+            else:
+                content = DeploymentContentRealization(
+                    address=resource.address,
+                    target_address=target_address,
+                    content_name=content_name,
+                    volume_suffix=volume_suffix,
+                    dest_relpath=dest_relpath,
+                    source_kind="project-file",
+                    source_relpath=source_name,
+                    sensitive=sensitive,
+                )
+    return content, diagnostics
 
 
 def _resolve_directory_content(
@@ -184,10 +243,11 @@ def _resolve_directory_content(
     """Lower a `type: directory` content spec."""
 
     dest_relpath = _optional_string(spec, "destination")
+    content: DeploymentContentRealization | None = None
+    diagnostics: list[Diagnostic] = []
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
-        return None, [_reject(resource.address, "unsafe-destination-path")]
-
-    if source_name is None:
+        diagnostics = [_reject(resource.address, "unsafe-destination-path")]
+    elif source_name is None:
         content = DeploymentContentRealization(
             address=resource.address,
             target_address=target_address,
@@ -197,25 +257,50 @@ def _resolve_directory_content(
             source_kind="empty-directory",
             sensitive=_is_sensitive(spec),
         )
-        return content, []
+    else:
+        content, diagnostics = _resolve_directory_content_from_source(
+            resource=resource,
+            content_name=content_name,
+            target_address=target_address,
+            dest_relpath=dest_relpath,
+            source_name=source_name,
+            volume_suffix=volume_suffix,
+            project_dir=project_dir,
+            sensitive=_is_sensitive(spec),
+        )
+    return content, diagnostics
 
+
+def _resolve_directory_content_from_source(
+    *,
+    resource: PlannedResource,
+    content_name: str,
+    target_address: str,
+    dest_relpath: str,
+    source_name: str,
+    volume_suffix: str,
+    project_dir: Path,
+    sensitive: bool,
+) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+    """Resolve a project-sourced `type: directory` content spec."""
+
+    content: DeploymentContentRealization | None = None
     resolved, diagnostics = _resolve_project_source(resource.address, source_name, project_dir)
-    if resolved is None:
-        return None, diagnostics
-    if not resolved.is_dir():
-        return None, [_reject(resource.address, "source-directory-missing")]
-
-    content = DeploymentContentRealization(
-        address=resource.address,
-        target_address=target_address,
-        content_name=content_name,
-        volume_suffix=volume_suffix,
-        dest_relpath=dest_relpath,
-        source_kind="project-directory",
-        source_relpath=source_name,
-        sensitive=_is_sensitive(spec),
-    )
-    return content, []
+    if resolved is not None:
+        if not resolved.is_dir():
+            diagnostics = [_reject(resource.address, "source-directory-missing")]
+        else:
+            content = DeploymentContentRealization(
+                address=resource.address,
+                target_address=target_address,
+                content_name=content_name,
+                volume_suffix=volume_suffix,
+                dest_relpath=dest_relpath,
+                source_kind="project-directory",
+                source_relpath=source_name,
+                sensitive=sensitive,
+            )
+    return content, diagnostics
 
 
 def _resolve_project_source(

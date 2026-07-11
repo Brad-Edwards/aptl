@@ -46,26 +46,44 @@ def resolve_account_placement(
     """Lower one account-placement resource or return fail-closed diagnostics."""
 
     spec = _placement_spec(payload)
+    username = _optional_string(spec, "username") if spec is not None else None
+    reason = _account_placement_rejection(spec, username, target_service)
+
+    account: DeploymentAccountRealization | None = None
+    diagnostics: list[Diagnostic] = []
+    if reason is not None:
+        diagnostics = [_reject(resource.address, reason)]
+    else:
+        account = DeploymentAccountRealization(
+            address=resource.address,
+            target_address=target_address,
+            username=username,
+            groups=_account_groups(spec),
+            spn=_optional_string(spec, "spn") or "",
+            mail=_optional_string(spec, "mail") or "",
+            disabled=bool(_optional_bool(spec, "disabled")),
+        )
+    return account, diagnostics
+
+
+def _account_placement_rejection(
+    spec: Mapping[str, Any] | None,
+    username: str | None,
+    target_service: str | None,
+) -> str | None:
+    """Return the first fail-closed rejection reason for an account placement.
+
+    None means the placement passed every policy check.
+    """
+
+    reason = None
     if spec is None:
-        return None, [_reject(resource.address, "invalid-account-spec")]
-
-    username = _optional_string(spec, "username")
-    if username is None:
-        return None, [_reject(resource.address, "account-missing-username")]
-
-    if target_service is None or target_service not in _ACCOUNT_PROVISIONER_SERVICES:
-        return None, [_reject(resource.address, "no-account-provisioner-for-target")]
-
-    account = DeploymentAccountRealization(
-        address=resource.address,
-        target_address=target_address,
-        username=username,
-        groups=_account_groups(spec),
-        spn=_optional_string(spec, "spn") or "",
-        mail=_optional_string(spec, "mail") or "",
-        disabled=bool(_optional_bool(spec, "disabled")),
-    )
-    return account, []
+        reason = "invalid-account-spec"
+    elif username is None:
+        reason = "account-missing-username"
+    elif target_service is None or target_service not in _ACCOUNT_PROVISIONER_SERVICES:
+        reason = "no-account-provisioner-for-target"
+    return reason
 
 
 def _reject(address: str, reason_code: str) -> Diagnostic:

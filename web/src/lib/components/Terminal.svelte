@@ -21,9 +21,13 @@
 		 * host surface (e.g. the focused terminal header) can reflect the state.
 		 */
 		onstatechange?: (status: TerminalStatus) => void;
+		/** xterm font size (px); sourced from operator preferences (UI-008f). */
+		fontSize?: number;
+		/** xterm scrollback (lines); sourced from operator preferences (UI-008f). */
+		scrollback?: number;
 	}
 
-	let { container, onstatechange }: Props = $props();
+	let { container, onstatechange, fontSize = 14, scrollback = 1000 }: Props = $props();
 
 	let terminalDiv: HTMLDivElement;
 	let term: Terminal | null = null;
@@ -66,7 +70,8 @@
 		term = new Terminal({
 			cursorBlink: true,
 			fontFamily: 'monospace',
-			fontSize: 14,
+			fontSize,
+			scrollback,
 			theme: {
 				background: '#1a1d23',
 				foreground: '#e2e8f0',

@@ -67,6 +67,17 @@ def _allowed_hosts() -> set[str]:
     return set(_DEFAULT_HOSTS) | extra
 
 
+def effective_allowed_hosts() -> list[str]:
+    """Return the effective Host allow-list, sorted, for non-secret projection.
+
+    The single owner of Host allow-list parsing is :func:`_allowed_hosts`; this
+    public wrapper exposes its result (loopback defaults plus
+    ``APTL_ALLOWED_HOSTS``) so the ``/config`` projection can display it without
+    re-implementing the env parsing. Hostnames are non-secret.
+    """
+    return sorted(_allowed_hosts())
+
+
 def _hostname(host_header: str) -> str:
     """Extract the hostname (no port) from a ``Host`` header value."""
     if not host_header:

@@ -186,10 +186,27 @@ export interface ScenarioDetail {
 	blocks: WorkbenchBlock[];
 }
 
-/** APTL configuration. */
+/** Non-secret web-serve facts (UI-008f).
+ *
+ *  Mirrors `aptl.api.schemas.WebServeInfo`. Read-only orientation facts only:
+ *  never carries the API token, session factors, cookies, or private keys.
+ */
+export interface WebServeInfo {
+	build_version: string;
+	allowed_hosts: string[];
+	public_origin: string | null;
+	deployment_provider: string;
+}
+
+/** APTL configuration (non-secret projection).
+ *
+ *  Mirrors `aptl.api.schemas.ConfigResponse`. The `web` sub-object carries the
+ *  non-secret web-serve facts for the `/config` orientation view.
+ */
 export interface AppConfig {
 	lab_name: string;
 	network_subnet: string;
 	containers: Record<string, boolean>;
 	run_storage_backend: string;
+	web: WebServeInfo;
 }

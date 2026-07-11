@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { LabStatus, ScenarioSummary } from '../../src/lib/types';
+import { noticeOpen } from '../../src/lib/stores/ui';
+import { resetPreferences, acknowledgeNotice } from '../../src/lib/stores/preferences';
 
 function summary(overrides: Partial<ScenarioSummary> = {}): ScenarioSummary {
 	return {
@@ -44,6 +46,12 @@ describe('Lab Home route', () => {
 		labLoading.set(false);
 		vi.clearAllMocks();
 		refreshLabStatus.mockResolvedValue(undefined);
+		// Pre-acknowledge the local-use notice so guarded lifecycle actions run;
+		// the deferral path is covered by its own test below.
+		localStorage.clear();
+		resetPreferences();
+		acknowledgeNotice();
+		noticeOpen.set(false);
 	});
 
 	it('leads with a stopped readiness headline and a Start control', async () => {
@@ -166,5 +174,14 @@ describe('Lab Home route', () => {
 	it('shows a catalog-unavailable state on load error', async () => {
 		await renderPage({ scenarios: [], scenariosError: true });
 		expect(screen.getByText(/catalog is currently unavailable/i)).toBeTruthy();
+	});
+
+	it('defers a lifecycle action behind the local-use notice when unacknowledged', async () => {
+		// Un-acknowledge so the guard must open the notice instead of acting.
+		resetPreferences();
+		await renderPage();
+		await fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+		expect(startLab).not.toHaveBeenCalled();
+		expect(get(noticeOpen)).toBe(true);
 	});
 });

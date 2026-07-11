@@ -89,8 +89,8 @@ export async function getScenario(
 	);
 }
 
-export async function getConfig(): Promise<AppConfig> {
-	return fetchJSON<AppConfig>('/config');
+export async function getConfig(fetchFn: typeof fetch = fetch): Promise<AppConfig> {
+	return fetchJSON<AppConfig>('/config', undefined, fetchFn);
 }
 
 /** A cancellable subscription to the lab events stream. */

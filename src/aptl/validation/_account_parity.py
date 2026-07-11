@@ -2,9 +2,8 @@
 
 Split out of ``_gate_checks.py`` to keep that module under the file-length
 gate: this module owns ``check_account_provisioner_parity``, the sole
-consumer of the provisioner-script scraping logic. ``_gate_checks`` re-exports
-``check_account_provisioner_parity`` so ``techvault_gate.validate_scenario``'s
-``_gate_checks as checks`` alias keeps working unchanged.
+consumer of the provisioner-script scraping logic.
+``techvault_gate.validate_scenario`` calls it here directly (step 7).
 """
 
 from __future__ import annotations

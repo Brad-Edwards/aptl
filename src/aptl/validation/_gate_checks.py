@@ -29,9 +29,6 @@ from aptl.backends.aces_profiles import public_start_profiles, select_backend_pr
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
-from aptl.validation._account_parity import (
-    check_account_provisioner_parity as check_account_provisioner_parity,
-)
 from aptl.validation.techvault_gate import (
     DEFAULT_PARITY_INVENTORY,
     PHASE_B,

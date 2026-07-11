@@ -33,7 +33,9 @@ from aptl.backends.aces_profiles import (
 )
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
+from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
+from aptl.validation._account_parity import check_account_provisioner_parity
 from aptl.validation._gate_checks import (
     _NoStartBackend,
     _cli_detail,
@@ -47,7 +49,6 @@ from aptl.validation._gate_checks import (
     _surface_evidence,
     _target_conformance_diagnostics,
     _verify_imports_diagnostics,
-    check_account_provisioner_parity,
     check_backend_conformance,
     check_compile,
     check_import_lock,
@@ -837,7 +838,7 @@ def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
         gc, "check_parity_manifest", lambda **k: GateCheck("parity_manifest", True)
     )
     monkeypatch.setattr(
-        gc,
+        _account_parity,
         "check_account_provisioner_parity",
         lambda **k: GateCheck("account_provisioner_parity", True),
     )

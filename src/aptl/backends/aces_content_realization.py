@@ -70,6 +70,17 @@ class _ContentPlacementInputs(object):
     volume_suffix: str
 
 
+@dataclass(frozen=True)
+class _ContentPlacement(object):
+    """Placement-identity fields shared by a resolved content realization."""
+
+    content_name: str
+    target_address: str
+    dest_relpath: str
+    volume_suffix: str
+    sensitive: bool
+
+
 def resolve_content_placement(
     *,
     resource: PlannedResource,
@@ -182,13 +193,15 @@ def _resolve_file_content(
         else:
             content, diagnostics = _resolve_file_content_from_source(
                 resource=resource,
-                content_name=content_name,
-                target_address=target_address,
-                dest_relpath=dest_relpath,
+                placement=_ContentPlacement(
+                    content_name=content_name,
+                    target_address=target_address,
+                    dest_relpath=dest_relpath,
+                    volume_suffix=volume_suffix,
+                    sensitive=_is_sensitive(spec),
+                ),
                 source_name=source_name,
-                volume_suffix=volume_suffix,
                 project_dir=project_dir,
-                sensitive=_is_sensitive(spec),
             )
     return content, diagnostics
 
@@ -196,13 +209,9 @@ def _resolve_file_content(
 def _resolve_file_content_from_source(
     *,
     resource: PlannedResource,
-    content_name: str,
-    target_address: str,
-    dest_relpath: str,
+    placement: _ContentPlacement,
     source_name: str | None,
-    volume_suffix: str,
     project_dir: Path,
-    sensitive: bool,
 ) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
     """Resolve a project-sourced `type: file` content spec (no inline text)."""
 
@@ -219,13 +228,13 @@ def _resolve_file_content_from_source(
             else:
                 content = DeploymentContentRealization(
                     address=resource.address,
-                    target_address=target_address,
-                    content_name=content_name,
-                    volume_suffix=volume_suffix,
-                    dest_relpath=dest_relpath,
+                    target_address=placement.target_address,
+                    content_name=placement.content_name,
+                    volume_suffix=placement.volume_suffix,
+                    dest_relpath=placement.dest_relpath,
                     source_kind="project-file",
                     source_relpath=source_name,
-                    sensitive=sensitive,
+                    sensitive=placement.sensitive,
                 )
     return content, diagnostics
 
@@ -260,13 +269,15 @@ def _resolve_directory_content(
     else:
         content, diagnostics = _resolve_directory_content_from_source(
             resource=resource,
-            content_name=content_name,
-            target_address=target_address,
-            dest_relpath=dest_relpath,
+            placement=_ContentPlacement(
+                content_name=content_name,
+                target_address=target_address,
+                dest_relpath=dest_relpath,
+                volume_suffix=volume_suffix,
+                sensitive=_is_sensitive(spec),
+            ),
             source_name=source_name,
-            volume_suffix=volume_suffix,
             project_dir=project_dir,
-            sensitive=_is_sensitive(spec),
         )
     return content, diagnostics
 
@@ -274,13 +285,9 @@ def _resolve_directory_content(
 def _resolve_directory_content_from_source(
     *,
     resource: PlannedResource,
-    content_name: str,
-    target_address: str,
-    dest_relpath: str,
+    placement: _ContentPlacement,
     source_name: str,
-    volume_suffix: str,
     project_dir: Path,
-    sensitive: bool,
 ) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
     """Resolve a project-sourced `type: directory` content spec."""
 
@@ -292,13 +299,13 @@ def _resolve_directory_content_from_source(
         else:
             content = DeploymentContentRealization(
                 address=resource.address,
-                target_address=target_address,
-                content_name=content_name,
-                volume_suffix=volume_suffix,
-                dest_relpath=dest_relpath,
+                target_address=placement.target_address,
+                content_name=placement.content_name,
+                volume_suffix=placement.volume_suffix,
+                dest_relpath=placement.dest_relpath,
                 source_kind="project-directory",
                 source_relpath=source_name,
-                sensitive=sensitive,
+                sensitive=placement.sensitive,
             )
     return content, diagnostics
 

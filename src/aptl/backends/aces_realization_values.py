@@ -247,3 +247,37 @@ def mapping(value: object) -> Mapping[str, Any] | None:
     """Return mapping values while rejecting scalar payload fragments."""
 
     return value if isinstance(value, Mapping) else None
+
+
+def placement_spec(payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Return the compiled ACES resource spec (the Content/Account dump)."""
+
+    return mapping(payload.get("spec"))
+
+
+def content_source(spec: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Return the ``source`` sub-mapping of a compiled Content spec, if any."""
+
+    return mapping(spec.get("source"))
+
+
+def content_source_name(spec: Mapping[str, Any]) -> str | None:
+    """Return the checked-in/observed source name declared on a Content spec."""
+
+    source = content_source(spec)
+    return optional_string(source, "name") if source is not None else None
+
+
+def content_text(spec: Mapping[str, Any]) -> str | None:
+    """Return the inline text declared on a Content spec, if any."""
+
+    return optional_string(spec, "text")
+
+
+def account_groups(spec: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return the group memberships declared on an Account spec."""
+
+    groups = spec.get("groups")
+    if not isinstance(groups, list):
+        return ()
+    return tuple(sorted({g for g in groups if isinstance(g, str) and g.strip()}))

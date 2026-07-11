@@ -2217,3 +2217,183 @@ class TestSeedNamedVolumes:
             with pytest.raises(BackendSeedError):
                 backend.seed_named_volumes([evil], seeder_image="img:1")
         mock_run.assert_not_called()
+
+
+class TestRealizeContent:
+    """Issue #689: typed content-placement realization via the ADR-043 seed seam.
+
+    ``realize_content`` mirrors ``seed_named_volumes`` (same root one-off
+    container, argv-list command, redacted failure) but takes typed
+    ``DeploymentContentRealization`` records instead of pre-built
+    ``NamedVolumeSeed``\\ s, so these tests focus on the extra translation
+    step (inline-text rendering, project-source resolution) rather than
+    re-testing the seed mechanics ``TestSeedNamedVolumes`` already covers.
+    """
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def _inline_text_item(self, **overrides):
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        fields = {
+            "address": "provision.content-placement.notice",
+            "target_address": "provision.node.fileshare",
+            "content_name": "notice",
+            "volume_suffix": "fileshare_data",
+            "dest_relpath": "public/notice.txt",
+            "source_kind": "inline-text",
+            "inline_text": "Welcome to TechVault.",
+        }
+        fields.update(overrides)
+        return DeploymentContentRealization(**fields)
+
+    def test_inline_text_renders_and_seeds_into_project_scoped_volume(self, tmp_path):
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.realize_content([self._inline_text_item()], seeder_image="img:1")
+
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:7] == [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "0:0",
+            "--entrypoint",
+            "/bin/sh",
+        ]
+        rendered_dir = (
+            tmp_path / ".aptl" / "content" / "provision.content-placement.notice"
+        )
+        assert f"{rendered_dir}:/src:ro" in cmd
+        assert "test_fileshare_data:/dest" in cmd
+        assert cmd[-3] == "img:1"
+        script = cmd[-1]
+        assert "mkdir -p /dest/public" in script
+        assert "cp -a /src/notice.txt /dest/public/notice.txt" in script
+
+        rendered_file = rendered_dir / "notice.txt"
+        assert rendered_file.read_text(encoding="utf-8") == "Welcome to TechVault."
+
+    def test_project_file_source_binds_resolved_parent_directory(self, tmp_path):
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        source_dir = tmp_path / "scenarios" / "fixtures" / "techvault-content"
+        source_dir.mkdir(parents=True)
+        (source_dir / "onboarding.md").write_text("hello", encoding="utf-8")
+        item = DeploymentContentRealization(
+            address="provision.content-placement.onboarding",
+            target_address="provision.node.fileshare",
+            content_name="onboarding",
+            volume_suffix="fileshare_data",
+            dest_relpath="onboarding/onboarding.md",
+            source_kind="project-file",
+            source_relpath="scenarios/fixtures/techvault-content/onboarding.md",
+        )
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.realize_content([item], seeder_image="img:1")
+
+        cmd = mock_run.call_args[0][0]
+        assert f"{source_dir}:/src:ro" in cmd
+        assert "test_fileshare_data:/dest" in cmd
+        script = cmd[-1]
+        assert "mkdir -p /dest/onboarding" in script
+        assert "cp -a /src/onboarding.md /dest/onboarding/onboarding.md" in script
+
+    def test_project_source_escaping_project_root_raises(self, tmp_path):
+        from aptl.core.credentials import PathContainmentError
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        item = DeploymentContentRealization(
+            address="provision.content-placement.evil",
+            target_address="provision.node.fileshare",
+            content_name="evil",
+            volume_suffix="fileshare_data",
+            dest_relpath="public/evil.txt",
+            source_kind="project-file",
+            source_relpath="../../etc/passwd",
+        )
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with pytest.raises(PathContainmentError):
+                backend.realize_content([item], seeder_image="img:1")
+        mock_run.assert_not_called()
+
+    def test_realize_content_is_idempotent_across_runs(self, tmp_path):
+        backend = self._backend(tmp_path)
+        item = self._inline_text_item()
+        commands = []
+        for _ in range(2):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+                backend.realize_content([item], seeder_image="img:1")
+                commands.append(mock_run.call_args[0][0])
+        assert commands[0] == commands[1]
+
+    def test_empty_content_list_runs_no_container(self, tmp_path):
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            backend.realize_content([], seeder_image="img:1")
+        mock_run.assert_not_called()
+
+    def test_nonzero_exit_raises_without_leaking_stderr(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="secret docker stderr"
+            )
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.realize_content(
+                    [self._inline_text_item()], seeder_image="img:1"
+                )
+        assert "fileshare_data" in str(exc_info.value)
+        assert "secret docker stderr" not in str(exc_info.value)
+
+
+class TestComposeRealizeContentStep:
+    """Issue #689: content realization wired into ``ComposeRealizationMixin.realize``."""
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def test_realize_content_failure_is_fail_closed_lab_result(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        backend = self._backend(tmp_path)
+        item = DeploymentContentRealization(
+            address="provision.content-placement.notice",
+            target_address="provision.node.fileshare",
+            content_name="notice",
+            volume_suffix="fileshare_data",
+            dest_relpath="public/notice.txt",
+            source_kind="inline-text",
+            inline_text="hi",
+        )
+        spec = DeploymentRealizationSpec(
+            profiles=(), nodes=(), networks=(), content=(item,)
+        )
+        # BackendSeedError itself only ever carries the artifact name, never
+        # raw Docker stderr (see TestRealizeContent's own leak test); this
+        # test proves the wrapping step fails closed rather than raising.
+        with patch.object(
+            backend,
+            "realize_content",
+            side_effect=BackendSeedError("Seeding named volume 'fileshare_data' failed"),
+        ):
+            result = backend._realize_content(spec)
+        assert result is not None
+        assert result.success is False
+        assert "fileshare_data" in (result.error or "")
+
+    def test_no_content_is_a_no_op(self, tmp_path):
+        backend = self._backend(tmp_path)
+        spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=(), content=())
+        assert backend._realize_content(spec) is None

@@ -47,6 +47,7 @@ from aptl.validation._gate_checks import (
     _surface_evidence,
     _target_conformance_diagnostics,
     _verify_imports_diagnostics,
+    check_account_provisioner_parity,
     check_backend_conformance,
     check_compile,
     check_import_lock,
@@ -641,6 +642,181 @@ def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
     assert any("public lab start profiles" in d for d in check.diagnostics)
 
 
+# --------------------------------------------------------------------------- #
+# Content/account honesty (ADR-046 TechVault Operational Standup Addendum,
+# issue #689): unrealizable content fails the existing provisioning
+# realization check (its error diagnostics now cover content/account
+# placements too); SDL<->provisioner account drift fails the new dedicated
+# account_provisioner_parity check.
+# --------------------------------------------------------------------------- #
+
+
+def test_operational_scenario_content_and_accounts_are_honest():
+    """The shipped operational SDL's content/accounts realize with no errors."""
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    assert scenario.content
+    assert scenario.accounts
+
+    details, check = check_provisioning_realization(
+        scenario=scenario, project_dir=PROJECT_ROOT, config=config
+    )
+    assert details is not None
+    assert check.passed, check.diagnostics
+    placements = details["placements"]
+    content_placements = [p for p in placements if p["resource_type"] == "content-placement"]
+    account_placements = [p for p in placements if p["resource_type"] == "account-placement"]
+    assert content_placements and all("content" in p for p in content_placements)
+    assert account_placements and all("account" in p for p in account_placements)
+
+
+def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
+    from textwrap import dedent
+
+    from aces_sdl.parser import parse_sdl
+
+    _write_compose(tmp_path, {"fileshare": ["fileshare"]})
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: bad-content
+            nodes:
+              fileshare:
+                type: vm
+                services:
+                  - {name: smb, port: 445, protocol: tcp}
+            content:
+              leaked-log:
+                type: file
+                target: fileshare
+                path: var/log/leak.log
+                source:
+                  name: "runtime-observed:/var/log/leak.log"
+            """
+        )
+    )
+    config = AptlConfig(
+        lab={"name": "t"},
+        containers={
+            "wazuh": False,
+            "victim": False,
+            "kali": False,
+            "reverse": False,
+            "enterprise": False,
+            "soc": False,
+            "mail": False,
+            "fileshare": True,
+            "dns": False,
+        },
+    )
+
+    details, check = check_provisioning_realization(
+        scenario=scenario, project_dir=tmp_path, config=config
+    )
+
+    assert details is not None
+    assert not check.passed
+    assert any("content-placement-rejected" in d for d in check.diagnostics)
+    assert any("runtime-observed-source" in d for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_passes_for_operational_scenario():
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert check.passed, check.diagnostics
+
+
+def test_account_provisioner_parity_fails_on_phantom_account():
+    from aces_sdl.accounts import Account, PasswordStrength
+
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    scenario.accounts["phantom-user"] = Account(
+        username="not-a-real-provisioner-user",
+        node="ad",
+        password_strength=PasswordStrength.WEAK,
+    )
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert not check.passed
+    assert any("not-a-real-provisioner-user" in d for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_closed_when_script_missing(tmp_path):
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=tmp_path)
+
+    assert not check.passed
+    assert any("provisioner script missing" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_undeclared_group():
+    """A declared group the provisioner never adds must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    account = scenario.accounts["ad-jessica-williams"]
+    account.groups = [*account.groups, "Finance"]
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert not check.passed
+    assert any("Finance" in d and "group" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_mail_mismatch():
+    """A declared mail address that doesn't match the provisioner's --mail must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    account = scenario.accounts["ad-jessica-williams"]
+    account.mail = "jessica.williams@example.com"
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert not check.passed
+    assert any("mail" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_spn_mismatch():
+    """A declared SPN the provisioner never sets via `samba-tool spn add` must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    account = scenario.accounts["ad-svc-sql"]
+    account.spn = "HTTP/bogus.techvault.local"
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert not check.passed
+    assert any("spn" in d.lower() for d in check.diagnostics)
+
+
+def test_account_provisioner_parity_fails_on_undisabled_account():
+    """A declared disabled=True account the provisioner never disables must fail closed."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed
+    assert scenario is not None
+    account = scenario.accounts["ad-former-employee"]
+    account.disabled = True
+
+    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+
+    assert not check.passed
+    assert any("disabled" in d.lower() for d in check.diagnostics)
+
+
 def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(gc, "check_parse", lambda p: ("scn", GateCheck("parse", True)))
     monkeypatch.setattr(
@@ -660,6 +836,11 @@ def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(
         gc, "check_parity_manifest", lambda **k: GateCheck("parity_manifest", True)
     )
+    monkeypatch.setattr(
+        gc,
+        "check_account_provisioner_parity",
+        lambda **k: GateCheck("account_provisioner_parity", True),
+    )
     report = validate_scenario(
         tmp_path / "s.sdl.yaml",
         project_dir=tmp_path,
@@ -674,6 +855,7 @@ def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
         "backend_conformance",
         "provisioning_realization",
         "parity_manifest",
+        "account_provisioner_parity",
     }
 
 

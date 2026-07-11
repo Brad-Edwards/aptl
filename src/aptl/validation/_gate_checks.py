@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,19 @@ _ISSUE_REF = re.compile(r"^(?:[a-z0-9][a-z0-9._-]*)?#\d+$", re.IGNORECASE)
 # dedicated gate step rather than the fast per-test suite.
 _SUBPROCESS_TIMEOUT_S = 120
 _IMPORT_LOCK_TIMEOUT_S = 600
+
+# Static SDL<->provisioner account parity (ADR-046 TechVault addendum,
+# issue #689): the checked-in AD account provisioner the `ad` container's
+# entrypoint always runs. A declared SDL account is honest only when this
+# script actually creates it.
+_PROVISION_USERS_SCRIPT = Path("containers") / "ad" / "provision-users.sh"
+_SAMBA_USER_CREATE_RE = re.compile(r"samba-tool\s+user\s+create\s+(\S+)")
+_SAMBA_MAIL_RE = re.compile(r'--mail="([^"]*)"')
+_SAMBA_GROUP_ADDMEMBERS_RE = re.compile(
+    r'samba-tool\s+group\s+addmembers\s+("[^"]+"|\S+)\s+(\S+)'
+)
+_SAMBA_SPN_ADD_RE = re.compile(r"samba-tool\s+spn\s+add\s+(\S+)\s+(\S+)")
+_SAMBA_USER_DISABLE_RE = re.compile(r"samba-tool\s+user\s+disable\s+(\S+)")
 
 
 class _NoStartBackend(object):
@@ -215,6 +229,188 @@ def check_provisioning_realization(
             f"{expected_profiles}; scenario would not instantiate the same range"
         )
     return details, GateCheck("provisioning_realization", *_outcome(diagnostics))
+
+
+@dataclass(frozen=True)
+class _ProvisionerFacts(object):
+    """Per-user facts statically scraped from ``provision-users.sh``.
+
+    Each field records what the provisioner script actually,
+    machine-checkably does for a given username — the authoritative
+    boundary account realization evidence must match (issue #689).
+    """
+
+    users: frozenset[str] = frozenset()
+    mail_by_user: Mapping[str, str] = field(default_factory=dict)
+    groups_by_user: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    spns_by_user: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    disabled_users: frozenset[str] = frozenset()
+
+
+def _parse_provisioner_facts(script_text: str) -> _ProvisionerFacts:
+    """Statically scan the AD provisioner script for per-user account facts.
+
+    ``user create`` commands use ``\\``-newline continuations to spread
+    flags (including ``--mail=``) across lines; collapse those first so a
+    continuation-line flag is still captured on the logical command line.
+    """
+    collapsed = script_text.replace("\\\n", " ")
+    users: set[str] = set()
+    mail_by_user: dict[str, str] = {}
+    groups_by_user: dict[str, set[str]] = {}
+    spns_by_user: dict[str, set[str]] = {}
+    disabled_users: set[str] = set()
+
+    for line in collapsed.splitlines():
+        create_match = _SAMBA_USER_CREATE_RE.search(line)
+        if create_match is not None:
+            username = create_match.group(1)
+            users.add(username)
+            mail_match = _SAMBA_MAIL_RE.search(line)
+            if mail_match is not None:
+                mail_by_user[username] = mail_match.group(1)
+            continue
+
+        group_match = _SAMBA_GROUP_ADDMEMBERS_RE.search(line)
+        if group_match is not None:
+            group = group_match.group(1).strip('"')
+            username = group_match.group(2)
+            groups_by_user.setdefault(username, set()).add(group)
+            continue
+
+        spn_match = _SAMBA_SPN_ADD_RE.search(line)
+        if spn_match is not None:
+            spn, username = spn_match.groups()
+            spns_by_user.setdefault(username, set()).add(spn)
+            continue
+
+        disable_match = _SAMBA_USER_DISABLE_RE.search(line)
+        if disable_match is not None:
+            disabled_users.add(disable_match.group(1))
+
+    return _ProvisionerFacts(
+        users=frozenset(users),
+        mail_by_user=mail_by_user,
+        groups_by_user={k: frozenset(v) for k, v in groups_by_user.items()},
+        spns_by_user={k: frozenset(v) for k, v in spns_by_user.items()},
+        disabled_users=frozenset(disabled_users),
+    )
+
+
+def check_account_provisioner_parity(
+    *, scenario: Scenario, project_dir: Path
+) -> GateCheck:
+    """Confirm every SDL-declared account attribute is provisioner-authoritative.
+
+    Account declarations are honest only when the clean-start path actually
+    creates them, with the same groups/mail/SPN/disabled state, through an
+    existing service-owned provisioner (ADR-046 TechVault Operational Standup
+    Addendum, issue #689). This never runs Docker or ``samba-tool``; it
+    statically scans the checked-in provisioner script the ``ad`` container's
+    entrypoint always runs (``containers/ad/provision-users.sh``), so
+    SDL<->provisioner drift is caught before ``aptl lab start`` rather than
+    discovered live.
+
+    Each SDL account (``scenario.accounts``) is checked against the
+    provisioner's per-user facts:
+
+    - ``username`` must have a matching ``samba-tool user create``.
+    - every declared ``group`` must be a subset of the groups the
+      provisioner actually adds that user to via
+      ``samba-tool group addmembers``.
+    - a non-empty declared ``mail`` must equal the ``--mail=`` value on
+      that user's ``user create`` command.
+    - a non-empty declared ``spn`` must be one the provisioner actually
+      sets for that user via ``samba-tool spn add``.
+    - declared ``disabled`` must equal whether the provisioner runs
+      ``samba-tool user disable`` for that user (absent means not
+      disabled).
+
+    The check is one-directional (the provisioner may create more users,
+    groups, or SPNs than the SDL declares; a phantom SDL account or a
+    phantom SDL-declared attribute still fails).
+    """
+    script_path = project_dir / _PROVISION_USERS_SCRIPT
+    if not script_path.exists():
+        return GateCheck(
+            "account_provisioner_parity",
+            False,
+            (f"AD account provisioner script missing at {script_path}",),
+        )
+    try:
+        script_text = script_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return GateCheck(
+            "account_provisioner_parity",
+            False,
+            (redact(f"AD account provisioner script unreadable: {exc}"),),
+        )
+
+    facts = _parse_provisioner_facts(script_text)
+    diagnostics: list[str] = []
+    for name, account in scenario.accounts.items():
+        username = account.username
+        label = f"SDL account {name!r} (username={username!r})"
+        if username not in facts.users:
+            diagnostics.append(
+                redact(
+                    f"{label} has no matching `samba-tool user create` in "
+                    f"{_PROVISION_USERS_SCRIPT.name}; declared accounts must "
+                    "be honest, clean-start-realized fixtures"
+                )
+            )
+            continue
+
+        missing_groups = set(account.groups) - facts.groups_by_user.get(username, frozenset())
+        if missing_groups:
+            diagnostics.append(
+                redact(
+                    f"{label} declares group(s) {sorted(missing_groups)} that "
+                    f"{_PROVISION_USERS_SCRIPT.name} never adds via "
+                    "`samba-tool group addmembers`"
+                )
+            )
+
+        declared_mail = account.mail
+        if declared_mail:
+            actual_mail = facts.mail_by_user.get(username)
+            if actual_mail != declared_mail:
+                diagnostics.append(
+                    redact(
+                        f"{label} declares mail {declared_mail!r} but "
+                        f"{_PROVISION_USERS_SCRIPT.name} sets {actual_mail!r} "
+                        "via `--mail=`"
+                    )
+                )
+
+        declared_spn = account.spn
+        if declared_spn and declared_spn not in facts.spns_by_user.get(
+            username, frozenset()
+        ):
+            diagnostics.append(
+                redact(
+                    f"{label} declares spn {declared_spn!r} that "
+                    f"{_PROVISION_USERS_SCRIPT.name} never sets via "
+                    "`samba-tool spn add`"
+                )
+            )
+
+        declared_disabled = bool(account.disabled)
+        actual_disabled = username in facts.disabled_users
+        if declared_disabled != actual_disabled:
+            diagnostics.append(
+                redact(
+                    f"{label} declares disabled={declared_disabled} but "
+                    f"{_PROVISION_USERS_SCRIPT.name} "
+                    + (
+                        "never runs `samba-tool user disable` for this user"
+                        if declared_disabled
+                        else "runs `samba-tool user disable` for this user"
+                    )
+                )
+            )
+
+    return GateCheck("account_provisioner_parity", *_outcome(diagnostics))
 
 
 def check_parity_manifest(

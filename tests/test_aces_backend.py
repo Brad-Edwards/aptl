@@ -2285,16 +2285,92 @@ def test_provisioner_rejects_supported_placement_without_declared_target(tmp_pat
     backend.realize.assert_not_called()
 
 
-def test_provisioner_records_supported_placement_realizations(tmp_path):
-    from aptl.backends.aces import AptlProvisioner
-
+def _fileshare_and_ad_compose(tmp_path: Path) -> None:
     _write_compose(
         tmp_path,
         {
             "kali": ["kali"],
             "aptl-otel-collector": ["otel"],
+            "fileshare": ["fileshare"],
+            "ad": ["enterprise"],
         },
     )
+
+
+def _content_resource(
+    *,
+    address: str = "provision.content-placement.notice",
+    target_node: str = "scenario.fileshare",
+    target_address: str,
+    spec_overrides: dict | None = None,
+) -> PlannedResource:
+    spec = {
+        "type": "file",
+        "description": "",
+        "target": target_node,
+        "path": "public/notice.txt",
+        "destination": "",
+        "text": "Welcome to TechVault.",
+        "source": None,
+        "format": "",
+        "items": [],
+        "sensitive": False,
+        "tags": [],
+    }
+    spec.update(spec_overrides or {})
+    return PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload={
+            "name": "notice",
+            "content_name": "notice",
+            "target_node": target_node,
+            "target_address": target_address,
+            "spec": spec,
+        },
+    )
+
+
+def _account_resource(
+    *,
+    address: str = "provision.account-placement.operator",
+    node_name: str = "scenario.ad",
+    target_address: str,
+    spec_overrides: dict | None = None,
+) -> PlannedResource:
+    spec = {
+        "username": "operator",
+        "node": node_name,
+        "groups": ["IT-Admins"],
+        "password_strength": "weak",
+        "auth_method": "password",
+        "description": "",
+        "mail": "operator@techvault.local",
+        "spn": "",
+        "shell": "",
+        "home": "",
+        "disabled": False,
+    }
+    spec.update(spec_overrides or {})
+    return PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="account-placement",
+        payload={
+            "name": "operator",
+            "account_name": "operator",
+            "node_name": node_name,
+            "target_address": target_address,
+            "spec": spec,
+        },
+    )
+
+
+def test_provisioner_records_supported_placement_realizations(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
     backend = MagicMock()
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
@@ -2303,6 +2379,8 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         deployment_backend=backend,
     )
     node = _node_resource("scenario.kali")
+    fileshare_node = _node_resource("scenario.fileshare")
+    ad_node = _node_resource("scenario.ad")
     feature = PlannedResource(
         address="provision.feature-binding.ssh",
         domain=RuntimeDomain.PROVISIONING,
@@ -2313,29 +2391,12 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
             "node_name": "scenario.kali",
         },
     )
-    content = PlannedResource(
-        address="provision.content-placement.payload",
-        domain=RuntimeDomain.PROVISIONING,
-        resource_type="content-placement",
-        payload={
-            "name": "payload",
-            "content_name": "payload.exe",
-            "target_address": node.address,
-        },
-    )
-    account = PlannedResource(
-        address="provision.account-placement.operator",
-        domain=RuntimeDomain.PROVISIONING,
-        resource_type="account-placement",
-        payload={
-            "name": "operator",
-            "account_name": "operator",
-            "node_name": "scenario.kali",
-        },
-    )
+    content = _content_resource(target_address=fileshare_node.address)
+    account = _account_resource(target_address=ad_node.address)
 
     result = provisioner.apply(
-        _plan_for_resources(node, feature, content, account), RuntimeSnapshot()
+        _plan_for_resources(node, fileshare_node, ad_node, feature, content, account),
+        RuntimeSnapshot(),
     )
 
     assert result.success is True
@@ -2345,13 +2406,184 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "content-placement",
         "feature-binding",
     }
-    assert {placement["target_address"] for placement in placements} == {node.address}
     assert result.details["realization"]["resource_counts"] == {
         "account-placement": 1,
         "content-placement": 1,
         "feature-binding": 1,
-        "node": 1,
+        "node": 3,
     }
+
+    content_placement = next(
+        p for p in placements if p["resource_type"] == "content-placement"
+    )
+    assert content_placement["content"] == {
+        "address": "provision.content-placement.notice",
+        "target_address": fileshare_node.address,
+        "content_name": "notice",
+        "volume_suffix": "fileshare_data",
+        "dest_relpath": "public/notice.txt",
+        "source_kind": "inline-text",
+        "source_relpath": None,
+        "sensitive": False,
+    }
+
+    account_placement = next(
+        p for p in placements if p["resource_type"] == "account-placement"
+    )
+    assert account_placement["account"] == {
+        "address": "provision.account-placement.operator",
+        "target_address": ad_node.address,
+        "username": "operator",
+        "groups": ["IT-Admins"],
+        "spn": "",
+        "mail": "operator@techvault.local",
+        "disabled": False,
+    }
+
+    # Real lowering, not counting: the typed backend spec actually passed
+    # to the deployment backend carries the content/account records.
+    deployment_spec = backend.realize.call_args[0][0]
+    assert len(deployment_spec.content) == 1
+    assert deployment_spec.content[0].dest_relpath == "public/notice.txt"
+    assert deployment_spec.content[0].inline_text == "Welcome to TechVault."
+    assert len(deployment_spec.accounts) == 1
+    assert deployment_spec.accounts[0].username == "operator"
+
+
+def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:
+    """Apply a plan with one fileshare-targeted content placement; return (result, code)."""
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    fileshare_node = _node_resource("scenario.fileshare")
+    content = _content_resource(
+        target_address=fileshare_node.address, spec_overrides=spec_overrides
+    )
+    result = provisioner.apply(
+        _plan_for_resources(fileshare_node, content), RuntimeSnapshot()
+    )
+    codes = {d.code for d in result.diagnostics}
+    return result, codes
+
+
+def test_content_placement_dataset_type_fails_closed(tmp_path):
+    result, codes = _apply_single_content_placement(
+        tmp_path,
+        spec_overrides={
+            "type": "dataset",
+            "text": None,
+            "source": {"name": "some-package", "version": "*", "build": None},
+            "items": [{"name": "item-1", "tags": [], "description": ""}],
+        },
+    )
+    assert result.success is False
+    assert "aptl.provisioner.content-placement-rejected" in codes
+    assert any(
+        "dataset-not-realizable" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    )
+
+
+def test_content_placement_runtime_observed_source_fails_closed(tmp_path):
+    result, codes = _apply_single_content_placement(
+        tmp_path,
+        spec_overrides={
+            "text": None,
+            "source": {
+                "name": "runtime-observed:/var/log/nginx/access.log",
+                "version": "*",
+                "build": None,
+            },
+        },
+    )
+    assert result.success is False
+    assert "aptl.provisioner.content-placement-rejected" in codes
+    assert any(
+        "runtime-observed-source" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    )
+
+
+def test_content_placement_source_path_escape_fails_closed(tmp_path):
+    result, codes = _apply_single_content_placement(
+        tmp_path,
+        spec_overrides={
+            "text": None,
+            "source": {"name": "../../../etc/passwd", "version": "*", "build": None},
+        },
+    )
+    assert result.success is False
+    assert "aptl.provisioner.content-placement-rejected" in codes
+    assert any(
+        "source-path-escapes-project" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    )
+
+
+def test_content_placement_destination_without_backing_mount_fails_closed(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    kali_node = _node_resource("scenario.kali")
+    content = _content_resource(
+        target_node="scenario.kali", target_address=kali_node.address
+    )
+    result = provisioner.apply(
+        _plan_for_resources(kali_node, content), RuntimeSnapshot()
+    )
+    codes = {d.code for d in result.diagnostics}
+    assert result.success is False
+    assert "aptl.provisioner.content-placement-rejected" in codes
+    assert any(
+        "destination-without-backing-mount" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    )
+
+
+def test_account_placement_target_without_provisioner_fails_closed(tmp_path):
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    kali_node = _node_resource("scenario.kali")
+    account = _account_resource(
+        node_name="scenario.kali", target_address=kali_node.address
+    )
+    result = provisioner.apply(
+        _plan_for_resources(kali_node, account), RuntimeSnapshot()
+    )
+    codes = {d.code for d in result.diagnostics}
+    assert result.success is False
+    assert "aptl.provisioner.account-placement-rejected" in codes
+    assert any(
+        "no-account-provisioner-for-target" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.account-placement-rejected"
+    )
 
 
 def test_provisioner_rejects_unsupported_resource_type(tmp_path):

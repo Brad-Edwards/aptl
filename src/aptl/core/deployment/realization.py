@@ -73,6 +73,79 @@ class DeploymentNodeRealization(object):
     network_attachments: tuple[DeploymentNetworkAttachment, ...] = ()
 
 
+ContentSourceKind = Literal[
+    "inline-text", "project-file", "project-directory", "empty-directory"
+]
+
+
+@dataclass(frozen=True)
+class DeploymentContentRealization(object):
+    """One content-placement operation lowered from an ACES content resource.
+
+    ``source_kind`` records how the content is materialized: ``inline-text``
+    (bounded text carried on the placement itself), ``project-file`` /
+    ``project-directory`` (a checked-in, project-contained source path), or
+    ``empty-directory`` (an explicit empty-directory declaration with no
+    source). ``source_relpath`` is project-relative and only set for the two
+    project-sourced kinds; ``inline_text`` is only set for ``inline-text``.
+    Both are mutually exclusive by construction in the interpreter.
+    """
+
+    address: str
+    target_address: str
+    content_name: str
+    volume_suffix: str
+    dest_relpath: str
+    source_kind: ContentSourceKind
+    source_relpath: str | None = None
+    inline_text: str | None = None
+    sensitive: bool = False
+
+    def details(self) -> dict[str, object]:
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "content_name": self.content_name,
+            "volume_suffix": self.volume_suffix,
+            "dest_relpath": self.dest_relpath,
+            "source_kind": self.source_kind,
+            "source_relpath": self.source_relpath,
+            "sensitive": self.sensitive,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentAccountRealization(object):
+    """One account-placement identity lowered from an ACES account resource.
+
+    Carries non-secret identity only (ADR-046 TechVault addendum): no
+    password material crosses this record. The concrete credential stays
+    owned by the target node's service-owned provisioner (e.g.
+    ``containers/ad/provision-users.sh``); this record is realization
+    evidence proving the declared account maps to a node whose backend
+    service actually provisions it.
+    """
+
+    address: str
+    target_address: str
+    username: str
+    groups: tuple[str, ...] = ()
+    spn: str = ""
+    mail: str = ""
+    disabled: bool = False
+
+    def details(self) -> dict[str, object]:
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "username": self.username,
+            "groups": list(self.groups),
+            "spn": self.spn,
+            "mail": self.mail,
+            "disabled": self.disabled,
+        }
+
+
 @dataclass(frozen=True)
 class DeploymentRealizationSpec(object):
     """Portable input for typed deployment backend realization."""
@@ -81,3 +154,5 @@ class DeploymentRealizationSpec(object):
     nodes: tuple[DeploymentNodeRealization, ...]
     networks: tuple[DeploymentNetworkRealization, ...]
     images: tuple[DeploymentImageRealization, ...] = ()
+    content: tuple[DeploymentContentRealization, ...] = ()
+    accounts: tuple[DeploymentAccountRealization, ...] = ()

@@ -261,6 +261,61 @@ static IP, selected backend, and non-secret provenance rule. Persist it through
 rendered Compose overrides containing unrelated config, `.env` values, or
 secret-bearing service configuration.
 
+## TechVault Operational Standup Addendum
+
+Issue #689 makes `scenarios/techvault-operational.sdl.yaml` the honest dynamic
+TechVault startup contract. The operational SDL is the public `aptl lab start`
+target listed in `scenarios/catalog.json`; the deep captured TechVault
+inventory is review evidence, not a runtime source. The operational SDL must
+not import or depend on captured `runtime-observed:` content,
+`datasets-in-services`, inventory-only filesystem manifests, logs, database
+dumps, screenshots, or runtime state that APTL cannot recreate from source on a
+clean machine.
+
+The acceptance bar is compose-guaranteed fidelity from authored ACES resources
+through APTL's interpret-then-driver path. Nodes, images, networks,
+attachments, content placements, and account placements must compile through
+ACES, enter `interpret_provisioning_plan`, appear in typed realization details,
+and be either realized by `DeploymentRealizationSpec` / `DeploymentBackend` or
+explicitly rejected by an ACES diagnostic before side effects. A placement that
+is merely counted in `AptlRealization.details()` is not dynamic realization.
+
+Content in the honest operational SDL is limited to realizable content:
+
+- file content provided as bounded inline text;
+- file content sourced from a project-contained, checked-in path;
+- directories whose materialized contents are sourced from project-contained,
+  checked-in paths or explicit empty-directory declarations.
+
+Do not encode runtime-observed files, generated service config, mutable volume
+state, database rows, index contents, captured package manifests, or arbitrary
+container filesystem trees as operational content. If #576's content
+realization seam is present, `AptlRealization` should lower those ACES
+placements into its canonical typed backend input and the Compose backend
+should reuse existing containment and named-volume/container-copy precedents,
+including `NamedVolumeSeed`, project-scoped volumes, argv-list commands,
+redacted `LabResult` failures, and `BackendSeedError` / `BackendTimeoutError`
+behavior where applicable. If that seam is absent, #689 is blocked or must add
+a narrow typed placement operation to `DeploymentBackend`; it must not add raw
+Docker calls, a second content schema, or a scenario-name special case.
+
+Account declarations must be equally honest. Lab fixture accounts may be
+declared only when the clean startup path actually creates or preserves them
+through an existing service-owned provisioning path or a new typed backend
+account-placement operation. They must not rely on post-capture drift. Designed
+weak target credentials are scenario fixture data; operator/control-plane
+secrets remain under `EnvVars`, `.env`, rendered config, and ADR-029 redaction.
+Do not serialize Wazuh, MISP, TheHive, Shuffle, registry, SSH private key,
+cookie, token, hash, or generated enrollment material into the SDL, run
+evidence, diagnostics, or snapshots.
+
+The manifest honesty rule is strict: APTL may claim `file`, `directory`,
+`dataset`, account, image, or network support only to the extent that the ACES
+planner gate, interpreter, typed backend spec, deployment backend, static tests,
+and live clean-start gate prove that support for the authored TechVault
+surface. A broad `ProvisionerCapabilities` value is not a waiver for a
+no-op interpreter branch.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -270,8 +325,11 @@ secret-bearing service configuration.
 | Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
+| Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
+| Account placement gate | Account declarations are allowed only for clean-start-realized lab fixtures or typed backend account placements. Operator secrets, generated credentials, token material, private keys, cookies, and hashes remain outside the SDL and outside realization evidence. |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
+| Static and live validation gate | Static tests prove the SDL parses, plans, and lowers to a realizable typed spec without unsupported or no-op placements. The live gate remains a clean `aptl lab stop -v && aptl lab start` with health/readiness checks, not a comparison to captured inventory state. |
 
 ## Maintainability
 
@@ -290,9 +348,14 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
   operation, including any future image pull/build/tag and network/IPAM side
   effects.
+- `src/aptl/core/seed_spec.py` and existing named-volume seed behavior for
+  project-contained source-to-runtime materialization when content placement
+  needs file or directory side effects.
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
+- `scenarios/techvault-operational.sdl.yaml` and `scenarios/catalog.json` for
+  the public TechVault ACES startup selection.
 
 Tests extend the existing ACES backend and realization seams
 (`tests/test_aces_backend.py` and the realization-focused tests) rather than
@@ -329,6 +392,13 @@ change is multi-architecture images, registry authentication, SBOM/attestation
 checks, or another backend provider. Those should add policy fields or typed
 backend parameters, not scenario branches or Compose-service rewrites.
 
+For content and account realization, the seam is a typed placement record:
+ACES placement address, target node/service/container, content or account
+identity, non-secret provenance, bounded source kind, destination kind, and the
+backend materialization operation. Future scenarios should be able to vary
+which checked-in source directory, inline file, target node, account fixture,
+or provider backend is used without editing TechVault-only code.
+
 ## Consequences
 
 ### Positive
@@ -348,6 +418,9 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - APTL's realization support declaration must stay honest. Widening the claimed
   realization support without the interpreter and driver to back it would let
   the planner gate pass scenarios APTL cannot actually realize.
+- The honest TechVault SDL may be smaller than the captured inventory. Omitting
+  non-realizable captured facts is correct; carrying them as no-op operational
+  placements is not.
 
 ### Risks
 
@@ -355,6 +428,9 @@ backend parameters, not scenario branches or Compose-service rewrites.
   diagnostic-not-failure choice keeps the apply running, so the operator must
   read realization diagnostics rather than assume a clean apply realized every
   authored concern.
+- Manifest capability text can drift ahead of backend behavior. The static
+  lowering tests and clean-start live gate must catch claims that are parsed
+  and counted but never passed to a typed backend operation.
 
 ## Non-Goals
 
@@ -364,6 +440,9 @@ backend parameters, not scenario branches or Compose-service rewrites.
   mirror model. Realization evidence rides ADR-044's record.
 - This ADR does not change APTL's backend profile claim. The manifest and
   conformance gates remain the source of truth for that claim.
+- This ADR does not require the operational TechVault SDL to reproduce every
+  captured inventory fact. It requires every authored operational fact to be
+  dynamically realizable or rejected before startup side effects.
 
 ## Anti-Patterns
 
@@ -385,6 +464,16 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Building from raw Docker history strings, unbounded Dockerfile text, or
   unvalidated build context paths instead of typed `source.build` provenance and
   project-contained backend operations.
+- Adding `runtime-observed:` content, `datasets-in-services`, database dumps,
+  log excerpts, package manifests, or arbitrary captured filesystem trees to
+  the operational TechVault SDL.
+- Treating `content-placement` or `account-placement` resource counts as proof
+  of realization when no typed backend operation consumes the placement.
+- Hiding an unrealizable content/account fact in `metadata`, comments,
+  `x-aptl-*`, inventory ledger rows, or a TechVault scenario-name branch.
+- Duplicating the content schema, account schema, path-containment checks,
+  volume seed behavior, credential taxonomy, or redaction policy instead of
+  reusing the existing ACES/APTL owners.
 - Echoing disallowed image refs, registry credentials, build arg values,
   rendered Dockerfile text, or backend stderr in diagnostics, logs, snapshots,
   API responses, or run records.
@@ -415,6 +504,10 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Related issues: [#554](https://github.com/Brad-Edwards/aptl/issues/554),
   [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded paper
   scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
+  [#574](https://github.com/Brad-Edwards/aptl/issues/574),
+  [#575](https://github.com/Brad-Edwards/aptl/issues/575),
+  [#576](https://github.com/Brad-Edwards/aptl/issues/576),
+  [#689](https://github.com/Brad-Edwards/aptl/issues/689),
   [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and
   [aces#600](https://github.com/Brad-Edwards/aces/issues/600); DSL-008 /
   [#422](https://github.com/Brad-Edwards/aptl/issues/422).

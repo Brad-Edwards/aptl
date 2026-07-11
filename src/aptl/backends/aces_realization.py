@@ -11,6 +11,8 @@ import yaml
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import PlannedResource, ProvisioningPlan
 
+from aptl.backends.aces_account_realization import resolve_account_placement
+from aptl.backends.aces_content_realization import resolve_content_placement
 from aptl.backends.aces_diagnostics import (
     PROVISIONING_ADDRESS,
     SUPPORTED_RESOURCE_TYPES,
@@ -52,6 +54,10 @@ from aptl.backends.aces_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
+    DeploymentContentRealization,
+)
 from aptl.utils.redaction import redact
 
 PLACEMENT_RESOURCE_TYPES = frozenset(
@@ -91,7 +97,13 @@ def interpret_provisioning_plan(
         diagnostics,
     )
     append_network_topology_diagnostics(nodes, networks, diagnostics)
-    placements = _realize_placements(payload_resources, _node_lookup(nodes), diagnostics)
+    placements = _realize_placements(
+        payload_resources,
+        _node_lookup(nodes),
+        {node.address: node for node in nodes},
+        project_dir,
+        diagnostics,
+    )
     _append_profile_diagnostics(profiles, config, diagnostics)
 
     return _realization_from_parts(nodes, networks, placements, profiles, diagnostics)
@@ -188,6 +200,8 @@ def _append_node_profile_diagnostic(
 def _realize_placements(
     payload_resources: list[PlannedResource],
     node_lookup: dict[str, str],
+    node_by_address: dict[str, NodeRealization],
+    project_dir: Path,
     diagnostics: list[Diagnostic],
 ) -> list[PlacementRealization]:
     """Resolve supported placement resources against realized nodes."""
@@ -199,6 +213,8 @@ def _realize_placements(
                 resource,
                 resource.payload,
                 node_lookup,
+                node_by_address,
+                project_dir,
             )
             diagnostics.extend(placement_diagnostics)
             if placement is not None:
@@ -438,6 +454,8 @@ def _realize_placement(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     node_lookup: dict[str, str],
+    node_by_address: dict[str, NodeRealization],
+    project_dir: Path,
 ) -> tuple[PlacementRealization | None, list[Diagnostic]]:
     """Realize a placement resource or return its diagnostics."""
 
@@ -457,6 +475,10 @@ def _realize_placement(
                 )
             ],
         )
+
+    content, account, resource_diagnostics = _realize_placement_resource(
+        resource, payload, target_address, node_by_address, project_dir
+    )
     return (
         PlacementRealization(
             address=resource.address,
@@ -464,9 +486,52 @@ def _realize_placement(
             name=_resource_name(resource.address, payload),
             target_address=target_address,
             target_node=_first_nonempty_string(target_values),
+            content=content,
+            account=account,
         ),
-        [],
+        resource_diagnostics,
     )
+
+
+def _realize_placement_resource(
+    resource: PlannedResource,
+    payload: Mapping[str, Any],
+    target_address: str,
+    node_by_address: dict[str, NodeRealization],
+    project_dir: Path,
+) -> tuple[
+    DeploymentContentRealization | None,
+    DeploymentAccountRealization | None,
+    list[Diagnostic],
+]:
+    """Lower a resolved content/account placement into typed backend input.
+
+    Feature bindings resolve target-only (no typed backend op today); an
+    unsupported content/account placement fails closed with the resolver's
+    diagnostic rather than silently dropping to the count-only path.
+    """
+
+    target_node = node_by_address.get(target_address)
+    target_service = _single_or_none(target_node.backend_services) if target_node else None
+
+    if resource.resource_type == "content-placement":
+        content, diagnostics = resolve_content_placement(
+            resource=resource,
+            payload=payload,
+            target_address=target_address,
+            target_service=target_service,
+            project_dir=project_dir,
+        )
+        return content, None, diagnostics
+    if resource.resource_type == "account-placement":
+        account, diagnostics = resolve_account_placement(
+            resource=resource,
+            payload=payload,
+            target_address=target_address,
+            target_service=target_service,
+        )
+        return None, account, diagnostics
+    return None, None, []
 
 
 def _node_lookup(nodes: list[NodeRealization]) -> dict[str, str]:

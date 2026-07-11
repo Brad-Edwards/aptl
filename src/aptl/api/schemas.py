@@ -300,6 +300,23 @@ class ScenarioDetailResponse(BaseModel):
     blocks: list[WorkbenchBlock] = Field(default_factory=list)
 
 
+class WebServeInfo(BaseModel):
+    """Non-secret web-serve facts for the ``/config`` orientation view (UI-008f).
+
+    Read-only projection of the shipped web surface. Deliberately excludes every
+    secret-bearing value (``APTL_API_TOKEN``, session factors, cookies, private
+    keys, raw ``.env``): only the operator-facing, non-secret facts the design's
+    Config "Web serve" section lists. ``allowed_hosts`` is the effective Host
+    allow-list (loopback plus ``APTL_ALLOWED_HOSTS``); ``public_origin`` is the
+    browser-facing origin the launch URL targets when set behind a proxy.
+    """
+
+    build_version: str = ""
+    allowed_hosts: list[str] = Field(default_factory=list)
+    public_origin: Optional[str] = None
+    deployment_provider: str = "docker-compose"
+
+
 class ConfigResponse(BaseModel):
     """Response for GET /api/config."""
 
@@ -307,3 +324,4 @@ class ConfigResponse(BaseModel):
     network_subnet: str = ""
     containers: dict[str, bool] = {}
     run_storage_backend: str = "local"
+    web: WebServeInfo = Field(default_factory=WebServeInfo)

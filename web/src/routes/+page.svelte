@@ -8,6 +8,7 @@
 	import LabStartNotice from '$lib/components/LabStartNotice.svelte';
 	import KillConfirmDialog from '$lib/components/KillConfirmDialog.svelte';
 	import ScenarioCard from '$lib/components/ScenarioCard.svelte';
+	import { guardControlledAction } from '$lib/stores/ui';
 	import type { LabActionResponse, KillActionResponse, ScenarioSummary } from '$lib/types';
 
 	let { data }: { data: { scenarios: ScenarioSummary[]; scenariosError: boolean } } = $props();
@@ -130,18 +131,26 @@
 			</div>
 			<div class="flex items-center gap-2">
 				{#if $labStatus.running}
-					<Button variant="secondary" disabled={actionPending} onclick={handleStop}>
+					<Button
+						variant="secondary"
+						disabled={actionPending}
+						onclick={() => guardControlledAction(handleStop)}
+					>
 						{pendingAction === 'stop' ? 'Stopping…' : 'Stop'}
 					</Button>
 				{:else}
-					<Button variant="primary" disabled={actionPending} onclick={handleStart}>
+					<Button
+						variant="primary"
+						disabled={actionPending}
+						onclick={() => guardControlledAction(handleStart)}
+					>
 						{pendingAction === 'start' ? 'Starting…' : 'Start'}
 					</Button>
 				{/if}
 				<Button
 					variant="danger"
 					disabled={actionPending}
-					onclick={() => (killDialogOpen = true)}
+					onclick={() => guardControlledAction(() => (killDialogOpen = true))}
 				>
 					Kill
 				</Button>

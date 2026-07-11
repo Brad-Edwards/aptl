@@ -60,10 +60,10 @@ local dataclass approximation is not accepted as conformance evidence.
 The parity inventory records, for each required surface, whether TechVault
 represents it today or marks it as a historical gap with an issue reference.
 Startup, workflow/evaluation contract, and participant runtime surfaces are
-represented through the full remote-control-plane target. Evaluator live-score
-progression remains truth-labeled until it is driven by real execution state. A
-surface that is neither represented with evidence nor explicitly tracked fails
-the gate.
+represented through the full remote-control-plane target. Evaluator progression
+is limited to condition/objective evaluation after ACES ADR-073 moved SDL
+scoring-chain semantics out of the authored runtime surface. A surface that is
+neither represented with evidence nor explicitly tracked fails the gate.
 
 ## Advisory in Phase A, blocking at cutover
 

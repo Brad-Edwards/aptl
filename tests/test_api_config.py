@@ -69,6 +69,81 @@ class TestConfigEndpoint:
             assert field_name in data["containers"], f"Missing container: {field_name}"
 
 
+class TestWebServeInfo:
+    """The non-secret web-serve projection (UI-008f)."""
+
+    def test_reports_build_version(self, api_client):
+        from aptl import __version__
+
+        data = api_client.get("/api/config").json()
+
+        assert data["web"]["build_version"] == __version__
+
+    def test_allowed_hosts_includes_loopback_defaults(self, api_client):
+        data = api_client.get("/api/config").json()
+
+        hosts = data["web"]["allowed_hosts"]
+        assert "127.0.0.1" in hosts
+        assert "localhost" in hosts
+
+    def test_allowed_hosts_reflects_env(self, api_client):
+        # Keep "testserver" so the TestClient Host still passes the BFF gate
+        # (conftest sets it); add an extra host and assert it is projected.
+        with patch.dict(
+            os.environ, {"APTL_ALLOWED_HOSTS": "testserver,box.example.ts.net"}
+        ):
+            data = api_client.get("/api/config").json()
+
+        assert "box.example.ts.net" in data["web"]["allowed_hosts"]
+        # Loopback defaults are still present alongside the extra host.
+        assert "127.0.0.1" in data["web"]["allowed_hosts"]
+
+    def test_public_origin_from_env_trims_trailing_slash(self, api_client):
+        with patch.dict(
+            os.environ, {"APTL_WEB_PUBLIC_ORIGIN": "https://box.example.ts.net/"}
+        ):
+            data = api_client.get("/api/config").json()
+
+        assert data["web"]["public_origin"] == "https://box.example.ts.net"
+
+    def test_public_origin_null_when_unset(self, api_client):
+        # Don't clear the whole env (conftest's APTL_ALLOWED_HOSTS must survive so
+        # the Host gate still admits the TestClient); just ensure the origin is
+        # unset. patch.dict restores the popped key on exit.
+        with patch.dict(os.environ, {}):
+            os.environ.pop("APTL_WEB_PUBLIC_ORIGIN", None)
+            data = api_client.get("/api/config").json()
+
+        assert data["web"]["public_origin"] is None
+
+    def test_deployment_provider_reflects_config(self, api_client, tmp_path):
+        config = {
+            "lab": {"name": "test-lab"},
+            "deployment": {"provider": "ssh-compose", "ssh_host": "10.0.0.5"},
+        }
+        (tmp_path / "aptl.json").write_text(json.dumps(config))
+
+        data = api_client.get("/api/config").json()
+
+        assert data["web"]["deployment_provider"] == "ssh-compose"
+
+    def test_response_never_contains_the_api_token(self, api_client):
+        """The projection must not leak any secret, e.g. an SSH host or token."""
+        token = "s3cr3t-token-value-should-never-appear"
+        with patch.dict(os.environ, {"APTL_API_TOKEN": token}):
+            body = api_client.get("/api/config").text
+
+        assert token not in body
+        # The web sub-object exposes no secret-bearing keys.
+        web = api_client.get("/api/config").json()["web"]
+        assert set(web.keys()) == {
+            "build_version",
+            "allowed_hosts",
+            "public_origin",
+            "deployment_provider",
+        }
+
+
 class TestGetProjectDir:
     """Test the get_project_dir dependency directly."""
 

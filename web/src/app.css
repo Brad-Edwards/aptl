@@ -42,6 +42,86 @@
 	--font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/*
+ * Color-mode palettes (UI-008f). The base @theme above is the dark palette. The
+ * SettingsDialog writes `data-color-mode` onto <html>; overriding the same
+ * `--color-aptl-*` custom properties here re-tints every `*-aptl-*` utility (and
+ * `body`, which reads the variables directly) without touching component markup.
+ * `system` follows `prefers-color-scheme` (dark base, light override below);
+ * `dark` is the base; `light` and `high-contrast` are explicit. Accent shades are
+ * darkened in light mode and brightened in high-contrast so status/link contrast
+ * stays legible (WCAG 2.2 AA target).
+ */
+
+/* Light palette — applied for explicit light mode, and for system mode when the
+   OS prefers light. The two selectors share identical values (one is gated on
+   the media query, so they cannot be merged into a single selector list). */
+html[data-color-mode='light'] {
+	--color-aptl-bg: #f8fafc;
+	--color-aptl-surface: #ffffff;
+	--color-aptl-surface-hover: #f1f5f9;
+	--color-aptl-border: #cbd5e1;
+	--color-aptl-text: #0f172a;
+	--color-aptl-text-muted: #475569;
+	--color-aptl-indigo: #4f46e5;
+	--color-aptl-indigo-hover: #4338ca;
+	--color-aptl-violet: #7c3aed;
+	--color-aptl-teal: #0d9488;
+	--color-aptl-red: #dc2626;
+	--color-aptl-green: #16a34a;
+	--color-aptl-amber: #b45309;
+	--color-aptl-focus: #4f46e5;
+}
+
+@media (prefers-color-scheme: light) {
+	html[data-color-mode='system'] {
+		--color-aptl-bg: #f8fafc;
+		--color-aptl-surface: #ffffff;
+		--color-aptl-surface-hover: #f1f5f9;
+		--color-aptl-border: #cbd5e1;
+		--color-aptl-text: #0f172a;
+		--color-aptl-text-muted: #475569;
+		--color-aptl-indigo: #4f46e5;
+		--color-aptl-indigo-hover: #4338ca;
+		--color-aptl-violet: #7c3aed;
+		--color-aptl-teal: #0d9488;
+		--color-aptl-red: #dc2626;
+		--color-aptl-green: #16a34a;
+		--color-aptl-amber: #b45309;
+		--color-aptl-focus: #4f46e5;
+	}
+}
+
+/* High-contrast palette — maximal foreground/background separation on black,
+   with bright accents and a white focus ring for a highly visible focus cue. */
+html[data-color-mode='high-contrast'] {
+	--color-aptl-bg: #000000;
+	--color-aptl-surface: #000000;
+	--color-aptl-surface-hover: #1f1f1f;
+	--color-aptl-border: #ffffff;
+	--color-aptl-text: #ffffff;
+	--color-aptl-text-muted: #e5e5e5;
+	--color-aptl-indigo: #a5b4fc;
+	--color-aptl-indigo-hover: #c7d2fe;
+	--color-aptl-violet: #c084fc;
+	--color-aptl-teal: #2dd4bf;
+	--color-aptl-red: #f87171;
+	--color-aptl-green: #4ade80;
+	--color-aptl-amber: #fbbf24;
+	--color-aptl-focus: #ffffff;
+}
+
+/* Forced reduced motion (Motion = reduced), mirroring the prefers-reduced-motion
+   block below for operators who set the preference explicitly in Settings. */
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+	scroll-behavior: auto !important;
+}
+
 /* Reduced-motion safety: honour `prefers-reduced-motion` globally so kit
    affordances (e.g. the StatusBadge pulse) never animate against the user's
    stated preference, even where a component forgets the `motion-safe:` guard. */

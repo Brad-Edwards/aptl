@@ -21,8 +21,9 @@ from aptl.backends._aces_evaluator_progress import append_progression
 from aptl.utils.redaction import redact
 
 EVALUATION_ADDRESS = "runtime.apply.evaluation"
-OBSERVABLE_RESOURCE_TYPES = frozenset(
-    {"condition-binding", "evaluation", "goal", "metric", "objective", "tlo"}
+OBSERVABLE_RESOURCE_TYPES = frozenset({"condition-binding", "objective"})
+UNSUPPORTED_SCORING_RESOURCE_TYPES = frozenset(
+    {"evaluation", "goal", "metric", "tlo"}
 )
 _FAILED_ENTRY_STATUSES = frozenset({"error", "failed", "unhealthy"})
 _READY_ENTRY_STATUS = "ready"
@@ -65,16 +66,6 @@ def _ready_passed(passed: bool, detail: str) -> _EvaluationOutcome:
     return _EvaluationOutcome(
         status=EvaluationResultStatus.READY,
         passed=passed,
-        detail=detail,
-    )
-
-
-def _ready_score(score: float | int, max_score: int, detail: str) -> _EvaluationOutcome:
-    """Return a ready score outcome."""
-    return _EvaluationOutcome(
-        status=EvaluationResultStatus.READY,
-        score=score,
-        max_score=max_score,
         detail=detail,
     )
 
@@ -214,30 +205,6 @@ def _string_values(raw: object) -> tuple[str, ...]:
     return tuple(str(value) for value in raw if str(value))
 
 
-def _int_value(raw: object) -> int | None:
-    """Return an integer value while excluding bools."""
-    value = raw if not isinstance(raw, bool) and isinstance(raw, int) else None
-    return value
-
-
-def _number_value(raw: object) -> float | int | None:
-    """Return a numeric value while excluding bools."""
-    value = raw if not isinstance(raw, bool) and isinstance(raw, (int, float)) else None
-    return value
-
-
-def _metric_max_score(
-    contract: EvaluationResultContract,
-    payload: dict[str, object],
-) -> int:
-    """Resolve the compiled max score for a conditional metric."""
-    max_score = contract.fixed_max_score
-    spec = payload.get("spec")
-    if max_score is None and isinstance(spec, dict):
-        max_score = _int_value(spec.get("max_score"))
-    return max_score if max_score is not None else 100
-
-
 def _state_truth_value(state: EvaluationExecutionState | None) -> bool | None:
     """Return True/False for ready/failed dependency states; None means wait."""
     value: bool | None = None
@@ -250,10 +217,6 @@ def _state_truth_value(state: EvaluationExecutionState | None) -> bool | None:
             value = False
         elif state.passed is not None:
             value = state.passed
-        elif state.score is not None and state.max_score is None:
-            value = bool(state.score)
-        elif state.score is not None:
-            value = float(state.score) >= float(state.max_score)
     return value
 
 
@@ -296,68 +259,6 @@ def _condition_outcome(
     return outcome
 
 
-def _metric_outcome(
-    payload: dict[str, object],
-    states: dict[str, EvaluationExecutionState],
-    contract: EvaluationResultContract,
-) -> _EvaluationOutcome:
-    """Resolve a conditional metric score from observed condition states."""
-    dependencies = _string_values(payload.get("condition_addresses"))
-    values = [_state_truth_value(states.get(address)) for address in dependencies]
-    if not dependencies:
-        outcome = _running("metric has no observed condition dependencies")
-    elif any(value is None for value in values):
-        outcome = _running("waiting for metric condition dependencies")
-    else:
-        max_score = _metric_max_score(contract, payload)
-        score = max_score if all(bool(value) for value in values) else 0
-        outcome = _ready_score(score, max_score, "scored from observed condition state")
-    return outcome
-
-
-def _min_score_threshold(payload: dict[str, object], total_max_score: float) -> float:
-    """Resolve the minimum score threshold for an evaluation resource."""
-    spec = payload.get("spec")
-    min_score = spec.get("min_score") if isinstance(spec, dict) else None
-    threshold: float | None = None
-    if isinstance(min_score, dict):
-        absolute = _number_value(min_score.get("absolute"))
-        percentage = _number_value(min_score.get("percentage"))
-        if absolute is not None:
-            threshold = float(absolute)
-        elif percentage is not None:
-            threshold = total_max_score * float(percentage) / 100
-    else:
-        direct = _number_value(min_score)
-        threshold = float(direct) if direct is not None else None
-    return total_max_score if threshold is None else threshold
-
-
-def _evaluation_aggregate_outcome(
-    payload: dict[str, object],
-    states: dict[str, EvaluationExecutionState],
-) -> _EvaluationOutcome:
-    """Resolve an evaluation pass/fail outcome from metric scores."""
-    dependencies = _string_values(payload.get("metric_addresses"))
-    metric_states = [states.get(address) for address in dependencies]
-    waiting = not dependencies or any(
-        state is None
-        or state.status in {EvaluationResultStatus.PENDING, EvaluationResultStatus.RUNNING}
-        for state in metric_states
-    )
-    if waiting:
-        outcome = _running("waiting for evaluation metric dependencies")
-    else:
-        total_score = sum(float(state.score or 0) for state in metric_states if state)
-        total_max = sum(float(state.max_score or 0) for state in metric_states if state)
-        threshold = _min_score_threshold(payload, total_max)
-        outcome = _ready_passed(
-            total_score >= threshold,
-            "evaluated from observed metric scores",
-        )
-    return outcome
-
-
 def _resolve_outcome(
     address: str,
     payload: dict[str, object],
@@ -371,24 +272,6 @@ def _resolve_outcome(
     outcome = _running(f"waiting for observed state for {address}")
     if resource_type == "condition-binding":
         outcome = _condition_outcome(payload, snapshot)
-    elif resource_type == "metric":
-        outcome = _metric_outcome(payload, states, contract)
-    elif resource_type == "evaluation":
-        outcome = _evaluation_aggregate_outcome(payload, states)
-    elif resource_type == "tlo":
-        outcome = _aggregate_dependency_outcome(
-            states,
-            _string_values(payload.get("evaluation_address")),
-            ready_detail="TLO evaluated from observed evaluation state",
-            waiting_detail="waiting for TLO evaluation dependency",
-        )
-    elif resource_type == "goal":
-        outcome = _aggregate_dependency_outcome(
-            states,
-            _string_values(payload.get("tlo_addresses")),
-            ready_detail="goal evaluated from observed TLO state",
-            waiting_detail="waiting for goal TLO dependencies",
-        )
     elif resource_type == "objective":
         outcome = _aggregate_dependency_outcome(
             states,
@@ -399,33 +282,12 @@ def _resolve_outcome(
     return outcome
 
 
-def _contract_score_fields(
-    outcome: _EvaluationOutcome,
-    contract: EvaluationResultContract,
-) -> tuple[float | int | None, int | None]:
-    """Return score fields allowed by the compiled result contract."""
-    score = outcome.score if contract.supports_score else None
-    max_score = outcome.max_score if contract.supports_score else None
-    if contract.supports_score and contract.fixed_max_score is not None:
-        max_score = contract.fixed_max_score
-    if contract.supports_score and score is None and outcome.passed is not None:
-        max_score = max_score if max_score is not None else 100
-        score = max_score if outcome.passed else 0
-    return score, max_score
-
-
 def _contract_passed_field(
     outcome: _EvaluationOutcome,
     contract: EvaluationResultContract,
-    score: float | int | None,
-    max_score: int | None,
 ) -> bool | None:
     """Return the pass/fail field allowed by the compiled result contract."""
-    passed = outcome.passed if contract.supports_passed else None
-    if contract.supports_passed and passed is None and score is not None:
-        threshold = max_score if max_score is not None else score
-        passed = float(score) >= float(threshold)
-    return passed
+    return outcome.passed if contract.supports_passed else None
 
 
 def _contractual_outcome(
@@ -435,18 +297,13 @@ def _contractual_outcome(
     """Strip or derive ready result values according to the compiled contract."""
     adjusted = _EvaluationOutcome(status=outcome.status, detail=outcome.detail)
     if outcome.status == EvaluationResultStatus.READY:
-        score, max_score = _contract_score_fields(outcome, contract)
-        passed = _contract_passed_field(outcome, contract, score, max_score)
-        if contract.supports_score and score is None:
-            adjusted = _running("waiting for contract-compatible score result")
-        elif contract.supports_passed and passed is None:
+        passed = _contract_passed_field(outcome, contract)
+        if contract.supports_passed and passed is None:
             adjusted = _running("waiting for contract-compatible pass/fail result")
         else:
             adjusted = _EvaluationOutcome(
                 status=EvaluationResultStatus.READY,
                 passed=passed,
-                score=score,
-                max_score=max_score,
                 detail=outcome.detail,
             )
     return adjusted

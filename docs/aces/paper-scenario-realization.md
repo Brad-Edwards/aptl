@@ -34,8 +34,14 @@ contract by resolving service refs from the runtime plan and Compose backend
 mapping, then checks the portal login endpoint from Kali and records negative
 boundary markers for direct database and Wazuh API reachability. Those markers
 are participant-runtime evidence for the boundary; Wazuh evidence remains
-evaluator-only and is registered as pending evaluator/runtime state rather than
-participant-visible task context or a detection-quality claim.
+evaluator-only rather than participant-visible task context or a
+detection-quality claim.
+
+The upstream paper SDL still carries OCR-style `metrics`, `evaluations`, `tlos`,
+and `goals` as source content. APTL does not declare or realize that SDL scoring
+chain after ACES ADR-073; planning records unsupported evaluator-section
+diagnostics for those resources while retaining the condition/objective
+evaluation surface that belongs to the runtime target.
 
 The participant behavior, action-contract, observation-boundary, action-instance,
 and shared-state snapshot entries are emitted from the runtime-selected

@@ -97,9 +97,10 @@ schema `aptl.live-gate.manifest/v1`. It records:
 - **`evidence`**: the telemetry-path summary (event types and counts, never raw
   payloads).
 - **`evaluator_surfaces`**: the declared `full-remote-control-plane` evaluator
-  profile and ACES evaluation result/history contracts. This is an evidence
-  index, not a score source; live score/progress belongs in ACES
-  `evaluation_results` and `evaluation_history` derived from observed run state.
+  profile and ACES evaluation result/history contracts for conditions and
+  objectives. This is an evidence index, not a score source; live evaluator
+  progression belongs in ACES `evaluation_results` and `evaluation_history`
+  derived from observed run state.
 
 ## Observable parity
 
@@ -108,11 +109,11 @@ The live gate validates the operational startup contract. The public boot SDL,
 services and networks at range granularity; the deep inventory SDL,
 `scenarios/techvault.sdl.yaml`, remains the detailed asset/parity evidence
 surface proven by the static inventory tests. Evaluator contracts are part of
-the declared `full-remote-control-plane` surface; #606 tightens that surface so
-live score progression must come from real evaluation observations and pass the
-same ACES conformance/re-verification path. The run archive is proof of what
-the operational model realized; it does not substitute for SDL encoding or for
-ACES evaluation result/history envelopes.
+the declared `full-remote-control-plane` surface; #606 narrows that surface to
+condition/objective evaluation after ACES ADR-073 moved SDL scoring-chain
+semantics out of scope. The run archive is proof of what the operational model
+realized; it does not substitute for SDL encoding or for ACES evaluation
+result/history envelopes.
 
 ## Prerequisites
 

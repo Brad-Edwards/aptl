@@ -362,6 +362,65 @@ endpoint/trust registry.
   `web/tests/components/Terminal.test.ts` plus workbench block tests for the
   component states and lazy mounting.
 
+## UI-008f Config, Settings, and Privacy Guardrails
+
+UI-008f (`/config`, the Settings dialog, and the local-use/privacy notice) is a
+read-only configuration and browser-local preference slice. It must not become a
+second runtime-settings authority, consent platform, server-side preference
+store, secret viewer, or terminal/lab lifecycle gate.
+
+- Keep backend configuration facts in `src/aptl/api/routers/config.py` and
+  `src/aptl/api/schemas.py`, projected from `get_config()` /
+  `aptl.core.config.AptlConfig`. The route may add non-secret first-party fields
+  only when they already exist in the strict `AptlConfig` schema or another
+  named non-secret owner. Do not read `.env`, generated `.aptl/config/*`, private
+  keys, token settings, cookies, session factors, service passwords, or raw
+  Compose environment blocks for the config summary.
+- Keep the web DTO mirror in `web/src/lib/types.ts` and fetch through
+  `web/src/lib/api.ts` with the shared `sessionHeaders()` path. Route components
+  should not call authenticated `/api/*` endpoints directly unless they preserve
+  that carrier, and `/config` remains a read-only route with no mutation
+  capability.
+- Treat Settings as browser-local, non-secret UI preference state. A versioned
+  key such as `aptl.web.preferences.v1` should be owned by one helper/store that
+  validates stored shape, falls back to defaults on corrupt or unknown data, and
+  exposes reset. Do not put preferences in `aptl.json`, `.env`, server state,
+  run archives, cookies, route params, or API DTOs.
+- Keep the preference schema narrow and explicit. Acceptable v1 values are
+  appearance/density/motion/locale/time-display/terminal-rendering defaults plus
+  the acknowledged local-use notice version and timestamp. Never persist API
+  tokens, terminal tickets, session factors, terminal input/output, command
+  history, copied commands, SIEM custom query bodies, investigation notes, raw
+  API errors, hints viewed, or scenario progress.
+- Gate the first mutating lab action and terminal launch through one reusable
+  local-use acknowledgement helper instead of scattering modal checks across
+  buttons. The acknowledgement is a local UI precondition only: it does not
+  authorize an action, weaken the FastAPI BFF auth/CSRF gates, replace terminal
+  ticket/origin/allow-list/known-host checks, or change lab lifecycle semantics.
+- Use the existing accessible `Dialog` primitive for Settings and the
+  local-use notice. Settings should be a dialog or side drawer opened from the
+  app shell; the privacy disclosure should remain persistently reachable from a
+  Help/footer affordance after acknowledgement.
+- Privacy copy must describe the actual v1 behavior: browser-local preference
+  storage, no token storage by the SPA, ephemeral terminal I/O/no transcript
+  persistence, local API/server logs that may record route names, component
+  names, sanitized target identifiers, statuses, and validation/error
+  categories, and no non-essential analytics, tracking, or third-party scripts.
+  If analytics or synchronized preferences are added later, that is a new
+  product and security decision.
+- Use existing observability and redaction conventions. Config and preference
+  code may log route/component/state transitions and validation-layer labels,
+  but not stored preference payloads wholesale, notice timestamps as identifiers,
+  auth/session material, raw `.env` values, generated config, terminal bytes, or
+  exception payloads that might carry secrets.
+- Tests should extend existing seams: `tests/test_api_config.py` for the
+  backend projection and secret-exclusion cases, `web/tests/lib/api.test.ts` for
+  `/api/config` carrier behavior, preference-helper tests for versioning,
+  validation, corrupt storage fallback, and reset, route/component tests for
+  `/config`, `SettingsDialog`, `LocalUseNoticeDialog`, and the persistent privacy
+  entry point, plus existing terminal/lab action tests to prove the
+  acknowledgement wraps but does not replace the server gates.
+
 ## Extensibility Seams
 
 The design specification should include a compact page contract table for each
@@ -387,7 +446,9 @@ Use existing extension points for obvious follow-up changes:
 - new scenario browsing data uses a narrow ACES/catalog projection rather than
   a local scenario parser;
 - new runtime web settings extend the typed env settings boundary, not
-  `aptl.json`; and
+  `aptl.json`;
+- new browser-local UI preferences extend the versioned preference helper/store,
+  not API DTOs or server-side config; and
 - the web asset root, bind host, and allowed origins are parameterized at the
   app/serve/runtime-settings boundary; future remote/shared modes must change
   that boundary deliberately instead of scattering path, host, or origin

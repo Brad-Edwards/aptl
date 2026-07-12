@@ -697,40 +697,256 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
     )
 
 
-def test_runtime_bindings_skips_non_yaml_content_text():
-    """Free-form content text must be skipped, not crash ``_runtime_bindings``.
+def test_runtime_bindings_read_from_behavior_spec_extension():
+    """The binding rides the behavior-spec governed extension, not content (#691).
 
-    Regression (issue #689 live-boot crash): a content-placement with inline
-    prose (a planted file's text) reaches ``_runtime_bindings``, which
-    ``yaml.safe_load()``s every content ``text`` to detect participant-binding
-    specs. Multi-line prose is not a single YAML document, so ``safe_load``
-    raised ``ParserError`` and crashed ``aptl lab start`` — the static gates
-    never exercised the runtime boot path. Unparseable text is simply not a
-    binding spec and must be skipped.
+    ``_runtime_bindings`` no longer scans content placements or YAML-parses any
+    inline text (which also retires the #689 live-boot ParserError class): the
+    binding is a structured mapping under
+    ``behavior_specifications[*].spec["extensions"]["x-aptl:participant-runtime-binding"]``.
     """
     from types import SimpleNamespace
 
-    from aptl.backends.aces_participant_bindings import _runtime_bindings
-
-    # Faithful to the shipped fileshare-public-notice text: the space before
-    # "#689" makes YAML read "#689) ..." as a comment, terminating the scalar,
-    # so the following line parses as an unexpected second document (ParserError).
-    prose = (
-        "Welcome to TechVault Solutions file server.\n"
-        "This notice is planted by the operational ACES scenario's\n"
-        "content-placement realization (issue #689) — dynamically realized\n"
-        "from inline text authored in techvault-operational.sdl.yaml, not\n"
-        "hand-copied onto the image.\n"
+    from aptl.backends.aces_participant_bindings import (
+        _BINDING_EXTENSION_KEY,
+        _BINDING_SCHEMA,
+        _runtime_bindings,
     )
+
+    binding = {
+        "schema_version": _BINDING_SCHEMA,
+        "runtime_target": "aptl",
+        "participant_ref": "paper-agent",
+    }
     model = SimpleNamespace(
-        content_placements={
-            "content.fileshare-public-notice": SimpleNamespace(
-                spec={"text": prose}
+        behavior_specifications={
+            "participant.behavior-specification.paper-agent-behavior": (
+                SimpleNamespace(
+                    spec={"extensions": {_BINDING_EXTENSION_KEY: binding}}
+                )
             ),
         }
     )
 
+    assert _runtime_bindings(model) == [binding]
+
+
+def test_runtime_bindings_skip_non_binding_extensions_and_content():
+    """Non-binding extensions, wrong schema, and content are all ignored."""
+    from types import SimpleNamespace
+
+    from aptl.backends.aces_participant_bindings import (
+        _BINDING_EXTENSION_KEY,
+        _runtime_bindings,
+    )
+
+    model = SimpleNamespace(
+        # Content placements are no longer consulted for bindings at all.
+        content_placements={
+            "content.task-brief": SimpleNamespace(spec={"text": "probe the portal"}),
+        },
+        behavior_specifications={
+            "spec.other-key": SimpleNamespace(
+                spec={"extensions": {"x-paper:wazuh-evidence": {"kind": "note"}}}
+            ),
+            "spec.wrong-schema": SimpleNamespace(
+                spec={
+                    "extensions": {
+                        _BINDING_EXTENSION_KEY: {"schema_version": "other/v9"}
+                    }
+                }
+            ),
+            "spec.no-extensions": SimpleNamespace(spec={"behavior_mode": "policy"}),
+        },
+    )
+
     assert _runtime_bindings(model) == []
+
+
+def _compile_paper_model_plan_config():
+    """Compile the real paper scenario for binding fail-closed tests."""
+    from aces_processor.compiler import compile_runtime_model
+    from aces_runtime.manager import RuntimeManager
+    from aces_sdl import parse_sdl_file
+
+    from aptl.backends.aces import create_aptl_runtime_target
+
+    scenario = parse_sdl_file(
+        PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
+    )
+    model = compile_runtime_model(scenario)
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"enterprise": True, "kali": True, "wazuh": True},
+    )
+    target = create_aptl_runtime_target(
+        project_dir=PROJECT_ROOT,
+        config=config,
+        backend=MagicMock(),
+    )
+    plan = RuntimeManager(target).plan(scenario)
+    return model, plan, config
+
+
+_PAPER_BEHAVIOR_SPEC_ADDRESS = (
+    "participant.behavior-specification.paper-agent-behavior"
+)
+_PAPER_PARTICIPANT_ADDRESS = "participant.behavior.paper-agent"
+
+
+def _paper_binding(model):
+    from aptl.backends.aces_participant_bindings import _BINDING_EXTENSION_KEY
+
+    spec = model.behavior_specifications[_PAPER_BEHAVIOR_SPEC_ADDRESS].spec
+    return spec["extensions"][_BINDING_EXTENSION_KEY]
+
+
+def test_valid_binding_yields_participant_spec_baseline():
+    """Baseline for the fail-closed cases: the untouched binding produces a spec."""
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_from_runtime_model,
+    )
+
+    model, plan, config = _compile_paper_model_plan_config()
+    specs = participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=plan.provisioning,
+        project_dir=PROJECT_ROOT,
+        config=config,
+    )
+    assert _PAPER_PARTICIPANT_ADDRESS in specs
+
+
+def _set_runtime_target(binding):
+    binding["runtime_target"] = "libvirt"
+
+
+def _set_unknown_action(binding):
+    binding["action_contract_ref"] = "no-such-action"
+
+
+def _set_unknown_boundary(binding):
+    binding["observation_boundary_ref"] = "no-such-boundary"
+
+
+def _add_unresolvable_target_ref(binding):
+    binding["target_refs"].append("container:{{ container:nodes.ghost-node }}")
+
+
+def _empty_argv(binding):
+    binding["command"]["argv"] = []
+
+
+def _empty_success_markers(binding):
+    binding["success_markers"] = []
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        _set_runtime_target,
+        _set_unknown_action,
+        _set_unknown_boundary,
+        _add_unresolvable_target_ref,
+        _empty_argv,
+        _empty_success_markers,
+    ],
+    ids=[
+        "non-aptl-runtime-target",
+        "uncompiled-action-contract",
+        "uncompiled-observation-boundary",
+        "unresolvable-template-placeholder",
+        "empty-argv",
+        "empty-success-markers",
+    ],
+)
+def test_malformed_binding_is_dropped_fail_closed(mutate):
+    """A semantically invalid binding fails closed — the spec is dropped (#691).
+
+    ``participant_action_specs_from_runtime_model`` swallows the per-binding
+    ``TypeError`` / ``ValueError`` from ``_spec_from_binding`` /
+    ``_assert_compiled_addresses`` / ``_render_template`` and simply omits the
+    action. Without these cases every fail-closed check could silently regress
+    (raise the wrong type, or stop raising) while the one valid scenario test
+    still passed.
+    """
+    from aptl.backends.aces_participant_actions import (
+        participant_action_specs_from_runtime_model,
+    )
+
+    model, plan, config = _compile_paper_model_plan_config()
+    mutate(_paper_binding(model))
+
+    specs = participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=plan.provisioning,
+        project_dir=PROJECT_ROOT,
+        config=config,
+    )
+    assert _PAPER_PARTICIPANT_ADDRESS not in specs
+
+
+def test_assert_compiled_addresses_rejects_compiled_but_unassigned_refs():
+    """Refs that are compiled but not assigned to the participant fail closed.
+
+    Complements the end-to-end fail-closed cases: those hit the "uncompiled
+    artifact" branch, this pins the two "compiled but not assigned to this
+    participant" branches that a single-action scenario cannot reach.
+    """
+    from types import SimpleNamespace
+
+    from aptl.backends.aces_participant_bindings import _assert_compiled_addresses
+
+    behavior = SimpleNamespace(
+        action_contract_addresses=("participant.action-contract.assigned",),
+        observation_boundary_addresses=(
+            "participant.observation-boundary.assigned",
+        ),
+    )
+    model = SimpleNamespace(
+        participant_behaviors={"p": behavior},
+        action_contracts={
+            "participant.action-contract.assigned": object(),
+            "participant.action-contract.other": object(),
+        },
+        observation_boundaries={
+            "participant.observation-boundary.assigned": object(),
+            "participant.observation-boundary.other": object(),
+        },
+    )
+
+    # Compiled, but the action contract is not assigned to this participant.
+    with pytest.raises(ValueError, match="action contract is not assigned"):
+        _assert_compiled_addresses(
+            model,
+            "p",
+            "participant.action-contract.other",
+            "participant.observation-boundary.assigned",
+        )
+    # Compiled, but the observation boundary is not assigned to this participant.
+    with pytest.raises(ValueError, match="observation boundary is not assigned"):
+        _assert_compiled_addresses(
+            model,
+            "p",
+            "participant.action-contract.assigned",
+            "participant.observation-boundary.other",
+        )
+    # Not compiled at all.
+    with pytest.raises(ValueError, match="uncompiled participant artifacts"):
+        _assert_compiled_addresses(
+            model,
+            "p",
+            "participant.action-contract.ghost",
+            "participant.observation-boundary.assigned",
+        )
+    # Unknown participant behavior.
+    with pytest.raises(ValueError, match="uncompiled participant artifacts"):
+        _assert_compiled_addresses(
+            model,
+            "missing-participant",
+            "participant.action-contract.assigned",
+            "participant.observation-boundary.assigned",
+        )
 
 
 def test_start_helper_returns_specs_from_compiled_scenario(mocker):
@@ -2583,18 +2799,90 @@ def test_content_placement_destination_without_backing_mount_fails_closed(tmp_pa
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
-    kali_node = _node_resource("scenario.kali")
+    # `ad` is a real backend service but has no content-capable named volume,
+    # so a placement targeting it must fail closed. (kali is now content
+    # capable via kali_operations — see the positive test below — so it can no
+    # longer stand in for "no backing mount".)
+    ad_node = _node_resource("scenario.ad")
     content = _content_resource(
-        target_node="scenario.kali", target_address=kali_node.address
+        target_node="scenario.ad", target_address=ad_node.address
     )
     result = provisioner.apply(
-        _plan_for_resources(kali_node, content), RuntimeSnapshot()
+        _plan_for_resources(ad_node, content), RuntimeSnapshot()
     )
     codes = {d.code for d in result.diagnostics}
     assert result.success is False
     assert "aptl.provisioner.content-placement-rejected" in codes
     assert any(
         "destination-without-backing-mount" in d.message
+        for d in result.diagnostics
+        if d.code == "aptl.provisioner.content-placement-rejected"
+    )
+
+
+def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
+    """Kali is content-capable via the kali_operations volume (#691).
+
+    Registering `kali -> kali_operations` in `_CONTENT_REALIZABLE_SERVICES`
+    lets the paper scenario's participant-visible task brief lower through the
+    existing typed content path (ADR-046 extensibility seam), with no
+    docker-compose change.
+    """
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    kali_node = _node_resource("scenario.kali")
+    content = _content_resource(
+        target_node="scenario.kali",
+        target_address=kali_node.address,
+        spec_overrides={"path": "scenario/task.md", "text": "probe the portal"},
+    )
+    result = provisioner.apply(
+        _plan_for_resources(kali_node, content), RuntimeSnapshot()
+    )
+    assert result.success is True
+    assert not any(
+        d.code == "aptl.provisioner.content-placement-rejected"
+        for d in result.diagnostics
+    )
+
+
+def test_content_placement_absolute_path_rejects_on_content_capable_service(tmp_path):
+    """An absolute destination path fails closed even on a mounted service.
+
+    Content paths are volume-relative; the paper scenario's original
+    `/scenario/...` absolute paths could never realize. Guard the invariant so
+    registering kali does not accidentally accept absolute destinations.
+    """
+    from aptl.backends.aces import AptlProvisioner
+
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    kali_node = _node_resource("scenario.kali")
+    content = _content_resource(
+        target_node="scenario.kali",
+        target_address=kali_node.address,
+        spec_overrides={"path": "/scenario/task.md"},
+    )
+    result = provisioner.apply(
+        _plan_for_resources(kali_node, content), RuntimeSnapshot()
+    )
+    assert result.success is False
+    assert any(
+        "unsafe-destination-path" in d.message
         for d in result.diagnostics
         if d.code == "aptl.provisioner.content-placement-rejected"
     )

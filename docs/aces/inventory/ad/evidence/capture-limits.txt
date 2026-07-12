@@ -1,4 +1,0 @@
-Capture was taken after a fresh `uv run aptl lab stop -v -y && uv run aptl lab start --skip-seed` completed successfully on 2026-05-23.
-This bundle is a steady-state observation of the realized local lab, not byte-identical rebuild proof.
-Generated AD administrator and CTF flag/token scenario values are committed verbatim as TechVault scenario content. Kerberos/Samba secret databases and Wazuh client keys are represented by observable paths, metadata, and checksums in this bundle.
-Vulnerability evidence is scanner state tied to the Trivy version/database available during capture. Treat package CVEs as time-sensitive observations, not permanent facts about the asset.

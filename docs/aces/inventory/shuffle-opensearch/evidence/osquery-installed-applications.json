@@ -1,9 +1,0 @@
-{
-  "table": "installed_applications",
-  "query": "select * from installed_applications;",
-  "tool": "osqueryi version 4.9.0",
-  "vantage": "containerized osquery Linux image",
-  "status": "unavailable",
-  "reason": "osquery table installed_applications is not present in the Linux osquery registry for the digest-pinned osquery 4.9.0 scanner image",
-  "rows": []
-}

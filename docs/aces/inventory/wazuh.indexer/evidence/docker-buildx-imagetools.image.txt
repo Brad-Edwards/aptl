@@ -1,3 +1,0 @@
-Name:      docker.io/wazuh/wazuh-indexer:4.12.0
-MediaType: application/vnd.docker.distribution.manifest.v2+json
-Digest:    sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299

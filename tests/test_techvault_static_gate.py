@@ -1,22 +1,20 @@
 """Static validation gate tests (SCN-010E / issue #322).
 
 These exercise the scenario-generic gate composed in
-``aptl.validation.techvault_gate``: the authoritative operational scenario gate,
-fail-loud on a missing ACES corpus, the parity-manifest represented/deferred
-contract, Phase B cutover strictness, and the anti-collapse / anti-preset proofs
-that the realization is driven by declared content, not by the scenario id.
+``aptl.validation.techvault_gate``: the authoritative operational scenario
+gate, fail-loud on a missing ACES corpus, and the anti-collapse / anti-preset
+proofs that the realization is driven by declared content, not by the
+scenario id.
 
 ``techvault-operational.sdl.yaml`` is the authoritative driving scenario the
-gate validates; the parity-manifest checks below cover the represented/deferred
-contract as reusable logic without imposing the full-surface parity of the
-retired capture inventory on the operational contract.
+gate validates.
 """
 
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-import yaml
 from aces_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -40,25 +38,17 @@ from aptl.validation._gate_checks import (
     _NoStartBackend,
     _cli_detail,
     _conformance_cli_diagnostics,
-    _contains_key,
-    _coverage_set_diagnostics,
-    _load_required_surface_coverage,
     _outcome,
     _severity,
-    _surface_diagnostics,
-    _surface_evidence,
     _target_conformance_diagnostics,
     _verify_imports_diagnostics,
     check_backend_conformance,
     check_compile,
     check_import_lock,
-    check_parity_manifest,
     check_parse,
     check_provisioning_realization,
 )
 from aptl.validation.techvault_gate import (
-    PHASE_B,
-    REQUIRED_SURFACES,
     GateCheck,
     GateOptions,
     GateReport,
@@ -73,11 +63,12 @@ PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
 # --------------------------------------------------------------------------- #
 # Authoritative operational scenario gate (integration: backend_conformance
 # spawns the `aces conformance backend` CLI). This is the driving-SDL completion
-# gate — it validates that techvault-operational parses, compiles, conforms to
-# the canonical backend-manifest-v2, and realizes into a provisioning plan. The
-# full-surface parity_manifest of the retired capture inventory is not imposed
-# on the operational contract; its represented/deferred logic is covered by the
-# unit tests further below.
+# gate — it validates that techvault-operational passes the composed gate.
+#
+# It calls `validate_scenario()` with default options, exactly as the CI job and
+# the pre-push hook do. Hand-calling the individual checks here would test a
+# sequence no caller runs and would let a check that fails only in composition
+# (an absent import lockfile, say) pass unnoticed.
 # --------------------------------------------------------------------------- #
 
 
@@ -85,27 +76,24 @@ PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
 def test_operational_gate_passes():
     config = load_config(PROJECT_ROOT / "aptl.json")
 
-    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
-    assert parse_check.passed, parse_check.diagnostics
-    assert scenario is not None
-
-    compile_check = check_compile(scenario)
-    assert compile_check.passed, compile_check.diagnostics
-
-    conformance_check = check_backend_conformance(
+    report = validate_scenario(
+        OPERATIONAL_SCENARIO,
         project_dir=PROJECT_ROOT,
         config=config,
-        profile="full-remote-control-plane",
-        fixtures_root=None,
-        profiles_root=None,
-        reference_scenario=scenario,
+        options=GateOptions(),
     )
-    assert conformance_check.passed, conformance_check.diagnostics
 
-    _details, realization_check = check_provisioning_realization(
-        scenario=scenario, project_dir=PROJECT_ROOT, config=config
-    )
-    assert realization_check.passed, realization_check.diagnostics
+    failed = [(c.name, c.diagnostics) for c in report.checks if not c.passed]
+    assert report.passed, f"static gate failed: {failed}"
+    # Every check in the composition ran; none was silently skipped.
+    assert [c.name for c in report.checks] == [
+        "parse",
+        "import_lock",
+        "compile",
+        "backend_conformance",
+        "provisioning_realization",
+        "account_provisioner_parity",
+    ]
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():
@@ -180,121 +168,6 @@ def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     )
     assert not check.passed
     assert check.diagnostics
-
-
-# --------------------------------------------------------------------------- #
-# Parity manifest: represented must have evidence; deferred must cite an issue.
-# --------------------------------------------------------------------------- #
-
-
-class _FakeScenario:
-    def __init__(self, doc):
-        self._doc = doc
-
-    def model_dump(self, **_kwargs):
-        return self._doc
-
-
-def _full_coverage(**overrides):
-    coverage = {
-        "nodes": {"status": "represented"},
-        "services": {"status": "represented"},
-        "vulnerabilities": {"status": "represented"},
-        "features": {"status": "represented"},
-        "kali_apparatus": {"status": "represented"},
-        "defensive_stack": {"status": "represented"},
-        "health": {"status": "represented"},
-        "injects": {"status": "deferred", "blocking_followup": "#312"},
-        "workflows": {"status": "deferred", "blocking_followup": "#312"},
-        "objectives": {"status": "deferred", "blocking_followup": "#312"},
-        "scoring": {"status": "deferred", "blocking_followup": "#312"},
-        "run_archive": {"status": "deferred", "blocking_followup": "#312"},
-    }
-    coverage.update(overrides)
-    return coverage
-
-
-def _represented_doc():
-    return {
-        "nodes": [{"name": "db", "runtime": {"health": {"status": "healthy"}}}],
-        "vulnerabilities": [{"id": "v1"}],
-        "features": [{"id": "f1"}],
-    }
-
-
-def _represented_realization():
-    return {
-        "nodes": [{"name": "db", "services": ["smb"]}],
-        "networks": [{"name": "net"}],
-        "profiles": ["kali", "soc"],
-    }
-
-
-def _write_inventory(tmp_path, coverage):
-    path = tmp_path / "parity-inventory.yaml"
-    path.write_text(yaml.safe_dump({"required_surface_coverage": coverage}))
-    return path
-
-
-def _parity(tmp_path, coverage, *, doc=None, realization=None, phase="phase_a"):
-    return check_parity_manifest(
-        scenario=_FakeScenario(doc or _represented_doc()),
-        realization_details=realization or _represented_realization(),
-        project_dir=tmp_path,
-        parity_inventory_path=_write_inventory(tmp_path, coverage),
-        phase=phase,
-    )
-
-
-def test_parity_passes_when_represented_has_evidence_and_deferred_has_issue(tmp_path):
-    assert _parity(tmp_path, _full_coverage()).passed
-
-
-def test_parity_covers_exactly_the_required_surfaces(tmp_path):
-    assert set(REQUIRED_SURFACES) == set(_full_coverage())
-
-
-def test_parity_fails_when_required_surface_missing(tmp_path):
-    coverage = _full_coverage()
-    del coverage["vulnerabilities"]
-    check = _parity(tmp_path, coverage)
-    assert not check.passed
-    assert any("missing entries" in d for d in check.diagnostics)
-
-
-def test_parity_fails_when_represented_surface_lacks_evidence(tmp_path):
-    # Coverage claims nodes are represented, but the realization has no nodes.
-    check = _parity(
-        tmp_path,
-        _full_coverage(),
-        realization={"nodes": [], "networks": [], "profiles": []},
-    )
-    assert not check.passed
-    assert any("no evidence" in d for d in check.diagnostics)
-
-
-def test_parity_fails_closed_when_surface_entry_is_not_a_mapping(tmp_path):
-    # A required surface present with a scalar/list/null value must fail, not
-    # silently bypass validation.
-    coverage = _full_coverage(nodes="represented")
-    check = _parity(tmp_path, coverage)
-    assert not check.passed
-    assert any("must be a mapping" in d for d in check.diagnostics)
-
-
-def test_parity_fails_when_deferred_without_issue(tmp_path):
-    coverage = _full_coverage(
-        objectives={"status": "deferred", "blocking_followup": "n/a"}
-    )
-    check = _parity(tmp_path, coverage)
-    assert not check.passed
-    assert any("without a tracking issue" in d for d in check.diagnostics)
-
-
-def test_phase_b_cutover_disallows_deferrals(tmp_path):
-    check = _parity(tmp_path, _full_coverage(), phase=PHASE_B)
-    assert not check.passed
-    assert any("Phase B" in d for d in check.diagnostics)
 
 
 # --------------------------------------------------------------------------- #
@@ -434,20 +307,13 @@ def _proc(returncode, stdout="", stderr=""):
 def test_gate_report_passed_failures_and_render():
     ok = GateCheck("parse", True)
     bad = GateCheck("compile", False, ("boom",))
-    report = GateReport("scn", "provisioning-only", "phase_a", (ok, bad))
+    report = GateReport("scn", "provisioning-only", (ok, bad))
     assert report.passed is False
     assert report.failures() == (bad,)
     text = report.render()
     assert "FAIL" in text
     assert "boom" in text
-    assert GateReport("scn", "p", "phase_a", (ok,)).passed is True
-
-
-def test_contains_key_nested():
-    assert _contains_key({"a": {"health": 1}}, "health")
-    assert _contains_key([{"x": [{"health": 1}]}], "health")
-    assert not _contains_key({"a": {"b": 1}}, "health")
-    assert not _contains_key("scalar", "health")
+    assert GateReport("scn", "p", (ok,)).passed is True
 
 
 def test_severity_reads_enum_or_str():
@@ -468,54 +334,6 @@ def test_severity_reads_enum_or_str():
 def test_outcome_packs_diagnostics():
     assert _outcome([]) == (True, ())
     assert _outcome(["x", "y"]) == (False, ("x", "y"))
-
-
-def test_surface_evidence_detects_each_family():
-    doc = {
-        "vulnerabilities": [1],
-        "features": [1],
-        "nodes": [{"runtime": {"health": {}}}],
-    }
-    realization = {"nodes": [{"services": ["smb"]}], "profiles": ["kali", "soc"]}
-    ev = _surface_evidence(doc, realization)
-    assert ev["nodes"] and ev["services"] and ev["vulnerabilities"]
-    assert ev["features"] and ev["kali_apparatus"] and ev["defensive_stack"]
-    assert ev["health"]
-    assert not _surface_evidence({}, {})["nodes"]
-
-
-def test_coverage_set_diagnostics():
-    assert _coverage_set_diagnostics(_full_coverage()) == []
-    bad = {"nodes": {}, "unknown_surface": {}}
-    diags = _coverage_set_diagnostics(bad)
-    assert any("missing entries" in d for d in diags)
-    assert any("unknown entries" in d for d in diags)
-
-
-def test_load_required_surface_coverage_paths(tmp_path):
-    missing = tmp_path / "nope.yaml"
-    cov, err = _load_required_surface_coverage(missing)
-    assert cov == {} and "missing" in err
-
-    bad = tmp_path / "bad.yaml"
-    bad.write_text("not-a-mapping")
-    cov, err = _load_required_surface_coverage(bad)
-    assert "required_surface_coverage" in err
-
-    good = _write_inventory(tmp_path, _full_coverage())
-    cov, err = _load_required_surface_coverage(good)
-    assert err is None and set(cov) == set(REQUIRED_SURFACES)
-
-
-def test_surface_diagnostics_branches():
-    ev = {"nodes": True}
-    assert _surface_diagnostics("nodes", {"status": "represented"}, ev, "phase_a") == []
-    assert _surface_diagnostics("nodes", {"status": "represented"}, {}, "phase_a")
-    assert _surface_diagnostics("nodes", "scalar", ev, "phase_a")
-    deferred = {"status": "deferred", "blocking_followup": "#312"}
-    assert _surface_diagnostics("injects", deferred, ev, "phase_a") == []
-    assert _surface_diagnostics("injects", deferred, ev, PHASE_B)
-    assert _surface_diagnostics("injects", {"status": "bogus"}, ev, "phase_a")
 
 
 def test_verify_imports_diagnostics():
@@ -562,18 +380,44 @@ def test_check_parse_rejects_missing_file(tmp_path):
     assert not check.passed
 
 
+def _scenario_with_imports(*imports: object) -> SimpleNamespace:
+    """Stand in for a parsed ACES ``Scenario`` carrying (or not) an import set."""
+    return SimpleNamespace(imports=list(imports))
+
+
 def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
-    scenario = tmp_path / "techvault.sdl.yaml"
-    scenario.write_text("name: t\n")
-    check = check_import_lock(scenario)
+    path = tmp_path / "techvault.sdl.yaml"
+    path.write_text("name: t\n")
+    scenario = _scenario_with_imports("local:mod.sdl.yaml")
+
+    check = check_import_lock(path, scenario)
     assert not check.passed and any(
         "missing import lockfile" in d for d in check.diagnostics
     )
 
     (tmp_path / "aces.lock.json").write_text("{}")
     monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
-    check = check_import_lock(scenario)
+    check = check_import_lock(path, scenario)
     assert not check.passed and any("not found on PATH" in d for d in check.diagnostics)
+
+
+def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
+    """No imports means nothing to resolve, so no lockfile is required."""
+    path = tmp_path / "operational.sdl.yaml"
+    path.write_text("name: t\n")
+
+    check = check_import_lock(path, _scenario_with_imports())
+
+    assert check.passed
+    assert not (tmp_path / "aces.lock.json").exists()
+
+
+def test_operational_scenario_declares_no_imports():
+    """The skip above is only correct while the driving SDL really imports nothing."""
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert parse_check.passed, parse_check.diagnostics
+    assert scenario is not None
+    assert not scenario.imports
 
 
 def test_check_compile_rejects_invalid_scenario():
@@ -860,7 +704,7 @@ def test_provisioner_relaxes_password_policy_before_user_creation():
 def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(gc, "check_parse", lambda p: ("scn", GateCheck("parse", True)))
     monkeypatch.setattr(
-        gc, "check_import_lock", lambda p: GateCheck("import_lock", True)
+        gc, "check_import_lock", lambda p, s: GateCheck("import_lock", True)
     )
     monkeypatch.setattr(gc, "check_compile", lambda s: GateCheck("compile", True))
     monkeypatch.setattr(
@@ -872,9 +716,6 @@ def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
         gc,
         "check_provisioning_realization",
         lambda **k: ({}, GateCheck("provisioning_realization", True)),
-    )
-    monkeypatch.setattr(
-        gc, "check_parity_manifest", lambda **k: GateCheck("parity_manifest", True)
     )
     monkeypatch.setattr(
         _account_parity,
@@ -894,7 +735,6 @@ def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
         "compile",
         "backend_conformance",
         "provisioning_realization",
-        "parity_manifest",
         "account_provisioner_parity",
     }
 

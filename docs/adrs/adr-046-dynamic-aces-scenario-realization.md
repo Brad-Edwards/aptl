@@ -265,9 +265,11 @@ secret-bearing service configuration.
 
 Issue #689 makes `scenarios/techvault-operational.sdl.yaml` the honest dynamic
 TechVault startup contract. The operational SDL is the public `aptl lab start`
-target listed in `scenarios/catalog.json`; the deep captured TechVault
-inventory is review evidence, not a runtime source. The operational SDL must
-not import or depend on captured `runtime-observed:` content,
+target listed in `scenarios/catalog.json`; it does not depend on a deep
+captured TechVault inventory (see the Capture Inventory and Parity-Inventory
+Removal Addendum below—that review-evidence surface has since been removed
+from APTL). The operational SDL must not import or depend on captured
+`runtime-observed:` content,
 `datasets-in-services`, inventory-only filesystem manifests, logs, database
 dumps, screenshots, or runtime state that APTL cannot recreate from source on a
 clean machine.
@@ -315,6 +317,27 @@ planner gate, interpreter, typed backend spec, deployment backend, static tests,
 and live clean-start gate prove that support for the authored TechVault
 surface. A broad `ProvisionerCapabilities` value is not a waiver for a
 no-op interpreter branch.
+
+## Capture Inventory and Parity-Inventory Removal Addendum
+
+Issue #690 removes the captured TechVault asset inventory
+(`docs/aces/inventory/`) and the SCN-010 parity-inventory surface
+(`docs/aces/parity-inventory.yaml` / `.md`, `check_parity_manifest`, and the
+`required_surface_coverage` contract in the static validation gate) from
+APTL. That capture was an experiment run inside APTL to prove out an
+asset-inventory capability; the capability itself now lives in ACES
+(`docs/aces/inventory/asset-inventory-methodology.md` at
+Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md).
+APTL is an ACES-conformant backend: it keeps only the operational SDL
+(`scenarios/techvault-operational.sdl.yaml`) as the driving contract, with no
+separate capture/parity evidence surface behind it.
+
+The removed capture output is recoverable from git history if ever needed: the
+capture SDL (`scenarios/techvault.sdl.yaml`) and its supporting tree
+(`scenarios/techvault/`, `scenarios/aces.lock.json`) were deleted in PR #745
+(`205e47d^` is the last commit carrying them); the per-asset inventory
+bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
+(its parent commit carries them).
 
 ## Security Layers
 
@@ -484,6 +507,13 @@ or provider backend is used without editing TechVault-only code.
 - Writing realization evidence to a new record type instead of `LocalRunStore`
   and `RangeSnapshot`, or storing secret values rather than digests and
   non-secret identities.
+- Reintroducing captured runtime-observed content (a per-asset inventory
+  tree, evidence bundles, or a `capture-evidence.sh`-style runner) into APTL;
+  that capture capability lives in ACES, not here.
+- Reintroducing a parity-inventory surface (a `required_surface_coverage`
+  manifest, a `check_parity_manifest`-style gate check, or a
+  represented/deferred contract) as a condition of the static or live
+  validation gate.
 
 ## References
 

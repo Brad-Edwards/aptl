@@ -29,8 +29,8 @@ collector owners and returns a `LiveGateReport`. Each stage is one
 layer that broke:
 
 1. **Static prerequisite** (`aces_specification`). The static gate runs first. A
-   parse, compile, conformance, or parity failure blocks the live boot rather
-   than degrading to a warning.
+   parse, compile, or conformance failure blocks the live boot rather than
+   degrading to a warning.
 2. **Boot-input agreement** (`backend_instantiation`). The selected scenario is
    passed through to public startup. The profile under validation must still be
    the public start path's capability profile (`full-remote-control-plane`). A
@@ -102,14 +102,14 @@ schema `aptl.live-gate.manifest/v1`. It records:
   progression belongs in ACES `evaluation_results` and `evaluation_history`
   derived from observed run state.
 
-## Observable parity
+## Observable surface
 
-The live gate validates the operational startup contract. The public boot SDL,
-`scenarios/techvault-operational.sdl.yaml`, names the steady-state Compose
-services and networks at range granularity; the deep inventory SDL,
-`scenarios/techvault.sdl.yaml`, remains the detailed asset/parity evidence
-surface proven by the static inventory tests. Evaluator contracts are part of
-the declared `full-remote-control-plane` surface; #606 narrows that surface to
+The live gate validates the operational startup contract. The public boot
+SDL, `scenarios/techvault-operational.sdl.yaml`, is the contract: it names
+the steady-state Compose services and networks the range actually realizes at
+range granularity, and there is no separate capture/parity evidence surface
+behind it (ADR-046). Evaluator contracts are part of the declared
+`full-remote-control-plane` surface; #606 narrows that surface to
 condition/objective evaluation after ACES ADR-073 moved SDL scoring-chain
 semantics out of scope. The run archive is proof of what the operational model
 realized; it does not substitute for SDL encoding or for ACES evaluation

@@ -10,14 +10,12 @@ starts Docker.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
 from aces_conformance.conformance import run_target_conformance
 from aces_processor.compiler import compile_scenario_runtime_model
 from aces_runtime.manager import RuntimeManager
@@ -29,12 +27,7 @@ from aptl.backends.aces_profiles import public_start_profiles, select_backend_pr
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
-from aptl.validation.techvault_gate import (
-    DEFAULT_PARITY_INVENTORY,
-    PHASE_B,
-    REQUIRED_SURFACES,
-    GateCheck,
-)
+from aptl.validation.techvault_gate import GateCheck
 
 if TYPE_CHECKING:
     from aces_conformance.conformance import BackendConformanceReport
@@ -42,14 +35,11 @@ if TYPE_CHECKING:
 
     from aptl.core.config import AptlConfig
 
-# A deferral must cite an APTL issue (``#312``) or an ACES upstream pointer
-# (``aces#537``); "n/a"/"none"/empty is not a deferral.
-_ISSUE_REF = re.compile(r"^(?:[a-z0-9][a-z0-9._-]*)?#\d+$", re.IGNORECASE)
-
 # `aces conformance backend` is ~2s. `aces sdl verify-imports` re-resolves and
-# re-parses TechVault's full module tree (hundreds of MB of inventory data) and
-# measures ~4.5 min, so it gets a generous standalone timeout and runs in a
-# dedicated gate step rather than the fast per-test suite.
+# re-parses a scenario's whole module tree, which scales with that tree rather
+# than with the root document, so it gets a generous standalone timeout and runs
+# in a dedicated gate step rather than the fast per-test suite. It only runs for
+# scenarios that declare imports; the ones this repo ships today do not.
 _SUBPROCESS_TIMEOUT_S = 120
 _IMPORT_LOCK_TIMEOUT_S = 600
 
@@ -100,7 +90,7 @@ def check_parse(scenario_path: Path) -> tuple[Scenario | None, GateCheck]:
     return scenario, GateCheck("parse", True)
 
 
-def check_import_lock(scenario_path: Path) -> GateCheck:
+def check_import_lock(scenario_path: Path, scenario: Scenario) -> GateCheck:
     """Verify the committed lockfile, trust policy, and import expansion.
 
     Runs the canonical ``aces sdl verify-imports``, which compares the committed
@@ -108,7 +98,17 @@ def check_import_lock(scenario_path: Path) -> GateCheck:
     ``resolved_source`` is checkout-independent (ACES #551), so this passes on CI
     and any developer checkout and fails only when an imported module changes
     without re-running ``aces sdl resolve``.
+
+    A scenario that declares no imports resolves nothing, so there is no lockfile
+    to verify and the check is a pass. The lockfile requirement stays fail-closed
+    for every scenario that does import. The import set is read from the parsed
+    ``Scenario`` the ACES parser already produced — APTL does not re-read the raw
+    document to reinterpret an ACES field (ADR-035 / ADR-046).
     """
+    if not scenario.imports:
+        return GateCheck(
+            "import_lock", True, ("scenario declares no imports; nothing to lock",)
+        )
     lockfile = scenario_path.with_name("aces.lock.json")
     if not lockfile.exists():
         return GateCheck(
@@ -217,104 +217,6 @@ def check_provisioning_realization(
     return details, GateCheck("provisioning_realization", *_outcome(diagnostics))
 
 
-def check_parity_manifest(
-    *,
-    scenario: Scenario,
-    realization_details: Mapping[str, object] | None,
-    project_dir: Path,
-    parity_inventory_path: Path | None,
-    phase: str,
-) -> GateCheck:
-    """Confirm every required surface is represented with evidence or deferred."""
-    inventory_path = parity_inventory_path or (project_dir / DEFAULT_PARITY_INVENTORY)
-    coverage, load_error = _load_required_surface_coverage(inventory_path)
-    if load_error is not None:
-        return GateCheck("parity_manifest", False, (load_error,))
-
-    diagnostics = _coverage_set_diagnostics(coverage)
-    doc = scenario.model_dump(mode="json", by_alias=True)
-    evidence = _surface_evidence(doc, realization_details or {})
-    for surface in REQUIRED_SURFACES:
-        if surface in coverage:
-            diagnostics.extend(
-                _surface_diagnostics(surface, coverage[surface], evidence, phase)
-            )
-    return GateCheck("parity_manifest", *_outcome(diagnostics))
-
-
-def _load_required_surface_coverage(
-    inventory_path: Path,
-) -> tuple[Mapping[str, object], str | None]:
-    """Load the parity inventory's ``required_surface_coverage`` mapping."""
-    coverage: Mapping[str, object] = {}
-    error: str | None = None
-    if not inventory_path.exists():
-        error = f"parity inventory missing at {inventory_path}"
-    else:
-        try:
-            with inventory_path.open(encoding="utf-8") as handle:
-                inventory = yaml.safe_load(handle)
-        except (OSError, yaml.YAMLError) as exc:
-            error = redact(f"parity inventory unreadable: {exc}")
-        else:
-            top = inventory if isinstance(inventory, Mapping) else {}
-            loaded = top.get("required_surface_coverage")
-            if isinstance(loaded, Mapping):
-                coverage = loaded
-            else:
-                error = "parity inventory has no `required_surface_coverage` mapping"
-    return coverage, error
-
-
-def _coverage_set_diagnostics(coverage: Mapping[str, object]) -> list[str]:
-    """Report required surfaces missing from, or unknown to, the coverage map."""
-    diagnostics: list[str] = []
-    missing = set(REQUIRED_SURFACES) - set(coverage)
-    extra = set(coverage) - set(REQUIRED_SURFACES)
-    if missing:
-        diagnostics.append(f"surface coverage missing entries: {sorted(missing)}")
-    if extra:
-        diagnostics.append(f"surface coverage has unknown entries: {sorted(extra)}")
-    return diagnostics
-
-
-def _surface_diagnostics(
-    surface: str, entry: object, evidence: Mapping[str, bool], phase: str
-) -> list[str]:
-    """Validate one surface coverage entry, failing closed on malformed input."""
-    if not isinstance(entry, Mapping):
-        return [
-            f"surface {surface!r} coverage entry must be a mapping, "
-            f"got {type(entry).__name__}"
-        ]
-    status = entry.get("status")
-    diagnostics: list[str] = []
-    if status == "represented":
-        if not evidence.get(surface):
-            diagnostics.append(
-                f"surface {surface!r} marked represented but the compiled "
-                f"scenario carries no evidence for it"
-            )
-    elif status == "deferred":
-        followup = str(entry.get("blocking_followup", "")).strip()
-        if not _ISSUE_REF.match(followup):
-            diagnostics.append(
-                f"surface {surface!r} deferred without a tracking issue "
-                f"(blocking_followup={followup!r})"
-            )
-        elif phase == PHASE_B:
-            diagnostics.append(
-                f"surface {surface!r} is deferred ({followup}); Phase B "
-                f"cutover requires full representation"
-            )
-    else:
-        diagnostics.append(
-            f"surface {surface!r} has invalid status {status!r} "
-            f"(expected 'represented' or 'deferred')"
-        )
-    return diagnostics
-
-
 def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[str]:
     """Turn a target conformance report into gate diagnostics."""
     diagnostics: list[str] = []
@@ -360,32 +262,6 @@ def _verify_imports_diagnostics(
     if result.returncode != 0:
         return [redact(f"aces sdl verify-imports failed: {_cli_detail(result)}")]
     return []
-
-
-def _surface_evidence(
-    doc: Mapping[str, object], realization_details: Mapping[str, object]
-) -> dict[str, bool]:
-    """Detect which required surfaces carry real compiled/realized evidence."""
-    nodes = realization_details.get("nodes", [])
-    profiles = set(realization_details.get("profiles", []))
-    return {
-        "nodes": bool(nodes),
-        "services": any(node.get("services") for node in nodes),
-        "vulnerabilities": bool(doc.get("vulnerabilities")),
-        "features": bool(doc.get("features")),
-        "kali_apparatus": "kali" in profiles,
-        "defensive_stack": bool({"soc", "wazuh"} & profiles),
-        "health": _contains_key(doc.get("nodes"), "health"),
-    }
-
-
-def _contains_key(obj: object, key: str) -> bool:
-    """Recursively test whether ``key`` appears as a mapping key in ``obj``."""
-    if isinstance(obj, Mapping):
-        return key in obj or any(_contains_key(value, key) for value in obj.values())
-    if isinstance(obj, (list, tuple)):
-        return any(_contains_key(item, key) for item in obj)
-    return False
 
 
 def _severity(diagnostic: Diagnostic) -> str:

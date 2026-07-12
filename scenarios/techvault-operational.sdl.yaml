@@ -2,8 +2,8 @@ name: techvault
 description: >
   Operational ACES projection for the TechVault range. This SDL is the public
   startup contract: it names the steady-state Compose services and networks
-  that `aptl lab start` realizes without carrying the deep per-asset inventory
-  encoded in scenarios/techvault.sdl.yaml.
+  that `aptl lab start` realizes. There is no separate captured deep
+  per-asset inventory behind it (ADR-046).
 
 nodes:
   security-net:
@@ -296,11 +296,12 @@ vulnerabilities:
 # Realizable content (ADR-046 TechVault Operational Standup Addendum,
 # issue #689): every entry here is either bounded inline text or a
 # project-contained, checked-in source. No runtime-observed:, dataset, or
-# captured-filesystem content is authored here — that captured inventory
-# lives in scenarios/techvault.sdl.yaml (review evidence, not a runtime
-# source). Both entries land on the `fileshare` node, whose Compose
-# service mounts the `fileshare_data` named volume the APTL content
-# realization backend seeds at `aptl lab start`.
+# captured-filesystem content is authored here — APTL does not carry a
+# separate captured inventory as review evidence (ADR-046 Capture Inventory
+# and Parity-Inventory Removal Addendum). Both entries land on the
+# `fileshare` node, whose Compose service mounts the `fileshare_data`
+# named volume the APTL content realization backend seeds at
+# `aptl lab start`.
 content:
   fileshare-public-notice:
     type: file

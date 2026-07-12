@@ -1,6 +1,0 @@
---pip3-freeze--
-(pip unavailable)
---npm-global--
-(npm global empty)
---node-version--
-v22.22.0

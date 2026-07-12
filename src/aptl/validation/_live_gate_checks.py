@@ -90,7 +90,7 @@ def check_static_prerequisite(
     """Run the static gate; a static failure blocks the live boot.
 
     Returns the parsed scenario (for the realization matrix) and the check.
-    Static parse/compile/conformance/parity failures are hard blocks, never
+    Static parse/compile/conformance failures are hard blocks, never
     downgraded to live-gate warnings.
     """
     report = validate_scenario(

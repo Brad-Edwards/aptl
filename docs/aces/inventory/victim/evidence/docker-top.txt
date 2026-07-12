@@ -1,5 +1,0 @@
-UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                3274791             3274739             0                   07:40               ?                   00:00:00            /usr/sbin/init
-root                3275102             3274791             0                   07:40               ?                   00:00:00            /usr/sbin/rsyslogd -n
-root                3275103             3274791             0                   07:40               ?                   00:00:00            sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
-root                3275087             3274791             0                   07:40               ?                   00:00:00            /usr/lib/systemd/systemd-journald

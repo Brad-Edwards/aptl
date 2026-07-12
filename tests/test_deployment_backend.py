@@ -2202,6 +2202,98 @@ class TestSeedNamedVolumes:
         assert "suricata_config_seed" in str(exc_info.value)
         assert "secret docker stderr" not in str(exc_info.value)
 
+    def test_nonzero_exit_logs_stderr_hint(self, tmp_path, caplog):
+        # Issue #716: a seed failure must be diagnosable from the log alone.
+        # The real docker error text reaches the operator-facing log line
+        # while the raised message stays artifact-name-only.
+        from aptl.core.deployment.errors import BackendSeedError
+
+        stderr = (
+            "Unable to find image 'jasonish/suricata:7.0' locally\n"
+            "docker: Error response from daemon: pull access denied"
+        )
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+            caplog.set_level(logging.ERROR, logger="aptl")
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "Error response from daemon: pull access denied" in message
+        assert "suricata_config_seed" in message
+        # The exception itself still leaks nothing beyond the artifact name.
+        assert "Error response from daemon" not in str(exc_info.value)
+
+    def test_stderr_hint_is_redacted(self, tmp_path, caplog):
+        # A credential-shaped token in docker stderr must be scrubbed before
+        # it reaches the log; the shared redactor owns the masking.
+        from aptl.core.deployment.errors import BackendSeedError
+
+        stderr = (
+            "docker: Error response from daemon: failed to auth: "
+            "Authorization: Bearer sk-supersecrettoken123"
+        )
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+            caplog.set_level(logging.ERROR, logger="aptl")
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "sk-supersecrettoken123" not in message
+        assert "[REDACTED]" in message
+
+    def test_empty_stderr_adds_no_hint_fragment(self, tmp_path, caplog):
+        # No stderr means no dangling " — stderr:" suffix on the log line.
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="   ")
+            caplog.set_level(logging.ERROR, logger="aptl")
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "stderr:" not in message
+        assert "suricata_config_seed" in message
+
+    def test_long_stderr_hint_is_tail_truncated(self, tmp_path, caplog):
+        # A verbose stderr collapses to a bounded tail; the daemon error at
+        # the end (the useful part) survives, the leading progress noise does
+        # not, and an ellipsis marks the cut.
+        from aptl.core.deployment.errors import BackendSeedError
+
+        stderr = "HEAD_NOISE " + ("x" * 2000) + " TAIL_DAEMON_ERROR"
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+            caplog.set_level(logging.ERROR, logger="aptl")
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "TAIL_DAEMON_ERROR" in message
+        assert "HEAD_NOISE" not in message
+        assert "…" in message
+
+    def test_retire_failure_logs_stderr_hint(self, tmp_path, caplog):
+        # The legacy-retire error path shares the same redacted-hint contract
+        # as the seed path. Retire runs first, so a nonzero exit fails there.
+        from aptl.core.deployment.errors import BackendSeedError
+
+        stderr = "docker: Error response from daemon: permission denied on /legacy"
+        backend = self._backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+            caplog.set_level(logging.ERROR, logger="aptl")
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.seed_named_volumes(
+                    [self._misp_seed_with_legacy()], seeder_image="img:1"
+                )
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "Retire of legacy seed path" in message
+        assert "permission denied on /legacy" in message
+        assert "permission denied" not in str(exc_info.value)
+
     def test_unsafe_relpath_rejected_before_any_container(self, tmp_path):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.seed_spec import NamedVolumeSeed, SeedFile

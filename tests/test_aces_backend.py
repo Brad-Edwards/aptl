@@ -691,6 +691,42 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
     )
 
 
+def test_runtime_bindings_skips_non_yaml_content_text():
+    """Free-form content text must be skipped, not crash ``_runtime_bindings``.
+
+    Regression (issue #689 live-boot crash): a content-placement with inline
+    prose (a planted file's text) reaches ``_runtime_bindings``, which
+    ``yaml.safe_load()``s every content ``text`` to detect participant-binding
+    specs. Multi-line prose is not a single YAML document, so ``safe_load``
+    raised ``ParserError`` and crashed ``aptl lab start`` — the static gates
+    never exercised the runtime boot path. Unparseable text is simply not a
+    binding spec and must be skipped.
+    """
+    from types import SimpleNamespace
+
+    from aptl.backends.aces_participant_bindings import _runtime_bindings
+
+    # Faithful to the shipped fileshare-public-notice text: the space before
+    # "#689" makes YAML read "#689) ..." as a comment, terminating the scalar,
+    # so the following line parses as an unexpected second document (ParserError).
+    prose = (
+        "Welcome to TechVault Solutions file server.\n"
+        "This notice is planted by the operational ACES scenario's\n"
+        "content-placement realization (issue #689) — dynamically realized\n"
+        "from inline text authored in techvault-operational.sdl.yaml, not\n"
+        "hand-copied onto the image.\n"
+    )
+    model = SimpleNamespace(
+        content_placements={
+            "content.fileshare-public-notice": SimpleNamespace(
+                spec={"text": prose}
+            ),
+        }
+    )
+
+    assert _runtime_bindings(model) == []
+
+
 def test_start_helper_returns_specs_from_compiled_scenario(mocker):
     from aptl.backends.aces_participant_actions import (
         participant_action_specs_for_scenario,

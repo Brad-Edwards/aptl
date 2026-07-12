@@ -818,6 +818,45 @@ def test_account_provisioner_parity_fails_on_undisabled_account():
     assert any("disabled" in d.lower() for d in check.diagnostics)
 
 
+def test_provisioner_relaxes_password_policy_before_user_creation():
+    """Declared weak-password personas must actually provision at boot.
+
+    The Samba domain default password policy (complexity on, min length 7)
+    rejects deliberately-weak passwords (e.g. jessica.williams / password123)
+    at ``samba-tool user create``; the script's ``|| true`` masks the failure,
+    so the account silently never exists — a runtime honesty gap the static
+    parity gate cannot see. The provisioner must disable complexity BEFORE it
+    creates any user so every declared weak-password account is realized
+    (issue #689 account-realization honesty).
+    """
+    script = (
+        PROJECT_ROOT / "containers" / "ad" / "provision-users.sh"
+    ).read_text(encoding="utf-8")
+    lines = script.splitlines()
+    complexity_off = next(
+        (
+            i
+            for i, line in enumerate(lines)
+            if "passwordsettings set --complexity=off" in line
+        ),
+        None,
+    )
+    first_user_create = next(
+        (i for i, line in enumerate(lines) if "samba-tool user create " in line),
+        None,
+    )
+
+    assert complexity_off is not None, (
+        "provisioner must disable password complexity so weak-password "
+        "personas can be created"
+    )
+    assert first_user_create is not None
+    assert complexity_off < first_user_create, (
+        "password complexity must be disabled BEFORE the first user is "
+        "created, or weak-password accounts silently fail to provision"
+    )
+
+
 def test_validate_scenario_composes_checks(monkeypatch, tmp_path):
     monkeypatch.setattr(gc, "check_parse", lambda p: ("scn", GateCheck("parse", True)))
     monkeypatch.setattr(

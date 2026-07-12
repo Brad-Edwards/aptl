@@ -154,7 +154,13 @@ def _runtime_bindings(model: object) -> list[Mapping[str, object]]:
         text = spec.get("text")
         if not isinstance(text, str) or not text.strip():
             continue
-        parsed = yaml.safe_load(text)
+        try:
+            parsed = yaml.safe_load(text)
+        except yaml.YAMLError:
+            # Free-form content text (e.g. a planted file's prose) is not a
+            # participant-binding YAML spec. A parse failure means "not a
+            # binding" — skip it rather than crashing the lab boot.
+            continue
         if not isinstance(parsed, Mapping):
             continue
         if parsed.get("schema_version") != _BINDING_SCHEMA and not tags & _BINDING_TAGS:

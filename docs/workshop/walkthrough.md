@@ -246,8 +246,9 @@ Path A (agent):
 > specifically rule IDs 5710 and 302011. What fired, and from which source IP?
 
 Expect rule 5710 (sshd non-existent user) about 6 times and rule 302011 (SQL
-injection special characters in URL) about 4 times. The source addresses are
-Kali's `172.20.2.35` for the SSH path and `172.20.1.30` for the web path.
+injection special characters in URL) about a dozen times (roughly three alerts
+per probe). The source addresses are Kali's `172.20.2.35` for the SSH path and
+`172.20.1.30` for the web path.
 
 Path B (direct):
 

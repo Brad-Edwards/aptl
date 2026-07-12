@@ -3,7 +3,7 @@
 Split out of ``_gate_checks.py`` to keep that module under the file-length
 gate: this module owns ``check_account_provisioner_parity``, the sole
 consumer of the provisioner-script scraping logic.
-``techvault_gate.validate_scenario`` calls it here directly (step 7).
+``techvault_gate.validate_scenario`` calls it here directly (step 6).
 """
 
 from __future__ import annotations

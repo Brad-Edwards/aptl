@@ -1,5 +1,16 @@
 # M1 ACES Conformance Truth-Up Preflight
 
+!!! warning "Superseded in part (2026-07-12, issue #690)"
+    This is a dated preflight record, kept as written. Where it names the
+    captured `scenarios/techvault.sdl.yaml`, the SCN-010 parity inventory
+    (`docs/aces/parity-inventory.yaml`), the parity-manifest gate check, the
+    `aptl aces-inventory` command, or the per-asset mapping ledgers, it no
+    longer describes the repository: all of them were removed in #690. The
+    asset-inventory capture capability now lives in ACES; APTL keeps
+    `scenarios/techvault-operational.sdl.yaml` as its only driving contract.
+    See the Capture Inventory and Parity-Inventory Removal Addendum in
+    [ADR-046](../adrs/adr-046-dynamic-aces-scenario-realization.md).
+
 This note is the architecture preflight for issue #599. It is guidance, not an
 implementation plan. ADR-035 remains the binding ACES adoption decision,
 ADR-046 remains the dynamic realization decision, and ADR-044 remains the run

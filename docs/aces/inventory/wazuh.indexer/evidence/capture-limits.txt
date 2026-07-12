@@ -1,8 +1,0 @@
-- This capture used the existing running lab as authorized by the user on 2026-06-05 and did not run aptl lab stop -v && aptl lab start; it is a non-destructive frozen steady-state observation, not clean-lab rebuild proof.
-- OpenSearch admin credentials, internal_users.yml bcrypt hashes, indexer keystore values, private TLS key checksums, and API probe output are retained as in-range scenario evidence.
-- The Wazuh indexer image does not include ss, netstat, ip, mount, or ps; runtime evidence uses Docker inspect/network records, /proc inspection, and the in-container OpenSearch HTTP API where in-container tooling is unavailable.
-- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; component identity remains and filesystem provenance is captured separately.
-- Trivy and Syft CycloneDX SBOM evidence is committed as deterministic gzip-compressed minified JSON to satisfy the repository's added-file size gate; compression is lossless.
-- osquery apt_sources was not applicable for the Amazon Linux Wazuh indexer target.
-- osquery installed_applications was unavailable in the digest-pinned Linux osquery scanner image.
-- osquery programs was unavailable in the digest-pinned Linux osquery scanner image.

@@ -1,5 +1,0 @@
-{
-  "vantage": "container localhost",
-  "command": "curl -ks -i https://localhost:55000",
-  "output": "HTTP/1.1 401 Unauthorized\r\ndate: Fri, 29 May 2026 00:52:45 GMT\r\ncontent-type: application/problem+json; charset=utf-8\r\ncontent-length: 70\r\n\r\n{\"title\": \"Unauthorized\", \"detail\": \"No authorization token provided\"}"
-}

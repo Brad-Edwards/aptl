@@ -1,6 +1,0 @@
-- Capture used the already-running aptl project and started only the mail profile service non-destructively; no aptl lab stop -v && aptl lab start clean reset was run for this bundle
-- The mounted containers/mailserver/setup.sh was executed manually after container start before capture because the upstream docker-mailserver image waited for accounts and did not automatically run the mounted script
-- mtree/AIDE/Tripwire filesystem manifest tooling was unavailable; filesystem-tree.txt and filesystem-checksums.txt provide the committed stable manifest for the captured mailserver scope
-- Syft CycloneDX output was deterministically normalized by stripping syft:location:* properties; filesystem provenance is captured in filesystem-tree.txt and filesystem-checksums.txt
-- osquery installed_applications table unavailable in the digest-pinned Linux scanner image.
-- osquery programs table unavailable in the digest-pinned Linux scanner image.

@@ -3,9 +3,8 @@
 The static validation gate (`aptl.validation.techvault_gate`) blocks an ACES
 SCN-010 cutover unless the TechVault scenario is parseable, semantically valid,
 conformance-aligned against the canonical ACES `backend-manifest-v2` surface,
-and proven to encode every required observable surface (or to defer it with a
-linked tracking issue). It implements requirement SCN-010 (issue #322) and
-records its decisions against the parity inventory.
+realizable into a concrete provisioning plan, and account-consistent between
+the SDL and the provisioner. It implements requirement SCN-010 (issue #322).
 
 The gate is scenario-generic. `validate_scenario()` takes a scenario path, a
 backend profile, the ACES corpus roots, and a target name, so the next scenario
@@ -18,12 +17,13 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
 `GateReport`. Each stage is one `GateCheck`:
 
 1. **Parse.** The ACES reference parser (`aces_sdl.parse_sdl_file`) accepts
-   `scenarios/techvault.sdl.yaml`.
-2. **Import lock.** `aces sdl verify-imports` verifies the committed
-   `scenarios/aces.lock.json` against a fresh resolution. The lockfile's local
-   `resolved_source` is checkout-independent (ACES #551), so this passes on CI
-   and any developer checkout and fails only when an imported module changes
-   without re-running `aces sdl resolve`.
+   `scenarios/techvault-operational.sdl.yaml`.
+2. **Import lock** (when the scenario declares imports and `check_imports` is
+   enabled). `aces sdl verify-imports` verifies the committed
+   `aces.lock.json` next to the scenario against a fresh resolution. The
+   lockfile's local `resolved_source` is checkout-independent (ACES #551), so
+   this passes on CI and any developer checkout and fails only when an
+   imported module changes without re-running `aces sdl resolve`.
 3. **Compile.** `aces_processor.compiler.compile_scenario_runtime_model` runs
    semantic validation against the concept-authority corpus and produces the
    runtime model.
@@ -43,10 +43,11 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
    selected Compose profiles must match the public lab-start profile set, so a
    scenario that would instantiate a partial range fails the gate. The
    realization is driven by declared content, not by the scenario identifier.
-6. **Parity manifest.** Every required observable surface in
-   `docs/aces/parity-inventory.yaml` under `required_surface_coverage` is either
-   represented (proven by real compiled evidence) or deferred with a linked
-   tracking issue.
+6. **Account provisioner parity.** Every account the SDL declares is a real,
+   clean-start-realized fixture in the provisioner script, not a phantom
+   declaration: group membership, mail attributes, SPNs, and the disabled flag
+   must all agree between the SDL and what the provisioner actually creates
+   (#689).
 
 ## Backend manifest
 
@@ -55,29 +56,13 @@ APTL publishes its capability declaration as the canonical ACES
 `create_aptl_manifest()`. The previous APTL-local manifest shim is removed: a
 local dataclass approximation is not accepted as conformance evidence.
 
-## Required surface coverage
+## Advisory today, blocking at cutover
 
-The parity inventory records, for each required surface, whether TechVault
-represents it today or marks it as a historical gap with an issue reference.
-Startup, workflow/evaluation contract, and participant runtime surfaces are
-represented through the full remote-control-plane target. Evaluator progression
-is limited to condition/objective evaluation after ACES ADR-073 moved SDL
-scoring-chain semantics out of the authored runtime surface. A surface that is
-neither represented with evidence nor explicitly tracked fails the gate.
-
-## Advisory in Phase A, blocking at cutover
-
-ACES adoption runs in two phases (ADR-035). The gate behaves the same in both
-phases but its enforcement strength differs:
-
-- **Phase A.** Fast gate-logic tests run in the blocking default test suite. The
-  full-scenario gate runs as the advisory `aces-scenario-gate` CI job, which
-  surfaces failures on the pull request without blocking merge. Deferred
-  surfaces are allowed when they carry a tracking issue.
-- **Phase B (cutover).** The cutover pull request removes `continue-on-error`
-  from the CI job to make the full-scenario gate blocking, and runs the gate
-  with `phase="phase_b"`, which disallows deferrals and requires full
-  representation.
+The gate runs today as the advisory `aces-scenario-gate` CI job
+(`continue-on-error: true`), which surfaces failures on the pull request
+without blocking merge, while the fast gate-logic tests run in the blocking
+default test suite. A future cutover PR removes `continue-on-error` to make
+the full-scenario gate blocking.
 
 ## Running the gate
 
@@ -87,10 +72,9 @@ The fast gate-logic tests run in the default suite:
 pytest tests/test_techvault_static_gate.py -m "not integration"
 ```
 
-The full-scenario gate parses the complete TechVault tree and runs
-`aces sdl verify-imports`, each of which takes minutes, so it is
-integration-marked. Run it before pushing a scenario, manifest, or parity
-change:
+The full-scenario gate parses the full TechVault tree and spawns the `aces`
+CLI, which takes minutes, so it is integration-marked. Run it before pushing a
+scenario or manifest change:
 
 ```
 pytest tests/test_techvault_static_gate.py -m integration

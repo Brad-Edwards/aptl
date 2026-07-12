@@ -14,11 +14,9 @@ boundary and curated startup slices, see
 
 ## Where the scenario is defined
 
-- `scenarios/techvault.sdl.yaml`, plus `scenarios/techvault/nodes/` and
-  `scenarios/techvault/sections/`, hold the canonical ACES SDL inventory
-  (nodes, vulnerabilities, accounts, content, and relationships).
-- `scenarios/techvault-operational.sdl.yaml` is the operational projection that
-  public startup boots by default.
+- `scenarios/techvault-operational.sdl.yaml` is the canonical ACES SDL that
+  public startup boots by default (nodes, vulnerabilities, accounts, content,
+  and relationships).
 - `scenarios/catalog.json` registers the operational default plus the four
   curated variants as startup aliases.
 

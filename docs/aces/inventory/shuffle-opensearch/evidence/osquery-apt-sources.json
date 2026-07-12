@@ -1,9 +1,0 @@
-{
-  "table": "apt_sources",
-  "query": "select * from apt_sources order by name;",
-  "tool": "osqueryi version 4.9.0",
-  "vantage": "containerized osquery Linux image",
-  "status": "unavailable",
-  "reason": "osquery table apt_sources is not present in the Linux osquery registry for the digest-pinned osquery 4.9.0 scanner image",
-  "rows": []
-}

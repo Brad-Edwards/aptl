@@ -1,9 +1,0 @@
-2026-05-23 06:19:19 [INFO] aptl.misp_suricata_sync: misp-suricata-sync starting; misp_url=https://misp tag_filter=aptl:enforce sync_interval=300s rules_out=/var/lib/suricata/rules/misp/misp-iocs.rules
-2026-05-23 06:19:19 [WARNING] aptl.curl_safe: curl_safe: curl exit 22 for https://misp/servers/getVersion
-2026-05-23 06:19:24 [WARNING] aptl.curl_safe: curl_safe: curl exit 22 for https://misp/servers/getVersion
-2026-05-23 06:19:29 [WARNING] aptl.curl_safe: curl_safe: curl exit 22 for https://misp/servers/getVersion
-2026-05-23 06:19:29 [INFO] aptl.misp_suricata_sync: Waiting for MISP to become reachable...
-2026-05-23 06:19:29 [WARNING] aptl.curl_safe: curl_safe: curl exit 22 for https://misp/servers/getVersion
-2026-05-23 06:19:35 [INFO] aptl.misp_suricata_sync: MISP reachable; version=2.5.36
-2026-05-23 06:19:35 [INFO] aptl.misp_suricata_sync: Wrote 0 rules (+ 0 hash-type sidecars) to /var/lib/suricata/rules/misp/misp-iocs.rules; triggering Suricata reload
-2026-05-23 06:19:48 [INFO] aptl.misp_suricata_sync: Suricata rule reload acknowledged

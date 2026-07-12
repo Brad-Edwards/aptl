@@ -36,7 +36,7 @@ jobs:
       # tools/check_pr_title.py must not be able to weaken its own required
       # check. The shared validator is still exercised against the PR's own code
       # by the test suite in checks.yml.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.base.sha }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6

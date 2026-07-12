@@ -22,6 +22,7 @@ app.add_typer(kill.app, name="kill")
 
 
 def _version_callback(value: bool) -> None:
+    """Print the installed version and exit when ``--version`` is passed."""
     if value:
         typer.echo(f"aptl {aptl.__version__}")
         raise typer.Exit()

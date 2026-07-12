@@ -151,25 +151,28 @@ def _runtime_bindings(model: object) -> list[Mapping[str, object]]:
     YAML text to re-parse.
     """
 
-    bindings: list[Mapping[str, object]] = []
-    for spec_artifact in _compiled_artifact_mapping(
-        model, "behavior_specifications"
-    ).values():
-        spec = getattr(spec_artifact, "spec", {})
-        if not isinstance(spec, Mapping):
-            continue
-        extensions = spec.get("extensions")
-        if not isinstance(extensions, Mapping):
-            continue
-        for key, value in extensions.items():
-            if key != _BINDING_EXTENSION_KEY:
-                continue
-            if not isinstance(value, Mapping):
-                continue
-            if value.get("schema_version") != _BINDING_SCHEMA:
-                continue
-            bindings.append(value)
-    return bindings
+    specs = _compiled_artifact_mapping(model, "behavior_specifications").values()
+    bindings = (_binding_from_behavior_spec(spec_artifact) for spec_artifact in specs)
+    return [binding for binding in bindings if binding is not None]
+
+
+def _binding_from_behavior_spec(
+    spec_artifact: object,
+) -> Mapping[str, object] | None:
+    """Extract one behavior spec's participant runtime binding, if it carries one."""
+
+    spec = getattr(spec_artifact, "spec", {})
+    if not isinstance(spec, Mapping):
+        return None
+    extensions = spec.get("extensions")
+    if not isinstance(extensions, Mapping):
+        return None
+    binding = extensions.get(_BINDING_EXTENSION_KEY)
+    if not isinstance(binding, Mapping):
+        return None
+    if binding.get("schema_version") != _BINDING_SCHEMA:
+        return None
+    return binding
 
 
 def _spec_from_binding(

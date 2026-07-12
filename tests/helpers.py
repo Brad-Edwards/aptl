@@ -486,17 +486,26 @@ def curl_json(
 
 
 def ssh_cmd(
-    port: int, user: str, cmd: str = "echo OK",
+    port: int, user: str, cmd: str = "echo OK", host: str = "localhost",
 ) -> subprocess.CompletedProcess:
-    """Run a command via SSH to a lab container."""
+    """Run a command via SSH to a lab container.
+
+    ``host`` defaults to ``localhost`` for services published to the host
+    (e.g. the kali SSH proxy on 2023). Internal-only targets such as victim
+    and workstation publish NO host port by design (issue #293) — they attach
+    only to an internal Docker network and are reached by container IP over the
+    bridge with the same lab key. For those, pass ``host=VICTIM_IP`` /
+    ``host=WS_IP`` with ``port=22``.
+    """
     return run_cmd([
         "ssh",
         "-i", SSH_KEY,
         "-o", "ConnectTimeout=5",
         "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
         "-o", "BatchMode=yes",
         "-p", str(port),
-        f"{user}@localhost",
+        f"{user}@{host}",
         cmd,
     ])
 

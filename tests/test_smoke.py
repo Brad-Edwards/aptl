@@ -19,7 +19,8 @@ from tests.helpers import (
     LIVE_LAB,
     PROJECT_ROOT,
     PUBLISHED_MCP_PATHS,
-    WS_SSH_PORT,
+    VICTIM_IP,
+    WS_IP,
     container_running,
     curl_indexer,
     docker_exec,
@@ -84,10 +85,16 @@ class TestContainerHealth:
 
 @LIVE_LAB
 class TestSSHAccess:
-    """SSH key auth works for all SSH-accessible containers."""
+    """SSH key auth works for all SSH-accessible containers.
+
+    Kali publishes a loopback SSH proxy on host port 2023. Victim and
+    workstation publish NO host port by design (issue #293): they sit on an
+    internal-only Docker network and are reached by container IP over the
+    bridge with the same lab key — the path the control plane / MCP hosts use.
+    """
 
     def test_victim_ssh(self):
-        result = ssh_cmd(2022, "labadmin")
+        result = ssh_cmd(22, "labadmin", host=VICTIM_IP)
         assert result.returncode == 0, f"SSH failed: {result.stderr}"
         assert "OK" in result.stdout
 
@@ -97,7 +104,7 @@ class TestSSHAccess:
         assert "OK" in result.stdout
 
     def test_workstation_ssh(self):
-        result = ssh_cmd(WS_SSH_PORT, "labadmin")
+        result = ssh_cmd(22, "labadmin", host=WS_IP)
         assert result.returncode == 0, f"SSH failed: {result.stderr}"
         assert "OK" in result.stdout
 
@@ -226,11 +233,21 @@ class TestMCPServers:
         ids=list(PUBLISHED_MCP_PATHS.keys()),
     )
     def test_published_binary_exists(self, name, path):
-        """Published MCP server binary or script is installed."""
-        assert os.path.isfile(path), (
-            f"Published MCP '{name}' not found at {path} -- "
-            "see tools/.gitignore for install instructions"
-        )
+        """Published MCP server binary or script is installed (optional).
+
+        The published wazuh/thehive/misp MCP servers are third-party, installed
+        per-machine and gitignored (``tools/.gitignore``); they back only the
+        optional full-SOC MCP path. Skip when absent so a core-workshop setup
+        (red + indexer, built from source) reports a clean smoke run, while
+        still validating the binary when a facilitator has installed it.
+        """
+        if not os.path.isfile(path):
+            pytest.skip(
+                f"Published MCP '{name}' not installed at {path} -- optional "
+                "per-machine install (see tools/.gitignore); required only for "
+                "the full-SOC MCP path."
+            )
+        assert os.path.isfile(path)
 
 
 # -------------------------------------------------------------------

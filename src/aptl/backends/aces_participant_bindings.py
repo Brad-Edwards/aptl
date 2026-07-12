@@ -162,17 +162,17 @@ def _binding_from_behavior_spec(
     """Extract one behavior spec's participant runtime binding, if it carries one."""
 
     spec = getattr(spec_artifact, "spec", {})
-    if not isinstance(spec, Mapping):
-        return None
-    extensions = spec.get("extensions")
-    if not isinstance(extensions, Mapping):
-        return None
-    binding = extensions.get(_BINDING_EXTENSION_KEY)
-    if not isinstance(binding, Mapping):
-        return None
-    if binding.get("schema_version") != _BINDING_SCHEMA:
-        return None
-    return binding
+    extensions = spec.get("extensions") if isinstance(spec, Mapping) else None
+    binding = (
+        extensions.get(_BINDING_EXTENSION_KEY)
+        if isinstance(extensions, Mapping)
+        else None
+    )
+    is_binding = (
+        isinstance(binding, Mapping)
+        and binding.get("schema_version") == _BINDING_SCHEMA
+    )
+    return binding if is_binding else None
 
 
 def _spec_from_binding(

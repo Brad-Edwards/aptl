@@ -174,7 +174,7 @@ def _apply_plan_operations(
 
 @dataclass
 class AptlEvaluator(object):
-    """ACES evaluation adapter for APTL's full remote-control-plane target."""
+    """Evaluation component of APTL's ``full-remote-control-plane`` target."""
 
     _results: dict[str, dict[str, object]] = field(default_factory=dict, init=False)
     _history: dict[str, list[dict[str, object]]] = field(default_factory=dict, init=False)

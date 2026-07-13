@@ -1,4 +1,4 @@
-"""APTL ACES runtime target and deployment handoff."""
+"""Compose APTL's full remote-control-plane ACES target and deployment handoff."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def create_aptl_runtime_target(
     backend: "DeploymentBackend",
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
 ) -> RuntimeTarget:
-    """Build the ACES runtime target for APTL."""
+    """Build APTL's canonical ``full-remote-control-plane`` runtime target."""
 
     provisioner = AptlProvisioner(
         project_dir=project_dir,

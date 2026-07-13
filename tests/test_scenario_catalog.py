@@ -72,15 +72,20 @@ scenarios:
     assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
 
 
-def test_repository_catalog_includes_paper_agent_loop():
+def test_repository_catalog_lists_only_techvault_scenarios():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
-    entries = {entry.id: entry for entry in catalog.scenarios}
+    ids = {entry.id for entry in catalog.scenarios}
 
-    assert entries["paper-agent-loop"].path == "scenarios/paper-agent-loop.sdl.yaml"
-    assert (project_root / entries["paper-agent-loop"].path).exists()
+    # The shipped catalog is techvault-only; no demo/paper/test scenario leaks
+    # into the product menu, and every listed path exists.
+    assert ids
+    assert all(entry.id.startswith("techvault-") for entry in catalog.scenarios)
+    assert all(
+        (project_root / entry.path).exists() for entry in catalog.scenarios
+    )
 
 
 def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):

@@ -55,10 +55,10 @@ from aptl.core.deployment.realization import DeploymentContentRealization
 # branch (ADR-046 §Extensibility).
 _CONTENT_REALIZABLE_SERVICES: dict[str, str] = {
     "fileshare": "fileshare_data",
-    # Kali carries the paper scenario's participant-visible task brief. The
-    # `kali_operations` named volume already exists in docker-compose.yml
-    # (mounted at /home/kali/operations), so a volume-relative content path
-    # lowers straight through the ADR-043 seed mechanism (issue #691).
+    # Kali carries a participant-visible task brief. The `kali_operations`
+    # named volume already exists in docker-compose.yml (mounted at
+    # /home/kali/operations), so a volume-relative content path lowers straight
+    # through the ADR-043 seed mechanism (issue #691).
     "kali": "kali_operations",
 }
 

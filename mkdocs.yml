@@ -107,7 +107,6 @@ nav:
     - TechVault Live Validation Gate: aces/techvault-live-validation-gate.md
     - TechVault Curated Live Validation Preflight: aces/techvault-curated-live-validation-preflight.md
     - TechVault Curated Live Validation Gate: aces/techvault-curated-live-validation-gate.md
-    - Paper Scenario Realization: aces/paper-scenario-realization.md
   - Testing:
     - Smoke Test Plan: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md

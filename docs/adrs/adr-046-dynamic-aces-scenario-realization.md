@@ -101,14 +101,20 @@ ADR-025); secret-bearing runtime values stay in `EnvVars` and `.env`
 (`src/aptl/core/env.py:25`). The realization record stores digests and
 non-secret identities only.
 
-## Paper Scenario Spine Addendum
+## Participant Behavior Realization Addendum
 
-Issue #573 starts the first end-to-end dynamic realization: the paper scenario
-from Brad-Edwards/aces#598. For that scenario, the profile-index driver above is
-only historical compatibility for the TechVault curated variants. The paper
-scenario must not be realized by selecting profiles over the fixed
-`docker-compose.yml`; it must realize the topology declared by the compiled ACES
-plan.
+APTL's first end-to-end dynamic realization (issue #573) was driven by a
+participant-behavior scenario: one carrying compiled participant action
+contracts, observation boundaries, evaluator evidence requirements, and a runtime
+binding. The reference scenario that drove it is a research artifact and lives in
+the research program repo, not APTL's product catalog; in-repo engine coverage
+uses a test fixture (`tests/fixtures/aces/participant-evidence.sdl.yaml`). The
+decisions below govern the realization engine for any such scenario.
+
+Such a scenario must not be realized by selecting profiles over the fixed
+`docker-compose.yml` (the profile-index driver above is only historical
+compatibility for the TechVault curated variants); it must realize the topology
+declared by the compiled ACES plan.
 
 The interpret stage remains pure. It consumes `PlannedResource`s and compiled
 runtime artifacts and emits portable, typed APTL realization specs: nodes,
@@ -125,13 +131,14 @@ ACES adapter.
 
 Participant action realization must be compiled-artifact driven. The existing
 `DEFAULT_PARTICIPANT_ACTIONS` / `PARTICIPANT_ACTION_ADDRESS` TechVault SSH probe
-is not the paper-scenario contract. The `probe-customer-portal-login` action,
-its source participant, target address, command/interaction contract, success
-classification, disclosed observation boundary, participant snapshot entries,
-and shared-state scope must come from the compiled SDL/runtime artifacts.
-Scenario identity may select the scenario file; it must not select behavior.
+is not a participant-behavior scenario's contract. A compiled action (for
+example `probe-customer-portal-login`), its source participant, target address,
+command/interaction contract, success classification, disclosed observation
+boundary, participant snapshot entries, and shared-state scope must come from the
+compiled SDL/runtime artifacts. Scenario identity may select the scenario file;
+it must not select behavior.
 
-Wazuh evidence for the paper action is evaluator-only evidence. It may be made
+Wazuh evidence for such a participant action is evaluator-only evidence. It may be made
 available through `AptlEvaluator`, `RuntimeSnapshot`, and `LocalRunStore`, but
 it must not be exposed as participant-visible task context or participant
 observation-boundary content, and it must not claim detection quality. Boundary
@@ -146,20 +153,20 @@ realization evidence persisted to disk must use `LocalRunStore` JSON/JSONL
 writers or `RangeSnapshot.to_dict()` so path validation and redaction stay at
 the existing serialization boundaries.
 
-The extensibility parameter is the typed realization spec, not the paper
-scenario name. Future scenarios should be able to vary participant source node,
-target service, network boundary, evaluator-only evidence source, and backend
-project name without editing a paper-scenario branch.
+The extensibility parameter is the typed realization spec, not a scenario name.
+Future scenarios should be able to vary participant source node, target service,
+network boundary, evaluator-only evidence source, and backend project name
+without editing a scenario-name branch.
 
-## Paper Scenario Evidence Modeling Addendum
+## Evidence Modeling Addendum
 
 Issue #691 removes an accidental equivalence between content placement and
 evidence. In ACES SDL, `content` means material intended for placement on a
 scenario target. It is not a generic carrier for an observation, an authored
-capture obligation, or a captured evidence record. The paper scenario therefore
-must not represent participant output, Wazuh evaluator evidence, or negative
-boundary-check evidence as `type: dataset` content merely to give those concepts
-names.
+capture obligation, or a captured evidence record. A participant-evidence
+scenario therefore must not represent participant output, Wazuh evaluator
+evidence, or negative boundary-check evidence as `type: dataset` content merely
+to give those concepts names.
 
 The existing ACES carriers remain authoritative:
 
@@ -177,11 +184,11 @@ The existing ACES carriers remain authoritative:
   `AptlEvaluator`, and `LocalRunStore` carry or reference captured records.
   `evidence_requirements.*` entries are deliberately not objective targets.
 
-Backend-only participant binding data is also not participant content. When the
-paper binding moves off `content`, it must reuse the compiled
-`behavior_specifications` governed-extension seam (`x-aptl:*`) and the existing
+Backend-only participant binding data is also not participant content. A
+participant runtime binding rides the compiled `behavior_specifications`
+governed-extension seam (`x-aptl:*`) and the existing
 `aptl-participant-runtime-binding/v1` validation/parser contract. Do not create a
-new top-level SDL section, a second binding schema, or a paper-scenario lookup in
+new top-level SDL section, a second binding schema, or a scenario-name lookup in
 Python. A task brief remains genuine participant-visible content only if it
 lowers through the existing typed content realization path to a registered,
 project-scoped backing volume. Adjudication prose that is not actually placed is
@@ -194,12 +201,12 @@ output or in snapshot fields marked observable/disclosed. Evaluator evidence may
 be referenced from the observation boundary as `evidence_only`; its payload
 remains behind the existing run-record redaction and persistence boundaries.
 
-The static gate must prove the whole content surface, not only the three removed
-datasets: every remaining paper-scenario `content-placement` lowers to a typed
+The static gate must prove the whole content surface, not only dataset removal:
+every content-placement in such a scenario lowers to a typed
 `DeploymentContentRealization`, and interpretation emits no
 `aptl.provisioner.content-placement-rejected` diagnostic. The gate also asserts
 the authored evidence requirements and observation-boundary projection through
-the parsed ACES models. It must not special-case the scenario in the content
+the parsed ACES models. It must not special-case a scenario in the content
 resolver, widen manifest dataset support, or treat the absence of a planner
 diagnostic as proof of backend realization.
 
@@ -404,7 +411,7 @@ bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
 | --- | --- |
 | ACES parser and compiler gate | Authored scenarios enter through `aces_sdl.parse_sdl_file` and compile through the ACES compiler and planner. APTL does not structurally revalidate ACES SDL or recompile the `RuntimeModel` with local models. |
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
-| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
+| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. Participant-behavior scenarios drive typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
@@ -423,7 +430,7 @@ The canonical incumbents this decision builds on are:
   `src/aptl/backends/aces_realization_model.py` for the interpret stage and its
   typed output.
 - `src/aptl/backends/aces_profiles.py` for curated compatibility only. It is
-  not the paper-scenario topology driver.
+  not a participant-behavior scenario topology driver.
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
@@ -447,8 +454,8 @@ introducing a new harness.
 
 The extensibility seam is the boundary between the interpreted realization and
 the driver. Interpret produces a typed `AptlRealization` from the compiled plan;
-the compatibility driver maps that realization onto compose profiles. For the
-paper scenario and later fully dynamic scenarios, the driver consumes the typed
+the compatibility driver maps that realization onto compose profiles. For
+participant-behavior scenarios and later fully dynamic scenarios, the driver consumes the typed
 realization spec directly through `DeploymentBackend`. A new authored resource
 type is added by extending `SUPPORTED_RESOURCE_TYPES` and the interpreter, then
 adding a typed backend realization operation when runtime side effects are
@@ -531,8 +538,8 @@ or provider backend is used without editing TechVault-only code.
 - Treating a scenario name as a profile selector instead of deriving profiles
   from the interpreted realization.
 - Using `select_backend_profiles` or `ComposeProfileIndex` as the topology
-  driver for the paper scenario.
-- Extending `DEFAULT_PARTICIPANT_ACTIONS` with paper-scenario behavior instead
+  driver for a participant-behavior scenario.
+- Extending `DEFAULT_PARTICIPANT_ACTIONS` with a scenario's participant behavior instead
   of deriving participant action specs from compiled SDL/runtime artifacts.
 - Emitting participant snapshot entries or shared-state scopes with legacy
   TechVault SSH identifiers after the runtime selected a different participant
@@ -591,8 +598,8 @@ or provider backend is used without editing TechVault-only code.
 - SEM-218 (ACES compiled realization requirements) and RUN-314 / autarchy-ai/aces#197
   (reference emulation backend).
 - Related issues: [#554](https://github.com/Brad-Edwards/aptl/issues/554),
-  [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded paper
-  scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
+  [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded
+  participant-scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
   [#574](https://github.com/Brad-Edwards/aptl/issues/574),
   [#575](https://github.com/Brad-Edwards/aptl/issues/575),
   [#576](https://github.com/Brad-Edwards/aptl/issues/576),

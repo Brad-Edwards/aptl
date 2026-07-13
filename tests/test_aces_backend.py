@@ -550,152 +550,6 @@ def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path
     )
 
 
-def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
-    tmp_path,
-):
-    import subprocess
-
-    from aces_processor.compiler import compile_runtime_model
-    from aces_contracts.runtime_state import OperationState
-    from aces_runtime.control_plane import RuntimeControlPlane
-    from aces_runtime.manager import RuntimeManager
-    from aces_sdl import parse_sdl_file
-
-    from aptl.backends.aces import create_aptl_runtime_target
-    from aptl.backends.aces_participant_actions import (
-        DEFAULT_PARTICIPANT_ACTIONS,
-        participant_action_specs_from_runtime_model,
-    )
-
-    participant_address = "participant.behavior.paper-agent"
-    action_contract_address = "participant.action-contract.probe-customer-portal-login"
-    observation_boundary_address = "participant.observation-boundary.paper-agent-view"
-
-    assert participant_address not in DEFAULT_PARTICIPANT_ACTIONS
-    assert not (
-        Path(__file__).resolve().parents[1]
-        / "src/aptl/backends/aces_paper_participant_actions.py"
-    ).exists()
-    backend = MagicMock()
-    backend.container_exec.return_value = subprocess.CompletedProcess(
-        args=["bash"],
-        returncode=0,
-        stdout=(
-            "portal_http_status=200\n"
-            "boundary_db=blocked\n"
-            "boundary_wazuh_api=blocked\n"
-        ),
-        stderr="",
-    )
-    project_root = Path(__file__).resolve().parents[1]
-    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
-    model = compile_runtime_model(scenario)
-    config = AptlConfig(
-        lab={"name": "test"},
-        containers={"enterprise": True, "kali": True, "wazuh": True},
-    )
-    plan_target = create_aptl_runtime_target(
-        project_dir=project_root,
-        config=config,
-        backend=MagicMock(),
-    )
-    plan = RuntimeManager(plan_target).plan(scenario)
-    participant_action_specs = participant_action_specs_from_runtime_model(
-        model,
-        provisioning_plan=plan.provisioning,
-        project_dir=project_root,
-        config=config,
-    )
-    target = create_aptl_runtime_target(
-        project_dir=tmp_path,
-        config=config,
-        backend=backend,
-        participant_action_specs=participant_action_specs,
-    )
-    control_plane = RuntimeControlPlane(target)
-
-    receipt = control_plane.initialize_participant_episode(participant_address)
-    status = control_plane.get_operation(receipt.operation_id)
-
-    assert status is not None
-    assert status.state == OperationState.SUCCEEDED, status.diagnostics
-    backend.container_exec.assert_called_once()
-    container_name, command = backend.container_exec.call_args.args
-    assert container_name == "aptl-kali"
-    assert command[:2] == ["bash", "-lc"]
-    assert "172.20.1.20:8080/login" in command[2]
-    assert "172.20.2.11/5432" in command[2]
-    assert "172.20.2.30/55000" in command[2]
-    behavior = control_plane.snapshot.participant_behavior_history[participant_address]
-    assert behavior[0]["action_contract_address"] == action_contract_address
-    assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
-    assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
-    entries = control_plane.snapshot.entries
-    assert (
-        entries[participant_address].payload["participant_address"]
-        == participant_address
-    )
-    assert entries[action_contract_address].payload["action_name"] == (
-        "probe-customer-portal-login"
-    )
-    assert entries[observation_boundary_address].payload["boundary_name"] == (
-        "paper-agent-view"
-    )
-    assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
-    assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
-    shared_state_records = getattr(
-        control_plane.snapshot, "shared_state_records", {}
-    )
-    assert {
-        record["state_scope"] for record in shared_state_records.values()
-    } == {participant_address}
-    assert participant_action_specs[participant_address].target_refs == (
-        "container:aptl-kali",
-        "container:aptl-webapp",
-        "http://172.20.1.20:8080/login",
-        "boundary-negative:tcp:172.20.2.11:5432",
-        "boundary-negative:tcp:172.20.2.30:55000",
-    )
-
-
-def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
-    from aces_runtime.manager import RuntimeManager
-    from aces_sdl import parse_sdl_file
-
-    from aptl.backends.aces import create_aptl_runtime_target
-    from aptl.backends.aces_participant_actions import (
-        participant_action_specs_from_runtime_model,
-    )
-
-    class EmptyModel:
-        participant_behaviors = {}
-        action_contracts = {}
-        observation_boundaries = {}
-        content_placements = {}
-
-    project_root = Path(__file__).resolve().parents[1]
-    config = AptlConfig(
-        lab={"name": "test"},
-        containers={"enterprise": True, "kali": True, "wazuh": True},
-    )
-    scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
-    target = create_aptl_runtime_target(
-        project_dir=project_root,
-        config=config,
-        backend=MagicMock(),
-    )
-    plan = RuntimeManager(target).plan(scenario)
-
-    assert (
-        participant_action_specs_from_runtime_model(
-            EmptyModel(),
-            provisioning_plan=plan.provisioning,
-            project_dir=project_root,
-            config=config,
-        )
-        == {}
-    )
-
 
 def test_runtime_bindings_read_from_behavior_spec_extension():
     """The binding rides the behavior-spec governed extension, not content (#691).
@@ -716,11 +570,11 @@ def test_runtime_bindings_read_from_behavior_spec_extension():
     binding = {
         "schema_version": _BINDING_SCHEMA,
         "runtime_target": "aptl",
-        "participant_ref": "paper-agent",
+        "participant_ref": "probe-agent",
     }
     model = SimpleNamespace(
         behavior_specifications={
-            "participant.behavior-specification.paper-agent-behavior": (
+            "participant.behavior-specification.probe-agent-behavior": (
                 SimpleNamespace(
                     spec={"extensions": {_BINDING_EXTENSION_KEY: binding}}
                 )
@@ -747,7 +601,7 @@ def test_runtime_bindings_skip_non_binding_extensions_and_content():
         },
         behavior_specifications={
             "spec.other-key": SimpleNamespace(
-                spec={"extensions": {"x-paper:wazuh-evidence": {"kind": "note"}}}
+                spec={"extensions": {"x-other:wazuh-evidence": {"kind": "note"}}}
             ),
             "spec.wrong-schema": SimpleNamespace(
                 spec={
@@ -763,198 +617,12 @@ def test_runtime_bindings_skip_non_binding_extensions_and_content():
     assert _runtime_bindings(model) == []
 
 
-def _compile_paper_model_plan_config():
-    """Compile the real paper scenario for binding fail-closed tests."""
-    from aces_processor.compiler import compile_runtime_model
-    from aces_runtime.manager import RuntimeManager
-    from aces_sdl import parse_sdl_file
-
-    from aptl.backends.aces import create_aptl_runtime_target
-
-    scenario = parse_sdl_file(
-        PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
-    )
-    model = compile_runtime_model(scenario)
-    config = AptlConfig(
-        lab={"name": "test"},
-        containers={"enterprise": True, "kali": True, "wazuh": True},
-    )
-    target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT,
-        config=config,
-        backend=MagicMock(),
-    )
-    plan = RuntimeManager(target).plan(scenario)
-    return model, plan, config
-
-
-_PAPER_BEHAVIOR_SPEC_ADDRESS = (
-    "participant.behavior-specification.paper-agent-behavior"
-)
-_PAPER_PARTICIPANT_ADDRESS = "participant.behavior.paper-agent"
-
-
-def _paper_binding(model):
-    from aptl.backends.aces_participant_bindings import _BINDING_EXTENSION_KEY
-
-    spec = model.behavior_specifications[_PAPER_BEHAVIOR_SPEC_ADDRESS].spec
-    return spec["extensions"][_BINDING_EXTENSION_KEY]
-
-
-def test_valid_binding_yields_participant_spec_baseline():
-    """Baseline for the fail-closed cases: the untouched binding produces a spec."""
-    from aptl.backends.aces_participant_actions import (
-        participant_action_specs_from_runtime_model,
-    )
-
-    model, plan, config = _compile_paper_model_plan_config()
-    specs = participant_action_specs_from_runtime_model(
-        model,
-        provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
-        config=config,
-    )
-    assert _PAPER_PARTICIPANT_ADDRESS in specs
-
-
-def _set_runtime_target(binding):
-    binding["runtime_target"] = "libvirt"
-
-
-def _set_unknown_action(binding):
-    binding["action_contract_ref"] = "no-such-action"
-
-
-def _set_unknown_boundary(binding):
-    binding["observation_boundary_ref"] = "no-such-boundary"
-
-
-def _add_unresolvable_target_ref(binding):
-    binding["target_refs"].append("container:{{ container:nodes.ghost-node }}")
-
-
-def _empty_argv(binding):
-    binding["command"]["argv"] = []
-
-
-def _empty_success_markers(binding):
-    binding["success_markers"] = []
-
-
-@pytest.mark.parametrize(
-    "mutate",
-    [
-        _set_runtime_target,
-        _set_unknown_action,
-        _set_unknown_boundary,
-        _add_unresolvable_target_ref,
-        _empty_argv,
-        _empty_success_markers,
-    ],
-    ids=[
-        "non-aptl-runtime-target",
-        "uncompiled-action-contract",
-        "uncompiled-observation-boundary",
-        "unresolvable-template-placeholder",
-        "empty-argv",
-        "empty-success-markers",
-    ],
-)
-def test_malformed_binding_is_dropped_fail_closed(mutate):
-    """A semantically invalid binding fails closed — the spec is dropped (#691).
-
-    ``participant_action_specs_from_runtime_model`` swallows the per-binding
-    ``TypeError`` / ``ValueError`` from ``_spec_from_binding`` /
-    ``_assert_compiled_addresses`` / ``_render_template`` and simply omits the
-    action. Without these cases every fail-closed check could silently regress
-    (raise the wrong type, or stop raising) while the one valid scenario test
-    still passed.
-    """
-    from aptl.backends.aces_participant_actions import (
-        participant_action_specs_from_runtime_model,
-    )
-
-    model, plan, config = _compile_paper_model_plan_config()
-    mutate(_paper_binding(model))
-
-    specs = participant_action_specs_from_runtime_model(
-        model,
-        provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
-        config=config,
-    )
-    assert _PAPER_PARTICIPANT_ADDRESS not in specs
-
-
-def test_assert_compiled_addresses_rejects_compiled_but_unassigned_refs():
-    """Refs that are compiled but not assigned to the participant fail closed.
-
-    Complements the end-to-end fail-closed cases: those hit the "uncompiled
-    artifact" branch, this pins the two "compiled but not assigned to this
-    participant" branches that a single-action scenario cannot reach.
-    """
-    from types import SimpleNamespace
-
-    from aptl.backends.aces_participant_bindings import _assert_compiled_addresses
-
-    behavior = SimpleNamespace(
-        action_contract_addresses=("participant.action-contract.assigned",),
-        observation_boundary_addresses=(
-            "participant.observation-boundary.assigned",
-        ),
-    )
-    model = SimpleNamespace(
-        participant_behaviors={"p": behavior},
-        action_contracts={
-            "participant.action-contract.assigned": object(),
-            "participant.action-contract.other": object(),
-        },
-        observation_boundaries={
-            "participant.observation-boundary.assigned": object(),
-            "participant.observation-boundary.other": object(),
-        },
-    )
-
-    # Compiled, but the action contract is not assigned to this participant.
-    with pytest.raises(ValueError, match="action contract is not assigned"):
-        _assert_compiled_addresses(
-            model,
-            "p",
-            "participant.action-contract.other",
-            "participant.observation-boundary.assigned",
-        )
-    # Compiled, but the observation boundary is not assigned to this participant.
-    with pytest.raises(ValueError, match="observation boundary is not assigned"):
-        _assert_compiled_addresses(
-            model,
-            "p",
-            "participant.action-contract.assigned",
-            "participant.observation-boundary.other",
-        )
-    # Not compiled at all.
-    with pytest.raises(ValueError, match="uncompiled participant artifacts"):
-        _assert_compiled_addresses(
-            model,
-            "p",
-            "participant.action-contract.ghost",
-            "participant.observation-boundary.assigned",
-        )
-    # Unknown participant behavior.
-    with pytest.raises(ValueError, match="uncompiled participant artifacts"):
-        _assert_compiled_addresses(
-            model,
-            "missing-participant",
-            "participant.action-contract.assigned",
-            "participant.observation-boundary.assigned",
-        )
-
-
 def test_start_helper_returns_specs_from_compiled_scenario(mocker):
     from aptl.backends.aces_participant_actions import (
         participant_action_specs_for_scenario,
     )
 
-    expected = {"participant.behavior.paper-agent": MagicMock()}
+    expected = {"participant.behavior.probe-agent": MagicMock()}
     model = object()
     scenario = object()
     provisioning_plan = object()
@@ -2824,9 +2492,8 @@ def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
     """Kali is content-capable via the kali_operations volume (#691).
 
     Registering `kali -> kali_operations` in `_CONTENT_REALIZABLE_SERVICES`
-    lets the paper scenario's participant-visible task brief lower through the
-    existing typed content path (ADR-046 extensibility seam), with no
-    docker-compose change.
+    lets a participant-visible task brief lower through the existing typed
+    content path (ADR-046 extensibility seam), with no docker-compose change.
     """
     from aptl.backends.aces import AptlProvisioner
 
@@ -2857,9 +2524,9 @@ def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
 def test_content_placement_absolute_path_rejects_on_content_capable_service(tmp_path):
     """An absolute destination path fails closed even on a mounted service.
 
-    Content paths are volume-relative; the paper scenario's original
-    `/scenario/...` absolute paths could never realize. Guard the invariant so
-    registering kali does not accidentally accept absolute destinations.
+    Content paths are volume-relative; an absolute `/scenario/...` path could
+    never realize. Guard the invariant so registering kali does not accidentally
+    accept absolute destinations.
     """
     from aptl.backends.aces import AptlProvisioner
 

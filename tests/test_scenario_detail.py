@@ -134,25 +134,30 @@ class TestBlockProjection:
 
 
 class TestRichScenarioProjection:
-    """paper-agent-loop carries objectives + workflows + vm nodes."""
+    """A scenario carrying objectives + workflows + vm nodes projects blocks.
+
+    Driven by the test-owned engine fixture (test data, not a catalog
+    scenario), which is the only in-repo SDL that declares objectives and
+    workflows.
+    """
 
     @pytest.fixture
-    def paper_detail(self):
+    def rich_detail(self):
         scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
+            PROJECT_ROOT / "tests" / "fixtures" / "aces" / "participant-evidence.sdl.yaml"
         )
-        return build_scenario_detail(_entry("paper-agent-loop"), scenario)
+        return build_scenario_detail(_entry("participant-evidence"), scenario)
 
-    def test_objective_blocks_projected_from_aces_objectives(self, paper_detail):
-        objectives = [b for b in paper_detail.blocks if b.type == "objective"]
-        assert objectives, "paper-agent-loop declares objectives"
+    def test_objective_blocks_projected_from_aces_objectives(self, rich_detail):
+        objectives = [b for b in rich_detail.blocks if b.type == "objective"]
+        assert objectives, "the fixture declares objectives"
         assert any("handoff" in o.name for o in objectives)
         # Every objective carries a human success summary derived from ACES.
         assert all(o.success for o in objectives)
 
-    def test_step_blocks_projected_from_aces_workflows(self, paper_detail):
-        steps = [b for b in paper_detail.blocks if b.type == "step"]
-        assert steps, "paper-agent-loop declares a workflow with steps"
+    def test_step_blocks_projected_from_aces_workflows(self, rich_detail):
+        steps = [b for b in rich_detail.blocks if b.type == "step"]
+        assert steps, "the fixture declares a workflow with steps"
         assert [s.index for s in steps] == sorted(s.index for s in steps)
 
 

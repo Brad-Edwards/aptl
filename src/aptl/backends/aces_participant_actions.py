@@ -45,8 +45,8 @@ TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
 # internal endpoint (e.g. the DB or Wazuh API) the participant path must NOT
 # reach. They are evaluator-only negative-boundary evidence, never a
 # participant-visible resource, so they must be kept out of the observation
-# boundary's observable/disclosed projection (ADR-046 Paper Scenario Evidence
-# Modeling Addendum; issue #691).
+# boundary's observable/disclosed projection (ADR-046 Evidence Modeling
+# Addendum; issue #691).
 _BOUNDARY_NEGATIVE_PREFIX = "boundary-negative:"
 
 

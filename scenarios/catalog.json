@@ -60,18 +60,6 @@
         "estimated_minutes": 20,
         "tags": ["observability"]
       }
-    },
-    {
-      "id": "paper-agent-loop",
-      "name": "Paper Agent Loop",
-      "description": "APTL realization of the ACES paper participant/portal/DB/Wazuh evidence loop.",
-      "path": "scenarios/paper-agent-loop.sdl.yaml",
-      "metadata": {
-        "mode": "purple",
-        "difficulty": "advanced",
-        "estimated_minutes": 45,
-        "tags": ["paper", "evidence", "purple"]
-      }
     }
   ]
 }

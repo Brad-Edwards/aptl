@@ -1,4 +1,4 @@
-"""Provisioning-only ACES backend adapter for APTL."""
+"""Provisioning component of APTL's full remote-control-plane ACES target."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class AptlProvisioner(object):
-    """Provisioning-only ACES backend adapter for APTL."""
+    """Provisioning component of APTL's ``full-remote-control-plane`` target."""
 
     project_dir: Path
     config: AptlConfig

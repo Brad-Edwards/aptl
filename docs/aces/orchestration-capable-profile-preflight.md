@@ -1,5 +1,11 @@
 # ACES Orchestration-Capable Profile Preflight
 
+!!! warning "Historical backend-profile milestone"
+    This is a dated preflight record for APTL's earlier
+    `orchestration-capable` promotion, kept as written. APTL's current claim is
+    `full-remote-control-plane`; see the current
+    [backend manifest](techvault-static-validation-gate.md#backend-manifest).
+
 This note is the architecture preflight for SCN-010 follow-on issue #311. It
 is guidance, not an implementation plan. ADR-035 remains the binding ACES SDL
 adoption decision, and the TechVault static and live preflight notes remain the

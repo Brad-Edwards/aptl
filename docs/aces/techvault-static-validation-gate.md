@@ -56,6 +56,33 @@ APTL publishes its capability declaration as the canonical ACES
 `create_aptl_manifest()`. The previous APTL-local manifest shim is removed: a
 local dataclass approximation is not accepted as conformance evidence.
 
+The conformance profile applied to that manifest and its runtime target is
+`full-remote-control-plane`. The profile name is a conformance input, not a
+serialized manifest field, and it is unrelated to the Docker Compose profiles
+that select APTL services. On the reference APTL backend, the declared manifest
+components mean:
+
+| Manifest component | APTL declaration |
+| --- | --- |
+| `provisioner` | Realizes `switch` and `vm` nodes across the declared OS families; `dataset`, `directory`, and `file` content; accounts and ACLs; and the listed account features through typed realization and `DeploymentBackend`. |
+| `orchestrator` | Drives RTE-001 workflows through `WorkflowEngine`, including decision, parallel-barrier, failure-transition, outcome-matching, condition-reference, and inject-binding surfaces. |
+| `evaluator` | Evaluates conditions and objectives and publishes result/history envelopes. It does not support scoring or the deprecated SDL scoring chain. |
+| `participant_runtime` | Supports the bounded red-participant episode, behavior-history, observation, and shared-state-change surface through `DeploymentBackend.container_exec()`. It does not claim other roles or general multi-party semantics. |
+| `observation` | Is `null`: participant observations are participant-runtime contract data, not a standalone observation component. |
+
+Realization support is constrained to declared-capability matching and the
+listed node, OS, content, and account constraint kinds, with disclosure through
+the manifest, operation-status, and runtime-snapshot contracts. The compatible
+processors, concept-authority bindings, and supported contract versions are
+separate compatibility declarations rather than additional capabilities.
+
+The profile defines the minimum component and contract surface required for
+conformance. APTL may publish a compatible contract superset, such as
+participant lifecycle and observation envelopes, without turning those
+contracts into extra manifest components or broader role claims. The manifest
+created by `create_aptl_manifest()` remains the authority when this explanation
+and runtime behavior differ.
+
 ## Advisory today, blocking at cutover
 
 The gate runs today as the advisory `aces-scenario-gate` CI job

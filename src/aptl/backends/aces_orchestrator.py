@@ -118,7 +118,7 @@ def _objective_outcomes_from_evaluation(
 
 @dataclass
 class AptlOrchestrator(object):
-    """ACES orchestration adapter for APTL's full remote-control-plane target."""
+    """Orchestration component of APTL's ``full-remote-control-plane`` target."""
 
     _engine: WorkflowEngine = field(default_factory=WorkflowEngine, init=False)
     _workflow_payloads: dict[str, dict[str, object]] = field(default_factory=dict, init=False)

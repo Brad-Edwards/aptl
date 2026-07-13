@@ -21,9 +21,10 @@ APTL already has the pieces this record must compose:
   and the ACES `RuntimeManager`.
 - APTL's backend capability claim is published by
   `src/aptl/backends/aces_manifest.py:create_aptl_manifest()`. The current
-  code claims the `orchestration-evaluation` profile and passes the
-  corresponding conformance tests; do not copy older `orchestration-capable`
-  wording from stale planning text into new records.
+  code satisfies the `full-remote-control-plane` profile and passes the
+  corresponding conformance tests; do not copy older `provisioning-only`,
+  `orchestration-capable`, or `orchestration-evaluation` wording from dated
+  planning records into new records.
 - ACES provisioning, orchestration, and evaluation state is adapted through
   `AptlProvisioner`, `AptlOrchestrator`, `AptlEvaluator`,
   `AptlRealization`, `ApplyResult`, `RuntimeSnapshot`, operation

@@ -502,6 +502,16 @@ jobs:
   sonarcloud:
     name: SonarCloud quality gate
     needs: [python-tests, mcp-tests, web-tests]
+    # Dependabot-triggered runs are handed the Dependabot secret store, not the
+    # Actions one, so `secrets.SONAR_TOKEN` is empty and the scan can only ever
+    # fail with "Not authorized or project not found". Mirroring the token into
+    # Dependabot secrets would hand it to the very third-party action version
+    # the PR is bumping, which defeats the SHA pinning above, so skip instead:
+    # Dependabot never touches first-party source, so there is no new code for
+    # the gate to judge. A job skipped by a condition reports success, which
+    # keeps this satisfiable as a required check. Human PRs and pushes to
+    # main/dev still run the full gate.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6

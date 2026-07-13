@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from aptl.core.deployment._compose_account_realization import (
+    ComposeRealizationAccountMixin,
+)
 from aptl.core.deployment._compose_content_realization import (
     CONTENT_SEEDER_IMAGE,
     ComposeRealizationContentMixin,
@@ -33,6 +36,7 @@ class ComposeRealizationMixin(
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
+    ComposeRealizationAccountMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -92,14 +96,34 @@ class ComposeRealizationMixin(
         start_result: LabResult,
         realization: DeploymentRealizationSpec,
     ) -> LabResult:
-        """Return the final result after service start and network reconciliation."""
+        """Return the final result after start, network, and account realization."""
 
-        result = start_result
-        if start_result.success:
-            failures = self._reconcile_realization_networks(realization)
-            result = (
-                LabResult(success=False, error="; ".join(failures[:5]))
-                if failures
-                else LabResult(success=True, message="Lab realized")
+        if not start_result.success:
+            return start_result
+        failures = self._reconcile_realization_networks(realization)
+        if failures:
+            return LabResult(success=False, error="; ".join(failures[:5]))
+        account_result = self._realize_accounts_step(realization)
+        if account_result is not None:
+            return account_result
+        return LabResult(success=True, message="Lab realized")
+
+    def _realize_accounts_step(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Realize account placements post-start; fail closed on a backend timeout.
+
+        Returns ``None`` on success (or nothing to realize). Account readiness
+        and verification failures already arrive as a fail-closed
+        :class:`LabResult`; a mid-mutation ``BackendTimeoutError`` from
+        ``container_exec`` is converted into the same bounded envelope here.
+        """
+
+        try:
+            return self.realize_accounts(realization.accounts, realization.nodes)
+        except BackendTimeoutError as exc:
+            return LabResult(
+                success=False,
+                error=f"Account realization timed out: {exc}",
             )
-        return result

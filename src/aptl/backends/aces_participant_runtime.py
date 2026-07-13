@@ -1,4 +1,4 @@
-"""APTL ACES participant runtime adapter.
+"""Participant-runtime component of APTL's full remote-control-plane target.
 
 APTL's participant runtime is intentionally narrow: it exposes the ACES
 participant episode lifecycle through the published DTOs and records a bounded
@@ -56,7 +56,7 @@ PARTICIPANT_ACTION_ADDRESS = _PARTICIPANT_ACTION_ADDRESS
 
 @dataclass
 class AptlParticipantRuntime:
-    """ACES ``ParticipantRuntime`` backed by APTL's deployment boundary."""
+    """Participant component of APTL's ``full-remote-control-plane`` target."""
 
     deployment_backend: "DeploymentBackend"
     action_specs: Mapping[str, ParticipantActionSpec] = field(

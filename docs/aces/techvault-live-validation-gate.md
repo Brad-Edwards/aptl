@@ -96,8 +96,9 @@ schema `aptl.live-gate.manifest/v1`. It records:
   endpoints).
 - **`evidence`**: the telemetry-path summary (event types and counts, never raw
   payloads).
-- **`evaluator_surfaces`**: the declared `full-remote-control-plane` evaluator
-  profile and ACES evaluation result/history contracts for conditions and
+- **`evaluator_surfaces`**: the evaluator component of the declared
+  `full-remote-control-plane` backend profile and its ACES evaluation
+  result/history contracts for conditions and
   objectives. This is an evidence index, not a score source; live evaluator
   progression belongs in ACES `evaluation_results` and `evaluation_history`
   derived from observed run state.

@@ -1,5 +1,6 @@
 """Tests for the APTL ACES runtime handoff."""
 
+import inspect
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -354,6 +355,67 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         {"red"}
     )
     assert payload["capabilities"]["participant_runtime"] is not None
+
+
+def test_current_backend_docs_cover_declared_manifest_components():
+    from aces_backend_protocols.manifest import backend_manifest_payload
+
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    payload = backend_manifest_payload(create_aptl_manifest())
+    documentation = " ".join(
+        (
+            PROJECT_ROOT / "docs" / "aces" / "techvault-static-validation-gate.md"
+        )
+        .read_text()
+        .split()
+    )
+
+    assert "full-remote-control-plane" in documentation
+    for component in payload["capabilities"]:
+        assert f"`{component}`" in documentation
+    assert "standalone observation component" in documentation
+    assert "compatible processors" in documentation
+    assert "concept-authority bindings" in documentation
+    assert "supported contract versions" in documentation
+
+
+def test_backend_adapter_docstrings_describe_component_scope():
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.aces_evaluator import AptlEvaluator
+    from aptl.backends.aces_orchestrator import AptlOrchestrator
+    from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
+    from aptl.backends.aces_provisioner import AptlProvisioner
+
+    adapters = (
+        AptlProvisioner,
+        AptlOrchestrator,
+        AptlEvaluator,
+        AptlParticipantRuntime,
+    )
+    for adapter in adapters:
+        assert "component of APTL's ``full-remote-control-plane`` target" in (
+            inspect.getdoc(adapter) or ""
+        )
+    assert "full-remote-control-plane" in (inspect.getdoc(create_aptl_runtime_target) or "")
+    assert "Provisioning-only" not in (inspect.getdoc(AptlProvisioner) or "")
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "docs/aces/dsl-008-realization-preflight.md",
+        "docs/aces/dsl-010-participant-runtime-preflight.md",
+        "docs/aces/orchestration-capable-profile-preflight.md",
+        "docs/aces/techvault-live-validation-preflight.md",
+        "docs/aces/techvault-static-validation-preflight.md",
+    ],
+)
+def test_dated_profile_preflights_direct_readers_to_current_truth(relative_path):
+    documentation = (PROJECT_ROOT / relative_path).read_text()
+
+    assert '!!! warning "Historical backend-profile milestone"' in documentation
+    assert "techvault-static-validation-gate.md#backend-manifest" in documentation
 
 
 def test_aptl_target_passes_provisioning_only_conformance():

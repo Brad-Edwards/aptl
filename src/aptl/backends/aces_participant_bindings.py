@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from aces_contracts.planning import ProvisioningPlan
 
 from aptl.backends.aces_profiles import (
@@ -22,7 +20,7 @@ from aptl.backends.aces_realization_model import AptlRealization, NodeRealizatio
 from aptl.core.config import AptlConfig
 
 _BINDING_SCHEMA = "aptl-participant-runtime-binding/v1"
-_BINDING_TAGS = frozenset({"aptl-participant-runtime-binding"})
+_BINDING_EXTENSION_KEY = "x-aptl:participant-runtime-binding"
 _NODES_PREFIX = "nodes."
 _PROVISION_NODE_PREFIX = "provision.node."
 _PARTICIPANT_PREFIX = "participant.behavior."
@@ -136,37 +134,45 @@ def participant_action_specs_from_runtime_model(
                 context=context,
                 spec_factory=spec_factory,
             )
-        except (TypeError, ValueError, yaml.YAMLError):
+        except (TypeError, ValueError):
             continue
         specs[participant_address] = spec
     return specs
 
 
 def _runtime_bindings(model: object) -> list[Mapping[str, object]]:
-    """Return structured participant binding payloads from compiled content."""
+    """Return structured participant binding payloads from behavior specs.
 
-    bindings: list[Mapping[str, object]] = []
-    for placement in _compiled_artifact_mapping(model, "content_placements").values():
-        spec = getattr(placement, "spec", {})
-        if not isinstance(spec, Mapping):
-            continue
-        tags = {str(tag) for tag in spec.get("tags", ())}
-        text = spec.get("text")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        try:
-            parsed = yaml.safe_load(text)
-        except yaml.YAMLError:
-            # Free-form content text (e.g. a planted file's prose) is not a
-            # participant-binding YAML spec. A parse failure means "not a
-            # binding" — skip it rather than crashing the lab boot.
-            continue
-        if not isinstance(parsed, Mapping):
-            continue
-        if parsed.get("schema_version") != _BINDING_SCHEMA and not tags & _BINDING_TAGS:
-            continue
-        bindings.append(parsed)
-    return bindings
+    Issue #691: the participant runtime binding is backend-private topology
+    data, so it rides the compiled behavior specification's governed-extension
+    seam (``x-aptl:participant-runtime-binding``) rather than being planted as
+    scenario content on the participant container. The extension value is
+    already a structured mapping in the compiled model, so there is no inline
+    YAML text to re-parse.
+    """
+
+    specs = _compiled_artifact_mapping(model, "behavior_specifications").values()
+    bindings = (_binding_from_behavior_spec(spec_artifact) for spec_artifact in specs)
+    return [binding for binding in bindings if binding is not None]
+
+
+def _binding_from_behavior_spec(
+    spec_artifact: object,
+) -> Mapping[str, object] | None:
+    """Extract one behavior spec's participant runtime binding, if it carries one."""
+
+    spec = getattr(spec_artifact, "spec", {})
+    extensions = spec.get("extensions") if isinstance(spec, Mapping) else None
+    binding = (
+        extensions.get(_BINDING_EXTENSION_KEY)
+        if isinstance(extensions, Mapping)
+        else None
+    )
+    is_binding = (
+        isinstance(binding, Mapping)
+        and binding.get("schema_version") == _BINDING_SCHEMA
+    )
+    return binding if is_binding else None
 
 
 def _spec_from_binding(

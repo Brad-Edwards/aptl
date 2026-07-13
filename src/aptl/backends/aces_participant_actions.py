@@ -41,6 +41,33 @@ PARTICIPANT_OBSERVATION_BOUNDARY_ADDRESS = (
 TECHVAULT_VICTIM_SSH_ADDRESS = ".".join(("172", "20", "2", "20"))
 TECHVAULT_VICTIM_SSH_REF = f"tcp:{TECHVAULT_VICTIM_SSH_ADDRESS}:22"
 
+# Target refs with this prefix name a negative reachability boundary — an
+# internal endpoint (e.g. the DB or Wazuh API) the participant path must NOT
+# reach. They are evaluator-only negative-boundary evidence, never a
+# participant-visible resource, so they must be kept out of the observation
+# boundary's observable/disclosed projection (ADR-046 Paper Scenario Evidence
+# Modeling Addendum; issue #691).
+_BOUNDARY_NEGATIVE_PREFIX = "boundary-negative:"
+
+
+def _partition_participant_refs(
+    target_refs: tuple[str, ...],
+) -> tuple[list[str], list[str]]:
+    """Split action target refs into participant-visible and evaluator-only.
+
+    Returns ``(visible, negative_boundary)``. ``negative_boundary`` refs carry
+    internal endpoint identities and are the participant projection's hidden
+    truth; only ``visible`` refs may project into the participant view.
+    """
+
+    visible = [
+        ref for ref in target_refs if not ref.startswith(_BOUNDARY_NEGATIVE_PREFIX)
+    ]
+    negative_boundary = [
+        ref for ref in target_refs if ref.startswith(_BOUNDARY_NEGATIVE_PREFIX)
+    ]
+    return visible, negative_boundary
+
 
 @dataclass(frozen=True)
 class ParticipantActionSpec:
@@ -338,6 +365,9 @@ def _action_snapshot_entries(
 
     action_name = _address_leaf(spec.action_contract_address)
     boundary_name = _address_leaf(spec.observation_boundary_address)
+    visible_refs, negative_boundary_refs = _partition_participant_refs(
+        spec.target_refs
+    )
     return {
         participant_address: SnapshotEntry(
             address=participant_address,
@@ -378,9 +408,12 @@ def _action_snapshot_entries(
                 "name": f"APTL participant observation boundary {boundary_name}",
                 "boundary_name": boundary_name,
                 "projection_basis": "terminal command output excerpt",
-                "observable_refs": list(spec.target_refs),
-                "evidence_refs": [action_instance_id],
-                "disclosed_refs": list(spec.target_refs),
+                # Negative-boundary refs name hidden internal endpoints and
+                # must never project into the participant view (ADR-046); they
+                # are evaluator-only evidence alongside the action instance.
+                "observable_refs": visible_refs,
+                "evidence_refs": [action_instance_id, *negative_boundary_refs],
+                "disclosed_refs": visible_refs,
                 "realized_view_disclosure": "terminal-observation",
                 "source_container": spec.source_container,
                 "target_refs": list(spec.target_refs),

@@ -151,6 +151,65 @@ scenario name. Future scenarios should be able to vary participant source node,
 target service, network boundary, evaluator-only evidence source, and backend
 project name without editing a paper-scenario branch.
 
+## Paper Scenario Evidence Modeling Addendum
+
+Issue #691 removes an accidental equivalence between content placement and
+evidence. In ACES SDL, `content` means material intended for placement on a
+scenario target. It is not a generic carrier for an observation, an authored
+capture obligation, or a captured evidence record. The paper scenario therefore
+must not represent participant output, Wazuh evaluator evidence, or negative
+boundary-check evidence as `type: dataset` content merely to give those concepts
+names.
+
+The existing ACES carriers remain authoritative:
+
+- `observation_boundaries` owns the participant projection and identifies the
+  runtime-emitted participant observation. The portable runtime carrier is the
+  existing `participant-observation-envelope-v1`; a second APTL observation DTO
+  or dataset schema is not permitted.
+- `evidence_requirements` owns portable capture intent for Wazuh corroboration
+  and negative boundary checks. Each requirement declares its source or source
+  class, scope, window/trigger/boundary, channel, sensitivity, redaction,
+  integrity, retention, and loss-disclosure expectations through the ACES
+  schema. A requirement is not proof that capture occurred.
+- Actual evidence and capture success remain runtime concerns. Conditions and
+  objective assertions may report observed success; `RuntimeSnapshot`,
+  `AptlEvaluator`, and `LocalRunStore` carry or reference captured records.
+  `evidence_requirements.*` entries are deliberately not objective targets.
+
+Backend-only participant binding data is also not participant content. When the
+paper binding moves off `content`, it must reuse the compiled
+`behavior_specifications` governed-extension seam (`x-aptl:*`) and the existing
+`aptl-participant-runtime-binding/v1` validation/parser contract. Do not create a
+new top-level SDL section, a second binding schema, or a paper-scenario lookup in
+Python. A task brief remains genuine participant-visible content only if it
+lowers through the existing typed content realization path to a registered,
+project-scoped backing volume. Adjudication prose that is not actually placed is
+not content and must not be relabeled as an evidence requirement.
+
+The participant projection is a security boundary, not descriptive prose. Raw
+Wazuh data, database or Wazuh endpoint identities, backend commands, evaluator
+notes, and negative-check internals must not appear in participant-visible
+output or in snapshot fields marked observable/disclosed. Evaluator evidence may
+be referenced from the observation boundary as `evidence_only`; its payload
+remains behind the existing run-record redaction and persistence boundaries.
+
+The static gate must prove the whole content surface, not only the three removed
+datasets: every remaining paper-scenario `content-placement` lowers to a typed
+`DeploymentContentRealization`, and interpretation emits no
+`aptl.provisioner.content-placement-rejected` diagnostic. The gate also asserts
+the authored evidence requirements and observation-boundary projection through
+the parsed ACES models. It must not special-case the scenario in the content
+resolver, widen manifest dataset support, or treat the absence of a planner
+diagnostic as proof of backend realization.
+
+The extensibility seams are the map-keyed ACES evidence requirement (parameterized
+by source, scope, boundary/window, channel, and handling expectations), the
+compiled observation-boundary address, and the governed behavior-specification
+extension keyed by backend owner. The next scenario can vary those values
+without changing the ACES schema, the content realizer, or a scenario-name
+branch.
+
 ## Image Realization Addendum
 
 Issue #574 realizes node images from ACES `source` and captured

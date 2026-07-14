@@ -13,7 +13,6 @@ flowchart TD
     B --> F[mcp-threatintel]
     B --> G[mcp-casemgmt]
     B --> I[mcp-soar]
-    B --> J[mcp-reverse]
     B --> K[mcp-indexer]
 
     C --> L[Kali Container<br/>172.20.4.30]
@@ -23,8 +22,11 @@ flowchart TD
     F --> P[MISP<br/>172.20.0.16]
     G --> Q[TheHive<br/>172.20.0.18]
     I --> R[Shuffle SOAR<br/>172.20.0.20]
-    J --> S[Reverse Engineering<br/>172.20.0.27]
 ```
+
+The optional `mcp-reverse` server is built with the other artifacts but is not
+written to the default client configuration because `techvault-operational`
+does not realize a reverse-engineering node.
 
 ## Common Library
 
@@ -41,23 +43,34 @@ All SSH-based MCPs use `aptl-mcp-common` for session management, connection pool
 | mcp-threatintel | MISP (172.20.0.16) | HTTPS | IOC search, indicator submission |
 | mcp-casemgmt | TheHive (172.20.0.18) | HTTPS | Case management, observables, analyzers |
 | mcp-soar | Shuffle (172.20.0.20) | HTTPS | Workflow triggers, response actions |
-| mcp-reverse | Reverse eng (172.20.0.27) | SSH | Binary analysis, YARA, capa |
 
 ## Setup
 
-Build all MCP servers:
+The normal participant path is automatic:
+
+```bash
+aptl lab start
+```
+
+Startup builds the MCP artifacts, creates `.mcp.json` from the shipped current
+template when it is missing, and injects the generated MISP, TheHive, and
+Shuffle keys. Existing MCP client entries are preserved. Start Claude Code,
+Cursor, Cline, or another project-config-aware client from the project root.
+
+To rebuild all artifacts without restarting the lab:
 
 ```bash
 ./mcp/build-all-mcps.sh
 ```
 
-Or build individually:
+Or rebuild one server:
 
 ```bash
 cd mcp/mcp-red && npm install && npm run build && cd ../..
 ```
 
-Configure your AI client to connect to `./mcp/<server>/build/index.js`.
+The generated config points every enabled server at
+`./mcp/<server>/build/index.js`.
 
 ## Usage
 
@@ -72,4 +85,3 @@ Configure your AI client to connect to `./mcp/<server>/build/index.js`.
 - Search threat intelligence
 - Manage incident cases
 - Trigger SOAR playbooks
-- Run binary analysis

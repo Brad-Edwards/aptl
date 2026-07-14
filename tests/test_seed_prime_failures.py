@@ -24,6 +24,9 @@ def test_required_seed_failure_returns_nonzero_and_names_component(tmp_path):
     fake_bin.mkdir()
     shutil.copy2(PROJECT_ROOT / "scripts" / "seed-prime.sh", scripts)
     (scripts / "seed-prime.sh").chmod(0o755)
+    env_helper = PROJECT_ROOT / "scripts" / "aptl-env.sh"
+    if env_helper.exists():
+        shutil.copy2(env_helper, scripts)
 
     _write_executable(scripts / "thehive-apikey.sh", "#!/bin/sh\nexit 1\n")
     _write_executable(

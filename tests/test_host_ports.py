@@ -75,6 +75,26 @@ def test_parse_published_ports_reads_all_services():
     assert len(specs) == 3
 
 
+def test_parse_published_ports_skips_inactive_profiles():
+    compose = {
+        "services": {
+            "core": {"ports": ["${APTL_HP_CORE:-1000}:1"]},
+            "soc": {
+                "profiles": ["soc"],
+                "ports": ["${APTL_HP_SOC:-2000}:2"],
+            },
+            "web": {
+                "profiles": ["web"],
+                "ports": ["${APTL_HP_WEB:-3000}:3"],
+            },
+        }
+    }
+
+    specs = host_ports.parse_published_ports(compose, {"soc"})
+
+    assert {spec.service for spec in specs} == {"core", "soc"}
+
+
 # --------------------------------------------------------------------------- #
 # port_available — only EADDRINUSE counts as occupied (Linux/macOS safety)
 # --------------------------------------------------------------------------- #

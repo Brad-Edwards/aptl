@@ -1,5 +1,6 @@
 """SSL certificate generation for Wazuh Indexer."""
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -15,6 +16,7 @@ _CERTS_SUBDIR = "config/wazuh_indexer_ssl_certs"
 _CERT_COMPOSE_FILE = "generate-indexer-certs.yml"
 _ROOT_CA = "root-ca.pem"
 _MANAGER_ROOT_CA = "root-ca-manager.pem"
+_CERT_CLEANUP_TIMEOUT = 60
 
 
 @dataclass
@@ -146,7 +148,7 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
     error_msg = None
     try:
         result = subprocess.run(
-            _cert_generator_command(certs_dir),
+            _cert_generator_command(project_dir, certs_dir),
             capture_output=True,
             text=True,
             # Decode as UTF-8 (not the host locale codec) so Docker's image
@@ -168,8 +170,16 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
         error_msg = str(exc)
     else:
         if result.returncode != 0:
-            error_msg = result.stderr.strip() or "Certificate generation failed"
+            error_msg = _command_failure_detail(result)
             log.error("Certificate generation failed: %s", error_msg)
+
+    cleanup_error = _cleanup_cert_generator(project_dir)
+    if cleanup_error is not None:
+        log.error("Certificate generator cleanup failed: %s", cleanup_error)
+        if error_msg is None:
+            error_msg = f"Certificate generator cleanup failed: {cleanup_error}"
+        else:
+            error_msg = f"{error_msg}; cleanup failed: {cleanup_error}"
 
     failure = None
     if error_msg is not None:
@@ -182,13 +192,15 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
     return failure
 
 
-def _cert_generator_command(certs_dir: Path) -> list[str]:
-    """Build the Docker Compose command for the certificate generator."""
+def _cert_generator_command(project_dir: Path, certs_dir: Path) -> list[str]:
+    """Build the isolated Docker Compose command for the cert generator."""
     if _native_linux_user() is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
     command = [
         "docker",
         "compose",
+        "-p",
+        _cert_generator_project_name(project_dir),
         "-f",
         _CERT_COMPOSE_FILE,
         "run",
@@ -196,6 +208,62 @@ def _cert_generator_command(certs_dir: Path) -> list[str]:
     ]
     command.append("generator")
     return command
+
+
+def _cert_generator_project_name(project_dir: Path) -> str:
+    """Return a stable project-scoped name for temporary generator resources."""
+
+    digest = hashlib.sha256(str(project_dir.resolve()).encode("utf-8")).hexdigest()[:12]
+    return f"aptl-certs-{digest}"
+
+
+def _cleanup_cert_generator(project_dir: Path) -> str | None:
+    """Remove the generator's temporary container and overlapping bridge.
+
+    ``docker compose run --rm`` removes the container but leaves its default
+    network behind. Docker commonly assigns that bridge ``172.20.0.0/16``,
+    which overlaps every TechVault network and blocks the SDL realization that
+    immediately follows certificate generation on a fresh install.
+    """
+
+    command = [
+        "docker",
+        "compose",
+        "-p",
+        _cert_generator_project_name(project_dir),
+        "-f",
+        _CERT_COMPOSE_FILE,
+        "down",
+        "--remove-orphans",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=project_dir,
+            timeout=_CERT_CLEANUP_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return f"timed out after {_CERT_CLEANUP_TIMEOUT}s"
+    except OSError as exc:
+        return str(exc)
+    if result.returncode != 0:
+        return _command_failure_detail(result)
+    return None
+
+
+def _command_failure_detail(result: subprocess.CompletedProcess) -> str:
+    """Return bounded useful output from a failed Docker command."""
+
+    detail = "\n".join(
+        part.strip()
+        for part in (result.stdout or "", result.stderr or "")
+        if part.strip()
+    )
+    return detail or "Certificate generation failed"
 
 
 def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:

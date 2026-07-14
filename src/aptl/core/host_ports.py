@@ -183,6 +183,20 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
+def _service_selected(
+    cfg: object, active_profiles: set[str] | None
+) -> bool:
+    """Return whether one Compose service participates in this topology."""
+    if not isinstance(cfg, dict):
+        return False
+    service_profiles = set(cfg.get("profiles") or [])
+    return (
+        active_profiles is None
+        or not service_profiles
+        or not service_profiles.isdisjoint(active_profiles)
+    )
+
+
 def parse_published_ports(
     compose: dict[str, object], active_profiles: set[str] | None = None
 ) -> list[PortSpec]:
@@ -193,15 +207,9 @@ def parse_published_ports(
     """
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
-        if not isinstance(cfg, dict):
+        if not _service_selected(cfg, active_profiles):
             continue
-        service_profiles = set(cfg.get("profiles") or [])
-        if (
-            active_profiles is not None
-            and service_profiles
-            and service_profiles.isdisjoint(active_profiles)
-        ):
-            continue
+        assert isinstance(cfg, dict)
         for entry in cfg.get("ports") or []:
             spec = _parse_entry(service, entry)
             if spec is not None:
@@ -242,6 +250,38 @@ def _resolved_for_pinned(
     )
 
 
+def _resolve_available_port(
+    first: PortSpec,
+    env_var: str,
+    default_port: int,
+    protos: tuple[str, ...],
+    taken: set[int],
+) -> int:
+    """Resolve and export an available port for an unpinned mapping."""
+    if _group_available(default_port, protos, first.host_ip):
+        return default_port
+
+    free = _find_free_port(protos, first.host_ip, taken)
+    if free is None:
+        log.warning(
+            "No free host port found to remap %s (default %d); leaving default.",
+            first.service,
+            default_port,
+        )
+        return default_port
+
+    taken.add(free)
+    os.environ[env_var] = str(free)
+    log.info(
+        "Host port %d for %s is in use; publishing on %d instead (%s).",
+        default_port,
+        first.service,
+        free,
+        env_var,
+    )
+    return free
+
+
 def _resolve_group(
     env_var: str,
     specs: list[PortSpec],
@@ -255,28 +295,10 @@ def _resolve_group(
     if env_var in reserved or env_var in os.environ:
         return _resolved_for_pinned(first, env_var, default_port, protos)
 
-    if _group_available(default_port, protos, first.host_ip):
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    free = _find_free_port(protos, first.host_ip, taken)
-    if free is None:
-        log.warning(
-            "No free host port found to remap %s (default %d); leaving default.",
-            first.service,
-            default_port,
-        )
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    taken.add(free)
-    os.environ[env_var] = str(free)
-    log.info(
-        "Host port %d for %s is in use; publishing on %d instead (%s).",
-        default_port,
-        first.service,
-        free,
-        env_var,
+    resolved_port = _resolve_available_port(
+        first, env_var, default_port, protos, taken
     )
-    return _resolved(first, env_var, default_port, free, protos)
+    return _resolved(first, env_var, default_port, resolved_port, protos)
 
 
 def resolve_host_ports(

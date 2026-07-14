@@ -43,7 +43,7 @@ SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
 # are intra-trust-boundary calls on the aptl-security Docker network
 # (ADR-034 § Decision: SOC consumers OF Shuffle verify; Shuffle's own
 # SOAR-internal HTTP actions are not the SOC-consumer surface and
-# retain ``verify_ssl: false`` until Shuffle's bundled HTTP app is
+# retain ``verify: false`` until Shuffle's bundled HTTP app is
 # taught about the lab CA bundle — see workflow JSON below).
 THEHIVE_INTERNAL_URL="https://172.20.0.18:9000"
 MISP_INTERNAL_URL="https://172.20.0.16"
@@ -142,6 +142,20 @@ import sys
 workflow = json.load(sys.stdin)
 misp_key = os.environ["MISP_API_KEY"]
 thehive_key = os.environ["THEHIVE_API_KEY"]
+case_body = json.dumps({
+    "title": "[Wazuh $exec.rule.id] $exec.rule.description",
+    "description": (
+        "Wazuh Alert Details:\n"
+        "- Rule: $exec.rule.id ($exec.rule.description)\n"
+        "- Level: $exec.rule.level\n"
+        "- Source IP: $exec.data.srcip\n"
+        "- Agent: $exec.agent.name\n"
+        "- Timestamp: $exec.timestamp\n\n"
+        "MISP Enrichment:\n"
+        "Matched IOC: $misp_ip_lookup.body.response.Attribute.#0.value"
+    ),
+    "severity": 3,
+})
 headers = {
     "misp_ip_lookup": (
         f"Authorization: {misp_key}\n"
@@ -153,12 +167,18 @@ headers = {
     ),
 }
 for action in workflow.get("actions", []):
-    value = headers.get(action.get("label"))
+    label = action.get("label")
+    value = headers.get(label)
     if value is None:
         continue
     for parameter in action.get("parameters", []):
         if parameter.get("name") == "headers":
             parameter["value"] = value
+        elif parameter.get("name") in {"verify", "verify_ssl"}:
+            parameter["name"] = "verify"
+            parameter["value"] = "false"
+        elif label == "create_thehive_case" and parameter.get("name") == "body":
+            parameter["value"] = case_body
 
 triggers = workflow.get("triggers", [])
 if triggers:
@@ -248,7 +268,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: ${MISP_API_KEY}\nContent-Type: application/json\nAccept: application/json"},
                 {"name": "body", "value": "{\"value\": \"\$exec.data.srcip\", \"type\": \"ip-src\", \"returnFormat\": \"json\"}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "verify", "value": "false"}
             ]
         },
         {
@@ -263,8 +283,8 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\n\$misp_ip_lookup\", \"severity\": 3}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\nMatched IOC: \$misp_ip_lookup.body.response.Attribute.#0.value\", \"severity\": 3}"},
+                {"name": "verify", "value": "false"}
             ]
         }
     ],

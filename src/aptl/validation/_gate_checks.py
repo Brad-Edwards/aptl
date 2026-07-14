@@ -72,7 +72,8 @@ class _NoStartBackend(object):
 
     def realize(self, realization: object, *, build: bool = True) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
-        del build  # accepted for DeploymentBackend parity; nothing is built here
+        # `build` is accepted for DeploymentBackend parity; nothing is built here.
+        del build
         self._container_names = {
             node.container_name
             for node in getattr(realization, "nodes", ())

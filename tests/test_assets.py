@@ -98,8 +98,9 @@ def test_default_config_json_round_trips(tmp_path: Path) -> None:
 
 
 def test_resolve_within_rejects_escape(tmp_path: Path) -> None:
+    escape = Path("../escape")
     with pytest.raises(AssetError, match="outside target directory"):
-        assets._resolve_within(tmp_path, Path("../escape"))
+        assets._resolve_within(tmp_path, escape)
 
 
 def test_resolve_within_allows_nested(tmp_path: Path) -> None:

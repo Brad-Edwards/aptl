@@ -20,7 +20,7 @@ from aptl.core import host_ports
 # _parse_entry — short-syntax port mappings, with and without ${VAR:-default}
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
-    ("entry", "expect"),
+    ("entry", "expected"),
     [
         (
             "127.0.0.1:${APTL_HP_WAZUH_DASHBOARD_5601:-443}:5601",
@@ -40,8 +40,8 @@ from aptl.core import host_ports
         ),
     ],
 )
-def test_parse_entry(entry, expect):
-    service = expect[0]
+def test_parse_entry(entry, expected):
+    service = expected[0]
     spec = host_ports._parse_entry(service, entry)
     assert spec is not None
     assert (
@@ -51,7 +51,7 @@ def test_parse_entry(entry, expect):
         spec.container_port,
         spec.proto,
         spec.host_ip,
-    ) == expect
+    ) == expected
 
 
 def test_parse_entry_skips_varref_without_default():
@@ -274,4 +274,55 @@ def test_project_port_bindings_deduplicates_address_families(mocker):
     assert result == {
         ("dns", 53, "tcp"): 20000,
         ("dns", 53, "udp"): 20000,
+    }
+
+
+def test_project_port_bindings_returns_empty_when_list_fails(mocker):
+    backend = mocker.MagicMock()
+    backend.container_list.side_effect = OSError("daemon unavailable")
+
+    assert host_ports.project_port_bindings(backend) == {}
+
+
+def test_project_port_bindings_ignores_malformed_runtime_state(mocker):
+    backend = mocker.MagicMock()
+    backend.container_list.return_value = [
+        "not-a-container",
+        {"Service": "dns"},
+        {"Name": "aptl-missing-service"},
+        {"Name": "aptl-inspect-error", "Service": "dns"},
+        {"Name": "aptl-invalid-info", "Service": "dns"},
+        {"Name": "aptl-invalid-ports", "Service": "dns"},
+        {"Name": "/aptl-dns", "Service": "dns"},
+    ]
+
+    def inspect(name):
+        if name == "aptl-inspect-error":
+            raise OSError("container disappeared")
+        if name == "aptl-invalid-info":
+            return []
+        if name == "aptl-invalid-ports":
+            return {"NetworkSettings": {"Ports": []}}
+        return {
+            "NetworkSettings": {
+                "Ports": {
+                    "not-a-port": [{"HostPort": "20000"}],
+                    "53/tcp": [
+                        None,
+                        {},
+                        {"HostPort": "invalid"},
+                        {"HostPort": "0"},
+                        {"HostPort": "20000"},
+                        {"HostPort": "20001"},
+                    ],
+                    "54": [{"HostPort": "20002"}],
+                    "55/tcp": None,
+                }
+            }
+        }
+
+    backend.container_inspect.side_effect = inspect
+
+    assert host_ports.project_port_bindings(backend) == {
+        ("dns", 54, "tcp"): 20002,
     }

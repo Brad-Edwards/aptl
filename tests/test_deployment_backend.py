@@ -297,8 +297,8 @@ services:
         assert "unique:" not in override
         cmd = mock_run.call_args[0][0]
         assert cmd[:4] == ["docker", "compose", "-p", "test"]
-        assert ["-f", str(tmp_path / "docker-compose.yml")] == cmd[4:6]
-        assert ["-f", str(override_path)] == cmd[6:8]
+        assert cmd[4:6] == ["-f", str(tmp_path / "docker-compose.yml")]
+        assert cmd[6:8] == ["-f", str(override_path)]
         assert "--build" in cmd
 
     def test_start_returns_failure_on_error(self, tmp_path):
@@ -2203,12 +2203,13 @@ class TestSeedNamedVolumes:
         from aptl.core.deployment.errors import BackendSeedError
 
         backend = self._backend(tmp_path)
+        seed = [self._config_seed()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="secret docker stderr"
             )
             with pytest.raises(BackendSeedError) as exc_info:
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         assert "suricata_config_seed" in str(exc_info.value)
         assert "secret docker stderr" not in str(exc_info.value)
 
@@ -2223,11 +2224,12 @@ class TestSeedNamedVolumes:
             "docker: Error response from daemon: pull access denied"
         )
         backend = self._backend(tmp_path)
+        seed = [self._config_seed()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError) as exc_info:
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         message = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "Error response from daemon: pull access denied" in message
         assert "suricata_config_seed" in message
@@ -2244,11 +2246,12 @@ class TestSeedNamedVolumes:
             "Authorization: Bearer sk-supersecrettoken123"
         )
         backend = self._backend(tmp_path)
+        seed = [self._config_seed()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError):
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         message = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "sk-supersecrettoken123" not in message
         assert "[REDACTED]" in message
@@ -2258,11 +2261,12 @@ class TestSeedNamedVolumes:
         from aptl.core.deployment.errors import BackendSeedError
 
         backend = self._backend(tmp_path)
+        seed = [self._config_seed()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="   ")
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError):
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         message = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "stderr:" not in message
         assert "suricata_config_seed" in message
@@ -2275,11 +2279,12 @@ class TestSeedNamedVolumes:
 
         stderr = "HEAD_NOISE " + ("x" * 2000) + " TAIL_DAEMON_ERROR"
         backend = self._backend(tmp_path)
+        seed = [self._config_seed()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError):
-                backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         message = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "TAIL_DAEMON_ERROR" in message
         assert "HEAD_NOISE" not in message
@@ -2292,13 +2297,12 @@ class TestSeedNamedVolumes:
 
         stderr = "docker: Error response from daemon: permission denied on /legacy"
         backend = self._backend(tmp_path)
+        seed = [self._misp_seed_with_legacy()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError) as exc_info:
-                backend.seed_named_volumes(
-                    [self._misp_seed_with_legacy()], seeder_image="img:1"
-                )
+                backend.seed_named_volumes(seed, seeder_image="img:1")
         message = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "Retire of legacy seed path" in message
         assert "permission denied on /legacy" in message
@@ -2447,14 +2451,13 @@ class TestRealizeContent:
         from aptl.core.deployment.errors import BackendSeedError
 
         backend = self._backend(tmp_path)
+        content = [self._inline_text_item()]
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=1, stdout="", stderr="secret docker stderr"
             )
             with pytest.raises(BackendSeedError) as exc_info:
-                backend.realize_content(
-                    [self._inline_text_item()], seeder_image="img:1"
-                )
+                backend.realize_content(content, seeder_image="img:1")
         assert "fileshare_data" in str(exc_info.value)
         assert "secret docker stderr" not in str(exc_info.value)
 

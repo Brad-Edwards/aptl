@@ -145,13 +145,20 @@ Authoring and selection details: [SDL Reference](docs/sdl/index.md) · [Curated 
 
 ## AI Agents (MCP)
 
-Build the MCP servers:
+`aptl lab start` builds the seven MCP servers for the default scenario and
+creates a private `.mcp.json` client configuration with the generated lab
+credentials. Start your AI client from the project directory so its relative
+entry points resolve correctly.
+
+To rebuild the MCP artifacts without restarting the lab:
 
 ```bash
 ./mcp/build-all-mcps.sh
 ```
 
-Point your AI client (Claude Code, Cursor, Cline) at the entry points under `./mcp/<server>/build/index.js`. Full setup: [MCP Integration](docs/components/mcp-integration.md).
+The repository still builds the optional reverse MCP artifact, but the
+generated default client config omits it because the default SDL has no
+reverse node. Full setup: [MCP Integration](docs/components/mcp-integration.md).
 
 Smoke-test the wiring once the lab is up:
 

@@ -60,7 +60,9 @@ This protocol is executed by an AI agent with the APTL MCP servers connected. Th
 
 ### MCP Server Architecture
 
-APTL uses 8 custom MCP servers, all Node.js, built from `mcp/`:
+APTL builds 8 custom Node.js MCP servers from `mcp/`. The default operational
+scenario configures the 7 servers whose target nodes are present; the reverse
+server remains an optional build artifact.
 
 | Server (.mcp.json name) | Type | Source |
 |---|---|---|
@@ -75,7 +77,9 @@ APTL uses 8 custom MCP servers, all Node.js, built from `mcp/`:
 
 ### Setup
 
-The agent's MCP client must have all 8 APTL servers configured (see `.mcp.json`). Environment variables required:
+For the default scenario, the agent's MCP client must have the 7 generated
+APTL servers configured in `.mcp.json`. Add `aptl-reverse` only when a selected
+scenario realizes its target node. Environment variables required:
 
 | Variable | Used by | Source |
 |---|---|---|
@@ -216,7 +220,7 @@ when neither automated tests nor agent MCP access are available.
 3. Wait for startup to complete (5-10 min for full SOC stack).
 4. Build MCP servers: `./mcp/build-all-mcps.sh`
 5. Install published MCPs (see `tools/.gitignore` for details).
-6. Configure your MCP client to load all APTL servers (see `.mcp.json`).
+6. Confirm your MCP client loaded the generated APTL servers from `.mcp.json`.
 
 ### 1. Container Health
 

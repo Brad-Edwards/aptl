@@ -83,7 +83,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 
 ## Requirements
 
-- Docker + Docker Compose
+- Docker + Docker Compose + Docker Buildx
 - Python 3.11+
 - RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
 - 20 GB+ disk

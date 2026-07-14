@@ -40,7 +40,7 @@ Edit `aptl.json` to enable/disable containers:
 
 ```bash
 # Check requirements
-docker --version && docker compose version
+docker --version && docker compose version && docker buildx version
 sysctl vm.max_map_count  # Native Linux Docker Engine only; should be >= 262144
 netstat -tlnp | grep -E "(443|2027|8443|9000|9001|9200|55000)"  # Ports must be free
 

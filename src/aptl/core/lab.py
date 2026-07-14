@@ -755,8 +755,12 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     """
     from aptl.core import host_ports
 
+    assert ctx.backend is not None
+    existing_bindings = host_ports.project_port_bindings(ctx.backend)
     ctx.resolved_ports = host_ports.resolve_host_ports(
-        ctx.project_dir, reserved_env=set(ctx.raw_env)
+        ctx.project_dir,
+        reserved_env=set(ctx.raw_env),
+        existing_bindings=existing_bindings,
     )
     for resolved in ctx.resolved_ports:
         if resolved.remapped:
@@ -1984,8 +1988,8 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 # stay aligned.
 _LAB_START_STEPS = (
     _step_load_env,
-    _step_resolve_host_ports,
     _step_load_config,
+    _step_resolve_host_ports,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
     _step_sync_credentials,
@@ -2007,8 +2011,8 @@ _LAB_START_STEPS = (
 
 _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
-    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_load_config": "Loading lab configuration.",
+    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
     "_step_sync_credentials": "Rendering service configuration.",

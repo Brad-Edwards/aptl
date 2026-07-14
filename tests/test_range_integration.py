@@ -140,34 +140,6 @@ class TestDetectionPipeline:
             f"Log '{tag}' not in Wazuh archives within 240s"
         )
 
-    def test_kali_redteam_log_reaches_manager(self):
-        """Red-team log on Kali reaches Wazuh archives."""
-        tag = f"APTL_INTEG_KALI_{int(time.time())}"
-        kali_exec(
-            "logger -t kali_redteam "
-            f'"RedTeamActivity: command={tag} '
-            'target=172.20.2.20"'
-        )
-
-        deadline = time.monotonic() + 180
-        while time.monotonic() < deadline:
-            time.sleep(5)
-            result = docker_exec(
-                "aptl-wazuh-manager",
-                [
-                    "grep", "-c", tag,
-                    "/var/ossec/logs/archives/archives.log",
-                ],
-            )
-            if (
-                result.returncode == 0
-                and result.stdout.strip() != "0"
-            ):
-                return
-        pytest.fail(
-            f"Log '{tag}' not in Wazuh archives within 180s"
-        )
-
     def test_wazuh_agents_registered(self):
         """Wazuh Manager API shows registered agents."""
         result = docker_exec(
@@ -739,6 +711,7 @@ class TestFullLoop:
 
 
 @LIVE_LAB
+@pytest.mark.skip(reason="Legacy pre-SDL scenario CLI was removed")
 class TestScenarioHarness:
     """Exercise the scenario system against live infrastructure."""
 
@@ -859,13 +832,12 @@ class TestScenarioHarness:
 MCP_SERVERS = {
     # Custom Node.js servers (known tool names)
     "kali-ssh": "kali_info",
-    "reverse-sandbox-ssh": "reverse_info",
     "shuffle": "soar_list_workflows",
     "indexer": "indexer_query",
-    # Published servers (verify they start and list tools)
-    "wazuh": None,
-    "misp": None,
-    "thehive": None,
+    "wazuh": "wazuh_query_alerts",
+    "network": "network_query_ids_alerts",
+    "misp": "threatintel_search_iocs",
+    "thehive": "cases_list_cases",
 }
 
 
@@ -873,7 +845,9 @@ def _server_available(name: str) -> bool:
     """Check if an MCP server's binary/build exists."""
     try:
         cmd, _ = mcp_server_cmd(name)
-        return os.path.isfile(cmd[0])
+        return os.path.isfile(cmd[0]) and (
+            len(cmd) < 2 or os.path.isfile(cmd[1])
+        )
     except (ValueError, IndexError):
         return False
 

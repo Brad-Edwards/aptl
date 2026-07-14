@@ -88,6 +88,57 @@ class ResolvedPort:
 PortBindingKey = tuple[str, int, str]
 
 
+def _container_identity(entry: object) -> tuple[str, str] | None:
+    """Return a Compose service and container name from one ``ps`` entry."""
+    if not isinstance(entry, dict):
+        return None
+    service = str(entry.get("Service") or "")
+    name = str(entry.get("Name") or "").lstrip("/")
+    return (service, name) if service and name else None
+
+
+def _binding_host_ports(bindings: object) -> set[int]:
+    """Return valid, non-zero host ports from an inspected port binding."""
+    host_ports: set[int] = set()
+    if not isinstance(bindings, list):
+        return host_ports
+    for binding in bindings:
+        try:
+            host_port = int(binding.get("HostPort", 0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if host_port:
+            host_ports.add(host_port)
+    return host_ports
+
+
+def _inspected_port_candidates(
+    backend: DeploymentBackend, service: str, name: str
+) -> dict[PortBindingKey, set[int]]:
+    """Return valid published-port candidates for one running container."""
+    try:
+        info = backend.container_inspect(name)
+    except Exception:
+        return {}
+    if not isinstance(info, dict):
+        return {}
+    ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
+    if not isinstance(ports, dict):
+        return {}
+
+    candidates: dict[PortBindingKey, set[int]] = {}
+    for container_port_proto, bindings in ports.items():
+        port_raw, _, proto = str(container_port_proto).partition("/")
+        try:
+            container_port = int(port_raw)
+        except ValueError:
+            continue
+        host_ports = _binding_host_ports(bindings)
+        if host_ports:
+            candidates[(service, container_port, proto or "tcp")] = host_ports
+    return candidates
+
+
 def project_port_bindings(
     backend: DeploymentBackend,
 ) -> dict[PortBindingKey, int]:
@@ -104,33 +155,14 @@ def project_port_bindings(
 
     candidates: dict[PortBindingKey, set[int]] = {}
     for entry in containers:
-        if not isinstance(entry, dict):
+        identity = _container_identity(entry)
+        if identity is None:
             continue
-        service = str(entry.get("Service") or "")
-        name = str(entry.get("Name") or "").lstrip("/")
-        if not service or not name:
-            continue
-        try:
-            info = backend.container_inspect(name)
-        except Exception:
-            continue
-        ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
-        if not isinstance(ports, dict):
-            continue
-        for container_port_proto, bindings in ports.items():
-            port_raw, _, proto = str(container_port_proto).partition("/")
-            try:
-                container_port = int(port_raw)
-            except ValueError:
-                continue
-            key = (service, container_port, proto or "tcp")
-            for binding in bindings or ():
-                try:
-                    host_port = int(binding.get("HostPort", 0))
-                except (AttributeError, TypeError, ValueError):
-                    continue
-                if host_port:
-                    candidates.setdefault(key, set()).add(host_port)
+        service, name = identity
+        for key, host_ports in _inspected_port_candidates(
+            backend, service, name
+        ).items():
+            candidates.setdefault(key, set()).update(host_ports)
     return {
         key: next(iter(host_ports))
         for key, host_ports in candidates.items()
@@ -311,6 +343,38 @@ def _resolved_for_pinned(
     )
 
 
+def _resolve_available_port(
+    first: PortSpec,
+    env_var: str,
+    default_port: int,
+    protos: tuple[str, ...],
+    taken: set[int],
+) -> int:
+    """Resolve and export an available port for an unpinned mapping."""
+    if _group_available(default_port, protos, first.host_ip):
+        return default_port
+
+    free = _find_free_port(protos, first.host_ip, taken)
+    if free is None:
+        log.warning(
+            "No free host port found to remap %s (default %d); leaving default.",
+            first.service,
+            default_port,
+        )
+        return default_port
+
+    taken.add(free)
+    os.environ[env_var] = str(free)
+    log.info(
+        "Host port %d for %s is in use; publishing on %d instead (%s).",
+        default_port,
+        first.service,
+        free,
+        env_var,
+    )
+    return free
+
+
 def _resolve_group(
     env_var: str,
     specs: list[PortSpec],
@@ -325,38 +389,18 @@ def _resolve_group(
     if env_var in reserved or env_var in os.environ:
         return _resolved_for_pinned(first, env_var, default_port, protos)
 
-    # A repeated `aptl lab start` must preserve this project's current
-    # binding. The ordinary socket probe cannot distinguish our own container
-    # from an unrelated process and would otherwise move every endpoint on
-    # each run.
-    if existing_port is not None:
+    if existing_port is None:
+        resolved_port = _resolve_available_port(
+            first, env_var, default_port, protos, taken
+        )
+    else:
+        # The ordinary socket probe cannot distinguish this project's own
+        # container from an unrelated process. Preserve its current binding.
         taken.add(existing_port)
         if existing_port != default_port:
             os.environ[env_var] = str(existing_port)
-        return _resolved(first, env_var, default_port, existing_port, protos)
-
-    if _group_available(default_port, protos, first.host_ip):
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    free = _find_free_port(protos, first.host_ip, taken)
-    if free is None:
-        log.warning(
-            "No free host port found to remap %s (default %d); leaving default.",
-            first.service,
-            default_port,
-        )
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    taken.add(free)
-    os.environ[env_var] = str(free)
-    log.info(
-        "Host port %d for %s is in use; publishing on %d instead (%s).",
-        default_port,
-        first.service,
-        free,
-        env_var,
-    )
-    return _resolved(first, env_var, default_port, free, protos)
+        resolved_port = existing_port
+    return _resolved(first, env_var, default_port, resolved_port, protos)
 
 
 def resolve_host_ports(

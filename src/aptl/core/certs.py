@@ -236,6 +236,7 @@ def _cleanup_cert_generator(project_dir: Path) -> str | None:
         "down",
         "--remove-orphans",
     ]
+    error: str | None = None
     try:
         result = subprocess.run(
             command,
@@ -247,12 +248,13 @@ def _cleanup_cert_generator(project_dir: Path) -> str | None:
             timeout=_CERT_CLEANUP_TIMEOUT,
         )
     except subprocess.TimeoutExpired:
-        return f"timed out after {_CERT_CLEANUP_TIMEOUT}s"
+        error = f"timed out after {_CERT_CLEANUP_TIMEOUT}s"
     except OSError as exc:
-        return str(exc)
-    if result.returncode != 0:
-        return _command_failure_detail(result)
-    return None
+        error = str(exc)
+    else:
+        if result.returncode != 0:
+            error = _command_failure_detail(result)
+    return error
 
 
 def _command_failure_detail(result: subprocess.CompletedProcess) -> str:

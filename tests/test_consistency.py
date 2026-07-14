@@ -178,6 +178,22 @@ class TestComposeConsistency:
             in environment
         )
 
+    def test_thehive_elasticsearch_stays_writable_on_full_host(
+        self, compose_config
+    ):
+        """Fresh TheHive and Cortex bootstrap must not depend on host usage.
+
+        Elasticsearch's percentage flood-stage can reject the first Cortex
+        organisation write while cluster health remains green. The lab store
+        is disposable and single-node, so host percentage watermarks are not
+        an appropriate readiness policy.
+        """
+        environment = compose_config["services"]["thehive-es"]["environment"]
+        assert (
+            "cluster.routing.allocation.disk.threshold_enabled=false"
+            in environment
+        )
+
     def test_web_api_token_does_not_block_inactive_profiles(self, compose_config):
         """Compose expands environment substitutions for inactive profiles, so
         the optional web token must be validated by the web runtime instead of

@@ -19,8 +19,10 @@ from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
     DeploymentContentRealization,
     DeploymentNetworkRealization,
+    DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -213,6 +215,41 @@ class DeploymentBackend(Protocol):
         Raises:
             BackendSeedError: if a seed container exits non-zero.
             BackendTimeoutError: if a seed container exceeds its timeout.
+        """
+        ...
+
+    def realize_accounts(
+        self,
+        accounts: Sequence[DeploymentAccountRealization],
+        nodes: Sequence[DeploymentNodeRealization],
+        *,
+        timeout: int | None = None,
+    ) -> LabResult | None:
+        """Realize typed ACES account placements onto their target nodes (#577).
+
+        Ensures declared groups, creates or reconciles each declared user via
+        the resolved backend account provider (Samba AD on the ``ad`` node),
+        applies supported non-secret attributes, reconciles group memberships,
+        and verifies the resulting non-secret state by read-after-write. The
+        whole batch is validated before the first mutation; an already-existing
+        account is reconciled, not re-created, so its provider-owned credential
+        is preserved. No credential ever crosses argv/env/evidence (ADR-029 +
+        ADR-046 addendum): user creation delegates password generation to the
+        target provider.
+
+        Args:
+            accounts: The typed account realizations to materialize.
+            nodes: The realized nodes, used to resolve each account's concrete
+                target container and account provider.
+            timeout: Optional per-command timeout in seconds.
+
+        Returns:
+            ``None`` on success (or when there is nothing to realize); a
+            fail-closed :class:`LabResult` naming the placement address and a
+            stable reason on validation, readiness, or verification failure.
+
+        Raises:
+            BackendTimeoutError: if a provider command exceeds its timeout.
         """
         ...
 

@@ -118,12 +118,18 @@ class DeploymentContentRealization(object):
 class DeploymentAccountRealization(object):
     """One account-placement identity lowered from an ACES account resource.
 
-    Carries non-secret identity only (ADR-046 TechVault addendum): no
-    password material crosses this record. The concrete credential stays
-    owned by the target node's service-owned provisioner (e.g.
-    ``containers/ad/provision-users.sh``); this record is realization
-    evidence proving the declared account maps to a node whose backend
-    service actually provisions it.
+    Carries non-secret identity only (ADR-046 addendum): no password material
+    crosses this record. The concrete credential is generated inside the target
+    provider boundary and never disclosed; this record is realization evidence
+    proving the declared account maps to a node whose backend provider actually
+    creates and reconciles it.
+
+    Author explicitness is preserved for optional attributes so the backend
+    reconciles only what the scenario author declared (SEM-218, ADR-046
+    addendum): ``mail`` / ``spn`` are ``""`` when the author omitted them, and
+    ``disabled`` is ``None`` when omitted (distinct from an authored ``False``).
+    An omitted attribute is never materialized, so a benign placement cannot
+    silently flip an existing account's state.
     """
 
     address: str
@@ -132,7 +138,7 @@ class DeploymentAccountRealization(object):
     groups: tuple[str, ...] = ()
     spn: str = ""
     mail: str = ""
-    disabled: bool = False
+    disabled: bool | None = None
 
     def details(self) -> dict[str, object]:
         return {

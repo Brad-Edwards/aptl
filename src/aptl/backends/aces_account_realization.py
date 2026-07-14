@@ -1,16 +1,17 @@
-"""Resolve ACES account-placement payloads into deployment account evidence.
+"""Resolve ACES account-placement payloads into typed realization records.
 
-Issue #689 / ADR-046's TechVault addendum: an `account-placement` resource
-must lower into typed realization evidence (:class:`DeploymentAccountRealization`)
-or fail closed with an error diagnostic. Unlike content, accounts carry no
-secret material and need no new backend operation — the concrete credential
-stays owned by the target node's service-owned provisioner
-(``containers/ad/provision-users.sh``, which already runs unconditionally as
-part of the `ad` container's entrypoint). Realization here is a narrow,
-honest claim: the declared account's target node resolves to a backend
-service APTL knows actually provisions accounts. A placement that targets
-any other node is unrealizable and fails closed before the account is
-recorded as realized.
+An `account-placement` resource lowers into a typed
+:class:`DeploymentAccountRealization` here, or fails closed with an error
+diagnostic when its target node has no registered account provider. This is the
+interpret-time half of account realization: #577 (ADR-046 Account and Identity
+Realization Addendum) makes the record load-bearing — the deployment backend's
+``realize_accounts`` operation ensures the declared groups, users, memberships,
+and non-secret attributes on the resolved target and verifies them by
+read-after-write. The record carries non-secret identity only; the concrete
+credential is generated inside the target/provider boundary and never crosses
+this record (ADR-029). The set of services that have an account provider is
+owned by a single code-owned binding (:mod:`aptl.core.deployment._account_provider`),
+so this gate and the materializer never diverge.
 """
 
 from __future__ import annotations
@@ -28,12 +29,14 @@ from aptl.backends.aces_realization_values import (
     optional_string as _optional_string,
     placement_spec as _placement_spec,
 )
+from aptl.core.deployment._account_provider import account_provider_services
 from aptl.core.deployment.realization import DeploymentAccountRealization
 
-# Backend services with an existing service-owned account provisioner.
-# Adding a new account-capable service is one new entry here, not a
-# scenario-name branch (ADR-046 §Extensibility).
-_ACCOUNT_PROVISIONER_SERVICES = frozenset({"ad"})
+# Backend services with a registered account provider. Single source of truth
+# with the realize-time materializer's binding (ADR-046 §Extensibility): adding
+# a new account-capable service is one entry in ``_account_provider``, never a
+# scenario-name branch here.
+_ACCOUNT_PROVISIONER_SERVICES = account_provider_services()
 
 
 def resolve_account_placement(
@@ -61,7 +64,10 @@ def resolve_account_placement(
             groups=_account_groups(spec),
             spn=_optional_string(spec, "spn") or "",
             mail=_optional_string(spec, "mail") or "",
-            disabled=bool(_optional_bool(spec, "disabled")),
+            # Preserve author explicitness (SEM-218, ADR-046 addendum): None when
+            # the author omitted `disabled`, so the backend never flips an
+            # existing account's enabled state on an unrelated placement.
+            disabled=_optional_bool(spec, "disabled"),
         )
     return account, diagnostics
 

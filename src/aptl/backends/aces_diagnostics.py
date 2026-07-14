@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any
 
 from aces_contracts.diagnostics import Diagnostic, Severity
 from aces_contracts.planning import ChangeAction, ProvisioningPlan, RuntimeDomain
@@ -131,9 +130,9 @@ def realized_changed_addresses(
 
 
 def _observed_payload(
-    planned_payload: Mapping[str, Any],
+    planned_payload: Mapping[str, object],
     observed: ObservedResource,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Return the planned payload with realization concerns replaced by reality.
 
     Non-concern fields (names, specs, addresses) are descriptive identity the
@@ -152,7 +151,9 @@ def _observed_payload(
     return payload
 
 
-def _set_path(payload: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
+def _set_path(
+    payload: dict[str, object], path: tuple[str, ...], value: object
+) -> None:
     """Set a nested concern value, building intermediate mappings as needed."""
 
     current = payload
@@ -165,10 +166,10 @@ def _set_path(payload: dict[str, Any], path: tuple[str, ...], value: Any) -> Non
     current[path[-1]] = value
 
 
-def _pop_path(payload: dict[str, Any], path: tuple[str, ...]) -> None:
+def _pop_path(payload: dict[str, object], path: tuple[str, ...]) -> None:
     """Remove a nested concern value, leaving other payload fields intact."""
 
-    current: Any = payload
+    current: object = payload
     for key in path[:-1]:
         if not isinstance(current, dict) or key not in current:
             return

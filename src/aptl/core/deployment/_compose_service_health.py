@@ -125,17 +125,43 @@ def wait_for_realized_health(
     # and polling for it would burn the whole budget before reporting a failure
     # we can already prove. Waiting is only for containers that exist and have
     # yet to settle.
-    missing = [name for name in names if not backend.container_inspect(name)]
+    missing = [
+        f"container {name!r} was never created"
+        for name in names
+        if not backend.container_inspect(name)
+    ]
     if missing:
-        return [f"container {name!r} was never created" for name in missing]
+        return missing
 
-    def _all_settled() -> bool:
+    return _await_all_settled(
+        backend,
+        names,
+        timeout=timeout,
+        interval=interval,
+        time_source=time_source,
+        sleep=sleep,
+    )
+
+
+def _await_all_settled(
+    backend: "DeploymentBackend",
+    names: Sequence[str],
+    *,
+    timeout: int,
+    interval: int,
+    time_source: Callable[[], float],
+    sleep: Callable[[float], None],
+) -> list[str]:
+    """Poll existing containers until all settle; return reasons on timeout."""
+
+    def all_settled() -> bool:
+        """Return whether every awaited container is running and healthy."""
         return all(
             container_settled(backend.container_inspect(name)) for name in names
         )
 
     result = wait_for_service(
-        check_fn=_all_settled,
+        check_fn=all_settled,
         timeout=timeout,
         interval=interval,
         service_name=f"{len(names)} realized service(s)",
@@ -144,12 +170,12 @@ def wait_for_realized_health(
     )
     if result.ready:
         return []
-    reasons = unhealthy_container_reasons(backend, names)
+    reasons = unhealthy_container_reasons(backend, names) or [
+        f"realized services did not become healthy within {timeout}s",
+    ]
     log.warning(
         "realized services did not become healthy within %ss: %s",
         timeout,
         "; ".join(reasons[:5]),
     )
-    return reasons or [
-        f"realized services did not become healthy within {timeout}s",
-    ]
+    return reasons

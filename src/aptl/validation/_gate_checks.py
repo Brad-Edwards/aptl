@@ -72,6 +72,7 @@ class _NoStartBackend(object):
 
     def realize(self, realization: object, *, build: bool = True) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
+        del build  # accepted for DeploymentBackend parity; nothing is built here
         self._container_names = {
             node.container_name
             for node in getattr(realization, "nodes", ())
@@ -109,8 +110,12 @@ class _NoStartBackend(object):
         }
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
-        """Report the declared scenario networks as present, project-scoped."""
-        return list(self._network_names)
+        """Report the declared scenario networks as present, project-scoped.
+
+        Filters by ``name_prefix`` exactly as the real backend does, so the stub
+        honours the same project scoping the observer relies on.
+        """
+        return [name for name in self._network_names if name_prefix in name]
 
     @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:

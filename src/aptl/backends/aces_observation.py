@@ -128,7 +128,7 @@ def _safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
 
     try:
         info = backend.container_inspect(name)
-    except (BackendTimeoutError, OSError) as exc:  # pragma: no cover - transient daemon failure
+    except (BackendTimeoutError, OSError) as exc:
         log.warning("could not inspect container %s: %s", name, exc)
         return {}
     return info if isinstance(info, dict) else {}
@@ -254,7 +254,7 @@ def _realized_network_names(
 
     try:
         names = backend.host_list_lab_networks(project_name)
-    except (BackendTimeoutError, OSError) as exc:  # pragma: no cover - transient daemon failure
+    except (BackendTimeoutError, OSError) as exc:
         log.warning("could not list realized networks: %s", exc)
         return set()
     return set(names) if isinstance(names, list | tuple | set) else set()

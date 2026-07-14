@@ -2132,6 +2132,36 @@ def orchestrate_lab_start(
     )
 
 
+_MCP_SERVER_KEYS = {
+    "aptl-casemgmt": ("THEHIVE_API_KEY",),
+    "aptl-threatintel": ("MISP_API_KEY",),
+    "aptl-soar": ("SHUFFLE_API_KEY",),
+}
+
+
+def _refresh_mcp_server_keys(
+    cfg: dict[str, Any], env_vals: dict[str, str]
+) -> list[str]:
+    """Refresh seeded credentials in MCP server environment blocks."""
+    updated: list[str] = []
+    servers = cfg.get("mcpServers", {})
+    if not isinstance(servers, dict):
+        return updated
+
+    for server_name, keys in _MCP_SERVER_KEYS.items():
+        spec = servers.get(server_name)
+        if not isinstance(spec, dict):
+            continue
+        spec_env = spec.setdefault("env", {})
+        if not isinstance(spec_env, dict):
+            continue
+        for key in keys:
+            if key in env_vals and env_vals[key] != spec_env.get(key):
+                spec_env[key] = env_vals[key]
+                updated.append(f"{server_name}.{key}")
+    return updated
+
+
 def _sync_mcp_config_keys(project_dir: Path) -> None:
     """Create or update `.mcp.json` with dynamic API keys from `.env`.
 
@@ -2161,25 +2191,8 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
         log.debug("MCP sync: %s vanished between checks; skipping", env_path.name)
         return
 
-    # server name -> env keys it expects
-    SERVER_KEYS = {
-        "aptl-casemgmt": ["THEHIVE_API_KEY"],
-        "aptl-threatintel": ["MISP_API_KEY"],
-        "aptl-soar": ["SHUFFLE_API_KEY"],
-    }
-
     cfg = json.loads(source_path.read_text())
-    servers = cfg.get("mcpServers", {})
-    updated = []
-    for server_name, keys in SERVER_KEYS.items():
-        spec = servers.get(server_name)
-        if not spec:
-            continue
-        spec_env = spec.setdefault("env", {})
-        for key in keys:
-            if key in env_vals and env_vals[key] != spec_env.get(key):
-                spec_env[key] = env_vals[key]
-                updated.append(f"{server_name}.{key}")
+    updated = _refresh_mcp_server_keys(cfg, env_vals)
 
     created = source_path == example_path
     if updated or created:

@@ -120,11 +120,11 @@ def _inspected_port_candidates(
         info = backend.container_inspect(name)
     except Exception:
         return {}
-    if not isinstance(info, dict):
-        return {}
-    ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
-    if not isinstance(ports, dict):
-        return {}
+    ports: dict[object, object] = {}
+    if isinstance(info, dict):
+        inspected = (info.get("NetworkSettings") or {}).get("Ports") or {}
+        if isinstance(inspected, dict):
+            ports = inspected
 
     candidates: dict[PortBindingKey, set[int]] = {}
     for container_port_proto, bindings in ports.items():

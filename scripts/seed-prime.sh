@@ -52,6 +52,16 @@ update_env_var() {
     chmod 600 "$ENV_FILE"
 }
 
+# Manual reruns start in a fresh shell, unlike `aptl lab start`, which passes
+# the hydrated lab environment explicitly. Reuse the running lab's credentials
+# so recovery cannot replace a randomized service key with a baked-in default.
+source "$SCRIPT_DIR/aptl-env.sh"
+for key in \
+    INDEXER_USERNAME INDEXER_PASSWORD MISP_API_KEY SHUFFLE_API_KEY CORTEX_API_KEY
+do
+    aptl_load_env_key "$ENV_FILE" "$key"
+done
+
 echo "============================================="
 echo "  APTL Prime Scenario Seed"
 echo "============================================="
@@ -248,7 +258,7 @@ echo "  Prime Scenario Seed Complete"
 echo "============================================="
 echo ""
 echo "Seeded state:"
-echo "  - TheHive API key: provisioned (export THEHIVE_API_KEY=${THEHIVE_API_KEY:-not set})"
+echo "  - TheHive API key: provisioned and stored in .env"
 echo "  - Cortex API key: provisioned for TheHive connector"
 echo "  - Wazuh Indexer: healthy"
 echo "  - MISP: Kali IOCs and attack patterns"

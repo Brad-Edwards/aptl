@@ -452,10 +452,14 @@ class TestSOCTools:
             method="POST",
             body={
                 "execution_argument": json.dumps({
-                    "title": "APTL Test Alert",
-                    "description": "Integration test alert",
-                    "severity": 2,
-                    "source_ip": KALI_DMZ_IP,
+                    "rule": {
+                        "id": "302010",
+                        "description": "APTL integration test alert",
+                        "level": 10,
+                    },
+                    "data": {"srcip": KALI_DMZ_IP},
+                    "agent": {"name": "aptl-integration-test"},
+                    "timestamp": str(int(time.time())),
                 }),
             },
         )
@@ -579,7 +583,6 @@ class TestFullLoop:
         assert aptl_wf, "APTL workflow not found in Shuffle"
 
         ts = int(time.time())
-        alert_title = f"SQLi from {src_ip} (integ test {ts})"
         exec_result = curl_json(
             f"{SHUFFLE_URL}/api/v1/workflows/"
             f"{aptl_wf['id']}/execute",
@@ -587,11 +590,14 @@ class TestFullLoop:
             method="POST",
             body={
                 "execution_argument": json.dumps({
-                    "title": alert_title,
-                    "description": f"SQLi from {src_ip}",
-                    "severity": 3,
-                    "source_ip": src_ip,
-                    "rule_id": "302010",
+                    "rule": {
+                        "id": "302010",
+                        "description": "SQL injection attempt detected",
+                        "level": 10,
+                    },
+                    "data": {"srcip": src_ip},
+                    "agent": {"name": "aptl-integration-test"},
+                    "timestamp": str(ts),
                 }),
             },
         )

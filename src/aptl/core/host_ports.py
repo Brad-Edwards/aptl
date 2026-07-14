@@ -29,10 +29,14 @@ import re
 import socket
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("host_ports")
 
@@ -79,6 +83,59 @@ class ResolvedPort:
     protos: tuple[str, ...]
     host_ip: str | None
     remapped: bool
+
+
+PortBindingKey = tuple[str, int, str]
+
+
+def project_port_bindings(
+    backend: DeploymentBackend,
+) -> dict[PortBindingKey, int]:
+    """Return published host ports already owned by this Compose project.
+
+    Docker exposes the same binding once for IPv4 and once for IPv6.  A key is
+    returned only when every address agrees on one host port; ambiguous runtime
+    state falls back to the normal availability probe.
+    """
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:
+        return {}
+
+    candidates: dict[PortBindingKey, set[int]] = {}
+    for entry in containers:
+        if not isinstance(entry, dict):
+            continue
+        service = str(entry.get("Service") or "")
+        name = str(entry.get("Name") or "").lstrip("/")
+        if not service or not name:
+            continue
+        try:
+            info = backend.container_inspect(name)
+        except Exception:
+            continue
+        ports = (info.get("NetworkSettings") or {}).get("Ports") or {}
+        if not isinstance(ports, dict):
+            continue
+        for container_port_proto, bindings in ports.items():
+            port_raw, _, proto = str(container_port_proto).partition("/")
+            try:
+                container_port = int(port_raw)
+            except ValueError:
+                continue
+            key = (service, container_port, proto or "tcp")
+            for binding in bindings or ():
+                try:
+                    host_port = int(binding.get("HostPort", 0))
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if host_port:
+                    candidates.setdefault(key, set()).add(host_port)
+    return {
+        key: next(iter(host_ports))
+        for key, host_ports in candidates.items()
+        if len(host_ports) == 1
+    }
 
 
 def _proto_socktype(proto: str) -> int:
@@ -240,6 +297,7 @@ def _resolve_group(
     specs: list[PortSpec],
     reserved: set[str],
     taken: set[int],
+    existing_port: int | None = None,
 ) -> ResolvedPort:
     """Resolve one env-var port group and update environment overrides."""
     first = specs[0]
@@ -247,6 +305,16 @@ def _resolve_group(
     default_port = first.default_port
     if env_var in reserved or env_var in os.environ:
         return _resolved_for_pinned(first, env_var, default_port, protos)
+
+    # A repeated `aptl lab start` must preserve this project's current
+    # binding. The ordinary socket probe cannot distinguish our own container
+    # from an unrelated process and would otherwise move every endpoint on
+    # each run.
+    if existing_port is not None:
+        taken.add(existing_port)
+        if existing_port != default_port:
+            os.environ[env_var] = str(existing_port)
+        return _resolved(first, env_var, default_port, existing_port, protos)
 
     if _group_available(default_port, protos, first.host_ip):
         return _resolved(first, env_var, default_port, default_port, protos)
@@ -273,7 +341,9 @@ def _resolve_group(
 
 
 def resolve_host_ports(
-    project_dir: Path, reserved_env: set[str] | None = None
+    project_dir: Path,
+    reserved_env: set[str] | None = None,
+    existing_bindings: dict[PortBindingKey, int] | None = None,
 ) -> list[ResolvedPort]:
     """Detect occupied published host ports, remap them, and export overrides.
 
@@ -294,9 +364,29 @@ def resolve_host_ports(
         groups.setdefault(spec.env_var, []).append(spec)
 
     resolved: list[ResolvedPort] = []
+    current = existing_bindings or {}
     taken: set[int] = {s.default_port for specs in groups.values() for s in specs}
+    taken.update(current.values())
     for env_var, specs in sorted(groups.items()):
-        resolved.append(_resolve_group(env_var, specs, reserved, taken))
+        current_ports = {
+            current.get((spec.service, spec.container_port, spec.proto))
+            for spec in specs
+        }
+        current_ports.discard(None)
+        complete = len(current_ports) == 1 and all(
+            (spec.service, spec.container_port, spec.proto) in current
+            for spec in specs
+        )
+        existing_port = next(iter(current_ports)) if complete else None
+        resolved.append(
+            _resolve_group(
+                env_var,
+                specs,
+                reserved,
+                taken,
+                existing_port=existing_port,
+            )
+        )
 
     return resolved
 

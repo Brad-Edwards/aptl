@@ -94,7 +94,7 @@ import sys
 args = sys.argv[1:]
 if (
     "https://thehive.invalid/api/v1/query" in args
-    and "Authorization: Bearer ExistingKey123" in args
+    and "Authorization: Bearer Existing/Key123" in args
 ):
     raise SystemExit(0)
 raise SystemExit(88)
@@ -105,7 +105,10 @@ raise SystemExit(88)
     env = {
         **os.environ,
         "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "THEHIVE_API_KEY": "ExistingKey123",
+        # Real TheHive keys can contain base64 punctuation such as ``/``.
+        # Rejecting every non-alphanumeric key renews it twice during one
+        # seed-prime run and leaves .env holding the already-revoked first key.
+        "THEHIVE_API_KEY": "Existing/Key123",
         "THEHIVE_URL": "https://thehive.invalid",
         "THEHIVE_CACERT": str(tmp_path / "missing-ca.pem"),
     }
@@ -119,7 +122,7 @@ raise SystemExit(88)
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "ExistingKey123"
+    assert result.stdout.strip() == "Existing/Key123"
 
 
 def test_existing_shuffle_workflow_refreshes_seeded_credentials():

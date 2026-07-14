@@ -1,12 +1,6 @@
-"""Docker Compose deployment backend.
+"""Local Docker Compose deployment backend.
 
-Implements the DeploymentBackend protocol using local Docker Compose
-subprocess calls. This is the default backend and wraps the logic
-previously embedded directly in lab.py and kill.py.
-
-Host- and container-level docker query/inspect operations live in
-``ComposeQueryMixin`` (``_compose_queries.py``) to keep this module within
-the size budget; they are mixed into ``DockerComposeBackend`` below.
+Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
@@ -16,14 +10,16 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-import yaml
-
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
+from aptl.core.deployment._compose_volume_cleanup import (
+    project_scoped_volume_names,
+    remove_leftover_project_volumes,
+)
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -246,7 +242,9 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         volume_names: set[str] = set()
         volume_discovery_error = ""
         if remove_volumes:
-            volume_names, volume_discovery_error = self._project_scoped_volume_names()
+            volume_names, volume_discovery_error = project_scoped_volume_names(
+                self._project_dir, self._project_name
+            )
 
         cmd = self._build_command("down", profiles=profiles)
         if remove_volumes:
@@ -265,7 +263,11 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             if volume_discovery_error:
                 failures.append(volume_discovery_error)
             else:
-                failures.extend(self._remove_leftover_project_volumes(volume_names))
+                failures.extend(
+                    remove_leftover_project_volumes(
+                        volume_names, self._run, timeout=_DOCKER_TIMEOUT
+                    )
+                )
         if failures:
             error = "; ".join(failures[:5])
             log.error("Lab cleanup failed: %s", error)
@@ -273,69 +275,6 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
 
         log.info("Lab stopped successfully")
         return LabResult(success=True, message="Lab stopped")
-
-    def _project_scoped_volume_names(self) -> tuple[set[str], str]:
-        """Return auto-scoped volume names declared by this Compose project.
-
-        Typed seed containers can create a named volume before Compose first
-        attaches its management labels.  Compose therefore leaves that volume
-        behind during ``down -v``.  Only implicit, non-external volume names
-        are returned here; explicit/global names are deliberately excluded so
-        cleanup cannot cross the project boundary.
-        """
-        compose_path = self._project_dir / "docker-compose.yml"
-        try:
-            compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            return set(), f"Failed to read project volumes for cleanup: {exc}"
-        if not isinstance(compose, dict):
-            return set(), "Failed to read project volumes for cleanup: invalid Compose"
-        declared = compose.get("volumes") or {}
-        if not isinstance(declared, dict):
-            return set(), "Failed to read project volumes for cleanup: invalid volumes"
-
-        names = set()
-        for key, config in declared.items():
-            if not isinstance(key, str):
-                continue
-            settings = config if isinstance(config, dict) else {}
-            if settings.get("external") or settings.get("name"):
-                continue
-            names.add(f"{self._project_name}_{key}")
-        return names, ""
-
-    def _remove_leftover_project_volumes(self, expected: set[str]) -> list[str]:
-        """Remove remaining declared volumes after Compose ``down -v``."""
-        if not expected:
-            return []
-        try:
-            listed = self._run(
-                ["docker", "volume", "ls", "--format", "{{.Name}}"],
-                timeout=_DOCKER_TIMEOUT,
-            )
-        except (BackendTimeoutError, OSError) as exc:
-            return [f"Failed to list project volumes for cleanup: {exc}"]
-        if listed.returncode != 0:
-            return [
-                "Failed to list project volumes for cleanup: "
-                f"{redact(listed.stderr.strip())}"
-            ]
-        leftovers = sorted(expected & set(listed.stdout.splitlines()))
-        if not leftovers:
-            return []
-        try:
-            removed = self._run(
-                ["docker", "volume", "rm", *leftovers],
-                timeout=_DOCKER_TIMEOUT,
-            )
-        except (BackendTimeoutError, OSError) as exc:
-            return [f"Failed to remove project volumes: {exc}"]
-        if removed.returncode != 0:
-            return [
-                "Failed to remove project volumes: "
-                f"{redact(removed.stderr.strip())}"
-            ]
-        return []
 
     def status(self) -> LabStatus:
         """Query current lab status via docker compose ps.

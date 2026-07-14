@@ -45,7 +45,7 @@ fi
 # project key when TheHive accepts it so an idempotent seed rerun cannot leave
 # an already-created Shuffle workflow holding a revoked credential. A stale
 # key left by `lab stop -v` fails this probe and falls through to renewal.
-if [[ "${THEHIVE_API_KEY:-}" =~ ^[A-Za-z0-9]+$ ]] && \
+if [[ -n "${THEHIVE_API_KEY:-}" && ! "${THEHIVE_API_KEY}" =~ [[:space:]] ]] && \
     curl -sf "${TLS_FLAGS[@]}" -X POST "${THEHIVE_URL}/api/v1/query" \
         -H "Authorization: Bearer ${THEHIVE_API_KEY}" \
         -H "Content-Type: application/json" \

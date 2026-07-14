@@ -42,10 +42,6 @@ nodes:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
-    runtime:
-      health:
-        status: healthy
-        description: Compose healthcheck must pass before public startup is ready.
   wazuh-indexer:
     type: vm
     os: linux

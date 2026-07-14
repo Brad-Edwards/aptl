@@ -8,6 +8,12 @@ from typing import Literal
 
 ImageRealizationMode = Literal["pull", "build"]
 
+# An SDL-declared host publish with no author-supplied host address binds
+# loopback. Defaulting to all interfaces would silently put a scenario-declared
+# port on the operator's LAN (ADR-034 Host Exposure Amendment); an author who
+# wants that must say so with an explicit host_ip.
+LOOPBACK_HOST_IP = "127.0.0.1"
+
 
 @dataclass(frozen=True)
 class DeploymentImageRealization(object):
@@ -62,6 +68,47 @@ class DeploymentNetworkAttachment(object):
 
 
 @dataclass(frozen=True)
+class DeploymentServicePort(object):
+    """One node-local transport binding declared on an ACES node.
+
+    Mirrors ACES ``ServicePort``: a container-facing service identity. It does
+    not publish a host port and does not authorize traffic — host exposure is
+    :class:`DeploymentPublishedPort`, a deliberately separate surface (ADR-025).
+    """
+
+    name: str
+    port: int
+    protocol: str = "tcp"
+
+    def details(self) -> dict[str, object]:
+        return {"name": self.name, "port": self.port, "protocol": self.protocol}
+
+
+@dataclass(frozen=True)
+class DeploymentPublishedPort(object):
+    """One host-published port binding declared on a node's runtime network.
+
+    Mirrors ACES ``RuntimePublishedPort``. ``host_ip`` is the host-facing
+    exposure boundary: an author who omits it gets loopback, never all
+    interfaces (ADR-034 Host Exposure Amendment). ``host_port`` is ``None`` when
+    the author declared a container port with no fixed host binding.
+    """
+
+    container_port: int
+    protocol: str = "tcp"
+    host_ip: str = LOOPBACK_HOST_IP
+    host_port: int | None = None
+
+    def details(self) -> dict[str, object]:
+        return {
+            "container_port": self.container_port,
+            "protocol": self.protocol,
+            "host_ip": self.host_ip,
+            "host_port": self.host_port,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentNodeRealization(object):
     """One scenario-declared node bound to a backend-managed service."""
 
@@ -71,6 +118,8 @@ class DeploymentNodeRealization(object):
     container_name: str | None
     networks: tuple[str, ...]
     network_attachments: tuple[DeploymentNetworkAttachment, ...] = ()
+    services: tuple[DeploymentServicePort, ...] = ()
+    published_ports: tuple[DeploymentPublishedPort, ...] = ()
 
 
 ContentSourceKind = Literal[

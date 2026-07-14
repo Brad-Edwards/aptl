@@ -277,18 +277,18 @@ features:
 
 conditions:
   portal-healthy: {command: /usr/local/bin/check-portal, interval: 30}
-  manifest-integrity-ok: {command: /usr/local/bin/check-manifest-integrity, interval: 30}
-  tampered-manifest-observed: {command: /usr/local/bin/check-tampered-manifest, interval: 60}
+  manifest-integrity-ok: {proposition: manifest-integrity-ok, command: /usr/local/bin/check-manifest-integrity, interval: 30}
+  tampered-manifest-observed: {proposition: tampered-manifest-observed, command: /usr/local/bin/check-tampered-manifest, interval: 60}
   terminal-throughput-healthy: {command: /usr/local/bin/check-terminal-throughput, interval: 30}
   port-sso-healthy: {command: /usr/local/bin/check-port-sso, interval: 30}
-  customs-link-healthy: {command: /usr/local/bin/check-customs-link, interval: 30}
-  crane-safe-mode: {command: /usr/local/bin/check-crane-safe-mode, interval: 15}
+  customs-link-healthy: {proposition: customs-link-healthy, command: /usr/local/bin/check-customs-link, interval: 30}
+  crane-safe-mode: {proposition: crane-safe-mode, command: /usr/local/bin/check-crane-safe-mode, interval: 15}
   operator-visibility-healthy: {command: /usr/local/bin/check-operator-visibility, interval: 30}
   crane-plc-online: {command: /usr/local/bin/check-crane-plc, interval: 15}
   gate-processing-healthy: {command: /usr/local/bin/check-gate-processing, interval: 30}
   camera-analytics-healthy: {command: /usr/local/bin/check-camera-analytics, interval: 30}
-  yard-telemetry-flowing: {command: /usr/local/bin/check-yard-telemetry, interval: 15}
-  historian-replication-ok: {command: /usr/local/bin/check-historian-replication, interval: 30}
+  yard-telemetry-flowing: {proposition: yard-telemetry-flowing, command: /usr/local/bin/check-yard-telemetry, interval: 15}
+  historian-replication-ok: {proposition: historian-replication-ok, command: /usr/local/bin/check-historian-replication, interval: 30}
   vendor-jump-healthy: {command: /usr/local/bin/check-vendor-jump, interval: 30}
   soc-feed-healthy: {command: /usr/local/bin/check-soc-feed, interval: 30}
   surge-incident-ticketed: {command: /usr/local/bin/check-surge-ticket, interval: 60}
@@ -311,56 +311,138 @@ vulnerabilities:
     technical: true
     class: CWE-306
 
-metrics:
-  blue-customs-integrity:
-    type: CONDITIONAL
-    max-score: 100
-    condition: manifest-integrity-ok
-  blue-yard-safety:
-    type: CONDITIONAL
-    max-score: 100
-    condition: crane-safe-mode
-  blue-telemetry-retention:
-    type: CONDITIONAL
-    max-score: 100
-    condition: yard-telemetry-flowing
-  blue-ops-brief:
-    type: MANUAL
-    max-score: 50
-    artifact: true
-  red-manifest-impact:
-    type: CONDITIONAL
-    max-score: 100
-    condition: tampered-manifest-observed
-
-evaluations:
-  blue-surge-resilience:
-    metrics: [blue-customs-integrity, blue-yard-safety, blue-telemetry-retention, blue-ops-brief]
-    min-score: 75
-  red-yard-impact:
-    metrics: [red-manifest-impact]
-    min-score: {absolute: 80}
-
-tlos:
-  sustain-safe-throughput:
-    name: Sustain safe throughput
-    evaluation: blue-surge-resilience
-  achieve-yard-disruption:
-    name: Achieve yard disruption
-    evaluation: red-yard-impact
-
-goals:
-  port-blue-goal:
-    tlos: [sustain-safe-throughput]
-  red-cartel-goal:
-    tlos: [achieve-yard-disruption]
+propositions:
+  crane-safe-mode:
+    description: The governed crane-safe-mode observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.yard-hmi]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: crane-safe-mode
+      semantic_ref: urn:aces:observable:crane-safe-mode
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  customs-link-healthy:
+    description: The governed customs-link-healthy observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.customs-gateway]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: customs-link-healthy
+      semantic_ref: urn:aces:observable:customs-link-healthy
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  historian-replication-ok:
+    description: The governed historian-replication-ok observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.historian01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: historian-replication-ok
+      semantic_ref: urn:aces:observable:historian-replication-ok
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  manifest-integrity-ok:
+    description: The governed manifest-integrity-ok observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.manifest-db]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: manifest-integrity-ok
+      semantic_ref: urn:aces:observable:manifest-integrity-ok
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  tampered-manifest-observed:
+    description: The governed tampered-manifest-observed observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.manifest-db]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: tampered-manifest-observed
+      semantic_ref: urn:aces:observable:tampered-manifest-observed
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  yard-telemetry-flowing:
+    description: The governed yard-telemetry-flowing observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.historian01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: yard-telemetry-flowing
+      semantic_ref: urn:aces:observable:yard-telemetry-flowing
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+assertions:
+  crane-safe-mode:
+    proposition: crane-safe-mode
+    role: postcondition
+    polarity: positive
+  customs-link-healthy:
+    proposition: customs-link-healthy
+    role: postcondition
+    polarity: positive
+  historian-replication-ok:
+    proposition: historian-replication-ok
+    role: postcondition
+    polarity: positive
+  manifest-integrity-ok:
+    proposition: manifest-integrity-ok
+    role: postcondition
+    polarity: positive
+  tampered-manifest-observed:
+    proposition: tampered-manifest-observed
+    role: postcondition
+    polarity: positive
+  yard-telemetry-flowing:
+    proposition: yard-telemetry-flowing
+    role: postcondition
+    polarity: positive
+  pre-tampered-manifest-observed:
+    proposition: tampered-manifest-observed
+    role: precondition
+    polarity: positive
+evidence_requirements:
+  objective-truth-evidence:
+    description: Capture evidence used to decide authored proposition assertions.
+    source_refs:
+    - nodes.manifest-db
+    - nodes.historian01
+    - nodes.customs-gateway
+    - nodes.yard-hmi
+    scope: authored objective, event, workflow, and participant assertion evaluation
+    boundary_kind: assertion_evaluation
+    channel: log
+    artifact_role: proposition_truth_evidence
+    media_types: [application/json]
+    sensitivity: plain
+    redaction: redact_secrets
+    integrity: checksum
+    retention: study_lifetime
+    loss_disclosure: required
 
 entities:
   port-blue:
     name: Port Authority Blue Team
     role: Blue
     mission: Maintain customs integrity and safe yard operations during the surge
-    tlos: [sustain-safe-throughput]
     entities:
       it:
         name: Port IT
@@ -407,25 +489,25 @@ events:
   customs-surge-event:
     injects: [customs-priority-ticket]
   yard-standdown:
-    conditions: [tampered-manifest-observed]
+    assertions: [pre-tampered-manifest-observed]
     injects: [safety-standdown]
 
 scripts:
   arrival-phase:
-    start-time: 0
-    end-time: 2 hour
+    start_time: 0
+    end_time: 2 hour
     speed: 1
     events:
       vessel-arrival: 15 min
   customs-surge-phase:
-    start-time: 2 hour
-    end-time: 4 hour
+    start_time: 2 hour
+    end_time: 4 hour
     speed: 1
     events:
       customs-surge-event: 150 min
   yard-disruption-phase:
-    start-time: 4 hour
-    end-time: 7 hour
+    start_time: 4 hour
+    end_time: 7 hour
     speed: 1
     events:
       yard-standdown: 5 hour
@@ -452,10 +534,12 @@ content:
     target: customs-gateway
     format: json
     items:
-      - name: hold-HZ-204.json
+      - name: hold-hz-204
+        display_name: hold-HZ-204.json
         tags: [customs, hold]
         description: Hold order for hazardous container HZ-204
-      - name: hold-HZ-991.json
+      - name: hold-hz-991
+        display_name: hold-HZ-991.json
         tags: [customs, hold]
         description: Hold order for hazardous container HZ-991
   yard-camera-clips:
@@ -550,7 +634,6 @@ agents:
       services: [shipping-portal-https, vendor-jump-ssh, yard-hmi-web]
       accounts: [vendor-tech]
     allowed_subnets: [public-edge, vendor-net, yard-ot, terminal-it]
-    reward_calculator: OTImpact
   blue-yard-agent:
     entity: port-blue.yard-ops
     actions: [Inspect, Isolate, Restore, Validate]
@@ -561,7 +644,6 @@ agents:
       services: [yard-hmi-rdp, crane-opcua, historian-ui]
       accounts: [historian-svc]
     allowed_subnets: [yard-ot, safety-net, backup-net]
-    reward_calculator: SafetyFirst
   blue-soc-agent:
     entity: port-blue.incident-command
     actions: [Monitor, Triage, Coordinate, Recover]
@@ -572,7 +654,6 @@ agents:
       services: [port-soc-ui, shipping-portal-https, tos-https]
       accounts: [harbor-master, customs-officer]
     allowed_subnets: [security-net, terminal-it, customs-link, backup-net]
-    reward_calculator: CoordinatedResponse
 
 objectives:
   red-corrupt-manifests:
@@ -580,8 +661,7 @@ objectives:
     actions: [Phish, Tamper]
     targets: [cargo-manifests, manifest-db, portal-to-manifest]
     success:
-      conditions: [tampered-manifest-observed]
-      metrics: [red-manifest-impact]
+      assertions: [tampered-manifest-observed]
     window:
       stories: [surge-day]
       scripts: [arrival-phase, customs-surge-phase]
@@ -589,7 +669,7 @@ objectives:
     entity: red-cartel
     targets: [yard-hmi, crane-plc, hmi-manages-crane]
     success:
-      goals: [red-cartel-goal]
+      assertions: [tampered-manifest-observed]
     depends_on: [red-corrupt-manifests]
     window:
       stories: [surge-day]
@@ -600,8 +680,7 @@ objectives:
     actions: [Monitor, Triage, Coordinate]
     targets: [customs-gateway, manifest-db, customs-federates-port]
     success:
-      metrics: [blue-customs-integrity]
-      conditions: [customs-link-healthy]
+      assertions: [customs-link-healthy, manifest-integrity-ok]
     window:
       stories: [surge-day]
       scripts: [arrival-phase, customs-surge-phase]
@@ -618,7 +697,7 @@ objectives:
       - nodes.crane-plc.services.crane-opcua
       - infrastructure.yard-ot.acls.allow-yard-control
     success:
-      goals: [port-blue-goal]
+      assertions: [crane-safe-mode, yard-telemetry-flowing]
     depends_on: [blue-maintain-customs-integrity, red-degrade-yard-ops]
     window:
       stories: [surge-day]
@@ -635,8 +714,7 @@ objectives:
       - nodes.historian01.services.historian-ui
       - infrastructure.yard-ot.acls.allow-yard-control
     success:
-      conditions: [yard-telemetry-flowing, historian-replication-ok]
-      metrics: [blue-telemetry-retention]
+      assertions: [yard-telemetry-flowing, historian-replication-ok]
     depends_on: [red-degrade-yard-ops]
     window:
       stories: [surge-day]
@@ -656,22 +734,27 @@ workflows:
       maintain-integrity:
         type: objective
         objective: blue-maintain-customs-integrity
-        next: assess-yard
+        on_success: assess-yard
       assess-yard:
-        type: if
+        type: decision
         when:
-          conditions: [tampered-manifest-observed]
+          assertions: [pre-tampered-manifest-observed]
         then: fanout-blackstart
         else: finish
       fanout-blackstart:
         type: parallel
         branches: [restore-yard, validate-telemetry]
-        next: finish
+        join: blackstart-joined
       restore-yard:
         type: objective
         objective: blue-blackstart-yard
+        on_success: blackstart-joined
       validate-telemetry:
         type: objective
         objective: blue-validate-yard-telemetry
+        on_success: blackstart-joined
+      blackstart-joined:
+        type: join
+        next: finish
       finish:
         type: end

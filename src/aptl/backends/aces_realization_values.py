@@ -6,6 +6,11 @@ from collections.abc import Mapping
 from typing import Any
 
 from aptl.backends.aces_profiles import normalize_identifier
+from aptl.core.deployment.realization import (
+    LOOPBACK_HOST_IP,
+    DeploymentPublishedPort,
+    DeploymentServicePort,
+)
 
 PLACEMENT_TARGET_KEYS = {
     "account-placement": ("target_address", "node_name"),
@@ -47,34 +52,103 @@ def resource_name(address: str, payload: Mapping[str, Any]) -> str:
 def service_names(node_spec: Mapping[str, Any] | None) -> set[str]:
     """Extract named services from a node specification."""
 
-    if node_spec is None:
-        return set()
-    services = node_spec.get("services")
-    if not isinstance(services, list):
-        return set()
-    names: set[str] = set()
-    for service in services:
-        if not isinstance(service, Mapping):
-            continue
-        name = service.get("name")
-        if isinstance(name, str) and name.strip():
-            names.add(name)
-    return names
+    return {service.name for service in service_ports(node_spec) if service.name}
 
 
-def health_status(node_spec: Mapping[str, Any] | None) -> str | None:
-    """Extract the declared health status from a node's runtime block.
+def service_ports(
+    node_spec: Mapping[str, Any] | None,
+) -> tuple[DeploymentServicePort, ...]:
+    """Extract a node's declared transport bindings from its compiled payload.
 
-    ACES carries the SDL ``runtime.health`` declaration into the compiled node
-    payload at ``spec.node.runtime.health.status``. The ``status`` is the
-    realizable expectation (e.g. ``healthy``) compared against live container
-    health; the sibling ``description`` is prose and is not realized.
+    ACES carries SDL ``nodes.<n>.services`` into the compiled node payload at
+    ``spec.node.services`` as ``ServicePort`` dumps, each carrying ``port`` and
+    ``protocol`` alongside ``name``. A service whose port is a variable that
+    never got substituted is not realizable, so it is dropped rather than
+    guessed at.
     """
 
-    runtime = node_spec.get("runtime") if isinstance(node_spec, Mapping) else None
-    health = runtime.get("health") if isinstance(runtime, Mapping) else None
-    status = health.get("status") if isinstance(health, Mapping) else None
-    return status if isinstance(status, str) and status.strip() else None
+    if not isinstance(node_spec, Mapping):
+        return ()
+    raw_services = node_spec.get("services")
+    if not isinstance(raw_services, list):
+        return ()
+    services: list[DeploymentServicePort] = []
+    for raw in raw_services:
+        if not isinstance(raw, Mapping):
+            continue
+        port = _port_number(raw.get("port"))
+        if port is None:
+            continue
+        services.append(
+            DeploymentServicePort(
+                name=_nonempty_string(raw.get("name")) or "",
+                port=port,
+                protocol=_protocol(raw.get("protocol")),
+            )
+        )
+    return tuple(services)
+
+
+def published_ports(
+    node_spec: Mapping[str, Any] | None,
+) -> tuple[DeploymentPublishedPort, ...]:
+    """Extract a node's host-published port bindings from its compiled payload.
+
+    ACES carries SDL ``nodes.<n>.runtime.network.published_ports`` into the
+    compiled node payload at ``spec.node.runtime.network.published_ports`` as
+    ``RuntimePublishedPort`` dumps. This is the host-facing exposure surface and
+    is kept distinct from ``services`` (container-facing): neither is inferred
+    from the other. An omitted ``host_ip`` binds loopback, never all interfaces.
+    """
+
+    if not isinstance(node_spec, Mapping):
+        return ()
+    runtime = mapping(node_spec.get("runtime"))
+    network = mapping(runtime.get("network")) if runtime is not None else None
+    raw_ports = network.get("published_ports") if network is not None else None
+    if not isinstance(raw_ports, list):
+        return ()
+    bindings: list[DeploymentPublishedPort] = []
+    for raw in raw_ports:
+        if not isinstance(raw, Mapping):
+            continue
+        container_port = _port_number(raw.get("container_port"))
+        if container_port is None:
+            continue
+        bindings.append(
+            DeploymentPublishedPort(
+                container_port=container_port,
+                protocol=_protocol(raw.get("protocol")),
+                host_ip=_nonempty_string(raw.get("host_ip")) or LOOPBACK_HOST_IP,
+                host_port=_port_number(raw.get("host_port")),
+            )
+        )
+    return tuple(bindings)
+
+
+def _port_number(value: object) -> int | None:
+    """Return a realizable TCP/UDP port, or ``None`` for absent/unsubstituted.
+
+    ACES types a port as ``int | str`` so an authored ``${var}`` survives
+    compilation. A port that is still a variable at realization time cannot be
+    bound, and inventing one would be exactly the silent approximation SEM-218
+    forbids — so it yields ``None`` and the binding is dropped.
+    """
+
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        return None
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def _protocol(value: object) -> str:
+    """Return a normalized transport protocol, defaulting to ACES's own ``tcp``."""
+
+    protocol = _nonempty_string(value)
+    return protocol.lower() if protocol is not None else "tcp"
 
 
 def network_names(infra_spec: Mapping[str, Any] | None) -> set[str]:

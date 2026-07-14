@@ -29,13 +29,48 @@ _WORKFLOW_SCENARIO = dedent(
         conditions: {health: ops}
         roles: {ops: operator}
     conditions:
-      health: {command: /bin/true, interval: 15}
+      health:
+        proposition: health
+        command: /bin/true
+        interval: 15
     entities:
       blue: {role: blue}
+    propositions:
+      health:
+        description: The governed health observation is true for the addressed scenario subject.
+        subjects: [nodes.vm]
+        basis: observed_state
+        predicate:
+          kind: boolean
+          property: health
+          semantic_ref: "urn:aces:observable:health"
+          operator: equals
+          expected: true
+        quantifier: all
+        evidence_requirements: [objective-truth-evidence]
+    assertions:
+      health:
+        proposition: health
+        role: postcondition
+        polarity: positive
+    evidence_requirements:
+      objective-truth-evidence:
+        description: Capture evidence used to decide authored proposition assertions.
+        source_refs: [nodes.vm]
+        scope: authored objective assertion evaluation
+        boundary_kind: assertion_evaluation
+        channel: log
+        artifact_role: proposition_truth_evidence
+        media_types: [application/json]
+        sensitivity: plain
+        redaction: redact_secrets
+        integrity: checksum
+        retention: study_lifetime
+        loss_disclosure: required
     objectives:
       validate:
         entity: blue
-        success: {conditions: [health]}
+        success: {assertions: [health]}
     workflows:
       response:
         start: run
@@ -43,7 +78,7 @@ _WORKFLOW_SCENARIO = dedent(
           run:
             type: objective
             objective: validate
-            on-success: finish
+            on_success: finish
           finish: {type: end}
     """
 )
@@ -194,13 +229,48 @@ def test_drive_failed_objective_with_on_failure_successor():
                 conditions: {health: ops}
                 roles: {ops: operator}
             conditions:
-              health: {command: /bin/true, interval: 15}
+              health:
+                proposition: health
+                command: /bin/true
+                interval: 15
             entities:
               blue: {role: blue}
+            propositions:
+              health:
+                description: The governed health observation is true for the addressed scenario subject.
+                subjects: [nodes.vm]
+                basis: observed_state
+                predicate:
+                  kind: boolean
+                  property: health
+                  semantic_ref: "urn:aces:observable:health"
+                  operator: equals
+                  expected: true
+                quantifier: all
+                evidence_requirements: [objective-truth-evidence]
+            assertions:
+              health:
+                proposition: health
+                role: postcondition
+                polarity: positive
+            evidence_requirements:
+              objective-truth-evidence:
+                description: Capture evidence used to decide authored proposition assertions.
+                source_refs: [nodes.vm]
+                scope: authored objective assertion evaluation
+                boundary_kind: assertion_evaluation
+                channel: log
+                artifact_role: proposition_truth_evidence
+                media_types: [application/json]
+                sensitivity: plain
+                redaction: redact_secrets
+                integrity: checksum
+                retention: study_lifetime
+                loss_disclosure: required
             objectives:
               validate:
                 entity: blue
-                success: {conditions: [health]}
+                success: {assertions: [health]}
             workflows:
               response:
                 start: run
@@ -208,8 +278,8 @@ def test_drive_failed_objective_with_on_failure_successor():
                   run:
                     type: objective
                     objective: validate
-                    on-success: finish
-                    on-failure: recover
+                    on_success: finish
+                    on_failure: recover
                   finish: {type: end}
                   recover: {type: end}
             """

@@ -25,6 +25,7 @@ from aces_sdl.scenario import Scenario
 from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
 from aptl.validation.techvault_gate import GateCheck
@@ -45,23 +46,71 @@ _IMPORT_LOCK_TIMEOUT_S = 600
 
 
 class _NoStartBackend(object):
-    """Deployment backend stub that refuses to start the lab.
+    """Deployment backend stub that simulates realization without Docker.
 
     The static gate compiles, plans, and interprets a scenario but must never
-    bring up Docker. The realization path (``provisioner.validate``) never calls
-    ``start``; this stub makes an accidental lab launch a loud error instead.
+    bring up Docker. It is an offline conformance check: it proves APTL can
+    represent the typed deployment and satisfy the realization contract, not that
+    containers actually run — so ``start`` is a loud error.
+
+    Since #578, the provisioner builds its runtime snapshot from what the backend
+    is *observed* to have realized (``container_inspect`` / ``host_list_networks``)
+    rather than echoing the plan, and the ACES conformance probe requires that
+    observed snapshot to be non-empty. This stub therefore reports back exactly
+    the topology it was asked to realize — the declared node containers as running
+    and healthy, the declared networks as present — so the offline conformance run
+    observes a faithful realization of the scenario under test. It is a
+    simulation, transparently: it fabricates no lab, and any real lifecycle call
+    (``start``/``stop``/``status``) still raises.
     """
 
-    @staticmethod
-    def realize(realization: object, *, build: bool = True) -> LabResult:
-        """Acknowledge typed realization without starting Docker.
+    project_name = "aptl"
 
-        ACES target conformance probes submit provisioning through the runtime
-        control plane and require a mutated snapshot. The static gate validates
-        that APTL can interpret and represent the typed deployment, but it must
-        not actually start containers.
-        """
+    def __init__(self) -> None:
+        self._container_names: set[str] = set()
+        self._network_names: list[str] = []
+
+    def realize(self, realization: object, *, build: bool = True) -> LabResult:
+        """Record the typed realization as realized without starting Docker."""
+        self._container_names = {
+            node.container_name
+            for node in getattr(realization, "nodes", ())
+            if getattr(node, "container_name", None)
+        }
+        # Report networks under the project-scoped name Compose actually creates
+        # (`<project>_aptl-<stem>`), not the bare declared name, so the offline
+        # observation exercises the same name matching a live run does.
+        self._network_names = [
+            _concrete_network_name(network.name, self.project_name)
+            for network in getattr(realization, "networks", ())
+            if getattr(network, "name", None)
+        ]
         return LabResult(success=True, message="Static validation realization accepted")
+
+    def container_inspect(self, name: str) -> dict[str, object]:
+        """Report a declared node container as running and healthy.
+
+        Only names this stub was asked to realize are reported up; anything else
+        reads as absent, so the observed snapshot mirrors the declared topology
+        rather than blanket-passing every probe.
+        """
+        if name not in self._container_names:
+            return {}
+        # Platform is linux because that is what APTL's Docker Compose backend
+        # actually produces — every realized node is a Linux container. This is
+        # the honest observed OS family, not a convenience: a node declared
+        # os: windows as an EXACT concern genuinely cannot be honoured by a Linux
+        # container, and the conformance gate rejecting that is correct behaviour,
+        # here as in a live run.
+        return {
+            "State": {"Running": True, "Health": {"Status": "healthy"}},
+            "Platform": "linux",
+            "NetworkSettings": {"Networks": {}},
+        }
+
+    def host_list_lab_networks(self, name_prefix: str) -> list[str]:
+        """Report the declared scenario networks as present, project-scoped."""
+        return list(self._network_names)
 
     @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:

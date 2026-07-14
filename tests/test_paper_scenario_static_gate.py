@@ -60,13 +60,18 @@ def _paper_plan():
 
 
 def _assert_paper_scoring_chain_is_not_supported(plan) -> None:
+    # ADR-073 removes the deprecated `metrics`/`evaluations`/`tlos`/`goals`/
+    # `scoring` chain from the authored SDL surface entirely, so the planner no
+    # longer emits diagnostics for it. Objective success is now authored via
+    # `propositions:`/`assertions:` (consumed structurally by
+    # `objectives.*.success.assertions`), but APTL's evaluator manifest
+    # deliberately narrows its declared runtime-evaluated surface to
+    # `conditions`/`objectives` only (issue #749) -- it does not claim to
+    # evaluate raw `propositions`/`assertions` sections itself.
     diagnostics = {(d.code, d.address) for d in plan.diagnostics}
     assert diagnostics == {
-        ("evaluator.unsupported-section", "evaluation.metrics"),
-        ("evaluator.unsupported-section", "evaluation.evaluations"),
-        ("evaluator.unsupported-section", "evaluation.tlos"),
-        ("evaluator.unsupported-section", "evaluation.goals"),
-        ("evaluator.scoring-unsupported", "evaluation.scoring"),
+        ("evaluator.unsupported-section", "evaluation.propositions"),
+        ("evaluator.unsupported-section", "evaluation.assertions"),
     }
 
 
@@ -88,9 +93,13 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
     assert binding["command"]["argv"][:2] == ["bash", "-lc"]
 
     # Evidence surfaces are authored ACES evidence requirements, not content.
+    # `objective-truth-evidence` is added by the ADR-073 migration: an
+    # observed-state proposition must cite at least one evidence requirement,
+    # so the compiled objective-success surface gets its own requirement id.
     assert set(scenario.evidence_requirements) == {
         "wazuh-evidence",
         "boundary-check-evidence",
+        "objective-truth-evidence",
     }
     assert set(scenario.content) == {"task-brief"}
     assert "participant-observation" not in scenario.evidence_requirements
@@ -196,8 +205,12 @@ def test_paper_observation_boundary_hides_evaluator_and_negative_surfaces():
         config=config,
     )
     spec = specs["participant.behavior.paper-agent"]
+    # `action_instance_id` must be a canonical compiled address (dotted
+    # segments), matching how `drive_participant_action` mints one in
+    # production: f"{participant_address}.{uuid4().hex}".
+    action_instance_id = "participant.behavior.paper-agent.probe-0001"
     entries = _action_snapshot_entries(
-        "participant.behavior.paper-agent", spec, "probe-0001", success=True
+        "participant.behavior.paper-agent", spec, action_instance_id, success=True
     )
     boundary = entries[spec.observation_boundary_address].payload
 
@@ -212,7 +225,7 @@ def test_paper_observation_boundary_hides_evaluator_and_negative_surfaces():
     ]
     # They remain as evaluator-only evidence alongside the action instance.
     assert boundary["evidence_refs"] == [
-        "probe-0001",
+        action_instance_id,
         "boundary-negative:tcp:172.20.2.11:5432",
         "boundary-negative:tcp:172.20.2.30:55000",
     ]

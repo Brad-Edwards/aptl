@@ -13,7 +13,9 @@ from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
+    DeploymentPublishedPort,
     DeploymentRealizationSpec,
+    DeploymentServicePort,
 )
 
 
@@ -27,12 +29,17 @@ class NodeRealization(object):
     profiles: tuple[str, ...]
     backend_services: tuple[str, ...]
     container_name: str | None
-    services: tuple[str, ...]
+    services: tuple[DeploymentServicePort, ...]
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
     static_address_assignments: tuple[tuple[str, str], ...] = ()
-    declared_health: str | None = None
+    published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
+
+    def service_names(self) -> tuple[str, ...]:
+        """Return the declared service names, for profile/alias matching."""
+
+        return tuple(sorted({s.name for s in self.services if s.name}))
 
     def details(self) -> dict[str, object]:
         details: dict[str, object] = {
@@ -42,14 +49,14 @@ class NodeRealization(object):
             "profiles": list(self.profiles),
             "backend_services": list(self.backend_services),
             "container_name": self.container_name,
-            "services": list(self.services),
+            "services": [service.details() for service in self.services],
             "networks": list(self.networks),
             "static_addresses": list(self.static_addresses),
             "static_address_assignments": [
                 {"network": network, "ipv4_address": address}
                 for network, address in self.static_address_assignments
             ],
-            "declared_health": self.declared_health,
+            "published_ports": [binding.details() for binding in self.published_ports],
         }
         if self.image is not None:
             details["image"] = self.image.details()
@@ -200,4 +207,6 @@ def _deployment_node_realization(
             )
             for network in node.networks
         ),
+        services=node.services,
+        published_ports=node.published_ports,
     )

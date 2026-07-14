@@ -334,6 +334,7 @@ services:
         inspect_payload = json.dumps(
             [
                 {
+                    "State": {"Running": True},
                     "NetworkSettings": {
                         "Networks": {
                             "test_aptl-redteam": {},
@@ -411,7 +412,9 @@ services:
                 ),
             ),
         )
-        inspect_payload = json.dumps([{"NetworkSettings": {"Networks": {}}}])
+        inspect_payload = json.dumps(
+            [{"State": {"Running": True}, "NetworkSettings": {"Networks": {}}}]
+        )
         network_ls_calls = 0
 
         def fake_run(cmd, **kwargs):
@@ -555,9 +558,10 @@ services:
         inspect_payload = json.dumps(
             [
                 {
+                    "State": {"Running": True},
                     "NetworkSettings": {
                         "Networks": {"test_aptl-dmz": {"IPAddress": "172.20.1.99"}}
-                    }
+                    },
                 }
             ]
         )
@@ -674,6 +678,10 @@ services:
             networks=(),
         )
 
+        inspect_payload = json.dumps(
+            [{"State": {"Running": True}, "NetworkSettings": {"Networks": {}}}]
+        )
+
         def fake_run(cmd, **kwargs):
             del kwargs
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
@@ -684,6 +692,8 @@ services:
                     stdout="test_aptl-internal\n",
                     stderr="",
                 )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run) as mock_run:

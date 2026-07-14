@@ -41,13 +41,14 @@ from aptl.backends.aces_realization_model import (
     _single_or_none,
 )
 from aptl.backends.aces_realization_values import (
-    health_status as _health_status,
     mapping as _mapping,
     network_names as _network_names,
     optional_bool as _optional_bool,
     optional_string as _optional_string,
+    published_ports as _published_ports,
     resource_name as _resource_name,
     service_names as _service_names,
+    service_ports as _service_ports,
     static_address_assignments as _static_address_assignments,
     static_addresses as _static_addresses,
 )
@@ -304,11 +305,11 @@ def _realize_node(
         profiles=tuple(sorted(profiles)),
         backend_services=tuple(sorted(backend_services)),
         container_name=_container_name(profile_index, backend_services),
-        services=tuple(sorted(_service_names(node_spec))),
+        services=_service_ports(node_spec),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
         static_address_assignments=_static_address_assignments(infra_spec),
-        declared_health=_health_status(node_spec),
+        published_ports=_published_ports(node_spec),
         image=resolve_node_image(
             resource=resource,
             payload=payload,

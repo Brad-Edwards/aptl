@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aces_contracts.runtime_state import OperationState, RuntimeSnapshot
-from aces_processor.semantics.realization import realization_disclosure
-from aces_runtime.control_plane import RuntimeControlPlane
+from aces_contracts.runtime_state import RuntimeSnapshot
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
 from aces_sdl import SDLError, parse_sdl_file
@@ -169,13 +167,14 @@ def _run_execution_plan(
     run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
 ) -> AcesStartOutcome:
-    """Apply a planned ACES scenario through the runtime control plane.
+    """Apply a planned ACES scenario through ACES's own runtime manager.
 
     Fail closed on every planner error. Scenario start routes provisioning,
     orchestration (when the scenario carries workflows), and evaluation (when
     the scenario carries observable evaluation resources) through the ACES
-    runtime control plane so APTL's published backend adapters record portable
-    contract state.
+    runtime manager, so APTL's published backend adapters record portable
+    contract state and ACES runs its own SEM-218 realization gate over the
+    result.
     """
     blocking = [diag for diag in execution_plan.diagnostics if diag.is_error]
     if blocking:
@@ -188,20 +187,19 @@ def _run_execution_plan(
             selected_profiles=[],
             scenario_path=scenario_path,
         )
-    control_plane = RuntimeControlPlane(
-        target, initial_snapshot=execution_plan.base_snapshot
+    realization_details, selected_profiles = _interpret_realization(
+        target, execution_plan
     )
-    failure, realization_details, selected_profiles = _apply_provisioning_and_orchestration(
-        control_plane,
-        execution_plan,
+    failure, snapshot = _apply_execution_plan(
         target,
+        execution_plan,
         run_store=run_store,
         run_id=run_id,
     )
     if failure is not None:
         return AcesStartOutcome(
             lab_result=failure,
-            final_snapshot=_current_runtime_snapshot(control_plane),
+            final_snapshot=snapshot,
             realization_details=realization_details,
             selected_profiles=selected_profiles,
             scenario_path=scenario_path,
@@ -211,93 +209,54 @@ def _run_execution_plan(
             success=True,
             message=f"Lab started through ACES runtime target '{APTL_ACES_TARGET_NAME}'",
         ),
-        final_snapshot=_current_runtime_snapshot(control_plane),
+        final_snapshot=snapshot,
         realization_details=realization_details,
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
     )
 
 
-def _apply_provisioning_and_orchestration(
-    control_plane: RuntimeControlPlane,
-    execution_plan: "ExecutionPlan",
+def _apply_execution_plan(
     target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
     *,
     run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
-) -> tuple[LabResult | None, dict[str, Any], list[str]]:
-    """Submit provisioning, orchestration, and evaluation control-plane phases.
+) -> tuple[LabResult | None, RuntimeSnapshot]:
+    """Apply the plan through ACES's own runtime manager, then drive workflows.
 
-    Returns a triple of (failure | None, realization_details, selected_profiles).
-    Failure is a failed LabResult for the first phase that fails, else None.
+    ``RuntimeManager.apply`` is the only path that threads the compiled
+    ``realization_requirements`` and the provisioning plan into the backend call
+    boundary, so it is the only path on which ACES runs the SEM-218
+    non-approximation gate and attaches the realization-provenance ledger to the
+    returned snapshot. APTL used to submit each phase through
+    ``RuntimeControlPlane`` — which never passes those — and then hand-rolled a
+    second, parallel disclosure pass plus a snapshot write-back to compensate.
+    Going through the manager deletes that parallel path outright: the gate and
+    the provenance ledger are ACES's, not APTL's (issue #578, ADR-046).
 
-    ``realization_details`` and ``selected_profiles`` are populated (REP-001 /
-    GAP 1) by interpreting the provisioning plan through the same public path
-    the provisioner uses, so the reproducibility record carries real
-    realization evidence rather than empty placeholders.
+    Returns ``(failure | None, snapshot)``.
     """
-    realization_details, selected_profiles = _interpret_realization(
-        target, execution_plan
+
+    manager = RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot)
+    apply_result = manager.apply(execution_plan)
+    snapshot = apply_result.snapshot
+    if not apply_result.success:
+        return (
+            LabResult(
+                success=False,
+                error=render_aces_diagnostics(list(apply_result.diagnostics)),
+            ),
+            snapshot,
+        )
+    evaluation_results = _evaluation_results(target, execution_plan)
+    failure = _drive_orchestrator_workflows(
+        target.orchestrator,
+        evaluation_results,
+        run_store=run_store,
+        run_id=run_id,
     )
-    failure = _run_control_plane_phases(control_plane, execution_plan)
-    if failure is None:
-        evaluation_results = _evaluation_results(target, execution_plan)
-        failure = _drive_orchestrator_workflows(
-            target.orchestrator,
-            evaluation_results,
-            run_store=run_store,
-            run_id=run_id,
-        )
-    return failure, realization_details, selected_profiles
-
-
-def _run_control_plane_phases(
-    control_plane: RuntimeControlPlane,
-    execution_plan: "ExecutionPlan",
-) -> LabResult | None:
-    """Apply provisioning, disclosure, orchestration, and evaluation phases."""
-
-    failure = _apply_phase(
-        control_plane,
-        lambda: control_plane.submit_provisioning(execution_plan.provisioning),
-    )
-    if failure is None:
-        failure = _apply_realization_disclosure(control_plane, execution_plan)
-    if failure is None:
-        failure = _apply_optional_control_plane_phases(control_plane, execution_plan)
-    return failure
-
-
-def _apply_optional_control_plane_phases(
-    control_plane: RuntimeControlPlane,
-    execution_plan: "ExecutionPlan",
-) -> LabResult | None:
-    """Submit orchestration/evaluation phases only when the plan has work."""
-
-    failure = None
-    for submit in _optional_phase_submissions(control_plane, execution_plan):
-        failure = _apply_phase(control_plane, submit)
-        if failure is not None:
-            break
-    return failure
-
-
-def _optional_phase_submissions(
-    control_plane: RuntimeControlPlane,
-    execution_plan: "ExecutionPlan",
-) -> list[Callable[[], object]]:
-    """Build deferred submissions for optional ACES phases."""
-
-    phases: list[Callable[[], object]] = []
-    if execution_plan.orchestration.actionable_operations:
-        phases.append(
-            lambda: control_plane.submit_orchestration(execution_plan.orchestration),
-        )
-    if execution_plan.evaluation.actionable_operations:
-        phases.append(
-            lambda: control_plane.submit_evaluation(execution_plan.evaluation),
-        )
-    return phases
+    return failure, snapshot
 
 
 def _evaluation_results(
@@ -337,93 +296,6 @@ def _drive_orchestrator_workflows(
     return failure
 
 
-def _current_runtime_snapshot(control_plane: object) -> RuntimeSnapshot:
-    """Return the current control-plane snapshot across ACES API shapes."""
-
-    snapshot = getattr(control_plane, "snapshot", None)
-    if not isinstance(snapshot, RuntimeSnapshot):
-        snapshot = _snapshot_from_getter(control_plane)
-    if not isinstance(snapshot, RuntimeSnapshot):
-        snapshot = RuntimeSnapshot()
-    return snapshot
-
-
-def _snapshot_from_getter(control_plane: object) -> RuntimeSnapshot | None:
-    """Read a runtime snapshot from legacy/getter ACES control-plane APIs."""
-
-    snapshot = None
-    get_snapshot = getattr(control_plane, "get_snapshot", None)
-    if callable(get_snapshot):
-        returned = get_snapshot()
-        if isinstance(returned, RuntimeSnapshot):
-            snapshot = returned
-        else:
-            snapshot = getattr(returned, "snapshot", None)
-    if not isinstance(snapshot, RuntimeSnapshot):
-        snapshot = None
-    return snapshot
-
-
-def _store_runtime_snapshot(control_plane: object, snapshot: RuntimeSnapshot) -> None:
-    """Persist a replacement snapshot when the control-plane object supports it."""
-
-    public_snapshot = getattr(control_plane, "snapshot", None)
-    if isinstance(public_snapshot, RuntimeSnapshot):
-        try:
-            setattr(control_plane, "snapshot", snapshot)
-        except AttributeError:
-            pass
-    if hasattr(control_plane, "_snapshot"):
-        setattr(control_plane, "_snapshot", snapshot)
-    store = getattr(control_plane, "_store", None)
-    save_snapshot = getattr(store, "save_snapshot", None)
-    if callable(save_snapshot):
-        save_snapshot(snapshot)
-
-
-def _realization_requirements(execution_plan: object) -> tuple[object, ...]:
-    """Return compiled SEM-218 realization requirements when present."""
-
-    model = getattr(execution_plan, "model", None)
-    requirements = getattr(model, "realization_requirements", ())
-    try:
-        return tuple(requirements or ())
-    except TypeError:
-        return ()
-
-
-def _apply_realization_disclosure(
-    control_plane: object,
-    execution_plan: object,
-) -> LabResult | None:
-    """Run ACES non-approximation disclosure after provisioning applies."""
-
-    requirements = _realization_requirements(execution_plan)
-    if not requirements:
-        return None
-    snapshot = _current_runtime_snapshot(control_plane)
-    diagnostics, provenance = realization_disclosure(
-        requirements,
-        execution_plan.provisioning,
-        snapshot,
-    )
-    if diagnostics:
-        return LabResult(
-            success=False,
-            error=render_aces_diagnostics(list(diagnostics)),
-        )
-    if provenance:
-        next_snapshot = snapshot.with_entries(
-            dict(snapshot.entries),
-            realization_provenance=(
-                *snapshot.realization_provenance,
-                *provenance,
-            ),
-        )
-        _store_runtime_snapshot(control_plane, next_snapshot)
-    return None
-
-
 def _interpret_realization(
     target: RuntimeTarget,
     execution_plan: "ExecutionPlan",
@@ -445,22 +317,3 @@ def _interpret_realization(
     return realization.details(), select_backend_profiles(
         provisioner.config, realization.profiles
     )
-
-
-def _apply_phase(
-    control_plane: RuntimeControlPlane,
-    submit: Callable[[], object],
-) -> LabResult | None:
-    """Submit one control-plane phase; return a failed ``LabResult`` or ``None``.
-
-    Returns ``None`` when the submitted operation succeeded, otherwise a redacted
-    failure ``LabResult`` built from the operation's (or receipt's) diagnostics.
-    """
-    receipt = submit()
-    status = control_plane.get_operation(receipt.operation_id)
-    if status is not None and status.state == OperationState.SUCCEEDED:
-        return None
-    diagnostics = (
-        list(status.diagnostics) if status is not None else list(receipt.diagnostics)
-    )
-    return LabResult(success=False, error=render_aces_diagnostics(diagnostics))

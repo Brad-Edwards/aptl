@@ -320,6 +320,78 @@ static IP, selected backend, and non-secret provenance rule. Persist it through
 rendered Compose overrides containing unrelated config, `.env` values, or
 secret-bearing service configuration.
 
+## Runtime Service and SEM-218 Execution Addendum
+
+Issue #578 completes runtime-service realization and the SEM-218 execution
+wiring. The public ACES execution owner is `RuntimeManager.apply()`: its backend
+call boundary validates `ApplyResult`, runs `realization_disclosure` with
+`ExecutionPlan.model.realization_requirements`, rejects silent approximation,
+and attaches `RealizationProvenanceEntry` values to the returned
+`RuntimeSnapshot`. APTL must use that path rather than call
+`realization_disclosure` itself, mutate control-plane snapshot internals, or
+reimplement phase ordering and provenance attachment.
+
+The provisioner's returned `RuntimeSnapshot` must describe backend-observed
+realization. `snapshot_after_apply()` currently copies provisioning resource
+payloads from the declared plan and marks them ready; that is suitable only as
+an interim reconciliation helper and is not evidence that a container, service,
+healthcheck, network attachment, or port binding exists. A resource may enter
+the successful snapshot only after the deployment backend has started and
+inspected the concrete project-scoped resource and verified every concern the
+snapshot claims. Backend inspection continues through typed
+`DeploymentBackend` inventory methods; the ACES adapter must not call Docker or
+parse Compose output directly.
+
+Service concepts must remain distinct while they pass through the existing
+`AptlRealization` to `DeploymentRealizationSpec` seam:
+
+- ACES `Node.services` declares container-facing service bindings (name,
+  container port, and transport protocol). It is not a Compose service name, a
+  process-start command, or a host publish.
+- `runtime.health.status` is a required observed state. It is not a healthcheck
+  command. A mapped image or Compose service must provide the actual healthcheck;
+  if `healthy` is required and the backend reports no healthcheck, realization
+  fails rather than treating `running` as equivalent.
+- `runtime.network.published_ports` owns host exposure and preserves host IP,
+  host port, container port, and transport protocol as separate fields. Do not
+  infer host publishing from `Node.services` or hardcode published ports in the
+  endpoint registry. Runtime evidence comes back through backend inventory and
+  the existing `ContainerSnapshot.ports` normalization.
+
+Starting, waiting for, and inspecting declared services belongs inside the
+typed deployment realization operation so a successful `LabResult` means the
+declared service topology is running and its required healthchecks have passed.
+The later lab-orchestration readiness and live-validation gates remain
+independent operational evidence; they must not be the first place a failed
+realization is discovered. Reuse the backend runner, project name and labels,
+timeouts, SSH transport, argv-list construction, host-port probing, and
+`LabResult` / `BackendTimeoutError` envelope. Do not return raw backend stderr
+through diagnostics, logs, API responses, or run records.
+
+Host publishing is also a security decision. Existing SOC and control-plane
+services inherit the loopback-only policy pinned by ADR-034 and
+`tests/test_docker_compose_port_bindings.py`; deliberate target surfaces remain
+separately classified. An omitted host address must not silently become
+all-interface exposure. A new dynamic publish that cannot be classified by the
+existing exposure policy fails closed until that policy is extended. Host-port
+conflicts reuse `src/aptl/core/host_ports.py`; an exact authored binding must be
+rejected when unavailable rather than silently remapped.
+
+Realization provenance uses the ACES `RealizationProvenanceEntry` contract and
+its `author-declared`, `processor-derived`, and `backend-realized` vocabulary.
+APTL must not define a parallel provenance enum or infer processor provenance
+from field values. If the selected ACES dependency does not carry classifier
+provenance through `CompiledRealizationRequirement` into the runtime disclosure
+gate, that dependency contract must be updated before APTL can claim
+processor-derived provenance support.
+
+The extensibility parameter is the per-node typed service binding: ACES resource
+address, backend service/container identity, container endpoint, optional host
+publish, required health state, and non-secret provenance reference. The next
+scenario can vary ports, protocols, host exposure, and health expectations by
+changing compiled input, without editing a scenario-name branch, the endpoint
+registry, or a second Compose parser.
+
 ## Account and Identity Realization Addendum
 
 Issue #577 replaces the account-placement compatibility proof introduced for

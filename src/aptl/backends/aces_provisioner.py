@@ -7,15 +7,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aces_contracts.diagnostics import Diagnostic
-from aces_contracts.planning import ChangeAction, ProvisioningPlan
+from aces_contracts.planning import ProvisioningPlan
 from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
 from aptl.backends.aces_diagnostics import (
     PROVISIONING_ADDRESS,
     diagnostic,
     has_error,
+    realized_changed_addresses,
     snapshot_after_apply,
 )
+from aptl.backends.aces_observation import observe_realization
 from aptl.backends.aces_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -124,11 +126,21 @@ class AptlProvisioner(object):
                     "realization": realization.details(),
                 },
             )
+        # The snapshot must record what the backend realized, not what the plan
+        # asked for: the SEM-218 gate reads the realized value out of it, so
+        # echoing the plan back would make the gate compare the plan against
+        # itself and pass unconditionally (issue #578).
+        observations = observe_realization(
+            self.deployment_backend,
+            realization,
+            plan,
+        )
+        realized_snapshot = snapshot_after_apply(plan, snapshot, observations)
         return ApplyResult(
             success=True,
-            snapshot=snapshot_after_apply(plan, snapshot),
+            snapshot=realized_snapshot,
             diagnostics=diagnostics,
-            changed_addresses=_changed_addresses(plan),
+            changed_addresses=realized_changed_addresses(plan, realized_snapshot),
             details={
                 "profiles": selected_profiles,
                 "realization": realization.details(),
@@ -192,8 +204,3 @@ class AptlProvisioner(object):
                 "APTL provisioner expected an ACES ProvisioningPlan.",
             )
         ]
-
-
-def _changed_addresses(plan: ProvisioningPlan) -> list[str]:
-    """Return addresses whose planned operation changes runtime state."""
-    return [op.address for op in plan.operations if op.action != ChangeAction.UNCHANGED]

@@ -329,6 +329,7 @@ conditions:
     command: /usr/local/bin/check-vpn-auth
     interval: 30
   vendor-session-established:
+    proposition: vendor-session-established
     command: /usr/local/bin/check-vendor-session
     interval: 30
   domain-auth-healthy:
@@ -341,39 +342,48 @@ conditions:
     command: /usr/local/bin/check-exchange-owa
     interval: 30
   phish-mail-delivered:
+    proposition: phish-mail-delivered
     command: /usr/local/bin/check-phish-delivery
     interval: 60
   ehr-api-healthy:
+    proposition: ehr-api-healthy
     command: /usr/local/bin/check-ehr-api
     interval: 15
   clinical-disruption-observed:
+    proposition: clinical-disruption-observed
     command: /usr/local/bin/check-clinical-disruption
     interval: 30
   ehr-db-healthy:
     command: /usr/local/bin/check-postgres
     interval: 15
   phi-staging-observed:
+    proposition: phi-staging-observed
     command: /usr/local/bin/check-staged-phi
     interval: 60
   pacs-archive-healthy:
+    proposition: pacs-archive-healthy
     command: /usr/local/bin/check-pacs
     interval: 15
   radiology-workflow-delayed:
+    proposition: radiology-workflow-delayed
     command: /usr/local/bin/check-radiology-delay
     interval: 30
   device-mesh-healthy:
     command: /usr/local/bin/check-device-mesh
     interval: 30
   backup-catalog-intact:
+    proposition: backup-catalog-intact
     command: /usr/local/bin/check-backup-catalog
     interval: 30
   restore-runbook-ready:
     command: /usr/local/bin/check-restore-runbook
     interval: 60
   soc-pipeline-up:
+    proposition: soc-pipeline-up
     command: /usr/local/bin/check-siem-ingest
     interval: 30
   triage-case-submitted:
+    proposition: triage-case-submitted
     command: /usr/local/bin/check-triage-case
     interval: 60
   vendor-jump-online:
@@ -402,60 +412,209 @@ vulnerabilities:
     technical: true
     class: CWE-732
 
-metrics:
-  blue-ehr-availability:
-    type: CONDITIONAL
-    max-score: 100
-    condition: ehr-api-healthy
-  blue-pacs-availability:
-    type: CONDITIONAL
-    max-score: 100
-    condition: pacs-archive-healthy
-  blue-backup-integrity:
-    type: CONDITIONAL
-    max-score: 100
-    condition: backup-catalog-intact
-  blue-ir-report:
-    type: MANUAL
-    max-score: 50
-    artifact: true
-  red-phi-staging:
-    type: CONDITIONAL
-    max-score: 100
-    condition: phi-staging-observed
-  red-clinical-disruption:
-    type: CONDITIONAL
-    max-score: 100
-    condition: clinical-disruption-observed
-
-evaluations:
-  blue-clinical-resilience:
-    metrics: [blue-ehr-availability, blue-pacs-availability, blue-backup-integrity, blue-ir-report]
-    min-score: 75
-  red-ransom-impact:
-    metrics: [red-phi-staging, red-clinical-disruption]
-    min-score: {percentage: 75}
-
-tlos:
-  sustain-clinical-operations:
-    name: Sustain clinical operations
-    evaluation: blue-clinical-resilience
-  achieve-ransomware-impact:
-    name: Achieve ransomware impact
-    evaluation: red-ransom-impact
-
-goals:
-  hospital-blue-goal:
-    tlos: [sustain-clinical-operations]
-  ransom-crew-goal:
-    tlos: [achieve-ransomware-impact]
+propositions:
+  backup-catalog-intact:
+    description: The governed backup-catalog-intact observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.backup-vault]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: backup-catalog-intact
+      semantic_ref: urn:aces:observable:backup-catalog-intact
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  clinical-disruption-observed:
+    description: The governed clinical-disruption-observed observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.ehr-frontend]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: clinical-disruption-observed
+      semantic_ref: urn:aces:observable:clinical-disruption-observed
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  ehr-api-healthy:
+    description: The governed ehr-api-healthy observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.ehr-frontend]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: ehr-api-healthy
+      semantic_ref: urn:aces:observable:ehr-api-healthy
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  pacs-archive-healthy:
+    description: The governed pacs-archive-healthy observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.pacs01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: pacs-archive-healthy
+      semantic_ref: urn:aces:observable:pacs-archive-healthy
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  phi-staging-observed:
+    description: The governed phi-staging-observed observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.ehr-db]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: phi-staging-observed
+      semantic_ref: urn:aces:observable:phi-staging-observed
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  phish-mail-delivered:
+    description: The governed phish-mail-delivered observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.exchange01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: phish-mail-delivered
+      semantic_ref: urn:aces:observable:phish-mail-delivered
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  radiology-workflow-delayed:
+    description: The governed radiology-workflow-delayed observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.pacs01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: radiology-workflow-delayed
+      semantic_ref: urn:aces:observable:radiology-workflow-delayed
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  soc-pipeline-up:
+    description: The governed soc-pipeline-up observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.siem01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: soc-pipeline-up
+      semantic_ref: urn:aces:observable:soc-pipeline-up
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  triage-case-submitted:
+    description: The governed triage-case-submitted observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.siem01]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: triage-case-submitted
+      semantic_ref: urn:aces:observable:triage-case-submitted
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  vendor-session-established:
+    description: The governed vendor-session-established observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.vpn-gateway]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: vendor-session-established
+      semantic_ref: urn:aces:observable:vendor-session-established
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+assertions:
+  backup-catalog-intact:
+    proposition: backup-catalog-intact
+    role: postcondition
+    polarity: positive
+  clinical-disruption-observed:
+    proposition: clinical-disruption-observed
+    role: postcondition
+    polarity: positive
+  ehr-api-healthy:
+    proposition: ehr-api-healthy
+    role: postcondition
+    polarity: positive
+  pacs-archive-healthy:
+    proposition: pacs-archive-healthy
+    role: postcondition
+    polarity: positive
+  phi-staging-observed:
+    proposition: phi-staging-observed
+    role: postcondition
+    polarity: positive
+  radiology-workflow-delayed:
+    proposition: radiology-workflow-delayed
+    role: postcondition
+    polarity: positive
+  soc-pipeline-up:
+    proposition: soc-pipeline-up
+    role: postcondition
+    polarity: positive
+  triage-case-submitted:
+    proposition: triage-case-submitted
+    role: postcondition
+    polarity: positive
+  vendor-session-established:
+    proposition: vendor-session-established
+    role: postcondition
+    polarity: positive
+  pre-clinical-disruption-observed:
+    proposition: clinical-disruption-observed
+    role: precondition
+    polarity: positive
+  pre-phish-mail-delivered:
+    proposition: phish-mail-delivered
+    role: precondition
+    polarity: positive
+evidence_requirements:
+  objective-truth-evidence:
+    description: Capture evidence used to decide authored proposition assertions.
+    source_refs:
+    - nodes.ehr-frontend
+    - nodes.backup-vault
+    - nodes.exchange01
+    - nodes.siem01
+    - nodes.pacs01
+    - nodes.vpn-gateway
+    - nodes.ehr-db
+    scope: authored objective, event, workflow, and participant assertion evaluation
+    boundary_kind: assertion_evaluation
+    channel: log
+    artifact_role: proposition_truth_evidence
+    media_types: [application/json]
+    sensitivity: plain
+    redaction: redact_secrets
+    integrity: checksum
+    retention: study_lifetime
+    loss_disclosure: required
 
 entities:
   hospital-blue:
     name: Hospital Blue Team
     role: Blue
     mission: Keep patient care and core services available throughout the incident
-    tlos: [sustain-clinical-operations]
     entities:
       soc:
         name: SOC
@@ -498,29 +657,29 @@ events:
   morning-advisory:
     injects: [vendor-advisory]
   phishing-delivery:
-    conditions: [phish-mail-delivered]
+    assertions: [pre-phish-mail-delivered]
     injects: [phishing-wave]
   surgery-pressure:
-    conditions: [clinical-disruption-observed]
+    assertions: [pre-clinical-disruption-observed]
     injects: [surgery-escalation]
 
 scripts:
   pre-surgery:
-    start-time: 0
-    end-time: 2 hour
+    start_time: 0
+    end_time: 2 hour
     speed: ${surgery_day_speed}
     events:
       morning-advisory: 10 min
       phishing-delivery: 45 min
   live-clinic:
-    start-time: 2 hour
-    end-time: 5 hour
+    start_time: 2 hour
+    end_time: 5 hour
     speed: ${surgery_day_speed}
     events:
       surgery-pressure: 3 hour
   recovery-window:
-    start-time: 5 hour
-    end-time: ${recovery_window}
+    start_time: 5 hour
+    end_time: ${recovery_window}
     speed: ${surgery_day_speed}
     events:
       surgery-pressure: 6 hour
@@ -551,10 +710,12 @@ content:
     format: eml
     sensitive: true
     items:
-      - name: payroll-adjustment.eml
+      - name: payroll-adjustment
+        display_name: payroll-adjustment.eml
         tags: [phishing, attachment]
         description: Message crafted to lure helpdesk review
-      - name: vendor-followup.eml
+      - name: vendor-followup
+        display_name: vendor-followup.eml
         tags: [phishing, vendor]
         description: Message impersonating the imaging vendor
   backup-runbook:
@@ -658,7 +819,6 @@ agents:
       services: [smtp-inbound, vpn-portal, vendor-rdp]
       accounts: [vendor-tech]
     allowed_subnets: [internet-edge, vendor-segment, corp-it]
-    reward_calculator: InitialAccessImpact
   red-operator:
     entity: ransom-crew
     actions: [Pivot, Exfiltrate, Encrypt, Disable]
@@ -669,7 +829,6 @@ agents:
       services: [ehr-https, ehr-postgres, dicom-store]
       accounts: [svc-sql, backup-operator]
     allowed_subnets: [clinical-it, backup-net, identity-net]
-    reward_calculator: HybridImpactPwn
   blue-soc-agent:
     entity: hospital-blue.soc
     actions: [Inspect, Triage, Isolate, Escalate]
@@ -680,7 +839,6 @@ agents:
       services: [soc-ui, mail-admin-ui, vpn-portal]
       accounts: [helpdesk-user, vendor-tech]
     allowed_subnets: [security-net, corp-it, vendor-segment]
-    reward_calculator: HybridAvailabilityConfidentiality
   blue-ir-agent:
     entity: hospital-blue.recovery
     actions: [Contain, Restore, ReissueCreds, Validate]
@@ -691,7 +849,6 @@ agents:
       services: [backup-api, backup-nfs, pacs-web-ui]
       accounts: [svc-sql, backup-operator]
     allowed_subnets: [backup-net, clinical-it, identity-net]
-    reward_calculator: RecoveryResilience
 
 objectives:
   red-establish-foothold:
@@ -704,7 +861,7 @@ objectives:
       - infrastructure.corp-it.acls.allow-vendor-support
       - vpn-vendor-support-path
     success:
-      conditions: [vendor-session-established]
+      assertions: [vendor-session-established]
     window:
       stories: [surgery-day]
       scripts: [pre-surgery]
@@ -714,8 +871,7 @@ objectives:
     actions: [Pivot, Exfiltrate]
     targets: [phi-records, ehr-to-database, ehr-db]
     success:
-      conditions: [phi-staging-observed]
-      metrics: [red-phi-staging]
+      assertions: [phi-staging-observed]
     depends_on: [red-establish-foothold]
     window:
       stories: [surgery-day]
@@ -724,7 +880,7 @@ objectives:
     entity: ransom-crew
     targets: [pacs01, radiology-images, pacs-sync-to-backup]
     success:
-      goals: [ransom-crew-goal]
+      assertions: [radiology-workflow-delayed, clinical-disruption-observed]
     depends_on: [red-stage-phi]
     window:
       stories: [surgery-day]
@@ -740,7 +896,7 @@ objectives:
       - nodes.vpn-gateway.services.vpn-portal
       - infrastructure.corp-it.acls.allow-vendor-support
     success:
-      conditions: [soc-pipeline-up, triage-case-submitted]
+      assertions: [soc-pipeline-up, triage-case-submitted]
     window:
       stories: [surgery-day]
       scripts: [pre-surgery, live-clinic]
@@ -749,8 +905,7 @@ objectives:
     actions: [Contain, Restore, Validate]
     targets: [backup-vault, ehr-db, pacs01, backup-manages-ehr]
     success:
-      goals: [hospital-blue-goal]
-      metrics: [blue-backup-integrity]
+      assertions: [ehr-api-healthy, pacs-archive-healthy, backup-catalog-intact]
     depends_on: [blue-detect-and-triage, red-disrupt-radiology]
     window:
       stories: [surgery-day]

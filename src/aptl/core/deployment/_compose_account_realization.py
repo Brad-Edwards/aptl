@@ -62,12 +62,21 @@ class ComposeRealizationAccountMixin(object):
 
         if not accounts:
             return None
-        cmd_timeout = timeout or _ACCOUNT_CMD_TIMEOUT
         targets, errors = provider.plan_account_targets(accounts, nodes)
         if errors:
             return _rejected(errors[0])
+        return self._realize_targets(targets, timeout=timeout or _ACCOUNT_CMD_TIMEOUT)
+
+    def _realize_targets(
+        self,
+        targets: Sequence[provider.AccountTarget],
+        *,
+        timeout: int,
+    ) -> LabResult | None:
+        """Realize each validated target batch; stop at the first failure."""
+
         for target in targets:
-            result = self._realize_account_target(target, timeout=cmd_timeout)
+            result = self._realize_account_target(target, timeout=timeout)
             if result is not None:
                 return result
         return None
@@ -102,20 +111,12 @@ class ComposeRealizationAccountMixin(object):
         """
 
         def probe() -> bool:
-            if (
-                self.container_exec(
-                    container, provider.samba_domain_info(), timeout=timeout
-                ).returncode
-                != 0
-            ):
-                return False
-            return (
-                self.container_exec(
-                    container,
-                    provider.samba_provisioning_complete_probe(),
-                    timeout=timeout,
-                ).returncode
-                == 0
+            """True only when the directory serves AND baseline provisioning is done."""
+
+            return self._probe_rc(
+                container, provider.samba_domain_info(), timeout
+            ) and self._probe_rc(
+                container, provider.samba_provisioning_complete_probe(), timeout
             )
 
         result = wait_for_service(
@@ -125,6 +126,11 @@ class ComposeRealizationAccountMixin(object):
             f"account-provider:{container}",
         )
         return result.ready
+
+    def _probe_rc(self, container: str, cmd: list[str], timeout: int) -> bool:
+        """Return True when a probe command returns a zero exit code."""
+
+        return self.container_exec(container, cmd, timeout=timeout).returncode == 0
 
     def _ensure_groups(
         self,
@@ -294,19 +300,30 @@ class ComposeRealizationAccountMixin(object):
         *,
         timeout: int,
     ) -> str | None:
-        """Return a stable failure reason for one account, or None when verified."""
+        """Return a stable failure reason for one account, or None when verified.
+
+        Each aspect is verified by an exact, field-aware read; ``or`` short-circuits
+        so a later read only runs once the earlier ones pass.
+        """
 
         shown = self.container_exec(
             container, provider.samba_user_show(account.username), timeout=timeout
         )
         if shown.returncode != 0:
             return "user-not-found-after-realize"
-        if account.mail and _show_attr(shown.stdout or "", "mail") != account.mail:
-            return "declared-mail-not-set"
-        if account.disabled is not None and (
-            _parse_disabled(shown.stdout or "") != account.disabled
-        ):
-            return "declared-disabled-state-not-set"
+        reason = _verify_attributes(shown.stdout or "", account)
+        reason = reason or self._verify_memberships(container, account, timeout=timeout)
+        return reason or self._verify_spn(container, account, timeout=timeout)
+
+    def _verify_memberships(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        *,
+        timeout: int,
+    ) -> str | None:
+        """Verify exact, case-insensitive membership in every declared group."""
+
         member = provider.canonical_principal(account.username)
         for group in account.groups:
             members = self.container_exec(
@@ -316,15 +333,43 @@ class ComposeRealizationAccountMixin(object):
                 members.stdout or ""
             ):
                 return "declared-group-membership-missing"
-        if account.spn:
-            listed = self.container_exec(
-                container, provider.samba_spn_list(account.username), timeout=timeout
-            )
-            if listed.returncode != 0 or account.spn not in _parse_spns(
-                listed.stdout or ""
-            ):
-                return "declared-spn-not-set"
         return None
+
+    def _verify_spn(
+        self,
+        container: str,
+        account: DeploymentAccountRealization,
+        *,
+        timeout: int,
+    ) -> str | None:
+        """Verify the declared SPN is present by exact match (when one is declared)."""
+
+        if not account.spn:
+            return None
+        listed = self.container_exec(
+            container, provider.samba_spn_list(account.username), timeout=timeout
+        )
+        if listed.returncode != 0 or account.spn not in _parse_spns(
+            listed.stdout or ""
+        ):
+            return "declared-spn-not-set"
+        return None
+
+
+def _verify_attributes(
+    user_show_stdout: str,
+    account: DeploymentAccountRealization,
+) -> str | None:
+    """Verify the declared, explicitly-authored non-secret attributes from `user show`."""
+
+    if account.mail and _show_attr(user_show_stdout, "mail") != account.mail:
+        return "declared-mail-not-set"
+    if (
+        account.disabled is not None
+        and _parse_disabled(user_show_stdout) != account.disabled
+    ):
+        return "declared-disabled-state-not-set"
+    return None
 
 
 # ACCOUNTDISABLE bit in the AD userAccountControl attribute (512 = enabled

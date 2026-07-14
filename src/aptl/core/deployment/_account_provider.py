@@ -144,23 +144,41 @@ def _nodes_by_address(
     return by_address
 
 
+_MISSING_NODE = object()
+
+
 def _resolve_target(
     account: DeploymentAccountRealization,
     by_address: Mapping[str, DeploymentNodeRealization | None],
 ) -> tuple[str, str] | AccountPlanError:
     """Resolve one account to ``(container_name, provider)`` or a plan error."""
 
-    if account.target_address not in by_address:
-        return AccountPlanError(account.address, "unresolved-target-node")
-    node = by_address[account.target_address]
-    if node is None:
-        return AccountPlanError(account.address, "ambiguous-target-node")
-    if node.container_name is None:
-        return AccountPlanError(account.address, "target-node-has-no-container")
-    provider = resolve_account_provider(node.service_name)
-    if provider is None:
-        return AccountPlanError(account.address, "no-account-provider-for-service")
-    return node.container_name, provider
+    node = by_address.get(account.target_address, _MISSING_NODE)
+    provider = resolve_account_provider(
+        node.service_name if isinstance(node, DeploymentNodeRealization) else None
+    )
+    reason = _target_reason(node, provider)
+    if reason is not None:
+        return AccountPlanError(account.address, reason)
+    return node.container_name, provider  # type: ignore[union-attr]
+
+
+def _target_reason(
+    node: DeploymentNodeRealization | None | object,
+    provider: str | None,
+) -> str | None:
+    """Return the first fail-closed reason a resolved target is unusable, or None."""
+
+    checks = (
+        ("unresolved-target-node", node is _MISSING_NODE),
+        ("ambiguous-target-node", node is None),
+        (
+            "target-node-has-no-container",
+            isinstance(node, DeploymentNodeRealization) and node.container_name is None,
+        ),
+        ("no-account-provider-for-service", provider is None),
+    )
+    return next((reason for reason, failed in checks if failed), None)
 
 
 def _validate_account_fields(
@@ -168,16 +186,20 @@ def _validate_account_fields(
 ) -> AccountPlanError | None:
     """Reject provider-unsafe identity values before any mutation."""
 
-    if not _matches(_USERNAME_RE, account.username):
-        return AccountPlanError(account.address, "invalid-username")
-    for group in account.groups:
-        if not _matches(_GROUP_RE, group):
-            return AccountPlanError(account.address, "invalid-group")
-    if account.mail and not _matches(_MAIL_RE, account.mail):
-        return AccountPlanError(account.address, "invalid-mail")
-    if account.spn and not _matches(_SPN_RE, account.spn):
-        return AccountPlanError(account.address, "invalid-spn")
-    return None
+    reason = _field_error_reason(account)
+    return AccountPlanError(account.address, reason) if reason is not None else None
+
+
+def _field_error_reason(account: DeploymentAccountRealization) -> str | None:
+    """Return the first provider-unsafe identity field's reason, or None."""
+
+    checks = (
+        ("invalid-username", _matches(_USERNAME_RE, account.username)),
+        ("invalid-group", all(_matches(_GROUP_RE, g) for g in account.groups)),
+        ("invalid-mail", not account.mail or _matches(_MAIL_RE, account.mail)),
+        ("invalid-spn", not account.spn or _matches(_SPN_RE, account.spn)),
+    )
+    return next((reason for reason, ok in checks if not ok), None)
 
 
 def _matches(pattern: re.Pattern[str], value: str) -> bool:
@@ -274,22 +296,32 @@ def samba_provisioning_complete_probe() -> list[str]:
 
 
 def samba_group_show(group: str) -> list[str]:
+    """Argv to check whether a group exists (rc 0 when present)."""
+
     return ["samba-tool", "group", "show", group]
 
 
 def samba_group_add(group: str) -> list[str]:
+    """Argv to create a group."""
+
     return ["samba-tool", "group", "add", group]
 
 
 def samba_group_addmembers(group: str, user: str) -> list[str]:
+    """Argv to add one user to a group (idempotent)."""
+
     return ["samba-tool", "group", "addmembers", group, user]
 
 
 def samba_group_listmembers(group: str) -> list[str]:
+    """Argv to list a group's members, one per line (read-after-write verify)."""
+
     return ["samba-tool", "group", "listmembers", group]
 
 
 def samba_user_show(user: str) -> list[str]:
+    """Argv to read a user's attributes (rc 0 when the account exists)."""
+
     return ["samba-tool", "user", "show", user]
 
 
@@ -314,16 +346,24 @@ def samba_user_set_mail(user: str, mail: str) -> list[str]:
 
 
 def samba_user_enable(user: str) -> list[str]:
+    """Argv to enable an account (idempotent)."""
+
     return ["samba-tool", "user", "enable", user]
 
 
 def samba_user_disable(user: str) -> list[str]:
+    """Argv to disable an account (idempotent)."""
+
     return ["samba-tool", "user", "disable", user]
 
 
 def samba_spn_list(user: str) -> list[str]:
+    """Argv to list a user's SPNs (read-after-write verify)."""
+
     return ["samba-tool", "spn", "list", user]
 
 
 def samba_spn_add(spn: str, user: str) -> list[str]:
+    """Argv to add one SPN to a user."""
+
     return ["samba-tool", "spn", "add", spn, user]

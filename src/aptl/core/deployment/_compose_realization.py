@@ -103,10 +103,9 @@ class ComposeRealizationMixin(
         failures = self._reconcile_realization_networks(realization)
         if failures:
             return LabResult(success=False, error="; ".join(failures[:5]))
-        account_result = self._realize_accounts_step(realization)
-        if account_result is not None:
-            return account_result
-        return LabResult(success=True, message="Lab realized")
+        return self._realize_accounts_step(realization) or LabResult(
+            success=True, message="Lab realized"
+        )
 
     def _realize_accounts_step(
         self,

@@ -183,11 +183,24 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
-def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
-    """Return every published host port declared in a compose mapping."""
+def parse_published_ports(
+    compose: dict[str, object], active_profiles: set[str] | None = None
+) -> list[PortSpec]:
+    """Return published ports for services selected by *active_profiles*.
+
+    Services without a Compose profile are always active. ``None`` preserves
+    the all-services behavior used by static callers.
+    """
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
         if not isinstance(cfg, dict):
+            continue
+        service_profiles = set(cfg.get("profiles") or [])
+        if (
+            active_profiles is not None
+            and service_profiles
+            and service_profiles.isdisjoint(active_profiles)
+        ):
             continue
         for entry in cfg.get("ports") or []:
             spec = _parse_entry(service, entry)
@@ -267,7 +280,9 @@ def _resolve_group(
 
 
 def resolve_host_ports(
-    project_dir: Path, reserved_env: set[str] | None = None
+    project_dir: Path,
+    reserved_env: set[str] | None = None,
+    active_profiles: set[str] | None = None,
 ) -> list[ResolvedPort]:
     """Detect occupied published host ports, remap them, and export overrides.
 
@@ -286,7 +301,7 @@ def resolve_host_ports(
     # Group entries that share an env var (e.g. DNS tcp+udp on one host port)
     # so they move together and land on a port free for every protocol.
     groups: dict[str, list[PortSpec]] = {}
-    for spec in parse_published_ports(compose):
+    for spec in parse_published_ports(compose, active_profiles):
         if spec.env_var is None:
             continue
         groups.setdefault(spec.env_var, []).append(spec)

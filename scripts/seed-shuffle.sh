@@ -145,13 +145,13 @@ thehive_key = os.environ["THEHIVE_API_KEY"]
 case_body = json.dumps({
     "title": "[Wazuh $exec.rule.id] $exec.rule.description",
     "description": (
-        "Wazuh Alert Details:\n"
-        "- Rule: $exec.rule.id ($exec.rule.description)\n"
-        "- Level: $exec.rule.level\n"
-        "- Source IP: $exec.data.srcip\n"
-        "- Agent: $exec.agent.name\n"
-        "- Timestamp: $exec.timestamp\n\n"
-        "MISP Enrichment:\n"
+        "Wazuh Alert Details; "
+        "Rule: $exec.rule.id ($exec.rule.description); "
+        "Level: $exec.rule.level; "
+        "Source IP: $exec.data.srcip; "
+        "Agent: $exec.agent.name; "
+        "Timestamp: $exec.timestamp; "
+        "MISP Enrichment; "
         "Matched IOC: $misp_ip_lookup.body.response.Attribute.#0.value"
     ),
     "severity": 3,
@@ -283,7 +283,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\nMatched IOC: \$misp_ip_lookup.body.response.Attribute.#0.value\", \"severity\": 3}"},
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details; Rule: \$exec.rule.id (\$exec.rule.description); Level: \$exec.rule.level; Source IP: \$exec.data.srcip; Agent: \$exec.agent.name; Timestamp: \$exec.timestamp; MISP Enrichment; Matched IOC: \$misp_ip_lookup.body.response.Attribute.#0.value\", \"severity\": 3}"},
                 {"name": "verify", "value": "false"}
             ]
         }

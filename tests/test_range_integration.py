@@ -323,6 +323,17 @@ def _require_thehive_key():
         )
 
 
+def _shuffle_action_result(execution: dict, label: str) -> dict:
+    """Return one action's nested app result from a Shuffle execution."""
+    for item in execution.get("results", []):
+        action = item.get("action", {})
+        if action.get("label") != label:
+            continue
+        result = item.get("result", {})
+        return json.loads(result) if isinstance(result, str) else result
+    return {}
+
+
 @LIVE_LAB
 class TestSOCTools:
     """SOC tool integration -- require seed scripts."""
@@ -495,6 +506,13 @@ class TestSOCTools:
         assert final_status == "FINISHED", (
             "Workflow execution must complete: "
             f"status={final_status}"
+        )
+        case_result = _shuffle_action_result(
+            status_data, "create_thehive_case"
+        )
+        assert case_result.get("success") is True, (
+            "Shuffle finished but TheHive case creation failed: "
+            f"{case_result.get('reason', 'missing action result')}"
         )
 
 

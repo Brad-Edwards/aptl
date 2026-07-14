@@ -80,3 +80,54 @@ def test_manual_seed_entrypoints_load_their_required_credentials():
         assert 'source "$SCRIPT_DIR/aptl-env.sh"' in text
         for key in keys:
             assert key in text
+
+
+def test_thehive_provisioner_reuses_a_working_key(tmp_path):
+    """A seed rerun must not revoke the key held by the Shuffle workflow."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_curl = fake_bin / "curl"
+    fake_curl.write_text(
+        """#!/usr/bin/env python3
+import sys
+
+args = sys.argv[1:]
+if (
+    "https://thehive.invalid/api/v1/query" in args
+    and "Authorization: Bearer ExistingKey123" in args
+):
+    raise SystemExit(0)
+raise SystemExit(88)
+""",
+        encoding="utf-8",
+    )
+    fake_curl.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "THEHIVE_API_KEY": "ExistingKey123",
+        "THEHIVE_URL": "https://thehive.invalid",
+        "THEHIVE_CACERT": str(tmp_path / "missing-ca.pem"),
+    }
+
+    result = subprocess.run(
+        [PROJECT_ROOT / "scripts" / "thehive-apikey.sh"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ExistingKey123"
+
+
+def test_existing_shuffle_workflow_refreshes_seeded_credentials():
+    """An idempotent rerun must repair credentials and webhook metadata."""
+    text = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text()
+
+    assert "refresh_workflow_credentials()" in text
+    assert 'refresh_workflow_credentials "$EXISTING_ID"' in text
+    assert 'os.environ["MISP_API_KEY"]' in text
+    assert 'os.environ["THEHIVE_API_KEY"]' in text
+    assert "> /tmp/aptl_shuffle_webhook_url" in text

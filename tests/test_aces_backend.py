@@ -543,9 +543,7 @@ def test_current_backend_docs_cover_declared_manifest_components():
 
     payload = backend_manifest_payload(create_aptl_manifest())
     documentation = " ".join(
-        (
-            PROJECT_ROOT / "docs" / "aces" / "techvault-static-validation-gate.md"
-        )
+        (PROJECT_ROOT / "docs" / "aces" / "techvault-static-validation-gate.md")
         .read_text()
         .split()
     )
@@ -576,7 +574,9 @@ def test_backend_adapter_docstrings_describe_component_scope():
         assert "component of APTL's ``full-remote-control-plane`` target" in (
             inspect.getdoc(adapter) or ""
         )
-    assert "full-remote-control-plane" in (inspect.getdoc(create_aptl_runtime_target) or "")
+    assert "full-remote-control-plane" in (
+        inspect.getdoc(create_aptl_runtime_target) or ""
+    )
     assert "Provisioning-only" not in (inspect.getdoc(AptlProvisioner) or "")
 
 
@@ -845,9 +845,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
         args=["bash"],
         returncode=0,
         stdout=(
-            "portal_http_status=200\n"
-            "boundary_db=blocked\n"
-            "boundary_wazuh_api=blocked\n"
+            "portal_http_status=200\nboundary_db=blocked\nboundary_wazuh_api=blocked\n"
         ),
         stderr="",
     )
@@ -907,12 +905,10 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     )
     assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
     assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
-    shared_state_records = getattr(
-        control_plane.snapshot, "shared_state_records", {}
-    )
-    assert {
-        record["state_scope"] for record in shared_state_records.values()
-    } == {participant_address}
+    shared_state_records = getattr(control_plane.snapshot, "shared_state_records", {})
+    assert {record["state_scope"] for record in shared_state_records.values()} == {
+        participant_address
+    }
     assert participant_action_specs[participant_address].target_refs == (
         "container:aptl-kali",
         "container:aptl-webapp",
@@ -985,9 +981,7 @@ def test_runtime_bindings_read_from_behavior_spec_extension():
     model = SimpleNamespace(
         behavior_specifications={
             "participant.behavior-specification.paper-agent-behavior": (
-                SimpleNamespace(
-                    spec={"extensions": {_BINDING_EXTENSION_KEY: binding}}
-                )
+                SimpleNamespace(spec={"extensions": {_BINDING_EXTENSION_KEY: binding}})
             ),
         }
     )
@@ -1035,9 +1029,7 @@ def _compile_paper_model_plan_config():
 
     from aptl.backends.aces import create_aptl_runtime_target
 
-    scenario = parse_sdl_file(
-        PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
-    )
+    scenario = parse_sdl_file(PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml")
     model = compile_runtime_model(scenario)
     config = AptlConfig(
         lab={"name": "test"},
@@ -1052,9 +1044,7 @@ def _compile_paper_model_plan_config():
     return model, plan, config
 
 
-_PAPER_BEHAVIOR_SPEC_ADDRESS = (
-    "participant.behavior-specification.paper-agent-behavior"
-)
+_PAPER_BEHAVIOR_SPEC_ADDRESS = "participant.behavior-specification.paper-agent-behavior"
 _PAPER_PARTICIPANT_ADDRESS = "participant.behavior.paper-agent"
 
 
@@ -1163,9 +1153,7 @@ def test_assert_compiled_addresses_rejects_compiled_but_unassigned_refs():
 
     behavior = SimpleNamespace(
         action_contract_addresses=("participant.action-contract.assigned",),
-        observation_boundary_addresses=(
-            "participant.observation-boundary.assigned",
-        ),
+        observation_boundary_addresses=("participant.observation-boundary.assigned",),
     )
     model = SimpleNamespace(
         participant_behaviors={"p": behavior},
@@ -2089,9 +2077,7 @@ def test_realization_rejects_static_address_outside_declared_network(tmp_path):
     _write_compose(tmp_path, {"kali": ["kali"]})
     node = _node_resource("red-workbench")
     node.payload["spec"]["infrastructure"]["links"] = ["dmz-net"]
-    node.payload["spec"]["infrastructure"]["properties"] = [
-        {"dmz-net": "172.20.99.30"}
-    ]
+    node.payload["spec"]["infrastructure"]["properties"] = [{"dmz-net": "172.20.99.30"}]
     dmz = _network_resource(
         "dmz-net",
         cidr="172.20.1.0/24",
@@ -2329,11 +2315,11 @@ def test_realization_prefers_unique_node_alias_over_shared_source_alias(tmp_path
             [
                 "services:",
                 "  wazuh-sidecar-db:",
-                "    profiles: [\"wazuh\"]",
+                '    profiles: ["wazuh"]',
                 "    image: aptl-wazuh-sidecar:local",
                 "    container_name: aptl-wazuh-sidecar-db",
                 "  wazuh-sidecar-suricata:",
-                "    profiles: [\"wazuh\"]",
+                '    profiles: ["wazuh"]',
                 "    image: aptl-wazuh-sidecar:local",
                 "    container_name: aptl-wazuh-sidecar-suricata",
             ]
@@ -2896,6 +2882,51 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
     assert deployment_spec.accounts[0].username == "operator"
 
 
+def test_account_lowering_preserves_disabled_explicitness():
+    """SEM-218 (#577 codex review): an omitted ``disabled`` lowers to None, not
+    a reconstructed False — so the backend never flips an existing account's
+    enabled state on a placement that did not author it. An explicit
+    ``disabled: false`` still lowers to False."""
+    from aptl.backends.aces_account_realization import resolve_account_placement
+
+    def _resolve(spec: dict):
+        resource = PlannedResource(
+            address="provision.account-placement.x",
+            domain=RuntimeDomain.PROVISIONING,
+            resource_type="account-placement",
+            payload={"spec": spec},
+        )
+        account, _ = resolve_account_placement(
+            resource=resource,
+            payload={"spec": spec},
+            target_address="scenario.node.ad",
+            target_service="ad",
+        )
+        return account
+
+    omitted = _resolve({"username": "u", "node": "scenario.ad"})
+    assert omitted is not None and omitted.disabled is None
+    authored = _resolve({"username": "u", "node": "scenario.ad", "disabled": False})
+    assert authored is not None and authored.disabled is False
+
+
+def test_manifest_account_features_match_realized_dto_fields():
+    """Manifest honesty (#577, ADR-046 addendum): advertise only the account
+    features the backend actually materializes AND verifies — the non-secret
+    fields the typed ``DeploymentAccountRealization`` carries. ``auth_method`` /
+    ``home`` / ``shell`` are neither carried nor realized, so they are not
+    claimed."""
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    manifest = create_aptl_manifest()
+    assert set(manifest.provisioner.supported_account_features) == {
+        "disabled",
+        "groups",
+        "mail",
+        "spn",
+    }
+
+
 def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:
     """Apply a plan with one fileshare-targeted content placement; return (result, code)."""
     from aptl.backends.aces import AptlProvisioner
@@ -2995,9 +3026,7 @@ def test_content_placement_destination_without_backing_mount_fails_closed(tmp_pa
     content = _content_resource(
         target_node="scenario.ad", target_address=ad_node.address
     )
-    result = provisioner.apply(
-        _plan_for_resources(ad_node, content), RuntimeSnapshot()
-    )
+    result = provisioner.apply(_plan_for_resources(ad_node, content), RuntimeSnapshot())
     codes = {d.code for d in result.diagnostics}
     assert result.success is False
     assert "aptl.provisioner.content-placement-rejected" in codes

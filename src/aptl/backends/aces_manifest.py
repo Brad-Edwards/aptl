@@ -148,8 +148,14 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_node_types=frozenset({"switch", "vm"}),
     supported_os_families=frozenset({"freebsd", "linux", "macos", "other", "windows"}),
     supported_content_types=frozenset({"dataset", "directory", "file"}),
+    # Manifest honesty (#577, ADR-046 addendum): advertise only the account
+    # features the backend materializes AND verifies by read-after-write — the
+    # non-secret fields the typed DeploymentAccountRealization carries. auth_method
+    # / home / shell are neither carried nor realized, so they are not claimed;
+    # an account placement that exercises one is a blocking ACES diagnostic, not
+    # a silently dropped field. No scenario declares those terms today.
     supported_account_features=frozenset(
-        {"auth_method", "disabled", "groups", "home", "mail", "shell", "spn"}
+        {"disabled", "groups", "mail", "spn"}
     ),
     supports_acls=True,
     supports_accounts=True,

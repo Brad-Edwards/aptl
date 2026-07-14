@@ -40,7 +40,9 @@ from aptl.core.lab import LabResult, LabStatus
 # appropriate absolute path so the validation is exercised on every platform
 # instead of tripping the absolute-path guard with the wrong path flavour.
 _IS_WINDOWS = os.name == "nt"
-_ABS_SSH_KEY = "C:\\Users\\user\\.ssh\\lab_key" if _IS_WINDOWS else "/home/user/.ssh/lab_key"
+_ABS_SSH_KEY = (
+    "C:\\Users\\user\\.ssh\\lab_key" if _IS_WINDOWS else "/home/user/.ssh/lab_key"
+)
 _ABS_SSH_KEY_TRAVERSAL = (
     "C:\\Users\\..\\etc\\passwd" if _IS_WINDOWS else "/home/../etc/passwd"
 )
@@ -1383,9 +1385,7 @@ class TestDockerComposeBackendContainerInteraction:
             caplog.set_level(logging.WARNING, logger="aptl")
             backend.container_restart("aptl-wazuh-manager")
         # Best-effort — no exception raised, but the failure is logged.
-        assert any(
-            "docker restart" in rec.getMessage() for rec in caplog.records
-        )
+        assert any("docker restart" in rec.getMessage() for rec in caplog.records)
 
     # container_inspect ----------------------------------------------------
 
@@ -2488,7 +2488,9 @@ class TestComposeRealizeContentStep:
         with patch.object(
             backend,
             "realize_content",
-            side_effect=BackendSeedError("Seeding named volume 'fileshare_data' failed"),
+            side_effect=BackendSeedError(
+                "Seeding named volume 'fileshare_data' failed"
+            ),
         ):
             result = backend._realize_content(spec)
         assert result is not None
@@ -2499,3 +2501,567 @@ class TestComposeRealizeContentStep:
         backend = self._backend(tmp_path)
         spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=(), content=())
         assert backend._realize_content(spec) is None
+
+
+class _FakeAd:
+    """A minimal stateful Samba AD, driven through ``container_exec``.
+
+    Records every command in order so tests can assert sequencing (groups
+    before members, existence-check before create, verify after mutation) and
+    convergent-upsert behavior. It does not model passwords — that a secret is
+    never disclosed is proven structurally: an already-existing user is never
+    re-created, so its provisioner-owned password is untouched.
+    """
+
+    def __init__(self, *, ready=True, provisioned=True, users=None, groups=None):
+        self.ready = ready
+        self.provisioned = provisioned
+        self.users = {
+            u: {"mail": "", "disabled": False, "spns": set(), "groups": set()}
+            for u in (users or [])
+        }
+        self.groups = set(groups or [])
+        self.calls: list[list[str]] = []
+
+    def __call__(self, name, cmd, *, timeout=None):
+        self.calls.append(list(cmd))
+        return self._dispatch(cmd)
+
+    def cmds(self, *prefix):
+        """Return recorded calls whose leading tokens match ``prefix``."""
+        n = len(prefix)
+        return [c for c in self.calls if c[:n] == list(prefix)]
+
+    def _ok(self, cmd, stdout=""):
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=0, stdout=stdout, stderr=""
+        )
+
+    def _fail(self, cmd, stderr="samba-tool: internal detail leak"):
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=1, stdout="", stderr=stderr
+        )
+
+    def _dispatch(self, cmd):
+        if cmd[0] == "test" and cmd[1] == "-f":
+            return self._ok(cmd) if self.provisioned else self._fail(cmd)
+        if cmd[1:] == ["domain", "info", "127.0.0.1"]:
+            return self._ok(cmd) if self.ready else self._fail(cmd)
+        if cmd[1] == "group":
+            return self._dispatch_group(cmd)
+        if cmd[1] in ("user", "spn"):
+            return self._dispatch_user(cmd)
+        return self._fail(cmd)
+
+    def _dispatch_group(self, cmd):
+        action = cmd[2]
+        if action == "show":
+            return self._ok(cmd) if cmd[3] in self.groups else self._fail(cmd)
+        if action == "add":
+            self.groups.add(cmd[3])
+            return self._ok(cmd)
+        if action == "addmembers":
+            if cmd[4] not in self.users:
+                return self._fail(cmd)
+            self.users[cmd[4]]["groups"].add(cmd[3])
+            return self._ok(cmd)
+        if action == "listmembers":
+            members = "\n".join(
+                u for u, s in self.users.items() if cmd[3] in s["groups"]
+            )
+            return self._ok(cmd, stdout=members)
+        return self._fail(cmd)
+
+    def _dispatch_user(self, cmd):
+        verb = tuple(cmd[1:3])
+        if verb == ("user", "show"):
+            if cmd[3] not in self.users:
+                return self._fail(cmd)
+            u = self.users[cmd[3]]
+            uac = 514 if u["disabled"] else 512
+            return self._ok(
+                cmd, stdout=f"mail: {u['mail']}\nuserAccountControl: {uac}\n"
+            )
+        if verb == ("user", "create"):
+            mail = next(
+                (a.split("=", 1)[1] for a in cmd if a.startswith("--mail-address=")), ""
+            )
+            self.users[cmd[3]] = self._blank(mail=mail)
+            return self._ok(cmd)
+        if verb == ("user", "rename"):
+            if cmd[3] not in self.users:
+                return self._fail(cmd)
+            for arg in cmd:
+                if arg.startswith("--mail-address="):
+                    self.users[cmd[3]]["mail"] = arg.split("=", 1)[1]
+            return self._ok(cmd)
+        if verb in (("user", "disable"), ("user", "enable")):
+            if cmd[3] not in self.users:
+                return self._fail(cmd)
+            self.users[cmd[3]]["disabled"] = cmd[2] == "disable"
+            return self._ok(cmd)
+        if verb == ("spn", "add"):
+            if cmd[4] not in self.users:
+                return self._fail(cmd)
+            self.users[cmd[4]]["spns"].add(cmd[3])
+            return self._ok(cmd)
+        if verb == ("spn", "list"):
+            spns = sorted(self.users.get(cmd[3], self._blank())["spns"])
+            return self._ok(cmd, stdout="\n".join(spns))
+        return self._fail(cmd)
+
+    @staticmethod
+    def _blank(mail=""):
+        return {"mail": mail, "disabled": False, "spns": set(), "groups": set()}
+
+
+def _ad_node(
+    address="scenario.node.ad", *, service_name="ad", container_name="aptl-ad"
+):
+    return DeploymentNodeRealization(
+        address=address,
+        name="scenario.ad",
+        service_name=service_name,
+        container_name=container_name,
+        networks=(),
+        network_attachments=(),
+    )
+
+
+def _acct(
+    username,
+    *,
+    address=None,
+    target="scenario.node.ad",
+    groups=(),
+    spn="",
+    mail="",
+    disabled=None,
+):
+    from aptl.core.deployment.realization import DeploymentAccountRealization
+
+    return DeploymentAccountRealization(
+        address=address or f"provision.account-placement.{username}",
+        target_address=target,
+        username=username,
+        groups=tuple(groups),
+        spn=spn,
+        mail=mail,
+        disabled=disabled,
+    )
+
+
+def _index(calls, predicate):
+    return next(i for i, c in enumerate(calls) if predicate(c))
+
+
+class TestRealizeAccounts:
+    """Issue #577: backend-driven account/group realization on the AD provider."""
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def test_empty_accounts_is_a_no_op(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((), ()) is None
+        assert ad.calls == []
+
+    def test_creates_new_user_with_groups_and_verifies(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        account = _acct(
+            "jessica.williams",
+            groups=("Sales", "VPN-Users"),
+            mail="jessica.williams@techvault.local",
+        )
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is None
+        # User created via --random-password, mail set atomically, no secret argv.
+        create = ad.cmds("samba-tool", "user", "create")[0]
+        assert "--random-password" in create
+        assert "--mail-address=jessica.williams@techvault.local" in create
+        assert all("password123" not in tok for tok in create)
+        # Groups are ensured before membership is reconciled.
+        first_addmember = _index(ad.calls, lambda c: c[1:3] == ["group", "addmembers"])
+        last_group_add = max(
+            _index(ad.calls[::-1], lambda c: c[1:3] == ["group", "add"] and c[3] == g)
+            for g in ("Sales", "VPN-Users")
+        )
+        last_group_add = len(ad.calls) - 1 - last_group_add
+        assert last_group_add < first_addmember
+        # Read-after-write verification actually ran.
+        assert ad.cmds("samba-tool", "user", "show")
+        assert ad.cmds("samba-tool", "group", "listmembers")
+
+    def test_existing_user_is_not_recreated_preserving_password(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(users=["jessica.williams"], groups=["Sales"])
+        account = _acct("jessica.williams", groups=("Sales",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is None
+        # Convergent upsert: an existing account is never re-created, so the
+        # provisioner-script-owned weak password is left untouched.
+        assert ad.cmds("samba-tool", "user", "create") == []
+        # Membership is still reconciled and verified.
+        assert [
+            "samba-tool",
+            "group",
+            "addmembers",
+            "Sales",
+            "jessica.williams",
+        ] in ad.calls
+
+    def test_authored_disabled_true_disables_and_verifies(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        account = _acct("former.employee", disabled=True)
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert ["samba-tool", "user", "disable", "former.employee"] in ad.calls
+
+    def test_authored_disabled_false_enables_and_verifies(self, tmp_path):
+        # An existing suspended account, explicitly declared enabled, converges.
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(users=["contractor.temp"])
+        ad.users["contractor.temp"]["disabled"] = True
+        account = _acct("contractor.temp", disabled=False)
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert ["samba-tool", "user", "enable", "contractor.temp"] in ad.calls
+        assert ad.users["contractor.temp"]["disabled"] is False
+
+    def test_omitted_disabled_never_touches_account_state(self, tmp_path):
+        # Security (#577 codex review): an omitted `disabled` must NOT be
+        # reconstructed as False and applied — that would re-enable a suspended
+        # account on an otherwise-benign placement, restoring attacker access.
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(users=["former.employee"])
+        ad.users["former.employee"]["disabled"] = True
+        account = _acct("former.employee", disabled=None)
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert ad.cmds("samba-tool", "user", "enable") == []
+        assert ad.cmds("samba-tool", "user", "disable") == []
+        assert ad.users["former.employee"]["disabled"] is True  # left suspended
+
+    def test_disabled_verify_fails_when_provider_state_wrong(self, tmp_path):
+        # Read-after-write: a disable that did not take must fail closed, not
+        # report success on a zero exit code.
+        backend = self._backend(tmp_path)
+
+        class _IgnoresDisable(_FakeAd):
+            def _dispatch_user(self, cmd):
+                if cmd[1:3] == ["user", "disable"]:
+                    return self._ok(cmd)  # pretend success but never persist
+                return super()._dispatch_user(cmd)
+
+        ad = _IgnoresDisable()
+        account = _acct("former.employee", disabled=True)
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "provision.account-placement.former.employee" in (result.error or "")
+
+    def test_mail_converged_on_existing_user_and_verified(self, tmp_path):
+        # An existing account whose stored mail drifts from the declaration is
+        # converged (samba-tool user rename --mail-address), not left stale, and
+        # the create path is never taken (password preserved).
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(users=["jessica.williams"])
+        ad.users["jessica.williams"]["mail"] = "stale@old.local"
+        account = _acct("jessica.williams", mail="jessica.williams@techvault.local")
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert ad.cmds("samba-tool", "user", "create") == []
+        assert [
+            "samba-tool",
+            "user",
+            "rename",
+            "jessica.williams",
+            "--mail-address=jessica.williams@techvault.local",
+        ] in ad.calls
+        assert (
+            ad.users["jessica.williams"]["mail"] == "jessica.williams@techvault.local"
+        )
+
+    def test_omitted_mail_is_not_materialized_or_verified(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(users=["svc-sql"])
+        account = _acct("svc-sql", spn="MSSQLSvc/db:1433")  # no mail declared
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert ad.cmds("samba-tool", "user", "rename") == []
+
+    def test_spn_verification_is_exact_not_substring(self, tmp_path):
+        # A declared SPN ending :1433 must NOT be certified by an existing SPN
+        # ending :14330 (Kerberos treats a superstring as a different principal).
+        backend = self._backend(tmp_path)
+
+        class _PrefixSpnAd(_FakeAd):
+            def _dispatch_user(self, cmd):
+                if cmd[1:3] == ["spn", "add"]:
+                    return self._ok(cmd)  # pretend success, never persist exact spn
+                return super()._dispatch_user(cmd)
+
+        ad = _PrefixSpnAd(users=["svc-sql"])
+        ad.users["svc-sql"]["spns"].add("MSSQLSvc/db.techvault.local:14330")
+        account = _acct("svc-sql", spn="MSSQLSvc/db.techvault.local:1433")
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "svc-sql" in (result.error or "")
+
+    def test_mail_verification_is_exact_not_substring(self, tmp_path):
+        # A superstring stored mail must not certify the declared value.
+        backend = self._backend(tmp_path)
+
+        class _IgnoreRenameAd(_FakeAd):
+            def _dispatch_user(self, cmd):
+                if cmd[1:3] == ["user", "rename"]:
+                    return self._ok(cmd)  # pretend success, never update mail
+                return super()._dispatch_user(cmd)
+
+        ad = _IgnoreRenameAd(users=["jessica.williams"])
+        ad.users["jessica.williams"]["mail"] = "xjessica.williams@techvault.local"
+        account = _acct("jessica.williams", mail="jessica.williams@techvault.local")
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+
+    def test_membership_verification_is_exact_not_whitespace_token(self, tmp_path):
+        # A requested user 'Admin' must not be certified by a member 'Alice Admin'.
+        backend = self._backend(tmp_path)
+
+        class _SpaceMemberAd(_FakeAd):
+            def _dispatch_group(self, cmd):
+                if cmd[2] == "listmembers":
+                    return self._ok(cmd, stdout="Alice Admin\nBob\n")
+                if cmd[2] == "addmembers":
+                    return self._ok(cmd)  # pretend success, never record membership
+                return super()._dispatch_group(cmd)
+
+        ad = _SpaceMemberAd(users=["Admin"], groups=["Engineering"])
+        account = _acct("Admin", groups=("Engineering",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+
+    def test_failed_create_stops_before_membership_mutation(self, tmp_path):
+        # If the user could not be created, no membership/attribute mutation may
+        # run against the raw identifier — it must fail closed first.
+        backend = self._backend(tmp_path)
+
+        class _AmnesiacAd(_FakeAd):
+            def _dispatch_user(self, cmd):
+                if cmd[1:3] == ["user", "create"]:
+                    return self._ok(cmd)  # pretend success but never persist
+                return super()._dispatch_user(cmd)
+
+        ad = _AmnesiacAd()
+        account = _acct("ghost", groups=("Engineering",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert ad.cmds("samba-tool", "group", "addmembers") == []
+
+    def test_batch_with_one_invalid_account_mutates_nothing(self, tmp_path):
+        # Batch-atomic at the realize boundary: a single invalid placement blocks
+        # the whole batch, so no valid sibling is partially mutated first.
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        accounts = (
+            _acct("jessica.williams", groups=("Sales",)),
+            _acct("emily.chen", address="provision.account-placement.emily"),
+            _acct("weak,Administrator", address="provision.account-placement.evil"),
+        )
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts(accounts, (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "invalid-username" in (result.error or "")
+        assert ad.calls == []
+
+    def test_membership_verification_is_case_insensitive(self, tmp_path):
+        # AD account names are case-insensitive: a member returned in a different
+        # case must still verify (the exact-line parse must not over-tighten into
+        # a false negative).
+        backend = self._backend(tmp_path)
+
+        class _CaseMemberAd(_FakeAd):
+            def _dispatch_group(self, cmd):
+                if cmd[2] == "listmembers":
+                    return self._ok(cmd, stdout="JESSICA.WILLIAMS\n")
+                return super()._dispatch_group(cmd)
+
+        ad = _CaseMemberAd(users=["jessica.williams"], groups=["Sales"])
+        account = _acct("jessica.williams", groups=("Sales",))
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+
+    def test_verification_read_requires_success_return_code(self, tmp_path):
+        # A nonzero verification read with misleading stdout must not certify.
+        backend = self._backend(tmp_path)
+
+        class _BadListAd(_FakeAd):
+            def _dispatch_group(self, cmd):
+                if cmd[2] == "listmembers":
+                    return self._fail(cmd, stderr="jessica.williams")  # rc!=0 w/ stdout
+                return super()._dispatch_group(cmd)
+
+        ad = _BadListAd(users=["jessica.williams"], groups=["Sales"])
+        account = _acct("jessica.williams", groups=("Sales",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+
+    def test_spn_is_added_and_verified(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        account = _acct("svc-sql", spn="MSSQLSvc/db.techvault.local:1433")
+        with patch.object(backend, "container_exec", ad):
+            assert backend.realize_accounts((account,), (_ad_node(),)) is None
+        assert [
+            "samba-tool",
+            "spn",
+            "add",
+            "MSSQLSvc/db.techvault.local:1433",
+            "svc-sql",
+        ] in ad.calls
+        assert ad.cmds("samba-tool", "spn", "list")
+
+    def test_unknown_provider_fails_closed_before_mutation(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        node = _ad_node("scenario.node.db", service_name="db", container_name="aptl-db")
+        account = _acct("x", target="scenario.node.db")
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (node,))
+        assert result is not None and result.success is False
+        assert "provision.account-placement.x" in (result.error or "")
+        assert "no-account-provider-for-service" in (result.error or "")
+        assert ad.calls == []  # no mutation happened
+
+    def test_invalid_username_fails_closed_before_mutation(self, tmp_path):
+        backend = self._backend(tmp_path)
+        ad = _FakeAd()
+        account = _acct("bad\x00name")
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "invalid-username" in (result.error or "")
+        assert ad.calls == []
+
+    def test_readiness_timeout_fails_closed(self, tmp_path, monkeypatch):
+        from aptl.core.deployment import _compose_account_realization as car
+
+        monkeypatch.setattr(car, "_READINESS_TIMEOUT", 0)
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(ready=False)
+        account = _acct("jessica.williams", groups=("Sales",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "aptl-ad" in (result.error or "")
+        # Readiness never passed, so no group/user mutation ran.
+        assert ad.cmds("samba-tool", "group", "add") == []
+        assert ad.cmds("samba-tool", "user", "create") == []
+
+    def test_readiness_requires_provisioner_complete_marker(
+        self, tmp_path, monkeypatch
+    ):
+        # The directory can answer `domain info` before the service-owned baseline
+        # provisioner has finished. Gating only on that would let the backend
+        # create an account the provisioner is about to create, losing the
+        # fixture credential. Realization must also wait for the explicit
+        # provisioning-complete marker, so "absent" is authoritative.
+        from aptl.core.deployment import _compose_account_realization as car
+
+        monkeypatch.setattr(car, "_READINESS_TIMEOUT", 0)
+        backend = self._backend(tmp_path)
+        ad = _FakeAd(provisioned=False)  # service up, baseline not yet complete
+        account = _acct("jessica.williams", groups=("Sales",))
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert ad.cmds("samba-tool", "user", "create") == []
+        assert ad.cmds("samba-tool", "group", "add") == []
+
+    def test_verify_failure_fails_closed_without_raw_stderr(self, tmp_path):
+        backend = self._backend(tmp_path)
+
+        # AD that silently forgets a created user, so read-after-write fails.
+        class _AmnesiacAd(_FakeAd):
+            def _dispatch(self, cmd):
+                if cmd[1:3] == ["user", "create"]:
+                    return self._ok(cmd)  # pretend success but never persist
+                return super()._dispatch(cmd)
+
+        ad = _AmnesiacAd()
+        account = _acct("ghost")
+        with patch.object(backend, "container_exec", ad):
+            result = backend.realize_accounts((account,), (_ad_node(),))
+        assert result is not None and result.success is False
+        assert "provision.account-placement.ghost" in (result.error or "")
+        assert "internal detail leak" not in (result.error or "")
+
+
+class TestAccountProvisionerOrderingContract:
+    """Issue #577: the AD readiness gate depends on setup-ad.sh's ordering.
+
+    ``_account_provider_ready`` waits for ``/var/lib/samba/private/.provisioned``
+    as the provisioner-complete signal. That is only correct if the AD entrypoint
+    writes that marker AFTER running its baseline account provisioner. Lock that
+    container contract here so a future entrypoint change that reorders them (and
+    would reopen the clean-start create race) fails a fast unit test rather than
+    only a full lab boot.
+    """
+
+    def test_setup_ad_writes_provisioned_marker_after_provision_users(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        setup = (repo_root / "containers/ad/setup-ad.sh").read_text(encoding="utf-8")
+        marker_write = setup.index('touch "$PROVISIONED_MARKER"')
+        provision_call = setup.index("/opt/provision-users.sh")
+        assert provision_call < marker_write
+        # And the marker the backend probes matches the one the script writes.
+        assert 'PROVISIONED_MARKER="/var/lib/samba/private/.provisioned"' in setup
+
+
+class TestComposeRealizeAccountsStep:
+    """Issue #577: account realization wired into ``ComposeRealizationMixin.realize``."""
+
+    def _backend(self, tmp_path):
+        return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def test_no_accounts_is_a_no_op(self, tmp_path):
+        backend = self._backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=(), nodes=(), networks=(), accounts=()
+        )
+        assert backend._realize_accounts_step(spec) is None
+
+    def test_step_surfaces_account_failure(self, tmp_path):
+        backend = self._backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=(),
+            nodes=(_ad_node(),),
+            networks=(),
+            accounts=(_acct("x", target="scenario.node.missing"),),
+        )
+        result = backend._realize_accounts_step(spec)
+        assert result is not None and result.success is False
+        assert "unresolved-target-node" in (result.error or "")
+
+    def test_step_converts_backend_timeout_to_bounded_result(self, tmp_path):
+        backend = self._backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=(), nodes=(_ad_node(),), networks=(), accounts=(_acct("x"),)
+        )
+        with patch.object(
+            backend, "realize_accounts", side_effect=BackendTimeoutError("boom")
+        ):
+            result = backend._realize_accounts_step(spec)
+        assert result is not None and result.success is False
+        assert "timed out" in (result.error or "").lower()

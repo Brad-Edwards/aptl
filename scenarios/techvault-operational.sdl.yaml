@@ -316,13 +316,16 @@ content:
     source:
       name: scenarios/fixtures/techvault-content/onboarding
 
-# Realizable accounts (same addendum): every username here is created by
-# containers/ad/provision-users.sh, which already runs unconditionally as
-# part of the `ad` container's entrypoint — no new secret-bearing backend
-# path. Declares identity only (no password material); the concrete
-# credential stays owned by the provisioner script. This is a
-# representative subset of the full weak/Kerberoastable/over-privileged
-# roster the provisioner creates, proving the account-placement
+# Realizable accounts (ADR-046 Account and Identity Realization Addendum,
+# #577): the deployment backend's realize_accounts operation ensures these
+# groups, users, memberships, and non-secret attributes on the resolved `ad`
+# node and verifies them by read-after-write. Declares identity only (no
+# password material); the concrete credential is generated inside the target
+# provider and never crosses the SDL or run evidence. Accounts that also exist
+# in containers/ad/provision-users.sh are reconciled, not re-created, so the
+# provisioner-owned weak passwords (the intentional attack surface) are
+# preserved. This is a representative subset of the full
+# weak/Kerberoastable/over-privileged roster, proving the account-placement
 # realization path against real, clean-start-created accounts.
 accounts:
   ad-jessica-williams:

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from aptl.core.deployment._compose_account_realization import (
+    ComposeRealizationAccountMixin,
+)
 from aptl.core.deployment._compose_content_realization import (
     CONTENT_SEEDER_IMAGE,
     ComposeRealizationContentMixin,
@@ -40,6 +43,7 @@ class ComposeRealizationMixin(
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
+    ComposeRealizationAccountMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -132,19 +136,25 @@ class ComposeRealizationMixin(
         start_result: LabResult,
         realization: DeploymentRealizationSpec,
     ) -> LabResult:
-        """Return the final result after service start and network reconciliation."""
+        """Return the final result after start, network, health, and accounts.
 
-        result = start_result
-        if start_result.success:
-            failures = self._reconcile_realization_networks(realization)
-            if not failures:
-                failures = self._await_realized_service_health(realization)
-            result = (
-                LabResult(success=False, error="; ".join(failures[:5]))
-                if failures
-                else LabResult(success=True, message="Lab realized")
-            )
-        return result
+        Ordering is load-bearing: networks are reconciled, then services must be
+        observed healthy, then accounts are realized. Account realization execs
+        into the running node containers (``container_exec``), so it cannot run
+        until those containers are up and healthy — the health wait gates it.
+        """
+
+        if not start_result.success:
+            return start_result
+        failures = self._reconcile_realization_networks(realization)
+        if failures:
+            return LabResult(success=False, error="; ".join(failures[:5]))
+        health_failures = self._await_realized_service_health(realization)
+        if health_failures:
+            return LabResult(success=False, error="; ".join(health_failures[:5]))
+        return self._realize_accounts_step(realization) or LabResult(
+            success=True, message="Lab realized"
+        )
 
     def _await_realized_service_health(
         self,
@@ -163,3 +173,23 @@ class ComposeRealizationMixin(
             node.container_name for node in realization.nodes if node.container_name
         ]
         return wait_for_realized_health(self, containers)
+
+    def _realize_accounts_step(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Realize account placements post-start; fail closed on a backend timeout.
+
+        Returns ``None`` on success (or nothing to realize). Account readiness
+        and verification failures already arrive as a fail-closed
+        :class:`LabResult`; a mid-mutation ``BackendTimeoutError`` from
+        ``container_exec`` is converted into the same bounded envelope here.
+        """
+
+        try:
+            return self.realize_accounts(realization.accounts, realization.nodes)
+        except BackendTimeoutError as exc:
+            return LabResult(
+                success=False,
+                error=f"Account realization timed out: {exc}",
+            )

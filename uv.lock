@@ -102,7 +102,7 @@ web = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aces-sdl", specifier = ">=0.21.0" },
+    { name = "aces-sdl", specifier = ">=0.21.0,<0.22.0" },
     { name = "asyncssh", marker = "extra == 'web'", specifier = ">=2.17.0" },
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },

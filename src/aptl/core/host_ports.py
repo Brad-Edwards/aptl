@@ -196,6 +196,12 @@ def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
     return specs
 
 
+def published_port_specs(project_dir: Path) -> list[PortSpec]:
+    """Load the published-port declarations for a Compose project."""
+    compose = _load_compose(project_dir)
+    return parse_published_ports(compose) if compose is not None else []
+
+
 def _load_compose(project_dir: Path) -> dict[str, object] | None:
     """Load the project compose file if it exists and is a mapping."""
     compose_path = project_dir / _COMPOSE_FILENAME
@@ -279,14 +285,10 @@ def resolve_host_ports(
     real host port of each service.
     """
     reserved = set(reserved_env or set())
-    compose = _load_compose(project_dir)
-    if compose is None:
-        return []
-
     # Group entries that share an env var (e.g. DNS tcp+udp on one host port)
     # so they move together and land on a port free for every protocol.
     groups: dict[str, list[PortSpec]] = {}
-    for spec in parse_published_ports(compose):
+    for spec in published_port_specs(project_dir):
         if spec.env_var is None:
             continue
         groups.setdefault(spec.env_var, []).append(spec)

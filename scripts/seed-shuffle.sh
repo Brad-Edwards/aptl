@@ -60,11 +60,15 @@ fi
 # Preflight checks
 # ---------------------------------------------------------------------------
 
-# Auto-provision TheHive API key if not set in env
-if [ -z "${THEHIVE_API_KEY:-}" ]; then
-    if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
-        THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) || true
+# Validate and, only when necessary, provision the TheHive key. The
+# provisioner reuses a working project key; calling it on every run also
+# repairs a stale key left after the TheHive volume was reset.
+if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
+    if ! THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null); then
+        echo "ERROR: Could not validate or provision the TheHive API key."
+        exit 1
     fi
+    export THEHIVE_API_KEY
 fi
 THEHIVE_API_KEY="${THEHIVE_API_KEY:-}"
 
@@ -119,6 +123,76 @@ WORKFLOWS_JSON=$(curl -s "${SHUFFLE_TLS_FLAGS[@]}" \
     -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
     "${SHUFFLE_URL}/api/v1/workflows")
 
+refresh_workflow_credentials() {
+    local workflow_id="$1"
+    local workflow_json updated response code real_trigger_id
+
+    if ! workflow_json=$(curl -fsS "${SHUFFLE_TLS_FLAGS[@]}" \
+        -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+        "${SHUFFLE_URL}/api/v1/workflows/${workflow_id}"); then
+        echo "ERROR: Could not fetch existing workflow ${workflow_id}."
+        return 1
+    fi
+
+    if ! updated=$(printf '%s' "$workflow_json" | python3 -c '
+import json
+import os
+import sys
+
+workflow = json.load(sys.stdin)
+misp_key = os.environ["MISP_API_KEY"]
+thehive_key = os.environ["THEHIVE_API_KEY"]
+headers = {
+    "misp_ip_lookup": (
+        f"Authorization: {misp_key}\n"
+        "Content-Type: application/json\nAccept: application/json"
+    ),
+    "create_thehive_case": (
+        f"Authorization: Bearer {thehive_key}\n"
+        "Content-Type: application/json"
+    ),
+}
+for action in workflow.get("actions", []):
+    value = headers.get(action.get("label"))
+    if value is None:
+        continue
+    for parameter in action.get("parameters", []):
+        if parameter.get("name") == "headers":
+            parameter["value"] = value
+
+triggers = workflow.get("triggers", [])
+if triggers:
+    workflow["start"] = triggers[0].get("id", workflow.get("start", ""))
+print(json.dumps(workflow))
+'); then
+        echo "ERROR: Could not refresh existing workflow credentials."
+        return 1
+    fi
+
+    response=$(curl -sS "${SHUFFLE_TLS_FLAGS[@]}" -w "\n%{http_code}" \
+        -X PUT \
+        -H "Authorization: Bearer ${SHUFFLE_API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "$updated" \
+        "${SHUFFLE_URL}/api/v1/workflows/${workflow_id}")
+    code=$(printf '%s\n' "$response" | tail -n1)
+    if [[ "$code" -lt 200 ]] || [[ "$code" -ge 300 ]]; then
+        echo "ERROR: Could not update existing workflow (HTTP ${code})."
+        return 1
+    fi
+
+    real_trigger_id=$(printf '%s' "$updated" | python3 -c '
+import json
+import sys
+triggers = json.load(sys.stdin).get("triggers", [])
+print(triggers[0].get("id", "") if triggers else "")
+')
+    if [ -n "$real_trigger_id" ]; then
+        echo "http://shuffle-backend:5001/api/v1/hooks/webhook_${real_trigger_id}" \
+            > /tmp/aptl_shuffle_webhook_url
+    fi
+}
+
 # Search for our workflow by name
 EXISTING_ID=""
 if command -v jq &>/dev/null; then
@@ -138,9 +212,10 @@ fi
 
 if [[ -n "${EXISTING_ID}" ]]; then
     echo "Workflow '${WORKFLOW_NAME}' already exists (id: ${EXISTING_ID})."
-    echo "Skipping creation."
+    echo "Refreshing credentials and webhook metadata..."
+    refresh_workflow_credentials "$EXISTING_ID"
     echo ""
-    echo "=== Seed Complete (no changes) ==="
+    echo "=== Seed Complete (existing workflow refreshed) ==="
     exit 0
 fi
 

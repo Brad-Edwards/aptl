@@ -272,6 +272,20 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
+def _service_selected(
+    cfg: object, active_profiles: set[str] | None
+) -> bool:
+    """Return whether one Compose service participates in this topology."""
+    if not isinstance(cfg, dict):
+        return False
+    service_profiles = set(cfg.get("profiles") or [])
+    return (
+        active_profiles is None
+        or not service_profiles
+        or not service_profiles.isdisjoint(active_profiles)
+    )
+
+
 def parse_published_ports(
     compose: dict[str, object], active_profiles: set[str] | None = None
 ) -> list[PortSpec]:
@@ -282,15 +296,9 @@ def parse_published_ports(
     """
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
-        if not isinstance(cfg, dict):
+        if not _service_selected(cfg, active_profiles):
             continue
-        service_profiles = set(cfg.get("profiles") or [])
-        if (
-            active_profiles is not None
-            and service_profiles
-            and service_profiles.isdisjoint(active_profiles)
-        ):
-            continue
+        assert isinstance(cfg, dict)
         for entry in cfg.get("ports") or []:
             spec = _parse_entry(service, entry)
             if spec is not None:

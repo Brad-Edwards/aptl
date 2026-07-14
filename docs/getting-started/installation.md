@@ -73,4 +73,6 @@ Access lab components:
 - Access summary: `aptl lab info`
 - Victim shell: `aptl container shell aptl-victim`
 - Kali shell: `aptl container shell aptl-kali`
-- Reverse engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
+- Reverse engineering SSH, only when the optional reverse service is enabled
+  and appears in `aptl lab status`:
+  `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`

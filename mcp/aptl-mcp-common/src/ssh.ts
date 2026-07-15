@@ -605,7 +605,13 @@ export class PersistentSession extends EventEmitter {
   async close(): Promise<void> {
     this.doCleanup();
     if (this.shell) {
-      this.shell.end();
+      // Send a shell-level exit before EOF. A bare channel EOF can make sshd
+      // tear down the ForceCommand process group before the Kali capture
+      // wrapper's inner `script(1)` process flushes its transcript FIFO. All
+      // supported shell types accept `exit`; stream.end preserves write order
+      // and then half-closes the SSH channel so the wrapper can wait for its
+      // capture client and exit cleanly.
+      this.shell.end('exit\n');
     }
     // Run the postcondition before flipping cleanupVerified so a violation
     // cannot mark the session as cleanly torn down. If assertion throws,

@@ -134,3 +134,25 @@ def test_existing_shuffle_workflow_refreshes_seeded_credentials():
     assert 'os.environ["MISP_API_KEY"]' in text
     assert 'os.environ["THEHIVE_API_KEY"]' in text
     assert "> /tmp/aptl_shuffle_webhook_url" in text
+
+
+def test_shuffle_http_actions_use_supported_tls_and_safe_enrichment():
+    """The bundled HTTP app names its TLS argument ``verify``."""
+    text = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text()
+
+    assert '"name": "verify_ssl"' not in text
+    assert text.count('{"name": "verify", "value": "false"}') == 2
+    assert "$misp_ip_lookup.body.response.Attribute.#0.value" in text
+
+
+def test_shuffle_thehive_body_is_safe_for_runtime_template_expansion():
+    """Shuffle's HTTP app parser rejects expanded newlines in JSON strings."""
+    text = (PROJECT_ROOT / "scripts" / "seed-shuffle.sh").read_text()
+    body_line = next(
+        line
+        for line in text.splitlines()
+        if '{"name": "body"' in line and "Wazuh Alert Details" in line
+    )
+
+    assert "\\n" not in body_line
+    assert "MISP Enrichment; Matched IOC" in body_line

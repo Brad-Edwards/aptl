@@ -154,6 +154,47 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
     assert not report.passed
 
 
+def test_no_start_backend_reads_back_simulated_content_kind():
+    """The offline backend observes a materialized shape, not plan payload text."""
+    from aptl.core.deployment.realization import (
+        DeploymentContentRealization,
+        DeploymentRealizationSpec,
+    )
+
+    file_item = DeploymentContentRealization(
+        address="provision.content.notice",
+        target_address="provision.node.fileshare",
+        content_name="notice",
+        volume_suffix="fileshare_data",
+        dest_relpath="public/notice.txt",
+        source_kind="inline-text",
+        inline_text="must not be materialized by the static gate",
+    )
+    directory_item = DeploymentContentRealization(
+        address="provision.content.onboarding",
+        target_address="provision.node.fileshare",
+        content_name="onboarding",
+        volume_suffix="fileshare_data",
+        dest_relpath="onboarding",
+        source_kind="empty-directory",
+    )
+    backend = _NoStartBackend()
+
+    result = backend.realize(
+        DeploymentRealizationSpec(
+            profiles=(),
+            nodes=(),
+            networks=(),
+            content=(file_item, directory_item),
+        )
+    )
+
+    assert result.success is True
+    assert backend.observe_content_type(file_item) == "file"
+    assert backend.observe_content_type(directory_item) == "directory"
+    assert backend.container_exists("unrealized") is False
+
+
 @pytest.mark.integration
 def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     # Spawns the `aces conformance backend` CLI subprocess via

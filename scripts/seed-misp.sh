@@ -15,7 +15,7 @@ set -euo pipefail
 # Usage:
 #   ./scripts/seed-misp.sh
 #
-# Uses ADMIN_KEY from docker-compose.yml by default. Override with:
+# Uses MISP_API_KEY from the project .env by default. Override with:
 #   MISP_API_KEY="custom-key" ./scripts/seed-misp.sh
 #
 # The script is idempotent -- re-running it will skip event creation if the
@@ -25,6 +25,12 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_DIR/.env"
+source "$SCRIPT_DIR/aptl-env.sh"
+aptl_load_env_key "$ENV_FILE" MISP_API_KEY
+
 MISP_URL="${MISP_URL:-https://localhost:8443}"
 # SEC-006 / ADR-034: MISP now serves a lab-CA-signed certificate.
 # The seed script verifies against the lab CA bundle by default; the
@@ -44,7 +50,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Preflight checks — default to ADMIN_KEY from docker-compose.yml
+# Preflight checks — the generated .env key matches Compose's ADMIN_KEY
 # ---------------------------------------------------------------------------
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 

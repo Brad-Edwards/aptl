@@ -120,6 +120,10 @@ repos:
         # contracts, dated point-in-time records) — keep the two in sync.
         entry: tools/vale-lint-hook.sh
         language: system
+        # The hook installs Vale and syncs its style packages on first use.
+        # Pre-commit otherwise shards file arguments across concurrent hook
+        # processes, which race while replacing the same binary and styles.
+        require_serial: true
         types_or: [markdown]
         exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|node_modules/|\.tools/|\.vale/)
 

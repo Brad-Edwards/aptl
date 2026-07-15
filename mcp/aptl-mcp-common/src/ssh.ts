@@ -13,6 +13,7 @@ export type {
   SessionMode,
   SessionMetadata,
   CommandRequest,
+  SessionConnectOptions,
 } from './ssh-contracts.js';
 export { PersistentSession } from './ssh-session.js';
 export { SSHConnectionManager } from './ssh-manager.js';

@@ -9,7 +9,8 @@ export {
   SessionType,
   SessionMode,
   SessionMetadata,
-  CommandRequest
+  CommandRequest,
+  SessionConnectOptions
 } from './ssh.js';
 export { expandTilde } from './utils.js';
 

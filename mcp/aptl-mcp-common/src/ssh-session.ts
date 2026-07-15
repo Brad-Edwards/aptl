@@ -1,6 +1,6 @@
 
 import { Client, ClientChannel } from 'ssh2';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { randomBytes } from 'node:crypto';
 import { ShellFormatter, ShellType, createShellFormatter } from './shells.js';
 import { createPtyTeeWriter } from './runs.js';
@@ -14,9 +14,9 @@ import {
   aptlShellEnv,
   CommandResult,
   SessionType,
-  SessionMode,
   SessionMetadata,
   CommandRequest,
+  SessionConnectOptions,
 } from './ssh-contracts.js';
 
 export class PersistentSession extends EventEmitter {
@@ -24,15 +24,15 @@ export class PersistentSession extends EventEmitter {
   private outputBuffer: string[] = [];
   private commandQueue: CommandRequest[] = [];
   private currentCommand: CommandRequest | null = null;
-  private sessionInfo: SessionMetadata;
-  private client: Client;
-  private commandDelimiter: string;
+  private readonly sessionInfo: SessionMetadata;
+  private readonly client: Client;
+  private readonly commandDelimiter: string;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private sessionTimeout: NodeJS.Timeout | null = null;
   private commandTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
   private outputData = '';
-  private shellFormatter: ShellFormatter;
+  private readonly shellFormatter: ShellFormatter;
   // Durable cleanup-success latch shared by both emit sites (close() and
   // stream.on('close')). cleanupVerified flips to true exactly once, when
   // doCleanup + assertCleanupInvariants both complete without throwing.
@@ -72,7 +72,7 @@ export class PersistentSession extends EventEmitter {
   // the ambient trace context (codex pre-push cycle 3 finding-6).
   private boundRunId: string | undefined;
 
-  private sessionTimeoutMs: number;
+  private readonly sessionTimeoutMs: number;
 
   private clearCommandTimeout(): void {
     if (this.commandTimeout) {
@@ -87,12 +87,15 @@ export class PersistentSession extends EventEmitter {
     username: string,
     type: SessionType,
     client: Client,
-    port: number = 22,
-    mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
-    shellType: ShellType = 'bash'
+    options: SessionConnectOptions = {}
   ) {
     super();
+    const {
+      port = 22,
+      mode = 'normal',
+      timeoutMs = TIMEOUTS.DEFAULT_SESSION,
+      shellType = 'bash'
+    } = options;
     this.client = client;
     this.sessionTimeoutMs = timeoutMs;
     // crypto.randomBytes for the unique-id suffix (SonarCloud S2245 —
@@ -241,7 +244,7 @@ export class PersistentSession extends EventEmitter {
         resolve: () => {}, // No-op resolve for background
         reject: () => {}, // No-op reject for background
         timeout,
-        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
+        raw: raw ?? (this.sessionInfo.mode === 'raw')
       };
 
       this.commandQueue.push(request);
@@ -278,7 +281,7 @@ export class PersistentSession extends EventEmitter {
         resolve,
         reject,
         timeout,
-        raw: raw !== undefined ? raw : this.sessionInfo.mode === 'raw'
+        raw: raw ?? (this.sessionInfo.mode === 'raw')
       };
 
       this.commandQueue.push(request);
@@ -312,7 +315,7 @@ export class PersistentSession extends EventEmitter {
             // In raw mode, resolve with whatever output we've collected
             const output = this.outputData;
             this.commandTimeout = null;
-            this.currentCommand!.resolve({
+            this.currentCommand.resolve({
               stdout: output,
               stderr: '',
               code: 0, // Unknown in raw mode
@@ -376,7 +379,7 @@ export class PersistentSession extends EventEmitter {
     }
 
     // Strip carriage returns to normalize line endings before parsing
-    const normalizedOutput = this.outputData.replace(/\r/g, '');
+    const normalizedOutput = this.outputData.replaceAll('\r', '');
 
     const endDelimiter = `${this.commandDelimiter}_END_${this.currentCommand.id}`;
     const exitCode = this.shellFormatter.parseExitCode(normalizedOutput, endDelimiter);
@@ -395,7 +398,7 @@ export class PersistentSession extends EventEmitter {
 
         const lines = output.split('\n');
         if (lines[0] === '') lines.shift();
-        if (lines[lines.length - 1] === '') lines.pop();
+        if (lines.at(-1) === '') lines.pop();
 
         // Filter out lines containing internal command delimiters or command echo
         const delimiter = this.commandDelimiter;

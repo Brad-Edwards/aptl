@@ -1,6 +1,7 @@
 
 import { loadActiveTraceId } from './runs.js';
 import { redact } from './redaction.js';
+import type { ShellType } from './shells.js';
 
 // Mask embedded credentials before putting a command into an error message.
 // Command-timeout / failure SSHError strings can reach stderr (console.error)
@@ -103,6 +104,13 @@ export class SSHError extends Error {
 
 export type SessionType = 'interactive' | 'background';
 export type SessionMode = 'normal' | 'raw';
+
+export interface SessionConnectOptions {
+  port?: number;
+  mode?: SessionMode;
+  timeoutMs?: number;
+  shellType?: ShellType;
+}
 
 export interface SessionMetadata {
   sessionId: string;

@@ -1,9 +1,8 @@
 
 import { Client } from 'ssh2';
-import { readFile } from 'fs/promises';
-import { EventEmitter } from 'events';
+import { readFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import { randomBytes } from 'node:crypto';
-import { ShellType } from './shells.js';
 import { createPtyTeeWriter } from './runs.js';
 import {
   SSHError,
@@ -15,8 +14,8 @@ import {
   aptlShellEnv,
   CommandResult,
   SessionType,
-  SessionMode,
   SessionMetadata,
+  SessionConnectOptions,
 } from './ssh-contracts.js';
 import { PersistentSession } from './ssh-session.js';
 
@@ -26,8 +25,8 @@ interface ConnectionInfo {
 }
 
 export class SSHConnectionManager {
-  private connections: Map<string, ConnectionInfo> = new Map();
-  private sessions: Map<string, PersistentSession> = new Map();
+  private readonly connections: Map<string, ConnectionInfo> = new Map();
+  private readonly sessions: Map<string, PersistentSession> = new Map();
   // In-flight createSession calls keyed by session id. Tracking the actual
   // promise (not just the id) lets disconnectAll quiesce by awaiting them
   // before sweeping; otherwise a reserved-but-incomplete create could
@@ -231,10 +230,7 @@ export class SSHConnectionManager {
     username: string,
     type: SessionType,
     privateKeyPath: string,
-    port: number = 22,
-    mode: SessionMode = 'normal',
-    timeoutMs: number = TIMEOUTS.DEFAULT_SESSION,
-    shellType: ShellType = 'bash'
+    options: SessionConnectOptions = {}
   ): Promise<PersistentSession> {
     // Reserve the id SYNCHRONOUSLY (before any await) so a concurrent
     // createSession with the same id cannot pass the precondition and
@@ -245,8 +241,9 @@ export class SSHConnectionManager {
     );
 
     const creation = (async (): Promise<PersistentSession> => {
+      const port = options.port ?? 22;
       const client = await this.getConnection(target, username, privateKeyPath, port);
-      const session = new PersistentSession(sessionId, target, username, type, client, port, mode, timeoutMs, shellType);
+      const session = new PersistentSession(sessionId, target, username, type, client, options);
 
       // Attach ownership-transfer listeners BEFORE the initialize() await so a
       // stream close/error during the startup delay is not missed. 'closed'

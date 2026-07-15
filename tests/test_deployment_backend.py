@@ -977,6 +977,9 @@ services:
 
     def test_stop_with_volumes(self, tmp_path):
         backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n  seeded_data:\n"
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -985,6 +988,67 @@ services:
         assert result.success is True
         cmd = mock_run.call_args_list[0][0][0]
         assert "-v" in cmd
+
+    def test_stop_with_volumes_removes_only_declared_project_leftovers(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n"
+            "  seeded_data:\n"
+            "  compose_data: {}\n"
+            "  shared_data:\n"
+            "    external: true\n"
+            "  explicit_data:\n"
+            "    name: global-data\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=(
+                        "test_seeded_data\n"
+                        "other_seeded_data\n"
+                        "global-data\n"
+                    ),
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert ["docker", "volume", "rm", "test_seeded_data"] in commands
+        assert all("other_seeded_data" not in command for command in commands)
+        assert all("global-data" not in command for command in commands)
+
+    def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n  seeded_data:\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_seeded_data\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "volume", "rm"]:
+                return MagicMock(returncode=1, stdout="", stderr="still in use")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is False
+        assert "Failed to remove project volumes" in result.error
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1757,6 +1821,7 @@ class TestSSHComposeBackend:
 
     def test_inherits_stop_behavior(self, tmp_path):
         backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text("volumes: {}\n")
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")

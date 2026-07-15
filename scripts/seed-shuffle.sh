@@ -24,6 +24,14 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_DIR/.env"
+source "$SCRIPT_DIR/aptl-env.sh"
+for key in SHUFFLE_API_KEY MISP_API_KEY THEHIVE_API_KEY; do
+    aptl_load_env_key "$ENV_FILE" "$key"
+done
+
 # SEC-006 / ADR-034: the host-facing Shuffle backend moved from
 # http://localhost:5001 to the HTTPS frontend at localhost:3443. The
 # seed script is a host-side CLIENT of Shuffle, so it verifies against
@@ -54,7 +62,6 @@ fi
 
 # Auto-provision TheHive API key if not set in env
 if [ -z "${THEHIVE_API_KEY:-}" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
         THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) || true
     fi

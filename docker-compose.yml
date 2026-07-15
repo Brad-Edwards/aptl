@@ -645,6 +645,11 @@ services:
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - discovery.type=single-node
+      # This is a disposable, single-node lab datastore sharing the host
+      # filesystem. Percentage watermarks can make it read-only even when the
+      # host still has tens of GiB free, leaving Shuffle healthy but unable to
+      # accept the seeded workflow. Match the Wazuh indexer's lab policy.
+      - cluster.routing.allocation.disk.threshold_enabled=false
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
     volumes:
       - shuffle_opensearch_data:/usr/share/opensearch/data

@@ -31,7 +31,7 @@ from aptl.core.deployment._compose_realization import (
     _resolve_realization_networks,
 )
 from aptl.core.deployment._compose_queries import _select_shell
-from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
 
 # SSHComposeBackend validates the *local* ssh identity path with
@@ -2525,6 +2525,140 @@ class TestRealizeContent:
                 backend.realize_content(content, seeder_image="img:1")
         assert "fileshare_data" in str(exc_info.value)
         assert "secret docker stderr" not in str(exc_info.value)
+
+
+class TestObserveContentType:
+    """Read back the realized filesystem kind without reading its content."""
+
+    def _item(self, **overrides):
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        fields = {
+            "address": "provision.content-placement.notice",
+            "target_address": "provision.node.fileshare",
+            "content_name": "notice",
+            "volume_suffix": "fileshare_data",
+            "dest_relpath": "public/notice.txt",
+            "source_kind": "inline-text",
+            "inline_text": "secret payload",
+        }
+        fields.update(overrides)
+        return DeploymentContentRealization(**fields)
+
+    @pytest.mark.parametrize(
+        ("returncode", "expected"),
+        [(10, "file"), (11, "directory"), (12, None), (1, None)],
+    )
+    def test_classifies_project_scoped_volume_destination(
+        self, tmp_path, returncode, expected
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        {
+                            "com.docker.compose.project": "test",
+                            "com.docker.compose.volume": "fileshare_data",
+                        }
+                    ),
+                    stderr="",
+                ),
+                MagicMock(
+                    returncode=returncode,
+                    stdout="must-not-be-consumed",
+                    stderr="must-not-be-consumed",
+                ),
+            ]
+
+            observed = backend.observe_content_type(self._item())
+
+        assert observed == expected
+        assert run.call_args_list[0].args[0] == [
+            "docker",
+            "volume",
+            "inspect",
+            "test_fileshare_data",
+            "--format",
+            "{{json .Labels}}",
+        ]
+        cmd = run.call_args_list[1].args[0]
+        assert "test_fileshare_data:/dest:ro" in cmd
+        assert cmd[:3] == ["docker", "run", "--rm"]
+        assert cmd[3:5] == ["--user", "0:0"]
+        assert cmd[5:7] == ["--network", "none"]
+        assert cmd[7:9] == ["--entrypoint", "/bin/sh"]
+        assert "secret payload" not in " ".join(cmd)
+        assert "/dest/public/notice.txt" not in cmd[-3]
+        assert '"$1"' in cmd[-3]
+        assert cmd[-2:] == ["aptl-content-probe", "/dest/public/notice.txt"]
+        assert all(call.kwargs["timeout"] > 0 for call in run.call_args_list)
+
+    def test_missing_project_volume_is_not_created_by_probe(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.return_value = MagicMock(returncode=1, stdout="", stderr="secret")
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_args.args[0] == [
+            "docker",
+            "volume",
+            "inspect",
+            "test_fileshare_data",
+            "--format",
+            "{{json .Labels}}",
+        ]
+        assert run.call_args.kwargs["timeout"] > 0
+
+    @pytest.mark.parametrize(
+        "labels",
+        [
+            {},
+            {
+                "com.docker.compose.project": "other",
+                "com.docker.compose.volume": "fileshare_data",
+            },
+            {
+                "com.docker.compose.project": "test",
+                "com.docker.compose.volume": "other_data",
+            },
+        ],
+    )
+    def test_same_named_foreign_or_unlabelled_volume_is_not_probed(
+        self, tmp_path, labels
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(returncode=0, stdout=json.dumps(labels), stderr=""),
+                MagicMock(returncode=10, stdout="", stderr=""),
+            ]
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_count == 1
+
+    def test_malformed_volume_labels_are_not_probed(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(returncode=0, stdout="not-json", stderr=""),
+                MagicMock(returncode=10, stdout="", stderr=""),
+            ]
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_count == 1
+
+    def test_unsafe_destination_never_runs_probe(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        item = self._item(dest_relpath="../../outside", inline_text=None)
+        with patch.object(backend, "_run") as run:
+            with pytest.raises(BackendSeedError):
+                backend.observe_content_type(item)
+        run.assert_not_called()
 
 
 class TestComposeRealizeContentStep:

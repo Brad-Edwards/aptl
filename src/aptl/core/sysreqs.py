@@ -118,8 +118,10 @@ def _docker_buildx_install_hint() -> str:
             "`docker buildx version` from the same shell that runs aptl."
         ),
         hostenv.OS_LINUX: (
-            "Install the Docker Buildx plugin, for example your distro's "
-            "docker-buildx-plugin package, then verify `docker buildx version`."
+            "Install the Docker Buildx plugin (`sudo apt install docker-buildx` "
+            "for Ubuntu's docker.io packages, or `sudo apt install "
+            "docker-buildx-plugin` for Docker CE), then verify "
+            "`docker buildx version`."
         ),
     }
     return hints.get(

@@ -79,6 +79,19 @@ misp_api() {
     curl "${args[@]}" "${MISP_URL}${endpoint}"
 }
 
+misp_search_event_field() {
+    local field="$1"
+    python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+events = payload.get("response", []) if isinstance(payload, dict) else payload
+event = events[0].get("Event", {}) if events else {}
+print(event.get(sys.argv[1], ""))
+' "$field"
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Check if the event already exists
 # ---------------------------------------------------------------------------
@@ -91,9 +104,9 @@ EVENT_ID=""
 EVENT_UUID=""
 if echo "${SEARCH_RESULT}" | grep -q '"id"'; then
     EVENT_ID=$(echo "${SEARCH_RESULT}" \
-        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Event']['id'] if d else '')" 2>/dev/null || true)
+        | misp_search_event_field id 2>/dev/null || true)
     EVENT_UUID=$(echo "${SEARCH_RESULT}" \
-        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Event']['uuid'] if d else '')" 2>/dev/null || true)
+        | misp_search_event_field uuid 2>/dev/null || true)
 fi
 
 if [[ -n "${EVENT_ID}" ]]; then

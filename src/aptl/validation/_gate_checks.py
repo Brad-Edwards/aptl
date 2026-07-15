@@ -163,13 +163,13 @@ class _NoStartBackend(object):
         """Read the filesystem kind materialized by the offline simulation."""
 
         path = self._content_paths.get(content.address)
-        if path is None:
-            return None
-        if path.is_file():
-            return "file"
-        if path.is_dir():
-            return "directory"
-        return None
+        observed: str | None = None
+        if path is not None:
+            if path.is_file():
+                observed = "file"
+            elif path.is_dir():
+                observed = "directory"
+        return observed
 
     @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:

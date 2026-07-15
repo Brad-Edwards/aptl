@@ -2521,9 +2521,9 @@ class TestObserveContentType:
         cmd = run.call_args_list[1].args[0]
         assert "test_fileshare_data:/dest:ro" in cmd
         assert cmd[:3] == ["docker", "run", "--rm"]
-        assert ["--user", "0:0"] == cmd[3:5]
-        assert ["--network", "none"] == cmd[5:7]
-        assert ["--entrypoint", "/bin/sh"] == cmd[7:9]
+        assert cmd[3:5] == ["--user", "0:0"]
+        assert cmd[5:7] == ["--network", "none"]
+        assert cmd[7:9] == ["--entrypoint", "/bin/sh"]
         assert "secret payload" not in " ".join(cmd)
         assert "/dest/public/notice.txt" not in cmd[-3]
         assert '"$1"' in cmd[-3]
@@ -2589,11 +2589,10 @@ class TestObserveContentType:
 
     def test_unsafe_destination_never_runs_probe(self, tmp_path):
         backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        item = self._item(dest_relpath="../../outside", inline_text=None)
         with patch.object(backend, "_run") as run:
             with pytest.raises(BackendSeedError):
-                backend.observe_content_type(
-                    self._item(dest_relpath="../../outside", inline_text=None)
-                )
+                backend.observe_content_type(item)
         run.assert_not_called()
 
 

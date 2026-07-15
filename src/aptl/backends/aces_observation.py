@@ -224,7 +224,7 @@ def _container_realized(info: Mapping[str, Any]) -> bool:
 
 def _observed_content_type(
     backend: "DeploymentBackend",
-    content: "DeploymentContentRealization | None",
+    content: DeploymentContentRealization | None,
 ) -> str | None:
     """Return the destination kind observed by the deployment provider."""
 

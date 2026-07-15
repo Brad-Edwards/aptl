@@ -165,6 +165,53 @@ class TestLabStartCommand:
         assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
         assert "Grafana: http://localhost:3100" in result.stdout
 
+    def test_lab_info_omits_reverse_access_when_service_is_not_running(
+        self, runner, tmp_path, mocker
+    ):
+        """The default TechVault scenario does not realize reverse."""
+        from aptl.cli.main import app
+
+        (tmp_path / ".env").touch()
+        mocker.patch("aptl.cli.lab_render.live_services", return_value=set())
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Reverse engineering SSH" not in result.stdout
+        assert "aptl_lab_key" not in result.stdout
+
+    def test_lab_info_prints_reverse_access_when_service_is_running(
+        self, runner, tmp_path, mocker
+    ):
+        """An explicitly realized reverse service remains discoverable."""
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="reverse",
+                    env_var="REVERSE_SSH_PORT",
+                    default_port=2027,
+                    resolved_port=20027,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                )
+            ],
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_services", return_value={"reverse"}
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Reverse engineering SSH" in result.stdout
+        assert "localhost -p 20027" in result.stdout
+
     def test_lab_info_fails_without_env(self, runner, tmp_path):
         """lab info should tell users to start the lab before .env exists."""
         from aptl.cli.main import app

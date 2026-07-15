@@ -755,11 +755,18 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     """
     from aptl.core import host_ports
 
+    active_profiles = None
+    if ctx.config is not None:
+        active_profiles = set(ctx.config.containers.enabled_profiles())
+        # The public start path always includes observability even though it is
+        # not an aptl.json container toggle.
+        active_profiles.add("otel")
     assert ctx.backend is not None
     existing_bindings = host_ports.project_port_bindings(ctx.backend)
     ctx.resolved_ports = host_ports.resolve_host_ports(
         ctx.project_dir,
         reserved_env=set(ctx.raw_env),
+        active_profiles=active_profiles,
         existing_bindings=existing_bindings,
     )
     for resolved in ctx.resolved_ports:

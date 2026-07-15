@@ -1738,6 +1738,7 @@ class TestResolveHostPortsStep:
     """
 
     def _ctx(self, tmp_path, raw_env=None, progress=None):
+        from aptl.core.config import AptlConfig
         from aptl.core.lab import _LabStartContext
 
         return _LabStartContext(
@@ -1745,6 +1746,10 @@ class TestResolveHostPortsStep:
             skip_seed=False,
             raw_env=raw_env or {},
             progress=progress,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={"wazuh": True, "soc": True},
+            ),
             backend=MagicMock(),
         )
 
@@ -1779,6 +1784,16 @@ class TestResolveHostPortsStep:
         resolve.assert_called_once_with(
             tmp_path,
             reserved_env={"APTL_DNS_HOST_PORT"},
+            active_profiles={
+                "wazuh",
+                "victim",
+                "kali",
+                "enterprise",
+                "soc",
+                "fileshare",
+                "dns",
+                "otel",
+            },
             existing_bindings={},
         )
 

@@ -5,12 +5,19 @@ set -euo pipefail
 # TheHive API Key Provisioner
 # =============================================================================
 # Ensures the APTL organisation exists in TheHive, creates an org-admin user,
-# and outputs a fresh API key. Prints the key to stdout:
+# and outputs a working API key. An existing generated key is reused while it
+# remains valid so downstream integrations are not invalidated by a rerun.
+# Prints the key to stdout:
 #
 #   THEHIVE_API_KEY=$(./scripts/thehive-apikey.sh)
 #
 # Idempotent -- safe to re-run. Creates org/user only if missing.
 # =============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/aptl-env.sh"
+aptl_load_env_key "$PROJECT_DIR/.env" THEHIVE_API_KEY
 
 # SEC-006 / ADR-034: TheHive now serves HTTPS on 9000 using the
 # lab-managed CA. Seed paths verify against the CA bundle that
@@ -32,6 +39,20 @@ trap 'rm -f "$COOKIE"' EXIT
 TLS_FLAGS=()
 if [ -f "$THEHIVE_CACERT" ]; then
     TLS_FLAGS+=(--cacert "$THEHIVE_CACERT")
+fi
+
+# Renewing a TheHive key immediately revokes the previous one. Reuse the
+# project key when TheHive accepts it so an idempotent seed rerun cannot leave
+# an already-created Shuffle workflow holding a revoked credential. A stale
+# key left by `lab stop -v` fails this probe and falls through to renewal.
+if [[ -n "${THEHIVE_API_KEY:-}" && ! "${THEHIVE_API_KEY}" =~ [[:space:]] ]] && \
+    curl -sf "${TLS_FLAGS[@]}" -X POST "${THEHIVE_URL}/api/v1/query" \
+        -H "Authorization: Bearer ${THEHIVE_API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d '{"query":[{"_name":"listCase"},{"_name":"page","from":0,"to":1}]}' \
+        >/dev/null 2>&1; then
+    echo "$THEHIVE_API_KEY"
+    exit 0
 fi
 
 _curl() {

@@ -146,8 +146,8 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
     supported_node_types=frozenset({"switch", "vm"}),
-    supported_os_families=frozenset({"freebsd", "linux", "macos", "other", "windows"}),
-    supported_content_types=frozenset({"dataset", "directory", "file"}),
+    supported_os_families=frozenset({"linux"}),
+    supported_content_types=frozenset({"directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
     # non-secret fields the typed DeploymentAccountRealization carries. auth_method
@@ -157,20 +157,25 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_account_features=frozenset(
         {"disabled", "groups", "mail", "spn"}
     ),
-    supports_acls=True,
+    supports_acls=False,
     supports_accounts=True,
 )
 
 # What APTL realizes from a provisioning plan, and how. APTL matches declared
 # capabilities against its provisioner support and discloses the result through
-# the backend-manifest / operation-status / runtime-snapshot contracts.
+# the backend-manifest / operation-status / runtime-snapshot contracts. The
+# constrained-kind set is intentionally narrower than the provisioner vocabulary:
+# ACES 0.21.x publishes runtime concern paths for node type, OS family, and
+# content type, but only OS family is currently expressible by APTL's regression
+# scenario as a constrained (processor-derived) requirement. Node/content exact
+# requirements are covered by ``declared-capability-match``; account features are
+# realized through the account provider's typed read-after-write path but are not
+# yet an ACES runtime realization concern.
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.CONSTRAINED,
-        supported_constraint_kinds=frozenset(
-            {"account-feature", "content-type", "node-type", "os-family"}
-        ),
+        supported_constraint_kinds=frozenset({"os-family"}),
         supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}

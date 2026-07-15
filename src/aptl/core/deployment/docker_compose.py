@@ -1,12 +1,6 @@
-"""Docker Compose deployment backend.
+"""Local Docker Compose deployment backend.
 
-Implements the DeploymentBackend protocol using local Docker Compose
-subprocess calls. This is the default backend and wraps the logic
-previously embedded directly in lab.py and kill.py.
-
-Host- and container-level docker query/inspect operations live in
-``ComposeQueryMixin`` (``_compose_queries.py``) to keep this module within
-the size budget; they are mixed into ``DockerComposeBackend`` below.
+Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
@@ -22,6 +16,10 @@ from aptl.core.deployment._compose_build_dedupe import (
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
+from aptl.core.deployment._compose_volume_cleanup import (
+    project_scoped_volume_names,
+    remove_leftover_project_volumes,
+)
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -241,6 +239,13 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             LabResult indicating success or failure.
         """
+        volume_names: set[str] = set()
+        volume_discovery_error = ""
+        if remove_volumes:
+            volume_names, volume_discovery_error = project_scoped_volume_names(
+                self._project_dir, self._project_name
+            )
+
         cmd = self._build_command("down", profiles=profiles)
         if remove_volumes:
             cmd.append("-v")
@@ -253,10 +258,19 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             log.error("Lab stop failed: %s", result.stderr)
             return LabResult(success=False, error=result.stderr)
 
-        network_failures = self.remove_project_networks()
-        if network_failures:
-            error = "; ".join(network_failures[:5])
-            log.error("Lab network cleanup failed: %s", error)
+        failures = self.remove_project_networks()
+        if remove_volumes:
+            if volume_discovery_error:
+                failures.append(volume_discovery_error)
+            else:
+                failures.extend(
+                    remove_leftover_project_volumes(
+                        volume_names, self._run, timeout=_DOCKER_TIMEOUT
+                    )
+                )
+        if failures:
+            error = "; ".join(failures[:5])
+            log.error("Lab cleanup failed: %s", error)
             return LabResult(success=False, error=error)
 
         log.info("Lab stopped successfully")

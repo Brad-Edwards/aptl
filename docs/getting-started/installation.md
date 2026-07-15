@@ -44,10 +44,11 @@ If you need to run steps individually:
 1. Generate SSH keys: `./scripts/generate-ssh-keys.sh`
 2. Set vm.max_map_count if using a native Linux Docker Engine:
    `sudo sysctl -w vm.max_map_count=262144`
-3. Generate SSL certificates: `docker compose -f generate-indexer-certs.yml run --rm generator`
-4. Start lab: `aptl lab start`
+3. Start the lab: `aptl lab start`. The CLI generates SSL certificates in an
+   isolated temporary Compose project and removes that project before it
+   creates the lab networks.
 
-> Step 4 must be `aptl lab start`, not a raw `docker compose up`: `aptl lab
+> Step 3 must be `aptl lab start`, not a raw `docker compose up`: `aptl lab
 > start` also renders the credentialized Wazuh config from the checked-in
 > templates into the gitignored `.aptl/config/` tree (ADR-028), which the
 > manager and dashboard containers bind-mount. There is no standalone command
@@ -73,4 +74,6 @@ Access lab components:
 - Access summary: `aptl lab info`
 - Victim shell: `aptl container shell aptl-victim`
 - Kali shell: `aptl container shell aptl-kali`
-- Reverse engineering SSH: `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`
+- Reverse engineering SSH, only when the optional reverse service is enabled
+  and appears in `aptl lab status`:
+  `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`

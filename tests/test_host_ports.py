@@ -44,14 +44,14 @@ def test_parse_entry(entry, expect):
     service = expect[0]
     spec = host_ports._parse_entry(service, entry)
     assert spec is not None
-    assert (
+    assert expect == (
         spec.service,
         spec.env_var,
         spec.default_port,
         spec.container_port,
         spec.proto,
         spec.host_ip,
-    ) == expect
+    )
 
 
 def test_parse_entry_skips_varref_without_default():

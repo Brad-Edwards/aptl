@@ -213,10 +213,11 @@ def _container_realized(info: Mapping[str, Any]) -> bool:
 def _declared_content_type(payload: Mapping[str, Any]) -> object | None:
     """Return the content type the backend realized for a content placement.
 
-    APTL materializes content exactly as the compiled spec types it (a file, a
-    directory, a dataset) — the seeder fails closed rather than substituting a
-    different kind — so the realized type is the spec's type, reported only
-    because the target container was observed running.
+    APTL materializes the content kinds its manifest claims (file and directory)
+    exactly as the compiled spec types them. Unsupported kinds such as datasets
+    fail closed in the realizer before mutation rather than being substituted,
+    so the realized type is the spec's type only after the target container was
+    observed running.
     """
 
     spec = payload.get("spec")

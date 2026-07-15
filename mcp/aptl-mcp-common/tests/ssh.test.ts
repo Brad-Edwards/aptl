@@ -1532,6 +1532,11 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     let resolved = false;
     closeP.then(() => { resolved = true; });
 
+    // The Kali ForceCommand wrapper needs its child shell to exit normally so
+    // `script(1)` closes the transcript FIFO and the capture client can flush
+    // before sshd closes the channel. Bare EOF truncated live captures.
+    expect(mockStream.end).toHaveBeenCalledWith('exit\n');
+
     // Microtask drain — local cleanup is sync, but the close promise must
     // still be pending because remote 'close' has not fired.
     await Promise.resolve();

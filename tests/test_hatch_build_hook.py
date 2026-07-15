@@ -117,6 +117,30 @@ def test_initialize_maps_assets_under_labdata(tmp_path: Path) -> None:
     assert hook._staging_dir is None
 
 
+def test_initialize_ignores_ambient_git_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The build hook must ignore inherited git *location* env vars.
+
+    Regression guard: a build (or pre-commit hook) that exports ``GIT_DIR`` /
+    ``GIT_WORK_TREE`` pointing at the real repo must not make ``_git_tracked``
+    resolve to the ambient repo and try to bundle files the synthetic
+    (non-repo) tree lacks — which raised ``FileNotFoundError``.
+    """
+    hatch_build = _load_hatch_build()
+    _make_fake_checkout(tmp_path)
+    monkeypatch.setenv("GIT_DIR", str(REPO_ROOT / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(REPO_ROOT))
+
+    hook = hatch_build.CustomBuildHook(str(tmp_path))
+    build_data: dict[str, object] = {}
+    hook.initialize("0", build_data)
+
+    targets = set(build_data["force_include"].values())
+    assert "aptl/_labdata/docker-compose.yml" in targets
+    assert not any(t.endswith(".dockerignore") for t in targets)
+
+
 def test_initialize_skips_minimal_context(tmp_path: Path) -> None:
     """A build context without docker-compose.yml (service images) bundles nothing."""
     hatch_build = _load_hatch_build()

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import importlib.resources
 import json
+import os
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -120,14 +121,42 @@ def default_config_json() -> str:
     return json.dumps(payload, indent=4) + "\n"
 
 
+# Git env vars that redirect where git resolves the repo/worktree/index.
+# A git hook (e.g. pre-commit) exports these pointing at the real repo; if
+# they leak into ``git ls-files`` below they make it resolve to the ambient
+# repo instead of ``root``, so a non-repo checkout is reported as carrying the
+# real repo's tracked files and materialize/bundle then fails copying paths the
+# checkout lacks. Strip them so selection is always scoped to ``root``.
+_GIT_LOCATION_ENV = frozenset(
+    {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_PREFIX",
+        "GIT_NAMESPACE",
+    }
+)
+
+
 def _git_tracked(root: Path) -> list[Path] | None:
-    """Return tracked asset files under ``root``, or ``None`` without git."""
+    """Return tracked asset files under ``root``, or ``None`` without git.
+
+    Runs ``git ls-files`` with the inherited git *location* environment
+    (``GIT_DIR``/``GIT_WORK_TREE``/``GIT_INDEX_FILE`` etc.) stripped, so a
+    caller running inside a git hook cannot make selection resolve to the
+    ambient repo instead of ``root``.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_ENV}
     try:
         completed = subprocess.run(
             ["git", "ls-files", "-z", "--", *_ASSET_ROOTS],
             cwd=root,
             capture_output=True,
             check=True,
+            env=env,
         )
     except (OSError, subprocess.CalledProcessError):
         return None

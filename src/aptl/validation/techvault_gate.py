@@ -2,11 +2,11 @@
 
 Composes the ACES authorities — the reference parser, import-lock verification,
 the runtime compiler/semantic validator, and canonical ``backend-manifest-v2``
-conformance — together with APTL's provisioning realization and the parity
-inventory into a single, scenario-generic gate. It is parameterized by scenario
-path, backend profile, corpus roots, and target name: TechVault is the proving
-input, never a hardcoded branch, so the next scenario in APTL's expressivity
-class passes through by changing inputs rather than editing this module.
+conformance — together with APTL's provisioning realization into a single,
+scenario-generic gate. It is parameterized by scenario path, backend profile,
+corpus roots, and target name: TechVault is the proving input, never a
+hardcoded branch, so the next scenario in APTL's expressivity class passes
+through by changing inputs rather than editing this module.
 
 The gate is STATIC. It parses, locks, compiles, conformance-checks, and
 interprets the provisioning plan, but never starts Docker or touches the lab.
@@ -30,30 +30,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
 DEFAULT_PROFILE = "full-remote-control-plane"
-DEFAULT_SCENARIO = Path("scenarios") / "techvault.sdl.yaml"
-DEFAULT_PARITY_INVENTORY = Path("docs") / "aces" / "parity-inventory.yaml"
-
-PHASE_A = "phase_a"
-PHASE_B = "phase_b"
-
-# Observable surface families SCN-010E requires the gate to account for. Each
-# must be REPRESENTED with real compiled evidence, or explicitly DEFERRED with a
-# linked tracking issue in the parity inventory. The set is the checker's
-# contract — a silently dropped surface fails the gate.
-REQUIRED_SURFACES: tuple[str, ...] = (
-    "nodes",
-    "services",
-    "vulnerabilities",
-    "features",
-    "injects",
-    "workflows",
-    "objectives",
-    "scoring",
-    "run_archive",
-    "kali_apparatus",
-    "defensive_stack",
-    "health",
-)
+DEFAULT_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
 
 
 @dataclass(frozen=True)
@@ -71,7 +48,6 @@ class GateReport(object):
 
     scenario: str
     profile: str
-    phase: str
     checks: tuple[GateCheck, ...]
 
     @property
@@ -87,7 +63,7 @@ class GateReport(object):
         """Render a redacted, human/CI-readable summary."""
         lines = [
             f"ACES static validation gate — scenario={self.scenario} "
-            f"profile={self.profile} phase={self.phase}: "
+            f"profile={self.profile}: "
             f"{'PASS' if self.passed else 'FAIL'}"
         ]
         for check in self.checks:
@@ -104,18 +80,17 @@ class GateOptions(object):
 
     ``fixtures_root`` / ``profiles_root`` override the ACES corpus roots
     (default: the roots bundled with the installed ``aces-sdl`` wheel).
-    ``phase`` selects Phase A (deferrals allowed when issue-linked) or Phase B
-    cutover (deferrals disallowed). ``check_imports`` controls the slow
-    ``aces sdl verify-imports`` step (~4.5 min on TechVault); the fast
-    inner-loop test suite sets it False and lets the dedicated CI job / pre-push
-    hook own lock verification.
+    ``check_imports`` controls the ``aces sdl verify-imports`` step, whose cost
+    scales with the scenario's imported module tree; the fast inner-loop test
+    suite sets it False and lets the dedicated CI job / pre-push hook own lock
+    verification. A scenario that declares no ``imports:`` passes the step
+    without a lockfile, so it costs nothing for the import-free scenarios this
+    repo ships today while staying fail-closed for any that import.
     """
 
     profile: str = DEFAULT_PROFILE
     fixtures_root: Path | None = None
     profiles_root: Path | None = None
-    parity_inventory_path: Path | None = None
-    phase: str = PHASE_A
     check_imports: bool = True
 
 
@@ -136,11 +111,11 @@ def validate_scenario(
     scenario, parse_check = checks.check_parse(scenario_path)
     results.append(parse_check)
     if scenario is None:
-        return GateReport(str(scenario_path), opts.profile, opts.phase, tuple(results))
+        return GateReport(str(scenario_path), opts.profile, tuple(results))
 
     # 2. Import lock — verify the committed lockfile, trust policy, and imports.
     if opts.check_imports:
-        results.append(checks.check_import_lock(scenario_path))
+        results.append(checks.check_import_lock(scenario_path, scenario))
 
     # 3. Compile / semantic validation.
     results.append(checks.check_compile(scenario))
@@ -158,20 +133,19 @@ def validate_scenario(
     )
 
     # 5. Provisioning realization — interpret the plan, scenario-generically.
-    realization_details, realization_check = checks.check_provisioning_realization(
+    _realization_details, realization_check = checks.check_provisioning_realization(
         scenario=scenario, project_dir=project_dir, config=config
     )
     results.append(realization_check)
 
-    # 6. Parity manifest — every required surface represented or deferred.
+    # 6. Account provisioner parity — every SDL account is a real,
+    # clean-start-realized fixture, not a phantom declaration (#689).
+    from aptl.validation import _account_parity
+
     results.append(
-        checks.check_parity_manifest(
-            scenario=scenario,
-            realization_details=realization_details,
-            project_dir=project_dir,
-            parity_inventory_path=opts.parity_inventory_path,
-            phase=opts.phase,
+        _account_parity.check_account_provisioner_parity(
+            scenario=scenario, project_dir=project_dir
         )
     )
 
-    return GateReport(str(scenario_path), opts.profile, opts.phase, tuple(results))
+    return GateReport(str(scenario_path), opts.profile, tuple(results))

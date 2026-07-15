@@ -288,6 +288,23 @@ class ComposeQueryMixin(object):
         argv = ["docker", "exec", name, *cmd]
         return self._run(argv, timeout=timeout)
 
+    def container_restart(self, name: str, *, timeout: int | None = None) -> None:
+        """Restart a container by name via ``docker restart``.
+
+        Best-effort: propagates the CalledProcessError-style non-zero
+        return through a log at warning level so the caller can proceed
+        with a retry regardless.
+        """
+        argv = ["docker", "restart", name]
+        result = self._run(argv, timeout=timeout or _HOST_INVENTORY_TIMEOUT)
+        if result.returncode != 0:
+            log.warning(
+                "docker restart %s returned %s: %s",
+                name,
+                result.returncode,
+                (result.stderr or "").strip(),
+            )
+
     def container_exists(self, name: str) -> bool:
         info = self.container_inspect(name)
         if not info:

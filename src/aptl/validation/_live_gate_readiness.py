@@ -3,8 +3,8 @@
 Extracted from ``_live_gate_probes`` (SCN-010F / #323) to keep both modules
 under the file-size budget. These helpers compare the realized ACES node
 surface against the booted range's container snapshot: every realized node in a
-started profile must map to a live container, and a node that declares
-``runtime.health`` must see its container actually report that health.
+started profile must map to a live container, and any container carrying a
+healthcheck must actually report healthy.
 ``_live_gate_checks.check_defensive_stack_readiness`` imports
 ``_node_readiness_diagnostics`` and ``_warn_unhealthy_infra`` from here.
 """
@@ -42,9 +42,7 @@ def _node_readiness_diagnostics(
             continue
         matched_names.add(container.get("name", ""))
         diagnostics.extend(
-            _container_health_diagnostics(
-                node.get("name", "?"), container, node.get("declared_health")
-            )
+            _container_health_diagnostics(node.get("name", "?"), container)
         )
     return diagnostics, matched_names
 
@@ -65,25 +63,28 @@ def _warn_unhealthy_infra(
 def _container_health_diagnostics(
     node_name: str,
     container: Mapping[str, Any],
-    declared_health: str | None = None,
 ) -> list[str]:
     """Return hard-failure diagnostics for one realized node's container.
 
-    ``declared_health`` is the node's realized ``runtime.health.status``
-    expectation (``None`` when undeclared). A node declaring ``healthy`` whose
-    container is not actually ``healthy`` fails; an undeclared node tolerates
-    any non-``unhealthy`` state.
+    Health is observed, never declared. aces-sdl 0.21.0 removed ``runtime.health``
+    from the authored SDL contract (ACES #761): observed health is evidence, so
+    there is no author-supplied expectation left to compare against — and nothing
+    to fabricate one from.
+
+    The container itself carries the expectation instead. A container reports a
+    health state only when its image or Compose service defines a healthcheck, so
+    a non-empty health field *is* the declaration that this service is meant to
+    become healthy: it must reach ``healthy``. A container with no healthcheck
+    reports nothing, and only has to be running.
     """
     status = str(container.get("status", ""))
     health = str(container.get("health", ""))
     if not status.startswith("Up"):
         diag = f"node {node_name!r} container not running (status={status!r})"
-    elif health == "unhealthy":
-        diag = f"node {node_name!r} container unhealthy"
-    elif declared_health == "healthy" and health != "healthy":
+    elif health and health != "healthy":
         diag = (
-            f"node {node_name!r} declares health {declared_health!r} but "
-            f"container health is {health or 'unreported'!r}"
+            f"node {node_name!r} container defines a healthcheck but reports "
+            f"health {health!r}, not 'healthy'"
         )
     else:
         diag = ""

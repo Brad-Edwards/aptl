@@ -26,6 +26,7 @@ from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
+from aptl.utils.redaction import redact
 
 log = get_logger("deployment.docker_compose")
 
@@ -45,6 +46,13 @@ _SEED_TIMEOUT = 600
 # validated defensively: a strict charset, no leading separator, and no
 # parent-traversal component, so nothing can escape /src or /dest.
 _SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+
+# Character budget for the redacted stderr tail appended to a failed
+# seed/retire log line (issue #716). Bounds a verbose or hostile Docker
+# stderr to a one-line tail; the value is redacted over its FULL length
+# before this truncation, so the cap can never turn a straddling secret
+# into a partial leak (fail closed).
+_SEED_STDERR_HINT_MAX = 500
 
 
 class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
@@ -369,16 +377,40 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
-            # Name only the artifact — raw Docker stderr stays out of the
-            # raised message and is surfaced through the redacted log line.
+            # Name only the artifact in the raised message — raw Docker
+            # stderr never reaches the exception (test_nonzero_exit_raises_
+            # without_leaking_stderr). The operator-facing log line carries
+            # a redacted stderr tail so a seed failure is diagnosable
+            # without rerunning the docker command by hand (issue #716).
             log.error(
-                "Seed of volume %s failed (exit %s)",
+                "Seed of volume %s failed (exit %s)%s",
                 seed.volume_suffix,
                 result.returncode,
+                self._redacted_stderr_hint(result.stderr),
             )
             raise BackendSeedError(
                 f"Seeding named volume '{seed.volume_suffix}' failed"
             )
+
+    @staticmethod
+    def _redacted_stderr_hint(stderr: str | None) -> str:
+        """Build a redacted, length-bounded stderr tail for a failed seed.
+
+        Returns ``""`` when there is nothing to show, otherwise a
+        `` — stderr: <hint>`` fragment ready to append to the failure log
+        line. The full stderr is scrubbed through the shared
+        serialization-boundary redactor (:func:`redact`) *before*
+        truncation, so a credential straddling the cut point can never
+        survive as a partial value — the hint fails closed. Only the log
+        carries this text; the raised ``BackendSeedError`` still names the
+        artifact and nothing else.
+        """
+        if not stderr or not stderr.strip():
+            return ""
+        redacted = redact(stderr).strip()
+        if len(redacted) > _SEED_STDERR_HINT_MAX:
+            redacted = "…" + redacted[-_SEED_STDERR_HINT_MAX:]
+        return f" — stderr: {redacted}"
 
     def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
         """Build the fixed-path copy script for one seed.
@@ -432,10 +464,14 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
+            # Same redacted-hint contract as the seed path (issue #716): the
+            # raised message names only the artifact; the log line carries a
+            # redacted stderr tail for diagnosis.
             log.error(
-                "Retire of legacy seed path %s failed (exit %s)",
+                "Retire of legacy seed path %s failed (exit %s)%s",
                 legacy,
                 result.returncode,
+                self._redacted_stderr_hint(result.stderr),
             )
             raise BackendSeedError(f"Retiring legacy seed path '{name}' failed")
 

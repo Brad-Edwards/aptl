@@ -1,5 +1,20 @@
 # TechVault Static Validation Preflight
 
+!!! warning "Historical backend-profile milestone"
+    This is a dated preflight record, kept as written. Where it names the
+    captured `scenarios/techvault.sdl.yaml`, the SCN-010 parity inventory
+    (`docs/aces/parity-inventory.yaml`), the parity-manifest gate check, the
+    `aptl aces-inventory` command, or the per-asset mapping ledgers, it no
+    longer describes the repository: all of them were removed in #690. The
+    asset-inventory capture capability now lives in ACES; APTL keeps
+    `scenarios/techvault-operational.sdl.yaml` as its only driving contract.
+    See the Capture Inventory and Parity-Inventory Removal Addendum in
+    [ADR-046](../adrs/adr-046-dynamic-aces-scenario-realization.md).
+    Its `provisioning-only` references and provisional-manifest description
+    record that milestone, not APTL's current `full-remote-control-plane`
+    target. See the current
+    [backend manifest](techvault-static-validation-gate.md#backend-manifest).
+
 This note is the architecture preflight for SCN-010E / issue #322. It is
 guidance, not an implementation plan. ADR-035 remains the binding adoption
 decision.

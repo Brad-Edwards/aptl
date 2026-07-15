@@ -1151,6 +1151,71 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
     return None
 
 
+_WAZUH_MANAGER_CONTAINER = "aptl-wazuh-manager"
+
+
+def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
+    """Return the number of live ``wazuh-*`` daemons in the manager container.
+
+    Returns ``None`` when the count can't be determined — the container is not
+    running, or the inspect/exec probe failed. Best-effort: it swallows every
+    inspect/exec failure so a diagnostics probe can never abort lab start.
+    """
+    assert ctx.backend is not None
+    # Amazon Linux 2023 in the manager image ships without `ps`, so walk
+    # /proc directly to count the live wazuh-* daemons.
+    probe = ["sh", "-c",
+             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
+             "done | sort -u | wc -l"]
+    try:
+        info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
+        if (info.get("State") or {}).get("Status") != "running":
+            return None
+        result = ctx.backend.container_exec(
+            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
+        )
+        return (
+            int((result.stdout or "0").strip())
+            if result.returncode == 0
+            else None
+        )
+    except Exception:
+        # Deliberately broad: this watchdog must never let an inspect/exec
+        # failure abort lab start (covered by the swallow-exceptions tests).
+        return None
+
+
+def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
+    """Restart wazuh-manager if it is Up but its daemons never spawned (#732).
+
+    Colima on macOS reproducibly gets s6-supervise into a state where
+    every attempt to exec the (executable) `run` scripts returns EACCES
+    and the wazuh daemons never spawn. The container itself stays Up
+    because PID 1 (s6-svscan) survives, so docker's own restart policy
+    never fires. A single `docker restart` clears the state cleanly.
+
+    This helper is best-effort: any failure to inspect or restart is
+    logged and ignored (the caller retries the compose up regardless).
+    """
+    # Caller (`_step_start_containers`) is icontract-guarded so
+    # `ctx.backend is not None` — no defensive check needed here.
+    assert ctx.backend is not None
+    count = _wazuh_manager_daemon_count(ctx)
+    # Daemons are alive, or their state could not be determined: nothing to do.
+    if count is None or count > 0:
+        return
+    log.warning(
+        "wazuh-manager is Up but has 0 wazuh-* daemons; restarting once "
+        "before compose retry (see issue #732)."
+    )
+    try:
+        ctx.backend.container_restart(_WAZUH_MANAGER_CONTAINER)
+    except Exception as exc:
+        # Deliberately broad: a failed restart attempt must not abort start.
+        log.warning("wazuh-manager restart attempt failed: %s", exc)
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1185,6 +1250,14 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         import time
 
         time.sleep(60)
+        # Colima on macOS reproducibly leaves the wazuh-manager container
+        # in a state where s6-supervise reports EACCES on the (executable)
+        # `run` scripts and the wazuh daemons never spawn (#732). The
+        # container stays Up so docker's own restart policy never fires,
+        # but no wazuh-* processes exist inside. A single `docker restart`
+        # clears the state; do that before the retry so compose isn't
+        # forced to try running `up` against a broken container instance.
+        _restart_wazuh_manager_if_stuck(ctx)
         outcome = start_aces_scenario(
             ctx.project_dir,
             ctx.config,
@@ -1233,7 +1306,21 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
     if "wazuh" not in ctx.selected_profiles:
         return None
 
-    indexer_url = "https://localhost:9200"
+    # Use the actual published host port for the indexer. If port 9200 was
+    # already in use on the host (Cursor / another OpenSearch / a k8s
+    # port-forward), `_step_resolve_host_ports` remapped the publish; probing
+    # the literal 9200 in that case reaches whatever else is on 9200 and
+    # falsely reports the indexer as unready. `ctx.resolved_ports` carries
+    # the post-remap answer.
+    indexer_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == "wazuh.indexer"
+        ),
+        9200,
+    )
+    indexer_url = f"https://localhost:{indexer_port}"
     indexer_result = wait_for_service(
         check_fn=partial(
             check_indexer_ready,
@@ -1241,7 +1328,10 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
             username=ctx.env.indexer_username,
             password=ctx.env.indexer_password,
         ),
-        timeout=300,
+        # Generous cold-boot headroom: OpenSearch's first-boot init (cluster
+        # formation + security index) can run long when the whole SOC stack and
+        # MCP builds start at once.
+        timeout=600,
         interval=10,
         service_name="Wazuh Indexer",
         progress=ctx.progress,
@@ -1696,12 +1786,9 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
         )
         return None
     try:
-        mcp_result = subprocess.run(
-            [str(mcp_script)],
-            capture_output=True,
-            text=True,
-            cwd=ctx.project_dir,
-        )
+        from aptl.utils.shell import run_shell_script
+
+        mcp_result = run_shell_script(mcp_script, cwd=ctx.project_dir)
         if mcp_result.returncode != 0:
             # Raw stderr stays in the log (existing redaction owns it);
             # the structured diagnostic carries only a narrow summary.
@@ -1819,10 +1906,10 @@ def _run_seed_soc_script(ctx: _LabStartContext) -> None:
 def _execute_seed_soc_script(ctx: _LabStartContext, seed_script: Path) -> None:
     """Execute the SOC seed script and emit non-fatal diagnostics."""
     try:
-        seed_result = subprocess.run(
-            [str(seed_script)],
-            capture_output=True,
-            text=True,
+        from aptl.utils.shell import run_shell_script
+
+        seed_result = run_shell_script(
+            seed_script,
             cwd=ctx.project_dir,
             env={**os.environ, **ctx.raw_env},
             timeout=1200,

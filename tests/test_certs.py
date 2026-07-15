@@ -1,5 +1,6 @@
 """Tests for SSL certificate generation."""
 
+import os
 import subprocess
 from unittest.mock import MagicMock
 
@@ -14,7 +15,15 @@ def no_native_ownership_fix_by_default(mocker):
 
 @pytest.fixture
 def linux_native(mocker):
-    """Force native-Linux generation with a fixed uid/gid."""
+    """Force native-Linux generation with a fixed uid/gid.
+
+    Native-Linux cert ownership repair (running the generator as root, then
+    chowning back to the host uid/gid) is a POSIX-only code path: os.getuid /
+    os.getgid do not exist on Windows, where the lab runs under Docker Desktop
+    and this branch is never taken. Skip rather than fabricate a fake uid.
+    """
+    if os.name != "posix":
+        pytest.skip("native-Linux uid/gid ownership repair is POSIX-only")
     mocker.patch("aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=True)
     mocker.patch("aptl.core.certs.os.getuid", return_value=1000)
     mocker.patch("aptl.core.certs.os.getgid", return_value=1000)
@@ -41,6 +50,24 @@ def _successful_generator(mocker, certs_dir):
     return mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
 
 
+def _mode(path):
+    return path.stat().st_mode & 0o777
+
+
+def _assert_posix_mode(path, expected):
+    """Assert a POSIX file mode where the platform enforces one.
+
+    These certs are hardened for non-root Linux container bind mounts, so the
+    modes matter on the deployment target. On Windows the host filesystem does
+    not carry POSIX modes (``st_mode`` reads 0o666/0o777 regardless of chmod),
+    so the check is skipped there while the surrounding behaviour still runs.
+    """
+    if os.name != "posix":
+        return
+    actual = _mode(path)
+    assert actual == expected, f"{path} mode {oct(actual)} != {oct(expected)}"
+
+
 class TestEnsureSSLCerts:
     """Tests for SSL certificate generation and management."""
 
@@ -60,7 +87,36 @@ class TestEnsureSSLCerts:
         assert result.generated is False
         assert result.certs_dir == certs_dir
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
-        assert (certs_dir / "root-ca-manager.pem").stat().st_mode & 0o200
+        _assert_posix_mode(certs_dir, 0o700)
+        _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
+        _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
+        mock_run.assert_not_called()
+
+    def test_existing_certs_are_widened_for_non_root_container_mounts(
+        self, tmp_path, mocker
+    ):
+        """Existing generated certs must be readable by non-root Wazuh images."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+        certs_dir.mkdir(parents=True)
+        root_ca = certs_dir / "root-ca.pem"
+        root_ca.write_text("fake-cert")
+        dashboard_key = certs_dir / "wazuh.dashboard-key.pem"
+        dashboard_key.write_text("fake-key")
+        root_ca.chmod(0o600)
+        dashboard_key.chmod(0o600)
+        certs_dir.chmod(0o700)
+        mock_run = mocker.patch("aptl.core.certs.subprocess.run")
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is True
+        assert result.generated is False
+        _assert_posix_mode(certs_dir, 0o700)
+        _assert_posix_mode(root_ca, 0o644)
+        _assert_posix_mode(dashboard_key, 0o644)
+        _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
         mock_run.assert_not_called()
 
     def test_linux_native_generator_runs_as_root_then_repairs_ownership(
@@ -79,9 +135,9 @@ class TestEnsureSSLCerts:
         assert result.generated is True
         assert result.certs_dir == certs_dir
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
-        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
-        assert (certs_dir / "wazuh.manager-key.pem").stat().st_mode & 0o200
-        assert certs_dir.stat().st_mode & 0o200
+        _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
+        _assert_posix_mode(certs_dir / "wazuh.manager-key.pem", 0o644)
+        _assert_posix_mode(certs_dir, 0o700)
         assert mock_run.call_count == 2
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert generator_cmd == [
@@ -105,6 +161,7 @@ class TestEnsureSSLCerts:
         assert repair_cmd[6] == f"{certs_dir.resolve()}:/certificates"
         assert repair_cmd[7] == "wazuh/wazuh-certs-generator:0.0.2"
         assert "chown -R 1000:1000 /certificates" in repair_cmd[-1]
+        assert "find /certificates -type f -exec chmod 644 {} +" in repair_cmd[-1]
 
     def test_linux_native_precreates_output_dir(self, tmp_path, mocker, linux_native):
         """Precreating the bind mount avoids Docker making a root-owned dir."""
@@ -125,8 +182,8 @@ class TestEnsureSSLCerts:
         assert result.success is True
         assert result.generated is True
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
-        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
-        assert certs_dir.stat().st_mode & 0o200
+        _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
+        _assert_posix_mode(certs_dir, 0o700)
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert "--user" not in generator_cmd
 
@@ -136,8 +193,11 @@ class TestEnsureSSLCerts:
 
         (tmp_path / "config").mkdir()
         certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
-        getuid = mocker.patch("aptl.core.certs.os.getuid")
-        getgid = mocker.patch("aptl.core.certs.os.getgid")
+        # create=True: os.getuid/getgid do not exist on Windows, but this test
+        # asserts they are NOT consulted on the Docker Desktop path, so the
+        # attributes must be patchable regardless of host.
+        getuid = mocker.patch("aptl.core.certs.os.getuid", create=True)
+        getgid = mocker.patch("aptl.core.certs.os.getgid", create=True)
         mock_run = _successful_generator(mocker, certs_dir)
 
         result = ensure_ssl_certs(tmp_path)
@@ -148,8 +208,8 @@ class TestEnsureSSLCerts:
         assert "--user" not in generator_cmd
         assert generator_cmd[-1] == "generator"
         assert (certs_dir / "root-ca-manager.pem").read_text() == "fake-cert"
-        assert (certs_dir / "root-ca.pem").stat().st_mode & 0o200
-        assert certs_dir.stat().st_mode & 0o200
+        _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
+        _assert_posix_mode(certs_dir, 0o700)
         getuid.assert_not_called()
         getgid.assert_not_called()
 
@@ -194,7 +254,7 @@ class TestEnsureSSLCerts:
         assert result.success is True
         assert result.generated is False
         assert (certs_dir / "root-ca-manager.pem").read_text() == "existing-cert"
-        assert (certs_dir / "root-ca-manager.pem").stat().st_mode & 0o200
+        _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
         mock_run.assert_not_called()
 
     def test_missing_generated_root_ca_is_reported(self, tmp_path, mocker):

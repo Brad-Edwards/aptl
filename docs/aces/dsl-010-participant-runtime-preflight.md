@@ -1,5 +1,11 @@
 # DSL-010 Participant Runtime Preflight
 
+!!! warning "Historical backend-profile milestone"
+    This is a dated preflight record, kept as written. Its description of the
+    promotion from `orchestration-evaluation` records the profile transition at
+    that milestone. APTL's current claim is `full-remote-control-plane`; see the
+    current [backend manifest](techvault-static-validation-gate.md#backend-manifest).
+
 This note is the architecture preflight for DSL-010 / issue #554. It is
 guidance, not an implementation plan. ADR-035 remains the binding ACES adoption
 decision, and the existing DSL-008/live-gate notes remain the topology and live

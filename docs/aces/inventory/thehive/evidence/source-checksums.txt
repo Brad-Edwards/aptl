@@ -1,2 +1,0 @@
-bd444352dbbc882655d3113c50f1a9c0bea0b61b8b14a0ca4ec176aa92e2af51  docker-compose.yml
-c582f0c2640e3b38d277ee61b2156d8cc99c459da44e7455cdcaeabfd904b093  config/thehive/application.conf

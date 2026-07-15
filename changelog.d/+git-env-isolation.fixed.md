@@ -1,0 +1,1 @@
+Lab asset selection (`aptl init` materialization and the wheel build hook) now strips inherited git *location* environment variables (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, …) before running `git ls-files`, so running inside a git hook (e.g. pre-commit) can no longer make asset selection resolve to the ambient repository instead of the checkout being processed.

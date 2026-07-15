@@ -1,7 +1,0 @@
---dns--
-172.20.0.2      misp-redis
-172.20.0.2      aptl-misp-redis
---redis-host-env--
-REDIS_HOST=misp-redis
---tcp6379--
-misp-redis:6379 reachable

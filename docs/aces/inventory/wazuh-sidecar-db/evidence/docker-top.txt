@@ -1,9 +1,0 @@
-UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                818088              818061              0                   Jun11               ?                   00:00:06            /bin/bash /opt/aptl/wazuh/wazuh-agent.sh
-root                818389              818088              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-execd
-dhcpcd              818624              818088              0                   Jun11               ?                   00:00:19            /var/ossec/bin/wazuh-agentd
-root                818833              818088              0                   Jun11               ?                   00:00:01            /var/ossec/bin/wazuh-syscheckd
-root                818972              818088              0                   Jun11               ?                   00:00:06            /var/ossec/bin/wazuh-logcollector
-root                819111              818088              0                   Jun11               ?                   00:00:00            /var/ossec/bin/wazuh-modulesd
-root                819352              818088              0                   Jun11               ?                   00:00:02            tail -F /var/ossec/logs/ossec.log
-root                1324446             818088              0                   15:21               ?                   00:00:00            sleep 5

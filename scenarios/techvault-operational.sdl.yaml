@@ -2,8 +2,8 @@ name: techvault
 description: >
   Operational ACES projection for the TechVault range. This SDL is the public
   startup contract: it names the steady-state Compose services and networks
-  that `aptl lab start` realizes without carrying the deep per-asset inventory
-  encoded in scenarios/techvault.sdl.yaml.
+  that `aptl lab start` realizes. There is no separate captured deep
+  per-asset inventory behind it (ADR-046).
 
 nodes:
   security-net:
@@ -26,10 +26,6 @@ nodes:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
-    runtime:
-      health:
-        status: healthy
-        description: Compose healthcheck must pass before public startup is ready.
   wazuh-indexer:
     type: vm
     os: linux
@@ -292,3 +288,65 @@ vulnerabilities:
     description: Login form accepts intentionally vulnerable SQL input.
     technical: true
     class: CWE-89
+
+# Realizable content (ADR-046 TechVault Operational Standup Addendum,
+# issue #689): every entry here is either bounded inline text or a
+# project-contained, checked-in source. No runtime-observed:, dataset, or
+# captured-filesystem content is authored here — APTL does not carry a
+# separate captured inventory as review evidence (ADR-046 Capture Inventory
+# and Parity-Inventory Removal Addendum). Both entries land on the
+# `fileshare` node, whose Compose service mounts the `fileshare_data`
+# named volume the APTL content realization backend seeds at
+# `aptl lab start`.
+content:
+  fileshare-public-notice:
+    type: file
+    target: fileshare
+    path: public/notice.txt
+    text: |
+      Welcome to TechVault Solutions file server.
+      This notice is planted by the operational ACES scenario's
+      content-placement realization (issue #689) — dynamically realized
+      from inline text authored in techvault-operational.sdl.yaml, not
+      hand-copied onto the image.
+  fileshare-onboarding-packet:
+    type: directory
+    target: fileshare
+    destination: onboarding
+    source:
+      name: scenarios/fixtures/techvault-content/onboarding
+
+# Realizable accounts (ADR-046 Account and Identity Realization Addendum,
+# #577): the deployment backend's realize_accounts operation ensures these
+# groups, users, memberships, and non-secret attributes on the resolved `ad`
+# node and verifies them by read-after-write. Declares identity only (no
+# password material); the concrete credential is generated inside the target
+# provider and never crosses the SDL or run evidence. Accounts that also exist
+# in containers/ad/provision-users.sh are reconciled, not re-created, so the
+# provisioner-owned weak passwords (the intentional attack surface) are
+# preserved. This is a representative subset of the full
+# weak/Kerberoastable/over-privileged roster, proving the account-placement
+# realization path against real, clean-start-created accounts.
+accounts:
+  ad-jessica-williams:
+    username: jessica.williams
+    node: ad
+    groups: [Sales, VPN-Users]
+    password_strength: weak
+    mail: jessica.williams@techvault.local
+  ad-svc-sql:
+    username: svc-sql
+    node: ad
+    password_strength: weak
+    spn: MSSQLSvc/db.techvault.local:1433
+  ad-emily-chen:
+    username: emily.chen
+    node: ad
+    groups: [Engineering, IT-Admins, "Domain Admins"]
+    password_strength: medium
+    mail: emily.chen@techvault.local
+  ad-former-employee:
+    username: former.employee
+    node: ad
+    password_strength: weak
+    disabled: false

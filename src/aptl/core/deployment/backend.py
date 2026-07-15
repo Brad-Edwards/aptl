@@ -19,7 +19,10 @@ from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
+    DeploymentContentRealization,
     DeploymentNetworkRealization,
+    DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -186,6 +189,70 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def realize_content(
+        self,
+        content: Sequence[DeploymentContentRealization],
+        *,
+        seeder_image: str,
+    ) -> None:
+        """Materialize typed ACES content placements (issue #689).
+
+        Mirrors :meth:`seed_named_volumes`: each realized content item is
+        lowered into a project-scoped named-volume seed (inline text is
+        rendered into the ignored ``.aptl/content/`` state tree first;
+        project-contained sources are bound read-only from their resolved,
+        containment-checked location) and materialized by the same
+        root one-off seed container mechanism, so content realization gets
+        the identical idempotency, project-scoping, and redaction behavior
+        as ADR-043 volume seeding without a second Docker-copy mechanism.
+
+        Args:
+            content: The typed content realizations to materialize, in
+                order.
+            seeder_image: Image used to run the copy containers (an image
+                already in the lab's supply chain).
+
+        Raises:
+            BackendSeedError: if a seed container exits non-zero.
+            BackendTimeoutError: if a seed container exceeds its timeout.
+        """
+        ...
+
+    def realize_accounts(
+        self,
+        accounts: Sequence[DeploymentAccountRealization],
+        nodes: Sequence[DeploymentNodeRealization],
+        *,
+        timeout: int | None = None,
+    ) -> LabResult | None:
+        """Realize typed ACES account placements onto their target nodes (#577).
+
+        Ensures declared groups, creates or reconciles each declared user via
+        the resolved backend account provider (Samba AD on the ``ad`` node),
+        applies supported non-secret attributes, reconciles group memberships,
+        and verifies the resulting non-secret state by read-after-write. The
+        whole batch is validated before the first mutation; an already-existing
+        account is reconciled, not re-created, so its provider-owned credential
+        is preserved. No credential ever crosses argv/env/evidence (ADR-029 +
+        ADR-046 addendum): user creation delegates password generation to the
+        target provider.
+
+        Args:
+            accounts: The typed account realizations to materialize.
+            nodes: The realized nodes, used to resolve each account's concrete
+                target container and account provider.
+            timeout: Optional per-command timeout in seconds.
+
+        Returns:
+            ``None`` on success (or when there is nothing to realize); a
+            fail-closed :class:`LabResult` naming the placement address and a
+            stable reason on validation, readiness, or verification failure.
+
+        Raises:
+            BackendTimeoutError: if a provider command exceeds its timeout.
+        """
+        ...
+
     # Container interaction (CLI-004) -------------------------------------
 
     def container_list(
@@ -303,6 +370,17 @@ class DeploymentBackend(Protocol):
         executing into a user-supplied container name. Implementation
         detail: backends typically use ``docker inspect <name>`` plus a
         compose-project label check.
+        """
+        ...
+
+    def container_restart(self, name: str, *, timeout: int | None = None) -> None:
+        """Restart a running container (docker restart <name>).
+
+        Used by the wazuh-manager watchdog (#732) between compose retry
+        attempts on hosts (Colima on macOS is the reproducible case) where
+        s6-supervise gets stuck reporting EACCES on executable service
+        `run` scripts and no wazuh daemon ever spawns — a docker-level
+        restart clears the state.
         """
         ...
 

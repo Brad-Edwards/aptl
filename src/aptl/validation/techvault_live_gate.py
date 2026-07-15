@@ -222,7 +222,7 @@ def validate_live_deployment(
     if not run_id_check.passed:
         return _report(scenario_path, run_id, opts, results)
 
-    # 1. Static prerequisite — parse/compile/conformance/parity must pass; a
+    # 1. Static prerequisite — parse/compile/conformance must pass; a
     #    static failure blocks the live boot rather than degrading to a warning.
     scenario, static_check = checks.check_static_prerequisite(
         scenario_path, project_dir=project_dir, config=config, options=opts

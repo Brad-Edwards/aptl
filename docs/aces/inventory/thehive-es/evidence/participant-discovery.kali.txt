@@ -1,8 +1,0 @@
---dns--
---route-to-security-net--
-RTNETLINK answers: Network is unreachable
---tcp-probe--
-172.20.0.5: inverse host lookup failed: Host name lookup failure
-(UNKNOWN) [172.20.0.5] 9200 (?) : Network is unreachable
---ping--
-ping: connect: Network is unreachable

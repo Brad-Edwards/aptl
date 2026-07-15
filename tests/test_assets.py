@@ -98,8 +98,9 @@ def test_default_config_json_round_trips(tmp_path: Path) -> None:
 
 
 def test_resolve_within_rejects_escape(tmp_path: Path) -> None:
+    escape = Path("../escape")
     with pytest.raises(AssetError, match="outside target directory"):
-        assets._resolve_within(tmp_path, Path("../escape"))
+        assets._resolve_within(tmp_path, escape)
 
 
 def test_resolve_within_allows_nested(tmp_path: Path) -> None:
@@ -235,6 +236,51 @@ def test_materialize_from_checkout_excludes_secrets(
     assert not (target / "config" / "lab-ssh").exists()
     assert not list(target.rglob("*.pyc"))
     assert not list(target.rglob("node_modules"))
+
+
+def test_git_tracked_ignores_ambient_git_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``_git_tracked`` must ignore inherited git *location* env vars.
+
+    A git hook (e.g. pre-commit) exports ``GIT_DIR`` / ``GIT_WORK_TREE`` /
+    ``GIT_INDEX_FILE`` pointing at the real repo. Without neutralizing them,
+    ``git ls-files`` run inside a non-repo checkout resolves to the ambient
+    repo and returns its tracked files (e.g. ``.dockerignore``) the checkout
+    lacks. ``_git_tracked`` must instead report nothing so the caller falls
+    back to walking ``root``.
+    """
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    _make_fake_checkout(checkout)  # deliberately not a git repo
+    monkeypatch.setenv("GIT_DIR", str(REPO_ROOT / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(REPO_ROOT))
+
+    assert assets._git_tracked(checkout) is None
+
+
+def test_materialize_ignores_ambient_git_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Materializing a non-repo checkout must not copy ambient-repo files.
+
+    Regression guard for the pre-commit-hook flake: the hook's ambient
+    ``GIT_DIR``/``GIT_WORK_TREE`` must not make materialize try to copy the
+    real repo's tracked files (which the fake checkout lacks) and raise
+    ``FileNotFoundError``.
+    """
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    _make_fake_checkout(checkout)
+    monkeypatch.setattr(assets, "resolve_asset_source", lambda: (checkout, False))
+    monkeypatch.setenv("GIT_DIR", str(REPO_ROOT / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(REPO_ROOT))
+
+    target = tmp_path / "lab"
+    materialize(target)
+
+    assert (target / "docker-compose.yml").is_file()
+    assert not (target / ".dockerignore").exists()
 
 
 def test_materialize_from_bundle_skips_pip_compiled_artifacts(

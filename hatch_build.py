@@ -23,6 +23,7 @@ itself only contains tracked files, so walking it yields the same set.
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import tempfile
@@ -56,6 +57,23 @@ _LABDATA_PREFIX: str = _MANIFEST.LABDATA_PREFIX
 _EXCLUDED_DIR_NAMES: frozenset[str] = _MANIFEST.EXCLUDED_DIR_NAMES
 _EXCLUDED_SUFFIXES: tuple[str, ...] = _MANIFEST.EXCLUDED_SUFFIXES
 _DISTRIBUTION_MARKER: str = _MANIFEST.DISTRIBUTION_MARKER
+
+# Git env vars that redirect where git resolves the repo/worktree/index. A
+# build or pre-commit hook exports these pointing at the real repo; stripped
+# below so ``git ls-files`` selection stays scoped to the tree being built
+# rather than resolving to the ambient repo.
+_GIT_LOCATION_ENV = frozenset(
+    {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_PREFIX",
+        "GIT_NAMESPACE",
+    }
+)
 
 
 class CustomBuildHook(BuildHookInterface):
@@ -117,13 +135,20 @@ class CustomBuildHook(BuildHookInterface):
 
     @staticmethod
     def _git_tracked(root: Path) -> list[Path] | None:
-        """Return tracked asset files, or ``None`` when git is unavailable."""
+        """Return tracked asset files, or ``None`` when git is unavailable.
+
+        Strips the inherited git *location* environment so a build running
+        inside a git hook cannot make ``git ls-files`` resolve to the ambient
+        repo instead of ``root``.
+        """
+        env = {k: v for k, v in os.environ.items() if k not in _GIT_LOCATION_ENV}
         try:
             completed = subprocess.run(
                 ["git", "ls-files", "-z", "--", *_ASSET_ROOTS],
                 cwd=root,
                 capture_output=True,
                 check=True,
+                env=env,
             )
         except (OSError, subprocess.CalledProcessError):
             return None

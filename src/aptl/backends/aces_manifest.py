@@ -18,7 +18,8 @@ condition evaluation through ``evaluation-result-envelope-v1`` and
 ``evaluation-history-event-stream-v1`` (see
 ``aptl.backends.aces_evaluator.AptlEvaluator``), and exposes a narrow red
 participant runtime through the participant episode and behavior-history
-contracts.
+contracts. It does not declare the deprecated SDL scoring chain
+(``metrics``/``evaluations``/``tlos``/``goals``) as an APTL runtime capability.
 """
 
 from __future__ import annotations
@@ -115,16 +116,13 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 
 # Evaluator capability declaration. APTL's RTE-001 runtime evaluates scenario
 # conditions (healthchecks realized during provisioning) and objectives through
-# the portable evaluation result/history contracts. Scoring sections are
-# declared because SCN-007 scoring resources compile into the same evaluation
-# plan surface; live score progression must come from real execution state, not
-# synthetic registration state.
+# the portable evaluation result/history contracts. ACES ADR-073 moves graded
+# scoring out of the authored SDL surface, so the manifest deliberately does not
+# claim support for the OCR scoring chain (`metrics`/`evaluations`/`tlos`/`goals`).
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
-    supported_sections=frozenset(
-        {"conditions", "evaluations", "goals", "metrics", "objectives", "tlos"}
-    ),
-    supports_scoring=True,
+    supported_sections=frozenset({"conditions", "objectives"}),
+    supports_scoring=False,
     supports_objectives=True,
 )
 
@@ -150,8 +148,14 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_node_types=frozenset({"switch", "vm"}),
     supported_os_families=frozenset({"freebsd", "linux", "macos", "other", "windows"}),
     supported_content_types=frozenset({"dataset", "directory", "file"}),
+    # Manifest honesty (#577, ADR-046 addendum): advertise only the account
+    # features the backend materializes AND verifies by read-after-write — the
+    # non-secret fields the typed DeploymentAccountRealization carries. auth_method
+    # / home / shell are neither carried nor realized, so they are not claimed;
+    # an account placement that exercises one is a blocking ACES diagnostic, not
+    # a silently dropped field. No scenario declares those terms today.
     supported_account_features=frozenset(
-        {"auth_method", "disabled", "groups", "home", "mail", "shell", "spn"}
+        {"disabled", "groups", "mail", "spn"}
     ),
     supports_acls=True,
     supports_accounts=True,

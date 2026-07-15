@@ -98,5 +98,4 @@ the enterprise tier cannot boot without the Wazuh core.
 - No dependency closure beyond the curated slices needed here; broad subset
   closure belongs to #532.
 - No arbitrary app or package installation from ACES feature descriptors.
-- No replacement of the detailed `scenarios/techvault.sdl.yaml` inventory SDL.
 - No change to the default operational startup scenario.

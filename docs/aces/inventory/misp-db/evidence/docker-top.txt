@@ -1,2 +1,0 @@
-UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-caddy               2955532             2955510             0                   May23               ?                   00:04:09            mariadbd

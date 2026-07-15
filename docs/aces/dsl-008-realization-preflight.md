@@ -1,5 +1,19 @@
 # DSL-008 ACES Topology Realization Preflight
 
+!!! warning "Historical backend-profile milestone"
+    This is a dated preflight record, kept as written. Where it names the
+    captured `scenarios/techvault.sdl.yaml`, the SCN-010 parity inventory
+    (`docs/aces/parity-inventory.yaml`), the parity-manifest gate check, the
+    `aptl aces-inventory` command, or the per-asset mapping ledgers, it no
+    longer describes the repository: all of them were removed in #690. The
+    asset-inventory capture capability now lives in ACES; APTL keeps
+    `scenarios/techvault-operational.sdl.yaml` as its only driving contract.
+    See the Capture Inventory and Parity-Inventory Removal Addendum in
+    [ADR-046](../adrs/adr-046-dynamic-aces-scenario-realization.md).
+    Its `orchestration-evaluation` references also describe the profile at that
+    milestone, not APTL's current `full-remote-control-plane` claim. See the
+    current [backend manifest](techvault-static-validation-gate.md#backend-manifest).
+
 This note is the architecture preflight for DSL-008 / issue #422. It is
 guidance, not an implementation plan. ADR-035 remains the binding ACES SDL
 adoption decision; this note narrows the backend realization guardrails for

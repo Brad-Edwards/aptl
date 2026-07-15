@@ -2172,6 +2172,68 @@ class TestStartupClassificationWiring:
         assert "HTTP 403" in indexer_diags[0].message
         assert "aptl lab stop -v" in indexer_diags[0].operator_action
 
+    def test_wait_for_services_probes_the_resolved_indexer_port_not_9200(
+        self, tmp_path, mocker
+    ):
+        """When 9200 is already in use on the host, `_step_resolve_host_ports`
+        remaps the indexer publish; the readiness probe must follow the
+        remap or it hits whatever else is on 9200 and reports the SIEM
+        store as unready even though it is fully healthy on the remapped
+        port."""
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        ctx.resolved_ports = [
+            ResolvedPort(
+                service="wazuh.indexer",
+                env_var="APTL_HP_WAZUH_INDEXER_9200",
+                default_port=9200,
+                resolved_port=20015,
+                protos=("tcp",),
+                host_ip="127.0.0.1",
+                remapped=True,
+            ),
+        ]
+        mock_wait = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
+        )
+
+        _step_wait_for_services(ctx)
+
+        # First wait_for_service call is the indexer wait; its check_fn is a
+        # partial(check_indexer_ready, url=..., ...) — assert the resolved
+        # port made it through.
+        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
+        assert indexer_call_kwargs["service_name"] == "Wazuh Indexer"
+        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
+            "https://localhost:20015"
+        )
+
+    def test_wait_for_services_falls_back_to_9200_when_no_remap(
+        self, tmp_path, mocker
+    ):
+        """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
+        case where 9200 was free) keeps the historical URL."""
+        from aptl.core.lab import _step_wait_for_services
+        from aptl.core.services import ServiceResult
+
+        ctx = self._ctx(tmp_path)
+        # resolved_ports left as the default empty list.
+        mock_wait = mocker.patch(
+            "aptl.core.lab.wait_for_service",
+            return_value=ServiceResult(ready=True, elapsed_seconds=1.0),
+        )
+
+        _step_wait_for_services(ctx)
+
+        indexer_call_kwargs = mock_wait.call_args_list[0].kwargs
+        assert indexer_call_kwargs["check_fn"].keywords["url"] == (
+            "https://localhost:9200"
+        )
+
     def test_wait_for_services_manager_timeout_emits_telemetry_warning(
         self, tmp_path, mocker
     ):
@@ -2257,11 +2319,19 @@ class TestStartupClassificationWiring:
     def test_test_ssh_per_target_timeout_emits_readiness_warning(
         self, tmp_path, mocker
     ):
+        from aptl.core import hostenv
         from aptl.core.lab import _step_test_ssh
         from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
         from aptl.core.services import ServiceResult
 
         ctx = self._ctx(tmp_path)
+        # Force native docker mode so the host-bridge probe path runs; on a
+        # Docker Desktop / VM host (e.g. Windows) the step intentionally skips
+        # bridge-IP probes, which would otherwise mask this readiness assertion.
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         # Targets are addressed by container IP (issue #293), not a
         # published host port — resolve a stub IP for every target.
         mocker.patch(
@@ -2339,10 +2409,17 @@ class TestStartupClassificationWiring:
         # A target whose container has no resolvable network IP cannot
         # be probed — surface it as a readiness diagnostic rather than
         # silently skipping (issue #293).
+        from aptl.core import hostenv
         from aptl.core.lab import _step_test_ssh
         from aptl.core.lab_types import DiagnosticImpact
 
         ctx = self._ctx(tmp_path)
+        # Force native docker mode so the probe path runs even on a Docker
+        # Desktop / VM host (which otherwise skips host-bridge probes).
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         mocker.patch("aptl.core.lab.container_networks", return_value={})
         wait = mocker.patch("aptl.core.lab.wait_for_service")
 
@@ -3064,6 +3141,214 @@ class TestLabOrchestrationContracts:
             selected,
         ]
 
+    def test_start_containers_restarts_wazuh_manager_when_stuck_between_attempts(
+        self, mocker, tmp_path
+    ):
+        """When the first compose up fails and the SOC retry path fires,
+        aptl inspects wazuh-manager. On Colima/macOS it can be Up but
+        with zero wazuh-* daemons alive (#732). One `docker restart`
+        clears the state; do it once, before the retry, so compose is
+        not asked to `up` against a broken container."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "running"},
+        }
+        # Stub the /proc walk that counts wazuh-* daemons — 0 alive.
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
+
+    def test_start_containers_skips_restart_when_wazuh_daemons_alive(
+        self, mocker, tmp_path
+    ):
+        """Daemons alive inside the container: the retry is likely
+        succeeding for a different reason; do NOT restart wazuh-manager."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "running"},
+        }
+        # 9 wazuh-* processes alive => watchdog stays quiet.
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="9\n")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_skips_restart_when_wazuh_manager_not_running(
+        self, mocker, tmp_path
+    ):
+        """State.Status != 'running' means the container is gone / dead /
+        being recreated by compose itself — restarting would race
+        compose. Skip."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {
+            "State": {"Status": "exited"},
+        }
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+
+        backend.container_restart.assert_not_called()
+        backend.container_exec.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_probe_exceptions(
+        self, mocker, tmp_path
+    ):
+        """The watchdog is best-effort: exceptions from container_inspect
+        or container_exec must not abort the retry. Also covers the
+        `int()` ValueError branch when the /proc walk emits garbage."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.side_effect = RuntimeError("boom")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        # Should complete without raising; retry still runs.
+        result = _step_start_containers(ctx)
+        assert result is None
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_exec_failures(
+        self, mocker, tmp_path
+    ):
+        """A nonzero exec probe (or non-int stdout) blocks the restart —
+        we do not know the process state, so refuse to restart rather
+        than guess wrong."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(
+            returncode=1, stdout="", stderr="probe failed"
+        )
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_watchdog_swallows_restart_failure(
+        self, mocker, tmp_path
+    ):
+        """`container_restart` raising is logged and swallowed — the
+        retry proceeds regardless."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
+        backend.container_restart.side_effect = RuntimeError("daemon down")
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+        assert result is None
+        # We tried, we failed, we did not raise.
+        backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
+
+    def test_start_containers_watchdog_handles_non_numeric_daemon_count(
+        self, mocker, tmp_path
+    ):
+        """If /proc walk returns non-numeric output (e.g. a sh error line),
+        the ValueError branch keeps the retry going with no restart."""
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        backend.container_inspect.return_value = {"State": {"Status": "running"}}
+        backend.container_exec.return_value = MagicMock(
+            returncode=0, stdout="not-a-number\n"
+        )
+        ctx.backend = backend
+
+        mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                LabResult(success=False, error="compose still starting"),
+                LabResult(success=True, message="ok"),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        _step_start_containers(ctx)
+        backend.container_restart.assert_not_called()
+
     def test_start_containers_hints_for_stale_realization_networks(
         self, mocker, tmp_path
     ):
@@ -3533,12 +3818,19 @@ class TestTerminalHostKeyPinningStep:
 
     @patch("aptl.core.lab.pin_terminal_host_keys")
     @patch("aptl.core.lab.list_container_snapshots")
-    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path):
+    def test_step_pins_endpoints(self, mock_list, mock_pin, tmp_path, mocker):
+        from aptl.core import hostenv
         from aptl.core.host_keys import HostKeyPinResult
         from aptl.core.lab import _LabStartContext, _step_pin_terminal_host_keys
 
         from aptl.core.endpoints import build_ssh_endpoints
 
+        # Force native docker mode so pinning runs; a Docker Desktop / VM host
+        # (e.g. Windows) intentionally skips this step (bridge IPs unreachable).
+        mocker.patch(
+            "aptl.core.lab.hostenv.docker_mode",
+            return_value=hostenv.DOCKER_LINUX_NATIVE,
+        )
         snapshots = []
         mock_list.return_value = snapshots
         mock_pin.return_value = HostKeyPinResult(

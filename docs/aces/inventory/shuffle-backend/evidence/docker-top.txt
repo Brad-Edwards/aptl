@@ -1,2 +1,0 @@
-UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
-root                807527              807476              0                   Jun11               ?                   00:02:13            ./shufflebackend

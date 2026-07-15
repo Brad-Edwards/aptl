@@ -174,6 +174,91 @@ class TestLabStartCommand:
         assert result.exit_code == 1
         assert "run `aptl lab start` first" in result.stderr
 
+    def test_lab_info_reflects_remapped_ports_from_live_docker_state(
+        self, runner, tmp_path, mocker
+    ):
+        """When docker has published Grafana on a remapped host port
+        (default 3100 was already in use), `aptl lab info` must print the
+        remapped port so students don't paste a URL that goes to whatever
+        is on 3100 (#737)."""
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+
+        # Bypass config load — return a stub list directly.
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="aptl-grafana-otel",
+                    env_var=None,
+                    default_port=3100,
+                    resolved_port=20005,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                ),
+            ],
+        )
+
+        result = runner.invoke(
+            app, ["lab", "info", "--project-dir", str(tmp_path)]
+        )
+
+        assert result.exit_code == 0
+        assert "Grafana: http://localhost:20005" in result.stdout
+        assert "Grafana: http://localhost:3100" not in result.stdout
+        # The remap block also appears now (aids reconciliation vs walkthrough).
+        assert "3100 -> 20005" in result.stdout
+
+    def test_live_resolved_ports_returns_empty_when_config_missing(self, tmp_path):
+        """Best-effort: no aptl.json / no backend / any error path just
+        returns []; info falls back to compile-time defaults."""
+        from aptl.cli.lab_render import live_resolved_ports
+
+        # tmp_path has neither aptl.json nor a running lab, so
+        # resolve_config_for_cli raises and the helper swallows it.
+        assert live_resolved_ports(tmp_path) == []
+
+    def test_live_resolved_ports_extracts_binding_from_docker_inspect(
+        self, tmp_path, mocker
+    ):
+        """Walks compose ps + docker inspect and builds a ResolvedPort
+        entry for each published port."""
+        from aptl.cli.lab_render import live_resolved_ports
+        from aptl.core.host_ports import ResolvedPort
+
+        backend = mocker.MagicMock()
+        backend.container_list.return_value = [
+            {"Name": "aptl-wazuh-indexer", "Service": "wazuh.indexer"},
+        ]
+        backend.container_inspect.return_value = {
+            "NetworkSettings": {
+                "Ports": {
+                    "9200/tcp": [{"HostIp": "127.0.0.1", "HostPort": "20015"}],
+                },
+            },
+        }
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(mocker.MagicMock(), tmp_path),
+        )
+        mocker.patch(
+            "aptl.core.deployment.get_backend", return_value=backend
+        )
+
+        result = live_resolved_ports(tmp_path)
+
+        assert len(result) == 1
+        entry = result[0]
+        assert isinstance(entry, ResolvedPort)
+        assert entry.service == "wazuh.indexer"
+        assert entry.default_port == 9200
+        assert entry.resolved_port == 20015
+        assert entry.remapped is True
+        assert entry.host_ip == "127.0.0.1"
+
     def test_start_handles_failure_gracefully(self, runner, mocker):
         """start command should exit 1 and show error on failure.
 

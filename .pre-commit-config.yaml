@@ -43,9 +43,6 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         # `tests/` historically holds private-key-shaped fixtures.
-        # TechVault inventory evidence captures scenario target filesystem
-        # secrets verbatim; those files are reviewed scenario content, not
-        # operator credentials.
         # `mcp/aptl-mcp-common/{src,tests}/redaction.{ts,test.ts}` and
         # `src/aptl/utils/redaction.py` (+ its test) intentionally embed
         # PEM block markers — they implement and verify masking of those
@@ -53,11 +50,6 @@ repos:
         exclude: |
           (?x)^(
             tests/.*|
-            docs/aces/inventory/fileshare/evidence/filesystem-sensitive-paths\.txt|
-            docs/aces/inventory/reverse/evidence/filesystem-sensitive-paths\.txt|
-            docs/aces/inventory/shuffle-frontend/evidence/filesystem-sensitive-paths\.txt|
-            docs/aces/inventory/victim/evidence/filesystem-sensitive-paths\.txt|
-            docs/aces/inventory/workstation/evidence/filesystem-sensitive-paths\.txt|
             mcp/aptl-mcp-common/src/redaction\.ts|
             mcp/aptl-mcp-common/tests/redaction\.test\.ts|
             src/aptl/utils/redaction\.py
@@ -129,37 +121,37 @@ repos:
         entry: tools/vale-lint-hook.sh
         language: system
         types_or: [markdown]
-        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|docs/aces/inventory/|node_modules/|\.tools/|\.vale/)
+        exclude: ^(\.claude/|\.gc/|\.github/|changelog\.d/|CHANGELOG\.md|AGENTS\.md|CLAUDE\.md|node_modules/|\.tools/|\.vale/)
 
       - id: pytest
         name: Python tests (pytest)
         # Prefer the repo's .venv (so contributors don't need to activate it
         # before committing). Fall back to PATH for contributors using a
-        # different venv layout that they've already activated. Scenario SDL,
-        # the import lockfile, and the parity inventory are included so an edit
-        # to those runs the fast ACES validation-gate logic tests (the slow
-        # full-scenario gate is the manual `aces-scenario-gate` hook below).
+        # different venv layout that they've already activated. Scenario SDL
+        # is included so an edit to it runs the fast ACES validation-gate
+        # logic tests (the slow full-scenario gate is the manual
+        # `aces-scenario-gate` hook below).
         # -n auto parallelizes across cores via pytest-xdist (no coverage here,
         # so xdist worker measurement is not a concern — that constraint only
         # applies to the CI `coverage run` job).
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/ -q -k "not integration" -n auto; else exec pytest tests/ -q -k "not integration" -n auto; fi'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|docs/aces/parity-inventory\.yaml)$
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml)$
 
       - id: aces-scenario-gate
-        name: ACES scenario validation gate (manual; slow — TechVault parse + verify-imports)
-        # SCN-010E / #322. The full-scenario gate parses TechVault's large SDL
-        # tree and runs `aces sdl verify-imports` (~minutes each), so it is a
-        # manual-stage hook, not part of the per-commit path. Run it before
-        # pushing a scenario/manifest/parity change:
+        name: ACES scenario validation gate (manual; techvault-operational)
+        # SCN-010E / #322. The static gate validates the authoritative
+        # techvault-operational SDL and spawns the `aces conformance backend`
+        # CLI, so it is a manual-stage hook rather than part of the per-commit
+        # path. Run it before pushing a scenario/manifest change:
         #   pre-commit run aces-scenario-gate --hook-stage manual
         # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
         language: system
         pass_filenames: false
         stages: [manual]
-        files: ^(scenarios/.*\.ya?ml|scenarios/aces\.lock\.json|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py|docs/aces/parity-inventory\.yaml)$
+        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py)$
 
       - id: vitest-mcp-common
         name: MCP TypeScript tests (aptl-mcp-common vitest)

@@ -18,7 +18,6 @@ authority.
 
 For current TechVault authoring and validation, use the ACES pages:
 
-- [TechVault SDL Authoring Preflight](../aces/techvault-sdl-authoring-preflight.md)
 - [TechVault Static Validation Gate](../aces/techvault-static-validation-gate.md)
 - [TechVault Live Validation Gate](../aces/techvault-live-validation-gate.md)
 - [Curated ACES Startup Variants](techvault-curated-variants.md)

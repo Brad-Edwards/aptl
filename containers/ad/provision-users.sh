@@ -6,6 +6,18 @@ REALM="${SAMBA_REALM:-TECHVAULT.LOCAL}"
 
 echo "=== Provisioning TechVault AD users and groups ==="
 
+# Weak, crackable passwords are an intentional attack surface for this training
+# range (e.g. jessica.williams / password123 for password-spraying practice).
+# The Samba domain default password policy (complexity ON, minimum length 7)
+# silently REJECTS them at `samba-tool user create` — the failure is masked by
+# the `|| true` guards below — so those personas never provision and the range
+# is quietly missing part of its attack surface. Relax the policy BEFORE any
+# user is created so every declared weak-password account is actually realized
+# (issue #689 account-realization honesty).
+samba-tool domain passwordsettings set --complexity=off 2>/dev/null || true
+samba-tool domain passwordsettings set --min-pwd-length=1 2>/dev/null || true
+samba-tool domain passwordsettings set --min-pwd-age=0 2>/dev/null || true
+
 # Create Organizational Units
 samba-tool ou create "OU=TechVault,DC=techvault,DC=local" --description="TechVault Solutions" 2>/dev/null || true
 samba-tool ou create "OU=Executives,OU=TechVault,DC=techvault,DC=local" 2>/dev/null || true

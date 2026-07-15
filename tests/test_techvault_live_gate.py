@@ -38,7 +38,6 @@ from aptl.validation.techvault_live_gate import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-FULL_INVENTORY_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault.sdl.yaml"
 
 
 # --------------------------------------------------------------------------- #
@@ -508,13 +507,6 @@ def test_boot_inputs_pass_for_custom_scenario_when_profile_matches():
     assert check.passed
 
 
-def test_boot_inputs_pass_for_full_inventory_scenario_when_profile_matches():
-    check = lgc.check_boot_inputs_match_public_path(
-        FULL_INVENTORY_SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
-    )
-    assert check.passed
-
-
 def test_boot_inputs_fail_for_mismatched_profile():
     check = lgc.check_boot_inputs_match_public_path(
         SCENARIO,
@@ -661,22 +653,38 @@ def test_readiness_passes_when_declared_health_met():
     assert check.passed
 
 
-def test_readiness_fails_when_declared_healthy_but_health_unreported():
-    # A node declaring health "healthy" whose container has no Compose
-    # healthcheck (health == "") must now fail — today's behavior silently
-    # tolerated this because only "unhealthy" was a hard failure.
+def test_readiness_fails_when_one_node_reports_unhealthy_alongside_a_healthy_node():
+    # Health is observed, never declared (aces-sdl 0.21.0 removed authored
+    # `runtime.health`, ACES #761), so there is no declared expectation left to
+    # mismatch against. The container's own healthcheck is the expectation
+    # instead: once it reports a health state at all, that state must be
+    # "healthy". A sibling node with no healthcheck (tolerated on its own, see
+    # test_readiness_tolerates_unreported_health_when_node_declares_none) must
+    # not mask a node whose own healthcheck is reporting non-healthy.
     state = _readiness_state(
-        [_node("webapp", ["dmz"], declared_health="healthy")],
-        [_container("aptl-webapp", status="Up 2 minutes", health="")],
+        [_node("webapp", ["dmz"]), _node("wazuh-manager", ["soc"])],
+        [
+            _container("aptl-webapp", status="Up 2 minutes", health=""),
+            _container(
+                "aptl-wazuh-manager",
+                status="Up 1 minute (unhealthy)",
+                health="unhealthy",
+            ),
+        ],
     )
     check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
-    assert any("declares health" in d for d in check.diagnostics)
+    assert any(
+        "wazuh-manager" in d and "not 'healthy'" in d for d in check.diagnostics
+    )
 
 
-def test_readiness_fails_when_declared_healthy_but_still_starting():
+def test_readiness_fails_when_container_health_still_starting():
+    # A container mid-healthcheck ("starting") has reported a health state
+    # that is not yet "healthy", so it must still fail the gate rather than be
+    # treated as ready.
     state = _readiness_state(
-        [_node("webapp", ["dmz"], declared_health="healthy")],
+        [_node("webapp", ["dmz"])],
         [
             _container(
                 "aptl-webapp", status="Up 5s (health: starting)", health="starting"
@@ -685,7 +693,7 @@ def test_readiness_fails_when_declared_healthy_but_still_starting():
     )
     check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
-    assert any("declares health" in d for d in check.diagnostics)
+    assert any("'starting'" in d and "not 'healthy'" in d for d in check.diagnostics)
 
 
 def test_readiness_tolerates_unreported_health_when_node_declares_none():

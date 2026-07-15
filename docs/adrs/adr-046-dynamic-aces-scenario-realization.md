@@ -151,6 +151,65 @@ scenario name. Future scenarios should be able to vary participant source node,
 target service, network boundary, evaluator-only evidence source, and backend
 project name without editing a paper-scenario branch.
 
+## Paper Scenario Evidence Modeling Addendum
+
+Issue #691 removes an accidental equivalence between content placement and
+evidence. In ACES SDL, `content` means material intended for placement on a
+scenario target. It is not a generic carrier for an observation, an authored
+capture obligation, or a captured evidence record. The paper scenario therefore
+must not represent participant output, Wazuh evaluator evidence, or negative
+boundary-check evidence as `type: dataset` content merely to give those concepts
+names.
+
+The existing ACES carriers remain authoritative:
+
+- `observation_boundaries` owns the participant projection and identifies the
+  runtime-emitted participant observation. The portable runtime carrier is the
+  existing `participant-observation-envelope-v1`; a second APTL observation DTO
+  or dataset schema is not permitted.
+- `evidence_requirements` owns portable capture intent for Wazuh corroboration
+  and negative boundary checks. Each requirement declares its source or source
+  class, scope, window/trigger/boundary, channel, sensitivity, redaction,
+  integrity, retention, and loss-disclosure expectations through the ACES
+  schema. A requirement is not proof that capture occurred.
+- Actual evidence and capture success remain runtime concerns. Conditions and
+  objective assertions may report observed success; `RuntimeSnapshot`,
+  `AptlEvaluator`, and `LocalRunStore` carry or reference captured records.
+  `evidence_requirements.*` entries are deliberately not objective targets.
+
+Backend-only participant binding data is also not participant content. When the
+paper binding moves off `content`, it must reuse the compiled
+`behavior_specifications` governed-extension seam (`x-aptl:*`) and the existing
+`aptl-participant-runtime-binding/v1` validation/parser contract. Do not create a
+new top-level SDL section, a second binding schema, or a paper-scenario lookup in
+Python. A task brief remains genuine participant-visible content only if it
+lowers through the existing typed content realization path to a registered,
+project-scoped backing volume. Adjudication prose that is not actually placed is
+not content and must not be relabeled as an evidence requirement.
+
+The participant projection is a security boundary, not descriptive prose. Raw
+Wazuh data, database or Wazuh endpoint identities, backend commands, evaluator
+notes, and negative-check internals must not appear in participant-visible
+output or in snapshot fields marked observable/disclosed. Evaluator evidence may
+be referenced from the observation boundary as `evidence_only`; its payload
+remains behind the existing run-record redaction and persistence boundaries.
+
+The static gate must prove the whole content surface, not only the three removed
+datasets: every remaining paper-scenario `content-placement` lowers to a typed
+`DeploymentContentRealization`, and interpretation emits no
+`aptl.provisioner.content-placement-rejected` diagnostic. The gate also asserts
+the authored evidence requirements and observation-boundary projection through
+the parsed ACES models. It must not special-case the scenario in the content
+resolver, widen manifest dataset support, or treat the absence of a planner
+diagnostic as proof of backend realization.
+
+The extensibility seams are the map-keyed ACES evidence requirement (parameterized
+by source, scope, boundary/window, channel, and handling expectations), the
+compiled observation-boundary address, and the governed behavior-specification
+extension keyed by backend owner. The next scenario can vary those values
+without changing the ACES schema, the content realizer, or a scenario-name
+branch.
+
 ## Image Realization Addendum
 
 Issue #574 realizes node images from ACES `source` and captured
@@ -261,6 +320,256 @@ static IP, selected backend, and non-secret provenance rule. Persist it through
 rendered Compose overrides containing unrelated config, `.env` values, or
 secret-bearing service configuration.
 
+## Runtime Service and SEM-218 Execution Addendum
+
+Issue #578 completes runtime-service realization and the SEM-218 execution
+wiring. The public ACES execution owner is `RuntimeManager.apply()`: its backend
+call boundary validates `ApplyResult`, runs `realization_disclosure` with
+`ExecutionPlan.model.realization_requirements`, rejects silent approximation,
+and attaches `RealizationProvenanceEntry` values to the returned
+`RuntimeSnapshot`. APTL must use that path rather than call
+`realization_disclosure` itself, mutate control-plane snapshot internals, or
+reimplement phase ordering and provenance attachment.
+
+The provisioner's returned `RuntimeSnapshot` must describe backend-observed
+realization. `snapshot_after_apply()` currently copies provisioning resource
+payloads from the declared plan and marks them ready; that is suitable only as
+an interim reconciliation helper and is not evidence that a container, service,
+healthcheck, network attachment, or port binding exists. A resource may enter
+the successful snapshot only after the deployment backend has started and
+inspected the concrete project-scoped resource and verified every concern the
+snapshot claims. Backend inspection continues through typed
+`DeploymentBackend` inventory methods; the ACES adapter must not call Docker or
+parse Compose output directly.
+
+Service concepts must remain distinct while they pass through the existing
+`AptlRealization` to `DeploymentRealizationSpec` seam:
+
+- ACES `Node.services` declares container-facing service bindings (name,
+  container port, and transport protocol). It is not a Compose service name, a
+  process-start command, or a host publish.
+- `runtime.health.status` is a required observed state. It is not a healthcheck
+  command. A mapped image or Compose service must provide the actual healthcheck;
+  if `healthy` is required and the backend reports no healthcheck, realization
+  fails rather than treating `running` as equivalent.
+- `runtime.network.published_ports` owns host exposure and preserves host IP,
+  host port, container port, and transport protocol as separate fields. Do not
+  infer host publishing from `Node.services` or hardcode published ports in the
+  endpoint registry. Runtime evidence comes back through backend inventory and
+  the existing `ContainerSnapshot.ports` normalization.
+
+Starting, waiting for, and inspecting declared services belongs inside the
+typed deployment realization operation so a successful `LabResult` means the
+declared service topology is running and its required healthchecks have passed.
+The later lab-orchestration readiness and live-validation gates remain
+independent operational evidence; they must not be the first place a failed
+realization is discovered. Reuse the backend runner, project name and labels,
+timeouts, SSH transport, argv-list construction, host-port probing, and
+`LabResult` / `BackendTimeoutError` envelope. Do not return raw backend stderr
+through diagnostics, logs, API responses, or run records.
+
+Host publishing is also a security decision. Existing SOC and control-plane
+services inherit the loopback-only policy pinned by ADR-034 and
+`tests/test_docker_compose_port_bindings.py`; deliberate target surfaces remain
+separately classified. An omitted host address must not silently become
+all-interface exposure. A new dynamic publish that cannot be classified by the
+existing exposure policy fails closed until that policy is extended. Host-port
+conflicts reuse `src/aptl/core/host_ports.py`; an exact authored binding must be
+rejected when unavailable rather than silently remapped.
+
+Realization provenance uses the ACES `RealizationProvenanceEntry` contract and
+its `author-declared`, `processor-derived`, and `backend-realized` vocabulary.
+APTL must not define a parallel provenance enum or infer processor provenance
+from field values. If the selected ACES dependency does not carry classifier
+provenance through `CompiledRealizationRequirement` into the runtime disclosure
+gate, that dependency contract must be updated before APTL can claim
+processor-derived provenance support.
+
+The extensibility parameter is the per-node typed service binding: ACES resource
+address, backend service/container identity, container endpoint, optional host
+publish, required health state, and non-secret provenance reference. The next
+scenario can vary ports, protocols, host exposure, and health expectations by
+changing compiled input, without editing a scenario-name branch, the endpoint
+registry, or a second Compose parser.
+
+## Account and Identity Realization Addendum
+
+Issue #577 replaces the account-placement compatibility proof introduced for
+the TechVault operational scenario with real backend-owned account
+materialization. Parsing an account placement, carrying it in
+`DeploymentRealizationSpec.accounts`, or finding the same username in
+`containers/ad/provision-users.sh` is not realization. The declared groups and
+account attributes must be applied to the resolved target through
+`DeploymentBackend`, and backend success must include a read-after-write check
+of the non-secret declared state.
+
+The authoritative input remains the ACES `account-placement` resource and the
+compiled SEM-218 account-feature requirements. APTL must consume the released
+ACES account-feature extraction, capability-envelope, explicitness, and
+realization-provenance contracts. It must not add a local account schema, a
+local feature classifier, or a second explicitness model. In particular,
+`aces_backend_protocols.account_features.provisioner_account_features` is the
+canonical mapping from an account spec to governed feature terms. APTL's
+manifest may advertise only the terms its backend materializes and verifies;
+an unsupported term is a blocking ACES diagnostic, not a silently ignored
+field. `password_strength` is non-secret policy metadata, not a credential. It
+may be claimed as realized only when the consumed ACES contract governs it and
+the target provider can enforce it without disclosing the resulting secret.
+
+`DeploymentAccountRealization` remains the single APTL backend-facing account
+record. It carries the placement address, target-node address, governed
+non-secret attributes, and enough provider binding to resolve the concrete
+backend-managed node. The corresponding `DeploymentNodeRealization` remains
+the authority for service/container identity; account code must not accept an
+independent caller-supplied container name. Group names on account placements
+are materialized before membership is reconciled and are deduplicated per
+target. They do not justify an APTL-local `Group`, directory, repository, or
+identity schema: ACES currently models them as account feature values.
+
+Provider selection is a small, code-owned binding from the resolved backend
+service/provider kind to its account materializer. The first supported binding
+is the Samba AD service on the realized `ad` node. It is not a TechVault or
+scenario-name branch. An account targeting an ambiguous node or a service with
+no registered account materializer fails validation before account side
+effects. A future POSIX, Windows-local, or directory-service provider adds one
+binding and provider implementation while consuming the same typed placement;
+it does not widen `container_exec` into a generic provisioning API.
+
+Account realization is a post-start operation because the target identity
+service must be running. The Compose backend starts the selected services,
+completes topology reconciliation, waits for the target provider's bounded
+readiness condition, then applies the account batch before returning a
+successful `LabResult`. The full batch is provider-validated before the first
+account mutation. Application is deterministic and convergent: ensure declared
+groups, create or update the user, reconcile every supported explicitly
+declared attribute, and verify the resulting non-secret state. A retry after a
+timeout or partial failure must converge without duplicate users/groups.
+Existing undeclared accounts and memberships are not deleted by this issue;
+future delete support must carry ACES `ChangeAction` through the typed boundary
+rather than infer desired deletion from absence.
+
+Provider validation is defense in depth, not a duplicate SDL validator. ACES
+owns shape, reference, controlled-vocabulary, capability, and SEM-218 checks.
+Before mutation, the account materializer additionally rejects provider-invalid
+or ambiguous identities, duplicate declarations with conflicting attributes,
+control characters/NULs, unsafe lengths or provider syntax, and an attribute
+the selected provider cannot faithfully apply. Values travel as structured
+arguments or provider API data, never interpolated shell. Identity values such
+as usernames, group names, mail addresses, and SPNs are not control-plane
+secrets, but untrusted values still must not become shell syntax, option names,
+paths, or unbounded log fields.
+
+No plaintext credential crosses the ACES/APTL realization or evidence
+boundary. `DeploymentAccountRealization`, `AptlRealization.details()`,
+`ApplyResult.details`, diagnostics, snapshots, run records, logs, and telemetry
+contain only non-secret identity/policy fields and provenance. Credentials are
+generated or resolved inside the target/provider boundary and are never put in
+Docker/Compose/process argv, environment variables, exception text, raw stderr
+hints, generated Compose overrides, or persisted request/response files. A
+provider API or descriptor/stdin mechanism must be used when a credential is
+needed; invoking a CLI that requires a password as a positional argument is not
+permitted. A failure returns a bounded `LabResult` message naming the placement
+address and stable reason, reusing `BackendTimeoutError` for timeouts and the
+existing ACES diagnostic/error-envelope translation. Do not add an account-only
+exception hierarchy or expose backend stdout/stderr.
+
+Runtime evidence reuses `snapshot_after_apply`, ACES
+`RealizationProvenanceEntry`, `RangeSnapshot.to_dict()`, and `LocalRunStore`.
+Account-feature provenance names the placement, field path, requirement kind,
+explicitness, and author-declared/backend-realized classification; it never
+contains the credential or a derived verifier/hash. Defaults and omitted fields
+must not be reconstructed locally from empty strings or false values: consume
+the upstream explicitness/provenance contract so only the fields the author made
+authoritative are claimed as such.
+
+The static `check_account_provisioner_parity` regex scan is superseded as an
+account-realization authority. The service-owned script may remain a source of
+additional baseline lab fixtures, and the backend must reconcile cleanly when a
+declared account already exists, but script text is neither a schema nor runtime
+proof. Static validation proves ACES parse/compile/plan, capability-envelope,
+SEM-218 lowering, target/provider binding, and typed backend input. The clean
+live gate proves users, groups, memberships, and declared attributes by querying
+the target through `DeploymentBackend` after `aptl lab stop -v && aptl lab
+start`.
+
+## TechVault Operational Standup Addendum
+
+Issue #689 makes `scenarios/techvault-operational.sdl.yaml` the honest dynamic
+TechVault startup contract. The operational SDL is the public `aptl lab start`
+target listed in `scenarios/catalog.json`; it does not depend on a deep
+captured TechVault inventory (see the Capture Inventory and Parity-Inventory
+Removal Addendum below—that review-evidence surface has since been removed
+from APTL). The operational SDL must not import or depend on captured
+`runtime-observed:` content,
+`datasets-in-services`, inventory-only filesystem manifests, logs, database
+dumps, screenshots, or runtime state that APTL cannot recreate from source on a
+clean machine.
+
+The acceptance bar is compose-guaranteed fidelity from authored ACES resources
+through APTL's interpret-then-driver path. Nodes, images, networks,
+attachments, content placements, and account placements must compile through
+ACES, enter `interpret_provisioning_plan`, appear in typed realization details,
+and be either realized by `DeploymentRealizationSpec` / `DeploymentBackend` or
+explicitly rejected by an ACES diagnostic before side effects. A placement that
+is merely counted in `AptlRealization.details()` is not dynamic realization.
+
+Content in the honest operational SDL is limited to realizable content:
+
+- file content provided as bounded inline text;
+- file content sourced from a project-contained, checked-in path;
+- directories whose materialized contents are sourced from project-contained,
+  checked-in paths or explicit empty-directory declarations.
+
+Do not encode runtime-observed files, generated service config, mutable volume
+state, database rows, index contents, captured package manifests, or arbitrary
+container filesystem trees as operational content. If #576's content
+realization seam is present, `AptlRealization` should lower those ACES
+placements into its canonical typed backend input and the Compose backend
+should reuse existing containment and named-volume/container-copy precedents,
+including `NamedVolumeSeed`, project-scoped volumes, argv-list commands,
+redacted `LabResult` failures, and `BackendSeedError` / `BackendTimeoutError`
+behavior where applicable. If that seam is absent, #689 is blocked or must add
+a narrow typed placement operation to `DeploymentBackend`; it must not add raw
+Docker calls, a second content schema, or a scenario-name special case.
+
+Account declarations must be equally honest. Lab fixture accounts may be
+declared only when the clean startup path actually creates or preserves them
+through an existing service-owned provisioning path or a new typed backend
+account-placement operation. They must not rely on post-capture drift. Designed
+weak target credentials are scenario fixture data; operator/control-plane
+secrets remain under `EnvVars`, `.env`, rendered config, and ADR-029 redaction.
+Do not serialize Wazuh, MISP, TheHive, Shuffle, registry, SSH private key,
+cookie, token, hash, or generated enrollment material into the SDL, run
+evidence, diagnostics, or snapshots.
+
+The manifest honesty rule is strict: APTL may claim `file`, `directory`,
+`dataset`, account, image, or network support only to the extent that the ACES
+planner gate, interpreter, typed backend spec, deployment backend, static tests,
+and live clean-start gate prove that support for the authored TechVault
+surface. A broad `ProvisionerCapabilities` value is not a waiver for a
+no-op interpreter branch.
+
+## Capture Inventory and Parity-Inventory Removal Addendum
+
+Issue #690 removes the captured TechVault asset inventory
+(`docs/aces/inventory/`) and the SCN-010 parity-inventory surface
+(`docs/aces/parity-inventory.yaml` / `.md`, `check_parity_manifest`, and the
+`required_surface_coverage` contract in the static validation gate) from
+APTL. That capture was an experiment run inside APTL to prove out an
+asset-inventory capability; the capability itself now lives in ACES
+(`docs/aces/inventory/asset-inventory-methodology.md` at
+Brad-Edwards/aces/blob/dev/docs/aces/inventory/asset-inventory-methodology.md).
+APTL is an ACES-conformant backend: it keeps only the operational SDL
+(`scenarios/techvault-operational.sdl.yaml`) as the driving contract, with no
+separate capture/parity evidence surface behind it.
+
+The removed capture output is recoverable from git history if ever needed: the
+capture SDL (`scenarios/techvault.sdl.yaml`) and its supporting tree
+(`scenarios/techvault/`, `scenarios/aces.lock.json`) were deleted in PR #745
+(`205e47d^` is the last commit carrying them); the per-asset inventory
+bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
+(its parent commit carries them).
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -270,8 +579,11 @@ secret-bearing service configuration.
 | Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
+| Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
+| Account placement gate | ACES parser/compiler, canonical account-feature extraction, manifest capability checks, and SEM-218 explicitness/provenance run before the backend. The backend resolves the placement only through its typed target node, validates the full batch and provider syntax before mutation, then creates/reconciles groups and accounts after bounded provider readiness and verifies non-secret state. Raw credentials, hashes, provider stderr, and caller-supplied container identities remain outside typed inputs and evidence. |
 | Config and env binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets stay in `EnvVars` and `.env`. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
+| Static and live validation gate | Static tests prove the SDL parses, plans, and lowers to a realizable typed spec without unsupported or no-op placements. The live gate remains a clean `aptl lab stop -v && aptl lab start` with health/readiness checks, not a comparison to captured inventory state. |
 
 ## Maintainability
 
@@ -287,12 +599,20 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
   and diagnostics.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
+- `aces_backend_protocols.account_features.provisioner_account_features` for
+  the governed account-spec-to-feature mapping; do not copy that decision table
+  into APTL.
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
   operation, including any future image pull/build/tag and network/IPAM side
   effects.
+- `src/aptl/core/seed_spec.py` and existing named-volume seed behavior for
+  project-contained source-to-runtime materialization when content placement
+  needs file or directory side effects.
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
+- `scenarios/techvault-operational.sdl.yaml` and `scenarios/catalog.json` for
+  the public TechVault ACES startup selection.
 
 Tests extend the existing ACES backend and realization seams
 (`tests/test_aces_backend.py` and the realization-focused tests) rather than
@@ -329,6 +649,16 @@ change is multi-architecture images, registry authentication, SBOM/attestation
 checks, or another backend provider. Those should add policy fields or typed
 backend parameters, not scenario branches or Compose-service rewrites.
 
+For content and account realization, the seam is a typed placement record:
+ACES placement address, target node/service/container, content or account
+identity, non-secret provenance, bounded source kind, destination kind, and the
+backend materialization operation. Account provider kind is resolved from the
+typed target binding, not from scenario identity. Future scenarios should be
+able to vary which checked-in source directory, inline file, target node,
+account fixture, or provider backend is used without editing TechVault-only
+code. Future account deletion/replacement reuses ACES `ChangeAction`; it must
+not add an APTL-only lifecycle enum.
+
 ## Consequences
 
 ### Positive
@@ -348,6 +678,9 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - APTL's realization support declaration must stay honest. Widening the claimed
   realization support without the interpreter and driver to back it would let
   the planner gate pass scenarios APTL cannot actually realize.
+- The honest TechVault SDL may be smaller than the captured inventory. Omitting
+  non-realizable captured facts is correct; carrying them as no-op operational
+  placements is not.
 
 ### Risks
 
@@ -355,6 +688,9 @@ backend parameters, not scenario branches or Compose-service rewrites.
   diagnostic-not-failure choice keeps the apply running, so the operator must
   read realization diagnostics rather than assume a clean apply realized every
   authored concern.
+- Manifest capability text can drift ahead of backend behavior. The static
+  lowering tests and clean-start live gate must catch claims that are parsed
+  and counted but never passed to a typed backend operation.
 
 ## Non-Goals
 
@@ -364,6 +700,13 @@ backend parameters, not scenario branches or Compose-service rewrites.
   mirror model. Realization evidence rides ADR-044's record.
 - This ADR does not change APTL's backend profile claim. The manifest and
   conformance gates remain the source of truth for that claim.
+- This ADR does not require the operational TechVault SDL to reproduce every
+  captured inventory fact. It requires every authored operational fact to be
+  dynamically realizable or rejected before startup side effects.
+- Issue #577 does not add operator identities, control-plane authentication,
+  RBAC, secrets management, or a general directory-service API. It does not
+  delete accounts/groups absent from the scenario or migrate the additional
+  baseline fixtures in `provision-users.sh`.
 
 ## Anti-Patterns
 
@@ -385,6 +728,31 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Building from raw Docker history strings, unbounded Dockerfile text, or
   unvalidated build context paths instead of typed `source.build` provenance and
   project-contained backend operations.
+- Adding `runtime-observed:` content, `datasets-in-services`, database dumps,
+  log excerpts, package manifests, or arbitrary captured filesystem trees to
+  the operational TechVault SDL.
+- Treating `content-placement` or `account-placement` resource counts as proof
+  of realization when no typed backend operation consumes the placement.
+- Treating a matching line in `provision-users.sh`, a successful create command,
+  or an existing username as proof that groups and declared attributes were
+  realized; backend success requires non-secret read-after-write verification.
+- Keeping `check_account_provisioner_parity` as a second account authority after
+  backend realization lands, or parsing shell scripts/Compose text to derive
+  account state.
+- Re-implementing ACES account-feature extraction, explicitness, capability, or
+  provenance rules in APTL, or advertising a manifest feature the selected
+  account provider does not apply and verify.
+- Passing a plaintext credential through a realization DTO, Docker/Compose or
+  process argv, environment, generated file, log, exception, stderr hint,
+  snapshot, telemetry attribute, or run artifact.
+- Building a generic remote-command/account-service abstraction, accepting a
+  caller-supplied container id, or branching on the TechVault scenario instead
+  of resolving a registered provider from the typed target node.
+- Hiding an unrealizable content/account fact in `metadata`, comments,
+  `x-aptl-*`, inventory ledger rows, or a TechVault scenario-name branch.
+- Duplicating the content schema, account schema, path-containment checks,
+  volume seed behavior, credential taxonomy, or redaction policy instead of
+  reusing the existing ACES/APTL owners.
 - Echoing disallowed image refs, registry credentials, build arg values,
   rendered Dockerfile text, or backend stderr in diagnostics, logs, snapshots,
   API responses, or run records.
@@ -395,6 +763,13 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Writing realization evidence to a new record type instead of `LocalRunStore`
   and `RangeSnapshot`, or storing secret values rather than digests and
   non-secret identities.
+- Reintroducing captured runtime-observed content (a per-asset inventory
+  tree, evidence bundles, or a `capture-evidence.sh`-style runner) into APTL;
+  that capture capability lives in ACES, not here.
+- Reintroducing a parity-inventory surface (a `required_surface_coverage`
+  manifest, a `check_parity_manifest`-style gate check, or a
+  represented/deferred contract) as a condition of the static or live
+  validation gate.
 
 ## References
 
@@ -415,6 +790,10 @@ backend parameters, not scenario branches or Compose-service rewrites.
 - Related issues: [#554](https://github.com/Brad-Edwards/aptl/issues/554),
   [#556](https://github.com/Brad-Edwards/aptl/issues/556) (superseded paper
   scenario path), [#573](https://github.com/Brad-Edwards/aptl/issues/573),
+  [#574](https://github.com/Brad-Edwards/aptl/issues/574),
+  [#575](https://github.com/Brad-Edwards/aptl/issues/575),
+  [#576](https://github.com/Brad-Edwards/aptl/issues/576),
+  [#689](https://github.com/Brad-Edwards/aptl/issues/689),
   [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and
   [aces#600](https://github.com/Brad-Edwards/aces/issues/600); DSL-008 /
   [#422](https://github.com/Brad-Edwards/aptl/issues/422).

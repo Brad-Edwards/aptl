@@ -2,15 +2,15 @@
 
 ## Status
 
-accepted (amended 2026-06-29 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
+accepted (amended 2026-06-29 and 2026-07-12 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
 
 ## Date
 
-2026-05-18 (amended 2026-06-29)
+2026-05-18 (amended 2026-06-29, 2026-07-12)
 
 ## Last Updated
 
-2026-06-29
+2026-07-12
 
 ## Status update—2026-06-29
 
@@ -27,6 +27,22 @@ than the topology authority.
 What this ADR decided still stands: ACES SDL adoption as the canonical authoring
 surface, the backend-manifest and conformance model, the `DeploymentBackend`
 execution boundary, and the ACES backend integration guardrails are preserved.
+
+## Status update—2026-07-12
+
+**Superseded further, by [ADR-046](adr-046-dynamic-aces-scenario-realization.md)'s
+Capture Inventory and Parity-Inventory Removal Addendum.** Wherever the body of
+this ADR below states that `scenarios/techvault.sdl.yaml` "remains the
+detailed inventory/parity evidence surface" (or the equivalent), that
+statement no longer describes the repository: the capture SDL, its supporting
+tree (`scenarios/techvault/`, `scenarios/aces.lock.json`), and the SCN-010
+parity inventory (`docs/aces/parity-inventory.yaml` / `.md`,
+`check_parity_manifest`, and the `required_surface_coverage` contract) have
+all since been removed. The asset-inventory capture capability now lives in
+ACES; APTL keeps only `scenarios/techvault-operational.sdl.yaml` as the
+driving contract, with no separate capture/parity evidence surface behind it.
+This is a point-in-time correction, not a rewrite of the decision record
+below—see ADR-046 for the current state.
 
 ## Context
 
@@ -161,11 +177,10 @@ Issue #318's parity inventory is the authoritative review surface for
 deciding whether the ACES TechVault can replace the legacy scenario set. It
 is not a runtime schema, not a new SDL, and not a deployment authority.
 
-The inventory lives at
-[`docs/aces/parity-inventory.yaml`](../aces/parity-inventory.yaml) with a
-human-readable overview at
-[`docs/aces/parity-inventory.md`](../aces/parity-inventory.md). Its schema
-is enforced by `tests/test_parity_inventory.py`.
+The inventory lived at `docs/aces/parity-inventory.yaml` with a
+human-readable overview at `docs/aces/parity-inventory.md`. Its schema
+was enforced by `tests/test_parity_inventory.py`. (Both files and that test
+were removed; see the 2026-07-12 status update above.)
 
 The inventory must map every legacy surface to exactly one owning category:
 

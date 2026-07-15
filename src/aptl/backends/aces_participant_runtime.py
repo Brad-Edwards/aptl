@@ -1,4 +1,4 @@
-"""APTL ACES participant runtime adapter.
+"""Participant-runtime component of APTL's full remote-control-plane target.
 
 APTL's participant runtime is intentionally narrow: it exposes the ACES
 participant episode lifecycle through the published DTOs and records a bounded
@@ -56,7 +56,7 @@ PARTICIPANT_ACTION_ADDRESS = _PARTICIPANT_ACTION_ADDRESS
 
 @dataclass
 class AptlParticipantRuntime:
-    """ACES ``ParticipantRuntime`` backed by APTL's deployment boundary."""
+    """Participant component of APTL's ``full-remote-control-plane`` target."""
 
     deployment_backend: "DeploymentBackend"
     action_specs: Mapping[str, ParticipantActionSpec] = field(
@@ -137,15 +137,20 @@ class AptlParticipantRuntime:
                 self._shared_state_records,
                 self._shared_state_history,
             )
-            changed.append(
-                f"runtime.snapshot.participant-behavior-history.{participant_address}"
-            )
-            changed.extend(action_result.snapshot_entries)
-            if hasattr(next_snapshot, "shared_state_records"):
-                changed.extend(
-                    f"runtime.snapshot.shared-state-records.{address}"
-                    for address in action_result.shared_state_records
-                )
+            # A changed address must be a canonical compiled address, name a key
+            # the snapshot carries, AND be unique — ACES enforces all three. The
+            # participant address is already in `changed` from `_store_episode`
+            # (it keys the episode + behavior-history carriers), so it is not
+            # re-added. The action snapshot-entry keys are compiled addresses and
+            # are added if not already present. The shared-state carrier is keyed
+            # by raw target refs (`container:aptl-kali`, `tcp:host:port`), which are
+            # NOT canonical addresses, so they can never be changed addresses — the
+            # shared-state change rides in the snapshot itself, not the changed set.
+            # (0.19.1 had none of these gates, so the old decorated prefix went
+            # unnoticed; it was always wrong.)
+            for address in action_result.snapshot_entries:
+                if address not in changed:
+                    changed.append(address)
             return ApplyResult(
                 success=action_result.success,
                 snapshot=next_snapshot,
@@ -313,9 +318,7 @@ class AptlParticipantRuntime:
         return ApplyResult(
             success=True,
             snapshot=next_snapshot,
-            changed_addresses=[
-                f"runtime.snapshot.participant-behavior-history.{address}"
-            ],
+            changed_addresses=[address],
         )
 
     def status(self) -> dict[str, object]:
@@ -404,10 +407,12 @@ class AptlParticipantRuntime:
             self._shared_state_records,
             self._shared_state_history,
         )
-        return next_snapshot, [
-            f"runtime.snapshot.participant-episode-results.{participant_address}",
-            f"runtime.snapshot.participant-episode-history.{participant_address}",
-        ]
+        # Both episode carriers are keyed by the participant address, so that is
+        # the changed address. A "runtime.snapshot.<carrier>." prefix names no key
+        # any carrier holds, and ACES rejects a changed address outside the
+        # snapshot transition. This is the base changed-list for every lifecycle
+        # call (initialize / reset / terminate / restart), so it must be right.
+        return next_snapshot, [participant_address]
 
     def _current_state(
         self,

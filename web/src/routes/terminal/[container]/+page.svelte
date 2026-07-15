@@ -1,15 +1,33 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
 	import type { TerminalStatus } from '$lib/bff';
+	import { guardControlledAction } from '$lib/stores/ui';
+	import { preferences } from '$lib/stores/preferences';
+	import { focusRing } from '$lib/components/kit/tone';
 
 	const container = $derived($page.params.container ?? '');
 
 	let status = $state<TerminalStatus | null>(null);
+	// The PTY is not opened until the first-run local-use notice is acknowledged
+	// (a UI precondition; the server still enforces every terminal gate).
+	let launched = $state(false);
+
+	// Re-enterable: also invoked from the placeholder's launch control, so a user
+	// who dismisses the notice (Escape/backdrop) can retry without reloading.
+	function launch(): void {
+		guardControlledAction(() => (launched = true));
+	}
+
+	onMount(() => {
+		launch();
+	});
 
 	// Short header label for the connection phase (the full, accessible status
 	// text lives in the Terminal component's status region).
 	const phaseLabel = $derived.by(() => {
+		if (!launched) return 'awaiting acknowledgement';
 		switch (status?.phase) {
 			case 'connected':
 				return 'connected';
@@ -23,6 +41,7 @@
 	});
 
 	const phaseColor = $derived.by(() => {
+		if (!launched) return 'text-aptl-amber';
 		switch (status?.phase) {
 			case 'connected':
 				return 'text-aptl-green';
@@ -51,6 +70,26 @@
 		<span class="ml-auto text-xs font-medium {phaseColor}">{phaseLabel}</span>
 	</div>
 	<div class="flex-1 overflow-hidden bg-[#1a1d23] p-1">
-		<Terminal {container} onstatechange={(s) => (status = s)} />
+		{#if launched}
+			<Terminal
+				{container}
+				fontSize={$preferences.terminalFontSize}
+				scrollback={$preferences.terminalScrollback}
+				onstatechange={(s) => (status = s)}
+			/>
+		{:else}
+			<div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+				<p class="text-sm text-aptl-text-muted">
+					Review and acknowledge the local-use notice to open the terminal.
+				</p>
+				<button
+					type="button"
+					onclick={launch}
+					class="rounded-md border border-aptl-border bg-aptl-surface px-3 py-1.5 text-sm text-aptl-text hover:bg-aptl-surface-hover {focusRing}"
+				>
+					Open terminal
+				</button>
+			</div>
+		{/if}
 	</div>
 </div>

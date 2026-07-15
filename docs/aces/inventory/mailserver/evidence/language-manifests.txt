@@ -1,2 +1,0 @@
---language-manifest-scan--
-/usr/bin/python3

@@ -1,3 +1,0 @@
-Name:      docker.io/wazuh/wazuh-manager:4.12.0
-MediaType: application/vnd.docker.distribution.manifest.v2+json
-Digest:    sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561

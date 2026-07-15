@@ -7,11 +7,15 @@ from dataclasses import dataclass
 from aces_contracts.diagnostics import Diagnostic
 
 from aptl.core.deployment.realization import (
+    DeploymentAccountRealization,
+    DeploymentContentRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
+    DeploymentPublishedPort,
     DeploymentRealizationSpec,
+    DeploymentServicePort,
 )
 
 
@@ -25,12 +29,17 @@ class NodeRealization(object):
     profiles: tuple[str, ...]
     backend_services: tuple[str, ...]
     container_name: str | None
-    services: tuple[str, ...]
+    services: tuple[DeploymentServicePort, ...]
     networks: tuple[str, ...]
     static_addresses: tuple[str, ...]
     static_address_assignments: tuple[tuple[str, str], ...] = ()
-    declared_health: str | None = None
+    published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
+
+    def service_names(self) -> tuple[str, ...]:
+        """Return the declared service names, for profile/alias matching."""
+
+        return tuple(sorted({s.name for s in self.services if s.name}))
 
     def details(self) -> dict[str, object]:
         details: dict[str, object] = {
@@ -40,14 +49,14 @@ class NodeRealization(object):
             "profiles": list(self.profiles),
             "backend_services": list(self.backend_services),
             "container_name": self.container_name,
-            "services": list(self.services),
+            "services": [service.details() for service in self.services],
             "networks": list(self.networks),
             "static_addresses": list(self.static_addresses),
             "static_address_assignments": [
                 {"network": network, "ipv4_address": address}
                 for network, address in self.static_address_assignments
             ],
-            "declared_health": self.declared_health,
+            "published_ports": [binding.details() for binding in self.published_ports],
         }
         if self.image is not None:
             details["image"] = self.image.details()
@@ -83,15 +92,22 @@ class PlacementRealization(object):
     name: str
     target_address: str
     target_node: str | None
+    content: DeploymentContentRealization | None = None
+    account: DeploymentAccountRealization | None = None
 
     def details(self) -> dict[str, object]:
-        return {
+        details: dict[str, object] = {
             "address": self.address,
             "resource_type": self.resource_type,
             "name": self.name,
             "target_address": self.target_address,
             "target_node": self.target_node,
         }
+        if self.content is not None:
+            details["content"] = self.content.details()
+        if self.account is not None:
+            details["account"] = self.account.details()
+        return details
 
 
 @dataclass(frozen=True)
@@ -124,6 +140,16 @@ class AptlRealization(object):
                 for network in self.networks
             ),
             images=tuple(node.image for node in self.nodes if node.image is not None),
+            content=tuple(
+                placement.content
+                for placement in self.placements
+                if placement.content is not None
+            ),
+            accounts=tuple(
+                placement.account
+                for placement in self.placements
+                if placement.account is not None
+            ),
         )
 
     def details(self) -> dict[str, object]:
@@ -181,4 +207,6 @@ def _deployment_node_realization(
             )
             for network in node.networks
         ),
+        services=node.services,
+        published_ports=node.published_ports,
     )

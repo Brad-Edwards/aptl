@@ -1,3 +1,0 @@
-symbolic link	lrwxrwxrwx	777	0	root	0	root	21	1752576135	stable	plain	/etc/os-release
-regular file	-rwxr-xr-x	755	0	root	0	root	102823125	1770909904	stable	plain	/orborus
-regular file	-rwxr-xr-x	755	0	root	0	root	149504	1770909694	stable	plain	/orborus.go

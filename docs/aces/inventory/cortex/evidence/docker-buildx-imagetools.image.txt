@@ -1,3 +1,0 @@
-Name:      docker.io/thehiveproject/cortex:3.1.8
-MediaType: application/vnd.docker.distribution.manifest.v2+json
-Digest:    sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b

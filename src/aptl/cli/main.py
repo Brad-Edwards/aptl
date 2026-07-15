@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 import aptl
-from aptl.cli import aces_inventory, config, container, kill, lab, runs, web
+from aptl.cli import config, container, kill, lab, runs, web
 
 app = typer.Typer(
     name="aptl",
@@ -16,13 +16,13 @@ app = typer.Typer(
 app.add_typer(lab.app, name="lab")
 app.add_typer(config.app, name="config")
 app.add_typer(container.app, name="container")
-app.add_typer(aces_inventory.app, name="aces-inventory")
 app.add_typer(runs.app, name="runs")
 app.add_typer(web.app, name="web")
 app.add_typer(kill.app, name="kill")
 
 
 def _version_callback(value: bool) -> None:
+    """Print the installed version and exit when ``--version`` is passed."""
     if value:
         typer.echo(f"aptl {aptl.__version__}")
         raise typer.Exit()

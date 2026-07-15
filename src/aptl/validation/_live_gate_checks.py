@@ -90,7 +90,7 @@ def check_static_prerequisite(
     """Run the static gate; a static failure blocks the live boot.
 
     Returns the parsed scenario (for the realization matrix) and the check.
-    Static parse/compile/conformance/parity failures are hard blocks, never
+    Static parse/compile/conformance failures are hard blocks, never
     downgraded to live-gate warnings.
     """
     report = validate_scenario(
@@ -391,7 +391,7 @@ def check_run_archive_manifest(
     """Persist scenario identity + ACES provenance + validation evidence.
 
     Writes through ``LocalRunStore``'s redacting boundary (ADR-029).
-    Objective / scoring run surfaces are published through the portable
+    Objective and condition run surfaces are published through the portable
     ACES evaluation contracts at the backend boundary. Live evaluator
     progression is emitted by ``AptlEvaluator`` from observed runtime state.
     """

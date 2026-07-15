@@ -16,8 +16,8 @@ variables:
     description: Password posture for release engineering operator accounts
   canary_cutover:
     type: string
-    default: "45 min"
-    description: When canary promotion begins
+    default: "2 hour 45 min"
+    description: When canary promotion begins, inside the canary-rollout window
   rollback_deadline:
     type: string
     default: "6 hour"
@@ -317,19 +317,19 @@ features:
 conditions:
   repo-integrity-healthy: {command: /usr/local/bin/check-repo-integrity, interval: 30}
   pipeline-green: {command: /usr/local/bin/check-pipeline, interval: 30}
-  rogue-release-promoted: {command: /usr/local/bin/check-rogue-release, interval: 60}
-  release-signature-valid: {command: /usr/local/bin/check-release-signature, interval: 30}
-  rollback-package-ready: {command: /usr/local/bin/check-rollback-package, interval: 60}
+  rogue-release-promoted: {proposition: rogue-release-promoted, command: /usr/local/bin/check-rogue-release, interval: 60}
+  release-signature-valid: {proposition: release-signature-valid, command: /usr/local/bin/check-release-signature, interval: 30}
+  rollback-package-ready: {proposition: rollback-package-ready, command: /usr/local/bin/check-rollback-package, interval: 60}
   signing-health: {command: /usr/local/bin/check-signing-service, interval: 30}
   control-plane-healthy: {command: /usr/local/bin/check-control-plane, interval: 15}
   rollback-complete: {command: /usr/local/bin/check-rollback-complete, interval: 60}
   edge-east-healthy: {command: /usr/local/bin/check-edge-east, interval: 30}
-  edge-east-poisoned: {command: /usr/local/bin/check-edge-east-poisoned, interval: 60}
+  edge-east-poisoned: {proposition: edge-east-poisoned, command: /usr/local/bin/check-edge-east-poisoned, interval: 60}
   edge-west-healthy: {command: /usr/local/bin/check-edge-west, interval: 30}
   edge-west-poisoned: {command: /usr/local/bin/check-edge-west-poisoned, interval: 60}
-  telemetry-flowing: {command: /usr/local/bin/check-telemetry, interval: 15}
+  telemetry-flowing: {proposition: telemetry-flowing, command: /usr/local/bin/check-telemetry, interval: 15}
   analytics-ingest-healthy: {command: /usr/local/bin/check-analytics-ingest, interval: 30}
-  tenant-isolation-healthy: {command: /usr/local/bin/check-tenant-isolation, interval: 30}
+  tenant-isolation-healthy: {proposition: tenant-isolation-healthy, command: /usr/local/bin/check-tenant-isolation, interval: 30}
   portal-sso-healthy: {command: /usr/local/bin/check-portal-sso, interval: 30}
   support-bastion-online: {command: /usr/local/bin/check-support-bastion, interval: 30}
   security-pipeline-healthy: {command: /usr/local/bin/check-security-pipeline, interval: 30}
@@ -359,60 +359,143 @@ vulnerabilities:
     technical: true
     class: CWE-345
 
-metrics:
-  blue-release-signing:
-    type: CONDITIONAL
-    max-score: 100
-    condition: release-signature-valid
-  blue-telemetry-availability:
-    type: CONDITIONAL
-    max-score: 100
-    condition: telemetry-flowing
-  blue-tenant-isolation:
-    type: CONDITIONAL
-    max-score: 100
-    condition: tenant-isolation-healthy
-  blue-rollback-report:
-    type: MANUAL
-    max-score: 50
-    artifact: true
-  red-release-poisoning:
-    type: CONDITIONAL
-    max-score: 100
-    condition: rogue-release-promoted
-  red-edge-compromise:
-    type: CONDITIONAL
-    max-score: 100
-    condition: edge-east-poisoned
-
-evaluations:
-  blue-release-resilience:
-    metrics: [blue-release-signing, blue-telemetry-availability, blue-tenant-isolation, blue-rollback-report]
-    min-score: 75
-  red-propagation:
-    metrics: [red-release-poisoning, red-edge-compromise]
-    min-score: {percentage: 75}
-
-tlos:
-  preserve-release-integrity:
-    name: Preserve release integrity
-    evaluation: blue-release-resilience
-  achieve-poisoned-propagation:
-    name: Achieve poisoned propagation
-    evaluation: red-propagation
-
-goals:
-  platform-blue-goal:
-    tlos: [preserve-release-integrity]
-  supply-chain-red-goal:
-    tlos: [achieve-poisoned-propagation]
+propositions:
+  edge-east-poisoned:
+    description: The governed edge-east-poisoned observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.edge-gateway-east]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: edge-east-poisoned
+      semantic_ref: urn:aces:observable:edge-east-poisoned
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  release-signature-valid:
+    description: The governed release-signature-valid observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.artifact-registry]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: release-signature-valid
+      semantic_ref: urn:aces:observable:release-signature-valid
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  rogue-release-promoted:
+    description: The governed rogue-release-promoted observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.ci-runner]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: rogue-release-promoted
+      semantic_ref: urn:aces:observable:rogue-release-promoted
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  rollback-package-ready:
+    description: The governed rollback-package-ready observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.artifact-registry]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: rollback-package-ready
+      semantic_ref: urn:aces:observable:rollback-package-ready
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  telemetry-flowing:
+    description: The governed telemetry-flowing observation is true for the addressed
+      scenario subject.
+    subjects: [nodes.telemetry-broker]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: telemetry-flowing
+      semantic_ref: urn:aces:observable:telemetry-flowing
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+  tenant-isolation-healthy:
+    description: The governed tenant-isolation-healthy observation is true for the
+      addressed scenario subject.
+    subjects: [nodes.customer-portal]
+    basis: observed_state
+    predicate:
+      kind: boolean
+      property: tenant-isolation-healthy
+      semantic_ref: urn:aces:observable:tenant-isolation-healthy
+      operator: equals
+      expected: true
+    quantifier: all
+    evidence_requirements: [objective-truth-evidence]
+assertions:
+  edge-east-poisoned:
+    proposition: edge-east-poisoned
+    role: postcondition
+    polarity: positive
+  release-signature-valid:
+    proposition: release-signature-valid
+    role: postcondition
+    polarity: positive
+  rogue-release-promoted:
+    proposition: rogue-release-promoted
+    role: postcondition
+    polarity: positive
+  rollback-package-ready:
+    proposition: rollback-package-ready
+    role: postcondition
+    polarity: positive
+  telemetry-flowing:
+    proposition: telemetry-flowing
+    role: postcondition
+    polarity: positive
+  tenant-isolation-healthy:
+    proposition: tenant-isolation-healthy
+    role: postcondition
+    polarity: positive
+  pre-edge-east-poisoned:
+    proposition: edge-east-poisoned
+    role: precondition
+    polarity: positive
+  pre-rogue-release-promoted:
+    proposition: rogue-release-promoted
+    role: precondition
+    polarity: positive
+evidence_requirements:
+  objective-truth-evidence:
+    description: Capture evidence used to decide authored proposition assertions.
+    source_refs:
+    - nodes.customer-portal
+    - nodes.ci-runner
+    - nodes.telemetry-broker
+    - nodes.artifact-registry
+    - nodes.edge-gateway-east
+    scope: authored objective, event, workflow, and participant assertion evaluation
+    boundary_kind: assertion_evaluation
+    channel: log
+    artifact_role: proposition_truth_evidence
+    media_types: [application/json]
+    sensitivity: plain
+    redaction: redact_secrets
+    integrity: checksum
+    retention: study_lifetime
+    loss_disclosure: required
 
 entities:
   platform-blue:
     name: Platform Blue Team
     role: Blue
     mission: Deliver a trusted release while maintaining customer service continuity
-    tlos: [preserve-release-integrity]
     entities:
       release-engineering:
         name: Release Engineering
@@ -457,28 +540,28 @@ events:
   freeze-window:
     injects: [release-freeze-brief]
   canary-cutover-event:
-    conditions: [rogue-release-promoted]
+    assertions: [pre-rogue-release-promoted]
     injects: [customer-telemetry-ticket]
   rollback-order-event:
-    conditions: [edge-east-poisoned]
+    assertions: [pre-edge-east-poisoned]
     injects: [exec-rollback-brief]
 
 scripts:
   release-prep:
-    start-time: 0
-    end-time: 2 hour
+    start_time: 0
+    end_time: 2 hour
     speed: ${release_story_speed}
     events:
       freeze-window: 10 min
   canary-rollout:
-    start-time: 2 hour
-    end-time: 4 hour
+    start_time: 2 hour
+    end_time: 4 hour
     speed: ${release_story_speed}
     events:
       canary-cutover-event: ${canary_cutover}
   incident-rollback:
-    start-time: 4 hour
-    end-time: ${rollback_deadline}
+    start_time: 4 hour
+    end_time: ${rollback_deadline}
     speed: ${release_story_speed}
     events:
       rollback-order-event: 5 hour
@@ -511,10 +594,12 @@ content:
     target: analytics-lake
     format: markdown
     items:
-      - name: canary-rollback.md
+      - name: canary-rollback
+        display_name: canary-rollback.md
         tags: [rollback, release]
         description: Canary rollback checklist
-      - name: edge-validation.md
+      - name: edge-validation
+        display_name: edge-validation.md
         tags: [validation, edge]
         description: Edge validation checklist after rollback
 
@@ -607,7 +692,6 @@ agents:
       services: [forge-https, ci-api, bastion-ssh]
       accounts: [support-vendor]
     allowed_subnets: [corp-eng, build-net, federation-net, control-net]
-    reward_calculator: SupplyChainImpact
   blue-release-agent:
     entity: platform-blue.release-engineering
     actions: [Review, Promote, Revoke, Rollback]
@@ -618,7 +702,6 @@ agents:
       services: [forge-https, registry-api, signing-api]
       accounts: [ci-bot, registry-bot]
     allowed_subnets: [corp-eng, build-net, control-net]
-    reward_calculator: TrustedRelease
   blue-sre-agent:
     entity: platform-blue.sre
     actions: [Inspect, Isolate, Restore, Validate]
@@ -629,7 +712,6 @@ agents:
       services: [control-api, edge-east-api, edge-west-api, telemetry-kafka]
       accounts: [satops]
     allowed_subnets: [control-net, edge-net, telemetry-net, security-net]
-    reward_calculator: TelemetryAvailability
 
 objectives:
   red-compromise-build:
@@ -637,7 +719,7 @@ objectives:
     actions: [Exploit, StealToken]
     targets: [ci-runner, support-bastion, forge-auths-ci]
     success:
-      conditions: [rogue-release-promoted]
+      assertions: [rogue-release-promoted]
     window:
       stories: [release-day]
       scripts: [release-prep]
@@ -646,7 +728,7 @@ objectives:
     actions: [PushArtifact]
     targets: [release-manifest, artifact-registry, ci-publishes-registry]
     success:
-      metrics: [red-release-poisoning]
+      assertions: [rogue-release-promoted]
     depends_on: [red-compromise-build]
     window:
       stories: [release-day]
@@ -656,7 +738,7 @@ objectives:
     entity: red-supply-chain
     targets: [edge-gateway-east, control-manages-east]
     success:
-      goals: [supply-chain-red-goal]
+      assertions: [edge-east-poisoned]
     depends_on: [red-poison-release]
     window:
       stories: [release-day]
@@ -667,8 +749,7 @@ objectives:
     actions: [Review, Revoke]
     targets: [artifact-registry, signing-hsm, registry-relies-signing]
     success:
-      conditions: [release-signature-valid]
-      metrics: [blue-release-signing]
+      assertions: [release-signature-valid]
     window:
       stories: [release-day]
       scripts: [release-prep, canary-rollout]
@@ -683,7 +764,7 @@ objectives:
       - nodes.artifact-registry.services.registry-api
       - infrastructure.build-net.acls.allow-engineering-release
     success:
-      conditions: [rollback-package-ready]
+      assertions: [rollback-package-ready]
     depends_on: [blue-validate-release]
     window:
       stories: [release-day]
@@ -696,8 +777,7 @@ objectives:
     actions: [Inspect, Isolate, Restore, Validate]
     targets: [control-api, edge-gateway-east, telemetry-broker, telemetry-replicates-analytics]
     success:
-      goals: [platform-blue-goal]
-      metrics: [blue-telemetry-availability, blue-tenant-isolation]
+      assertions: [telemetry-flowing, tenant-isolation-healthy]
     depends_on: [blue-validate-release, red-reach-edge]
     window:
       stories: [release-day]
@@ -715,22 +795,27 @@ workflows:
       validate-release:
         type: objective
         objective: blue-validate-release
-        next: branch-on-promotion
+        on_success: branch-on-promotion
       branch-on-promotion:
-        type: if
+        type: decision
         when:
-          conditions: [rogue-release-promoted]
+          assertions: [pre-rogue-release-promoted]
         then: rollback-fanout
         else: finish
       rollback-fanout:
         type: parallel
         branches: [revoke-artifact, rollback-edge]
-        next: finish
+        join: rollback-joined
       revoke-artifact:
         type: objective
         objective: blue-revoke-artifact
+        on_success: rollback-joined
       rollback-edge:
         type: objective
         objective: blue-preserve-service
+        on_success: rollback-joined
+      rollback-joined:
+        type: join
+        next: finish
       finish:
         type: end

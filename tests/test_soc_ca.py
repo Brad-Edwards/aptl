@@ -7,6 +7,7 @@ mock, only filesystem behaviour to assert.
 
 from __future__ import annotations
 
+import os
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -168,14 +169,19 @@ class TestFirstRunGeneration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX file modes are unenforced on Windows (st_mode is 0o666/0o777); "
+    "these certs are consumed by Linux containers where the modes apply",
+)
 class TestPermissions:
     """Permission contract (ADR-029 § Secret at rest).
 
     - Output dir + per-service subdirs: ``0o700`` (host-side access control).
     - Public certs: ``0o644`` (operator-readable, mounted as RO).
-    - Private keys, PKCS#12 keystores, keystore password files:
-      ``0o600``. Tight by intent — the service inside the container
-      runs as the host UID (verified live) and needs no other reader.
+    - Private keys and keystore password files: ``0o600``.
+    - PKCS#12 keystores: ``0o644`` so non-root Play containers can read the
+      bind-mounted file when their UID differs from the host user.
     """
 
     def test_output_dir_is_owner_traverseable_only(self, tmp_path):
@@ -204,10 +210,9 @@ class TestPermissions:
 
     def test_service_private_keys_are_owner_read_only(self, tmp_path):
         """Server keys at 0600 — tight by intent per codex security
-        finding. The service process inside each SOC container runs
-        as the host UID 1000 (verified live during SEC-006 bring-up)
-        so 0600 is readable to the service and unreadable to anything
-        else inside the container."""
+        finding. Services that need host-generated private key material through
+        a non-root bind mount should consume the container-readable PKCS#12
+        keystore path instead of widening raw PEM private keys."""
         from aptl.core.soc_ca import LAB_CA_RELDIR, SOC_SERVICE_REGISTRY, ensure_soc_certs
 
         ensure_soc_certs(tmp_path)
@@ -217,10 +222,10 @@ class TestPermissions:
             mode = stat.S_IMODE(key_path.stat().st_mode)
             assert mode == 0o600, f"{svc.name} key mode {oct(mode)} != 0o600"
 
-    def test_keystore_and_password_files_are_owner_read_only(self, tmp_path):
-        """env_file is consumed by Compose on the host (as the host user),
-        and the keystore is consumed by the Play process inside the
-        container (as the host UID per above). Both stay 0600."""
+    def test_keystore_is_container_readable_and_password_file_is_owner_read_only(
+        self, tmp_path
+    ):
+        """Keystore crosses a bind mount; password stays host-side env_file only."""
         from aptl.core.soc_ca import LAB_CA_RELDIR, SOC_SERVICE_REGISTRY, ensure_soc_certs
 
         ensure_soc_certs(tmp_path)
@@ -228,10 +233,16 @@ class TestPermissions:
         for svc in SOC_SERVICE_REGISTRY:
             if not svc.needs_keystore:
                 continue
-            for name in ("keystore.p12", "keystore.p12.password"):
-                p = ca_dir / svc.name / name
-                mode = stat.S_IMODE(p.stat().st_mode)
-                assert mode == 0o600, f"{svc.name} {name} mode {oct(mode)} != 0o600"
+            keystore = ca_dir / svc.name / "keystore.p12"
+            password = ca_dir / svc.name / "keystore.p12.password"
+            keystore_mode = stat.S_IMODE(keystore.stat().st_mode)
+            password_mode = stat.S_IMODE(password.stat().st_mode)
+            assert keystore_mode == 0o644, (
+                f"{svc.name} keystore.p12 mode {oct(keystore_mode)} != 0o644"
+            )
+            assert password_mode == 0o600, (
+                f"{svc.name} keystore.p12.password mode {oct(password_mode)} != 0o600"
+            )
 
 
 class TestSymlinkContainmentPerService:

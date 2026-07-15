@@ -31,6 +31,8 @@ def linux_native(mocker):
 
 def _successful_generator(mocker, certs_dir):
     def fake_run(cmd, **kwargs):
+        if "down" in cmd:
+            return MagicMock(returncode=0, stdout="", stderr="")
         if cmd[:2] == ["docker", "run"]:
             certs_dir.chmod(0o700)
             for path in certs_dir.iterdir():
@@ -138,18 +140,25 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
         _assert_posix_mode(certs_dir / "wazuh.manager-key.pem", 0o644)
         _assert_posix_mode(certs_dir, 0o700)
-        assert mock_run.call_count == 2
+        assert mock_run.call_count == 3
         generator_cmd = mock_run.call_args_list[0][0][0]
-        assert generator_cmd == [
+        assert generator_cmd[:3] == ["docker", "compose", "-p"]
+        assert generator_cmd[3].startswith("aptl-certs-")
+        assert generator_cmd[4:] == [
+            "-f", "generate-indexer-certs.yml", "run", "--rm", "generator"
+        ]
+        cleanup_cmd = mock_run.call_args_list[1][0][0]
+        assert cleanup_cmd == [
             "docker",
             "compose",
+            "-p",
+            generator_cmd[3],
             "-f",
             "generate-indexer-certs.yml",
-            "run",
-            "--rm",
-            "generator",
+            "down",
+            "--remove-orphans",
         ]
-        repair_cmd = mock_run.call_args_list[1][0][0]
+        repair_cmd = mock_run.call_args_list[2][0][0]
         assert repair_cmd[:6] == [
             "docker",
             "run",
@@ -223,7 +232,9 @@ class TestEnsureSSLCerts:
         certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
 
         def fake_run(cmd, **kwargs):
-            if cmd[:3] == ["docker", "compose", "-f"]:
+            if cmd[:2] == ["docker", "compose"]:
+                if "down" in cmd:
+                    return MagicMock(returncode=0, stdout="", stderr="")
                 certs_dir.mkdir(parents=True, exist_ok=True)
                 (certs_dir / "root-ca.pem").write_text("fake-cert")
                 return MagicMock(returncode=0, stdout="", stderr="")
@@ -295,20 +306,46 @@ class TestEnsureSSLCerts:
 
         (tmp_path / "config").mkdir()
 
-        mocker.patch(
+        mock_run = mocker.patch(
             "aptl.core.certs.subprocess.run",
-            return_value=MagicMock(
-                returncode=1,
-                stdout="",
-                stderr="Error: service 'generator' failed",
-            ),
+            side_effect=[
+                MagicMock(
+                    returncode=1,
+                    stdout="generator detail",
+                    stderr="Error: service 'generator' failed",
+                ),
+                MagicMock(returncode=0, stdout="", stderr=""),
+            ],
         )
 
         result = ensure_ssl_certs(tmp_path)
 
         assert result.success is False
         assert result.generated is False
-        assert "generator" in result.error.lower() or "failed" in result.error.lower()
+        assert "generator detail" in result.error
+        assert mock_run.call_args_list[1][0][0][-2:] == ["down", "--remove-orphans"]
+
+    def test_cleanup_failure_blocks_start(self, tmp_path, mocker):
+        """A leftover generator network would overlap TechVault and must fail."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        (tmp_path / "config").mkdir()
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+
+        def fake_run(cmd, **kwargs):
+            if "down" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="network is in use")
+            certs_dir.mkdir(parents=True, exist_ok=True)
+            (certs_dir / "root-ca.pem").write_text("fake-cert")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is False
+        assert "cleanup failed" in result.error.lower()
+        assert "network is in use" in result.error
 
     def test_handles_subprocess_exception(self, tmp_path, mocker):
         """Should handle the generator subprocess raising an exception."""

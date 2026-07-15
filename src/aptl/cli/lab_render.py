@@ -219,6 +219,28 @@ def live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
     return _coalesce_resolved_ports(resolved)
 
 
+def live_services(project_dir: Path) -> set[str]:
+    """Return the Compose service names that are currently running.
+
+    Access instructions must describe the realized scenario, not every
+    optional service declared in Compose.  Best-effort failures deliberately
+    return an empty set so the CLI never advertises an endpoint it could not
+    verify.
+    """
+    backend = _cli_backend(project_dir)
+    if backend is None:
+        return set()
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:
+        return set()
+    return {
+        str(entry.get("Service"))
+        for entry in containers
+        if isinstance(entry, dict) and entry.get("Service")
+    }
+
+
 def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
     """List any ports that were remapped off an in-use default."""
     remapped = [r for r in (resolved_ports or ()) if getattr(r, "remapped", False)]
@@ -249,7 +271,9 @@ def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
 
 
 def emit_lab_access_summary(
-    project_dir: Path, resolved_ports: list[ResolvedPort] | None = None
+    project_dir: Path,
+    resolved_ports: list[ResolvedPort] | None = None,
+    active_services: set[str] | None = None,
 ) -> None:
     """Print the credential locations and common lab entry points.
 
@@ -258,6 +282,8 @@ def emit_lab_access_summary(
     a default port was in use and the service was remapped to a free one.
     """
     resolved_ports = resolved_ports or []
+    if active_services is None:
+        active_services = live_services(project_dir)
     env_path = project_dir / ".env"
     dashboard_port = _resolved_port(
         resolved_ports, _WAZUH_DASHBOARD_SVC, _WAZUH_DASHBOARD_DEFAULT
@@ -278,6 +304,9 @@ def emit_lab_access_summary(
     typer.echo(f"  Grafana: http://localhost:{grafana_port}")
     typer.echo("    username: admin")
     typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
-    typer.echo("  Reverse engineering SSH:")
-    typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}")
+    if _REVERSE_SVC in active_services:
+        typer.echo("  Reverse engineering SSH:")
+        typer.echo(
+            f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
+        )
     _emit_host_port_remaps(resolved_ports)

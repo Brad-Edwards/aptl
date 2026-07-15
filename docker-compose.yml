@@ -483,6 +483,10 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      # TheHive and Cortex share this disposable single-node datastore. Host
+      # percentage watermarks can block fresh bootstrap writes even with tens
+      # of GiB free while the healthcheck continues to report green.
+      - cluster.routing.allocation.disk.threshold_enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     volumes:
       - thehive_es_data:/usr/share/elasticsearch/data

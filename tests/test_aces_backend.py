@@ -579,6 +579,53 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert payload["capabilities"]["participant_runtime"] is not None
 
 
+def test_manifest_provisioner_declares_only_realized_capabilities():
+    """Issue #580: provisioner vocabulary must match the typed realization path."""
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    manifest = create_aptl_manifest()
+    provisioner = manifest.provisioner
+
+    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_os_families == frozenset({"linux"})
+    assert provisioner.supported_content_types == frozenset({"directory", "file"})
+    assert provisioner.supported_account_features == frozenset(
+        {"disabled", "groups", "mail", "spn"}
+    )
+    assert provisioner.supports_accounts is True
+    assert provisioner.supports_acls is False
+
+
+def test_manifest_realization_support_matches_exercised_concerns():
+    """Issue #580: constrained support is limited to a non-vacuous witness."""
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    (support,) = create_aptl_manifest().realization_support
+
+    assert support.domain == "runtime-realization"
+    assert support.supported_constraint_kinds == frozenset({"os-family"})
+    assert support.supported_exact_requirement_kinds == frozenset(
+        {"declared-capability-match"}
+    )
+    assert support.disclosure_kinds == frozenset(
+        {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
+    )
+
+
+def test_derived_realization_fixture_exercises_manifest_constrained_claim():
+    """The retained constrained claim has a compiled runtime requirement."""
+    from aces_sdl.explicitness import ExplicitnessClass
+
+    execution_plan = _execution_plan_with_derived_realization_requirements()
+
+    constrained = {
+        requirement.requirement_kind: requirement.field_path
+        for requirement in execution_plan.model.realization_requirements
+        if requirement.explicitness is ExplicitnessClass.CONSTRAINED
+    }
+    assert constrained == {"os-family": "nodes.vm.os"}
+
+
 def test_current_backend_docs_cover_declared_manifest_components():
     from aces_backend_protocols.manifest import backend_manifest_payload
 
@@ -714,6 +761,8 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
         for case in report.cases
         if not case.passed
     ]
+    case_names = {case.name for case in report.cases}
+    assert {"target-provisioning", "target-snapshot"} <= case_names
 
 
 def test_aptl_target_passes_full_remote_control_plane_conformance():
@@ -746,6 +795,8 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
         for case in report.cases
         if not case.passed
     ]
+    case_names = {case.name for case in report.cases}
+    assert {"target-provisioning", "target-snapshot"} <= case_names
 
 
 def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):
@@ -3552,7 +3603,7 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     unreachable at the runtime gate, so this test is the regression guard on the
     dependency floor.
     """
-    from aces_sdl.explicitness import ExplicitnessProvenance
+    from aces_sdl.explicitness import ExplicitnessClass, ExplicitnessProvenance
 
     backend = _RealizedBackend(containers=("vm",), platform="linux")
 
@@ -3567,8 +3618,13 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
         entry.requirement_kind: entry.provenance
         for entry in result.snapshot.realization_provenance
     }
+    by_explicitness = {
+        entry.requirement_kind: entry.explicitness
+        for entry in result.snapshot.realization_provenance
+    }
     assert by_kind["os-family"] == ExplicitnessProvenance.PROCESSOR_DERIVED
     assert by_kind["node-type"] == ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
 def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):

@@ -196,6 +196,12 @@ def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
     return specs
 
 
+def published_port_specs(project_dir: Path) -> list[PortSpec]:
+    """Load the published-port declarations for a Compose project."""
+    compose = _load_compose(project_dir)
+    return parse_published_ports(compose) if compose is not None else []
+
+
 def _load_compose(project_dir: Path) -> dict[str, object] | None:
     """Load the project compose file if it exists and is a mapping."""
     compose_path = project_dir / _COMPOSE_FILENAME
@@ -229,6 +235,38 @@ def _resolved_for_pinned(
     )
 
 
+def _resolve_available_port(
+    first: PortSpec,
+    env_var: str,
+    default_port: int,
+    protos: tuple[str, ...],
+    taken: set[int],
+) -> int:
+    """Resolve and export an available port for an unpinned mapping."""
+    if _group_available(default_port, protos, first.host_ip):
+        return default_port
+
+    free = _find_free_port(protos, first.host_ip, taken)
+    if free is None:
+        log.warning(
+            "No free host port found to remap %s (default %d); leaving default.",
+            first.service,
+            default_port,
+        )
+        return default_port
+
+    taken.add(free)
+    os.environ[env_var] = str(free)
+    log.info(
+        "Host port %d for %s is in use; publishing on %d instead (%s).",
+        default_port,
+        first.service,
+        free,
+        env_var,
+    )
+    return free
+
+
 def _resolve_group(
     env_var: str,
     specs: list[PortSpec],
@@ -242,28 +280,10 @@ def _resolve_group(
     if env_var in reserved or env_var in os.environ:
         return _resolved_for_pinned(first, env_var, default_port, protos)
 
-    if _group_available(default_port, protos, first.host_ip):
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    free = _find_free_port(protos, first.host_ip, taken)
-    if free is None:
-        log.warning(
-            "No free host port found to remap %s (default %d); leaving default.",
-            first.service,
-            default_port,
-        )
-        return _resolved(first, env_var, default_port, default_port, protos)
-
-    taken.add(free)
-    os.environ[env_var] = str(free)
-    log.info(
-        "Host port %d for %s is in use; publishing on %d instead (%s).",
-        default_port,
-        first.service,
-        free,
-        env_var,
+    resolved_port = _resolve_available_port(
+        first, env_var, default_port, protos, taken
     )
-    return _resolved(first, env_var, default_port, free, protos)
+    return _resolved(first, env_var, default_port, resolved_port, protos)
 
 
 def resolve_host_ports(
@@ -279,14 +299,10 @@ def resolve_host_ports(
     real host port of each service.
     """
     reserved = set(reserved_env or set())
-    compose = _load_compose(project_dir)
-    if compose is None:
-        return []
-
     # Group entries that share an env var (e.g. DNS tcp+udp on one host port)
     # so they move together and land on a port free for every protocol.
     groups: dict[str, list[PortSpec]] = {}
-    for spec in parse_published_ports(compose):
+    for spec in published_port_specs(project_dir):
         if spec.env_var is None:
             continue
         groups.setdefault(spec.env_var, []).append(spec)

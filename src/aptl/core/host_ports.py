@@ -272,12 +272,33 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
-def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
-    """Return every published host port declared in a compose mapping."""
+def _service_selected(
+    cfg: object, active_profiles: set[str] | None
+) -> bool:
+    """Return whether one Compose service participates in this topology."""
+    if not isinstance(cfg, dict):
+        return False
+    service_profiles = set(cfg.get("profiles") or [])
+    return (
+        active_profiles is None
+        or not service_profiles
+        or not service_profiles.isdisjoint(active_profiles)
+    )
+
+
+def parse_published_ports(
+    compose: dict[str, object], active_profiles: set[str] | None = None
+) -> list[PortSpec]:
+    """Return published ports for services selected by *active_profiles*.
+
+    Services without a Compose profile are always active. ``None`` preserves
+    the all-services behavior used by static callers.
+    """
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
-        if not isinstance(cfg, dict):
+        if not _service_selected(cfg, active_profiles):
             continue
+        assert isinstance(cfg, dict)
         for entry in cfg.get("ports") or []:
             spec = _parse_entry(service, entry)
             if spec is not None:
@@ -285,10 +306,16 @@ def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
     return specs
 
 
-def published_port_specs(project_dir: Path) -> list[PortSpec]:
+def published_port_specs(
+    project_dir: Path, active_profiles: set[str] | None = None
+) -> list[PortSpec]:
     """Load the published-port declarations for a Compose project."""
     compose = _load_compose(project_dir)
-    return parse_published_ports(compose) if compose is not None else []
+    return (
+        parse_published_ports(compose, active_profiles)
+        if compose is not None
+        else []
+    )
 
 
 def _load_compose(project_dir: Path) -> dict[str, object] | None:
@@ -387,6 +414,7 @@ def _resolve_group(
 def resolve_host_ports(
     project_dir: Path,
     reserved_env: set[str] | None = None,
+    active_profiles: set[str] | None = None,
     existing_bindings: dict[PortBindingKey, int] | None = None,
 ) -> list[ResolvedPort]:
     """Detect occupied published host ports, remap them, and export overrides.
@@ -402,7 +430,7 @@ def resolve_host_ports(
     # Group entries that share an env var (e.g. DNS tcp+udp on one host port)
     # so they move together and land on a port free for every protocol.
     groups: dict[str, list[PortSpec]] = {}
-    for spec in published_port_specs(project_dir):
+    for spec in published_port_specs(project_dir, active_profiles):
         if spec.env_var is None:
             continue
         groups.setdefault(spec.env_var, []).append(spec)

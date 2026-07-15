@@ -39,11 +39,12 @@ from aptl.core.deployment._compose_service_health import (
     container_health,
     container_running,
 )
-from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.deployment.realization import DeploymentContentRealization
 
 # Compose defaults the project name to "aptl"; a backend that scopes to a
 # different project exposes its own ``project_name``.
@@ -94,6 +95,11 @@ def observe_realization(
         placement.address: placement.target_address
         for placement in realization.placements
     }
+    placement_content = {
+        placement.address: placement.content
+        for placement in realization.placements
+        if placement.content is not None
+    }
     project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
     realized_networks = _realized_network_names(backend, project_name)
 
@@ -109,15 +115,15 @@ def observe_realization(
         else:
             observations[address] = _observe_placement(
                 backend,
-                resource.payload,
                 node_containers,
                 placement_targets.get(address),
+                placement_content.get(address),
             )
     return observations
 
 
 def _safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
-    """Inspect a container, treating a transient backend error as "absent".
+    """Inspect a project-owned container, treating uncertainty as "absent".
 
     A ``docker inspect`` that times out or errors leaves the container's state
     unknown, and an unobservable resource must fail closed — read as not
@@ -127,9 +133,15 @@ def _safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
     """
 
     try:
+        if not backend.container_exists(name):
+            return {}
         info = backend.container_inspect(name)
     except (BackendTimeoutError, OSError) as exc:
-        log.warning("could not inspect container %s: %s", name, exc)
+        log.warning(
+            "could not inspect project container %s (%s)",
+            name,
+            type(exc).__name__,
+        )
         return {}
     return info if isinstance(info, dict) else {}
 
@@ -174,9 +186,9 @@ def _observe_network(
 
 def _observe_placement(
     backend: "DeploymentBackend",
-    payload: Mapping[str, Any],
     node_containers: dict[str, str],
     target_address: str | None,
+    content: "DeploymentContentRealization | None",
 ) -> ObservedResource:
     """Observe a node-scoped placement through the node that received it.
 
@@ -195,7 +207,7 @@ def _observe_placement(
         return ObservedResource(realized=False)
 
     concerns: dict[tuple[str, ...], object] = {}
-    content_type = _declared_content_type(payload)
+    content_type = _observed_content_type(backend, content)
     if content_type is not None:
         concerns[_CONTENT_TYPE_PATH] = content_type
     return ObservedResource(realized=True, concerns=concerns)
@@ -210,20 +222,24 @@ def _container_realized(info: Mapping[str, Any]) -> bool:
     return not health or health == "healthy"
 
 
-def _declared_content_type(payload: Mapping[str, Any]) -> object | None:
-    """Return the content type the backend realized for a content placement.
+def _observed_content_type(
+    backend: "DeploymentBackend",
+    content: "DeploymentContentRealization | None",
+) -> str | None:
+    """Return the destination kind observed by the deployment provider."""
 
-    APTL materializes content exactly as the compiled spec types it (a file, a
-    directory, a dataset) — the seeder fails closed rather than substituting a
-    different kind — so the realized type is the spec's type, reported only
-    because the target container was observed running.
-    """
-
-    spec = payload.get("spec")
-    if not isinstance(spec, Mapping):
+    if content is None:
         return None
-    content_type = spec.get("type")
-    return content_type if content_type is not None else None
+    try:
+        observed = backend.observe_content_type(content)
+    except (BackendSeedError, BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe content type for %s (%s)",
+            content.address,
+            type(exc).__name__,
+        )
+        return None
+    return observed if observed in ("file", "directory") else None
 
 
 def _observed_os_family(info: Mapping[str, Any]) -> str | None:
@@ -255,7 +271,7 @@ def _realized_network_names(
     try:
         names = backend.host_list_lab_networks(project_name)
     except (BackendTimeoutError, OSError) as exc:
-        log.warning("could not list realized networks: %s", exc)
+        log.warning("could not list realized networks (%s)", type(exc).__name__)
         return set()
     return set(names) if isinstance(names, list | tuple | set) else set()
 

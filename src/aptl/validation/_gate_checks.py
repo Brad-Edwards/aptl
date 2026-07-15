@@ -14,6 +14,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from aces_conformance.conformance import run_target_conformance
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
     from aces_contracts.diagnostics import Diagnostic
 
     from aptl.core.config import AptlConfig
+    from aptl.core.deployment.realization import DeploymentContentRealization
 
 # `aces conformance backend` is ~2s. `aces sdl verify-imports` re-resolves and
 # re-parses a scenario's whole module tree, which scales with that tree rather
@@ -69,6 +71,8 @@ class _NoStartBackend(object):
     def __init__(self) -> None:
         self._container_names: set[str] = set()
         self._network_names: list[str] = []
+        self._content_root: TemporaryDirectory[str] | None = None
+        self._content_paths: dict[str, Path] = {}
 
     def realize(self, realization: object, *, build: bool = True) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
@@ -87,7 +91,41 @@ class _NoStartBackend(object):
             for network in getattr(realization, "networks", ())
             if getattr(network, "name", None)
         ]
+        self._materialize_content_shapes(getattr(realization, "content", ()))
         return LabResult(success=True, message="Static validation realization accepted")
+
+    def _materialize_content_shapes(self, content: Sequence[object]) -> None:
+        """Create empty filesystem shapes for offline content observation.
+
+        The static gate never copies inline or project content. It creates only
+        an empty file/directory per typed realization, then the same observation
+        boundary reads that filesystem state back. This keeps the offline
+        simulation non-secret and non-vacuous without starting Docker.
+        """
+
+        if self._content_root is not None:
+            self._content_root.cleanup()
+        self._content_root = TemporaryDirectory(prefix="aptl-static-conformance-")
+        root = Path(self._content_root.name)
+        self._content_paths = {}
+        for index, item in enumerate(content):
+            address = getattr(item, "address", None)
+            source_kind = getattr(item, "source_kind", None)
+            if not isinstance(address, str):
+                continue
+            path = root / f"content-{index}"
+            if source_kind in ("project-directory", "empty-directory"):
+                path.mkdir()
+            elif source_kind in ("inline-text", "project-file"):
+                path.touch()
+            else:
+                continue
+            self._content_paths[address] = path
+
+    def container_exists(self, name: str) -> bool:
+        """Return whether the simulated project realized this container."""
+
+        return name in self._container_names
 
     def container_inspect(self, name: str) -> dict[str, object]:
         """Report a declared node container as running and healthy.
@@ -117,6 +155,21 @@ class _NoStartBackend(object):
         honours the same project scoping the observer relies on.
         """
         return [name for name in self._network_names if name_prefix in name]
+
+    def observe_content_type(
+        self,
+        content: "DeploymentContentRealization",
+    ) -> str | None:
+        """Read the filesystem kind materialized by the offline simulation."""
+
+        path = self._content_paths.get(content.address)
+        if path is None:
+            return None
+        if path.is_file():
+            return "file"
+        if path.is_dir():
+            return "directory"
+        return None
 
     @staticmethod
     def start(profiles: list[str], *, build: bool = True) -> LabResult:

@@ -159,6 +159,7 @@ class _RealizedBackend(MagicMock):
         platform: str = "linux",
         health: str | None = None,
         running: bool = True,
+        content_types: dict[str, str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -173,7 +174,11 @@ class _RealizedBackend(MagicMock):
         self._platform = platform
         self._health = health
         self._running = running
+        self._content_types = content_types or {}
         self.realize.return_value = LabResult(success=True, message="ok")
+
+    def container_exists(self, name: str) -> bool:
+        return name in self._containers
 
     def container_inspect(self, name: str) -> dict:
         if name not in self._containers:
@@ -189,6 +194,9 @@ class _RealizedBackend(MagicMock):
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         return list(self._networks)
+
+    def observe_content_type(self, content) -> str | None:
+        return self._content_types.get(content.address)
 
     def _get_child_mock(self, /, **kw):
         # ``NonCallableMock.__new__`` gives every mock instance its own
@@ -284,6 +292,41 @@ def _execution_plan_with_derived_realization_requirements():
                 type: vm
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
+            """
+        )
+    )
+    return plan(
+        compile_runtime_model(scenario),
+        create_aptl_manifest(),
+        target_name=APTL_ACES_TARGET_NAME,
+    )
+
+
+def _execution_plan_with_content_realization_requirement():
+    """Compile an EXACT file content concern through ACES's public planner."""
+    from textwrap import dedent
+
+    from aces_processor.compiler import compile_runtime_model
+    from aces_processor.planner import plan
+    from aces_sdl.parser import parse_sdl
+
+    from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
+
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: disclosure-content
+            nodes:
+              fileshare:
+                type: vm
+                os: linux
+                resources: {ram: 1 gib, cpu: 1}
+            content:
+              notice:
+                type: file
+                target: fileshare
+                path: public/notice.txt
+                text: hello
             """
         )
     )
@@ -3349,6 +3392,30 @@ def _apply_disclosure_scenario(tmp_path, backend, execution_plan=None):
     return manager.apply(execution_plan)
 
 
+def _apply_content_disclosure_scenario(tmp_path, observed_content_type):
+    """Apply an exact content concern with a controlled backend observation."""
+    from aces_runtime.manager import RuntimeManager
+
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.core.config import AptlConfig
+
+    execution_plan = _execution_plan_with_content_realization_requirement()
+    content_address = "provision.content.notice"
+    backend = _RealizedBackend(
+        containers=("fileshare",),
+        content_types={content_address: observed_content_type},
+    )
+    _write_compose(tmp_path, {"fileshare": ["otel"]})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        backend=backend,
+    )
+    return RuntimeManager(
+        target, initial_snapshot=execution_plan.base_snapshot
+    ).apply(execution_plan)
+
+
 def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
     """A scenario that realizes nodes reports non-empty realization details."""
     from unittest.mock import MagicMock as _MagicMock
@@ -3405,6 +3472,26 @@ def test_apply_provisioning_rejects_exact_concern_realized_differently(tmp_path)
     assert result.success is False
     codes = {diagnostic.code for diagnostic in result.diagnostics}
     assert "runtime.backend-contract-invalid" in codes
+
+
+def test_apply_provisioning_rejects_exact_content_type_probe_mismatch(tmp_path):
+    """The disclosure gate rejects a real directory where a file was authored."""
+    result = _apply_content_disclosure_scenario(tmp_path, "directory")
+
+    assert result.success is False
+    assert "runtime.backend-contract-invalid" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
+def test_apply_provisioning_records_content_type_provenance_when_honored(tmp_path):
+    """A matching content probe succeeds and reaches the provenance ledger."""
+    result = _apply_content_disclosure_scenario(tmp_path, "file")
+
+    assert result.success is True, [d.message for d in result.diagnostics]
+    assert "content-type" in {
+        entry.requirement_kind for entry in result.snapshot.realization_provenance
+    }
 
 
 def test_apply_provisioning_rejects_node_that_never_became_healthy(tmp_path):

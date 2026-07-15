@@ -6,7 +6,7 @@
 
 **Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
 
-One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, DNS, mail), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), a malware-analysis container, and MCP servers giving AI agents programmatic control over all of it. Scenarios are [ACES SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive.
+One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are [ACES SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault-operational` scenario.
 
 **Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
 
@@ -69,7 +69,6 @@ Once it's up:
 | Wazuh Dashboard | <https://localhost:443> (`admin` / your `INDEXER_PASSWORD` from `.env`) |
 | Victim shell | `aptl container shell aptl-victim` |
 | Kali shell | `aptl container shell aptl-kali` |
-| Reverse engineering SSH | `ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027` |
 
 Lifecycle:
 
@@ -89,7 +88,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 - RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
 - 20 GB+ disk
 - Linux, macOS, or Windows with Docker Desktop/WSL2
-- Open ports: 443, 2027, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
+- Open ports: 443, 8443, 9000, 9001, 9200, 55000 (and the rest of the published ports in `docker-compose.yml`)
 
 ## Architecture
 
@@ -104,7 +103,7 @@ flowchart TD
     end
 
     Kali[Kali Red Team]
-    Reverse[Malware Analysis]
+    Reverse[Optional Malware Analysis<br/>not in the default scenario]
 
     subgraph Scenario[Scenario Environment]
         Targets[Scenario-defined target topology<br/>AD · web · DB · file share · DNS · mail · victim hosts · etc.]
@@ -135,7 +134,7 @@ The catalog ships the operational default plus four curated slices:
 
 | Scenario id | Boots | Omits |
 |---|---|---|
-| `techvault-operational` | Full TechVault stack (default) | — |
+| `techvault-operational` | TechVault enterprise, Kali, SOC, and observability (default) | Mail and reverse engineering |
 | `techvault-attacker-target` | Kali + one monitored victim + Wazuh core + observability | Enterprise web tier, wider SOC stack |
 | `techvault-enterprise-web` | Vulnerable webapp + DB + AD + Wazuh core + observability | Red-team apparatus, wider SOC stack |
 | `techvault-defensive-min` | Wazuh manager / indexer / dashboard + observability | Attacker and enterprise components, wider SOC stack |

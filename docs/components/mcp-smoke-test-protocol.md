@@ -44,12 +44,11 @@ API keys are pre-configured in `.env` and `docker-compose.yml` so no manual expo
 ### What the automated tests prove
 
 - **Precondition gate**: All 12 expected containers are running (fail fast, no skip)
-- **Detection pipeline**: Victim log -> archives, Kali red-team log -> archives, Kali SSH to victim, Wazuh agent registration
+- **Detection pipeline**: Victim log -> archives, Kali SSH to victim, Wazuh agent registration. Kali activity stays in per-session evidence under ADR-033 rather than contaminating the blue SIEM.
 - **Attack -> Detection**: SQLi (rule 302010), XSS (rule 302020), CmdInj (rule 302030) from Kali generate real Wazuh alerts
 - **SOC tools**: MISP IOC lookup, TheHive case lifecycle, Shuffle workflow execution to FINISHED
 - **Full loop**: SQLi from Kali -> Wazuh alert -> MISP lookup -> Shuffle workflow -> TheHive case (6 systems)
-- **Scenario harness**: detect-brute-force lifecycle (start -> SSH brute force from Kali -> evaluate -> stop -> verify report)
-- **MCP protocol**: JSON-RPC initialize + tools/list for all 7 servers (4 custom Node.js + 3 published binaries)
+- **MCP protocol**: JSON-RPC initialize + tools/list for the seven enabled custom Node.js servers (reverse is optional)
 - **MCP tool calls**: Real tool invocations against live services (kali_info, kali_run_command, indexer_query, soar_list_workflows)
 
 ---

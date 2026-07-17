@@ -1612,6 +1612,46 @@ def test_start_aces_scenario_passes_runtime_parameters_to_aces_planner(
     assert calls == {"scenario": scenario, "parameters": parameters}
 
 
+def test_start_aces_scenario_threads_resolved_run_target(mocker, tmp_path):
+    from aptl.backends import aces
+    from aptl.backends.aces_start_model import AcesRunTarget, AcesStartOutcome
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch(
+        "aptl.backends.aces.participant_action_specs_from_runtime_model",
+        return_value={},
+    )
+    outcome = AcesStartOutcome(
+        lab_result=LabResult(success=True, message="ok"),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=["victim"],
+        scenario_path=None,
+    )
+    run_plan = mocker.patch("aptl.backends.aces._run_execution_plan", return_value=outcome)
+    store = object()
+    run_target = AcesRunTarget(run_store=store, run_id="run-1")
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        MagicMock(),
+        run_target=run_target,
+    )
+
+    assert result is outcome
+    assert run_plan.call_args.kwargs == {"run_store": store, "run_id": "run-1"}
+
+
 def test_start_aces_scenario_uses_planned_runtime_model_for_participant_actions(
     mocker, tmp_path
 ):

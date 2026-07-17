@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from docker.client import DockerClient
 
     from aptl.backends.aces import AcesStartOutcome
+    from aptl.backends.aces_start_model import AcesRunTarget
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -119,16 +120,15 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: object = None,
-    run_id: str | None = None,
+    run_target: AcesRunTarget | None = None,
     parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome | LabResult:
     """Lazy ACES handoff import for the public lab-start path.
 
-    ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
-    are threaded into the ACES handoff so orchestration persists workflow
-    artifacts under the same run directory the run record is written to.
+    ``run_target`` (resolved once per lab-start run, REP-001 / GAP 4) is
+    threaded into the ACES handoff so orchestration persists workflow artifacts
+    under the same run directory the run record is written to.
     ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
     the backend retains and reapplies the already admitted execution plan.
     """
@@ -144,8 +144,7 @@ def start_aces_scenario(
         config,
         backend,
         scenario_path=scenario_path,
-        run_store=run_store,
-        run_id=run_id,
+        run_target=run_target,
         parameters=parameters,
         before_backend_retry=before_backend_retry,
     )
@@ -1340,13 +1339,14 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     # orchestration persists workflow artifacts and the later run-record step
     # write to the same run directory / run_id.
     ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    from aptl.backends.aces_start_model import AcesRunTarget
+
     outcome = start_aces_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
-        run_store=ctx.run_store,
-        run_id=ctx.run_id,
+        run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
         # The ACES handoff invokes this only for a retryable backend-start
         # failure whose admitted plan actually selected SOC. Keeping that gate
         # beside the admitted plan avoids both config-flag approximation and a

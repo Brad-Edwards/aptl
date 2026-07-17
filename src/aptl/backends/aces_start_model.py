@@ -13,6 +13,14 @@ from aptl.core.lab_types import LabResult
 DEFAULT_ACES_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
 
 
+@dataclass(frozen=True)
+class AcesRunTarget:
+    """Resolved archive destination shared by orchestration and run records."""
+
+    run_store: Any
+    run_id: str
+
+
 @dataclass
 class AcesStartOutcome:
     """Reference-holder for start_aces_scenario outputs (REP-001 / ADR-044)."""

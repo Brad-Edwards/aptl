@@ -3373,6 +3373,8 @@ class TestLabOrchestrationContracts:
         result = _step_start_containers(ctx)
 
         assert result is None
+        from aptl.backends.aces_start_model import AcesRunTarget
+
         # GAP 4: the handoff is invoked with the single run target resolved
         # once on ctx, so orchestration and the run record share a run_id.
         start_aces.assert_called_once_with(
@@ -3380,8 +3382,7 @@ class TestLabOrchestrationContracts:
             ctx.config,
             ctx.backend,
             scenario_path=None,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
+            run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
             before_backend_retry=ANY,
         )
         assert ctx.run_store is not None

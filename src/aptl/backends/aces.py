@@ -30,7 +30,11 @@ from aptl.backends.aces_realization import (
 from aptl.backends.aces_profiles import (
     select_backend_profiles,
 )
-from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO, AcesStartOutcome
+from aptl.backends.aces_start_model import (
+    DEFAULT_ACES_SCENARIO,
+    AcesRunTarget,
+    AcesStartOutcome,
+)
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -91,18 +95,17 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: RunStorageBackend | None = None,
-    run_id: str | None = None,
+    run_target: AcesRunTarget | None = None,
     parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome:
     """Start an APTL lab by compiling and applying an ACES SDL scenario.
 
-    ``run_store`` and ``run_id`` (resolved once for the whole lab-start run,
-    REP-001 / GAP 4) are threaded into orchestration so workflow result and
-    history artifacts persist under the same run directory the reproducibility
-    record is written to. ``parameters`` is the explicit per-run ACES binding
-    mapping; only the planner sees it, and APTL neither logs nor persists it.
+    ``run_target`` (resolved once for the whole lab-start run, REP-001 / GAP 4)
+    is threaded into orchestration so workflow result and history artifacts
+    persist under the same run directory the reproducibility record is written
+    to. ``parameters`` is the explicit per-run ACES binding mapping; only the
+    planner sees it, and APTL neither logs nor persists it.
     """
 
     resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
@@ -138,8 +141,8 @@ def start_aces_scenario(
             target,
             execution_plan,
             resolved_scenario,
-            run_store=run_store,
-            run_id=run_id,
+            run_store=run_target.run_store if run_target is not None else None,
+            run_id=run_target.run_id if run_target is not None else None,
         )
         if (
             outcome.retryable
@@ -151,8 +154,8 @@ def start_aces_scenario(
                 target,
                 execution_plan,
                 resolved_scenario,
-                run_store=run_store,
-                run_id=run_id,
+                run_store=run_target.run_store if run_target is not None else None,
+                run_id=run_target.run_id if run_target is not None else None,
             )
         return outcome
     except SDLInstantiationError:

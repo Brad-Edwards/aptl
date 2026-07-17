@@ -79,11 +79,12 @@ class TestReproRecord:
         assert sentinel_value not in raw
         assert "[REDACTED]" in raw
 
-    def test_seeds_honest_absence(self):
+    def test_runtime_parameters_are_intentionally_omitted(self):
         record = _dummy_record()
         assert record["aces"]["scenario_parameters"] is None
         note = record["aces"]["scenario_parameters_note"]
-        assert isinstance(note, str) and len(note) > 0
+        assert "intentionally omitted" in note
+        assert "raw scenario bindings" in note
 
     def test_image_digest_captured_when_available(self):
         record = _dummy_record(

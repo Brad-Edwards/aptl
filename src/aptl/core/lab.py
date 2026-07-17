@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -120,12 +120,16 @@ def start_aces_scenario(
     *,
     run_store: object = None,
     run_id: str | None = None,
+    parameters: Mapping[str, object] | None = None,
+    before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome | LabResult:
     """Lazy ACES handoff import for the public lab-start path.
 
     ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
     are threaded into the ACES handoff so orchestration persists workflow
     artifacts under the same run directory the run record is written to.
+    ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
+    the backend retains and reapplies the already admitted execution plan.
     """
     try:
         from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
@@ -141,6 +145,8 @@ def start_aces_scenario(
         scenario_path=scenario_path,
         run_store=run_store,
         run_id=run_id,
+        parameters=parameters,
+        before_backend_retry=before_backend_retry,
     )
 
 
@@ -150,12 +156,12 @@ def selected_profiles_for_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> set[str]:
-    """Lazy ACES import for the scenario's selected Compose profiles.
+    """Inspect a scenario's selected Compose profiles without starting it.
 
-    Returns the profile set the scenario actually starts, so post-start
-    readiness checks scope to it instead of the global config flags. On import
-    failure returns an empty set (the readiness steps then skip rather than
-    falsely waiting on services).
+    This remains an independent validation/inspection surface. The actual lab
+    start path consumes ``AcesStartOutcome.selected_profiles`` from its one
+    admitted execution plan and does not call this helper after deployment.
+    On import or planning failure, return an empty set.
     """
     try:
         from aptl.backends.aces import (
@@ -167,10 +173,8 @@ def selected_profiles_for_scenario(
                 project_dir, config, backend, scenario_path=scenario_path
             )
         )
-    # broad-except: resolving selected profiles is best-effort enrichment for
-    # the readiness steps. The lab already started; any failure (import,
-    # missing/invalid SDL, ACES planning error) must degrade to an empty set so
-    # the readiness steps skip rather than crash the start or falsely wait.
+    # broad-except: resolving profiles is best-effort inspection. Any failure
+    # (import, missing/invalid SDL, ACES planning error) degrades to an empty set.
     except Exception as exc:
         log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
         return set()
@@ -1227,6 +1231,22 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 
+def _prepare_aces_backend_retry(ctx: _LabStartContext) -> None:
+    """Wait for SOC dependencies and repair the manager before one apply retry."""
+
+    log.warning(
+        "Initial compose up failed (SOC dependencies may still be "
+        "initializing). Waiting 60s and retrying the admitted plan..."
+    )
+    import time
+
+    time.sleep(60)
+    # Colima on macOS reproducibly leaves the wazuh-manager container in a
+    # state where s6-supervise reports EACCES while the container remains Up.
+    # Repair that state between apply attempts without reparsing or replanning.
+    _restart_wazuh_manager_if_stuck(ctx)
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1251,33 +1271,13 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         scenario_path=ctx.scenario_path,
         run_store=ctx.run_store,
         run_id=ctx.run_id,
+        before_backend_retry=(
+            partial(_prepare_aces_backend_retry, ctx)
+            if ctx.config.containers.soc
+            else None
+        ),
     )
     lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
-    if not lab_result.success and ctx.config.containers.soc:
-        log.warning(
-            "Initial compose up failed (SOC dependencies may still be "
-            "initializing). Waiting 60s and retrying..."
-        )
-        import time
-
-        time.sleep(60)
-        # Colima on macOS reproducibly leaves the wazuh-manager container
-        # in a state where s6-supervise reports EACCES on the (executable)
-        # `run` scripts and the wazuh daemons never spawn (#732). The
-        # container stays Up so docker's own restart policy never fires,
-        # but no wazuh-* processes exist inside. A single `docker restart`
-        # clears the state; do that before the retry so compose isn't
-        # forced to try running `up` against a broken container instance.
-        _restart_wazuh_manager_if_stuck(ctx)
-        outcome = start_aces_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-        )
-        lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
     if lab_result.success:
         # Store the ACES start outcome for the run record step (REP-001).
         ctx.aces_outcome = outcome
@@ -1285,12 +1285,7 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         # actually started, not the global config flags. A curated bounded
         # scenario starts a subset, so a config-flag gate would wait on (and
         # fail) services it never launched.
-        ctx.selected_profiles = selected_profiles_for_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-        )
+        ctx.selected_profiles = set(getattr(outcome, "selected_profiles", ()))
         return None
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(

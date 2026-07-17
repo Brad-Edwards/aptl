@@ -7,7 +7,7 @@ calls are mocked.
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
@@ -16,6 +16,44 @@ import pytest
 def _env_key(*parts: str) -> str:
     """Build env names for generated test values."""
     return "_".join(parts)
+
+
+def _aces_outcome(
+    *,
+    success: bool,
+    error: str = "",
+    selected_profiles: tuple[str, ...] = (),
+    retryable: bool = False,
+):
+    """Build the concrete outcome returned by the ACES backend handoff."""
+    from aces_contracts.runtime_state import RuntimeSnapshot
+
+    from aptl.backends.aces import AcesStartOutcome
+    from aptl.core.lab_types import LabResult
+
+    return AcesStartOutcome(
+        lab_result=LabResult(
+            success=success,
+            message="Lab started" if success else "",
+            error=error,
+        ),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=list(selected_profiles),
+        scenario_path=None,
+        retryable=retryable,
+    )
+
+
+def _aces_start_after_backend_retry(
+    *_args,
+    before_backend_retry=None,
+    **_kwargs,
+):
+    """Model the backend invoking the lifecycle callback between apply attempts."""
+    assert before_backend_retry is not None
+    before_backend_retry()
+    return _aces_outcome(success=True)
 
 
 class TestLabImportContracts:
@@ -1079,20 +1117,14 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock ACES runtime handoff start
-        from aptl.core.lab import LabResult
-
+        # Mock ACES runtime handoff start. The planned profile set is part of
+        # the outcome so the lifecycle does not re-plan the authored scenario.
         mocks["start"] = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=LabResult(success=True, message="Lab started"),
-        )
-        # Mock the post-start profile resolution so _step_start_containers does
-        # not re-parse a scenario file the test fixture does not provide. The
-        # config above enables wazuh/victim/kali, so the default operational
-        # scenario selects exactly those (+ otel).
-        mocks["selected_profiles"] = mocker.patch(
-            "aptl.core.lab.selected_profiles_for_scenario",
-            return_value={"wazuh", "victim", "kali", "otel"},
+            return_value=_aces_outcome(
+                success=True,
+                selected_profiles=("wazuh", "victim", "kali", "otel"),
+            ),
         )
 
         # Mock service waiting
@@ -3111,14 +3143,14 @@ class TestLabOrchestrationContracts:
             _step_start_containers(ctx)
 
     def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config()
         ctx.backend = MagicMock()
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=LabResult(success=True, message="ok"),
+            return_value=_aces_outcome(success=True),
         )
 
         result = _step_start_containers(ctx)
@@ -3133,14 +3165,118 @@ class TestLabOrchestrationContracts:
             scenario_path=None,
             run_store=ctx.run_store,
             run_id=ctx.run_id,
+            before_backend_retry=ANY,
         )
         assert ctx.run_store is not None
         assert ctx.run_id
 
+    def test_start_containers_disables_backend_retry_without_soc(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=False)
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=_aces_outcome(success=True),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        start_aces.assert_called_once()
+        assert start_aces.call_args.kwargs["before_backend_retry"] is None
+
+    def test_start_containers_reuses_profiles_from_aces_outcome(
+        self, mocker, tmp_path
+    ):
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        outcome = AcesStartOutcome(
+            lab_result=LabResult(success=True, message="ok"),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=["wazuh", "otel"],
+            scenario_path=None,
+        )
+        mocker.patch("aptl.core.lab.start_aces_scenario", return_value=outcome)
+        replan = mocker.patch(
+            "aptl.core.lab.selected_profiles_for_scenario",
+            side_effect=AssertionError("successful startup must not plan twice"),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        assert ctx.selected_profiles == {"wazuh", "otel"}
+        replan.assert_not_called()
+
+    def test_start_containers_does_not_retry_nonretryable_aces_failure(
+        self, mocker, tmp_path
+    ):
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        ctx.backend = MagicMock()
+        outcome = AcesStartOutcome(
+            lab_result=LabResult(
+                success=False,
+                error="ACES runtime variable binding failed.",
+            ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=None,
+            retryable=False,
+        )
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario", return_value=outcome
+        )
+        sleep = mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is not None
+        assert result.success is False
+        start_aces.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_start_containers_retries_retryable_backend_start_failure(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=_aces_start_after_backend_retry,
+        )
+        sleep = mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        start_aces.assert_called_once()
+        sleep.assert_called_once_with(60)
+
     def test_start_containers_preserves_scenario_path_on_soc_retry(
         self, mocker, tmp_path
     ):
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3149,10 +3285,7 @@ class TestLabOrchestrationContracts:
         ctx.scenario_path = selected
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3160,7 +3293,6 @@ class TestLabOrchestrationContracts:
 
         assert result is None
         assert [call.kwargs["scenario_path"] for call in start_aces.call_args_list] == [
-            selected,
             selected,
         ]
 
@@ -3172,7 +3304,7 @@ class TestLabOrchestrationContracts:
         with zero wazuh-* daemons alive (#732). One `docker restart`
         clears the state; do it once, before the retry, so compose is
         not asked to `up` against a broken container."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3186,10 +3318,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3203,7 +3332,7 @@ class TestLabOrchestrationContracts:
     ):
         """Daemons alive inside the container: the retry is likely
         succeeding for a different reason; do NOT restart wazuh-manager."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3217,10 +3346,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3234,7 +3360,7 @@ class TestLabOrchestrationContracts:
         """State.Status != 'running' means the container is gone / dead /
         being recreated by compose itself — restarting would race
         compose. Skip."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3246,10 +3372,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3264,7 +3387,7 @@ class TestLabOrchestrationContracts:
         """The watchdog is best-effort: exceptions from container_inspect
         or container_exec must not abort the retry. Also covers the
         `int()` ValueError branch when the /proc walk emits garbage."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3274,10 +3397,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3292,7 +3412,7 @@ class TestLabOrchestrationContracts:
         """A nonzero exec probe (or non-int stdout) blocks the restart —
         we do not know the process state, so refuse to restart rather
         than guess wrong."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3305,10 +3425,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3320,7 +3437,7 @@ class TestLabOrchestrationContracts:
     ):
         """`container_restart` raising is logged and swallowed — the
         retry proceeds regardless."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3332,10 +3449,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3349,7 +3463,7 @@ class TestLabOrchestrationContracts:
     ):
         """If /proc walk returns non-numeric output (e.g. a sh error line),
         the ValueError branch keeps the retry going with no restart."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3362,10 +3476,7 @@ class TestLabOrchestrationContracts:
 
         mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 

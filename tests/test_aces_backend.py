@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -465,10 +465,12 @@ class _FakeExecutionPlan:
         diagnostics=None,
         orchestration=None,
         evaluation=None,
+        model=None,
     ):
         self.provisioning = provisioning
         self.orchestration = orchestration or OrchestrationPlan()
         self.evaluation = evaluation or EvaluationPlan()
+        self.model = model if model is not None else object()
         self.base_snapshot = RuntimeSnapshot()
         self.is_valid = is_valid
         self.diagnostics = diagnostics or []
@@ -1577,6 +1579,155 @@ def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser.assert_called_once_with(selected)
 
 
+def test_start_aces_scenario_passes_runtime_parameters_to_aces_planner(
+    mocker, tmp_path
+):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls: dict[str, object] = {}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None):
+            calls["scenario"] = parsed_scenario
+            calls["parameters"] = parameters
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    parameters = {"victim_os": "linux", "instance_count": 1}
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        config,
+        backend,
+        parameters=parameters,
+    )
+
+    assert result.lab_result.success is True
+    assert calls == {"scenario": scenario, "parameters": parameters}
+
+
+def test_start_aces_scenario_uses_planned_runtime_model_for_participant_actions(
+    mocker, tmp_path
+):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    planned_model = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(
+                _plan_for_nodes("aptl-victim"), model=planned_model
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    planned_specs = mocker.patch.object(
+        aces,
+        "participant_action_specs_from_runtime_model",
+        create=True,
+        return_value={},
+    )
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.lab_result.success is True
+    planned_specs.assert_called_once_with(
+        planned_model,
+        provisioning_plan=ANY,
+        project_dir=tmp_path,
+        config=config,
+    )
+
+
+def test_start_aces_scenario_projects_instantiation_failure_without_values(
+    tmp_path,
+):
+    from aptl.backends import aces
+
+    scenario_path = tmp_path / "runtime-variables.sdl.yaml"
+    scenario_path.write_text(
+        "name: runtime-variables\n"
+        "description: Deployment tier ${deployment_tier}\n"
+        "variables:\n"
+        "  deployment_tier:\n"
+        "    type: integer\n"
+        "    required: true\n"
+        "nodes: {}\n"
+    )
+    supplied_value = "private-runtime-value"
+    backend = MagicMock()
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}),
+        backend,
+        scenario_path=scenario_path,
+        parameters={"deployment_tier": supplied_value},
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is False
+    assert "runtime variable" in result.lab_result.error.lower()
+    assert supplied_value not in result.lab_result.error
+    assert result.retryable is False
+    backend.realize.assert_not_called()
+    before_retry.assert_not_called()
+
+
+def test_start_aces_scenario_retries_apply_without_replanning(mocker, tmp_path):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls = {"plan": 0, "apply": 0}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None):
+            assert parsed_scenario is scenario
+            assert parameters == {"victim_os": "linux"}
+            calls["plan"] += 1
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+        def apply(self, execution_plan):
+            calls["apply"] += 1
+            return super().apply(execution_plan)
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.side_effect = [
+        LabResult(success=False, error="backend still starting"),
+        LabResult(success=True, message="ok"),
+    ]
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+        parameters={"victim_os": "linux"},
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is True
+    assert calls == {"plan": 1, "apply": 2}
+    assert backend.realize.call_count == 2
+    before_retry.assert_called_once_with()
+
+
 def _workflow_and_evaluation_execution_plan():
     """Compile a minimal workflow+objective scenario into its full ACES plan.
 
@@ -1722,6 +1873,7 @@ def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
 
     assert result.lab_result.success is False
     assert result.lab_result.error
+    assert result.retryable is True
 
 
 def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
@@ -1757,11 +1909,20 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     backend = MagicMock()
     backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    before_retry = MagicMock()
 
-    result = aces.start_aces_scenario(tmp_path, config, backend)
+    result = aces.start_aces_scenario(
+        tmp_path,
+        config,
+        backend,
+        before_backend_retry=before_retry,
+    )
 
     assert result.lab_result.success is False
     assert result.lab_result.error
+    assert result.retryable is False
+    before_retry.assert_not_called()
+    backend.realize.assert_called_once()
 
 
 def test_start_aces_scenario_submits_evaluation_for_objective_scenario(

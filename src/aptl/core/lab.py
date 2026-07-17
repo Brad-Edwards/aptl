@@ -26,7 +26,6 @@ from aptl.core.contracts import (
     backend_is_initialized,
     config_is_loaded,
     env_is_loaded,
-    required_profiles_enabled,
     ssh_key_is_ready,
 )
 from aptl.core.credentials import (
@@ -1304,6 +1303,45 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 
+def _selected_profiles_after_attempt(
+    ctx: _LabStartContext, outcome: object
+) -> set[str]:
+    """Return the selected-profile set to cache on ``ctx`` after a handoff attempt.
+
+    Called from ``_step_start_containers`` after EVERY
+    ``start_aces_scenario`` attempt — including a failed first attempt,
+    not only on success. ACES computes ``AcesStartOutcome.selected_profiles``
+    before the backend apply and returns it on both the failure and
+    success branches (aces.py), so a failed attempt's outcome already
+    carries the authoritative answer. That ordering is what lets the SOC
+    retry gate see the real selected set instead of the empty default a
+    "populate the cache only on success" approach would leave behind
+    (issue #550).
+
+    ``profiles is not None`` is the load-bearing branch: an outcome that
+    explicitly carries ``[]`` (a planner-blocked failure) must fail
+    closed — no seed, no retry, per the guardrail that an
+    empty/unresolved selected set is never permission to act. An outcome
+    with no ``selected_profiles`` attribute at all — a bare ``LabResult``,
+    the shape ``start_aces_scenario`` returns when the ACES import itself
+    fails — falls back to the no-side-effect
+    ``selected_profiles_for_scenario`` resolver, kept as the
+    compatibility/best-effort seam rather than a second source of truth.
+    """
+    # Caller (`_step_start_containers`) is icontract-guarded so config/backend
+    # are not None — narrowing only, no new behavior.
+    assert ctx.config is not None and ctx.backend is not None
+    profiles = getattr(outcome, "selected_profiles", None)
+    if profiles is not None:
+        return set(_safe_list(profiles))
+    return selected_profiles_for_scenario(
+        ctx.project_dir,
+        ctx.config,
+        ctx.backend,
+        scenario_path=ctx.scenario_path,
+    )
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1330,7 +1368,14 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         run_id=ctx.run_id,
     )
     lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
-    if not lab_result.success and ctx.config.containers.soc:
+    # Cache the realized profile set from THIS attempt before the retry gate
+    # below reads it. ACES computes selected_profiles before the backend
+    # apply and returns it on both branches (aces.py), so a failed first
+    # attempt can still carry the authoritative set — populating the cache
+    # only in the success branch below would read an empty set here and
+    # silently disable the full-scenario SOC retry (issue #550).
+    ctx.selected_profiles = _selected_profiles_after_attempt(ctx, outcome)
+    if not lab_result.success and "soc" in ctx.selected_profiles:
         log.warning(
             "Initial compose up failed (SOC dependencies may still be "
             "initializing). Waiting 60s and retrying..."
@@ -1355,19 +1400,13 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
             run_id=ctx.run_id,
         )
         lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
+        ctx.selected_profiles = _selected_profiles_after_attempt(ctx, outcome)
     if lab_result.success:
         # Store the ACES start outcome for the run record step (REP-001).
+        # ctx.selected_profiles is already populated from this attempt's
+        # outcome above; re-resolving it here would re-parse and re-plan
+        # the scenario a second time for an answer already in hand.
         ctx.aces_outcome = outcome
-        # Scope the post-start readiness checks to the profiles this scenario
-        # actually started, not the global config flags. A curated bounded
-        # scenario starts a subset, so a config-flag gate would wait on (and
-        # fail) services it never launched.
-        ctx.selected_profiles = selected_profiles_for_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-        )
         return None
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
@@ -1928,11 +1967,13 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
 # without fileshare), so a missing prime profile must NOT fatally refuse
 # lab startup — it just means the prime seed cannot meaningfully run, and
 # the lab should come up with SOC empty plus a CAPABILITY diagnostic.
-# Kept module-level so the reusable `required_profiles_enabled` predicate
-# from `aptl.core.contracts` has a stable constant to read, and so a
-# future operation (e.g. an explicit `aptl scenario prime start`
-# entrypoint) can wire the same set into a hard `_runtime_require` at
-# *that* boundary without redefining it.
+# Kept module-level as a stable constant: the seed gate below diffs it
+# directly against `ctx.selected_profiles`, the scenario-realized surface
+# (issue #550 — not the config ceiling), and a future operation (e.g. an
+# explicit `aptl scenario prime start` entrypoint) can still wire the same
+# set into a hard `_runtime_require` via the config-bound
+# `required_profiles_enabled` predicate in `aptl.core.contracts` without
+# redefining it.
 _PRIME_REQUIRED_PROFILES = frozenset(
     {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
 )
@@ -1954,9 +1995,9 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
         log.info("Step 13: Seeding SOC tools...")
         # Runtime guard above.
         assert ctx.config is not None
-        if not ctx.config.containers.soc:
-            log.debug("SOC profile not enabled, skipping seed")
-        elif not required_profiles_enabled(ctx.config, _PRIME_REQUIRED_PROFILES):
+        if "soc" not in ctx.selected_profiles:
+            log.debug("SOC profile not selected by this scenario, skipping seed")
+        elif not _PRIME_REQUIRED_PROFILES.issubset(ctx.selected_profiles):
             _emit_missing_prime_profiles(ctx)
         else:
             _run_seed_soc_script(ctx)
@@ -1964,11 +2005,15 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
-    """Emit the non-fatal diagnostic for partial prime profile sets."""
-    assert ctx.config is not None
-    missing = sorted(
-        _PRIME_REQUIRED_PROFILES - set(ctx.config.containers.enabled_profiles())
-    )
+    """Emit the non-fatal diagnostic for a selected-but-incomplete prime set.
+
+    Diffs against ``ctx.selected_profiles`` — the scenario-realized
+    surface — not the config ceiling: a profile can be missing here
+    because the selected scenario never included it, not only because it
+    is disabled in ``aptl.json`` (issue #550), so the operator guidance
+    below must name both possible causes.
+    """
+    missing = sorted(_PRIME_REQUIRED_PROFILES - ctx.selected_profiles)
     _emit_diagnostic(
         ctx,
         step="seed_soc",
@@ -1979,9 +2024,11 @@ def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
             f"missing: {', '.join(missing)}. SOC tools will start empty."
         ),
         operator_action=(
-            "Enable the missing prime profiles in aptl.json and "
-            "re-run `aptl lab start`, or run `scripts/seed-prime.sh` "
-            "manually once the prime stack is up."
+            "Enable the missing prime profiles in aptl.json if they are "
+            "disabled, or start a scenario that selects them — the "
+            "current scenario may intentionally omit them. Alternatively "
+            "run `scripts/seed-prime.sh` manually once the prime stack "
+            "is up."
         ),
     )
 

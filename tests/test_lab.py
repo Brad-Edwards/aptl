@@ -3029,6 +3029,45 @@ class TestStartupClassificationWiring:
 
         assert ctx.diagnostics == []
 
+    def test_seed_soc_skipped_when_soc_not_in_selected_profiles(self, tmp_path):
+        """A scenario that never selects `soc` (e.g. a curated reduced
+        variant) must skip seeding even though the global config flag is
+        on — the gate is the scenario-realized profile surface, not the
+        config ceiling (issue #550). A real seed script that would fail
+        loudly if invoked (rather than a mock assertion) proves the skip:
+        if the gate regressed to reading the config flag, this script
+        would run and its `exit 1` would surface as a diagnostic."""
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(
+            tmp_path,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={
+                    "wazuh": True,
+                    "enterprise": True,
+                    "victim": True,
+                    "kali": True,
+                    "fileshare": True,
+                    "soc": True,
+                },
+            ),
+            # soc (and the rest of the prime set) is enabled in config, but
+            # the scenario this run started never selected it.
+            selected_profiles={"wazuh", "victim", "kali", "otel"},
+        )
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        seed_script = scripts_dir / "seed-prime.sh"
+        seed_script.write_text("#!/bin/bash\nexit 1\n")
+        seed_script.chmod(0o755)
+
+        result = _step_seed_soc(ctx)
+        assert result is None
+
+        assert ctx.diagnostics == []
+
     # -- mcp_config_sync (capability) ----------------------------------
 
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
@@ -3174,6 +3213,27 @@ class TestLabOrchestrationContracts:
         defaults.update(container_overrides)
         return AptlConfig(lab={"name": "test-lab"}, containers=defaults)
 
+    def _outcome(self, *, success, selected_profiles, error="", message="ok"):
+        """Build a real `AcesStartOutcome` — the shape `start_aces_scenario`
+        actually returns on a successful ACES import. ACES computes
+        `selected_profiles` before the backend apply and returns it on
+        BOTH the failure and success branches (aces.py:181-216), so the
+        SOC retry-gate tests below must prove the ordering contract
+        against this shape, not a bare `LabResult` (which carries no
+        `selected_profiles` attribute at all) — issue #550."""
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult
+
+        return AcesStartOutcome(
+            lab_result=LabResult(success=success, error=error, message=message),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=sorted(selected_profiles),
+            scenario_path=None,
+        )
+
     # -- env_is_loaded ------------------------------------------------
 
     def test_sync_credentials_without_env_raises_violation(self, tmp_path):
@@ -3291,10 +3351,114 @@ class TestLabOrchestrationContracts:
         assert ctx.run_store is not None
         assert ctx.run_id
 
+    # -- SOC retry gate reads the attempt's own selected profiles -----
+
+    def test_start_containers_retries_when_outcome_carries_soc_selected(
+        self, mocker, tmp_path
+    ):
+        """The SOC retry gate must read the FAILED attempt's own selected
+        profiles, not a config flag and not a cache populated only on
+        success. ACES computes `selected_profiles` before the backend
+        apply and returns it on the failure branch too
+        (aces.py:199-206) — a failed first apply whose outcome carries
+        "soc" must still trigger the retry. This is issue #550's central
+        ordering-contract regression: a naive `"soc" in
+        ctx.selected_profiles` swap on a cache populated only after
+        success would read an empty set here and silently disable the
+        full-scenario SOC retry."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        # Config itself disables soc: proves the retry decision comes
+        # from the outcome's selected profiles, not ctx.config.
+        ctx.config = self._full_config(soc=False)
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            side_effect=[
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+            ],
+        )
+        mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        assert start_aces.call_count == 2
+
+    def test_start_containers_skips_retry_when_outcome_omits_soc(
+        self, mocker, tmp_path
+    ):
+        """A failed first apply whose outcome does NOT select "soc" must
+        not wait, must not probe/restart wazuh-manager, and must not
+        retry — even though the global config flag is on. A bounded
+        scenario that never selects SOC gets no SOC-specific recovery
+        (issue #550)."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        backend = MagicMock()
+        ctx.backend = backend
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=self._outcome(
+                success=False,
+                error="compose still starting",
+                selected_profiles={"wazuh", "victim", "kali"},
+            ),
+        )
+        sleep = mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is not None
+        assert result.success is False
+        start_aces.assert_called_once()
+        sleep.assert_not_called()
+        backend.container_restart.assert_not_called()
+
+    def test_start_containers_fails_closed_on_planner_blocked_outcome(
+        self, mocker, tmp_path
+    ):
+        """A planner-blocked failure returns `selected_profiles=[]`
+        (explicitly empty, not absent) — waiting 60s never fixes a
+        planner error, and an empty/unresolved selected set is never
+        permission to retry (issue #550 fail-closed guardrail)."""
+        from aptl.core.lab import _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config(soc=True)
+        ctx.backend = MagicMock()
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario",
+            return_value=self._outcome(
+                success=False,
+                error="planner blocked: unresolved dependency",
+                selected_profiles=[],
+            ),
+        )
+        sleep = mocker.patch("time.sleep")
+
+        result = _step_start_containers(ctx)
+
+        assert result is not None
+        assert result.success is False
+        start_aces.assert_called_once()
+        sleep.assert_not_called()
+
     def test_start_containers_preserves_scenario_path_on_soc_retry(
         self, mocker, tmp_path
     ):
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3304,8 +3468,15 @@ class TestLabOrchestrationContracts:
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
@@ -3326,7 +3497,7 @@ class TestLabOrchestrationContracts:
         with zero wazuh-* daemons alive (#732). One `docker restart`
         clears the state; do it once, before the retry, so compose is
         not asked to `up` against a broken container."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3338,11 +3509,18 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
@@ -3350,6 +3528,7 @@ class TestLabOrchestrationContracts:
         result = _step_start_containers(ctx)
 
         assert result is None
+        assert start_aces.call_count == 2
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
     def test_start_containers_skips_restart_when_wazuh_daemons_alive(
@@ -3357,7 +3536,7 @@ class TestLabOrchestrationContracts:
     ):
         """Daemons alive inside the container: the retry is likely
         succeeding for a different reason; do NOT restart wazuh-manager."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3369,17 +3548,25 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="9\n")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
+        assert start_aces.call_count == 2
         backend.container_restart.assert_not_called()
 
     def test_start_containers_skips_restart_when_wazuh_manager_not_running(
@@ -3388,7 +3575,7 @@ class TestLabOrchestrationContracts:
         """State.Status != 'running' means the container is gone / dead /
         being recreated by compose itself — restarting would race
         compose. Skip."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3398,17 +3585,25 @@ class TestLabOrchestrationContracts:
         }
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
+        assert start_aces.call_count == 2
         backend.container_restart.assert_not_called()
         backend.container_exec.assert_not_called()
 
@@ -3418,7 +3613,7 @@ class TestLabOrchestrationContracts:
         """The watchdog is best-effort: exceptions from container_inspect
         or container_exec must not abort the retry. Also covers the
         `int()` ValueError branch when the /proc walk emits garbage."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3426,11 +3621,18 @@ class TestLabOrchestrationContracts:
         backend.container_inspect.side_effect = RuntimeError("boom")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
@@ -3438,6 +3640,7 @@ class TestLabOrchestrationContracts:
         # Should complete without raising; retry still runs.
         result = _step_start_containers(ctx)
         assert result is None
+        assert start_aces.call_count == 2
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_exec_failures(
@@ -3446,7 +3649,7 @@ class TestLabOrchestrationContracts:
         """A nonzero exec probe (or non-int stdout) blocks the restart —
         we do not know the process state, so refuse to restart rather
         than guess wrong."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3457,16 +3660,24 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
+        assert start_aces.call_count == 2
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_restart_failure(
@@ -3474,7 +3685,7 @@ class TestLabOrchestrationContracts:
     ):
         """`container_restart` raising is logged and swallowed — the
         retry proceeds regardless."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3484,17 +3695,25 @@ class TestLabOrchestrationContracts:
         backend.container_restart.side_effect = RuntimeError("daemon down")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
+                self._outcome(
+                    success=True,
+                    selected_profiles={"soc", "wazuh", "victim", "kali"},
+                ),
             ],
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
         assert result is None
+        assert start_aces.call_count == 2
         # We tried, we failed, we did not raise.
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
@@ -3503,7 +3722,7 @@ class TestLabOrchestrationContracts:
     ):
         """If /proc walk returns non-numeric output (e.g. a sh error line),
         the ValueError branch keeps the retry going with no restart."""
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
@@ -3514,16 +3733,25 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        mocker.patch(
+        selected = {"soc", "wazuh", "victim", "kali"}
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=[
-                LabResult(success=False, error="compose still starting"),
-                LabResult(success=True, message="ok"),
+                self._outcome(
+                    success=False,
+                    error="compose still starting",
+                    selected_profiles=selected,
+                ),
+                self._outcome(success=True, selected_profiles=selected),
             ],
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
+        # Without this the test cannot tell "retry ran and the ValueError
+        # branch handled it" from "retry never fired", which is exactly what
+        # a bare LabResult side_effect would silently cause (issue #550).
+        assert start_aces.call_count == 2
         backend.container_restart.assert_not_called()
 
     def test_start_containers_hints_for_stale_realization_networks(
@@ -3783,20 +4011,29 @@ class TestStopLabCleanupIsContractFree:
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against the reusable `required_profiles_enabled`
-    predicate at the SOC seed boundary. ADR-005 supports selective SOC
-    labs, so a missing prime profile must NOT fatally refuse lab
-    startup — it surfaces as a CAPABILITY diagnostic and the step
-    returns None. The reusable predicate remains available as a hard
-    contract for a future explicit prime-scenario entrypoint."""
+    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
+    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
+    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
+    missing prime profile must NOT fatally refuse lab startup — it
+    surfaces as a CAPABILITY diagnostic and the step returns None. The
+    config-bound `required_profiles_enabled` predicate in
+    `aptl.core.contracts` remains available as a hard contract for a
+    future explicit prime-scenario entrypoint; this boundary uses plain
+    set containment against the selected surface instead."""
 
-    def _ctx(self, tmp_path: Path, *, soc: bool, **extra):
+    def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
 
         containers = {"wazuh": True, "victim": True, "kali": True, "soc": soc}
         containers.update(extra)
+        cfg = AptlConfig(lab={"name": "t"}, containers=containers)
+        # Default: the scenario selects exactly what config enables (the
+        # common case where config and selection coincide). Tests proving
+        # the selected-surface distinction pass an explicit subset.
+        if selected_profiles is None:
+            selected_profiles = set(cfg.containers.enabled_profiles())
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -3806,7 +4043,8 @@ class TestSeedSocPrimeProfileDiagnostic:
                 api_username="u",
                 api_password="p",
             ),
-            config=AptlConfig(lab={"name": "t"}, containers=containers),
+            config=cfg,
+            selected_profiles=selected_profiles,
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
@@ -3863,6 +4101,43 @@ class TestSeedSocPrimeProfileDiagnostic:
         result = _step_seed_soc(ctx)
         assert result is None
         assert ctx.diagnostics == []
+
+    def test_scenario_omitted_profile_emits_diagnostic_from_selected_surface(
+        self, tmp_path
+    ):
+        """A profile can be fully enabled in aptl.json yet still land in
+        the diagnostic's `missing` list, because the gate diffs against
+        `ctx.selected_profiles` — the scenario-realized surface — not the
+        config ceiling. Operator guidance must name both possible causes
+        (issue #550): a profile can be disabled in aptl.json, or the
+        selected scenario can intentionally omit it, as this test does."""
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(
+            tmp_path,
+            soc=True,
+            enterprise=True,
+            fileshare=True,
+            # Every prime profile is enabled in config, but this run's
+            # scenario only realized a subset of it.
+            selected_profiles={"soc", "wazuh", "victim", "kali"},
+        )
+        result = _step_seed_soc(ctx)
+
+        assert result is None  # non-fatal
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "enterprise" in diag.message
+        assert "fileshare" in diag.message
+        # Operator guidance must name BOTH causes, not just "edit
+        # aptl.json" — enterprise/fileshare are enabled in config here;
+        # it is the scenario's own selection that omitted them.
+        assert "aptl.json" in diag.operator_action
+        assert "scenario" in diag.operator_action.lower()
 
 
 class TestGenerateSocCertsStep:

@@ -151,3 +151,14 @@ aptl lab stop -v -y
 - Variants that omit `kali` or the SOC stack are intentionally not subject to the
   full gate's Kali reachability and Suricata telemetry probes. Their absence is
   part of the reduced surface, not an ambiguous startup failure.
+- The `techvault-observability-core`, `techvault-defensive-min`, and
+  `techvault-enterprise-web` recorded rows above pass `--skip-seed` in their
+  `command` field. That predates issue #550's fix, which scopes the SOC seed
+  step (and the SOC compose-retry watchdog) to the scenario's realized
+  `selected_profiles` instead of the global `config.containers.soc` flag; before
+  that fix, `aptl lab start` for these `soc`-less variants would otherwise
+  attempt to run `scripts/seed-prime.sh` against a stack that never started SOC.
+  `--skip-seed` is no longer required for these (or any other) reduced variants
+  — none of them select `soc`, so the seed step is now an intentional no-op
+  regardless of the flag. The evidence rows are not re-recorded here because
+  reproducing them needs live infrastructure; see "Reproducing the proof" above.

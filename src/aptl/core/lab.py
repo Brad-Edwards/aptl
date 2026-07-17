@@ -1902,7 +1902,7 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
         assert ctx.config is not None
         if "soc" not in ctx.selected_profiles:
             log.debug("SOC profile not selected by this scenario, skipping seed")
-        elif not _PRIME_REQUIRED_PROFILES <= ctx.selected_profiles:
+        elif not _PRIME_REQUIRED_PROFILES.issubset(ctx.selected_profiles):
             _emit_missing_prime_profiles(ctx)
         else:
             _run_seed_soc_script(ctx)

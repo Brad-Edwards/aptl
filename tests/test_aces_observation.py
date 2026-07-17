@@ -31,6 +31,7 @@ from aptl.core.deployment.realization import (
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
 )
+from aptl.core.deployment.realization import DeploymentContentRealization
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.deployment.errors import BackendTimeoutError
 
@@ -55,6 +56,9 @@ class _Backend:
         mounts=None,
         project_dir=None,
         authenticated_readiness=None,
+        project_owned=True,
+        content_types=None,
+        content_probe_raises=False,
     ):
         self._containers = set(containers)
         self._networks = [
@@ -68,6 +72,12 @@ class _Backend:
         self._mounts = mounts or {}
         self.project_dir = project_dir
         self.authenticated_readiness = authenticated_readiness or {}
+        self._project_owned = project_owned
+        self._content_types = content_types or {}
+        self._content_probe_raises = content_probe_raises
+
+    def container_exists(self, name):
+        return self._project_owned and name in self._containers
 
     def container_inspect(self, name):
         if self._inspect_raises:
@@ -88,6 +98,11 @@ class _Backend:
         if self._networks_raise:
             raise BackendTimeoutError("docker network ls timed out")
         return [n for n in self._networks if name_prefix in n]
+
+    def observe_content_type(self, content):
+        if self._content_probe_raises:
+            raise BackendTimeoutError("content probe timed out")
+        return self._content_types.get(content.address)
 
 
 def _node_plan(name="vm"):
@@ -174,6 +189,21 @@ def test_inspect_timeout_fails_closed_not_crash():
     )
     backend = _Backend(containers=("aptl-vm",), inspect_raises=True)
     # Must not raise, and the unobservable node must not be reported realized.
+    assert observe_realization(backend, realization, plan)[address].realized is False
+
+
+def test_same_named_container_from_another_project_is_not_realized():
+    """A foreign container name cannot satisfy this project's node concern."""
+    address, plan = _node_plan()
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(containers=("aptl-vm",), project_owned=False)
+
     assert observe_realization(backend, realization, plan)[address].realized is False
 
 
@@ -599,3 +629,82 @@ def test_persistent_volume_is_observed_from_project_scoped_mount():
             }
         ],
     }
+    assert observe_realization(_Backend(containers=()), realization, plan)[
+        address
+    ].realized is False
+
+
+def _content_placement_fixture():
+    address = "provision.content.notice"
+    target_address = "provision.node.vm"
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload={
+            "name": "notice",
+            "target_address": target_address,
+            "spec": {"type": "file", "path": "public/notice.txt"},
+        },
+    )
+    plan = ProvisioningPlan(
+        resources={address: resource},
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address=address,
+                resource_type=resource.resource_type,
+                payload=resource.payload,
+            )
+        ],
+    )
+    content = DeploymentContentRealization(
+        address=address,
+        target_address=target_address,
+        content_name="notice",
+        volume_suffix="fileshare_data",
+        dest_relpath="public/notice.txt",
+        source_kind="inline-text",
+        inline_text="hello",
+    )
+    placement = PlacementRealization(
+        address=address,
+        resource_type="content-placement",
+        name="notice",
+        target_address=target_address,
+        target_node="vm",
+        content=content,
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(placement,),
+        diagnostics=(),
+    )
+    return address, plan, realization
+
+
+def test_content_type_comes_from_backend_probe_not_declared_payload():
+    """A realized directory must not be echoed back as the planned file."""
+    address, plan, realization = _content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        content_types={address: "directory"},
+    )
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {("spec", "type"): "directory"}
+
+
+def test_content_probe_timeout_omits_concern_without_echoing_plan():
+    """Unobservable exact content fails closed instead of becoming a file."""
+    address, plan, realization = _content_placement_fixture()
+    backend = _Backend(containers=("aptl-vm",), content_probe_raises=True)
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {}

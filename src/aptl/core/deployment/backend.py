@@ -218,6 +218,19 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def observe_content_type(
+        self,
+        content: DeploymentContentRealization,
+    ) -> str | None:
+        """Read back the realized filesystem kind for one content placement.
+
+        Implementations inspect the project-scoped realized destination and
+        return only the governed ACES kind (``file`` or ``directory``). Missing,
+        ambiguous, or failed observations return ``None``. Content bytes and raw
+        probe output must never cross this boundary.
+        """
+        ...
+
     def realize_accounts(
         self,
         accounts: Sequence[DeploymentAccountRealization],

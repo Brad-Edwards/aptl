@@ -9,6 +9,53 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.0.0](https://github.com/Brad-Edwards/aptl/compare/v4.2.2...v5.0.0) (2026-07-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* the `aptl aces-inventory` command is removed. Asset-inventory capture is owned by ACES.
+
+### Features
+
+* **aces:** realize account/group placements via DeploymentBackend ([#768](https://github.com/Brad-Edwards/aptl/issues/768)) ([a4a0984](https://github.com/Brad-Edwards/aptl/commit/a4a09843e639ff7f1e131d2429ece45039aaecb2))
+* **aces:** realize TechVault content and account placements or fail closed ([#750](https://github.com/Brad-Edwards/aptl/issues/750)) ([45c6ece](https://github.com/Brad-Edwards/aptl/commit/45c6ecebc789d90555adc4c43ef3cf1fb1db7687))
+* **deployment:** surface a redacted stderr hint when a volume seed exits nonzero ([#756](https://github.com/Brad-Edwards/aptl/issues/756)) ([f168e43](https://github.com/Brad-Edwards/aptl/commit/f168e43e80cb5620b503ef68d263796a37f8fc29))
+* **deployment:** surface redacted stderr hint on volume seed failure ([f168e43](https://github.com/Brad-Edwards/aptl/commit/f168e43e80cb5620b503ef68d263796a37f8fc29))
+* realize runtime services and honest SEM-218 disclosure via RuntimeManager ([#770](https://github.com/Brad-Edwards/aptl/issues/770)) ([10dc1e2](https://github.com/Brad-Edwards/aptl/commit/10dc1e205d4cb8dd42a950b317ca49e26558452d))
+* run MCP build and SOC seed shell steps on native Windows ([#729](https://github.com/Brad-Edwards/aptl/issues/729)) ([5a0b7f9](https://github.com/Brad-Edwards/aptl/commit/5a0b7f92c46ac7c2280aadd5af7760ba2acf74a5))
+* **web:** add /config summary, Settings dialog, and local-use notice ([#751](https://github.com/Brad-Edwards/aptl/issues/751)) ([98cabd2](https://github.com/Brad-Edwards/aptl/commit/98cabd2bc1cc71479d9e1aef6b546f44602ddc4c))
+
+
+### Bug Fixes
+
+* **ci:** clear Sonar test code smells ([#771](https://github.com/Brad-Edwards/aptl/issues/771)) ([cf02a61](https://github.com/Brad-Edwards/aptl/commit/cf02a61f3ebe561643ce308439d2bf1c281dc133))
+* **cli:** `aptl lab info` reflects live published ports, not compile-time defaults ([9d2d29b](https://github.com/Brad-Edwards/aptl/commit/9d2d29bc18084a334f90edd1ca54074847e95aef)), closes [#737](https://github.com/Brad-Edwards/aptl/issues/737)
+* **cli+windows:** clear [#739](https://github.com/Brad-Edwards/aptl/issues/739) SonarCloud smells and green the suite on native Windows ([#747](https://github.com/Brad-Edwards/aptl/issues/747)) ([dc4e2f1](https://github.com/Brad-Edwards/aptl/commit/dc4e2f1fba9b9867ecc5bb0960ba414fef3a1d8c))
+* **cli:** reflect live published ports in `aptl lab info` (was hardcoded defaults) ([#738](https://github.com/Brad-Edwards/aptl/issues/738)) ([9d2d29b](https://github.com/Brad-Edwards/aptl/commit/9d2d29bc18084a334f90edd1ca54074847e95aef))
+* **compose:** raise suricata memory limit 1g -&gt; 3g so IDS stays up under full rule set ([d9b7676](https://github.com/Brad-Edwards/aptl/commit/d9b7676e3e923b4720af98086e578bd08d2827a1))
+* **compose:** suricata memory 1g -&gt; 3g so IDS stays up under full APTL rule set ([#731](https://github.com/Brad-Edwards/aptl/issues/731)) ([d9b7676](https://github.com/Brad-Edwards/aptl/commit/d9b7676e3e923b4720af98086e578bd08d2827a1))
+* constrain ACES and define libvirt service boundary ([#767](https://github.com/Brad-Edwards/aptl/issues/767)) ([2bf9988](https://github.com/Brad-Edwards/aptl/commit/2bf99883ff4714ef63408aedf48b8a21cefb2cc5))
+* **lab:** cross-platform lab-start fixes (indexer wait, WSL detection, Sonar smells) ([#740](https://github.com/Brad-Edwards/aptl/issues/740)) ([40244be](https://github.com/Brad-Edwards/aptl/commit/40244be63684b755895101531be3a9243ab0613c))
+* **lab:** restart wazuh-manager between compose retries if daemons never spawn ([#736](https://github.com/Brad-Edwards/aptl/issues/736)) ([75a050d](https://github.com/Brad-Edwards/aptl/commit/75a050d6bd33635a05dd208e189bf6d9e75e28a5))
+* **lab:** use resolved indexer host port in readiness probe (was hardcoded 9200) ([#735](https://github.com/Brad-Edwards/aptl/issues/735)) ([e45c3a6](https://github.com/Brad-Edwards/aptl/commit/e45c3a6b3e4d57ade35cbeb7f2512de6543c05c6)), closes [#733](https://github.com/Brad-Edwards/aptl/issues/733)
+* make generated cert mounts container-readable ([#734](https://github.com/Brad-Edwards/aptl/issues/734)) ([ac5224a](https://github.com/Brad-Edwards/aptl/commit/ac5224a9a29b00bc80e345a3b6619162a87de795))
+* narrow evaluator surface to conditions and objectives ([#749](https://github.com/Brad-Edwards/aptl/issues/749)) ([1b2159d](https://github.com/Brad-Edwards/aptl/commit/1b2159d1ad27de525be84002d72c7c9b1ab4216b))
+* **techvault:** stop lab-boot crash on prose content and realize weak-password accounts ([#754](https://github.com/Brad-Edwards/aptl/issues/754)) ([c6bda8b](https://github.com/Brad-Edwards/aptl/commit/c6bda8b7ca9a5d9da44b395f6201280217e77bc9))
+
+
+### Documentation
+
+* align ACES backend capability claims ([#766](https://github.com/Brad-Edwards/aptl/issues/766)) ([81c268f](https://github.com/Brad-Edwards/aptl/commit/81c268fd6563b759262602794bfbef851881bfdb))
+* generalize workshop rollout capacity example ([b3657c4](https://github.com/Brad-Edwards/aptl/commit/b3657c4abfabbec14889b41f108782aae5fd1549))
+* **workshop:** document emergency rollout ([#746](https://github.com/Brad-Edwards/aptl/issues/746)) ([33966d3](https://github.com/Brad-Edwards/aptl/commit/33966d33ef4101784527c100182e4cdf11b714dc))
+* **workshop:** generalize rollout capacity example ([#748](https://github.com/Brad-Edwards/aptl/issues/748)) ([b3657c4](https://github.com/Brad-Edwards/aptl/commit/b3657c4abfabbec14889b41f108782aae5fd1549))
+
+
+### Code Refactoring
+
+* remove ACES capture inventory and the SCN-010 parity surface ([#757](https://github.com/Brad-Edwards/aptl/issues/757)) ([b4b9c04](https://github.com/Brad-Edwards/aptl/commit/b4b9c04dd380ae259f59320000bf496959801b14))
+
 ## [4.2.2](https://github.com/Brad-Edwards/aptl/compare/v4.2.1...v4.2.2) (2026-07-08)
 
 

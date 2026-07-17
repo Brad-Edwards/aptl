@@ -60,7 +60,7 @@ wheels = [
 
 [[package]]
 name = "aptl-labs"
-version = "4.2.2"
+version = "5.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aces-sdl" },

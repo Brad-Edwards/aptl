@@ -1892,6 +1892,7 @@ class TestResolveHostPortsStep:
     """
 
     def _ctx(self, tmp_path, raw_env=None, progress=None):
+        from aptl.core.config import AptlConfig
         from aptl.core.lab import _LabStartContext
 
         return _LabStartContext(
@@ -1899,6 +1900,11 @@ class TestResolveHostPortsStep:
             skip_seed=False,
             raw_env=raw_env or {},
             progress=progress,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={"wazuh": True, "soc": True},
+            ),
+            backend=MagicMock(),
         )
 
     def test_stores_resolution_and_passes_reserved_env(self, mocker, tmp_path):
@@ -1919,14 +1925,30 @@ class TestResolveHostPortsStep:
         resolve = mocker.patch(
             "aptl.core.host_ports.resolve_host_ports", return_value=resolution
         )
+        bindings = mocker.patch(
+            "aptl.core.host_ports.project_port_bindings", return_value={}
+        )
         ctx = self._ctx(tmp_path, raw_env={"APTL_DNS_HOST_PORT": "9"})
 
         result = _step_resolve_host_ports(ctx)
 
         assert result is None
         assert ctx.resolved_ports is resolution
+        bindings.assert_called_once_with(ctx.backend)
         resolve.assert_called_once_with(
-            tmp_path, reserved_env={"APTL_DNS_HOST_PORT"}
+            tmp_path,
+            reserved_env={"APTL_DNS_HOST_PORT"},
+            active_profiles={
+                "wazuh",
+                "victim",
+                "kali",
+                "enterprise",
+                "soc",
+                "fileshare",
+                "dns",
+                "otel",
+            },
+            existing_bindings={},
         )
 
     def test_announces_remaps_via_progress(self, mocker, tmp_path):
@@ -1945,6 +1967,7 @@ class TestResolveHostPortsStep:
         mocker.patch(
             "aptl.core.host_ports.resolve_host_ports", return_value=[remapped]
         )
+        mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
         progress = MagicMock()
 
         _step_resolve_host_ports(self._ctx(tmp_path, progress=progress))

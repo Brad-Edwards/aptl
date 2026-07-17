@@ -105,7 +105,9 @@ def snapshot_after_apply(
             address=address,
             domain=RuntimeDomain.PROVISIONING,
             resource_type=resource.resource_type,
-            payload=_observed_payload(resource.payload, observed),
+            payload=_observed_payload(
+                resource.payload, observed, resource.resource_type
+            ),
             ordering_dependencies=resource.ordering_dependencies,
             refresh_dependencies=resource.refresh_dependencies,
             status="ready",
@@ -134,6 +136,7 @@ def realized_changed_addresses(
 def _observed_payload(
     planned_payload: Mapping[str, object],
     observed: ObservedResource,
+    resource_type: str,
 ) -> dict[str, object]:
     """Return the planned payload with realization concerns replaced by reality.
 
@@ -145,7 +148,13 @@ def _observed_payload(
     """
 
     payload = deepcopy(dict(planned_payload))
-    for path in CONCERN_PAYLOAD_PATH.values():
+    concern_kinds = {
+        "node": ("node-type", "os-family", "domain-topology"),
+        "content-placement": ("content-type",),
+        "generated-artifact": ("generated-artifact",),
+        "persistent-volume": ("persistent-volume",),
+    }.get(resource_type, ())
+    for path in (CONCERN_PAYLOAD_PATH[kind] for kind in concern_kinds):
         if path in observed.concerns:
             _set_path(payload, path, observed.concerns[path])
         else:

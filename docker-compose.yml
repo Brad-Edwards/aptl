@@ -481,6 +481,10 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      # TheHive and Cortex share this disposable single-node datastore. Host
+      # percentage watermarks can block fresh bootstrap writes even with tens
+      # of GiB free while the healthcheck continues to report green.
+      - cluster.routing.allocation.disk.threshold_enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     volumes:
       - thehive_es_data:/usr/share/elasticsearch/data
@@ -639,6 +643,11 @@ services:
     environment:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - discovery.type=single-node
+      # This is a disposable, single-node lab datastore sharing the host
+      # filesystem. Percentage watermarks can make it read-only even when the
+      # host still has tens of GiB free, leaving Shuffle healthy but unable to
+      # accept the seeded workflow. Match the Wazuh indexer's lab policy.
+      - cluster.routing.allocation.disk.threshold_enabled=false
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=StrongPassword123!
     volumes:
       - shuffle_opensearch_data:/usr/share/opensearch/data

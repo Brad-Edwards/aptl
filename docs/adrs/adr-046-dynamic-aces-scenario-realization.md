@@ -332,15 +332,45 @@ and attaches `RealizationProvenanceEntry` values to the returned
 reimplement phase ordering and provenance attachment.
 
 The provisioner's returned `RuntimeSnapshot` must describe backend-observed
-realization. `snapshot_after_apply()` currently copies provisioning resource
-payloads from the declared plan and marks them ready; that is suitable only as
-an interim reconciliation helper and is not evidence that a container, service,
-healthcheck, network attachment, or port binding exists. A resource may enter
-the successful snapshot only after the deployment backend has started and
-inspected the concrete project-scoped resource and verified every concern the
-snapshot claims. Backend inspection continues through typed
-`DeploymentBackend` inventory methods; the ACES adapter must not call Docker or
-parse Compose output directly.
+realization. `snapshot_after_apply()` is only the snapshot assembler; neither a
+planned resource payload, a successful lowering, nor a successful materializer
+call is evidence of runtime state. A resource may enter the successful snapshot
+only after the deployment backend has started and inspected the concrete
+project-scoped resource and verified every concern the snapshot claims. Backend
+inspection continues through typed `DeploymentBackend` operations; the ACES
+adapter must not call Docker or parse Compose output directly.
+
+Issue #692 makes that rule explicit for every SEM-218 concern in
+`aces_processor.semantics.realization.CONCERN_PAYLOAD_PATH`. The existing
+`aptl.backends.aces_observation.observe_realization()` boundary owns the
+translation from backend evidence to concern values; APTL must not copy the
+registry, derive a second concern schema, or read a concern back from the plan:
+
+- `node-type` is disclosed only after a concrete, project-owned backend object
+  of the corresponding kind is observed: a project-labelled container for
+  `vm`, or a project-scoped network for `switch`. Resource routing or a planned
+  `node_type` value is not evidence.
+- `os-family` comes from the inspected project-owned container platform and is
+  normalized into the ACES vocabulary. A missing, malformed, or unsupported
+  platform is omitted; it is never guessed from an image name, Compose service,
+  host OS, or planned `os_family`.
+- `content-type` requires read-back of the realized destination's actual
+  filesystem kind after materialization. A successful seed, a running target
+  container, `DeploymentContentRealization.source_kind`, and the planned
+  `spec.type` are expectations or prerequisites, not observed type. Read-back
+  consumes the existing typed `DeploymentContentRealization` and resolves the
+  project-scoped target/volume through `DeploymentBackend`; it returns only the
+  ACES kind, never content bytes or command output.
+
+An absent object, wrong project label, ambiguous binding, malformed inspection
+shape, non-zero probe result, timeout, or backend I/O error produces no observed
+concern. It does not fall back to the plan. For an `EXACT` requirement that
+omission or mismatch is rejected by ACES as
+`runtime.backend-contract-invalid`; non-exact concerns remain undisclosed
+rather than being fabricated. Snapshot assembly may preserve non-concern fields
+only where the ACES reconciliation contract requires them. In particular, probe
+stdout/stderr and sensitive inline content must not enter `RuntimeSnapshot`,
+`ApplyResult.details`, logs, API errors, telemetry, or run records.
 
 Service concepts must remain distinct while they pass through the existing
 `AptlRealization` to `DeploymentRealizationSpec` seam:
@@ -745,7 +775,8 @@ bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
 | Control-plane auth gate | Existing CLI and authenticated API lab-start paths converge on the same orchestration. FastAPI router dependencies in `src/aptl/api/main.py` / `src/aptl/api/deps.py` and the BFF Host, same-origin/CSRF, cookie-plus-header session checks in `src/aptl/api/middleware/bff.py` remain mandatory; stateful realization adds no endpoint, token path, or auth bypass. |
 | ACES parser and compiler gate | Authored scenarios enter through `aces_sdl.parse_sdl_file` and compile through the ACES compiler and planner. APTL does not structurally revalidate ACES SDL or recompile the `RuntimeModel` with local models. |
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
-| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start()` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
+| Runtime observation gate | `observe_realization()` emits concern values only from project-scoped backend read-back, using ACES's `CONCERN_PAYLOAD_PATH`. Missing, malformed, timed-out, or mismatched evidence omits the concern and lets `RuntimeManager.apply()` fail an exact requirement closed; it never falls back to planned payload values. |
+| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
@@ -772,6 +803,9 @@ The canonical incumbents this decision builds on are:
   not the paper-scenario topology driver.
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
   and diagnostics.
+- `src/aptl/backends/aces_observation.py` for backend evidence-to-concern
+  translation, using the ACES-owned concern path registry rather than an
+  APTL-local schema.
 - `src/aptl/backends/aces_manifest.py` for the realization support declaration.
 - `src/aptl/backends/aces_observation.py` for explicit backend-observed
   realization state; new resource kinds must not fall through to placement
@@ -875,6 +909,14 @@ mount/access contract, persistence lifecycle, secret references, and provenance
 are parameters. Raw commands and Compose fragments are deliberately not
 extension points.
 
+For runtime disclosure, the parameterized seam remains
+`observe_realization(DeploymentBackend, AptlRealization, ProvisioningPlan)` and
+the existing typed realization records. A new backend or a new ACES concern
+adds provider-owned read-back behind `DeploymentBackend` and maps only the
+observed value at this boundary. The ACES concern kind/path registry, runtime
+gate, snapshot DTO, and provenance vocabulary remain upstream-owned and are not
+extended with APTL mirrors.
+
 ## Consequences
 
 ### Positive
@@ -907,6 +949,18 @@ extension points.
 - Manifest capability text can drift ahead of backend behavior. The static
   lowering tests and clean-start live gate must catch claims that are parsed
   and counted but never passed to a typed backend operation.
+- `RuntimeSnapshot.payload` participates in ACES reconciliation as well as
+  disclosure. Removing non-concern fields blindly can force perpetual updates,
+  while copying a sensitive planned payload can leak it into the run record.
+  Preserve only contract-required reconciliation state and keep sensitive
+  content and probe output outside the snapshot; a broader split between
+  desired-state fingerprints and observed evidence belongs in ACES, not an
+  APTL-only snapshot schema.
+- Disclosure failure happens after backend side effects. It rejects the apply
+  and restores the baseline control-plane snapshot, but it is not transactional
+  rollback of already-created containers, networks, or volumes. Do not report
+  failed observations in `changed_addresses`; cleanup remains the established
+  lab stop/kill workflow unless ACES adds an apply rollback contract.
 
 ## Non-Goals
 
@@ -930,8 +984,11 @@ extension points.
   init-job/workflow or evaluator engine. It may sequence the existing action,
   evidence probe, and `AptlEvaluator` result correctly for Wazuh, but it does
   not create a parallel evaluation contract. An SSH realization may remain
-  explicitly unsupported until the backend can materialize its artifacts
-  safely.
+explicitly unsupported until the backend can materialize its artifacts
+safely.
+- Issue #692 does not add a second disclosure gate, a new runtime snapshot or
+evidence schema, an API surface, operator-configurable probe commands, content
+equality/integrity attestation, or transactional provisioning rollback.
 
 ## Anti-Patterns
 
@@ -958,6 +1015,9 @@ extension points.
   the operational TechVault SDL.
 - Treating `content-placement` or `account-placement` resource counts as proof
   of realization when no typed backend operation consumes the placement.
+- Treating a successful seed, a running/healthy target container, the typed
+  placement's source kind, or `spec.type` as read-back proof of the realized
+  content type.
 - Treating a matching line in `provision-users.sh`, a successful create command,
   or an existing username as proof that groups and declared attributes were
   realized; backend success requires non-secret read-after-write verification.
@@ -1017,6 +1077,9 @@ extension points.
   API responses, or run records.
 - Re-evaluating SEM-218 explicitness classes with a local model rather than
   consuming `realization_requirements` and the planner gate.
+- Copying gated concern values from a `ProvisioningPlan`, or falling back to
+  them when inspection is unavailable; accepting a same-named container without
+  the configured Compose project label; or logging raw probe output.
 - Adding a second topology authority, a duplicate compose parser, or a local
   `RuntimeModel` mirror.
 - Writing realization evidence to a new record type instead of `LocalRunStore`
@@ -1060,6 +1123,7 @@ extension points.
   [#576](https://github.com/Brad-Edwards/aptl/issues/576),
   [#579](https://github.com/Brad-Edwards/aptl/issues/579),
   [#689](https://github.com/Brad-Edwards/aptl/issues/689),
+  [#692](https://github.com/Brad-Edwards/aptl/issues/692),
   [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and
   [aces#600](https://github.com/Brad-Edwards/aces/issues/600); DSL-008 /
   [#422](https://github.com/Brad-Edwards/aptl/issues/422).

@@ -94,6 +94,49 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
         mock_run.assert_not_called()
 
+    def test_generation_uses_supplied_backend_runner(self, tmp_path, mocker):
+        """Typed realization must keep Docker mutation behind its backend."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+        subprocess_run = mocker.patch("aptl.core.certs.subprocess.run")
+        commands = []
+
+        def backend_run(cmd, *, timeout=None):
+            commands.append((cmd, timeout))
+            if "run" in cmd:
+                certs_dir.mkdir(parents=True, exist_ok=True)
+                (certs_dir / "root-ca.pem").write_text("fake-cert")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        result = ensure_ssl_certs(tmp_path, run_command=backend_run)
+
+        assert result.success is True
+        assert [command for command, _timeout in commands] == [
+            [
+                "docker",
+                "compose",
+                "-p",
+                commands[0][0][3],
+                "-f",
+                "generate-indexer-certs.yml",
+                "run",
+                "--rm",
+                "generator",
+            ],
+            [
+                "docker",
+                "compose",
+                "-p",
+                commands[0][0][3],
+                "-f",
+                "generate-indexer-certs.yml",
+                "down",
+                "--remove-orphans",
+            ],
+        ]
+        subprocess_run.assert_not_called()
+
     def test_existing_certs_are_widened_for_non_root_container_mounts(
         self, tmp_path, mocker
     ):
@@ -145,7 +188,11 @@ class TestEnsureSSLCerts:
         assert generator_cmd[:3] == ["docker", "compose", "-p"]
         assert generator_cmd[3].startswith("aptl-certs-")
         assert generator_cmd[4:] == [
-            "-f", "generate-indexer-certs.yml", "run", "--rm", "generator"
+            "-f",
+            "generate-indexer-certs.yml",
+            "run",
+            "--rm",
+            "generator",
         ]
         cleanup_cmd = mock_run.call_args_list[1][0][0]
         assert cleanup_cmd == [

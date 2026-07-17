@@ -21,9 +21,9 @@ output.elasticsearch:
   username: 'admin'
   password: 'SecretPassword'
   ssl.verification_mode: 'full'
-  ssl.certificate_authorities: ['/etc/ssl/root-ca.pem']
-  ssl.certificate: '/etc/ssl/filebeat.pem'
-  ssl.key: '/etc/ssl/filebeat.key'
+  ssl.certificate_authorities: ['/etc/ssl/wazuh/root-ca-manager.pem']
+  ssl.certificate: '/etc/ssl/wazuh/wazuh.manager.pem'
+  ssl.key: '/etc/ssl/wazuh/wazuh.manager-key.pem'
 
 logging.metrics.enabled: false
 

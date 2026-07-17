@@ -7,6 +7,12 @@ from typing import Literal
 
 
 ImageRealizationMode = Literal["pull", "build"]
+StatefulConsumerAccessMode = Literal["read_only", "read_write"]
+GeneratedArtifactKind = Literal["certificate_bundle", "rendered_config"]
+GeneratedArtifactLifecycle = Literal["regenerate_on_change", "reuse_valid"]
+ResourceSensitivity = Literal["public", "restricted", "secret"]
+VolumeLifecycle = Literal["retain", "ephemeral"]
+VolumeAccessMode = Literal["read_write_once", "read_write_many", "read_only_many"]
 
 # An SDL-declared host publish with no author-supplied host address binds
 # loopback. Defaulting to all interfaces would silently put a scenario-declared
@@ -120,6 +126,7 @@ class DeploymentNodeRealization(object):
     network_attachments: tuple[DeploymentNetworkAttachment, ...] = ()
     services: tuple[DeploymentServicePort, ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
+    ordering_dependencies: tuple[str, ...] = ()
 
 
 ContentSourceKind = Literal[
@@ -202,6 +209,94 @@ class DeploymentAccountRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentStatefulConsumer(object):
+    """One resolved node mount for a generated artifact or persistent volume."""
+
+    target_address: str
+    node_name: str
+    service_name: str
+    mount_destination: str
+    access_mode: StatefulConsumerAccessMode
+
+    def details(self) -> dict[str, object]:
+        return {
+            "target_address": self.target_address,
+            "node_name": self.node_name,
+            "service_name": self.service_name,
+            "mount_destination": self.mount_destination,
+            "access_mode": self.access_mode,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentGeneratedArtifactOutput(object):
+    """One declared output from a backend-owned generated artifact."""
+
+    name: str
+    path: str
+    sensitivity: ResourceSensitivity
+
+    def details(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "path": self.path,
+            "sensitivity": self.sensitivity,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentGeneratedArtifactRealization(object):
+    """One ACES generated-artifact operation admitted for deployment."""
+
+    address: str
+    name: str
+    generator: GeneratedArtifactKind
+    lifecycle: GeneratedArtifactLifecycle
+    provenance: str
+    outputs: tuple[DeploymentGeneratedArtifactOutput, ...]
+    consumers: tuple[DeploymentStatefulConsumer, ...]
+    ordering_dependencies: tuple[str, ...] = ()
+    refresh_dependencies: tuple[str, ...] = ()
+
+    def details(self) -> dict[str, object]:
+        return {
+            "address": self.address,
+            "name": self.name,
+            "generator": self.generator,
+            "lifecycle": self.lifecycle,
+            "provenance": self.provenance,
+            "outputs": [output.details() for output in self.outputs],
+            "consumers": [consumer.details() for consumer in self.consumers],
+            "ordering_dependencies": list(self.ordering_dependencies),
+            "refresh_dependencies": list(self.refresh_dependencies),
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentPersistentVolumeRealization(object):
+    """One ACES persistent-volume operation admitted for deployment."""
+
+    address: str
+    name: str
+    lifecycle: VolumeLifecycle
+    access_mode: VolumeAccessMode
+    consumers: tuple[DeploymentStatefulConsumer, ...]
+    ordering_dependencies: tuple[str, ...] = ()
+    refresh_dependencies: tuple[str, ...] = ()
+
+    def details(self) -> dict[str, object]:
+        return {
+            "address": self.address,
+            "name": self.name,
+            "lifecycle": self.lifecycle,
+            "access_mode": self.access_mode,
+            "consumers": [consumer.details() for consumer in self.consumers],
+            "ordering_dependencies": list(self.ordering_dependencies),
+            "refresh_dependencies": list(self.refresh_dependencies),
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentRealizationSpec(object):
     """Portable input for typed deployment backend realization."""
 
@@ -211,3 +306,5 @@ class DeploymentRealizationSpec(object):
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()
+    generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
+    persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()

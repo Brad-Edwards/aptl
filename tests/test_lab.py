@@ -53,7 +53,10 @@ def _aces_start_after_backend_retry(
     """Model the backend invoking the lifecycle callback between apply attempts."""
     assert before_backend_retry is not None
     before_backend_retry()
-    return _aces_outcome(success=True)
+    return _aces_outcome(
+        success=True,
+        selected_profiles=("soc", "wazuh", "victim", "kali"),
+    )
 
 
 class TestLabImportContracts:
@@ -1543,6 +1546,78 @@ class TestOrchestrateLabStart:
         assert len(pull_calls) >= 1
 
 
+class TestStatefulArtifactOwnership:
+    def test_real_scenario_populates_exact_admitted_ownership(self):
+        from aptl.core.config import load_config
+        from aptl.core.lab import (
+            _LabStartContext,
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _WAZUH_MANAGER_CONFIG_OWNERSHIP,
+            _load_stateful_artifact_ownership,
+        )
+
+        project_root = Path(__file__).resolve().parents[1]
+        ctx = _LabStartContext(
+            project_dir=project_root,
+            skip_seed=False,
+            scenario_path=project_root / "scenarios/techvault-operational.sdl.yaml",
+            config=load_config(project_root / "aptl.json"),
+            backend=MagicMock(),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is None
+        assert _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership
+        assert _WAZUH_MANAGER_CONFIG_OWNERSHIP in ctx.stateful_artifact_ownership
+
+    def test_missing_scenario_leaves_legacy_ownership(self, tmp_path):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
+
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            scenario_path=tmp_path / "missing.sdl.yaml",
+            config=AptlConfig(),
+            backend=MagicMock(),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is None
+        assert ctx.stateful_artifact_ownership == frozenset()
+
+    def test_admission_error_fails_before_legacy_mutation(
+        self, tmp_path, monkeypatch
+    ):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
+
+        scenario = tmp_path / "scenario.sdl.yaml"
+        scenario.write_text("schema_version: 1.0.0\nname: fixture\n")
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            scenario_path=scenario,
+            config=AptlConfig(),
+            backend=MagicMock(),
+        )
+        monkeypatch.setattr(
+            "aptl.core.lab.admitted_stateful_artifact_ownership",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                ValueError("fixture admission failure")
+            ),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "admission failed" in result.error
+        assert ctx.stateful_artifact_ownership == frozenset()
+
+
 class TestSyncCredentialsStep:
     """Direct tests for `_step_sync_credentials` (issue #266 follow-up).
 
@@ -1705,6 +1780,88 @@ class TestSyncCredentialsStep:
         result = _step_sync_credentials(ctx)
 
         assert result is None
+
+    def test_typed_rendered_config_has_exclusive_manager_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_MANAGER_CONFIG_OWNERSHIP,
+            _step_sync_credentials,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {_WAZUH_MANAGER_CONFIG_OWNERSHIP}
+        )
+        dashboard = mocker.patch("aptl.core.lab.sync_dashboard_config")
+        manager = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None
+        dashboard.assert_called_once()
+        manager.assert_not_called()
+
+    def test_unrelated_rendered_artifact_does_not_take_manager_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {
+                (
+                    "provision.generated-artifact.other-config",
+                    "rendered_config",
+                    "other.service",
+                    "/etc/other.conf",
+                )
+            }
+        )
+        mocker.patch("aptl.core.lab.sync_dashboard_config")
+        manager = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None
+        manager.assert_called_once()
+
+    def test_typed_certificate_bundle_has_exclusive_generator_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _step_generate_certs,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = _WAZUH_CERTIFICATE_OWNERSHIP
+        generator = mocker.patch("aptl.core.lab.ensure_ssl_certs")
+
+        result = _step_generate_certs(ctx)
+
+        assert result is None
+        generator.assert_not_called()
+
+    def test_partial_certificate_ownership_keeps_legacy_generator(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _step_generate_certs,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {next(iter(_WAZUH_CERTIFICATE_OWNERSHIP))}
+        )
+        generator = mocker.patch("aptl.core.lab.ensure_ssl_certs")
+        generator.return_value = MagicMock(success=True)
+
+        result = _step_generate_certs(ctx)
+
+        assert result is None
+        generator.assert_called_once_with(tmp_path)
 
     def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
         """End-to-end (real credential writers): the step renders the
@@ -2907,6 +3064,45 @@ class TestStartupClassificationWiring:
 
         assert ctx.diagnostics == []
 
+    def test_seed_soc_skipped_when_soc_not_in_selected_profiles(self, tmp_path):
+        """A scenario that never selects `soc` (e.g. a curated reduced
+        variant) must skip seeding even though the global config flag is
+        on — the gate is the scenario-realized profile surface, not the
+        config ceiling (issue #550). A real seed script that would fail
+        loudly if invoked (rather than a mock assertion) proves the skip:
+        if the gate regressed to reading the config flag, this script
+        would run and its `exit 1` would surface as a diagnostic."""
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _step_seed_soc
+
+        ctx = self._ctx(
+            tmp_path,
+            config=AptlConfig(
+                lab={"name": "test-lab"},
+                containers={
+                    "wazuh": True,
+                    "enterprise": True,
+                    "victim": True,
+                    "kali": True,
+                    "fileshare": True,
+                    "soc": True,
+                },
+            ),
+            # soc (and the rest of the prime set) is enabled in config, but
+            # the scenario this run started never selected it.
+            selected_profiles={"wazuh", "victim", "kali", "otel"},
+        )
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        seed_script = scripts_dir / "seed-prime.sh"
+        seed_script.write_text("#!/bin/bash\nexit 1\n")
+        seed_script.chmod(0o755)
+
+        result = _step_seed_soc(ctx)
+        assert result is None
+
+        assert ctx.diagnostics == []
+
     # -- mcp_config_sync (capability) ----------------------------------
 
     def test_mcp_config_sync_exception_emits_capability_warning(self, tmp_path, mocker):
@@ -3052,6 +3248,27 @@ class TestLabOrchestrationContracts:
         defaults.update(container_overrides)
         return AptlConfig(lab={"name": "test-lab"}, containers=defaults)
 
+    def _outcome(self, *, success, selected_profiles, error="", message="ok"):
+        """Build a real `AcesStartOutcome` — the shape `start_aces_scenario`
+        actually returns on a successful ACES import. ACES computes
+        `selected_profiles` before the backend apply and returns it on
+        BOTH the failure and success branches (aces.py:181-216), so the
+        SOC retry-gate tests below must prove the ordering contract
+        against this shape, not a bare `LabResult` (which carries no
+        `selected_profiles` attribute at all) — issue #550."""
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult
+
+        return AcesStartOutcome(
+            lab_result=LabResult(success=success, error=error, message=message),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=sorted(selected_profiles),
+            scenario_path=None,
+        )
+
     # -- env_is_loaded ------------------------------------------------
 
     def test_sync_credentials_without_env_raises_violation(self, tmp_path):
@@ -3170,9 +3387,17 @@ class TestLabOrchestrationContracts:
         assert ctx.run_store is not None
         assert ctx.run_id
 
-    def test_start_containers_disables_backend_retry_without_soc(
+    # -- SOC retry gate reads the attempt's own selected profiles -----
+
+    def test_start_containers_allows_plan_selected_soc_retry_when_config_flag_off(
         self, mocker, tmp_path
     ):
+        """An admitted SOC plan can recover even when the config flag is off.
+
+        The backend owns the retry gate because only it has the admitted
+        plan's selected profiles. The mocked handoff models that backend
+        invoking the callback between apply attempts (issue #550).
+        """
         from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
@@ -3180,14 +3405,16 @@ class TestLabOrchestrationContracts:
         ctx.backend = MagicMock()
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=_aces_outcome(success=True),
+            side_effect=_aces_start_after_backend_retry,
         )
+        sleep = mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
         start_aces.assert_called_once()
-        assert start_aces.call_args.kwargs["before_backend_retry"] is None
+        assert start_aces.call_args.kwargs["before_backend_retry"] is not None
+        sleep.assert_called_once_with(60)
 
     def test_start_containers_reuses_profiles_from_aces_outcome(
         self, mocker, tmp_path
@@ -3316,7 +3543,7 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="0\n")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
@@ -3325,6 +3552,7 @@ class TestLabOrchestrationContracts:
         result = _step_start_containers(ctx)
 
         assert result is None
+        start_aces.assert_called_once()
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
     def test_start_containers_skips_restart_when_wazuh_daemons_alive(
@@ -3344,7 +3572,7 @@ class TestLabOrchestrationContracts:
         backend.container_exec.return_value = MagicMock(returncode=0, stdout="9\n")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
@@ -3352,6 +3580,7 @@ class TestLabOrchestrationContracts:
 
         _step_start_containers(ctx)
 
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_skips_restart_when_wazuh_manager_not_running(
@@ -3370,7 +3599,7 @@ class TestLabOrchestrationContracts:
         }
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
@@ -3378,6 +3607,7 @@ class TestLabOrchestrationContracts:
 
         _step_start_containers(ctx)
 
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
         backend.container_exec.assert_not_called()
 
@@ -3395,7 +3625,7 @@ class TestLabOrchestrationContracts:
         backend.container_inspect.side_effect = RuntimeError("boom")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
@@ -3404,6 +3634,7 @@ class TestLabOrchestrationContracts:
         # Should complete without raising; retry still runs.
         result = _step_start_containers(ctx)
         assert result is None
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_exec_failures(
@@ -3423,13 +3654,14 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_restart_failure(
@@ -3447,7 +3679,7 @@ class TestLabOrchestrationContracts:
         backend.container_restart.side_effect = RuntimeError("daemon down")
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
@@ -3455,6 +3687,7 @@ class TestLabOrchestrationContracts:
 
         result = _step_start_containers(ctx)
         assert result is None
+        start_aces.assert_called_once()
         # We tried, we failed, we did not raise.
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
@@ -3474,13 +3707,17 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        mocker.patch(
+        start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
             side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
+        # Without this the test cannot tell "retry ran and the ValueError
+        # branch handled it" from "retry never fired", which is exactly what
+        # a bare LabResult side_effect would silently cause (issue #550).
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_hints_for_stale_realization_networks(
@@ -3740,20 +3977,29 @@ class TestStopLabCleanupIsContractFree:
 
 
 class TestSeedSocPrimeProfileDiagnostic:
-    """Soft check against the reusable `required_profiles_enabled`
-    predicate at the SOC seed boundary. ADR-005 supports selective SOC
-    labs, so a missing prime profile must NOT fatally refuse lab
-    startup — it surfaces as a CAPABILITY diagnostic and the step
-    returns None. The reusable predicate remains available as a hard
-    contract for a future explicit prime-scenario entrypoint."""
+    """Soft check against `_PRIME_REQUIRED_PROFILES`, diffed against
+    `ctx.selected_profiles` (the scenario-realized surface, issue #550) at
+    the SOC seed boundary. ADR-005 supports selective SOC labs, so a
+    missing prime profile must NOT fatally refuse lab startup — it
+    surfaces as a CAPABILITY diagnostic and the step returns None. The
+    config-bound `required_profiles_enabled` predicate in
+    `aptl.core.contracts` remains available as a hard contract for a
+    future explicit prime-scenario entrypoint; this boundary uses plain
+    set containment against the selected surface instead."""
 
-    def _ctx(self, tmp_path: Path, *, soc: bool, **extra):
+    def _ctx(self, tmp_path: Path, *, soc: bool, selected_profiles=None, **extra):
         from aptl.core.config import AptlConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
 
         containers = {"wazuh": True, "victim": True, "kali": True, "soc": soc}
         containers.update(extra)
+        cfg = AptlConfig(lab={"name": "t"}, containers=containers)
+        # Default: the scenario selects exactly what config enables (the
+        # common case where config and selection coincide). Tests proving
+        # the selected-surface distinction pass an explicit subset.
+        if selected_profiles is None:
+            selected_profiles = set(cfg.containers.enabled_profiles())
         return _LabStartContext(
             project_dir=tmp_path,
             skip_seed=False,
@@ -3763,7 +4009,8 @@ class TestSeedSocPrimeProfileDiagnostic:
                 api_username="u",
                 api_password="p",
             ),
-            config=AptlConfig(lab={"name": "t"}, containers=containers),
+            config=cfg,
+            selected_profiles=selected_profiles,
         )
 
     def test_partial_prime_set_emits_capability_diagnostic(self, tmp_path):
@@ -3820,6 +4067,43 @@ class TestSeedSocPrimeProfileDiagnostic:
         result = _step_seed_soc(ctx)
         assert result is None
         assert ctx.diagnostics == []
+
+    def test_scenario_omitted_profile_emits_diagnostic_from_selected_surface(
+        self, tmp_path
+    ):
+        """A profile can be fully enabled in aptl.json yet still land in
+        the diagnostic's `missing` list, because the gate diffs against
+        `ctx.selected_profiles` — the scenario-realized surface — not the
+        config ceiling. Operator guidance must name both possible causes
+        (issue #550): a profile can be disabled in aptl.json, or the
+        selected scenario can intentionally omit it, as this test does."""
+        from aptl.core.lab import _step_seed_soc
+        from aptl.core.lab_types import DiagnosticImpact, DiagnosticSeverity
+
+        ctx = self._ctx(
+            tmp_path,
+            soc=True,
+            enterprise=True,
+            fileshare=True,
+            # Every prime profile is enabled in config, but this run's
+            # scenario only realized a subset of it.
+            selected_profiles={"soc", "wazuh", "victim", "kali"},
+        )
+        result = _step_seed_soc(ctx)
+
+        assert result is None  # non-fatal
+        assert len(ctx.diagnostics) == 1
+        diag = ctx.diagnostics[0]
+        assert diag.step == "seed_soc"
+        assert diag.impact is DiagnosticImpact.CAPABILITY
+        assert diag.severity is DiagnosticSeverity.WARNING
+        assert "enterprise" in diag.message
+        assert "fileshare" in diag.message
+        # Operator guidance must name BOTH causes, not just "edit
+        # aptl.json" — enterprise/fileshare are enabled in config here;
+        # it is the scenario's own selection that omitted them.
+        assert "aptl.json" in diag.operator_action
+        assert "scenario" in diag.operator_action.lower()
 
 
 class TestGenerateSocCertsStep:

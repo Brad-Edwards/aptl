@@ -4,7 +4,7 @@ requires-python = ">=3.11"
 
 [[package]]
 name = "aces-sdl"
-version = "0.21.0"
+version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncssh" },
@@ -22,9 +22,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e7/7f/4918e056ac9d9ffb3c31d88ebcf5fb37df3f9a6437cf8cac554426b71033/aces_sdl-0.21.0.tar.gz", hash = "sha256:1d4c0e30cbdef0f1214025033e960dd5c34902d83b0827d891f08f0737c15dbd", size = 1612671, upload-time = "2026-07-14T00:38:10.831Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/71/c3923fc8713fbab0baf779c902ac82a6030793e98e1219eec0f35e0a321e/aces_sdl-0.23.1.tar.gz", hash = "sha256:0a53f680c5b2420554cc3f6053ba64d0f4ef919a73337ab060f5dc283295bc0d", size = 1674846, upload-time = "2026-07-17T04:06:34.594Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/1b/840ca2f26eca8ea47ae5638f9c8c8f88a5e2c047608dab19ab860059440d/aces_sdl-0.21.0-py3-none-any.whl", hash = "sha256:252a787cd4348f1815be8de30e9a9fd5d3ccd354c598635e01d333144e942e14", size = 1412615, upload-time = "2026-07-14T00:38:08.466Z" },
+    { url = "https://files.pythonhosted.org/packages/c2/b4/77b40bb8214385c243d187d04614175b0f1a162ec7183a5143c016c06be6/aces_sdl-0.23.1-py3-none-any.whl", hash = "sha256:86f5e99d2dff009fe7165bbe8853f6fdf5a41074e7813f2e38e092910c1147a1", size = 1466167, upload-time = "2026-07-17T04:06:32.749Z" },
 ]
 
 [[package]]
@@ -60,7 +60,7 @@ wheels = [
 
 [[package]]
 name = "aptl-labs"
-version = "4.2.2"
+version = "5.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aces-sdl" },
@@ -102,7 +102,7 @@ web = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aces-sdl", specifier = ">=0.21.0,<0.22.0" },
+    { name = "aces-sdl", specifier = ">=0.23.1,<0.24.0" },
     { name = "asyncssh", marker = "extra == 'web'", specifier = ">=2.17.0" },
     { name = "boto3", marker = "extra == 's3'", specifier = ">=1.28.0" },
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.0.0" },

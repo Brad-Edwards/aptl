@@ -1687,10 +1687,10 @@ def test_start_aces_scenario_projects_instantiation_failure_without_values(
     before_retry.assert_not_called()
 
 
-def test_start_aces_scenario_retries_apply_without_replanning(mocker, tmp_path):
+def test_start_aces_scenario_retries_soc_apply_without_replanning(mocker, tmp_path):
     from aptl.backends import aces
 
-    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    _write_compose(tmp_path, {"aptl-soc": ["soc"]})
     scenario = object()
     mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
     calls = {"plan": 0, "apply": 0}
@@ -1700,7 +1700,7 @@ def test_start_aces_scenario_retries_apply_without_replanning(mocker, tmp_path):
             assert parsed_scenario is scenario
             assert parameters == {"victim_os": "linux"}
             calls["plan"] += 1
-            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-soc"))
 
         def apply(self, execution_plan):
             calls["apply"] += 1
@@ -1716,7 +1716,7 @@ def test_start_aces_scenario_retries_apply_without_replanning(mocker, tmp_path):
 
     result = aces.start_aces_scenario(
         tmp_path,
-        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        AptlConfig(lab={"name": "test"}, containers={"soc": True}),
         backend,
         parameters={"victim_os": "linux"},
         before_backend_retry=before_retry,
@@ -1726,6 +1726,46 @@ def test_start_aces_scenario_retries_apply_without_replanning(mocker, tmp_path):
     assert calls == {"plan": 1, "apply": 2}
     assert backend.realize.call_count == 2
     before_retry.assert_called_once_with()
+
+
+def test_start_aces_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
+    """A retryable apply is not enough; the admitted plan must select SOC."""
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls = {"plan": 0, "apply": 0}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            calls["plan"] += 1
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+        def apply(self, execution_plan):
+            calls["apply"] += 1
+            return super().apply(execution_plan)
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(
+        success=False, error="backend still starting"
+    )
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is False
+    assert result.retryable is True
+    assert calls == {"plan": 1, "apply": 1}
+    backend.realize.assert_called_once()
+    before_retry.assert_not_called()
 
 
 def _workflow_and_evaluation_execution_plan():
@@ -3179,6 +3219,9 @@ def test_manifest_account_features_match_realized_dto_fields():
         "groups",
         "mail",
         "spn",
+    }
+    assert set(manifest.provisioner.supported_domain_profiles) == {
+        "active_directory"
     }
 
 

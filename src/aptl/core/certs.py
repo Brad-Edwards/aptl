@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,7 +30,14 @@ class CertResult:
     error: str = ""
 
 
-def ensure_ssl_certs(project_dir: Path) -> CertResult:
+CommandRunner = Callable[..., subprocess.CompletedProcess]
+
+
+def ensure_ssl_certs(
+    project_dir: Path,
+    *,
+    run_command: CommandRunner | None = None,
+) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
     If the certificates directory already exists, this is a no-op. Otherwise,
@@ -66,16 +74,20 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
         )
 
-    return _generate_ssl_certs(project_dir, certs_dir)
+    return _generate_ssl_certs(project_dir, certs_dir, run_command)
 
 
-def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
+def _generate_ssl_certs(
+    project_dir: Path,
+    certs_dir: Path,
+    run_command: CommandRunner | None,
+) -> CertResult:
     """Run certificate generation and convert the generator outcome."""
     log.info("Generating SSL certificates...")
-    error = _run_cert_generator(project_dir, certs_dir)
+    error = _run_cert_generator(project_dir, certs_dir, run_command)
     result = error
     if result is None:
-        repair_error = _repair_native_linux_cert_ownership(certs_dir)
+        repair_error = _repair_native_linux_cert_ownership(certs_dir, run_command)
         if repair_error is not None:
             return CertResult(
                 success=False,
@@ -143,20 +155,18 @@ def _ensure_container_readable_certs(certs_dir: Path) -> None:
             log.warning("Could not make generated cert readable (%s): %s", path, exc)
 
 
-def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:
+def _run_cert_generator(
+    project_dir: Path,
+    certs_dir: Path,
+    run_command: CommandRunner | None,
+) -> CertResult | None:
     """Run the compose cert generator, returning a failure result when needed."""
     error_msg = None
     try:
-        result = subprocess.run(
+        result = _execute_command(
             _cert_generator_command(project_dir, certs_dir),
-            capture_output=True,
-            text=True,
-            # Decode as UTF-8 (not the host locale codec) so Docker's image
-            # pull/build glyphs don't raise UnicodeDecodeError on Windows,
-            # where `text=True` would otherwise decode as cp1252.
-            encoding="utf-8",
-            errors="replace",
-            cwd=project_dir,
+            run_command=run_command,
+            project_dir=project_dir,
             timeout=300,
         )
     except subprocess.TimeoutExpired:
@@ -173,7 +183,7 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
             error_msg = _command_failure_detail(result)
             log.error("Certificate generation failed: %s", error_msg)
 
-    cleanup_error = _cleanup_cert_generator(project_dir)
+    cleanup_error = _cleanup_cert_generator(project_dir, run_command)
     if cleanup_error is not None:
         log.error("Certificate generator cleanup failed: %s", cleanup_error)
         if error_msg is None:
@@ -217,7 +227,10 @@ def _cert_generator_project_name(project_dir: Path) -> str:
     return f"aptl-certs-{digest}"
 
 
-def _cleanup_cert_generator(project_dir: Path) -> str | None:
+def _cleanup_cert_generator(
+    project_dir: Path,
+    run_command: CommandRunner | None,
+) -> str | None:
     """Remove the generator's temporary container and overlapping bridge.
 
     ``docker compose run --rm`` removes the container but leaves its default
@@ -238,13 +251,10 @@ def _cleanup_cert_generator(project_dir: Path) -> str | None:
     ]
     error: str | None = None
     try:
-        result = subprocess.run(
+        result = _execute_command(
             command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=project_dir,
+            run_command=run_command,
+            project_dir=project_dir,
             timeout=_CERT_CLEANUP_TIMEOUT,
         )
     except subprocess.TimeoutExpired:
@@ -268,7 +278,10 @@ def _command_failure_detail(result: subprocess.CompletedProcess) -> str:
     return detail or "Certificate generation failed"
 
 
-def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:
+def _repair_native_linux_cert_ownership(
+    certs_dir: Path,
+    run_command: CommandRunner | None,
+) -> str | None:
     """Repair root-owned generator output on native Linux Docker.
 
     The upstream Wazuh cert generator image must run as root because its
@@ -276,25 +289,50 @@ def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:
     then leaves bind-mounted output root-owned. Use Docker itself, not host
     sudo, to chown the generated files back to the invoking user.
     """
+    error: str | None = None
     user = _native_linux_user()
-    if user is None:
-        return None
+    if user is not None:
+        try:
+            result = _execute_command(
+                _cert_ownership_repair_command(certs_dir, user),
+                run_command=run_command,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            error = "Certificate permission repair timed out after 120s"
+        except OSError as exc:
+            error = f"Certificate permission repair failed: {exc}"
+        else:
+            if result.returncode != 0:
+                detail = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "permission repair container failed"
+                )
+                error = f"Certificate permission repair failed: {detail}"
+    return error
 
-    result = subprocess.run(
-        _cert_ownership_repair_command(certs_dir, user),
+
+def _execute_command(
+    command: list[str],
+    *,
+    run_command: CommandRunner | None,
+    timeout: int,
+    project_dir: Path | None = None,
+) -> subprocess.CompletedProcess:
+    """Run through the deployment backend when supplied, else locally."""
+
+    if run_command is not None:
+        return run_command(command, timeout=timeout)
+    return subprocess.run(
+        command,
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=120,
+        cwd=project_dir,
+        timeout=timeout,
     )
-    if result.returncode == 0:
-        return None
-
-    detail = result.stderr.strip() or result.stdout.strip()
-    if not detail:
-        detail = "permission repair container failed"
-    return f"Certificate permission repair failed: {detail}"
 
 
 def _cert_ownership_repair_command(certs_dir: Path, user: tuple[int, int]) -> list[str]:

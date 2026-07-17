@@ -17,9 +17,11 @@ The supported runtime handoff is now:
    evidence, and apply. The start path does not recompile the authored scenario.
 5. Start the lab through `aptl.backends.aces.start_aces_scenario()`.
 
-If the deployment backend returns its existing retryable start diagnostic, the
-SOC recovery hook runs and APTL applies that same admitted `ExecutionPlan` one
-more time. It does not parse the SDL or invoke the planner again.
+If the deployment backend returns its existing retryable start diagnostic and
+the admitted plan selected the `soc` profile, the SOC recovery hook runs and
+APTL applies that same admitted `ExecutionPlan` one more time. It does not parse
+the SDL or invoke the planner again. The retry decision therefore follows the
+realized profile set, not the global container configuration.
 
 Runtime bindings are an in-process admission input, not APTL configuration or
 secrets. APTL does not source them from the environment, forward them to

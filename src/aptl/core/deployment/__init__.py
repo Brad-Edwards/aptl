@@ -25,11 +25,15 @@ from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentContentRealization,
+    DeploymentGeneratedArtifactOutput,
+    DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
+    DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
+    DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
 
@@ -41,11 +45,15 @@ __all__ = [
     "DockerComposeBackend",
     "DeploymentAccountRealization",
     "DeploymentContentRealization",
+    "DeploymentGeneratedArtifactOutput",
+    "DeploymentGeneratedArtifactRealization",
     "DeploymentImageRealization",
     "DeploymentNetworkAttachment",
     "DeploymentNetworkRealization",
     "DeploymentNodeRealization",
+    "DeploymentPersistentVolumeRealization",
     "DeploymentRealizationSpec",
+    "DeploymentStatefulConsumer",
     "SSHComposeBackend",
     "get_backend",
 ]
@@ -81,13 +89,9 @@ def get_backend(config: AptlConfig, project_dir: Path) -> DeploymentBackend:
     if provider == "ssh-compose":
         dep = config.deployment
         if not dep.ssh_host:
-            raise ValueError(
-                "deployment.ssh_host is required for ssh-compose provider"
-            )
+            raise ValueError("deployment.ssh_host is required for ssh-compose provider")
         if not dep.ssh_user:
-            raise ValueError(
-                "deployment.ssh_user is required for ssh-compose provider"
-            )
+            raise ValueError("deployment.ssh_user is required for ssh-compose provider")
         return SSHComposeBackend(
             project_dir=project_dir,
             host=dep.ssh_host,

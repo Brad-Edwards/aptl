@@ -54,6 +54,7 @@ from aptl.core.lab_types import (
     StartupOutcome as StartupOutcome,
 )
 from aptl.core.services import (
+    ServiceResult,
     check_indexer_ready,
     check_indexer_status,
     check_manager_api_ready,
@@ -91,6 +92,7 @@ ProgressCallback = Callable[[str], None]
 _STALE_NETWORK_RECOVERY_HINT = (
     "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
+_WAZUH_MANAGER_SERVICE = "wazuh.manager"
 
 
 def _looks_like_stale_realization_network_error(error: str) -> bool:
@@ -219,6 +221,19 @@ def _runtime_require(
         enabled=True,
         error=_narrow_violation,
     )
+
+
+def admitted_stateful_artifact_ownership(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> frozenset[tuple[str, str, str, str]]:
+    """Lazy ACES import for exact pre-mutation artifact ownership."""
+
+    from aptl.backends.aces import admitted_stateful_artifact_ownership as _load
+
+    return _load(project_dir, config, backend, scenario_path=scenario_path)
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
@@ -618,6 +633,37 @@ class _LabStartContext(object):
     # workflow artifacts and the record share a single run directory.
     run_store: object = None
     run_id: str | None = None
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str]] = frozenset()
+
+
+_WAZUH_MANAGER_CONFIG_OWNERSHIP = (
+    "provision.generated-artifact.wazuh-manager-config",
+    "rendered_config",
+    _WAZUH_MANAGER_SERVICE,
+    "/wazuh-config-mount/etc/ossec.conf",
+)
+_WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
+    {
+        (
+            "provision.generated-artifact.wazuh-indexer-certs",
+            "certificate_bundle",
+            "wazuh.indexer",
+            "/usr/share/wazuh-indexer/certs",
+        ),
+        (
+            "provision.generated-artifact.wazuh-manager-certs",
+            "certificate_bundle",
+            _WAZUH_MANAGER_SERVICE,
+            "/etc/ssl/wazuh",
+        ),
+        (
+            "provision.generated-artifact.wazuh-dashboard-certs",
+            "certificate_bundle",
+            "wazuh.dashboard",
+            "/usr/share/wazuh-dashboard/certs",
+        ),
+    }
+)
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -795,6 +841,37 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
         log.exception("Failed to load config")
         return LabResult(success=False, error=f"Failed to load config: {exc}")
     ctx.backend = _get_backend(ctx.project_dir, ctx.config)
+    return _load_stateful_artifact_ownership(ctx)
+
+
+def _load_stateful_artifact_ownership(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Cache exact admitted artifact consumers before legacy mutation."""
+
+    from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO
+
+    scenario_path = ctx.scenario_path or DEFAULT_ACES_SCENARIO
+    if not scenario_path.is_absolute():
+        scenario_path = ctx.project_dir / scenario_path
+    if not scenario_path.is_file():
+        return None
+    try:
+        assert ctx.config is not None and ctx.backend is not None
+        ctx.stateful_artifact_ownership = admitted_stateful_artifact_ownership(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=scenario_path,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return LabResult(
+            success=False,
+            error=(
+                "ACES scenario admission failed before artifact preparation: "
+                f"{redact(str(exc))}"
+            ),
+        )
     return None
 
 
@@ -914,8 +991,9 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # separately. See ADR-028 § Non-Goals.
     from aptl.core.deployment import SSHComposeBackend
 
+    result: LabResult | None
     if isinstance(ctx.backend, SSHComposeBackend):
-        return LabResult(
+        result = LabResult(
             success=False,
             error=(
                 "Credentialized service config is rendered to .aptl/config/ "
@@ -926,27 +1004,27 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
                 "to the local Docker Compose backend."
             ),
         )
-    # Both writers own their canonical project-relative source-template
-    # and rendered-output paths and validate containment internally; the
-    # orchestrator only passes the trusted project root. See ADR-028
-    # (runtime-rendered service config) and ADR-007 (security guardrail).
-    # Any render failure — containment breach or otherwise — aborts lab
-    # start because the rendered files are mandatory Compose mount
-    # sources; on success they are guaranteed freshly written this run.
-    result = _run_credential_sync(
-        "Dashboard config",
-        sync_dashboard_config,
-        ctx.project_dir,
-        ctx.env.api_password,
-    )
-    if result is not None:
-        return result
-    return _run_credential_sync(
-        "Manager config",
-        sync_manager_config,
-        ctx.project_dir,
-        ctx.env.wazuh_cluster_key,
-    )
+    else:
+        # Each writer validates its canonical source and output beneath the
+        # trusted project root. Any failure aborts before Compose sees a stale
+        # or missing bind source (ADR-007 and ADR-028).
+        result = _run_credential_sync(
+            "Dashboard config",
+            sync_dashboard_config,
+            ctx.project_dir,
+            ctx.env.api_password,
+        )
+        if (
+            result is None
+            and _WAZUH_MANAGER_CONFIG_OWNERSHIP not in ctx.stateful_artifact_ownership
+        ):
+            result = _run_credential_sync(
+                "Manager config",
+                sync_manager_config,
+                ctx.project_dir,
+                ctx.env.wazuh_cluster_key,
+            )
+    return result
 
 
 @_runtime_require(
@@ -1043,6 +1121,8 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
+    if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
+        return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
         return None
@@ -1175,22 +1255,19 @@ def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
     assert ctx.backend is not None
     # Amazon Linux 2023 in the manager image ships without `ps`, so walk
     # /proc directly to count the live wazuh-* daemons.
-    probe = ["sh", "-c",
-             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
-             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
-             "done | sort -u | wc -l"]
+    probe = [
+        "sh",
+        "-c",
+        "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+        'read n < "$f"; case "$n" in wazuh-*) echo "$n";; esac; '
+        "done | sort -u | wc -l",
+    ]
     try:
         info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
         if (info.get("State") or {}).get("Status") != "running":
             return None
-        result = ctx.backend.container_exec(
-            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
-        )
-        return (
-            int((result.stdout or "0").strip())
-            if result.returncode == 0
-            else None
-        )
+        result = ctx.backend.container_exec(_WAZUH_MANAGER_CONTAINER, probe, timeout=10)
+        return int((result.stdout or "0").strip()) if result.returncode == 0 else None
     except Exception:
         # Deliberately broad: this watchdog must never let an inspect/exec
         # failure abort lab start (covered by the swallow-exceptions tests).
@@ -1299,6 +1376,56 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+def _emit_indexer_readiness_diagnostic(
+    ctx: _LabStartContext,
+    indexer_url: str,
+    indexer_result: ServiceResult,
+) -> None:
+    """Classify and report an indexer readiness failure."""
+
+    assert ctx.env is not None
+    final_status = check_indexer_status(
+        url=indexer_url,
+        username=ctx.env.indexer_username,
+        password=ctx.env.indexer_password,
+    )
+    if final_status in (401, 403):
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Indexer rejected the configured INDEXER_PASSWORD "
+                f"(HTTP {final_status}) while its listener was responding"
+            ),
+            operator_action=(
+                "The persisted wazuh-indexer-data volume likely still holds a "
+                "previous admin password, so the changed .env credentials no "
+                "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
+                "reset the indexer security state, or restore the original "
+                "INDEXER_PASSWORD in .env."
+            ),
+        )
+    else:
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Indexer did not become ready within "
+                f"{int(indexer_result.elapsed_seconds)}s"
+            ),
+            operator_action=(
+                "Check indexer container logs; SIEM ingest will not work "
+                "until indexer is healthy"
+            ),
+        )
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1348,57 +1475,25 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         progress=ctx.progress,
     )
     if not indexer_result.ready:
-        # Indexer is the SIEM store — without it, detections never land.
-        # Lab is up but telemetry is degraded. A second, one-shot
-        # classification probe tells apart "still not listening" from
-        # "listening but rejecting the configured credentials" (#623) —
-        # the latter means the persisted indexer volume's admin password
-        # no longer matches .env, which is a distinct, actionable state.
-        final_status = check_indexer_status(
-            url=indexer_url,
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-        )
-        if final_status in (401, 403):
-            _emit_diagnostic(
-                ctx,
-                step="wait_for_services",
-                component="wazuh_indexer",
-                impact=DiagnosticImpact.TELEMETRY,
-                severity=DiagnosticSeverity.WARNING,
-                message=(
-                    f"Wazuh Indexer rejected the configured INDEXER_PASSWORD "
-                    f"(HTTP {final_status}) while its listener was responding"
-                ),
-                operator_action=(
-                    "The persisted wazuh-indexer-data volume likely still holds a "
-                    "previous admin password, so the changed .env credentials no "
-                    "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
-                    "reset the indexer security state, or restore the original "
-                    "INDEXER_PASSWORD in .env."
-                ),
-            )
-        else:
-            _emit_diagnostic(
-                ctx,
-                step="wait_for_services",
-                component="wazuh_indexer",
-                impact=DiagnosticImpact.TELEMETRY,
-                severity=DiagnosticSeverity.WARNING,
-                message=(
-                    "Wazuh Indexer did not become ready within "
-                    f"{int(indexer_result.elapsed_seconds)}s"
-                ),
-                operator_action=(
-                    "Check indexer container logs; SIEM ingest will not work "
-                    "until indexer is healthy"
-                ),
-            )
+        # A one-shot status probe distinguishes unavailable from credential
+        # mismatch against retained indexer state (#623).
+        _emit_indexer_readiness_diagnostic(ctx, indexer_url, indexer_result)
 
+    manager_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == _WAZUH_MANAGER_SERVICE
+            and getattr(r, "container_port", None) == 55000
+        ),
+        55000,
+    )
     manager_result = wait_for_service(
         check_fn=partial(
             check_manager_api_ready,
-            container_name="aptl-wazuh-manager",
+            url=f"https://localhost:{manager_port}",
+            username=ctx.env.api_username,
+            password=ctx.env.api_password,
         ),
         timeout=120,
         interval=5,

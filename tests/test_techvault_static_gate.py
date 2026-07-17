@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from aces_runtime.manager import RuntimeManager
 from aces_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -29,6 +30,7 @@ from aptl.backends.aces_profiles import (
     select_backend_profiles,
     steady_state_service_aliases_for_profiles,
 )
+from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
 from aptl.validation import _account_parity
@@ -57,6 +59,7 @@ from aptl.validation.techvault_gate import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
 
 
@@ -125,6 +128,101 @@ def test_operational_scenario_matches_public_start_profiles_and_services():
         and not set(aliases) & realized_aliases
     }
     assert missing == {}
+
+
+def test_operational_scenario_lowers_wazuh_stateful_resources():
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
+    assert scenario is not None
+    assert parse_check.passed, parse_check.diagnostics
+
+    execution_plan = RuntimeManager(
+        create_aptl_runtime_target(
+            project_dir=PROJECT_ROOT,
+            config=config,
+            backend=_NoStartBackend(),
+        )
+    ).plan(scenario)
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning,
+        project_dir=PROJECT_ROOT,
+        config=config,
+    )
+    details = realization.details()
+
+    assert not [
+        diagnostic
+        for diagnostic in realization.diagnostics
+        if getattr(diagnostic.severity, "value", diagnostic.severity) == "error"
+    ]
+    assert details["resource_counts"]["generated-artifact"] >= 2
+    assert details["resource_counts"]["persistent-volume"] >= 2
+    generators = {item["generator"] for item in details["generated_artifacts"]}
+    assert generators == {"certificate_bundle", "rendered_config"}
+    artifacts = {item["name"]: item for item in details["generated_artifacts"]}
+    assert {output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]} == {
+        "root-ca.pem",
+        "wazuh.indexer-key.pem",
+        "wazuh.indexer.pem",
+    }
+    assert {output["path"] for output in artifacts["wazuh-manager-certs"]["outputs"]} == {
+        "root-ca-manager.pem",
+        "wazuh.manager-key.pem",
+        "wazuh.manager.pem",
+    }
+    assert {output["path"] for output in artifacts["wazuh-dashboard-certs"]["outputs"]} == {
+        "root-ca.pem",
+        "wazuh.dashboard-key.pem",
+        "wazuh.dashboard.pem",
+    }
+    assert all(
+        len(artifacts[name]["consumers"]) == 1
+        for name in (
+            "wazuh-indexer-certs",
+            "wazuh-manager-certs",
+            "wazuh-dashboard-certs",
+        )
+    )
+    nodes = {node["name"]: node for node in details["nodes"]}
+    assert nodes["wazuh-manager"]["image"]["image_ref"] == (
+        "wazuh/wazuh-manager:4.12.0"
+    )
+    assert nodes["wazuh-indexer"]["image"]["image_ref"] == (
+        "wazuh/wazuh-indexer:4.12.0"
+    )
+    assert (
+        "provision.node.wazuh-indexer"
+        in nodes["wazuh-manager"]["ordering_dependencies"]
+    )
+
+
+def test_paper_scenario_lowers_same_wazuh_stateful_contract():
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    scenario, parse_check = check_parse(PAPER_SCENARIO)
+    assert scenario is not None
+    assert parse_check.passed, parse_check.diagnostics
+
+    execution_plan = RuntimeManager(
+        create_aptl_runtime_target(
+            project_dir=PROJECT_ROOT,
+            config=config,
+            backend=_NoStartBackend(),
+        )
+    ).plan(scenario)
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning,
+        project_dir=PROJECT_ROOT,
+        config=config,
+    )
+    details = realization.details()
+
+    assert not [
+        diagnostic
+        for diagnostic in realization.diagnostics
+        if getattr(diagnostic.severity, "value", diagnostic.severity) == "error"
+    ]
+    assert details["resource_counts"]["generated-artifact"] == 3
+    assert details["resource_counts"]["persistent-volume"] == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -552,8 +650,12 @@ def test_operational_scenario_content_and_accounts_are_honest():
     assert details is not None
     assert check.passed, check.diagnostics
     placements = details["placements"]
-    content_placements = [p for p in placements if p["resource_type"] == "content-placement"]
-    account_placements = [p for p in placements if p["resource_type"] == "account-placement"]
+    content_placements = [
+        p for p in placements if p["resource_type"] == "content-placement"
+    ]
+    account_placements = [
+        p for p in placements if p["resource_type"] == "account-placement"
+    ]
     assert content_placements and all("content" in p for p in content_placements)
     assert account_placements and all("account" in p for p in account_placements)
 
@@ -613,7 +715,9 @@ def test_account_provisioner_parity_passes_for_operational_scenario():
     assert parse_check.passed
     assert scenario is not None
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert check.passed, check.diagnostics
 
@@ -630,7 +734,9 @@ def test_account_provisioner_parity_fails_on_phantom_account():
         password_strength=PasswordStrength.WEAK,
     )
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert not check.passed
     assert any("not-a-real-provisioner-user" in d for d in check.diagnostics)
@@ -655,7 +761,9 @@ def test_account_provisioner_parity_fails_on_undeclared_group():
     account = scenario.accounts["ad-jessica-williams"]
     account.groups = [*account.groups, "Finance"]
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert not check.passed
     assert any("Finance" in d and "group" in d.lower() for d in check.diagnostics)
@@ -669,7 +777,9 @@ def test_account_provisioner_parity_fails_on_mail_mismatch():
     account = scenario.accounts["ad-jessica-williams"]
     account.mail = "jessica.williams@example.com"
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert not check.passed
     assert any("mail" in d.lower() for d in check.diagnostics)
@@ -683,7 +793,9 @@ def test_account_provisioner_parity_fails_on_spn_mismatch():
     account = scenario.accounts["ad-svc-sql"]
     account.spn = "HTTP/bogus.techvault.local"
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert not check.passed
     assert any("spn" in d.lower() for d in check.diagnostics)
@@ -697,7 +809,9 @@ def test_account_provisioner_parity_fails_on_undisabled_account():
     account = scenario.accounts["ad-former-employee"]
     account.disabled = True
 
-    check = check_account_provisioner_parity(scenario=scenario, project_dir=PROJECT_ROOT)
+    check = check_account_provisioner_parity(
+        scenario=scenario, project_dir=PROJECT_ROOT
+    )
 
     assert not check.passed
     assert any("disabled" in d.lower() for d in check.diagnostics)
@@ -714,9 +828,9 @@ def test_provisioner_relaxes_password_policy_before_user_creation():
     creates any user so every declared weak-password account is realized
     (issue #689 account-realization honesty).
     """
-    script = (
-        PROJECT_ROOT / "containers" / "ad" / "provision-users.sh"
-    ).read_text(encoding="utf-8")
+    script = (PROJECT_ROOT / "containers" / "ad" / "provision-users.sh").read_text(
+        encoding="utf-8"
+    )
     lines = script.splitlines()
     complexity_off = next(
         (

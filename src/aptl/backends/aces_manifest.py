@@ -157,8 +157,15 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_account_features=frozenset(
         {"disabled", "groups", "mail", "spn"}
     ),
+    # The Samba AD provider realizes and read-verifies the operational
+    # scenario's domain-bound accounts and SPNs (#577). ACES 0.23 makes that
+    # domain profile an explicit admission capability rather than inferring it
+    # from account fields.
+    supported_domain_profiles=frozenset({"active_directory"}),
     supports_acls=False,
     supports_accounts=True,
+    supports_generated_artifacts=True,
+    supports_persistent_volumes=True,
 )
 
 # What APTL realizes from a provisioning plan, and how. APTL matches declared
@@ -199,6 +206,10 @@ _CONCEPT_BINDINGS = (
     ),
     ConceptBinding(
         scope="capabilities.provisioner.supported_account_features",
+        family="identities",
+    ),
+    ConceptBinding(
+        scope="capabilities.provisioner.supported_domain_profiles",
         family="identities",
     ),
 )

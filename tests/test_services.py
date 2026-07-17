@@ -114,9 +114,7 @@ class TestWaitForService:
         """Should treat exceptions from check_fn as failures and continue retrying."""
         from aptl.core.services import wait_for_service
 
-        check_fn = MagicMock(
-            side_effect=[ConnectionError("refused"), False, True]
-        )
+        check_fn = MagicMock(side_effect=[ConnectionError("refused"), False, True])
 
         result = wait_for_service(
             check_fn=check_fn,
@@ -207,11 +205,14 @@ class TestCheckIndexerReady:
 
         mocker.patch("aptl.core.services.check_indexer_status", return_value=200)
 
-        assert check_indexer_ready(
-            url="https://localhost:9200",
-            username="admin",
-            password="secret",
-        ) is True
+        assert (
+            check_indexer_ready(
+                url="https://localhost:9200",
+                username="admin",
+                password="secret",
+            )
+            is True
+        )
 
     def test_returns_false_for_status_401(self, mocker):
         """A 401 means the indexer is listening but rejected the
@@ -221,11 +222,14 @@ class TestCheckIndexerReady:
 
         mocker.patch("aptl.core.services.check_indexer_status", return_value=401)
 
-        assert check_indexer_ready(
-            url="https://localhost:9200",
-            username="admin",
-            password="secret",
-        ) is False
+        assert (
+            check_indexer_ready(
+                url="https://localhost:9200",
+                username="admin",
+                password="secret",
+            )
+            is False
+        )
 
     def test_returns_false_when_status_is_none(self, mocker):
         """No HTTP response at all (transport failure, timeout, or
@@ -234,11 +238,14 @@ class TestCheckIndexerReady:
 
         mocker.patch("aptl.core.services.check_indexer_status", return_value=None)
 
-        assert check_indexer_ready(
-            url="https://localhost:9200",
-            username="admin",
-            password="secret",
-        ) is False
+        assert (
+            check_indexer_ready(
+                url="https://localhost:9200",
+                username="admin",
+                password="secret",
+            )
+            is False
+        )
 
 
 class TestCheckIndexerStatus:
@@ -275,11 +282,14 @@ class TestCheckIndexerStatus:
 
         mocker.patch("aptl.core.services.curl_status", return_value=None)
 
-        assert check_indexer_status(
-            url="https://localhost:9200",
-            username="admin",
-            password="secret",
-        ) is None
+        assert (
+            check_indexer_status(
+                url="https://localhost:9200",
+                username="admin",
+                password="secret",
+            )
+            is None
+        )
 
     def test_password_never_reaches_subprocess_argv(self, mocker):
         """End-to-end guardrail at the real subprocess boundary (not the
@@ -313,75 +323,87 @@ class TestCheckManagerApiReady:
     """Tests for the Wazuh Manager API readiness check."""
 
     def test_returns_true_on_successful_check(self, mocker):
-        """Should return True when API responds with any HTTP status."""
+        """Authenticated readiness requires a successful manager-status body."""
+        from aptl.core.services import check_manager_api_ready
+
+        request = mocker.patch(
+            "aptl.core.services.curl_json",
+            side_effect=[
+                {"error": 0, "data": {"token": "bounded-token"}},
+                {
+                    "error": 0,
+                    "data": {"affected_items": [{"wazuh-manager": "running"}]},
+                },
+            ],
+        )
+
+        assert (
+            check_manager_api_ready(
+                url="https://localhost:55000",
+                username="api-user",
+                password="api-password",
+            )
+            is True
+        )
+        assert request.call_count == 2
+
+    def test_returns_false_when_authentication_fails(self, mocker):
         from aptl.core.services import check_manager_api_ready
 
         mocker.patch(
-            "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="401", stderr=""),
+            "aptl.core.services.curl_json",
+            return_value=None,
         )
 
-        assert check_manager_api_ready(
-            container_name="aptl-wazuh-manager",
-        ) is True
+        assert (
+            check_manager_api_ready(
+                url="https://localhost:55000",
+                username="api-user",
+                password="api-password",
+            )
+            is False
+        )
 
-    def test_returns_true_on_200(self, mocker):
-        """Should return True when API responds with 200."""
+    def test_returns_false_when_manager_status_is_not_semantically_successful(
+        self, mocker
+    ):
         from aptl.core.services import check_manager_api_ready
 
         mocker.patch(
-            "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="200", stderr=""),
+            "aptl.core.services.curl_json",
+            side_effect=[
+                {"error": 0, "data": {"token": "bounded-token"}},
+                {"error": 1, "data": {"affected_items": []}},
+            ],
         )
 
-        assert check_manager_api_ready(
-            container_name="aptl-wazuh-manager",
-        ) is True
-
-    def test_returns_false_on_failure(self, mocker):
-        """Should return False when docker command fails."""
-        from aptl.core.services import check_manager_api_ready
-
-        mocker.patch(
-            "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=1, stdout="", stderr="Error"),
+        assert (
+            check_manager_api_ready(
+                url="https://localhost:55000",
+                username="api-user",
+                password="api-password",
+            )
+            is False
         )
 
-        assert check_manager_api_ready(
-            container_name="aptl-wazuh-manager",
-        ) is False
-
-    def test_returns_false_on_no_http_response(self, mocker):
-        """Should return False when curl gets no HTTP response."""
+    def test_credentials_use_permissioned_header_path_not_url(self, mocker):
         from aptl.core.services import check_manager_api_ready
 
-        mocker.patch(
-            "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=7, stdout="000", stderr=""),
-        )
-
-        assert check_manager_api_ready(
-            container_name="aptl-wazuh-manager",
-        ) is False
-
-    def test_uses_docker_exec(self, mocker):
-        """Should use docker exec to run curl inside the container."""
-        from aptl.core.services import check_manager_api_ready
-
-        mock_run = mocker.patch(
-            "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=0, stdout="401", stderr=""),
+        request = mocker.patch(
+            "aptl.core.services.curl_json",
+            return_value=None,
         )
 
         check_manager_api_ready(
-            container_name="aptl-wazuh-manager",
+            url="https://localhost:55000",
+            username="api-user",
+            password="api-password",
         )
 
-        cmd = mock_run.call_args[0][0]
-        assert "docker" in cmd
-        assert "aptl-wazuh-manager" in cmd
-        assert "curl" in cmd
-        assert "-f" not in cmd
+        kwargs = request.call_args.kwargs
+        assert kwargs["auth_header"].startswith("Basic ")
+        assert "api-user" not in request.call_args.args[0]
+        assert "api-password" not in request.call_args.args[0]
 
 
 class TestSSHConnection:
@@ -396,12 +418,15 @@ class TestSSHConnection:
             return_value=MagicMock(returncode=0, stdout="SSH OK", stderr=""),
         )
 
-        assert test_ssh_connection(
-            host="localhost",
-            port=2022,
-            user="labadmin",
-            key_path=Path("/home/user/.ssh/aptl_lab_key"),
-        ) is True
+        assert (
+            test_ssh_connection(
+                host="localhost",
+                port=2022,
+                user="labadmin",
+                key_path=Path("/home/user/.ssh/aptl_lab_key"),
+            )
+            is True
+        )
 
     def test_returns_false_on_ssh_failure(self, mocker):
         """Should return False when SSH fails."""
@@ -409,15 +434,20 @@ class TestSSHConnection:
 
         mocker.patch(
             "aptl.core.services.subprocess.run",
-            return_value=MagicMock(returncode=255, stdout="", stderr="Connection refused"),
+            return_value=MagicMock(
+                returncode=255, stdout="", stderr="Connection refused"
+            ),
         )
 
-        assert test_ssh_connection(
-            host="localhost",
-            port=2022,
-            user="labadmin",
-            key_path=Path("/home/user/.ssh/aptl_lab_key"),
-        ) is False
+        assert (
+            test_ssh_connection(
+                host="localhost",
+                port=2022,
+                user="labadmin",
+                key_path=Path("/home/user/.ssh/aptl_lab_key"),
+            )
+            is False
+        )
 
     def test_returns_false_on_exception(self, mocker):
         """Should return False when subprocess raises."""
@@ -428,12 +458,15 @@ class TestSSHConnection:
             side_effect=FileNotFoundError("ssh not found"),
         )
 
-        assert test_ssh_connection(
-            host="localhost",
-            port=2022,
-            user="labadmin",
-            key_path=Path("/home/user/.ssh/aptl_lab_key"),
-        ) is False
+        assert (
+            test_ssh_connection(
+                host="localhost",
+                port=2022,
+                user="labadmin",
+                key_path=Path("/home/user/.ssh/aptl_lab_key"),
+            )
+            is False
+        )
 
     def test_uses_correct_ssh_args(self, mocker):
         """Should call ssh with -i key, -o options, port, and user@host."""

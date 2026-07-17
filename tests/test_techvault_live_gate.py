@@ -20,6 +20,7 @@ from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import _live_gate_probes as lgp
+from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
     CATEGORY_ACES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
@@ -674,9 +675,7 @@ def test_readiness_fails_when_one_node_reports_unhealthy_alongside_a_healthy_nod
     )
     check = lgc.check_defensive_stack_readiness(state=state)
     assert not check.passed
-    assert any(
-        "wazuh-manager" in d and "not 'healthy'" in d for d in check.diagnostics
-    )
+    assert any("wazuh-manager" in d and "not 'healthy'" in d for d in check.diagnostics)
 
 
 def test_readiness_fails_when_container_health_still_starting():
@@ -787,6 +786,16 @@ def _telemetry_state():
     return state
 
 
+def _telemetry_env(_path):
+    return {
+        "INDEXER_USERNAME": "live-indexer-user",
+        "INDEXER_PASSWORD": "live-indexer-password",
+        "API_USERNAME": "live-api-user",
+        "API_PASSWORD": "live-api-password",
+        "APTL_HP_WAZUH_INDEXER_9200": "19200",
+    }
+
+
 def _patch_collect_no_sleep(monkeypatch):
     """Drive the evidence poll loop with an injected no-op sleep.
 
@@ -795,51 +804,127 @@ def _patch_collect_no_sleep(monkeypatch):
     the module. The poll loop still runs its iterations and collector calls.
     """
     monkeypatch.setattr(
-        lgc,
+        lgt,
         "_collect_until_evidence",
         functools.partial(lgp._collect_until_evidence, sleep_fn=lambda _: None),
     )
 
 
-def test_telemetry_passes_when_traffic_evidence_collected(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp,
         "collect_suricata_eve",
         lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}],
     )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
         state=state,
+        env_loader=_telemetry_env,
     )
-    assert check.passed
+    assert not check.passed
     telemetry = state.evidence["telemetry"]
     assert telemetry["suricata_traffic_event_count"] == 2
     assert telemetry["suricata_event_types"] == {"alert": 1, "flow": 1}
+    assert telemetry["wazuh_alert_count"] == 0
+    assert any("Wazuh alert" in d for d in check.diagnostics)
+
+
+def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch):
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
+    _patch_collect_no_sleep(monkeypatch)
+    monkeypatch.setattr(
+        lgp,
+        "collect_suricata_eve",
+        lambda s, e, b: [{"event_type": "flow"}],
+    )
+    collector_kwargs = {}
+
+    def collect_wazuh(start, end, **kwargs):
+        collector_kwargs.update(kwargs)
+        return [
+            {
+                "rule": {"id": "5710"},
+                "agent": {"name": "manager"},
+                "@timestamp": "2026-07-17T10:00:00+00:00",
+                "full_log": "Invalid user aptl-live-gate-invalid from 172.20.4.30",
+            }
+        ]
+
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
+    state = _telemetry_state()
+    check = lgc.check_telemetry_evidence_path(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(event_window_seconds=10),
+        state=state,
+        env_loader=_telemetry_env,
+    )
+    assert check.passed
+    telemetry = state.evidence["telemetry"]
+    assert telemetry["wazuh_alert_count"] == 1
+    assert telemetry["wazuh_correlated_alert_count"] == 1
+    assert telemetry["wazuh_correlation"]["rule_id"] == "5710"
+    assert len(telemetry["wazuh_correlation"]["sha256"]) == 64
+    assert "full_log" not in telemetry["wazuh_correlation"]
+    assert collector_kwargs == {
+        "indexer_url": "https://localhost:19200",
+        "auth": ("live-indexer-user", "live-indexer-password"),
+    }
+
+
+def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
+    _patch_collect_no_sleep(monkeypatch)
+    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
+    monkeypatch.setattr(
+        lgp,
+        "collect_wazuh_alerts",
+        lambda s, e, **kwargs: [
+            {
+                "rule": {"id": "1002"},
+                "full_log": "Unrelated periodic service event",
+            }
+        ],
+    )
+    state = _telemetry_state()
+
+    check = lgc.check_telemetry_evidence_path(
+        project_dir=PROJECT_ROOT,
+        config=_config(),
+        options=LiveGateOptions(event_window_seconds=10),
+        state=state,
+        env_loader=_telemetry_env,
+    )
+
+    assert not check.passed
+    assert state.evidence["telemetry"]["wazuh_alert_count"] == 1
+    assert state.evidence["telemetry"]["wazuh_correlated_alert_count"] == 0
 
 
 def test_telemetry_fails_on_stats_only_events(monkeypatch):
     # Suricata emits `stats` regardless of traffic; the check must not pass on
     # them alone (otherwise it would pass on any quiet lab).
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp,
         "collect_suricata_eve",
         lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}],
     )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
         state=state,
+        env_loader=_telemetry_env,
     )
     assert not check.passed
     assert state.evidence["telemetry"]["suricata_traffic_event_count"] == 0
@@ -847,19 +932,20 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
 
 
 def test_telemetry_fails_when_no_evidence(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e: [])
+    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
     check = lgc.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
         state=state,
+        env_loader=_telemetry_env,
     )
     assert not check.passed
-    assert any("no traffic-derived" in d for d in check.diagnostics)
+    assert any("no correlated post-trigger Wazuh alert" in d for d in check.diagnostics)
 
 
 def test_telemetry_fails_without_target(monkeypatch):

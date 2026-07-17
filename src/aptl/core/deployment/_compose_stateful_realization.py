@@ -708,7 +708,7 @@ def _wazuh_service_definitions(
                     _bind(
                         project_dir,
                         "config/wazuh_cluster/filebeat_wazuh_module.yml",
-                        "/tmp/filebeat-override.yml",
+                        "/run/filebeat-override.yml",
                     ),
                     _bind(
                         project_dir,
@@ -719,7 +719,7 @@ def _wazuh_service_definitions(
                 "entrypoint": [
                     "/bin/bash",
                     "-c",
-                    "cp /tmp/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init",
+                    "cp /run/filebeat-override.yml /etc/filebeat/filebeat.yml && chown root:root /etc/filebeat/filebeat.yml && python3 /docker-entrypoint-initdb.d/patch-rule-path.py 2>/dev/null; exec /init",
                 ],
                 "healthcheck": {
                     "test": [

@@ -1511,6 +1511,78 @@ class TestOrchestrateLabStart:
         assert len(pull_calls) >= 1
 
 
+class TestStatefulArtifactOwnership:
+    def test_real_scenario_populates_exact_admitted_ownership(self):
+        from aptl.core.config import load_config
+        from aptl.core.lab import (
+            _LabStartContext,
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _WAZUH_MANAGER_CONFIG_OWNERSHIP,
+            _load_stateful_artifact_ownership,
+        )
+
+        project_root = Path(__file__).resolve().parents[1]
+        ctx = _LabStartContext(
+            project_dir=project_root,
+            skip_seed=False,
+            scenario_path=project_root / "scenarios/techvault-operational.sdl.yaml",
+            config=load_config(project_root / "aptl.json"),
+            backend=MagicMock(),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is None
+        assert _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership
+        assert _WAZUH_MANAGER_CONFIG_OWNERSHIP in ctx.stateful_artifact_ownership
+
+    def test_missing_scenario_leaves_legacy_ownership(self, tmp_path):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
+
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            scenario_path=tmp_path / "missing.sdl.yaml",
+            config=AptlConfig(),
+            backend=MagicMock(),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is None
+        assert ctx.stateful_artifact_ownership == frozenset()
+
+    def test_admission_error_fails_before_legacy_mutation(
+        self, tmp_path, monkeypatch
+    ):
+        from aptl.core.config import AptlConfig
+        from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
+
+        scenario = tmp_path / "scenario.sdl.yaml"
+        scenario.write_text("schema_version: 1.0.0\nname: fixture\n")
+        ctx = _LabStartContext(
+            project_dir=tmp_path,
+            skip_seed=False,
+            scenario_path=scenario,
+            config=AptlConfig(),
+            backend=MagicMock(),
+        )
+        monkeypatch.setattr(
+            "aptl.core.lab.admitted_stateful_artifact_ownership",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                ValueError("fixture admission failure")
+            ),
+        )
+
+        result = _load_stateful_artifact_ownership(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "admission failed" in result.error
+        assert ctx.stateful_artifact_ownership == frozenset()
+
+
 class TestSyncCredentialsStep:
     """Direct tests for `_step_sync_credentials` (issue #266 follow-up).
 
@@ -1673,6 +1745,88 @@ class TestSyncCredentialsStep:
         result = _step_sync_credentials(ctx)
 
         assert result is None
+
+    def test_typed_rendered_config_has_exclusive_manager_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_MANAGER_CONFIG_OWNERSHIP,
+            _step_sync_credentials,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {_WAZUH_MANAGER_CONFIG_OWNERSHIP}
+        )
+        dashboard = mocker.patch("aptl.core.lab.sync_dashboard_config")
+        manager = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None
+        dashboard.assert_called_once()
+        manager.assert_not_called()
+
+    def test_unrelated_rendered_artifact_does_not_take_manager_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import _step_sync_credentials
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {
+                (
+                    "provision.generated-artifact.other-config",
+                    "rendered_config",
+                    "other.service",
+                    "/etc/other.conf",
+                )
+            }
+        )
+        mocker.patch("aptl.core.lab.sync_dashboard_config")
+        manager = mocker.patch("aptl.core.lab.sync_manager_config")
+
+        result = _step_sync_credentials(ctx)
+
+        assert result is None
+        manager.assert_called_once()
+
+    def test_typed_certificate_bundle_has_exclusive_generator_ownership(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _step_generate_certs,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = _WAZUH_CERTIFICATE_OWNERSHIP
+        generator = mocker.patch("aptl.core.lab.ensure_ssl_certs")
+
+        result = _step_generate_certs(ctx)
+
+        assert result is None
+        generator.assert_not_called()
+
+    def test_partial_certificate_ownership_keeps_legacy_generator(
+        self, mocker, tmp_path
+    ):
+        from aptl.core.lab import (
+            _WAZUH_CERTIFICATE_OWNERSHIP,
+            _step_generate_certs,
+        )
+
+        ctx = self._ctx(mocker, tmp_path)
+        ctx.stateful_artifact_ownership = frozenset(
+            {next(iter(_WAZUH_CERTIFICATE_OWNERSHIP))}
+        )
+        generator = mocker.patch("aptl.core.lab.ensure_ssl_certs")
+        generator.return_value = MagicMock(success=True)
+
+        result = _step_generate_certs(ctx)
+
+        assert result is None
+        generator.assert_called_once_with(tmp_path)
 
     def test_renders_to_aptl_config_and_leaves_source_untouched(self, mocker, tmp_path):
         """End-to-end (real credential writers): the step renders the

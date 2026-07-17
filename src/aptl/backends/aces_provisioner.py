@@ -17,7 +17,7 @@ from aptl.backends.aces_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.aces_observation import observe_realization
+from aptl.backends.aces_observation import observation_evidence, observe_realization
 from aptl.backends.aces_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -144,6 +144,7 @@ class AptlProvisioner(object):
             details={
                 "profiles": selected_profiles,
                 "realization": realization.details(),
+                "observation_evidence": observation_evidence(observations),
             },
         )
 

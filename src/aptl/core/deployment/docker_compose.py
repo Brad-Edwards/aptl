@@ -4,7 +4,6 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
-import re
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
@@ -16,15 +15,15 @@ from aptl.core.deployment._compose_build_dedupe import (
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
-from aptl.core.deployment._compose_volume_cleanup import (
-    project_scoped_volume_names,
-    remove_leftover_project_volumes,
+from aptl.core.deployment._compose_seed_safety import (
+    assert_safe_relpath,
+    redacted_stderr_hint,
 )
+from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 log = get_logger("deployment.docker_compose")
 
@@ -38,19 +37,6 @@ _DOCKER_TIMEOUT = 30
 # fresh host may pull the seeder image (already in the lab's supply
 # chain), so the margin is deliberately generous.
 _SEED_TIMEOUT = 600
-
-# Seed file relpaths come from code-defined specs (never operator input),
-# but they are embedded in the seed container's shell command, so they are
-# validated defensively: a strict charset, no leading separator, and no
-# parent-traversal component, so nothing can escape /src or /dest.
-_SAFE_SEED_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-
-# Character budget for the redacted stderr tail appended to a failed
-# seed/retire log line (issue #716). Bounds a verbose or hostile Docker
-# stderr to a one-line tail; the value is redacted over its FULL length
-# before this truncation, so the cap can never turn a straddling secret
-# into a partial leak (fail closed).
-_SEED_STDERR_HINT_MAX = 500
 
 
 class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
@@ -77,6 +63,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     @property
     def project_name(self) -> str:
         return self._project_name
+
+    @property
+    def supports_local_artifacts(self) -> bool:
+        """Return whether bind sources are visible to the Docker daemon."""
+
+        return True
 
     def _build_command(
         self,
@@ -239,42 +231,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             LabResult indicating success or failure.
         """
-        volume_names: set[str] = set()
-        volume_discovery_error = ""
-        if remove_volumes:
-            volume_names, volume_discovery_error = project_scoped_volume_names(
-                self._project_dir, self._project_name
-            )
-
-        cmd = self._build_command("down", profiles=profiles)
-        if remove_volumes:
-            cmd.append("-v")
-
-        log.info("Stopping lab (remove_volumes=%s)", remove_volumes)
-
-        result = self._run(cmd)
-
-        if result.returncode != 0:
-            log.error("Lab stop failed: %s", result.stderr)
-            return LabResult(success=False, error=result.stderr)
-
-        failures = self.remove_project_networks()
-        if remove_volumes:
-            if volume_discovery_error:
-                failures.append(volume_discovery_error)
-            else:
-                failures.extend(
-                    remove_leftover_project_volumes(
-                        volume_names, self._run, timeout=_DOCKER_TIMEOUT
-                    )
-                )
-        if failures:
-            error = "; ".join(failures[:5])
-            log.error("Lab cleanup failed: %s", error)
-            return LabResult(success=False, error=error)
-
-        log.info("Lab stopped successfully")
-        return LabResult(success=True, message="Lab stopped")
+        return stop_compose_lab(
+            self,
+            profiles,
+            remove_volumes=remove_volumes,
+            timeout=_DOCKER_TIMEOUT,
+        )
 
     def status(self) -> LabStatus:
         """Query current lab status via docker compose ps.
@@ -400,31 +362,11 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
                 "Seed of volume %s failed (exit %s)%s",
                 seed.volume_suffix,
                 result.returncode,
-                self._redacted_stderr_hint(result.stderr),
+                redacted_stderr_hint(result.stderr),
             )
             raise BackendSeedError(
                 f"Seeding named volume '{seed.volume_suffix}' failed"
             )
-
-    @staticmethod
-    def _redacted_stderr_hint(stderr: str | None) -> str:
-        """Build a redacted, length-bounded stderr tail for a failed seed.
-
-        Returns ``""`` when there is nothing to show, otherwise a
-        `` — stderr: <hint>`` fragment ready to append to the failure log
-        line. The full stderr is scrubbed through the shared
-        serialization-boundary redactor (:func:`redact`) *before*
-        truncation, so a credential straddling the cut point can never
-        survive as a partial value — the hint fails closed. Only the log
-        carries this text; the raised ``BackendSeedError`` still names the
-        artifact and nothing else.
-        """
-        if not stderr or not stderr.strip():
-            return ""
-        redacted = redact(stderr).strip()
-        if len(redacted) > _SEED_STDERR_HINT_MAX:
-            redacted = "…" + redacted[-_SEED_STDERR_HINT_MAX:]
-        return f" — stderr: {redacted}"
 
     def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
         """Build the fixed-path copy script for one seed.
@@ -438,13 +380,19 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         """
         parts = ["set -e"]
         for seed_file in seed.files:
-            self._assert_safe_relpath(seed_file.src)
-            self._assert_safe_relpath(seed_file.dest)
+            assert_safe_relpath(seed_file.src)
+            assert_safe_relpath(seed_file.dest)
             dest_dir = PurePosixPath(seed_file.dest).parent
             if dest_dir.name:
                 parts.append(f"mkdir -p /dest/{dest_dir}")
             parts.append(f"cp -a /src/{seed_file.src} /dest/{seed_file.dest}")
         return "; ".join(parts)
+
+    @staticmethod
+    def _assert_safe_relpath(relpath: str) -> None:
+        """Preserve the validation seam shared with content realization."""
+
+        assert_safe_relpath(relpath)
 
     def _retire_legacy_seed_path(
         self, seed: NamedVolumeSeed, seeder_image: str
@@ -461,7 +409,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         if legacy is None:
             return
         name = legacy.name
-        self._assert_safe_relpath(name)
+        assert_safe_relpath(name)
         cmd = [
             "docker",
             "run",
@@ -485,14 +433,6 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
                 "Retire of legacy seed path %s failed (exit %s)%s",
                 legacy,
                 result.returncode,
-                self._redacted_stderr_hint(result.stderr),
+                redacted_stderr_hint(result.stderr),
             )
             raise BackendSeedError(f"Retiring legacy seed path '{name}' failed")
-
-    @staticmethod
-    def _assert_safe_relpath(relpath: str) -> None:
-        """Reject a seed relpath that is unsafe to embed in the seed command."""
-        if ".." in PurePosixPath(relpath).parts or not _SAFE_SEED_RELPATH.match(
-            relpath
-        ):
-            raise BackendSeedError(f"Unsafe seed relpath rejected: {relpath!r}")

@@ -108,56 +108,22 @@ def start_aces_scenario(
     planner sees it, and APTL neither logs nor persists it.
     """
 
-    resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
+    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path)
     try:
-        scenario = parse_sdl_file(resolved_scenario)
-        target = create_aptl_runtime_target(
-            project_dir=project_dir,
-            config=config,
-            backend=backend,
+        target, execution_plan = _plan_scenario(
+            project_dir,
+            config,
+            backend,
+            resolved_scenario,
+            parameters,
         )
-        manager = RuntimeManager(target)
-        execution_plan = (
-            manager.plan(scenario, parameters=dict(parameters))
-            if parameters is not None
-            else manager.plan(scenario)
-        )
-        participant_action_specs = participant_action_specs_from_runtime_model(
-            execution_plan.model,
-            provisioning_plan=execution_plan.provisioning,
-            project_dir=project_dir,
-            config=config,
-        )
-        if participant_action_specs:
-            target = create_aptl_runtime_target(
-                project_dir=project_dir,
-                config=config,
-                backend=backend,
-                participant_action_specs=participant_action_specs,
-            )
-        outcome = _run_execution_plan(
+        return _apply_with_backend_retry(
             target,
             execution_plan,
             resolved_scenario,
-            run_store=run_target.run_store if run_target is not None else None,
-            run_id=run_target.run_id if run_target is not None else None,
+            run_target,
+            before_backend_retry,
         )
-        if (
-            outcome.retryable
-            and "soc" in outcome.selected_profiles
-            and before_backend_retry is not None
-        ):
-            before_backend_retry()
-            outcome = _run_execution_plan(
-                target,
-                execution_plan,
-                resolved_scenario,
-                run_store=run_target.run_store if run_target is not None else None,
-                run_id=run_target.run_id if run_target is not None else None,
-            )
-        return outcome
     except SDLInstantiationError:
         return AcesStartOutcome(
             lab_result=LabResult(
@@ -181,6 +147,84 @@ def start_aces_scenario(
             selected_profiles=[],
             scenario_path=resolved_scenario,
         )
+
+
+def _resolve_scenario_path(project_dir: Path, scenario_path: Path | None) -> Path:
+    """Resolve the authored scenario beneath the project when it is relative."""
+
+    resolved = scenario_path or DEFAULT_ACES_SCENARIO
+    return resolved if resolved.is_absolute() else project_dir / resolved
+
+
+def _plan_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path,
+    parameters: Mapping[str, object] | None,
+) -> tuple[RuntimeTarget, "ExecutionPlan"]:
+    """Build one ACES plan and the target that consumes its concrete model."""
+
+    scenario = parse_sdl_file(scenario_path)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+    )
+    manager = RuntimeManager(target)
+    execution_plan = (
+        manager.plan(scenario, parameters=dict(parameters))
+        if parameters is not None
+        else manager.plan(scenario)
+    )
+    participant_action_specs = participant_action_specs_from_runtime_model(
+        execution_plan.model,
+        provisioning_plan=execution_plan.provisioning,
+        project_dir=project_dir,
+        config=config,
+    )
+    if participant_action_specs:
+        target = create_aptl_runtime_target(
+            project_dir=project_dir,
+            config=config,
+            backend=backend,
+            participant_action_specs=participant_action_specs,
+        )
+    return target, execution_plan
+
+
+def _apply_with_backend_retry(
+    target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
+    scenario_path: Path,
+    run_target: AcesRunTarget | None,
+    before_backend_retry: Callable[[], None] | None,
+) -> AcesStartOutcome:
+    """Apply one admitted plan, retrying only its SOC backend-start failure."""
+
+    run_store = run_target.run_store if run_target is not None else None
+    run_id = run_target.run_id if run_target is not None else None
+    outcome = _run_execution_plan(
+        target,
+        execution_plan,
+        scenario_path,
+        run_store=run_store,
+        run_id=run_id,
+    )
+    if (
+        outcome.retryable
+        and "soc" in outcome.selected_profiles
+        and before_backend_retry is not None
+    ):
+        before_backend_retry()
+        return _run_execution_plan(
+            target,
+            execution_plan,
+            scenario_path,
+            run_store=run_store,
+            run_id=run_id,
+        )
+    return outcome
 
 
 def selected_profiles_for_scenario(

@@ -11,6 +11,8 @@ telemetry probes without a live lab.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
@@ -51,14 +53,15 @@ if TYPE_CHECKING:
 log = get_logger("live-gate")
 
 _KALI_CONTAINER = "aptl-kali"
-# Poll interval while waiting for generated activity to land as Suricata flow /
-# alert events and Wazuh alerts (both have ingest/flush latency).
+# Poll interval while waiting for generated activity to land in Wazuh. Suricata
+# traffic remains useful supporting evidence, but cannot complete this gate.
 _POLL_STEP_SECONDS = 10
 # Suricata emits periodic ``stats`` events regardless of traffic, so they never
 # count as proof that a generated event traversed the defensive stack.
 _NON_TRAFFIC_EVENT_TYPES = frozenset({"stats"})
 # Reachable targets to drive failed-auth events at (kept small to bound runtime).
 _MAX_EVENT_TARGETS = 3
+_WAZUH_TRIGGER_IDENTITY = "aptl-live-gate-invalid"
 
 
 def _check(name: str, category: str, diagnostics: list[str]) -> LiveGateCheck:
@@ -223,14 +226,18 @@ def _collect_until_evidence(
     backend: "DeploymentBackend",
     start_iso: str,
     window_seconds: int,
+    *,
+    indexer_url: str,
+    indexer_auth: tuple[str, str],
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Poll for defensive-stack evidence until found or the window elapses.
+    """Poll for a post-trigger Wazuh alert until the window elapses.
 
     Both Suricata flow flushing and Wazuh ingest have latency, so the gate polls
-    rather than sleeping a fixed interval; it returns as soon as a traffic-derived
-    Suricata event or a Wazuh alert appears. ``sleep_fn`` is injectable so tests
-    can skip the real poll wait without patching ``time.sleep`` on the module.
+    rather than sleeping a fixed interval. Suricata evidence is retained in the
+    returned summary, but only a Wazuh alert ends the poll: a sensor-only event
+    does not prove the realized Wazuh ingestion path. ``sleep_fn`` is injectable
+    so tests can skip the real poll wait without patching ``time.sleep``.
     """
     steps = max(1, window_seconds // _POLL_STEP_SECONDS)
     eve: list[dict[str, Any]] = []
@@ -239,8 +246,13 @@ def _collect_until_evidence(
         sleep_fn(_POLL_STEP_SECONDS)
         now = _now_iso()
         eve = collect_suricata_eve(start_iso, now, backend)
-        alerts = collect_wazuh_alerts(start_iso, now)
-        if any(_is_traffic_event(e) for e in eve) or alerts:
+        alerts = collect_wazuh_alerts(
+            start_iso,
+            now,
+            indexer_url=indexer_url,
+            auth=indexer_auth,
+        )
+        if any(_is_correlated_wazuh_alert(alert) for alert in alerts):
             break
     return eve, alerts
 
@@ -262,10 +274,14 @@ def _generate_event(
                 backend,
                 [
                     "ssh",
-                    "-o", "BatchMode=yes",
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "ConnectTimeout=3",
-                    "-p", "22",
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=3",
+                    "-p",
+                    "22",
                     f"aptl-live-gate-invalid@{ip}",
                     "true",
                 ],
@@ -302,6 +318,42 @@ def _event_type_tally(eve: list[dict[str, Any]]) -> dict[str, int]:
         )
         tally[etype] = tally.get(etype, 0) + 1
     return tally
+
+
+def _is_correlated_wazuh_alert(alert: object) -> bool:
+    """Match the bounded failed-auth identity emitted by ``_generate_event``."""
+
+    if not isinstance(alert, dict) or not isinstance(alert.get("rule"), dict):
+        return False
+    return any(_WAZUH_TRIGGER_IDENTITY in value for value in _nested_strings(alert))
+
+
+def _nested_strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [item for nested in value.values() for item in _nested_strings(nested)]
+    if isinstance(value, list):
+        return [item for nested in value for item in _nested_strings(nested)]
+    return []
+
+
+def _wazuh_correlation_summary(alert: dict[str, Any]) -> dict[str, str]:
+    """Return a bounded, non-secret identity summary for one correlated alert."""
+
+    rule = alert.get("rule") if isinstance(alert.get("rule"), dict) else {}
+    data = alert.get("data") if isinstance(alert.get("data"), dict) else {}
+    agent = alert.get("agent") if isinstance(alert.get("agent"), dict) else {}
+    canonical = json.dumps(alert, sort_keys=True, default=str).encode("utf-8")
+    return {
+        "rule_id": str(rule.get("id", "unknown"))[:64],
+        "event_time": str(alert.get("@timestamp", "unknown"))[:64],
+        "source_identity": redact(
+            str(data.get("srcip") or agent.get("name") or "unknown")
+        )[:128],
+        "correlation_id": _WAZUH_TRIGGER_IDENTITY,
+        "sha256": hashlib.sha256(canonical).hexdigest(),
+    }
 
 
 def _missing_manifest_keys(manifest: Mapping[str, Any]) -> list[str]:

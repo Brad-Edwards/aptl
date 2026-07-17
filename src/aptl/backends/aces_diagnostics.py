@@ -21,6 +21,8 @@ SUPPORTED_RESOURCE_TYPES = frozenset(
         "feature-binding",
         "content-placement",
         "account-placement",
+        "generated-artifact",
+        "persistent-volume",
     }
 )
 

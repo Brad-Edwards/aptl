@@ -23,6 +23,7 @@ from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.credentials import PathContainmentError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
@@ -79,6 +80,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     @property
     def project_name(self) -> str:
         return self._project_name
+
+    @property
+    def supports_local_artifacts(self) -> bool:
+        """Return whether bind sources are visible to the Docker daemon."""
+
+        return True
 
     def _build_command(
         self,
@@ -241,7 +248,18 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             LabResult indicating success or failure.
         """
-        cmd = self._build_command("down", profiles=profiles)
+        try:
+            compose_files = self._stateful_teardown_compose_files()
+        except PathContainmentError:
+            return LabResult(
+                success=False,
+                error="Stateful teardown model failed containment validation.",
+            )
+        cmd = self._build_command(
+            "down",
+            profiles=profiles,
+            compose_files=compose_files,
+        )
         if remove_volumes:
             cmd.append("-v")
 

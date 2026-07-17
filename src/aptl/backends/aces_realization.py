@@ -33,6 +33,7 @@ from aptl.backends.aces_profiles import (
 from aptl.backends.aces_realization_networks import (
     append_network_topology_diagnostics,
 )
+from aptl.backends.aces_stateful_realization import realize_stateful_resources
 from aptl.backends.aces_realization_model import (
     AptlRealization,
     NetworkRealization,
@@ -95,9 +96,22 @@ def interpret_provisioning_plan(
         project_dir,
         diagnostics,
     )
+    generated_artifacts, persistent_volumes = realize_stateful_resources(
+        payload_resources,
+        nodes,
+        diagnostics,
+    )
     _append_profile_diagnostics(profiles, config, diagnostics)
 
-    return _realization_from_parts(nodes, networks, placements, profiles, diagnostics)
+    return _realization_from_parts(
+        nodes,
+        networks,
+        placements,
+        generated_artifacts,
+        persistent_volumes,
+        profiles,
+        diagnostics,
+    )
 
 
 def _load_profile_index(
@@ -225,6 +239,8 @@ def _realization_from_parts(
     nodes: list[NodeRealization],
     networks: list[NetworkRealization],
     placements: list[PlacementRealization],
+    generated_artifacts: list,
+    persistent_volumes: list,
     profiles: set[str],
     diagnostics: list[Diagnostic],
 ) -> AptlRealization:
@@ -236,6 +252,12 @@ def _realization_from_parts(
         networks=tuple(sorted(networks, key=lambda item: item.address)),
         placements=tuple(sorted(placements, key=lambda item: item.address)),
         diagnostics=tuple(diagnostics),
+        generated_artifacts=tuple(
+            sorted(generated_artifacts, key=lambda item: item.address)
+        ),
+        persistent_volumes=tuple(
+            sorted(persistent_volumes, key=lambda item: item.address)
+        ),
     )
 
 
@@ -317,6 +339,7 @@ def _realize_node(
             service_name=service_name,
             diagnostics=diagnostics,
         ),
+        ordering_dependencies=resource.ordering_dependencies,
     )
 
 

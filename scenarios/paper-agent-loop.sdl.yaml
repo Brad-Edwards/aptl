@@ -75,6 +75,9 @@ nodes:
     - name: agent-events
       port: 1514
       protocol: tcp
+    - name: agent-enrollment
+      port: 1515
+      protocol: tcp
     - name: syslog
       port: 514
       protocol: udp
@@ -146,10 +149,76 @@ infrastructure:
     - internal-net
     dependencies:
     - wazuh-indexer
+    properties:
+    - security-net: 172.20.0.10
+    - internal-net: 172.20.2.30
   wazuh-indexer:
     count: 1
     links:
     - security-net
+    properties:
+    - security-net: 172.20.0.12
+generated_artifacts:
+  wazuh-indexer-certs:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+    - {name: root-ca, path: root-ca.pem, sensitivity: public}
+    - {name: indexer-key, path: wazuh.indexer-key.pem, sensitivity: secret}
+    - {name: indexer-cert, path: wazuh.indexer.pem, sensitivity: public}
+    consumers:
+    - node: wazuh-indexer
+      mount_destination: /usr/share/wazuh-indexer/certs
+      access_mode: read_only
+  wazuh-manager-certs:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+    - {name: manager-root-ca, path: root-ca-manager.pem, sensitivity: public}
+    - {name: manager-key, path: wazuh.manager-key.pem, sensitivity: secret}
+    - {name: manager-cert, path: wazuh.manager.pem, sensitivity: public}
+    consumers:
+    - node: wazuh-manager
+      mount_destination: /etc/ssl/wazuh
+      access_mode: read_only
+  wazuh-manager-config:
+    generator: rendered_config
+    lifecycle: regenerate_on_change
+    provenance: config/wazuh_cluster/wazuh_manager.conf
+    outputs:
+    - {name: manager-config, path: wazuh_manager.conf, sensitivity: secret}
+    consumers:
+    - node: wazuh-manager
+      mount_destination: /wazuh-config-mount/etc/ossec.conf
+      access_mode: read_only
+    ordering_dependencies: [generated_artifacts.wazuh-manager-certs]
+persistent_volumes:
+  wazuh-indexer-data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+    - node: wazuh-indexer
+      mount_destination: /var/lib/wazuh-indexer
+      access_mode: read_write
+    ordering_dependencies: [generated_artifacts.wazuh-indexer-certs]
+  wazuh-manager-etc:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+    - node: wazuh-manager
+      mount_destination: /var/ossec/etc
+      access_mode: read_write
+    ordering_dependencies: [generated_artifacts.wazuh-manager-config]
+  wazuh-manager-logs:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+    - node: wazuh-manager
+      mount_destination: /var/ossec/logs
+      access_mode: read_write
+    ordering_dependencies: [persistent_volumes.wazuh-manager-etc]
 entities:
   paper-participant:
     role: red

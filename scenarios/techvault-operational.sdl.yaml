@@ -22,13 +22,16 @@ nodes:
   wazuh-manager:
     type: vm
     os: linux
+    source: {name: wazuh-manager, version: 4.x}
     services:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
+      - {name: agent-enrollment, port: 1515, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
   wazuh-indexer:
     type: vm
     os: linux
+    source: {name: wazuh-indexer, version: 4.x}
     services:
       - {name: indexer-api, port: 9200, protocol: tcp}
   wazuh-dashboard:
@@ -187,9 +190,15 @@ infrastructure:
 
   wazuh-manager:
     links: [security-net, dmz-net, internal-net]
+    dependencies: [wazuh-indexer]
+    properties:
+      - {security-net: 172.20.0.10}
+      - {dmz-net: 172.20.1.10}
+      - {internal-net: 172.20.2.30}
   wazuh-indexer:
     links: [security-net]
-    dependencies: [wazuh-manager]
+    properties:
+      - {security-net: 172.20.0.12}
   wazuh-dashboard:
     links: [security-net]
     dependencies: [wazuh-indexer, wazuh-manager]
@@ -268,6 +277,85 @@ infrastructure:
     links: [security-net]
     dependencies: [aptl-tempo]
 
+# Stateful Wazuh prerequisites are authored ACES resources. The deployment
+# backend materializes and verifies these before either consumer starts; the
+# checked-in Compose service definitions are provider bindings, not the source
+# of artifact, volume, or dependency intent.
+generated_artifacts:
+  wazuh-indexer-certs:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+      - {name: root-ca, path: root-ca.pem, sensitivity: public}
+      - {name: indexer-key, path: wazuh.indexer-key.pem, sensitivity: secret}
+      - {name: indexer-cert, path: wazuh.indexer.pem, sensitivity: public}
+    consumers:
+      - node: wazuh-indexer
+        mount_destination: /usr/share/wazuh-indexer/certs
+        access_mode: read_only
+  wazuh-manager-certs:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+      - {name: manager-root-ca, path: root-ca-manager.pem, sensitivity: public}
+      - {name: manager-key, path: wazuh.manager-key.pem, sensitivity: secret}
+      - {name: manager-cert, path: wazuh.manager.pem, sensitivity: public}
+    consumers:
+      - node: wazuh-manager
+        mount_destination: /etc/ssl/wazuh
+        access_mode: read_only
+  wazuh-dashboard-certs:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+      - {name: root-ca, path: root-ca.pem, sensitivity: public}
+      - {name: dashboard-key, path: wazuh.dashboard-key.pem, sensitivity: secret}
+      - {name: dashboard-cert, path: wazuh.dashboard.pem, sensitivity: public}
+    consumers:
+      - node: wazuh-dashboard
+        mount_destination: /usr/share/wazuh-dashboard/certs
+        access_mode: read_only
+  wazuh-manager-config:
+    generator: rendered_config
+    lifecycle: regenerate_on_change
+    provenance: config/wazuh_cluster/wazuh_manager.conf
+    outputs:
+      - {name: manager-config, path: wazuh_manager.conf, sensitivity: secret}
+    consumers:
+      - node: wazuh-manager
+        mount_destination: /wazuh-config-mount/etc/ossec.conf
+        access_mode: read_only
+    ordering_dependencies: [generated_artifacts.wazuh-manager-certs]
+
+persistent_volumes:
+  wazuh-indexer-data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - node: wazuh-indexer
+        mount_destination: /var/lib/wazuh-indexer
+        access_mode: read_write
+    ordering_dependencies: [generated_artifacts.wazuh-indexer-certs]
+  wazuh-manager-etc:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - node: wazuh-manager
+        mount_destination: /var/ossec/etc
+        access_mode: read_write
+    ordering_dependencies: [generated_artifacts.wazuh-manager-config]
+  wazuh-manager-logs:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - node: wazuh-manager
+        mount_destination: /var/ossec/logs
+        access_mode: read_write
+    ordering_dependencies: [persistent_volumes.wazuh-manager-etc]
+
 features:
   techvault-webapp-service:
     type: service
@@ -327,6 +415,20 @@ content:
 # preserved. This is a representative subset of the full
 # weak/Kerberoastable/over-privileged roster, proving the account-placement
 # realization path against real, clean-start-created accounts.
+identity_domains:
+  techvault:
+    profile: active_directory
+    dns_name: techvault.local
+    netbios_name: TECHVAULT
+    authority_account_ref: ad-emily-chen
+
+relationships:
+  ad-controls-techvault-domain:
+    type: domain_controller_for
+    source: ad
+    target: techvault
+    domain_controller: {}
+
 accounts:
   ad-jessica-williams:
     username: jessica.williams
@@ -339,6 +441,7 @@ accounts:
     node: ad
     password_strength: weak
     spn: MSSQLSvc/db.techvault.local:1433
+    domain_ref: techvault
   ad-emily-chen:
     username: emily.chen
     node: ad

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from aptl.core.deployment._compose_account_realization import (
@@ -16,6 +17,10 @@ from aptl.core.deployment._compose_port_realization import (
     write_port_override,
 )
 from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_stateful_realization import (
+    ComposeStatefulRealizationMixin,
+    effective_stateful_model_errors,
+)
 from aptl.core.deployment._compose_image_realization import (
     ComposeRealizationImageMixin,
 )
@@ -44,6 +49,7 @@ class ComposeRealizationMixin(
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
     ComposeRealizationAccountMixin,
+    ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -56,8 +62,14 @@ class ComposeRealizationMixin(
         """Realize a typed scenario deployment through Docker Compose."""
 
         profiles = list(realization.profiles)
-        image_result, compose_files = self._prepare_realization_images(realization)
-        result = image_result
+        result = self._validate_stateful_realization(realization)
+        compose_files = None
+        if result is None:
+            result = self._validate_stateful_compose_capability(realization)
+        if result is None:
+            result = self._realize_stateful_prerequisites(realization)
+        if result is None:
+            result, compose_files = self._prepare_realization_images(realization)
         if result is None:
             result = self._realize_published_ports(realization)
         if result is None:
@@ -70,12 +82,17 @@ class ComposeRealizationMixin(
         if result is None:
             result = self._realize_content(realization)
         if result is None:
+            compose_files = self._realization_compose_files(compose_files, realization)
+            result = self._validate_realization_compose_model(
+                profiles,
+                compose_files,
+                realization,
+            )
+        if result is None:
             start_result = self._start_realized_services(
                 profiles,
                 build=build,
-                compose_files=self._realization_compose_files(
-                    compose_files, realization
-                ),
+                compose_files=compose_files,
             )
             result = self._realization_result(start_result, realization)
         return result
@@ -102,12 +119,17 @@ class ComposeRealizationMixin(
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
     ) -> tuple[Path, ...] | None:
-        """Add the declared-host-port override to the realization compose files."""
+        """Add generated realization overrides to the Compose file set."""
 
         port_override = write_port_override(self._project_dir, realization)
-        if port_override is None:
+        stateful_override = self._write_stateful_realization_override(realization)
+        overrides = tuple(
+            path for path in (port_override, stateful_override) if path is not None
+        )
+        if not overrides:
             return compose_files
-        return (*(compose_files or ()), port_override)
+        base_files = compose_files or (self._project_dir / "docker-compose.yml",)
+        return (*base_files, *overrides)
 
     def _realize_content(
         self,
@@ -129,6 +151,56 @@ class ComposeRealizationMixin(
                 success=False,
                 error=f"Content placement realization failed: {exc}",
             )
+        return None
+
+    def _validate_realization_compose_model(
+        self,
+        profiles: list[str],
+        compose_files: tuple[Path, ...] | None,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Render and inspect the effective generated model before startup."""
+
+        if compose_files is None:
+            return None
+        command = self._build_command(
+            "config",
+            profiles,
+            compose_files=compose_files,
+        )
+        if not realization.generated_artifacts and not realization.persistent_volumes:
+            command.append("--quiet")
+            result = self._run(command)
+            return (
+                None
+                if result.returncode == 0
+                else LabResult(
+                    success=False,
+                    error="Generated Compose model validation failed.",
+                )
+            )
+        command.extend(["--no-interpolate", "--format", "json"])
+        result = self._run(command)
+        if result.returncode != 0:
+            return LabResult(
+                success=False,
+                error="Generated Compose model validation failed.",
+            )
+        try:
+            payload = json.loads(result.stdout)
+        except (TypeError, ValueError):
+            return LabResult(
+                success=False,
+                error="Generated Compose model validation failed.",
+            )
+        errors = effective_stateful_model_errors(
+            payload,
+            self._project_dir,
+            self.project_name,
+            realization,
+        )
+        if errors:
+            return LabResult(success=False, error="; ".join(errors[:5]))
         return None
 
     def _realization_result(
@@ -166,6 +238,9 @@ class ComposeRealizationMixin(
         health_failures = self._await_realized_service_health(realization)
         if health_failures:
             return LabResult(success=False, error="; ".join(health_failures[:5]))
+        readiness_failure = self._verify_stateful_authenticated_readiness(realization)
+        if readiness_failure is not None:
+            return readiness_failure
         return self._realize_accounts_step(realization) or LabResult(
             success=True, message="Lab realized"
         )

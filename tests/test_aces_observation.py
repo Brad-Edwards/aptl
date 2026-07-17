@@ -8,6 +8,8 @@ fails closed (no snapshot entry) rather than being assumed realized.
 
 from __future__ import annotations
 
+import hashlib
+
 from aces_contracts.planning import (
     ChangeAction,
     PlannedResource,
@@ -22,6 +24,12 @@ from aptl.backends.aces_realization_model import (
     NetworkRealization,
     NodeRealization,
     PlacementRealization,
+)
+from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactOutput,
+    DeploymentGeneratedArtifactRealization,
+    DeploymentPersistentVolumeRealization,
+    DeploymentStatefulConsumer,
 )
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.deployment.errors import BackendTimeoutError
@@ -44,14 +52,22 @@ class _Backend:
         running=True,
         inspect_raises=False,
         networks_raise=False,
+        mounts=None,
+        project_dir=None,
+        authenticated_readiness=None,
     ):
         self._containers = set(containers)
-        self._networks = [_concrete_network_name(n, self.project_name) for n in networks]
+        self._networks = [
+            _concrete_network_name(n, self.project_name) for n in networks
+        ]
         self._platform = platform
         self._health = health
         self._running = running
         self._inspect_raises = inspect_raises
         self._networks_raise = networks_raise
+        self._mounts = mounts or {}
+        self.project_dir = project_dir
+        self.authenticated_readiness = authenticated_readiness or {}
 
     def container_inspect(self, name):
         if self._inspect_raises:
@@ -65,6 +81,7 @@ class _Backend:
             "State": state,
             "Platform": self._platform,
             "NetworkSettings": {"Networks": {}},
+            "Mounts": self._mounts.get(name, []),
         }
 
     def host_list_lab_networks(self, name_prefix):
@@ -263,9 +280,12 @@ def test_feature_binding_placement_resolves_via_target_address():
         placements=(placement,),
         diagnostics=(),
     )
-    assert observe_realization(
-        _Backend(containers=("aptl-vm",)), realization, plan
-    )[address].realized is True
+    assert (
+        observe_realization(_Backend(containers=("aptl-vm",)), realization, plan)[
+            address
+        ].realized
+        is True
+    )
 
 
 def test_placement_on_down_target_is_not_realized():
@@ -298,6 +318,284 @@ def test_placement_on_down_target_is_not_realized():
         diagnostics=(),
     )
     # container aptl-vm absent -> target node down -> placement not realized
-    assert observe_realization(_Backend(containers=()), realization, plan)[
-        address
-    ].realized is False
+    assert (
+        observe_realization(_Backend(containers=()), realization, plan)[
+            address
+        ].realized
+        is False
+    )
+
+
+def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
+    tmp_path, mocker
+):
+    address = "provision.generated-artifact.wazuh-indexer-certs"
+    spec = {
+        "generator": "certificate_bundle",
+        "lifecycle": "reuse_valid",
+        "provenance": "config/certs.yml",
+        "outputs": [
+            {"name": "root-ca", "path": "root-ca.pem", "sensitivity": "public"}
+        ],
+        "consumers": [
+            {
+                "node": "wazuh-indexer",
+                "target_address": "provision.node.wazuh-indexer",
+                "mount_destination": "/usr/share/wazuh-indexer/certs",
+                "access_mode": "read_only",
+            }
+        ],
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "wazuh-indexer-certs", "spec": spec},
+    )
+    plan = ProvisioningPlan(resources={address: resource})
+    certs = tmp_path / "config/wazuh_indexer_ssl_certs"
+    certs.mkdir(parents=True)
+    (certs / "root-ca.pem").write_text("public certificate fixture")
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.wazuh-indexer",
+        node_name="wazuh-indexer",
+        service_name="wazuh.indexer",
+        mount_destination="/usr/share/wazuh-indexer/certs",
+        access_mode="read_only",
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer"),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        generated_artifacts=(
+            DeploymentGeneratedArtifactRealization(
+                address=address,
+                name="wazuh-indexer-certs",
+                generator="certificate_bundle",
+                lifecycle="reuse_valid",
+                provenance="config/certs.yml",
+                outputs=(
+                    DeploymentGeneratedArtifactOutput(
+                        name="root-ca", path="root-ca.pem", sensitivity="public"
+                    ),
+                ),
+                consumers=(consumer,),
+            ),
+        ),
+    )
+    backend = _Backend(
+        containers=("aptl-wazuh-indexer",),
+        project_dir=tmp_path,
+        authenticated_readiness={"wazuh.indexer": True},
+        mounts={
+            "aptl-wazuh-indexer": [
+                {
+                    "Type": "bind",
+                    "Source": str(certs / "root-ca.pem"),
+                    "Destination": "/usr/share/wazuh-indexer/certs/root-ca.pem",
+                    "RW": False,
+                }
+            ]
+        },
+    )
+    certificate_evidence = mocker.patch(
+        "aptl.backends.aces_observation.certificate_bundle_evidence",
+        return_value={
+            "public_root_sha256": "0" * 64,
+            "chain_valid": True,
+            "san_valid": True,
+        },
+    )
+
+    observed = observe_realization(backend, realization, plan)[address]
+
+    assert observed.realized is True
+    assert observed.concerns == {("spec",): spec}
+    assert observed.evidence["address"] == address
+    assert observed.evidence["status"] == "ready"
+    assert observed.evidence["authenticated_readiness"] == {"wazuh.indexer": True}
+    assert observed.evidence["consumer_mounts"] == [
+        {
+            "target_address": "provision.node.wazuh-indexer",
+            "destination": "/usr/share/wazuh-indexer/certs",
+            "access_mode": "read_only",
+            "service_health": "healthy",
+        }
+    ]
+    backend.authenticated_readiness = {}
+    assert observe_realization(backend, realization, plan)[address].realized is False
+    backend.authenticated_readiness = {"wazuh.indexer": True}
+    certificate_evidence.return_value = None
+    assert observe_realization(backend, realization, plan)[address].realized is False
+
+
+def test_rendered_config_observation_records_digest_not_content(tmp_path):
+    address = "provision.generated-artifact.wazuh-manager-config"
+    spec = {
+        "generator": "rendered_config",
+        "lifecycle": "regenerate_on_change",
+        "provenance": "config/wazuh_cluster/wazuh_manager.conf",
+        "outputs": [
+            {
+                "name": "manager-config",
+                "path": "wazuh_manager.conf",
+                "sensitivity": "secret",
+            }
+        ],
+        "consumers": [
+            {
+                "node": "wazuh-manager",
+                "target_address": "provision.node.wazuh-manager",
+                "mount_destination": "/wazuh-config-mount/etc/ossec.conf",
+                "access_mode": "read_only",
+            }
+        ],
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "wazuh-manager-config", "spec": spec},
+    )
+    rendered = tmp_path / ".aptl/config/wazuh_cluster/wazuh_manager.conf"
+    rendered.parent.mkdir(parents=True)
+    secret_content = b"<cluster><key>must-not-enter-evidence</key></cluster>"
+    rendered.write_bytes(secret_content)
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.wazuh-manager",
+        node_name="wazuh-manager",
+        service_name="wazuh.manager",
+        mount_destination="/wazuh-config-mount/etc/ossec.conf",
+        access_mode="read_only",
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization("wazuh-manager", "aptl-wazuh-manager"),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        generated_artifacts=(
+            DeploymentGeneratedArtifactRealization(
+                address=address,
+                name="wazuh-manager-config",
+                generator="rendered_config",
+                lifecycle="regenerate_on_change",
+                provenance="config/wazuh_cluster/wazuh_manager.conf",
+                outputs=(
+                    DeploymentGeneratedArtifactOutput(
+                        name="manager-config",
+                        path="wazuh_manager.conf",
+                        sensitivity="secret",
+                    ),
+                ),
+                consumers=(consumer,),
+            ),
+        ),
+    )
+    backend = _Backend(
+        containers=("aptl-wazuh-manager",),
+        project_dir=tmp_path,
+        authenticated_readiness={"wazuh.manager": True},
+        mounts={
+            "aptl-wazuh-manager": [
+                {
+                    "Type": "bind",
+                    "Source": str(rendered),
+                    "Destination": "/wazuh-config-mount/etc/ossec.conf",
+                    "RW": False,
+                }
+            ]
+        },
+    )
+
+    observed = observe_realization(
+        backend, realization, ProvisioningPlan(resources={address: resource})
+    )[address]
+
+    assert observed.realized is True
+    assert (
+        observed.evidence["configuration_sha256"]
+        == hashlib.sha256(secret_content).hexdigest()
+    )
+    assert "must-not-enter-evidence" not in str(observed.evidence)
+
+
+def test_persistent_volume_is_observed_from_project_scoped_mount():
+    address = "provision.persistent-volume.wazuh-indexer-data"
+    spec = {
+        "lifecycle": "retain",
+        "access_mode": "read_write_once",
+        "consumers": [
+            {
+                "node": "wazuh-indexer",
+                "target_address": "provision.node.wazuh-indexer",
+                "mount_destination": "/var/lib/wazuh-indexer",
+                "access_mode": "read_write",
+            }
+        ],
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="persistent-volume",
+        payload={"name": "wazuh-indexer-data", "spec": spec},
+    )
+    plan = ProvisioningPlan(resources={address: resource})
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.wazuh-indexer",
+        node_name="wazuh-indexer",
+        service_name="wazuh.indexer",
+        mount_destination="/var/lib/wazuh-indexer",
+        access_mode="read_write",
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer"),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        persistent_volumes=(
+            DeploymentPersistentVolumeRealization(
+                address=address,
+                name="wazuh-indexer-data",
+                lifecycle="retain",
+                access_mode="read_write_once",
+                consumers=(consumer,),
+            ),
+        ),
+    )
+    backend = _Backend(
+        containers=("aptl-wazuh-indexer",),
+        authenticated_readiness={"wazuh.indexer": True},
+        mounts={
+            "aptl-wazuh-indexer": [
+                {
+                    "Type": "volume",
+                    "Name": "aptl_wazuh-indexer-data",
+                    "Destination": "/var/lib/wazuh-indexer",
+                    "RW": True,
+                }
+            ]
+        },
+    )
+
+    observed = observe_realization(backend, realization, plan)[address]
+
+    assert observed.realized is True
+    assert observed.concerns == {("spec",): spec}
+    assert observed.evidence == {
+        "address": address,
+        "status": "ready",
+        "volume_identity": "aptl_wazuh-indexer-data",
+        "lifecycle": "retain",
+        "consumer_mounts": [
+            {
+                "target_address": "provision.node.wazuh-indexer",
+                "destination": "/var/lib/wazuh-indexer",
+                "access_mode": "read_write",
+                "service_health": "healthy",
+            }
+        ],
+    }

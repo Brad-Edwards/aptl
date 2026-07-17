@@ -342,7 +342,7 @@ services:
                             "test_aptl-internal": {},
                             "unmanaged": {},
                         }
-                    }
+                    },
                 }
             ]
         )
@@ -985,6 +985,21 @@ services:
         assert result.success is True
         cmd = mock_run.call_args_list[0][0][0]
         assert "-v" in cmd
+
+    def test_stop_with_volumes_includes_persisted_stateful_override(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        override = tmp_path / ".aptl/realization/compose.stateful.yml"
+        override.parent.mkdir(parents=True)
+        override.write_text("services: {}\nvolumes: {}\n")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is True
+        cmd = mock_run.call_args_list[0][0][0]
+        assert cmd[cmd.index("-f") + 1] == str(tmp_path / "docker-compose.yml")
+        assert cmd[cmd.index("-f", cmd.index("-f") + 1) + 1] == str(override)
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)

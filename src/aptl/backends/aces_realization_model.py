@@ -9,11 +9,13 @@ from aces_contracts.diagnostics import Diagnostic
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentContentRealization,
+    DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
     DeploymentNetworkAttachment,
     DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentPublishedPort,
+    DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
     DeploymentServicePort,
 )
@@ -35,6 +37,7 @@ class NodeRealization(object):
     static_address_assignments: tuple[tuple[str, str], ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
+    ordering_dependencies: tuple[str, ...] = ()
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -57,6 +60,7 @@ class NodeRealization(object):
                 for network, address in self.static_address_assignments
             ],
             "published_ports": [binding.details() for binding in self.published_ports],
+            "ordering_dependencies": list(self.ordering_dependencies),
         }
         if self.image is not None:
             details["image"] = self.image.details()
@@ -119,6 +123,8 @@ class AptlRealization(object):
     networks: tuple[NetworkRealization, ...]
     placements: tuple[PlacementRealization, ...]
     diagnostics: tuple[Diagnostic, ...]
+    generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
+    persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
 
     def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this ACES realization."""
@@ -150,6 +156,8 @@ class AptlRealization(object):
                 for placement in self.placements
                 if placement.account is not None
             ),
+            generated_artifacts=self.generated_artifacts,
+            persistent_volumes=self.persistent_volumes,
         )
 
     def details(self) -> dict[str, object]:
@@ -168,6 +176,8 @@ class AptlRealization(object):
             ),
             "network": len(self.networks),
             "node": len(self.nodes),
+            "generated-artifact": len(self.generated_artifacts),
+            "persistent-volume": len(self.persistent_volumes),
         }
         return {
             "profiles": sorted(self.profiles),
@@ -177,6 +187,12 @@ class AptlRealization(object):
             "nodes": [node.details() for node in self.nodes],
             "networks": [network.details() for network in self.networks],
             "placements": [placement.details() for placement in self.placements],
+            "generated_artifacts": [
+                artifact.details() for artifact in self.generated_artifacts
+            ],
+            "persistent_volumes": [
+                volume.details() for volume in self.persistent_volumes
+            ],
         }
 
 
@@ -209,4 +225,5 @@ def _deployment_node_realization(
         ),
         services=node.services,
         published_ports=node.published_ports,
+        ordering_dependencies=node.ordering_dependencies,
     )

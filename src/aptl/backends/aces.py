@@ -159,6 +159,45 @@ def selected_profiles_for_scenario(
     return select_backend_profiles(config, realization.profiles)
 
 
+def admitted_stateful_artifact_ownership(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> frozenset[tuple[str, str, str, str]]:
+    """Return exact addressed artifact consumers from the admitted graph."""
+
+    resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
+    if not resolved_scenario.is_absolute():
+        resolved_scenario = project_dir / resolved_scenario
+    scenario = parse_sdl_file(resolved_scenario)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir, config=config, backend=backend
+    )
+    execution_plan = RuntimeManager(target).plan(scenario)
+    blocking = [diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error]
+    if blocking:
+        raise ValueError(render_aces_diagnostics(blocking))
+    realization = interpret_provisioning_plan(
+        plan=execution_plan.provisioning,
+        project_dir=project_dir,
+        config=config,
+    )
+    blocking = [diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error]
+    if blocking:
+        raise ValueError(render_aces_diagnostics(blocking))
+    return frozenset(
+        (
+            artifact.address,
+            artifact.generator,
+            consumer.service_name,
+            consumer.mount_destination,
+        )
+        for artifact in realization.generated_artifacts
+        for consumer in artifact.consumers
+    )
+
+
 def _run_execution_plan(
     target: RuntimeTarget,
     execution_plan: "ExecutionPlan",

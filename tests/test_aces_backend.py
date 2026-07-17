@@ -2925,6 +2925,9 @@ def test_manifest_account_features_match_realized_dto_fields():
         "mail",
         "spn",
     }
+    assert set(manifest.provisioner.supported_domain_profiles) == {
+        "active_directory"
+    }
 
 
 def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:

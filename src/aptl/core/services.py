@@ -6,11 +6,11 @@ Wazuh Indexer, Manager API, and SSH services.
 
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from aptl.utils.curl_safe import curl_status
+from aptl.utils.curl_safe import basic_auth_header, curl_json, curl_status
 from aptl.utils.logging import get_logger
 
 log = get_logger("services")
@@ -60,7 +60,9 @@ def wait_for_service(
     next_progress_elapsed = 0.0
     bounded_progress_interval = max(_PROGRESS_INTERVAL_SECONDS, interval)
 
-    log.info("Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval)
+    log.info(
+        "Waiting for %s (timeout=%ds, interval=%ds)", service_name, timeout, interval
+    )
 
     while True:
         try:
@@ -75,8 +77,7 @@ def wait_for_service(
         elapsed = max(0.0, now - start)
         if progress is not None and elapsed >= next_progress_elapsed:
             progress(
-                f"Readiness: {service_name} still waiting "
-                f"({int(elapsed)}/{timeout}s)."
+                f"Readiness: {service_name} still waiting ({int(elapsed)}/{timeout}s)."
             )
             next_progress_elapsed = elapsed + bounded_progress_interval
         if now >= deadline:
@@ -129,45 +130,46 @@ def check_indexer_ready(url: str, username: str, password: str) -> bool:
     return status is not None and 200 <= status < 300
 
 
-def check_manager_api_ready(container_name: str) -> bool:
-    """Check if the Wazuh Manager API is responding inside the container.
+def check_manager_api_ready(url: str, username: str, password: str) -> bool:
+    """Authenticate and require a semantically successful manager status."""
 
-    Uses ``docker exec`` to run curl inside the manager container.
-    The Wazuh API uses token-based auth, so the root endpoint returns
-    401 with basic auth — any HTTP response (including 401) means
-    the API is up and listening.
-
-    Args:
-        container_name: Docker container name for the manager.
-
-    Returns:
-        True if the API responds with any HTTP status, False otherwise.
-    """
-    try:
-        result = subprocess.run(
-            [
-                "docker", "exec", container_name,
-                "curl", "-k", "-s", "-o", "/dev/null",
-                "-w", "%{http_code}",
-                "https://localhost:55000",
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=15,
-        )
-        # Any HTTP response means the API is listening
-        status = result.stdout.strip()
-        return result.returncode == 0 and status.isdigit() and int(status) > 0
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
-        log.debug("Manager API check failed: %s", exc)
+    base = url.rstrip("/")
+    auth = curl_json(
+        f"{base}/security/user/authenticate",
+        auth_header=basic_auth_header(username, password),
+        insecure=True,
+        method="POST",
+        timeout=10,
+    )
+    token = _manager_api_token(auth)
+    if token is None:
         return False
+    status = curl_json(
+        f"{base}/manager/status",
+        auth_header=f"Bearer {token}",
+        insecure=True,
+        timeout=10,
+    )
+    return _manager_status_ready(status)
 
 
-def test_ssh_connection(
-    host: str, port: int, user: str, key_path: Path
-) -> bool:
+def _manager_api_token(payload: object) -> str | None:
+    if not isinstance(payload, Mapping) or payload.get("error") != 0:
+        return None
+    data = payload.get("data")
+    token = data.get("token") if isinstance(data, Mapping) else None
+    return token if isinstance(token, str) and token else None
+
+
+def _manager_status_ready(payload: object) -> bool:
+    if not isinstance(payload, Mapping) or payload.get("error") != 0:
+        return False
+    data = payload.get("data")
+    affected = data.get("affected_items") if isinstance(data, Mapping) else None
+    return isinstance(affected, list) and bool(affected)
+
+
+def test_ssh_connection(host: str, port: int, user: str, key_path: Path) -> bool:
     """Test SSH connectivity to a lab container.
 
     Args:
@@ -183,13 +185,19 @@ def test_ssh_connection(
         result = subprocess.run(
             [
                 "ssh",
-                "-i", str(key_path),
-                "-o", "ConnectTimeout=5",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "BatchMode=yes",
-                "-p", str(port),
+                "-i",
+                str(key_path),
+                "-o",
+                "ConnectTimeout=5",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "BatchMode=yes",
+                "-p",
+                str(port),
                 f"{user}@{host}",
-                "echo", "SSH OK",
+                "echo",
+                "SSH OK",
             ],
             capture_output=True,
             text=True,

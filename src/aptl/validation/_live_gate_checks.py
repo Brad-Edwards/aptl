@@ -22,6 +22,7 @@ check branch without a live lab. The boot / telemetry probes that live in
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,6 +32,7 @@ from aces_sdl.scenario import Scenario
 from aptl.backends.aces_profiles import select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.deployment import get_backend
+from aptl.core.env import env_vars_from_dict, find_placeholder_env_values, load_dotenv
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
     _KALI_CONTAINER,
@@ -45,6 +47,7 @@ from aptl.validation._live_gate_probes import (
     _find_container,
     _generate_event,
     _is_traffic_event,
+    _is_correlated_wazuh_alert,
     _missing_manifest_keys,
     _now_iso,
     _ping_from_kali,
@@ -52,6 +55,7 @@ from aptl.validation._live_gate_probes import (
     _shared_network_targets,
     _single_node_plan,
     _variation_diagnostics,
+    _wazuh_correlation_summary,
 )
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
@@ -309,12 +313,14 @@ def check_telemetry_evidence_path(
     config: "AptlConfig",
     options: "LiveGateOptions",
     state: "LiveGateState",
+    env_loader: Callable[[Path], dict[str, str]] | None = None,
 ) -> LiveGateCheck:
     """Generate one representative event and confirm it traverses the defensive stack.
 
     Drives traffic from Kali at a reachable DMZ host, then collects Suricata EVE
-    and Wazuh alerts in the bounded window. At least one evidence artifact must
-    be captured; the summary is recorded for the run archive.
+    and Wazuh alerts in the bounded post-trigger window. A Wazuh alert is
+    mandatory; Suricata evidence is recorded as supporting evidence but cannot
+    satisfy the realized-Wazuh proof by itself.
     """
     snapshot = state.snapshot or {}
     containers = snapshot.get("containers", [])
@@ -335,7 +341,14 @@ def check_telemetry_evidence_path(
             ["no reachable target to generate defensive-stack telemetry"],
         )
 
-    diagnostics = _telemetry_diagnostics(targets, config, project_dir, options, state)
+    diagnostics = _telemetry_diagnostics(
+        targets,
+        config,
+        project_dir,
+        options,
+        state,
+        env_loader=env_loader,
+    )
     return _check("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, diagnostics)
 
 
@@ -345,30 +358,51 @@ def _telemetry_diagnostics(
     project_dir: Path,
     options: "LiveGateOptions",
     state: "LiveGateState",
+    *,
+    env_loader: Callable[[Path], dict[str, str]] | None = None,
 ) -> list[str]:
     """Generate an event, collect evidence, record the summary, and grade it."""
     backend = get_backend(config, project_dir)
+    try:
+        raw_env = (env_loader or load_dotenv)(project_dir / ".env")
+        if find_placeholder_env_values(raw_env):
+            raise ValueError("placeholder credentials")
+        env = env_vars_from_dict(raw_env)
+        indexer_port = int(raw_env.get("APTL_HP_WAZUH_INDEXER_9200", "9200"))
+        if not 1 <= indexer_port <= 65535:
+            raise ValueError("invalid indexer port")
+    except (OSError, ValueError):
+        return ["Wazuh collector credentials or endpoint are unavailable."]
     start_iso = _now_iso()
     _generate_event(backend, targets)
     eve, alerts = _collect_until_evidence(
-        backend, start_iso, options.event_window_seconds
+        backend,
+        start_iso,
+        options.event_window_seconds,
+        indexer_url=f"https://localhost:{indexer_port}",
+        indexer_auth=(env.indexer_username, env.indexer_password),
     )
     end_iso = _now_iso()
 
     traffic_eve = [e for e in eve if _is_traffic_event(e)]
+    correlated_alerts = [alert for alert in alerts if _is_correlated_wazuh_alert(alert)]
     summary = {
         "generator": "kali nmap + failed-ssh-auth against reachable targets",
         "window": [start_iso, end_iso],
         "suricata_event_types": _event_type_tally(eve),
         "suricata_traffic_event_count": len(traffic_eve),
         "wazuh_alert_count": len(alerts),
+        "wazuh_correlated_alert_count": len(correlated_alerts),
     }
+    if correlated_alerts:
+        summary["wazuh_correlation"] = _wazuh_correlation_summary(correlated_alerts[0])
     state.evidence = {**(state.evidence or {}), "telemetry": summary}
 
-    if (len(traffic_eve) + len(alerts)) < 1:
+    if not correlated_alerts:
         return [
-            "no traffic-derived alert/log/evidence traversed the defensive "
-            "stack in the window (Suricata stats-only events do not count)"
+            "no correlated post-trigger Wazuh alert traversed the realized defensive "
+            "stack in the bounded window (unrelated, Suricata-only, or stats-only "
+            "events do not count)"
         ]
     return []
 

@@ -161,7 +161,6 @@ def selected_profiles_for_scenario(
         from aptl.backends.aces import (
             selected_profiles_for_scenario as _selected_profiles,
         )
-
         return set(
             _selected_profiles(
                 project_dir, config, backend, scenario_path=scenario_path
@@ -219,6 +218,19 @@ def _runtime_require(
         enabled=True,
         error=_narrow_violation,
     )
+
+
+def admitted_stateful_artifact_ownership(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> frozenset[tuple[str, str, str, str]]:
+    """Lazy ACES import for exact pre-mutation artifact ownership."""
+
+    from aptl.backends.aces import admitted_stateful_artifact_ownership as _load
+
+    return _load(project_dir, config, backend, scenario_path=scenario_path)
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
@@ -618,6 +630,37 @@ class _LabStartContext(object):
     # workflow artifacts and the record share a single run directory.
     run_store: object = None
     run_id: str | None = None
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str]] = frozenset()
+
+
+_WAZUH_MANAGER_CONFIG_OWNERSHIP = (
+    "provision.generated-artifact.wazuh-manager-config",
+    "rendered_config",
+    "wazuh.manager",
+    "/wazuh-config-mount/etc/ossec.conf",
+)
+_WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
+    {
+        (
+            "provision.generated-artifact.wazuh-indexer-certs",
+            "certificate_bundle",
+            "wazuh.indexer",
+            "/usr/share/wazuh-indexer/certs",
+        ),
+        (
+            "provision.generated-artifact.wazuh-manager-certs",
+            "certificate_bundle",
+            "wazuh.manager",
+            "/etc/ssl/wazuh",
+        ),
+        (
+            "provision.generated-artifact.wazuh-dashboard-certs",
+            "certificate_bundle",
+            "wazuh.dashboard",
+            "/usr/share/wazuh-dashboard/certs",
+        ),
+    }
+)
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -784,6 +827,37 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
         log.exception("Failed to load config")
         return LabResult(success=False, error=f"Failed to load config: {exc}")
     ctx.backend = _get_backend(ctx.project_dir, ctx.config)
+    return _load_stateful_artifact_ownership(ctx)
+
+
+def _load_stateful_artifact_ownership(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Cache exact admitted artifact consumers before legacy mutation."""
+
+    from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO
+
+    scenario_path = ctx.scenario_path or DEFAULT_ACES_SCENARIO
+    if not scenario_path.is_absolute():
+        scenario_path = ctx.project_dir / scenario_path
+    if not scenario_path.is_file():
+        return None
+    try:
+        assert ctx.config is not None and ctx.backend is not None
+        ctx.stateful_artifact_ownership = admitted_stateful_artifact_ownership(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=scenario_path,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return LabResult(
+            success=False,
+            error=(
+                "ACES scenario admission failed before artifact preparation: "
+                f"{redact(str(exc))}"
+            ),
+        )
     return None
 
 
@@ -930,6 +1004,8 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     )
     if result is not None:
         return result
+    if _WAZUH_MANAGER_CONFIG_OWNERSHIP in ctx.stateful_artifact_ownership:
+        return None
     return _run_credential_sync(
         "Manager config",
         sync_manager_config,
@@ -1032,6 +1108,8 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
+    if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
+        return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
         return None
@@ -1384,10 +1462,21 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
                 ),
             )
 
+    manager_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == "wazuh.manager"
+            and getattr(r, "container_port", None) == 55000
+        ),
+        55000,
+    )
     manager_result = wait_for_service(
         check_fn=partial(
             check_manager_api_ready,
-            container_name="aptl-wazuh-manager",
+            url=f"https://localhost:{manager_port}",
+            username=ctx.env.api_username,
+            password=ctx.env.api_password,
         ),
         timeout=120,
         interval=5,

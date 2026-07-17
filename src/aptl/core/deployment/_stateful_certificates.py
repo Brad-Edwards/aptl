@@ -249,25 +249,42 @@ def _expected_identities(provenance_path: Path) -> dict[str, str] | None:
     except (OSError, yaml.YAMLError):
         payload = None
     nodes = payload.get("nodes") if isinstance(payload, dict) else None
+    if not isinstance(nodes, dict):
+        return None
     expected: dict[str, str] = {}
-    valid = isinstance(nodes, dict)
-    for entries in nodes.values() if isinstance(nodes, dict) else ():
-        if not isinstance(entries, list):
-            valid = False
-            break
-        for entry in entries:
-            if not isinstance(entry, dict):
-                valid = False
-                break
-            name = entry.get("name")
-            address = entry.get("ip")
-            if not isinstance(name, str) or not isinstance(address, str):
-                valid = False
-                break
-            expected[name] = address
-        if not valid:
-            break
-    return expected if valid else None
+    for entries in nodes.values():
+        parsed = _identity_entries(entries)
+        if parsed is None:
+            return None
+        expected.update(parsed)
+    return expected
+
+
+def _identity_entries(entries: object) -> dict[str, str] | None:
+    """Parse one provenance node group into name-to-address identities."""
+
+    if not isinstance(entries, list):
+        return None
+    parsed: dict[str, str] = {}
+    for entry in entries:
+        identity = _identity_entry(entry)
+        if identity is None:
+            return None
+        name, address = identity
+        parsed[name] = address
+    return parsed
+
+
+def _identity_entry(entry: object) -> tuple[str, str] | None:
+    """Return one valid provenance identity or reject its shape."""
+
+    if not isinstance(entry, dict):
+        return None
+    name = entry.get("name")
+    address = entry.get("ip")
+    return (
+        (name, address) if isinstance(name, str) and isinstance(address, str) else None
+    )
 
 
 def _identities_match(

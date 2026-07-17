@@ -170,32 +170,45 @@ class ComposeRealizationMixin(
             profiles,
             compose_files=compose_files,
         )
-        error: str | None = None
-        if not realization.generated_artifacts and not realization.persistent_volumes:
-            command.append("--quiet")
-            result = self._run(command)
-            if result.returncode != 0:
-                error = _COMPOSE_MODEL_VALIDATION_ERROR
-        else:
-            command.extend(["--no-interpolate", "--format", "json"])
-            result = self._run(command)
-            if result.returncode != 0:
-                error = _COMPOSE_MODEL_VALIDATION_ERROR
-            else:
-                try:
-                    payload = json.loads(result.stdout)
-                except (TypeError, ValueError):
-                    error = _COMPOSE_MODEL_VALIDATION_ERROR
-                else:
-                    errors = effective_stateful_model_errors(
-                        payload,
-                        self._project_dir,
-                        self.project_name,
-                        realization,
-                    )
-                    if errors:
-                        error = "; ".join(errors[:5])
+        stateful = bool(
+            realization.generated_artifacts or realization.persistent_volumes
+        )
+        error = (
+            self._effective_compose_model_error(command, realization)
+            if stateful
+            else self._compose_syntax_error(command)
+        )
         return LabResult(success=False, error=error) if error is not None else None
+
+    def _compose_syntax_error(self, command: list[str]) -> str | None:
+        """Return a bounded error when Compose rejects a stateless model."""
+
+        command.append("--quiet")
+        result = self._run(command)
+        return _COMPOSE_MODEL_VALIDATION_ERROR if result.returncode != 0 else None
+
+    def _effective_compose_model_error(
+        self,
+        command: list[str],
+        realization: DeploymentRealizationSpec,
+    ) -> str | None:
+        """Render and validate a stateful model without interpolating secrets."""
+
+        command.extend(["--no-interpolate", "--format", "json"])
+        result = self._run(command)
+        if result.returncode != 0:
+            return _COMPOSE_MODEL_VALIDATION_ERROR
+        try:
+            payload = json.loads(result.stdout)
+        except (TypeError, ValueError):
+            return _COMPOSE_MODEL_VALIDATION_ERROR
+        errors = effective_stateful_model_errors(
+            payload,
+            self._project_dir,
+            self.project_name,
+            realization,
+        )
+        return "; ".join(errors[:5]) if errors else None
 
     def _realization_result(
         self,

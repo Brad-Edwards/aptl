@@ -160,11 +160,7 @@ def _observe_generated_artifact(
     if artifact is None or not isinstance(project_dir, Path):
         return ObservedResource(realized=False)
     source = artifact_source_path(project_dir, artifact)
-    outputs_present = (
-        all((source / output.path).is_file() for output in artifact.outputs)
-        if source.is_dir()
-        else source.is_file() and len(artifact.outputs) == 1
-    )
+    outputs_present = _artifact_outputs_present(source, artifact)
     realized = (
         outputs_present
         and _artifact_consumers_mounted(backend, artifact, node_containers, source)
@@ -183,6 +179,17 @@ def _observe_generated_artifact(
         concerns={CONCERN_PAYLOAD_PATH["generated-artifact"]: _artifact_spec(artifact)},
         evidence=evidence,
     )
+
+
+def _artifact_outputs_present(
+    source: Path,
+    artifact: DeploymentGeneratedArtifactRealization,
+) -> bool:
+    """Return whether every declared artifact output exists at its source."""
+
+    if source.is_dir():
+        return all((source / output.path).is_file() for output in artifact.outputs)
+    return source.is_file() and len(artifact.outputs) == 1
 
 
 def _observe_persistent_volume(
@@ -411,7 +418,7 @@ def _observe_placement(
     backend: "DeploymentBackend",
     node_containers: dict[str, str],
     target_address: str | None,
-    content: "DeploymentContentRealization | None",
+    content: DeploymentContentRealization | None,
 ) -> ObservedResource:
     """Observe a node-scoped placement through the node that received it.
 

@@ -19,12 +19,8 @@ from aptl.core.deployment._compose_seed_safety import (
     assert_safe_relpath,
     redacted_stderr_hint,
 )
-from aptl.core.deployment._compose_volume_cleanup import (
-    project_scoped_volume_names,
-    remove_leftover_project_volumes,
-)
+from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
-from aptl.core.credentials import PathContainmentError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
@@ -235,54 +231,12 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         Returns:
             LabResult indicating success or failure.
         """
-        volume_names: set[str] = set()
-        volume_discovery_error = ""
-        if remove_volumes:
-            volume_names, volume_discovery_error = project_scoped_volume_names(
-                self._project_dir, self._project_name
-            )
-
-        outcome: LabResult
-        try:
-            compose_files = self._stateful_teardown_compose_files()
-        except PathContainmentError:
-            outcome = LabResult(
-                success=False,
-                error="Stateful teardown model failed containment validation.",
-            )
-        else:
-            cmd = self._build_command(
-                "down",
-                profiles=profiles,
-                compose_files=compose_files,
-            )
-            if remove_volumes:
-                cmd.append("-v")
-
-            log.info("Stopping lab (remove_volumes=%s)", remove_volumes)
-            result = self._run(cmd)
-            if result.returncode != 0:
-                log.error("Lab stop failed: %s", result.stderr)
-                outcome = LabResult(success=False, error=result.stderr)
-            else:
-                failures = self.remove_project_networks()
-                if remove_volumes:
-                    if volume_discovery_error:
-                        failures.append(volume_discovery_error)
-                    else:
-                        failures.extend(
-                            remove_leftover_project_volumes(
-                                volume_names, self._run, timeout=_DOCKER_TIMEOUT
-                            )
-                        )
-                if failures:
-                    error = "; ".join(failures[:5])
-                    log.error("Lab cleanup failed: %s", error)
-                    outcome = LabResult(success=False, error=error)
-                else:
-                    log.info("Lab stopped successfully")
-                    outcome = LabResult(success=True, message="Lab stopped")
-        return outcome
+        return stop_compose_lab(
+            self,
+            profiles,
+            remove_volumes=remove_volumes,
+            timeout=_DOCKER_TIMEOUT,
+        )
 
     def status(self) -> LabStatus:
         """Query current lab status via docker compose ps.

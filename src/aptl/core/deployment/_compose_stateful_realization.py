@@ -28,8 +28,8 @@ from aptl.core.deployment._compose_stateful_graph import (
     stateful_realization_errors,
 )
 from aptl.core.deployment._compose_stateful_model import (
-    artifact_source_path,
-    effective_stateful_model_errors,
+    artifact_source_path as _artifact_source_path,
+    effective_stateful_model_errors as _effective_stateful_model_errors,
     stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_services import StatefulDumper
@@ -48,6 +48,9 @@ from aptl.core.env import (
 )
 from aptl.core.lab_types import LabResult
 from aptl.core.services import check_indexer_ready, check_manager_api_ready
+
+artifact_source_path = _artifact_source_path
+effective_stateful_model_errors = _effective_stateful_model_errors
 
 
 class ComposeStatefulRealizationMixin:

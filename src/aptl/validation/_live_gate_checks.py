@@ -32,7 +32,6 @@ from aces_sdl.scenario import Scenario
 from aptl.backends.aces_profiles import select_backend_profiles
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.deployment import get_backend
-from aptl.core.env import load_dotenv
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
     _KALI_CONTAINER,

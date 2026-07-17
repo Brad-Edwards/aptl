@@ -56,6 +56,40 @@ cross a serialization, observability, archive, CLI, API-response, or log
 boundary.** File permissions, ignored paths, S3 bucket access controls, and
 archive location are defense in depth only.
 
+### Amendment: Restorable range checkpoint payloads
+
+RNG-003 introduces one deliberately narrow exception to the serialization rule:
+a byte-preserving range checkpoint can contain container environments,
+databases, generated service credentials, target evidence, and private material
+inside container writable layers or Docker-managed volumes. Redacting those
+opaque bytes would corrupt the restore point rather than make it safe.
+
+Treat such payloads as **privileged operational backups**, not as inventory
+snapshots, run evidence, normal local state, or exports:
+
+- keep payloads only under the canonical ignored `.aptl/checkpoints/` tree,
+  with owner-only directories/files, contained generated identifiers, atomic
+  staging, and integrity manifests;
+- keep them out of `RangeSnapshot`, ACES `RuntimeSnapshot`, `LocalRunStore`,
+  normal run exports, CLI/API response bodies, logs, traces, and registry
+  pushes;
+- pass only narrow checkpoint metadata and lineage references through the
+  normal redacting JSON/JSONL boundaries;
+- never expose raw payload bytes, archive members, container environments, or
+  backend stderr while diagnosing checkpoint operations; and
+- require authenticated encryption before any explicit off-host copy or future
+  remote checkpoint-store upload. Encryption keys must not live beside the
+  payload or enter process argv, logs, diagnostics, telemetry, or repository
+  state.
+
+This exception does not make `write_file()`, `copy_file()`, `exporter.py`,
+filesystem permissions, or `.gitignore` general-purpose secret-storage
+boundaries. A platform that cannot enforce the privileged local checkpoint
+boundary must refuse capture rather than emit a plaintext checkpoint into a
+normal artifact location. The full consistency, ownership, restore, and
+transport guardrails are recorded in the
+[RNG-003 preflight](../architecture/rng-003-snapshot-restore-preflight.md).
+
 Use the existing shared helper for the boundary in the language that owns the
 artifact. Do not add a second secret taxonomy, parallel DTO schema, custom
 exception hierarchy, or call-site-only filter unless the canonical helper
@@ -74,6 +108,7 @@ cannot express the required shape and is extended first.
 | `aptl config show --json` | First-party configuration values | Should not contain `.env` secrets; future config fields might contain tokens if schema boundaries drift | `AptlConfig` remains the canonical non-secret config schema. Do not move runtime secrets from `.env` into `aptl.json` without an explicit secret-handling design. |
 | `aptl lab continuity-audit --json` and `continuity-events.jsonl` | Firewall rules, target containers, continuity evidence | Usually no secrets; command/error strings could leak if backend output is copied verbatim in the future | Keep event schema narrow. Do not include raw backend command output unless redacted first. |
 | `.aptl/trace-context.json`, `.aptl/session.json`, generated `.aptl/config/*` | Trace/session correlation IDs and generated lab config | Replayable IDs and generated service secrets | Keep under ignored state with restrictive permissions where applicable; do not archive or print generated secret-bearing config, and redact replayable IDs when they enter analysis artifacts. |
+| `.aptl/checkpoints/*` (RNG-003) | Byte-preserving container layers, Docker-managed volumes, and restore metadata | Container environments, databases, generated service secrets, private material, and target evidence | Privileged operational-backup exception only: owner-only canonical storage, integrity manifest, no normal run/export/API/log/trace path, metadata redacted separately, and authenticated encryption before off-host transport. |
 
 ## Security Layers
 
@@ -104,6 +139,10 @@ cannot express the required shape and is extended first.
 - **Persistence and exports:** `LocalRunStore` owns run artifact writes;
   `exporter.py` packages already-safe artifacts. Do not rely on tar/S3/export
   code as the primary redaction point.
+- **Restorable checkpoint payloads:** apply the privileged-backup amendment
+  above. Opaque bytes stay outside normal run persistence and export; checkpoint
+  metadata remains redacted, and off-host copies are encrypted before leaving
+  the canonical local store.
 - **Observability and errors:** logs, OTel attributes, CLI output, API
   responses, and exception text may name the failed system, path, or validation
   layer, but not the secret value.
@@ -141,6 +180,9 @@ deploy keys, host keys, and flags.
   participant-visible weak credentials from ACES inventory bundles merely
   because they are secret-shaped.
 - Do not make run artifacts complete forensic vaults for plaintext secrets.
+- Do not treat the RNG-003 privileged-checkpoint exception as permission to put
+  opaque secret-bearing bytes in run archives, normal exports, APIs, logs,
+  traces, or arbitrary local paths.
 - Do not redact every target username, host, port, file path, rule ID, or
   non-secret diagnostic field.
 - Do not redesign OTel, OCSF red-team logging, run archive layout, or Docker
@@ -158,6 +200,8 @@ deploy keys, host keys, and flags.
 - Redacting inside one CLI command while leaving the same DTO unsafe elsewhere.
 - Letting `exporter.py` mutate archive contents to hide leaks that were already
   written to the run directory.
+- Routing a restorable checkpoint through `LocalRunStore.write_file()`,
+  `copy_file()`, `exporter.py`, stdout, an API body, or a container registry.
 - Passing credentials, hashes, cookies, tokens, or private key material through
   process argv, logs, exception messages, or span attributes.
 - Treating `.env`, generated config, target container data, run archive data,

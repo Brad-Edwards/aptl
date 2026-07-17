@@ -264,17 +264,14 @@ def test_stateful_override_uses_contained_artifact_and_project_volume(
     assert mounts[-3:] == [
         {
             "type": "bind",
-            "source": str(
-                tmp_path / "config/wazuh_indexer_ssl_certs/root-ca.pem"
-            ),
+            "source": str(tmp_path / "config/wazuh_indexer_ssl_certs/root-ca.pem"),
             "target": "/usr/share/wazuh-indexer/certs/root-ca.pem",
             "read_only": True,
         },
         {
             "type": "bind",
             "source": str(
-                tmp_path
-                / "config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem"
+                tmp_path / "config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem"
             ),
             "target": "/usr/share/wazuh-indexer/certs/wazuh.indexer-key.pem",
             "read_only": True,
@@ -307,9 +304,10 @@ def test_stateful_override_uses_contained_artifact_and_project_volume(
 
 def test_stateful_override_rejects_symlinked_generated_path(tmp_path: Path) -> None:
     (tmp_path / ".aptl").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    spec = _spec()
 
     with pytest.raises(PathContainmentError):
-        write_stateful_override(tmp_path, "aptl-test", _spec())
+        write_stateful_override(tmp_path, "aptl-test", spec)
 
 
 def test_stateful_validation_rejects_remote_artifact_consumers() -> None:
@@ -369,9 +367,7 @@ def test_certificate_materialization_rejects_symlinked_output_before_docker(
     outside.mkdir()
     config = tmp_path / "config"
     config.mkdir()
-    (config / "wazuh_indexer_ssl_certs").symlink_to(
-        outside, target_is_directory=True
-    )
+    (config / "wazuh_indexer_ssl_certs").symlink_to(outside, target_is_directory=True)
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     monkeypatch.setattr(
         backend,
@@ -583,9 +579,7 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
         "_run",
         lambda cmd, **kwargs: MagicMock(
             returncode=0,
-            stdout=(
-                "2.24.4" if "version" in cmd else json.dumps(payload)
-            ),
+            stdout=("2.24.4" if "version" in cmd else json.dumps(payload)),
             stderr="",
         ),
     )

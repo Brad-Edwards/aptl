@@ -54,6 +54,10 @@ from aptl.backends.aces_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactRealization,
+    DeploymentPersistentVolumeRealization,
+)
 from aptl.utils.redaction import redact
 
 
@@ -239,8 +243,8 @@ def _realization_from_parts(
     nodes: list[NodeRealization],
     networks: list[NetworkRealization],
     placements: list[PlacementRealization],
-    generated_artifacts: list,
-    persistent_volumes: list,
+    generated_artifacts: list[DeploymentGeneratedArtifactRealization],
+    persistent_volumes: list[DeploymentPersistentVolumeRealization],
     profiles: set[str],
     diagnostics: list[Diagnostic],
 ) -> AptlRealization:

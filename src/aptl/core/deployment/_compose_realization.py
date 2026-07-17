@@ -43,6 +43,8 @@ __all__ = [
     "_resolve_realization_networks",
 ]
 
+_COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
+
 
 class ComposeRealizationMixin(
     ComposeRealizationImageMixin,
@@ -168,40 +170,32 @@ class ComposeRealizationMixin(
             profiles,
             compose_files=compose_files,
         )
+        error: str | None = None
         if not realization.generated_artifacts and not realization.persistent_volumes:
             command.append("--quiet")
             result = self._run(command)
-            return (
-                None
-                if result.returncode == 0
-                else LabResult(
-                    success=False,
-                    error="Generated Compose model validation failed.",
-                )
-            )
-        command.extend(["--no-interpolate", "--format", "json"])
-        result = self._run(command)
-        if result.returncode != 0:
-            return LabResult(
-                success=False,
-                error="Generated Compose model validation failed.",
-            )
-        try:
-            payload = json.loads(result.stdout)
-        except (TypeError, ValueError):
-            return LabResult(
-                success=False,
-                error="Generated Compose model validation failed.",
-            )
-        errors = effective_stateful_model_errors(
-            payload,
-            self._project_dir,
-            self.project_name,
-            realization,
-        )
-        if errors:
-            return LabResult(success=False, error="; ".join(errors[:5]))
-        return None
+            if result.returncode != 0:
+                error = _COMPOSE_MODEL_VALIDATION_ERROR
+        else:
+            command.extend(["--no-interpolate", "--format", "json"])
+            result = self._run(command)
+            if result.returncode != 0:
+                error = _COMPOSE_MODEL_VALIDATION_ERROR
+            else:
+                try:
+                    payload = json.loads(result.stdout)
+                except (TypeError, ValueError):
+                    error = _COMPOSE_MODEL_VALIDATION_ERROR
+                else:
+                    errors = effective_stateful_model_errors(
+                        payload,
+                        self._project_dir,
+                        self.project_name,
+                        realization,
+                    )
+                    if errors:
+                        error = "; ".join(errors[:5])
+        return LabResult(success=False, error=error) if error is not None else None
 
     def _realization_result(
         self,
@@ -232,18 +226,28 @@ class ComposeRealizationMixin(
         containers). First failure wins.
         """
 
+        result: LabResult | None = None
         network_failures = self._reconcile_realization_networks(realization)
         if network_failures:
-            return LabResult(success=False, error="; ".join(network_failures[:5]))
-        health_failures = self._await_realized_service_health(realization)
-        if health_failures:
-            return LabResult(success=False, error="; ".join(health_failures[:5]))
-        readiness_failure = self._verify_stateful_authenticated_readiness(realization)
-        if readiness_failure is not None:
-            return readiness_failure
-        return self._realize_accounts_step(realization) or LabResult(
-            success=True, message="Lab realized"
-        )
+            result = LabResult(
+                success=False,
+                error="; ".join(network_failures[:5]),
+            )
+        if result is None:
+            health_failures = self._await_realized_service_health(realization)
+            if health_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(health_failures[:5]),
+                )
+        if result is None:
+            result = self._verify_stateful_authenticated_readiness(realization)
+        if result is None:
+            result = self._realize_accounts_step(realization) or LabResult(
+                success=True,
+                message="Lab realized",
+            )
+        return result
 
     def _await_realized_service_health(
         self,

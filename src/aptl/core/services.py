@@ -154,6 +154,8 @@ def check_manager_api_ready(url: str, username: str, password: str) -> bool:
 
 
 def _manager_api_token(payload: object) -> str | None:
+    """Extract a non-empty authentication token from a manager response."""
+
     if not isinstance(payload, Mapping) or payload.get("error") != 0:
         return None
     data = payload.get("data")
@@ -162,6 +164,8 @@ def _manager_api_token(payload: object) -> str | None:
 
 
 def _manager_status_ready(payload: object) -> bool:
+    """Return whether the manager status response contains affected items."""
+
     if not isinstance(payload, Mapping) or payload.get("error") != 0:
         return False
     data = payload.get("data")

@@ -329,13 +329,18 @@ def _is_correlated_wazuh_alert(alert: object) -> bool:
 
 
 def _nested_strings(value: object) -> list[str]:
+    """Collect string leaves from a nested JSON-like value."""
+
+    strings: list[str] = []
     if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        return [item for nested in value.values() for item in _nested_strings(nested)]
-    if isinstance(value, list):
-        return [item for nested in value for item in _nested_strings(nested)]
-    return []
+        strings.append(value)
+    elif isinstance(value, dict):
+        for nested in value.values():
+            strings.extend(_nested_strings(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            strings.extend(_nested_strings(nested))
+    return strings
 
 
 def _wazuh_correlation_summary(alert: dict[str, Any]) -> dict[str, str]:

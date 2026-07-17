@@ -72,6 +72,8 @@ def _generated_artifact(
     nodes: dict[str, NodeRealization],
     diagnostics: list[Diagnostic],
 ) -> DeploymentGeneratedArtifactRealization | None:
+    """Lower one valid generated-artifact resource into the deployment DTO."""
+
     spec = _spec(resource, diagnostics)
     if spec is None:
         return None
@@ -107,6 +109,8 @@ def _persistent_volume(
     nodes: dict[str, NodeRealization],
     diagnostics: list[Diagnostic],
 ) -> DeploymentPersistentVolumeRealization | None:
+    """Lower one valid persistent-volume resource into the deployment DTO."""
+
     spec = _spec(resource, diagnostics)
     if spec is None:
         return None
@@ -131,6 +135,8 @@ def _spec(
     resource: PlannedResource,
     diagnostics: list[Diagnostic],
 ) -> Mapping[str, Any] | None:
+    """Return a resource's mapping-valued spec or record invalid input."""
+
     raw = resource.payload.get("spec")
     if isinstance(raw, Mapping):
         return raw
@@ -143,28 +149,35 @@ def _outputs(
     raw_outputs: object,
     diagnostics: list[Diagnostic],
 ) -> list[DeploymentGeneratedArtifactOutput]:
+    """Parse a generated artifact's unique typed output declarations."""
+
     if not isinstance(raw_outputs, list):
         return []
-    outputs: list[DeploymentGeneratedArtifactOutput] = []
-    for raw in raw_outputs:
-        if not isinstance(raw, Mapping):
-            return []
-        name = _text(raw.get("name"))
-        path = _text(raw.get("path"))
-        sensitivity = _choice(raw, "sensitivity", _SENSITIVITIES)
-        if name is None or path is None or sensitivity is None:
-            return []
-        outputs.append(
-            DeploymentGeneratedArtifactOutput(
-                name=name,
-                path=path,
-                sensitivity=cast(ResourceSensitivity, sensitivity),
-            )
-        )
+    parsed_outputs = [_output(raw) for raw in raw_outputs]
+    if any(output is None for output in parsed_outputs):
+        return []
+    outputs = [output for output in parsed_outputs if output is not None]
     if len({output.name for output in outputs}) != len(outputs):
         _append_invalid(resource, diagnostics)
-        return []
+        outputs = []
     return outputs
+
+
+def _output(raw: object) -> DeploymentGeneratedArtifactOutput | None:
+    """Parse one generated-artifact output declaration."""
+
+    if not isinstance(raw, Mapping):
+        return None
+    name = _text(raw.get("name"))
+    path = _text(raw.get("path"))
+    sensitivity = _choice(raw, "sensitivity", _SENSITIVITIES)
+    if name is None or path is None or sensitivity is None:
+        return None
+    return DeploymentGeneratedArtifactOutput(
+        name=name,
+        path=path,
+        sensitivity=cast(ResourceSensitivity, sensitivity),
+    )
 
 
 def _consumers(
@@ -173,6 +186,8 @@ def _consumers(
     nodes: dict[str, NodeRealization],
     diagnostics: list[Diagnostic],
 ) -> list[DeploymentStatefulConsumer]:
+    """Parse every consumer, rejecting an incomplete consumer collection."""
+
     if not isinstance(raw_consumers, list):
         return []
     consumers: list[DeploymentStatefulConsumer] = []
@@ -190,6 +205,8 @@ def _consumer(
     nodes: dict[str, NodeRealization],
     diagnostics: list[Diagnostic],
 ) -> DeploymentStatefulConsumer | None:
+    """Resolve one stateful consumer to exactly one admitted backend service."""
+
     if not isinstance(raw, Mapping):
         _append_invalid(resource, diagnostics)
         return None
@@ -198,6 +215,7 @@ def _consumer(
     mount_destination = _text(raw.get("mount_destination"))
     access_mode = _choice(raw, "access_mode", _CONSUMER_ACCESS_MODES)
     node = nodes.get(target_address or "")
+    service_name = _only(node.backend_services) if node is not None else None
     if node is None:
         diagnostics.append(
             diagnostic(
@@ -206,9 +224,7 @@ def _consumer(
                 "Stateful resource consumer does not resolve to an admitted node.",
             )
         )
-        return None
-    service_name = _only(node.backend_services)
-    if service_name is None:
+    elif service_name is None:
         diagnostics.append(
             diagnostic(
                 "aptl.provisioner.stateful-consumer-service-unresolved",
@@ -216,17 +232,17 @@ def _consumer(
                 "Stateful resource consumer does not resolve to one backend service.",
             )
         )
-        return None
-    if node_name is None or mount_destination is None or access_mode is None:
+    elif node_name is None or mount_destination is None or access_mode is None:
         _append_invalid(resource, diagnostics)
-        return None
-    return DeploymentStatefulConsumer(
-        target_address=node.address,
-        node_name=node_name,
-        service_name=service_name,
-        mount_destination=mount_destination,
-        access_mode=cast(StatefulConsumerAccessMode, access_mode),
-    )
+    else:
+        return DeploymentStatefulConsumer(
+            target_address=node.address,
+            node_name=node_name,
+            service_name=service_name,
+            mount_destination=mount_destination,
+            access_mode=cast(StatefulConsumerAccessMode, access_mode),
+        )
+    return None
 
 
 def _append_destination_conflicts(
@@ -234,6 +250,8 @@ def _append_destination_conflicts(
     volumes: list[DeploymentPersistentVolumeRealization],
     diagnostics: list[Diagnostic],
 ) -> None:
+    """Report multiple stateful resources claiming one consumer destination."""
+
     occupied: dict[tuple[str, str], str] = {}
     for resource in [*artifacts, *volumes]:
         for consumer in resource.consumers:
@@ -253,6 +271,8 @@ def _append_invalid(
     resource: PlannedResource,
     diagnostics: list[Diagnostic],
 ) -> None:
+    """Append the stable invalid-resource diagnostic at most once per address."""
+
     if any(
         item.address == resource.address
         and item.code == "aptl.provisioner.stateful-resource-invalid"
@@ -269,6 +289,8 @@ def _append_invalid(
 
 
 def _resource_name(resource: PlannedResource) -> str:
+    """Return the authored resource name or its address suffix."""
+
     return _text(resource.payload.get("name")) or resource.address.rsplit(".", 1)[-1]
 
 
@@ -277,13 +299,19 @@ def _choice(
     key: str,
     allowed: frozenset[str],
 ) -> str | None:
+    """Return a non-empty string only when it belongs to the allowed vocabulary."""
+
     value = _text(mapping.get(key))
     return value if value in allowed else None
 
 
 def _text(value: object) -> str | None:
+    """Return a non-empty string value without altering authored whitespace."""
+
     return value if isinstance(value, str) and value.strip() else None
 
 
 def _only(values: tuple[str, ...]) -> str | None:
+    """Return the sole tuple member, rejecting absent or ambiguous bindings."""
+
     return values[0] if len(values) == 1 else None

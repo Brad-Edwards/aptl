@@ -289,27 +289,28 @@ def _repair_native_linux_cert_ownership(
     then leaves bind-mounted output root-owned. Use Docker itself, not host
     sudo, to chown the generated files back to the invoking user.
     """
+    error: str | None = None
     user = _native_linux_user()
-    if user is None:
-        return None
-
-    try:
-        result = _execute_command(
-            _cert_ownership_repair_command(certs_dir, user),
-            run_command=run_command,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        return "Certificate permission repair timed out after 120s"
-    except OSError as exc:
-        return f"Certificate permission repair failed: {exc}"
-    if result.returncode == 0:
-        return None
-
-    detail = result.stderr.strip() or result.stdout.strip()
-    if not detail:
-        detail = "permission repair container failed"
-    return f"Certificate permission repair failed: {detail}"
+    if user is not None:
+        try:
+            result = _execute_command(
+                _cert_ownership_repair_command(certs_dir, user),
+                run_command=run_command,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            error = "Certificate permission repair timed out after 120s"
+        except OSError as exc:
+            error = f"Certificate permission repair failed: {exc}"
+        else:
+            if result.returncode != 0:
+                detail = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "permission repair container failed"
+                )
+                error = f"Certificate permission repair failed: {detail}"
+    return error
 
 
 def _execute_command(

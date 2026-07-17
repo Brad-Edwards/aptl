@@ -20,6 +20,7 @@ from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import _live_gate_probes as lgp
+from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
     CATEGORY_ACES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
@@ -803,14 +804,14 @@ def _patch_collect_no_sleep(monkeypatch):
     the module. The poll loop still runs its iterations and collector calls.
     """
     monkeypatch.setattr(
-        lgc,
+        lgt,
         "_collect_until_evidence",
         functools.partial(lgp._collect_until_evidence, sleep_fn=lambda _: None),
     )
 
 
 def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp,
@@ -835,7 +836,7 @@ def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
 
 
 def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp,
@@ -878,7 +879,7 @@ def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch
 
 
 def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
     monkeypatch.setattr(
@@ -909,7 +910,7 @@ def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
 def test_telemetry_fails_on_stats_only_events(monkeypatch):
     # Suricata emits `stats` regardless of traffic; the check must not pass on
     # them alone (otherwise it would pass on any quiet lab).
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(
         lgp,
@@ -931,7 +932,7 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
 
 
 def test_telemetry_fails_when_no_evidence(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend())
+    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
     _patch_collect_no_sleep(monkeypatch)
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])

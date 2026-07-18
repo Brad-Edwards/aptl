@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aces_contracts.runtime_state import RuntimeSnapshot
 from aces_runtime.manager import RuntimeManager
 from aces_runtime.registry import RuntimeTarget
-from aces_sdl import SDLError, parse_sdl_file
+from aces_sdl import SDLError, SDLInstantiationError, parse_sdl_file
 
 from aptl.backends.aces_diagnostics import (
     render_aces_diagnostics,
@@ -20,7 +20,7 @@ from aptl.backends.aces_orchestrator import AptlOrchestrator
 from aptl.backends.aces_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
     ParticipantActionSpec,
-    participant_action_specs_for_scenario,
+    participant_action_specs_from_runtime_model,
 )
 from aptl.backends.aces_participant_runtime import AptlParticipantRuntime
 from aptl.backends.aces_provisioner import AptlProvisioner
@@ -30,7 +30,11 @@ from aptl.backends.aces_realization import (
 from aptl.backends.aces_profiles import (
     select_backend_profiles,
 )
-from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO, AcesStartOutcome
+from aptl.backends.aces_start_model import (
+    DEFAULT_ACES_SCENARIO,
+    AcesRunTarget,
+    AcesStartOutcome,
+)
 from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -43,6 +47,14 @@ if TYPE_CHECKING:
     from aptl.core.runstore import RunStorageBackend
 
 log = get_logger("aces-backend")
+
+_INSTANTIATION_FAILURE_MESSAGE = (
+    "ACES runtime variable binding failed before deployment. Provide every "
+    "required variable using its declared type and allowed values."
+)
+_RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset(
+    {"aptl.provisioner.backend-start-failed"}
+)
 
 
 def create_aptl_runtime_target(
@@ -83,47 +95,46 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: RunStorageBackend | None = None,
-    run_id: str | None = None,
+    run_target: AcesRunTarget | None = None,
+    parameters: Mapping[str, object] | None = None,
+    before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome:
     """Start an APTL lab by compiling and applying an ACES SDL scenario.
 
-    ``run_store`` and ``run_id`` (resolved once for the whole lab-start run,
-    REP-001 / GAP 4) are threaded into orchestration so workflow result and
-    history artifacts persist under the same run directory the reproducibility
-    record is written to.
+    ``run_target`` (resolved once for the whole lab-start run, REP-001 / GAP 4)
+    is threaded into orchestration so workflow result and history artifacts
+    persist under the same run directory the reproducibility record is written
+    to. ``parameters`` is the explicit per-run ACES binding mapping; only the
+    planner sees it, and APTL neither logs nor persists it.
     """
 
-    resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
+    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path)
     try:
-        scenario = parse_sdl_file(resolved_scenario)
-        target = create_aptl_runtime_target(
-            project_dir=project_dir,
-            config=config,
-            backend=backend,
+        target, execution_plan = _plan_scenario(
+            project_dir,
+            config,
+            backend,
+            resolved_scenario,
+            parameters,
         )
-        execution_plan = RuntimeManager(target).plan(scenario)
-        participant_action_specs = participant_action_specs_for_scenario(
-            scenario,
-            provisioning_plan=execution_plan.provisioning,
-            project_dir=project_dir,
-            config=config,
-        )
-        if participant_action_specs:
-            target = create_aptl_runtime_target(
-                project_dir=project_dir,
-                config=config,
-                backend=backend,
-                participant_action_specs=participant_action_specs,
-            )
-        return _run_execution_plan(
+        return _apply_with_backend_retry(
             target,
             execution_plan,
             resolved_scenario,
-            run_store=run_store,
-            run_id=run_id,
+            run_target,
+            before_backend_retry,
+        )
+    except SDLInstantiationError:
+        return AcesStartOutcome(
+            lab_result=LabResult(
+                success=False,
+                error=_INSTANTIATION_FAILURE_MESSAGE,
+            ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=resolved_scenario,
+            retryable=False,
         )
     except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
         return AcesStartOutcome(
@@ -136,6 +147,84 @@ def start_aces_scenario(
             selected_profiles=[],
             scenario_path=resolved_scenario,
         )
+
+
+def _resolve_scenario_path(project_dir: Path, scenario_path: Path | None) -> Path:
+    """Resolve the authored scenario beneath the project when it is relative."""
+
+    resolved = scenario_path or DEFAULT_ACES_SCENARIO
+    return resolved if resolved.is_absolute() else project_dir / resolved
+
+
+def _plan_scenario(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path,
+    parameters: Mapping[str, object] | None,
+) -> tuple[RuntimeTarget, "ExecutionPlan"]:
+    """Build one ACES plan and the target that consumes its concrete model."""
+
+    scenario = parse_sdl_file(scenario_path)
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+    )
+    manager = RuntimeManager(target)
+    execution_plan = (
+        manager.plan(scenario, parameters=dict(parameters))
+        if parameters is not None
+        else manager.plan(scenario)
+    )
+    participant_action_specs = participant_action_specs_from_runtime_model(
+        execution_plan.model,
+        provisioning_plan=execution_plan.provisioning,
+        project_dir=project_dir,
+        config=config,
+    )
+    if participant_action_specs:
+        target = create_aptl_runtime_target(
+            project_dir=project_dir,
+            config=config,
+            backend=backend,
+            participant_action_specs=participant_action_specs,
+        )
+    return target, execution_plan
+
+
+def _apply_with_backend_retry(
+    target: RuntimeTarget,
+    execution_plan: "ExecutionPlan",
+    scenario_path: Path,
+    run_target: AcesRunTarget | None,
+    before_backend_retry: Callable[[], None] | None,
+) -> AcesStartOutcome:
+    """Apply one admitted plan, retrying only its SOC backend-start failure."""
+
+    run_store = run_target.run_store if run_target is not None else None
+    run_id = run_target.run_id if run_target is not None else None
+    outcome = _run_execution_plan(
+        target,
+        execution_plan,
+        scenario_path,
+        run_store=run_store,
+        run_id=run_id,
+    )
+    if (
+        outcome.retryable
+        and "soc" in outcome.selected_profiles
+        and before_backend_retry is not None
+    ):
+        before_backend_retry()
+        return _run_execution_plan(
+            target,
+            execution_plan,
+            scenario_path,
+            run_store=run_store,
+            run_id=run_id,
+        )
+    return outcome
 
 
 def selected_profiles_for_scenario(
@@ -229,7 +318,7 @@ def _run_execution_plan(
     realization_details, selected_profiles = _interpret_realization(
         target, execution_plan
     )
-    failure, snapshot = _apply_execution_plan(
+    failure, snapshot, retryable = _apply_execution_plan(
         target,
         execution_plan,
         run_store=run_store,
@@ -242,6 +331,7 @@ def _run_execution_plan(
             realization_details=realization_details,
             selected_profiles=selected_profiles,
             scenario_path=scenario_path,
+            retryable=retryable,
         )
     return AcesStartOutcome(
         lab_result=LabResult(
@@ -261,7 +351,7 @@ def _apply_execution_plan(
     *,
     run_store: RunStorageBackend | None = None,
     run_id: str | None = None,
-) -> tuple[LabResult | None, RuntimeSnapshot]:
+) -> tuple[LabResult | None, RuntimeSnapshot, bool]:
     """Apply the plan through ACES's own runtime manager, then drive workflows.
 
     ``RuntimeManager.apply`` is the only path that threads the compiled
@@ -274,7 +364,9 @@ def _apply_execution_plan(
     Going through the manager deletes that parallel path outright: the gate and
     the provenance ledger are ACES's, not APTL's (issue #578, ADR-046).
 
-    Returns ``(failure | None, snapshot)``.
+    Returns ``(failure | None, snapshot, retryable)``. Only the existing
+    deployment-backend start diagnostic is retryable; deterministic admission,
+    planning, provider-policy, and workflow failures are not.
     """
 
     manager = RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot)
@@ -287,6 +379,10 @@ def _apply_execution_plan(
                 error=render_aces_diagnostics(list(apply_result.diagnostics)),
             ),
             snapshot,
+            any(
+                diagnostic.code in _RETRYABLE_APPLY_DIAGNOSTIC_CODES
+                for diagnostic in apply_result.diagnostics
+            ),
         )
     evaluation_results = _evaluation_results(target, execution_plan)
     failure = _drive_orchestrator_workflows(
@@ -295,7 +391,7 @@ def _apply_execution_plan(
         run_store=run_store,
         run_id=run_id,
     )
-    return failure, snapshot
+    return failure, snapshot, False
 
 
 def _evaluation_results(

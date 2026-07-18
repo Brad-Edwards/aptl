@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from docker.client import DockerClient
 
     from aptl.backends.aces import AcesStartOutcome
+    from aptl.backends.aces_start_model import AcesRunTarget
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -119,14 +120,17 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: object = None,
-    run_id: str | None = None,
+    run_target: AcesRunTarget | None = None,
+    parameters: Mapping[str, object] | None = None,
+    before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome | LabResult:
     """Lazy ACES handoff import for the public lab-start path.
 
-    ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
-    are threaded into the ACES handoff so orchestration persists workflow
-    artifacts under the same run directory the run record is written to.
+    ``run_target`` (resolved once per lab-start run, REP-001 / GAP 4) is
+    threaded into the ACES handoff so orchestration persists workflow artifacts
+    under the same run directory the run record is written to.
+    ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
+    the backend retains and reapplies the already admitted execution plan.
     """
     try:
         from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
@@ -140,8 +144,9 @@ def start_aces_scenario(
         config,
         backend,
         scenario_path=scenario_path,
-        run_store=run_store,
-        run_id=run_id,
+        run_target=run_target,
+        parameters=parameters,
+        before_backend_retry=before_backend_retry,
     )
 
 
@@ -151,12 +156,12 @@ def selected_profiles_for_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> set[str]:
-    """Lazy ACES import for the scenario's selected Compose profiles.
+    """Inspect a scenario's selected Compose profiles without starting it.
 
-    Returns the profile set the scenario actually starts, so post-start
-    readiness checks scope to it instead of the global config flags. On import
-    failure returns an empty set (the readiness steps then skip rather than
-    falsely waiting on services).
+    This remains an independent validation/inspection surface. The actual lab
+    start path consumes ``AcesStartOutcome.selected_profiles`` from its one
+    admitted execution plan and does not call this helper after deployment.
+    On import or planning failure, return an empty set.
     """
     try:
         from aptl.backends.aces import (
@@ -168,10 +173,8 @@ def selected_profiles_for_scenario(
                 project_dir, config, backend, scenario_path=scenario_path
             )
         )
-    # broad-except: resolving selected profiles is best-effort enrichment for
-    # the readiness steps. The lab already started; any failure (import,
-    # missing/invalid SDL, ACES planning error) must degrade to an empty set so
-    # the readiness steps skip rather than crash the start or falsely wait.
+    # broad-except: resolving profiles is best-effort inspection. Any failure
+    # (import, missing/invalid SDL, ACES planning error) degrades to an empty set.
     except Exception as exc:
         log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
         return set()
@@ -1303,43 +1306,20 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 
-def _selected_profiles_after_attempt(
-    ctx: _LabStartContext, outcome: object
-) -> set[str]:
-    """Return the selected-profile set to cache on ``ctx`` after a handoff attempt.
+def _prepare_aces_backend_retry(ctx: _LabStartContext) -> None:
+    """Wait for SOC dependencies and repair the manager before one apply retry."""
 
-    Called from ``_step_start_containers`` after EVERY
-    ``start_aces_scenario`` attempt — including a failed first attempt,
-    not only on success. ACES computes ``AcesStartOutcome.selected_profiles``
-    before the backend apply and returns it on both the failure and
-    success branches (aces.py), so a failed attempt's outcome already
-    carries the authoritative answer. That ordering is what lets the SOC
-    retry gate see the real selected set instead of the empty default a
-    "populate the cache only on success" approach would leave behind
-    (issue #550).
-
-    ``profiles is not None`` is the load-bearing branch: an outcome that
-    explicitly carries ``[]`` (a planner-blocked failure) must fail
-    closed — no seed, no retry, per the guardrail that an
-    empty/unresolved selected set is never permission to act. An outcome
-    with no ``selected_profiles`` attribute at all — a bare ``LabResult``,
-    the shape ``start_aces_scenario`` returns when the ACES import itself
-    fails — falls back to the no-side-effect
-    ``selected_profiles_for_scenario`` resolver, kept as the
-    compatibility/best-effort seam rather than a second source of truth.
-    """
-    # Caller (`_step_start_containers`) is icontract-guarded so config/backend
-    # are not None — narrowing only, no new behavior.
-    assert ctx.config is not None and ctx.backend is not None
-    profiles = getattr(outcome, "selected_profiles", None)
-    if profiles is not None:
-        return set(_safe_list(profiles))
-    return selected_profiles_for_scenario(
-        ctx.project_dir,
-        ctx.config,
-        ctx.backend,
-        scenario_path=ctx.scenario_path,
+    log.warning(
+        "Initial compose up failed (SOC dependencies may still be "
+        "initializing). Waiting 60s and retrying the admitted plan..."
     )
+    import time
+
+    time.sleep(60)
+    # Colima on macOS reproducibly leaves the wazuh-manager container in a
+    # state where s6-supervise reports EACCES while the container remains Up.
+    # Repair that state between apply attempts without reparsing or replanning.
+    _restart_wazuh_manager_if_stuck(ctx)
 
 
 @_runtime_require(
@@ -1359,54 +1339,29 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     # orchestration persists workflow artifacts and the later run-record step
     # write to the same run directory / run_id.
     ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    from aptl.backends.aces_start_model import AcesRunTarget
+
     outcome = start_aces_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
-        run_store=ctx.run_store,
-        run_id=ctx.run_id,
+        run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
+        # The ACES handoff invokes this only for a retryable backend-start
+        # failure whose admitted plan actually selected SOC. Keeping that gate
+        # beside the admitted plan avoids both config-flag approximation and a
+        # second parse/plan pass (issues #432 and #550).
+        before_backend_retry=partial(_prepare_aces_backend_retry, ctx),
     )
     lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
-    # Cache the realized profile set from THIS attempt before the retry gate
-    # below reads it. ACES computes selected_profiles before the backend
-    # apply and returns it on both branches (aces.py), so a failed first
-    # attempt can still carry the authoritative set — populating the cache
-    # only in the success branch below would read an empty set here and
-    # silently disable the full-scenario SOC retry (issue #550).
-    ctx.selected_profiles = _selected_profiles_after_attempt(ctx, outcome)
-    if not lab_result.success and "soc" in ctx.selected_profiles:
-        log.warning(
-            "Initial compose up failed (SOC dependencies may still be "
-            "initializing). Waiting 60s and retrying..."
-        )
-        import time
-
-        time.sleep(60)
-        # Colima on macOS reproducibly leaves the wazuh-manager container
-        # in a state where s6-supervise reports EACCES on the (executable)
-        # `run` scripts and the wazuh daemons never spawn (#732). The
-        # container stays Up so docker's own restart policy never fires,
-        # but no wazuh-* processes exist inside. A single `docker restart`
-        # clears the state; do that before the retry so compose isn't
-        # forced to try running `up` against a broken container instance.
-        _restart_wazuh_manager_if_stuck(ctx)
-        outcome = start_aces_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-        )
-        lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
-        ctx.selected_profiles = _selected_profiles_after_attempt(ctx, outcome)
     if lab_result.success:
         # Store the ACES start outcome for the run record step (REP-001).
-        # ctx.selected_profiles is already populated from this attempt's
-        # outcome above; re-resolving it here would re-parse and re-plan
-        # the scenario a second time for an answer already in hand.
         ctx.aces_outcome = outcome
+        # Scope the post-start readiness checks to the profiles this scenario
+        # actually started, not the global config flags. A curated bounded
+        # scenario starts a subset, so a config-flag gate would wait on (and
+        # fail) services it never launched.
+        ctx.selected_profiles = set(getattr(outcome, "selected_profiles", ()))
         return None
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(

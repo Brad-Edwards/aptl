@@ -7,7 +7,7 @@ calls are mocked.
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
@@ -16,6 +16,47 @@ import pytest
 def _env_key(*parts: str) -> str:
     """Build env names for generated test values."""
     return "_".join(parts)
+
+
+def _aces_outcome(
+    *,
+    success: bool,
+    error: str = "",
+    selected_profiles: tuple[str, ...] = (),
+    retryable: bool = False,
+):
+    """Build the concrete outcome returned by the ACES backend handoff."""
+    from aces_contracts.runtime_state import RuntimeSnapshot
+
+    from aptl.backends.aces import AcesStartOutcome
+    from aptl.core.lab_types import LabResult
+
+    return AcesStartOutcome(
+        lab_result=LabResult(
+            success=success,
+            message="Lab started" if success else "",
+            error=error,
+        ),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=list(selected_profiles),
+        scenario_path=None,
+        retryable=retryable,
+    )
+
+
+def _aces_start_after_backend_retry(
+    *_args,
+    before_backend_retry=None,
+    **_kwargs,
+):
+    """Model the backend invoking the lifecycle callback between apply attempts."""
+    assert before_backend_retry is not None
+    before_backend_retry()
+    return _aces_outcome(
+        success=True,
+        selected_profiles=("soc", "wazuh", "victim", "kali"),
+    )
 
 
 class TestLabImportContracts:
@@ -1079,20 +1120,14 @@ class TestOrchestrateLabStart:
             return_value=CertResult(success=True, generated=False, certs_dir=certs_dir),
         )
 
-        # Mock ACES runtime handoff start
-        from aptl.core.lab import LabResult
-
+        # Mock ACES runtime handoff start. The planned profile set is part of
+        # the outcome so the lifecycle does not re-plan the authored scenario.
         mocks["start"] = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=LabResult(success=True, message="Lab started"),
-        )
-        # Mock the post-start profile resolution so _step_start_containers does
-        # not re-parse a scenario file the test fixture does not provide. The
-        # config above enables wazuh/victim/kali, so the default operational
-        # scenario selects exactly those (+ otel).
-        mocks["selected_profiles"] = mocker.patch(
-            "aptl.core.lab.selected_profiles_for_scenario",
-            return_value={"wazuh", "victim", "kali", "otel"},
+            return_value=_aces_outcome(
+                success=True,
+                selected_profiles=("wazuh", "victim", "kali", "otel"),
+            ),
         )
 
         # Mock service waiting
@@ -3325,19 +3360,21 @@ class TestLabOrchestrationContracts:
             _step_start_containers(ctx)
 
     def test_start_containers_routes_through_aces_handoff(self, mocker, tmp_path):
-        from aptl.core.lab import LabResult, _step_start_containers
+        from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config()
         ctx.backend = MagicMock()
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=LabResult(success=True, message="ok"),
+            return_value=_aces_outcome(success=True),
         )
 
         result = _step_start_containers(ctx)
 
         assert result is None
+        from aptl.backends.aces_start_model import AcesRunTarget
+
         # GAP 4: the handoff is invoked with the single run target resolved
         # once on ctx, so orchestration and the run record share a run_id.
         start_aces.assert_called_once_with(
@@ -3345,76 +3382,95 @@ class TestLabOrchestrationContracts:
             ctx.config,
             ctx.backend,
             scenario_path=None,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
+            run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
+            before_backend_retry=ANY,
         )
         assert ctx.run_store is not None
         assert ctx.run_id
 
     # -- SOC retry gate reads the attempt's own selected profiles -----
 
-    def test_start_containers_retries_when_outcome_carries_soc_selected(
+    def test_start_containers_allows_plan_selected_soc_retry_when_config_flag_off(
         self, mocker, tmp_path
     ):
-        """The SOC retry gate must read the FAILED attempt's own selected
-        profiles, not a config flag and not a cache populated only on
-        success. ACES computes `selected_profiles` before the backend
-        apply and returns it on the failure branch too
-        (aces.py:199-206) — a failed first apply whose outcome carries
-        "soc" must still trigger the retry. This is issue #550's central
-        ordering-contract regression: a naive `"soc" in
-        ctx.selected_profiles` swap on a cache populated only after
-        success would read an empty set here and silently disable the
-        full-scenario SOC retry."""
+        """An admitted SOC plan can recover even when the config flag is off.
+
+        The backend owns the retry gate because only it has the admitted
+        plan's selected profiles. The mocked handoff models that backend
+        invoking the callback between apply attempts (issue #550).
+        """
         from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
-        # Config itself disables soc: proves the retry decision comes
-        # from the outcome's selected profiles, not ctx.config.
         ctx.config = self._full_config(soc=False)
         ctx.backend = MagicMock()
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
-        mocker.patch("time.sleep")
+        sleep = mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
+        assert start_aces.call_args.kwargs["before_backend_retry"] is not None
+        sleep.assert_called_once_with(60)
 
-    def test_start_containers_skips_retry_when_outcome_omits_soc(
+    def test_start_containers_reuses_profiles_from_aces_outcome(
         self, mocker, tmp_path
     ):
-        """A failed first apply whose outcome does NOT select "soc" must
-        not wait, must not probe/restart wazuh-manager, and must not
-        retry — even though the global config flag is on. A bounded
-        scenario that never selects SOC gets no SOC-specific recovery
-        (issue #550)."""
-        from aptl.core.lab import _step_start_containers
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult, _step_start_containers
+
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        outcome = AcesStartOutcome(
+            lab_result=LabResult(success=True, message="ok"),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=["wazuh", "otel"],
+            scenario_path=None,
+        )
+        mocker.patch("aptl.core.lab.start_aces_scenario", return_value=outcome)
+        replan = mocker.patch(
+            "aptl.core.lab.selected_profiles_for_scenario",
+            side_effect=AssertionError("successful startup must not plan twice"),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is None
+        assert ctx.selected_profiles == {"wazuh", "otel"}
+        replan.assert_not_called()
+
+    def test_start_containers_does_not_retry_nonretryable_aces_failure(
+        self, mocker, tmp_path
+    ):
+        from aces_contracts.runtime_state import RuntimeSnapshot
+
+        from aptl.backends.aces import AcesStartOutcome
+        from aptl.core.lab import LabResult, _step_start_containers
 
         ctx = self._ctx(tmp_path)
         ctx.config = self._full_config(soc=True)
-        backend = MagicMock()
-        ctx.backend = backend
-        start_aces = mocker.patch(
-            "aptl.core.lab.start_aces_scenario",
-            return_value=self._outcome(
+        ctx.backend = MagicMock()
+        outcome = AcesStartOutcome(
+            lab_result=LabResult(
                 success=False,
-                error="compose still starting",
-                selected_profiles={"wazuh", "victim", "kali"},
+                error="ACES runtime variable binding failed.",
             ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=None,
+            retryable=False,
+        )
+        start_aces = mocker.patch(
+            "aptl.core.lab.start_aces_scenario", return_value=outcome
         )
         sleep = mocker.patch("time.sleep")
 
@@ -3424,15 +3480,10 @@ class TestLabOrchestrationContracts:
         assert result.success is False
         start_aces.assert_called_once()
         sleep.assert_not_called()
-        backend.container_restart.assert_not_called()
 
-    def test_start_containers_fails_closed_on_planner_blocked_outcome(
+    def test_start_containers_retries_retryable_backend_start_failure(
         self, mocker, tmp_path
     ):
-        """A planner-blocked failure returns `selected_profiles=[]`
-        (explicitly empty, not absent) — waiting 60s never fixes a
-        planner error, and an empty/unresolved selected set is never
-        permission to retry (issue #550 fail-closed guardrail)."""
         from aptl.core.lab import _step_start_containers
 
         ctx = self._ctx(tmp_path)
@@ -3440,20 +3491,15 @@ class TestLabOrchestrationContracts:
         ctx.backend = MagicMock()
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            return_value=self._outcome(
-                success=False,
-                error="planner blocked: unresolved dependency",
-                selected_profiles=[],
-            ),
+            side_effect=_aces_start_after_backend_retry,
         )
         sleep = mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
-        assert result is not None
-        assert result.success is False
+        assert result is None
         start_aces.assert_called_once()
-        sleep.assert_not_called()
+        sleep.assert_called_once_with(60)
 
     def test_start_containers_preserves_scenario_path_on_soc_retry(
         self, mocker, tmp_path
@@ -3467,17 +3513,7 @@ class TestLabOrchestrationContracts:
         ctx.scenario_path = selected
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3485,7 +3521,6 @@ class TestLabOrchestrationContracts:
 
         assert result is None
         assert [call.kwargs["scenario_path"] for call in start_aces.call_args_list] == [
-            selected,
             selected,
         ]
 
@@ -3511,24 +3546,14 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
 
         assert result is None
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
     def test_start_containers_skips_restart_when_wazuh_daemons_alive(
@@ -3550,23 +3575,13 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_skips_restart_when_wazuh_manager_not_running(
@@ -3587,23 +3602,13 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
 
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
         backend.container_exec.assert_not_called()
 
@@ -3623,24 +3628,14 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         # Should complete without raising; retry still runs.
         result = _step_start_containers(ctx)
         assert result is None
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_exec_failures(
@@ -3662,22 +3657,12 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         _step_start_containers(ctx)
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_watchdog_swallows_restart_failure(
@@ -3697,23 +3682,13 @@ class TestLabOrchestrationContracts:
 
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-                self._outcome(
-                    success=True,
-                    selected_profiles={"soc", "wazuh", "victim", "kali"},
-                ),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
         result = _step_start_containers(ctx)
         assert result is None
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         # We tried, we failed, we did not raise.
         backend.container_restart.assert_called_once_with("aptl-wazuh-manager")
 
@@ -3733,17 +3708,9 @@ class TestLabOrchestrationContracts:
         )
         ctx.backend = backend
 
-        selected = {"soc", "wazuh", "victim", "kali"}
         start_aces = mocker.patch(
             "aptl.core.lab.start_aces_scenario",
-            side_effect=[
-                self._outcome(
-                    success=False,
-                    error="compose still starting",
-                    selected_profiles=selected,
-                ),
-                self._outcome(success=True, selected_profiles=selected),
-            ],
+            side_effect=_aces_start_after_backend_retry,
         )
         mocker.patch("time.sleep")
 
@@ -3751,7 +3718,7 @@ class TestLabOrchestrationContracts:
         # Without this the test cannot tell "retry ran and the ValueError
         # branch handled it" from "retry never fired", which is exactly what
         # a bare LabResult side_effect would silently cause (issue #550).
-        assert start_aces.call_count == 2
+        start_aces.assert_called_once()
         backend.container_restart.assert_not_called()
 
     def test_start_containers_hints_for_stale_realization_networks(

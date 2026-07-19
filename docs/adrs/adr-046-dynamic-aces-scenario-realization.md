@@ -2,11 +2,15 @@
 
 ## Status
 
-accepted
+accepted (amended 2026-07-19)
 
 ## Date
 
 2026-06-29
+
+## Last Updated
+
+2026-07-19
 
 ## Context
 
@@ -211,6 +215,18 @@ without changing the ACES schema, the content realizer, or a scenario-name
 branch.
 
 ## Image Realization Addendum
+
+> **Superseded by [ADR-047](adr-047-image-free-placement-realization.md)
+> (2026-07-20).** APTL no longer realizes a node's scenario-meaningful
+> software, services, content, accounts, or configuration from a pulled or
+> built *appliance* image. A node's realized state comes from the ACES
+> `ProvisioningPlan`'s placements (`feature-binding`, `content-placement`,
+> `account-placement`) applied onto a generic base substrate, at
+> docker-compose granularity or better. A generic OS base image is still a
+> permitted container substrate; an appliance image that encodes the range
+> outside the SDL is not. The pull/build model described below is retained only
+> for historical context and for a generic base substrate; it is not the
+> node-realization authority. See ADR-047 for the current model.
 
 Issue #574 realizes node images from ACES `source` and captured
 `source.build` provenance. This is part of the same dynamic realization
@@ -703,7 +719,7 @@ from APTL). The operational SDL must not import or depend on captured
 dumps, screenshots, or runtime state that APTL cannot recreate from source on a
 clean machine.
 
-The acceptance bar is compose-guaranteed fidelity from authored ACES resources
+The acceptance bar is backend-guaranteed fidelity from authored ACES resources
 through APTL's interpret-then-driver path. Nodes, images, networks,
 attachments, content placements, and account placements must compile through
 ACES, enter `interpret_provisioning_plan`, appear in typed realization details,
@@ -768,6 +784,183 @@ capture SDL (`scenarios/techvault.sdl.yaml`) and its supporting tree
 bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
 (its parent commit carries them).
 
+## TechVault Full Dynamic Cutover Addendum
+
+Issue #581 closes the remaining compatibility gap for
+`techvault-operational`. The compiled ACES execution graph and the typed APTL
+realization derived from it are the sole deployment authority for the public
+TechVault start path. `docker-compose.yml`, `ComposeProfileIndex`, profile
+selection, `aptl.json` container switches, package discovery, and tests must no
+longer contribute otherwise-undeclared nodes, services, networks, volumes,
+mounts, ports, dependencies, commands, health contracts, or lifecycle identity
+to that path. Configuration may constrain admission or select a registered
+scenario/backend; it is not a second topology language.
+
+Docker Compose remains a backend wire format, not an authored model. The
+Compose backend renders one standalone, non-interpolated effective model from
+the existing `DeploymentRealizationSpec` at a fixed project-contained path
+under `.aptl/realization/`. It must not merge a generated overlay with the
+hand-authored base file. A repository-root `docker-compose.yml` is either
+removed or emitted deterministically by the same renderer as a derived
+reference artifact with a drift check. Public start, stop, kill, retry, status,
+clean-volume, packaging, and validation paths must not read that reference as
+input.
+
+### Admission and ownership boundary
+
+There is one admitted scenario execution per start attempt. After existing env
+and strict config validation, the orchestration path resolves the catalog entry,
+parses, compiles, plans, interprets, and validates once, before any
+scenario-dependent artifact, volume, image, network, content, or account side
+effect. Artifact ownership, host exposure, image preparation, generated model
+rendering, startup, observation, retry, and run evidence consume that same
+execution-plan identity and typed realization. A helper must not re-plan the
+SDL to decide whether it or typed realization owns a side effect.
+
+The existing ACES models and APTL realization DTOs are the only desired-state
+schemas. Extend `AptlRealization` and `DeploymentRealizationSpec` where an ACES
+compiled field already has runtime meaning; do not introduce an APTL SDL mirror,
+a generic Compose-service DTO, or an untyped Compose fragment/command escape
+hatch. Node `source`, `services`, and `runtime`, compiled networks and
+dependencies, content/accounts, generated artifacts, and persistent volumes
+lower through those owners. `Node.services` remains container-facing service
+identity; host exposure remains `runtime.network.published_ports`; observed
+health remains distinct from the authored readiness/healthcheck mechanism.
+
+The released ACES `RuntimeConfiguration` is already the portable declarative
+owner for environment value classification/provenance, mounts, Linux
+capabilities, container entrypoint/command and security settings, namespaces,
+restart/resource policy, and runtime networking. APTL lowers those compiled
+fields directly into its existing typed realization boundary. It must not copy
+them into a local service schema, rediscover them from Compose, or let a provider
+binding silently override an authored value. An exact runtime fact that cannot
+be compiled or faithfully lowered is an upstream-contract or backend-capability
+gap and fails admission; it is not filled from the legacy file.
+
+A source/provider binding may supply backend mechanics intrinsic to an
+addressed resource, such as a trusted image/build resolution or a
+provider-owned entrypoint/readiness contract. It may not inject undeclared
+scenario topology. Every steady-state container, network, volume, mount,
+publication, and dependency in the effective model must be attributable to an
+addressed compiled resource. A bounded one-shot backend helper is allowed only
+when it is mechanically derived from such a resource, project-labelled,
+lifecycle-owned, represented in evidence, and excluded explicitly from
+steady-state parity. A Compose profile is never permission to start an
+undeclared service.
+
+The preflight inventory makes this boundary concrete: 28 of the 30 operational
+TechVault VM nodes currently have no node `source`; the active legacy stack also
+contains `kali-ssh-proxy` and the one-shot `cortex-index-init` without matching
+SDL nodes, and the root Compose model declares 45 top-level volumes while the
+SDL addresses three persistent volumes. These are cutover gaps, not permission
+to retain Compose as an implicit provider catalog. Each runtime fact used by the
+admitted graph must become portable authored/compiled input or an explicit,
+bounded backend-policy/provider derivation under the ownership rules above;
+inactive legacy profiles do not become scenario scope merely because they
+appear in the old file.
+
+At the 2026-07-19 cutover baseline, the configured public profile set selects 32
+legacy service blocks, five networks, and 41 named volumes. The SDL declares 30
+VM nodes and four switches; in addition to the two undeclared services above,
+the legacy-only `aptl-control` network is therefore an explicit ownership gap.
+These counts are migration diagnostics, not a permanent parity schema. The
+static gate must derive its expected set from the admitted graph and declared
+bounded helpers, while the temporary migration comparison must account for each
+of these differences rather than accepting a healthy subset.
+
+Every effective backend field has exactly one inspectable provenance class:
+author-declared ACES data, ACES-processor-derived data, an APTL backend
+policy/default, or a bounded source/provider binding. Missing, ambiguous,
+unsupported, or unowned fields are admission errors before side effects. APTL
+must not widen its backend-manifest or SEM-218 claims beyond values that the
+planner gate and `observe_realization()` can prove. If ACES lacks a portable
+contract for a required exact fact, the contract is fixed upstream or the
+scenario fails closed; APTL does not create a local exactness vocabulary.
+
+### Generated-model and lifecycle contract
+
+The standalone model is written with the containment, symlink-chain,
+atomic-replacement, and permission behavior already used for generated
+credentials and service config. It carries environment reference names and
+classification only, preserves Compose interpolation expressions, and is
+validated with interpolation disabled. Resolved secret values, private keys,
+tokens, generated sensitive config, raw backend output, and credentials never
+enter realization DTOs, process argv, logs, diagnostics, API envelopes,
+snapshots, or run records.
+
+Rendering and validation are pure, pre-mutation admission work. The backend
+stages a complete model and non-secret identity, validates every referenced
+artifact declaration/source, planned output path, and backend field, then
+atomically publishes the admitted lifecycle artifact before creating or
+changing images, volumes, networks, content, or accounts. Generated outputs are
+verified after materialization and before their consumers start. Validating only
+immediately before `compose up` is insufficient if an earlier realization step
+already mutated the Docker daemon or project files.
+
+Per-project lifecycle mutation is serialized so concurrent start/stop/kill or
+monitor actions cannot replace the fixed-path artifact underneath one another;
+reuse the existing lifecycle single-owner locking convention rather than
+inventing an unrelated lock namespace.
+
+Before `compose up`, backend-owned validation covers the complete standalone
+model: Compose shape, image trust/build containment, generated bind sources,
+mount destinations and access, Linux capabilities/security options, dependency
+closure, health/readiness definitions, network/IPAM/internal policy, static
+attachments, named-volume ownership/lifecycle, and host-published ports. An
+authored exact host port fails on conflict; it is not silently remapped. An
+omitted host address remains loopback by default. An SSH backend fails before
+side effects while it cannot materialize project-local artifacts safely.
+
+High-impact host/runtime powers require explicit, inspectable ownership and a
+fail-closed policy: Docker-socket/control-interface mounts, host devices or
+namespaces, `privileged`, unconfined seccomp, and added Linux capabilities are
+never inherited from the old Compose service. Build context and Dockerfile
+paths are project-contained and symlink-safe, image inputs remain subject to the
+existing trust/digest policy, and secret values are not accepted in build args.
+Provider policy may allow only the minimum mechanics intrinsic to the addressed
+resource and must preserve read-only access where the contract requires it.
+
+The generated artifact and its non-secret deployment digest are the lifecycle
+identity for every operation. The same admitted artifact drives up, readiness,
+inspection, retry, stop, kill, and volume-aware cleanup. If it is absent or
+invalid, recovery may use only project/realization labels and bounded backend
+metadata; it must never infer broad deletion from daemon-wide names or prefixes.
+Run evidence records the execution-plan identity, typed realization digest,
+field/resource provenance, and observed state through `LocalRunStore` and
+`RangeSnapshot`, not a secret-bearing interpolated model. `selected_profiles`
+is compatibility evidence, not TechVault realization evidence.
+
+### Parity and cutover proof
+
+Parity is a two-boundary proof, not a resurrected inventory. The static gate
+proves that the operational SDL parses, compiles, plans, passes manifest and
+SEM-218 checks, lowers every supported addressed resource to the typed
+realization, renders a complete standalone model, contains no unowned
+steady-state object, and does not consult the legacy Compose model. Unsupported
+or no-op resources are errors for the full TechVault gate. This gate is
+scenario-generic and blocking for the cutover.
+
+The live gate exercises the public clean boot (`aptl lab stop -v && aptl lab
+start`) and compares project-labelled observed containers, networks,
+attachments, mounts, ports, volumes, health, content, and accounts with the
+admitted graph and its declared backend helpers. It retains authenticated Wazuh
+readiness and a post-trigger, correlated alert assertion. A healthy subset, a
+profile list, or silently started extra services is failure. The old fixed
+Compose model may be a temporary migration oracle, but neither it nor a shell
+provisioning-script regex remains a permanent authority or parity gate.
+
+The whole-repository cutover boundary includes the public CLI/API orchestration
+in `src/aptl/core/lab.py`, ACES catalog/plan/realization code under
+`src/aptl/backends/`, Compose rendering and lifecycle under
+`src/aptl/core/deployment/`, config/env/credentials/certificates/host-port
+owners under `src/aptl/core/`, run evidence and endpoint discovery, the static
+and live TechVault gates, package/lab asset discovery (`hatch_build.py`,
+`src/aptl/_asset_manifest.py`, and `src/aptl/core/assets.py`), and all tests and
+operator documentation that currently parse or describe the root Compose file
+as an input. The canonical asset manifest and scenario catalog replace Compose
+as package-root and bundled-asset discovery inputs; a retained derived Compose
+file is reference output only.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -776,19 +969,19 @@ bundles under `docs/aces/inventory/` were deleted in the PR that closes #690
 | ACES parser and compiler gate | Authored scenarios enter through `aces_sdl.parse_sdl_file` and compile through the ACES compiler and planner. APTL does not structurally revalidate ACES SDL or recompile the `RuntimeModel` with local models. |
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
 | Runtime observation gate | `observe_realization()` emits concern values only from project-scoped backend read-back, using ACES's `CONCERN_PAYLOAD_PATH`. Missing, malformed, timed-out, or mismatched evidence omits the concern and lets `RuntimeManager.apply()` fail an exact requirement closed; it never falls back to planned payload values. |
-| Deployment boundary gate | The curated compatibility path may still drive `DeploymentBackend.start_lab` with profiles. The paper scenario drives typed `DeploymentBackend` realization methods. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
+| Deployment boundary gate | Curated compatibility paths outside operational TechVault may still drive `DeploymentBackend.start_lab` with profiles. The paper and operational TechVault scenarios drive typed `DeploymentBackend` realization methods, with Compose rendering confined to that backend. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
 | Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
 | Stateful prerequisite gate | ACES shape/reference/dependency/SEM-218 checks precede backend policy validation of artifact providers, contained outputs, complete certificate sets, cryptographic relationships, mount sources/destinations, stable project-scoped volume identities, lifecycle, and local/SSH feasibility. Generated overrides are rechecked after materialization and before startup; observed mounts, authenticated Wazuh readiness, and actual alert retrieval are required runtime evidence. |
 | Artifact path and permission gate | Manager configuration and certificate outputs reuse `credentials.py` containment, symlink-chain rejection, atomic replacement, and verified mode behavior. Declared certificate outputs additionally pass key-pair, CA-chain, subject/SAN, consumer, and completeness checks. No unchecked path, missing output, or warning-only permission failure reaches Compose. |
-| Effective Compose model gate | The backend renders and validates the fully merged model, generated bind sources, volume declarations, dependency order, loopback publications, and health contract before `compose up`. Validation preserves secret references or redacts resolved values without logging or persisting the fully interpolated model. A partial overlay or unsupported reset/override syntax fails closed instead of inheriting hand-authored Wazuh semantics. |
+| Effective Compose model gate | The backend renders and validates one standalone model, generated bind sources, volume declarations, dependency order, loopback publications, and health contract before `compose up`. Validation preserves secret references and runs without interpolation; it neither logs nor persists a fully interpolated model. An overlay/base merge, partial reset, or inherited hand-authored semantic is a cutover failure. |
 | Account placement gate | ACES parser/compiler, canonical account-feature extraction, manifest capability checks, and SEM-218 explicitness/provenance run before the backend. The backend resolves the placement only through its typed target node, validates the full batch and provider syntax before mutation, then creates/reconciles groups and accounts after bounded provider readiness and verifies non-secret state. Raw credentials, hashes, provider stderr, and caller-supplied container identities remain outside typed inputs and evidence. |
-| Config, env, and secret binding | Non-secret realization knobs bind through strict `AptlConfig`; runtime secrets pass through `hydrate_dotenv`, `load_dotenv`, `env_vars_from_dict`, `find_placeholder_env_values`, and `EnvVars`, while the graph carries only secret-reference names. Values resolve only at the existing renderer/provider/readiness boundary and are passed through the existing env or permissioned-file channels. Hard-coded collector defaults are not a live credential source. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
+| Config, env, and secret binding | Non-secret backend/admission knobs bind through strict `AptlConfig`; config toggles do not add or remove operational TechVault topology. Runtime secrets pass through `hydrate_dotenv`, `load_dotenv`, `env_vars_from_dict`, `find_placeholder_env_values`, and `EnvVars`, while the graph carries only secret-reference names and classification. Values resolve only at the existing renderer/provider/readiness boundary and are passed through the existing env or permissioned-file channels. Hard-coded collector defaults are not a live credential source. The realization record stores digests and non-secret identities, never `.env` values, rendered config, tokens, or key material. |
 | Host and process exposure | Existing loopback host-binding policy and published-port conflict checks apply to Wazuh. Docker/Compose execution uses argv lists through the shared local/SSH runner; credentials, private-key contents, and rendered config are never command arguments. An unclassified host bind or a remote artifact path the backend cannot materialize fails closed. |
 | Logging and error envelope | Provider failures collapse into bounded, stable `LabResult`, existing deployment exceptions, and ACES diagnostics after shared redaction. Raw subprocess stdout/stderr, SDL secret values, rendered config, private keys, and raw alert bodies do not cross logs, API responses, telemetry, snapshots, or run artifacts; no Wazuh-only exception hierarchy is introduced. |
-| Persistence and redaction | Realization details, selected profiles for compatibility scenarios, typed realization specs for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. |
-| Static and live validation gate | Static tests prove the SDL parses, plans, and lowers to a realizable typed spec without unsupported or no-op placements. The live gate remains a clean `aptl lab stop -v && aptl lab start` with health/readiness checks, not a comparison to captured inventory state. |
+| Persistence and redaction | Realization details, selected profiles only for compatibility scenarios, typed realization digests/provenance for dynamic scenarios, and evaluator-only evidence enter JSON through `LocalRunStore` and `RangeSnapshot.to_dict()`, inheriting ADR-029 redaction and path-containment checks. Neither interpolated Compose nor secret-bearing generated configuration is evidence. |
+| Static and live validation gate | Static tests prove the SDL parses, plans, and lowers to a complete standalone realizable model without unsupported, unowned, or no-op resources, and without a legacy Compose input. The live gate remains a public clean `aptl lab stop -v && aptl lab start` plus graph-to-observation parity, authenticated readiness, and correlated evidence, not a comparison to captured inventory state. |
 
 ## Maintainability
 
@@ -800,7 +993,7 @@ The canonical incumbents this decision builds on are:
   `src/aptl/backends/aces_realization_model.py` for the interpret stage and its
   typed output.
 - `src/aptl/backends/aces_profiles.py` for curated compatibility only. It is
-  not the paper-scenario topology driver.
+  not the paper-scenario or operational-TechVault topology driver.
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
   and diagnostics.
 - `src/aptl/backends/aces_observation.py` for backend evidence-to-concern
@@ -820,6 +1013,9 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/core/deployment/` for every Docker, Compose, container, and host
   operation, including any future image pull/build/tag and network/IPAM side
   effects.
+- `src/aptl/core/scenario_catalog.py` for registered scenario identity and
+  project-contained resolution, and `src/aptl/core/lab.py` for the one public
+  CLI/API orchestration and retry boundary. Neither gains a second SDL planner.
 - `src/aptl/core/credentials.py` and ADR-028 for contained, atomic manager
   configuration rendering; `src/aptl/core/certs.py` and `config/certs.yml` for
   the existing Wazuh certificate generator/subject contract. These are
@@ -830,10 +1026,11 @@ The canonical incumbents this decision builds on are:
   orchestrator beside them.
 - `src/aptl/core/deployment/_compose_image_realization.py` and
   `src/aptl/core/deployment/_compose_port_realization.py` for composing fixed,
-  generated realization files with the base Compose model. Reuse that
-  composition boundary, while applying ADR-028 containment, symlink, atomic
-  write, and effective-model validation rather than copying their unchecked
-  file-write details.
+  typed image and port decisions and their validation. Reuse those policies and
+  move rendering behind the standalone Compose-model boundary; their existing
+  overlay/base merge is compatibility behavior, not a cutover contract. Apply
+  ADR-028 containment, symlink, atomic-write, permission, and effective-model
+  validation rather than copying unchecked file-write details.
 - `src/aptl/core/seed_spec.py` and existing named-volume seed behavior for
   project-contained source-to-runtime materialization when content placement
   needs file or directory side effects. Mutable Wazuh persistence reuses its
@@ -850,11 +1047,15 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/core/runstore.py`, `src/aptl/core/snapshot.py`,
   `src/aptl/core/config.py`, and `src/aptl/core/env.py` for run persistence,
   inventory evidence, config, and env binding.
+- `src/aptl/_asset_manifest.py`, `src/aptl/core/assets.py`, `hatch_build.py`,
+  and `scenarios/catalog.json` for package assets and lab-root/scenario
+  discovery. Compose is removed as an input/marker rather than replaced by a
+  second generated asset list.
 - `src/aptl/utils/redaction.py`, `src/aptl/core/lab_types.py`, and
   `src/aptl/core/deployment/errors.py` for redaction and the existing result /
   timeout/failure envelopes; do not add Wazuh-specific copies.
 - `scenarios/paper-agent-loop.sdl.yaml` for #579's manager/indexer and Wazuh
-  evidence contract; `scenarios/techvault-operational.sdl.yaml` for compatible
+  evidence contract; `scenarios/techvault-operational.sdl.yaml` for dynamic
   public startup; and `scenarios/catalog.json` for their registered selection.
 
 Tests extend the existing ACES backend and realization seams
@@ -865,13 +1066,14 @@ introducing a new harness.
 
 The extensibility seam is the boundary between the interpreted realization and
 the driver. Interpret produces a typed `AptlRealization` from the compiled plan;
-the compatibility driver maps that realization onto compose profiles. For the
-paper scenario and later fully dynamic scenarios, the driver consumes the typed
-realization spec directly through `DeploymentBackend`. A new authored resource
-type is added by extending `SUPPORTED_RESOURCE_TYPES` and the interpreter, then
-adding a typed backend realization operation when runtime side effects are
-needed, without adding a second topology authority or branching on a specific
-scenario name.
+the compatibility driver may map explicitly compatible scenarios onto profiles.
+The paper and operational TechVault drivers consume the typed realization spec
+directly through `DeploymentBackend`. Standalone rendering is parameterized by
+execution-plan identity, `DeploymentRealizationSpec`, backend/provider policy,
+project identity, and target capability. A new authored resource type extends
+`SUPPORTED_RESOURCE_TYPES`, the interpreter, and a typed backend operation when
+runtime side effects are needed, without adding a second topology authority or
+branching on a specific scenario name.
 
 The design must stay parameterized by scenario identity and backend manifest
 version. It must not assume TechVault is the only scenario, that Docker Compose
@@ -930,9 +1132,9 @@ extended with APTL mirrors.
 
 ### Negative / costs
 
-- The profile index must track the compose file. A profile that exists in
-  `docker-compose.yml` but is unmapped, or mapped but absent, is a realization
-  gap the index and its tests must catch.
+- The standalone renderer and lifecycle metadata become a versioned backend
+  contract. Field provenance, deterministic output, project labels, and
+  backward-compatible cleanup must stay aligned across local and SSH targets.
 - APTL's realization support declaration must stay honest. Widening the claimed
   realization support without the interpreter and driver to back it would let
   the planner gate pass scenarios APTL cannot actually realize.
@@ -942,10 +1144,10 @@ extended with APTL mirrors.
 
 ### Risks
 
-- An authored scenario can carry resource types APTL does not interpret. The
-  diagnostic-not-failure choice keeps the apply running, so the operator must
-  read realization diagnostics rather than assume a clean apply realized every
-  authored concern.
+- An authored scenario can carry resource types APTL does not interpret.
+  Compatibility scenarios may continue to report bounded diagnostics, but the
+  full operational TechVault gate treats every unsupported or no-op addressed
+  resource as a pre-side-effect error.
 - Manifest capability text can drift ahead of backend behavior. The static
   lowering tests and clean-start live gate must catch claims that are parsed
   and counted but never passed to a typed backend operation.
@@ -964,8 +1166,10 @@ extended with APTL mirrors.
 
 ## Non-Goals
 
-- This ADR does not replace `docker-compose.yml` as the realization vehicle. It
-  removes the file's role as topology authority, not the file.
+- This ADR does not replace Docker Compose as a deployment backend. It does
+  replace the repository-root, hand-authored `docker-compose.yml` as the
+  operational TechVault realization and lifecycle input; any retained copy is
+  deterministic derived/reference output.
 - This ADR does not define a new run-record type, scenario schema, or ACES
   mirror model. Realization evidence rides ADR-044's record.
 - This ADR does not change APTL's backend profile claim. The manifest and
@@ -977,23 +1181,41 @@ extended with APTL mirrors.
   RBAC, secrets management, or a general directory-service API. It does not
   delete accounts/groups absent from the scenario or migrate the additional
   baseline fixtures in `provision-users.sh`.
-- Issue #579 does not dynamically realize the dashboard, merge the Wazuh and
-  lab SOC certificate authorities, design certificate rotation, capture or
-  seed mutable Wazuh data, migrate existing volumes, change Wazuh versions or
-  credentials, add remote artifact synchronization, or introduce a generic
-  init-job/workflow or evaluator engine. It may sequence the existing action,
-  evidence probe, and `AptlEvaluator` result correctly for Wazuh, but it does
-  not create a parallel evaluation contract. An SSH realization may remain
-explicitly unsupported until the backend can materialize its artifacts
-safely.
+- Issue #579 by itself did not dynamically realize the dashboard, merge the
+  Wazuh and lab SOC certificate authorities, design certificate rotation,
+  capture or seed mutable Wazuh data, migrate existing volumes, change Wazuh
+  versions or credentials, add remote artifact synchronization, or introduce a
+  generic init-job/workflow or evaluator engine. It may sequence the existing
+  action, evidence probe, and `AptlEvaluator` result correctly for Wazuh, but it
+  does not create a parallel evaluation contract. An SSH realization may remain
+  explicitly unsupported until the backend can materialize its artifacts
+  safely.
+- Issue #581 does not create a new orchestration language, generic provider hook
+  or command schema, Kubernetes backend, remote artifact synchronization, API
+  endpoint, auth model, secret store, transactional rollback, or daemon-wide
+  cleanup mechanism. It does not promote services from inactive legacy Compose
+  profiles into TechVault merely because they existed in that file; the
+  operational SDL decides membership, while every service selected by the
+  pre-cutover canonical public start must be accounted for as an addressed
+  resource or an explicitly bounded backend helper.
 - Issue #692 does not add a second disclosure gate, a new runtime snapshot or
-evidence schema, an API surface, operator-configurable probe commands, content
-equality/integrity attestation, or transactional provisioning rollback.
+  evidence schema, an API surface, operator-configurable probe commands,
+  content equality/integrity attestation, or transactional provisioning
+  rollback.
 
 ## Anti-Patterns
 
 - Treating a scenario name as a profile selector instead of deriving profiles
   from the interpreted realization.
+- Reading the repository-root `docker-compose.yml`, `ComposeProfileIndex`, or
+  `aptl.json` container switches to complete operational TechVault topology,
+  service identity, or lifecycle behavior missing from the admitted graph.
+- Producing the standalone model by copying legacy Compose service blocks and
+  labelling the result "generated" without typed field ownership and
+  provenance.
+- Re-planning the SDL in artifact preparation, host-port resolution, retry,
+  validation, or evidence code instead of consuming the single admitted
+  execution/realization identity.
 - Using `select_backend_profiles` or `ComposeProfileIndex` as the topology
   driver for the paper scenario.
 - Extending `DEFAULT_PARTICIPANT_ACTIONS` with paper-scenario behavior instead
@@ -1052,6 +1274,8 @@ equality/integrity attestation, or transactional provisioning rollback.
 - Using a partial Compose overlay that silently retains base mounts,
   environment, dependencies, healthchecks, or commands, or relying on a
   reset/override merge tag without enforcing its supported Compose version.
+- Interpolating secret values into the generated model, passing them on process
+  argv, or persisting/logging the rendered effective configuration as proof.
 - Treating container health, node-ready evaluator conditions, authored evidence
   intent, or a Suricata-only event as proof of a functioning realized Wazuh.
 - Using the collector's default credentials, accepting any alert already in the
@@ -1063,6 +1287,9 @@ equality/integrity attestation, or transactional provisioning rollback.
 - Starting with a generated effective Compose model but stopping with only the
   base file when that can leave realized containers, networks, or volumes
   orphaned.
+- Treating a profile set, selected-container subset, or healthy declared nodes
+  as full parity without rejecting extra project-labelled steady-state runtime
+  objects and missing mounts, publications, volumes, or dependencies.
 - Logging or persisting PEM/key material, rendered configuration, resolved env
   secrets, raw alert bodies, or backend stderr; accepting incomplete cert
   output, failed permission repair, or unchecked key/certificate/SAN/chain
@@ -1122,6 +1349,7 @@ equality/integrity attestation, or transactional provisioning rollback.
   [#575](https://github.com/Brad-Edwards/aptl/issues/575),
   [#576](https://github.com/Brad-Edwards/aptl/issues/576),
   [#579](https://github.com/Brad-Edwards/aptl/issues/579),
+  [#581](https://github.com/Brad-Edwards/aptl/issues/581),
   [#689](https://github.com/Brad-Edwards/aptl/issues/689),
   [#692](https://github.com/Brad-Edwards/aptl/issues/692),
   [aces#598](https://github.com/Brad-Edwards/aces/issues/598), and

@@ -635,7 +635,7 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         },
     )
     certificate_evidence = mocker.patch(
-        "aptl.backends.aces_observation.certificate_bundle_evidence",
+        "aptl.backends._aces_stateful_observation.certificate_bundle_evidence",
         return_value={
             "public_root_sha256": "0" * 64,
             "chain_valid": True,

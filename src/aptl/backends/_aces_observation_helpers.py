@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment._compose_realization_networks import (
@@ -29,6 +30,20 @@ if TYPE_CHECKING:
     from aptl.core.deployment.realization import DeploymentContentRealization
 
 log = get_logger("realization-observe")
+
+
+@dataclass(frozen=True)
+class ObservedResource(object):
+    """What the deployment backend was observed to have realized for one address.
+
+    ``concerns`` maps a SEM-218 concern payload path to the value the backend
+    actually realized there. A concern the backend cannot be seen to have
+    realized is simply absent, so the gate sees an omission rather than an echo.
+    """
+
+    realized: bool
+    concerns: dict[tuple[str, ...], object] = field(default_factory=dict)
+    evidence: dict[str, object] = field(default_factory=dict)
 
 
 def consumer_mount_evidence(
@@ -272,18 +287,25 @@ def observed_domain_topology(
             type(exc).__name__,
         )
         return None
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    observed = _parse_samba_domain_info(getattr(result, "stdout", "") or "")
+    corroborated = getattr(result, "returncode", 1) == 0 and _domain_info_corroborates(
+        getattr(result, "stdout", "") or "", declared
+    )
+    return dict(declared) if corroborated else None
+
+
+def _domain_info_corroborates(text: str, declared: Mapping[str, Any]) -> bool:
+    """Return whether the live domain readback matches every observable field."""
+
+    observed = _parse_samba_domain_info(text)
     dns_name = str(declared.get("dns_name", "")).lower()
     netbios_name = str(declared.get("netbios_name", "")).upper()
-    if not dns_name or observed.get("domain") != dns_name:
-        return None
-    if not netbios_name or observed.get("netbios_domain") != netbios_name:
-        return None
-    if declared.get("role") == "controller" and not observed.get("dc_name"):
-        return None
-    return dict(declared)
+    return bool(
+        dns_name
+        and observed.get("domain") == dns_name
+        and netbios_name
+        and observed.get("netbios_domain") == netbios_name
+        and (declared.get("role") != "controller" or observed.get("dc_name"))
+    )
 
 
 def _parse_samba_domain_info(text: str) -> dict[str, str]:

@@ -2392,13 +2392,12 @@ class TestSeedNamedVolumes:
         from aptl.core.deployment.errors import BackendSeedError
 
         backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="null", stderr="")
             with pytest.raises(BackendSeedError) as exc_info:
-                backend.seed_named_volumes(
-                    [self._config_seed()], seeder_image="img:1"
-                )
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
 
         assert "attribution" in str(exc_info.value)
         commands = [call.args[0] for call in mock_run.call_args_list]
@@ -2408,6 +2407,7 @@ class TestSeedNamedVolumes:
         from aptl.core.deployment.errors import BackendSeedError
 
         backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
 
         def run(cmd, **kwargs):
             if cmd[:3] == ["docker", "volume", "inspect"]:
@@ -2418,9 +2418,7 @@ class TestSeedNamedVolumes:
 
         with patch("subprocess.run", side_effect=run):
             with pytest.raises(BackendSeedError):
-                backend.seed_named_volumes(
-                    [self._config_seed()], seeder_image="img:1"
-                )
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
 
     def test_legacy_path_retired_before_seed_as_root(self, tmp_path):
         # The legacy .aptl tree may be UID-991-owned from a prior run, so the

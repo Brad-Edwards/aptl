@@ -575,25 +575,36 @@ def _check_service_bind_mounts(
         # a service with profiles only runs when at least one is active.
         if svc_profiles and not (set(svc_profiles) & active_profiles):
             return []
-    errors: list[str] = []
-    for vol in svc_def.get("volumes", []):
-        if not isinstance(vol, str) or not vol.startswith("./"):
-            continue
-        parts = vol.split(":")
-        src = parts[0]
-        destination = parts[1] if len(parts) > 1 else ""
-        if _stateful_realization_owns_mount(
-            svc_name, destination, src, stateful_owned_mounts
-        ):
-            continue
-        src_path = (project_dir / src).resolve()
-        if not src_path.exists():
-            errors.append(
-                f"Service '{svc_name}': bind-mount source "
-                f"'{src}' does not exist. Create it before "
-                f"starting the lab to avoid root-owned directories."
-            )
-    return errors
+    errors = (
+        _bind_mount_error(svc_name, vol, project_dir, stateful_owned_mounts)
+        for vol in svc_def.get("volumes", [])
+    )
+    return [error for error in errors if error is not None]
+
+
+def _bind_mount_error(
+    svc_name: str,
+    vol: object,
+    project_dir: Path,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]],
+) -> str | None:
+    """Return the pre-flight error for one Compose volume entry, if any."""
+    if not isinstance(vol, str) or not vol.startswith("./"):
+        return None
+    parts = vol.split(":")
+    src = parts[0]
+    destination = parts[1] if len(parts) > 1 else ""
+    if _stateful_realization_owns_mount(
+        svc_name, destination, src, stateful_owned_mounts
+    ):
+        return None
+    if (project_dir / src).resolve().exists():
+        return None
+    return (
+        f"Service '{svc_name}': bind-mount source "
+        f"'{src}' does not exist. Create it before "
+        f"starting the lab to avoid root-owned directories."
+    )
 
 
 def _stateful_realization_owns_mount(

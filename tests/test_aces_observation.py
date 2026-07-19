@@ -9,6 +9,7 @@ fails closed (no snapshot entry) rather than being assumed realized.
 from __future__ import annotations
 
 import hashlib
+from types import SimpleNamespace
 
 from aces_contracts.planning import (
     ChangeAction,
@@ -59,6 +60,9 @@ class _Backend:
         project_owned=True,
         content_types=None,
         content_probe_raises=False,
+        exec_results=None,
+        exec_raises=False,
+        health_sequence=None,
     ):
         self._containers = set(containers)
         self._networks = [
@@ -75,6 +79,16 @@ class _Backend:
         self._project_owned = project_owned
         self._content_types = content_types or {}
         self._content_probe_raises = content_probe_raises
+        self._exec_results = exec_results
+        self._exec_raises = exec_raises
+        self._health_sequence = list(health_sequence or [])
+
+    def container_exec(self, name, cmd, *, timeout=None):
+        if self._exec_raises:
+            raise BackendTimeoutError("docker exec timed out")
+        assert self._exec_results is not None, "container_exec must not be called"
+        returncode, stdout = self._exec_results[name]
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
 
     def container_exists(self, name):
         return self._project_owned and name in self._containers
@@ -84,9 +98,12 @@ class _Backend:
             raise BackendTimeoutError("docker inspect timed out")
         if name not in self._containers:
             return {}
+        health = self._health
+        if self._health_sequence:
+            health = self._health_sequence.pop(0)
         state = {"Running": self._running}
-        if self._health is not None:
-            state["Health"] = {"Status": self._health}
+        if health is not None:
+            state["Health"] = {"Status": health}
         return {
             "State": state,
             "Platform": self._platform,
@@ -147,6 +164,188 @@ def test_running_healthy_node_is_realized_with_concerns():
         diagnostics=(),
     )
     obs = observe_realization(_Backend(containers=("aptl-vm",)), realization, plan)
+    assert obs[address].realized is True
+    assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
+
+
+_DECLARED_TOPOLOGY = {
+    "domain_id": "techvault",
+    "profile": "active_directory",
+    "dns_name": "techvault.local",
+    "netbios_name": "TECHVAULT",
+    "authority_account_address": "provision.account.ad-emily-chen",
+    "role": "controller",
+    "controller_addresses": ("provision.node.ad",),
+}
+
+_SAMBA_DOMAIN_INFO = (
+    "Forest           : techvault.local\n"
+    "Domain           : techvault.local\n"
+    "Netbios domain   : TECHVAULT\n"
+    "DC name          : dc.techvault.local\n"
+    "DC netbios name  : DC\n"
+)
+
+
+def _domain_node_plan():
+    address = "provision.node.ad"
+    payload = {
+        "name": "ad",
+        "node_type": "vm",
+        "os_family": "linux",
+        "domain_topology": dict(_DECLARED_TOPOLOGY),
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload=payload,
+    )
+    op = ProvisionOp(
+        action=ChangeAction.CREATE,
+        address=address,
+        resource_type="node",
+        payload=payload,
+    )
+    return address, ProvisioningPlan(resources={address: resource}, operations=[op])
+
+
+def _domain_realization():
+    return AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(name="ad", container="aptl-ad"),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+
+
+def test_domain_topology_attested_when_live_domain_matches():
+    address, plan = _domain_node_plan()
+    backend = _Backend(
+        containers=("aptl-ad",),
+        exec_results={"aptl-ad": (0, _SAMBA_DOMAIN_INFO)},
+    )
+    obs = observe_realization(backend, _domain_realization(), plan)
+    assert obs[address].realized is True
+    assert obs[address].concerns[("domain_topology",)] == _DECLARED_TOPOLOGY
+
+
+def test_domain_topology_omitted_when_live_domain_differs():
+    address, plan = _domain_node_plan()
+    backend = _Backend(
+        containers=("aptl-ad",),
+        exec_results={
+            "aptl-ad": (0, _SAMBA_DOMAIN_INFO.replace("TECHVAULT", "OTHERCORP"))
+        },
+    )
+    obs = observe_realization(backend, _domain_realization(), plan)
+    assert obs[address].realized is True
+    assert ("domain_topology",) not in obs[address].concerns
+
+
+def test_domain_topology_probe_failure_fails_closed():
+    address, plan = _domain_node_plan()
+    backend = _Backend(
+        containers=("aptl-ad",),
+        exec_results={"aptl-ad": (1, "")},
+    )
+    obs = observe_realization(backend, _domain_realization(), plan)
+    assert obs[address].realized is True
+    assert ("domain_topology",) not in obs[address].concerns
+
+
+def test_domain_topology_exec_timeout_fails_closed_not_crash():
+    address, plan = _domain_node_plan()
+    backend = _Backend(containers=("aptl-ad",), exec_raises=True)
+    obs = observe_realization(backend, _domain_realization(), plan)
+    assert obs[address].realized is True
+    assert ("domain_topology",) not in obs[address].concerns
+
+
+def test_starting_node_settles_before_judgment(monkeypatch):
+    """A transiently 'starting' container is waited out, not failed.
+
+    Wazuh manager/indexer restart themselves once during first boot, so a
+    consumer can read health='starting' between the realization health gate
+    and observation (issue #677). 'starting' is transitional evidence, not an
+    unrealized resource.
+    """
+    from aptl.backends import _aces_observation_helpers as helpers
+
+    monkeypatch.setattr(helpers.time, "sleep", lambda _s: None)
+    address, plan = _node_plan()
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    backend = _Backend(
+        containers=("aptl-vm",),
+        health_sequence=["starting", "starting", "healthy"],
+    )
+    obs = observe_realization(backend, realization, plan)
+    assert obs[address].realized is True
+    assert obs[address].concerns[("node_type",)] == "vm"
+
+
+def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatch):
+    """A container stuck in 'starting' fails closed at the settle budget.
+
+    The deadline is the fail-safe for a genuinely wedged container: settle
+    must give up within `_SETTLE_TIMEOUT` and hand back the still-transitional
+    info (judged unrealized) rather than loop forever.
+    """
+    from aptl.backends import _aces_observation_helpers as helpers
+
+    clock = iter(
+        [0.0, 1.0, helpers._SETTLE_TIMEOUT + 1.0, helpers._SETTLE_TIMEOUT + 2.0]
+    )
+    monkeypatch.setattr(helpers.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(helpers.time, "sleep", lambda _s: None)
+    backend = _Backend(containers=("aptl-vm",), health="starting")
+
+    info = helpers.settled_inspect(backend, "aptl-vm")
+
+    assert info["State"]["Health"]["Status"] == "starting"
+    assert helpers.container_realized(info) is False
+
+
+def test_stopped_node_fails_immediately_without_settling(monkeypatch):
+    from aptl.backends import _aces_observation_helpers as helpers
+
+    def _no_sleep(_s):
+        raise AssertionError("terminal states must not be waited on")
+
+    monkeypatch.setattr(helpers.time, "sleep", _no_sleep)
+    address, plan = _node_plan()
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    obs = observe_realization(
+        _Backend(containers=("aptl-vm",), running=False), realization, plan
+    )
+    assert obs[address].realized is False
+
+
+def test_node_without_declared_topology_is_never_probed():
+    address, plan = _node_plan()
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+    )
+    # No exec_results configured: the fake asserts if container_exec is called.
+    backend = _Backend(containers=("aptl-vm",))
+    obs = observe_realization(backend, realization, plan)
     assert obs[address].realized is True
     assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
 
@@ -375,6 +574,11 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
                 "access_mode": "read_only",
             }
         ],
+        # aces-sdl 0.23 carries dependency wiring inside the declared spec;
+        # the observed spec renders the DTO's realized wiring in the same
+        # author vocabulary (issue #677).
+        "ordering_dependencies": [],
+        "refresh_dependencies": [],
     }
     resource = PlannedResource(
         address=address,
@@ -565,6 +769,8 @@ def test_persistent_volume_is_observed_from_project_scoped_mount():
                 "access_mode": "read_write",
             }
         ],
+        "ordering_dependencies": [],
+        "refresh_dependencies": [],
     }
     resource = PlannedResource(
         address=address,

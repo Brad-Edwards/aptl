@@ -326,9 +326,76 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         backend's own ``_run`` so this stays a narrow, typed operation
         rather than a generic Docker passthrough.
         """
+        # Validate every declared relpath before the first Docker command so
+        # an unsafe seed can never cause any container or volume side effect.
         for seed in seeds:
+            for seed_file in seed.files:
+                assert_safe_relpath(seed_file.src)
+                assert_safe_relpath(seed_file.dest)
+        for seed in seeds:
+            self._ensure_labeled_seed_volume(seed)
             self._retire_legacy_seed_path(seed, seeder_image)
             self._seed_one_named_volume(seed, seeder_image)
+
+    def _ensure_labeled_seed_volume(self, seed: NamedVolumeSeed) -> None:
+        """Create a missing seed volume with Compose project labels.
+
+        A bare ``docker run -v`` auto-creates a missing named volume without
+        labels. Compose happily reuses it, but the content observation gate
+        (``observe_content_type``) refuses a volume it cannot attribute to
+        this project, so a seeded volume must carry the same labels Compose
+        itself would have written. Labels are immutable after creation, so
+        this must happen before the first seeding ``docker run``.
+        """
+        volume = f"{self._project_name}_{seed.volume_suffix}"
+        inspect = self._run(
+            ["docker", "volume", "inspect", volume, "--format", "{{json .Labels}}"],
+            timeout=_SEED_TIMEOUT,
+        )
+        if inspect.returncode == 0:
+            if self._content_volume_owned_by_project(
+                inspect.stdout, seed.volume_suffix
+            ):
+                return
+            # Labels are immutable after creation and the volume may hold
+            # runtime state, so an unattributed same-named volume is an
+            # explicit operator decision, not something to adopt silently:
+            # content observation would reject it late with a far less
+            # actionable failure.
+            log.error(
+                "Named volume %s exists without Compose project attribution. "
+                "Remove it with `docker volume rm %s` (seeded content is "
+                "recreated from checked-in sources) and rerun `aptl lab start`.",
+                volume,
+                volume,
+            )
+            raise BackendSeedError(
+                f"Named volume '{seed.volume_suffix}' exists without Compose "
+                "project attribution"
+            )
+        create = self._run(
+            [
+                "docker",
+                "volume",
+                "create",
+                "--label",
+                f"com.docker.compose.project={self._project_name}",
+                "--label",
+                f"com.docker.compose.volume={seed.volume_suffix}",
+                volume,
+            ],
+            timeout=_SEED_TIMEOUT,
+        )
+        if create.returncode != 0:
+            log.error(
+                "Labeled create of volume %s failed (exit %s)%s",
+                seed.volume_suffix,
+                create.returncode,
+                redacted_stderr_hint(create.stderr),
+            )
+            raise BackendSeedError(
+                f"Creating named volume '{seed.volume_suffix}' failed"
+            )
 
     def _seed_one_named_volume(self, seed: NamedVolumeSeed, seeder_image: str) -> None:
         """Copy a seed's files into its project-scoped named volume."""

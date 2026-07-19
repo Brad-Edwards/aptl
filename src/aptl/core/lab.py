@@ -502,6 +502,7 @@ def lab_terminal_ssh_endpoints(
 def _check_bind_mounts(
     project_dir: Path,
     enabled_profiles: list[str] | None = None,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
@@ -518,6 +519,17 @@ def _check_bind_mounts(
     would otherwise fail this preflight on a non-SOC lab start, even
     though the service is never started. ``enabled_profiles=None`` keeps
     the original "check every service" behaviour for direct callers.
+
+    ``stateful_owned_mounts`` holds ``(service_name, mount_destination,
+    source_relpath)`` triples owned by admitted stateful realization. Those
+    sources are generated inside ``DeploymentBackend.realize`` before
+    Compose starts the consuming services, so on a fresh checkout they
+    legitimately do not exist yet; requiring them here would make a fresh
+    ``lab start`` unstartable (issue #677). The exemption matches BOTH the
+    destination and the declared source — a stray bind whose destination
+    merely nests beneath an owned directory is not owned by the artifact
+    and is still checked. A realization failure still fails the run before
+    Compose can create any root-owned directory.
     """
     compose_path = project_dir / "docker-compose.yml"
     if not compose_path.exists():
@@ -534,7 +546,9 @@ def _check_bind_mounts(
     errors: list[str] = []
     for svc_name, svc_def in services.items():
         errors.extend(
-            _check_service_bind_mounts(svc_name, svc_def, project_dir, active)
+            _check_service_bind_mounts(
+                svc_name, svc_def, project_dir, active, stateful_owned_mounts
+            )
         )
     return errors
 
@@ -544,6 +558,7 @@ def _check_service_bind_mounts(
     svc_def: object,
     project_dir: Path,
     active_profiles: set[str] | None,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[str]:
     """Return bind-mount errors for one Compose service.
 
@@ -564,7 +579,13 @@ def _check_service_bind_mounts(
     for vol in svc_def.get("volumes", []):
         if not isinstance(vol, str) or not vol.startswith("./"):
             continue
-        src = vol.split(":")[0]
+        parts = vol.split(":")
+        src = parts[0]
+        destination = parts[1] if len(parts) > 1 else ""
+        if _stateful_realization_owns_mount(
+            svc_name, destination, src, stateful_owned_mounts
+        ):
+            continue
         src_path = (project_dir / src).resolve()
         if not src_path.exists():
             errors.append(
@@ -573,6 +594,36 @@ def _check_service_bind_mounts(
                 f"starting the lab to avoid root-owned directories."
             )
     return errors
+
+
+def _stateful_realization_owns_mount(
+    svc_name: str,
+    destination: str,
+    source: str,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]],
+) -> bool:
+    """Return whether an admitted stateful artifact owns this service mount.
+
+    Owned destinations and sources may be directories (the certificate
+    bundle mounts individual files beneath ``/etc/ssl/wazuh`` from
+    ``config/wazuh_indexer_ssl_certs``) or exact files (the rendered
+    ``ossec.conf``), so each side matches on equality or directory
+    containment — and BOTH sides must match. A stray bind whose destination
+    nests beneath an owned directory but whose source is not the artifact's
+    generated path stays subject to the pre-flight (issue #677).
+    """
+    normalized_source = source.removeprefix("./")
+    return any(
+        svc_name == owned_service
+        and _path_within(destination, owned_destination)
+        and _path_within(normalized_source, owned_source)
+        for owned_service, owned_destination, owned_source in stateful_owned_mounts
+    )
+
+
+def _path_within(candidate: str, owned: str) -> bool:
+    """Return whether a path equals an owned path or nests beneath it."""
+    return candidate == owned or candidate.startswith(owned.rstrip("/") + "/")
 
 
 def _validate_env_secrets(raw_env: dict[str, str]) -> "LabResult | None":
@@ -635,14 +686,21 @@ class _LabStartContext(object):
     # workflow artifacts and the record share a single run directory.
     run_store: object = None
     run_id: str | None = None
-    stateful_artifact_ownership: frozenset[tuple[str, str, str, str]] = frozenset()
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]] = (
+        frozenset()
+    )
 
 
+# Ownership tuples are (address, generator, service_name, mount_destination,
+# source_relpath) — the canonical generated source rides along so mount
+# exemptions can match both sides of a bind (issue #677).
+_WAZUH_CERTIFICATE_SOURCE = "config/wazuh_indexer_ssl_certs"
 _WAZUH_MANAGER_CONFIG_OWNERSHIP = (
     "provision.generated-artifact.wazuh-manager-config",
     "rendered_config",
     _WAZUH_MANAGER_SERVICE,
     "/wazuh-config-mount/etc/ossec.conf",
+    ".aptl/config/wazuh_cluster/wazuh_manager.conf",
 )
 _WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
     {
@@ -651,18 +709,21 @@ _WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
             "certificate_bundle",
             "wazuh.indexer",
             "/usr/share/wazuh-indexer/certs",
+            _WAZUH_CERTIFICATE_SOURCE,
         ),
         (
             "provision.generated-artifact.wazuh-manager-certs",
             "certificate_bundle",
             _WAZUH_MANAGER_SERVICE,
             "/etc/ssl/wazuh",
+            _WAZUH_CERTIFICATE_SOURCE,
         ),
         (
             "provision.generated-artifact.wazuh-dashboard-certs",
             "certificate_bundle",
             "wazuh.dashboard",
             "/usr/share/wazuh-dashboard/certs",
+            _WAZUH_CERTIFICATE_SOURCE,
         ),
     }
 )
@@ -1196,7 +1257,17 @@ def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     enabled = (
         ctx.config.containers.enabled_profiles() if ctx.config is not None else None
     )
-    mount_errors = _check_bind_mounts(ctx.project_dir, enabled_profiles=enabled)
+    stateful_owned = frozenset(
+        (service_name, mount_destination, source_relpath)
+        for _address, _generator, service_name, mount_destination, source_relpath in (
+            ctx.stateful_artifact_ownership
+        )
+    )
+    mount_errors = _check_bind_mounts(
+        ctx.project_dir,
+        enabled_profiles=enabled,
+        stateful_owned_mounts=stateful_owned,
+    )
     if not mount_errors:
         return None
     for err in mount_errors:

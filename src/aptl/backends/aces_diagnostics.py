@@ -11,7 +11,10 @@ from aces_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
 from aces_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends.aces_observation import ObservedResource
+from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
+
+log = get_logger("aces-diagnostics")
 
 PROVISIONING_ADDRESS = "runtime.apply.provisioning"
 SUPPORTED_RESOURCE_TYPES = frozenset(
@@ -43,14 +46,32 @@ def has_error(diagnostics: list[Diagnostic]) -> bool:
     return any(item.is_error for item in diagnostics)
 
 
+_RENDERED_DIAGNOSTIC_CAP = 5
+
+
 def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
-    """Render ACES diagnostics into the APTL ``LabResult`` error surface."""
+    """Render ACES diagnostics into the APTL ``LabResult`` error surface.
+
+    The error surface stays bounded, but truncation must never be silent: a
+    dropped diagnostic can be the actionable one (issue #677), so the full
+    rendered set always lands in the log and the surface names how many
+    entries it omitted.
+    """
     if not diagnostics:
         return "ACES runtime handoff failed."
     rendered = [_format_diagnostic(item) for item in diagnostics if item.is_error]
     if not rendered:
         rendered = [_format_diagnostic(item) for item in diagnostics]
-    return redact("ACES runtime handoff failed: " + "; ".join(rendered[:5]))
+    shown = rendered[:_RENDERED_DIAGNOSTIC_CAP]
+    if len(rendered) > _RENDERED_DIAGNOSTIC_CAP:
+        for item in rendered:
+            log.error("ACES diagnostic: %s", redact(item))
+        shown = [
+            *shown,
+            f"[{len(rendered) - _RENDERED_DIAGNOSTIC_CAP} more diagnostics "
+            "omitted; full set in the log]",
+        ]
+    return redact("ACES runtime handoff failed: " + "; ".join(shown))
 
 
 def unsupported_resource_diagnostics(

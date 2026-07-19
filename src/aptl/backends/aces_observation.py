@@ -33,7 +33,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
-from aces_contracts.planning import ProvisioningPlan
+from aces_contracts.planning import PlannedResource, ProvisioningPlan
 from aces_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends._aces_observation_helpers import (
@@ -43,9 +43,10 @@ from aptl.backends._aces_observation_helpers import (
     mount_present as _mount_present,
     network_realized as _network_realized,
     observed_content_type as _observed_content_type,
+    observed_domain_topology as _observed_domain_topology,
     observed_os_family as _observed_os_family,
     realized_network_names as _realized_network_names,
-    safe_inspect as _safe_inspect,
+    settled_inspect as _settled_inspect,
     volume_spec as _volume_spec,
 )
 from aptl.backends.aces_realization_model import AptlRealization
@@ -56,6 +57,9 @@ from aptl.core.deployment.realization import (
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
 )
+from aptl.utils.logging import get_logger
+
+log = get_logger("realization-observe")
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -75,6 +79,7 @@ _REALIZED_SWITCH_TYPE = "switch"
 _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
 _OS_FAMILY_PATH = CONCERN_PAYLOAD_PATH["os-family"]
 _CONTENT_TYPE_PATH = CONCERN_PAYLOAD_PATH["content-type"]
+_DOMAIN_TOPOLOGY_PATH = CONCERN_PAYLOAD_PATH["domain-topology"]
 
 
 @dataclass(frozen=True)
@@ -121,7 +126,11 @@ def observe_realization(
 
     for address, resource in plan.resources.items():
         if resource.resource_type == "node":
-            observations[address] = _observe_node(backend, node_containers.get(address))
+            observations[address] = _observe_node(
+                backend,
+                node_containers.get(address),
+                declared_domain_topology=_declared_domain_topology(resource),
+            )
         elif resource.resource_type == "network":
             observations[address] = _observe_network(
                 network_names.get(address), realized_networks, project_name
@@ -161,11 +170,13 @@ def _observe_generated_artifact(
         return ObservedResource(realized=False)
     source = artifact_source_path(project_dir, artifact)
     outputs_present = _artifact_outputs_present(source, artifact)
-    realized = (
-        outputs_present
-        and _artifact_consumers_mounted(backend, artifact, node_containers, source)
-        and _authenticated_consumers_ready(backend, artifact.consumers)
+    consumers_mounted = outputs_present and _artifact_consumers_mounted(
+        backend, artifact, node_containers, source
     )
+    consumers_ready = consumers_mounted and _authenticated_consumers_ready(
+        backend, artifact.consumers
+    )
+    realized = consumers_ready
     evidence = (
         _artifact_evidence(backend, project_dir, source, artifact) if realized else {}
     )
@@ -173,6 +184,18 @@ def _observe_generated_artifact(
         artifact.generator != "certificate_bundle" or "certificate" in evidence
     )
     if not realized:
+        # An unrealized observation always fails the SEM-218 gate, so the
+        # failing predicate must be diagnosable from the log (names and
+        # booleans only — never artifact bytes).
+        log.warning(
+            "artifact %s not observed as realized "
+            "(outputs=%s consumers_mounted=%s consumers_ready=%s evidence=%s)",
+            artifact.address,
+            outputs_present,
+            consumers_mounted,
+            consumers_ready,
+            bool(evidence),
+        )
         return ObservedResource(realized=False)
     return ObservedResource(
         realized=True,
@@ -200,17 +223,23 @@ def _observe_persistent_volume(
 ) -> ObservedResource:
     """Observe project-scoped named-volume mounts for one desired volume."""
 
-    if (
-        volume is None
-        or not _consumers_mounted(
-            backend,
-            volume.consumers,
-            node_containers,
-            mount_type="volume",
-            source=f"{project_name}_{volume.name}",
+    if volume is None:
+        return ObservedResource(realized=False)
+    mounted = _consumers_mounted(
+        backend,
+        volume.consumers,
+        node_containers,
+        mount_type="volume",
+        source=f"{project_name}_{volume.name}",
+    )
+    ready = mounted and _authenticated_consumers_ready(backend, volume.consumers)
+    if not ready:
+        log.warning(
+            "volume %s not observed as realized (mounted=%s ready=%s)",
+            volume.address,
+            mounted,
+            ready,
         )
-        or not _authenticated_consumers_ready(backend, volume.consumers)
-    ):
         return ObservedResource(realized=False)
     return ObservedResource(
         realized=True,
@@ -287,14 +316,25 @@ def _consumers_mounted(
     for consumer in consumers:
         container = node_containers.get(consumer.target_address)
         if not container:
+            log.warning(
+                "consumer %s has no realized container to observe",
+                consumer.target_address,
+            )
             return False
-        info = _safe_inspect(backend, container)
-        if not _container_realized(info) or not _mount_present(
-            info,
-            consumer,
-            mount_type=mount_type,
-            source=source,
-        ):
+        info = _settled_inspect(backend, container)
+        if not _container_realized(info):
+            log.warning(
+                "consumer container %s not settled/healthy for observation",
+                container,
+            )
+            return False
+        if not _mount_present(info, consumer, mount_type=mount_type, source=source):
+            log.warning(
+                "consumer container %s missing %s mount of %s",
+                container,
+                mount_type,
+                source,
+            )
             return False
     return True
 
@@ -330,9 +370,17 @@ def _artifact_consumer_mounted(
 
     container = node_containers.get(consumer.target_address)
     if not container:
+        log.warning(
+            "artifact consumer %s has no realized container to observe",
+            consumer.target_address,
+        )
         return False
-    info = _safe_inspect(backend, container)
+    info = _settled_inspect(backend, container)
     if not _container_realized(info):
+        log.warning(
+            "artifact consumer container %s not settled/healthy for observation",
+            container,
+        )
         return False
     expected = (
         [
@@ -371,20 +419,38 @@ def _authenticated_consumers_ready(
     if not expected:
         return True
     readiness = getattr(backend, "authenticated_readiness", {})
-    return isinstance(readiness, Mapping) and all(
+    ready = isinstance(readiness, Mapping) and all(
         readiness.get(service) is True for service in expected
     )
+    if not ready:
+        log.warning(
+            "authenticated readiness not recorded for %s (map=%s)",
+            sorted(expected),
+            dict(readiness) if isinstance(readiness, Mapping) else type(readiness),
+        )
+    return ready
+
+
+def _declared_domain_topology(resource: "PlannedResource") -> Mapping[str, object] | None:
+    """Return the node's declared domain topology when the plan carries one."""
+
+    payload = resource.payload
+    if not isinstance(payload, Mapping):
+        return None
+    topology = payload.get("domain_topology")
+    return topology if isinstance(topology, Mapping) else None
 
 
 def _observe_node(
     backend: "DeploymentBackend",
     container_name: str | None,
+    declared_domain_topology: Mapping[str, object] | None = None,
 ) -> ObservedResource:
     """Observe one ACES node through the container the backend realized for it."""
 
     if not container_name:
         return ObservedResource(realized=False)
-    info = _safe_inspect(backend, container_name)
+    info = _settled_inspect(backend, container_name)
     if not _container_realized(info):
         return ObservedResource(realized=False)
 
@@ -394,6 +460,12 @@ def _observe_node(
     os_family = _observed_os_family(info)
     if os_family is not None:
         concerns[_OS_FAMILY_PATH] = os_family
+    if declared_domain_topology is not None:
+        topology = _observed_domain_topology(
+            backend, container_name, declared_domain_topology
+        )
+        if topology is not None:
+            concerns[_DOMAIN_TOPOLOGY_PATH] = topology
     return ObservedResource(realized=True, concerns=concerns)
 
 
@@ -433,7 +505,7 @@ def _observe_placement(
     container_name = node_containers.get(target_address) if target_address else None
     if not container_name:
         return ObservedResource(realized=False)
-    if not _container_realized(_safe_inspect(backend, container_name)):
+    if not _container_realized(_settled_inspect(backend, container_name)):
         return ObservedResource(realized=False)
 
     concerns: dict[tuple[str, ...], object] = {}

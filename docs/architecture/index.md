@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [EXP-001 Durable Experiment Execution](exp-001-durable-execution-preflight.md)
 - [DEP-008 Self-Contained Lab Assets](dep-008-self-contained-lab-assets-preflight.md)
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)
 - [DEP-003 Ephemeral Lifecycle Policy](dep-003-ephemeral-lifecycle-preflight.md)

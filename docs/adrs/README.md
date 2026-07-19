@@ -68,3 +68,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [044](adr-044-aces-aligned-run-reproducibility-record.md) | ACES-Aligned Run Reproducibility Record | accepted | 2026-06-25 |
 | [045](adr-045-ephemeral-lifecycle-policy-enforcement.md) | Ephemeral Lifecycle Policy Enforcement | accepted | 2026-06-28 |
 | [046](adr-046-dynamic-aces-scenario-realization.md) | Dynamic ACES Scenario Realization | accepted | 2026-06-29 |
+| [047](adr-047-aces-experiment-admission-and-trial-plan-boundary.md) | ACES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |

@@ -594,11 +594,10 @@ def _bind_mount_error(
     parts = vol.split(":")
     src = parts[0]
     destination = parts[1] if len(parts) > 1 else ""
-    if _stateful_realization_owns_mount(
+    exempt_or_present = _stateful_realization_owns_mount(
         svc_name, destination, src, stateful_owned_mounts
-    ):
-        return None
-    if (project_dir / src).resolve().exists():
+    ) or (project_dir / src).resolve().exists()
+    if exempt_or_present:
         return None
     return (
         f"Service '{svc_name}': bind-mount source "

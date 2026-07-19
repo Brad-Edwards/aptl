@@ -26,11 +26,7 @@ drift from the set of concerns the gate actually enforces.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from aces_contracts.planning import PlannedResource, ProvisioningPlan
@@ -51,13 +47,6 @@ from aptl.backends._aces_stateful_observation import (
     _observe_persistent_volume,
 )
 from aptl.backends.aces_realization_model import AptlRealization
-from aptl.core.deployment._compose_stateful_realization import artifact_source_path
-from aptl.core.deployment._stateful_certificates import certificate_bundle_evidence
-from aptl.core.deployment.realization import (
-    DeploymentGeneratedArtifactRealization,
-    DeploymentPersistentVolumeRealization,
-    DeploymentStatefulConsumer,
-)
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")

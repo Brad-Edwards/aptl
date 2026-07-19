@@ -57,9 +57,6 @@ cd aptl
 # Generate SSH keys
 ./scripts/generate-ssh-keys.sh
 
-# Generate SSL certificates
-docker compose -f generate-indexer-certs.yml run --rm generator
-
 # Build MCP servers (optional - for AI integration)
 ./mcp/build-all-mcps.sh
 ```
@@ -71,8 +68,10 @@ aptl lab start
 ```
 
 **Use `aptl lab start` for the deploy itself.** Beyond the steps above it also
-renders the credentialized Wazuh config from the checked-in templates into the
-gitignored `.aptl/config/` tree (ADR-028)—there is no standalone manual
+generates the Wazuh Indexer SSL certificates automatically (producer-owned,
+platform-aware—see [Troubleshooting](troubleshooting/index.md)) and renders
+the credentialized Wazuh config from the checked-in templates into the
+gitignored `.aptl/config/` tree (ADR-028); there is no standalone manual
 command for that render, so a hand-run `docker compose --profile wazuh ... up`
 on a fresh checkout fails at the `.aptl/config/...` bind mounts. Once a lab has
 been started, a raw `docker compose --profile wazuh --profile victim --profile
@@ -196,7 +195,7 @@ sudo lsof -t -i:443 | xargs kill
 
 ```bash
 rm -rf config/wazuh_indexer_ssl_certs
-docker compose -f generate-indexer-certs.yml run --rm generator
+aptl lab start
 ```
 
 ### Container Build Failures

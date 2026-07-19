@@ -16,6 +16,25 @@ _IMAGE_REALIZATION_TIMEOUT = 600
 _IMAGE_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose-images.yml"
 
 
+class _ResetValue:
+    """Marker emitting Compose's ``!reset`` tag (remove the key on merge).
+
+    Compose >= 2.24 rejects ``build: null`` at schema validation, so clearing
+    a base service's ``build`` from an override file requires the ``!reset``
+    merge tag instead of a null value.
+    """
+
+
+class _ImageOverrideDumper(yaml.SafeDumper):
+    """Safe YAML dumper that can emit Compose's ``!reset`` removal tag."""
+
+
+_ImageOverrideDumper.add_representer(
+    _ResetValue,
+    lambda dumper, _value: dumper.represent_scalar("!reset", ""),
+)
+
+
 class ComposeRealizationImageMixin:
     """Realize typed scenario image operations through Docker Compose."""
 
@@ -114,11 +133,15 @@ class ComposeRealizationImageMixin:
         override_path = self._project_dir / _IMAGE_OVERRIDE_RELATIVE_PATH
         override_path.parent.mkdir(parents=True, exist_ok=True)
         services = {
-            image.service_name: {"image": image.image_ref, "build": None}
+            image.service_name: {"image": image.image_ref, "build": _ResetValue()}
             for image in images
         }
         override_path.write_text(
-            yaml.safe_dump({"services": services}, sort_keys=True),
+            yaml.dump(
+                {"services": services},
+                Dumper=_ImageOverrideDumper,
+                sort_keys=True,
+            ),
             encoding="utf-8",
             newline="\n",
         )

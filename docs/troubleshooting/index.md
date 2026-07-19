@@ -85,7 +85,7 @@ curl -k https://localhost:443
 **Regenerate certificates:**
 ```bash
 rm -rf config/wazuh_indexer_ssl_certs
-docker compose -f generate-indexer-certs.yml run --rm generator
+aptl lab start
 ```
 
 ### No logs in Wazuh

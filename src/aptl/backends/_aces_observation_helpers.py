@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment._compose_realization_networks import (
@@ -28,6 +30,20 @@ if TYPE_CHECKING:
     from aptl.core.deployment.realization import DeploymentContentRealization
 
 log = get_logger("realization-observe")
+
+
+@dataclass(frozen=True)
+class ObservedResource(object):
+    """What the deployment backend was observed to have realized for one address.
+
+    ``concerns`` maps a SEM-218 concern payload path to the value the backend
+    actually realized there. A concern the backend cannot be seen to have
+    realized is simply absent, so the gate sees an omission rather than an echo.
+    """
+
+    realized: bool
+    concerns: dict[tuple[str, ...], object] = field(default_factory=dict)
+    evidence: dict[str, object] = field(default_factory=dict)
 
 
 def consumer_mount_evidence(
@@ -75,6 +91,36 @@ def mount_present(
     return False
 
 
+# The realized dependency wiring lives on the DTOs as plan addresses
+# (``provision.generated-artifact.X``); the declared spec states the same
+# wiring in the author vocabulary (``generated_artifacts.X``). aces-sdl
+# 0.23 carries the dependency fields inside the declared spec, so the
+# observed spec must render the wiring the backend actually realized in
+# that same vocabulary or the SEM-218 exact comparison rejects every
+# artifact and volume (issue #677).
+_AUTHOR_DEPENDENCY_PREFIXES = (
+    ("provision.generated-artifact.", "generated_artifacts."),
+    ("provision.persistent-volume.", "persistent_volumes."),
+    ("provision.node.", "nodes."),
+    ("provision.network.", "networks."),
+)
+
+
+def _author_dependency(address: str) -> str:
+    """Render one realized dependency address in the author vocabulary."""
+
+    for plan_prefix, author_prefix in _AUTHOR_DEPENDENCY_PREFIXES:
+        if address.startswith(plan_prefix):
+            return author_prefix + address[len(plan_prefix) :]
+    return address
+
+
+def _author_dependencies(addresses: tuple[str, ...]) -> list[str]:
+    """Render realized dependency wiring in the author vocabulary."""
+
+    return [_author_dependency(address) for address in addresses]
+
+
 def artifact_spec(
     artifact: DeploymentGeneratedArtifactRealization,
 ) -> dict[str, object]:
@@ -86,6 +132,8 @@ def artifact_spec(
         "provenance": artifact.provenance,
         "outputs": [output.details() for output in artifact.outputs],
         "consumers": [consumer_spec(consumer) for consumer in artifact.consumers],
+        "ordering_dependencies": _author_dependencies(artifact.ordering_dependencies),
+        "refresh_dependencies": _author_dependencies(artifact.refresh_dependencies),
     }
 
 
@@ -96,6 +144,8 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
         "lifecycle": volume.lifecycle,
         "access_mode": volume.access_mode,
         "consumers": [consumer_spec(consumer) for consumer in volume.consumers],
+        "ordering_dependencies": _author_dependencies(volume.ordering_dependencies),
+        "refresh_dependencies": _author_dependencies(volume.refresh_dependencies),
     }
 
 
@@ -125,6 +175,42 @@ def safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
         )
         return {}
     return info if isinstance(info, dict) else {}
+
+
+# Wazuh manager and indexer restart themselves once during first boot, so a
+# consumer container can legitimately read health='starting' for a bounded
+# window between the realization health gate and observation. Observed on a
+# loaded host: the restart cycle returns to healthy well inside two minutes;
+# 180s keeps a generous margin (issue #677).
+_SETTLE_TIMEOUT = 180
+_SETTLE_INTERVAL = 5
+
+
+def settled_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
+    """Inspect a container, waiting out transitional startup states.
+
+    ``starting`` health and Docker's ``Restarting`` flag are transitional —
+    not evidence of an unrealized resource — so observation waits for the
+    container to settle before judging. Terminal states (missing, stopped,
+    unhealthy) return immediately and fail closed exactly as before.
+    """
+    deadline = time.monotonic() + _SETTLE_TIMEOUT
+    while True:
+        info = safe_inspect(backend, name)
+        if not _transitional_state(info) or time.monotonic() >= deadline:
+            return info
+        time.sleep(_SETTLE_INTERVAL)
+
+
+def _transitional_state(info: Mapping[str, Any]) -> bool:
+    """Return whether a container is mid-startup rather than settled."""
+
+    state = info.get("State") if isinstance(info, Mapping) else None
+    if not isinstance(state, Mapping):
+        return False
+    if state.get("Restarting") is True:
+        return True
+    return container_running(info) and container_health(info) == "starting"
 
 
 def container_realized(info: Mapping[str, Any]) -> bool:
@@ -163,6 +249,78 @@ def observed_os_family(info: Mapping[str, Any]) -> str | None:
     if isinstance(platform, str) and platform.strip():
         return platform.strip().lower()
     return None
+
+
+_DOMAIN_INFO_TIMEOUT = 30
+
+
+def observed_domain_topology(
+    backend: "DeploymentBackend",
+    container: str,
+    declared: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Attest a declared domain topology from the live directory, or nothing.
+
+    ``samba-tool domain info`` exposes the runtime-observable core of the
+    declaration — the served DNS domain, the NetBIOS domain, and (by
+    answering for itself) the controller role. The remaining declared fields
+    (domain id, profile, plan addresses) are definitional identity with no
+    runtime counterpart, so the declared mapping is attested only when every
+    observable field corroborates it; a mismatch, failed probe, or missing
+    tooling attests nothing and the SEM-218 gate fails closed.
+    """
+    from aptl.core.deployment._account_provider import samba_domain_info
+
+    container_exec = getattr(backend, "container_exec", None)
+    if container_exec is None:
+        # A backend without an exec seam (e.g. conformance stubs) cannot
+        # corroborate the live domain; attest nothing and fail closed.
+        return None
+    try:
+        result = container_exec(
+            container, samba_domain_info(), timeout=_DOMAIN_INFO_TIMEOUT
+        )
+    except (BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe domain topology in %s (%s)",
+            container,
+            type(exc).__name__,
+        )
+        return None
+    corroborated = getattr(result, "returncode", 1) == 0 and _domain_info_corroborates(
+        getattr(result, "stdout", "") or "", declared
+    )
+    return dict(declared) if corroborated else None
+
+
+def _domain_info_corroborates(text: str, declared: Mapping[str, Any]) -> bool:
+    """Return whether the live domain readback matches every observable field."""
+
+    observed = _parse_samba_domain_info(text)
+    dns_name = str(declared.get("dns_name", "")).lower()
+    netbios_name = str(declared.get("netbios_name", "")).upper()
+    return bool(
+        dns_name
+        and observed.get("domain") == dns_name
+        and netbios_name
+        and observed.get("netbios_domain") == netbios_name
+        and (declared.get("role") != "controller" or observed.get("dc_name"))
+    )
+
+
+def _parse_samba_domain_info(text: str) -> dict[str, str]:
+    """Extract the observable fields from ``samba-tool domain info`` output."""
+
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition(":")
+        if sep:
+            fields[key.strip().lower().replace(" ", "_")] = value.strip()
+    return {
+        "domain": fields.get("domain", "").lower(),
+        "netbios_domain": fields.get("netbios_domain", "").upper(),
+        "dc_name": fields.get("dc_name", ""),
+    }
 
 
 def realized_network_names(

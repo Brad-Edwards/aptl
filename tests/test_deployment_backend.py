@@ -865,6 +865,80 @@ services:
         assert desired == {"test_aptl-dmz"}
         assert missing == ["unknown-net"]
 
+    @pytest.mark.parametrize(
+        ("image_kwargs", "failing_cmd", "expected_error"),
+        [
+            (
+                {"mode": "pull"},
+                ["docker", "pull"],
+                "Image pull failed",
+            ),
+            (
+                {
+                    "mode": "build",
+                    "dockerfile_path": "containers/custom/Dockerfile",
+                    "context_path": ".",
+                },
+                ["docker", "build"],
+                "Image build failed",
+            ),
+            (
+                {"mode": "build"},
+                None,
+                "Image build input missing",
+            ),
+            (
+                {"mode": "sideload"},
+                None,
+                "Unsupported image realization mode",
+            ),
+        ],
+    )
+    def test_realize_image_failures_stop_before_compose_up(
+        self, tmp_path, image_kwargs, failing_cmd, expected_error
+    ):
+        """A failed or invalid image operation must fail realize() fail-closed.
+
+        If a non-zero pull/build exit stopped propagating, realize() would
+        report success and start the stack against a stale or never-built
+        image — the vacuous-realization failure mode this module exists to
+        prevent.
+        """
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("enterprise",),
+            nodes=(),
+            networks=(),
+            images=(
+                DeploymentImageRealization(
+                    address="provision.node.custom",
+                    service_name="custom",
+                    source_name="aptl-custom",
+                    source_version="aptl-custom@sha256:" + "b" * 64,
+                    image_ref="aptl-custom:local",
+                    policy_rule="project-build-provenance",
+                    **image_kwargs,
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if failing_cmd is not None and cmd[: len(failing_cmd)] == failing_cmd:
+                return MagicMock(returncode=1, stdout="", stderr="boom")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is False
+        assert expected_error in result.error
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any("up" in cmd for cmd in commands)
+        override = tmp_path / ".aptl" / "realization" / "compose-images.yml"
+        assert not override.exists()
+
     def test_realize_pulls_builds_and_overrides_images(self, tmp_path):
         backend = self._make_backend(tmp_path)
         digest = "sha256:" + "a" * 64
@@ -957,7 +1031,10 @@ services:
         assert f"image: postgres@{digest}" in override
         assert "custom:" in override
         assert "image: aptl-custom:local" in override
-        assert "build: null" in override
+        # Compose >= 2.24 rejects `build: null` at schema validation; the
+        # override must remove the key with the `!reset` tag instead.
+        assert "build: null" not in override
+        assert "build: !reset" in override
         assert b"\r\n" not in override_path.read_bytes()
 
     def test_stop_calls_compose_down(self, tmp_path):
@@ -2210,10 +2287,28 @@ class TestSeedNamedVolumes:
             legacy_retire_path=Path("/proj/.aptl/suricata/rules/misp"),
         )
 
+    @staticmethod
+    def _seed_run_mock(volume_suffix, **result_overrides):
+        """Side effect answering the label inspect with valid attribution."""
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            f'"com.docker.compose.volume": "{volume_suffix}"}}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            defaults = {"returncode": 0, "stdout": "", "stderr": ""}
+            defaults.update(result_overrides)
+            return MagicMock(**defaults)
+
+        return run
+
     def test_seed_runs_root_copy_into_project_scoped_volume(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_config_seed")
+        ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
         cmd = mock_run.call_args[0][0]
         assert cmd[:7] == [
@@ -2238,17 +2333,109 @@ class TestSeedNamedVolumes:
         assert "mkdir -p /dest/rules" in script
         assert "cp -a /src/rules/local.rules /dest/rules/local.rules" in script
 
+    def test_seed_creates_missing_volume_with_compose_labels(self, tmp_path):
+        """A seeded volume must carry the Compose project labels.
+
+        A bare ``docker run -v`` auto-creates a missing named volume without
+        labels; the content observation gate (``observe_content_type``) then
+        refuses the volume as not project-owned, failing the SEM-218
+        realization gate on every fresh start (issue #677).
+        """
+        backend = self._backend(tmp_path)
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="no such volume")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run) as mock_run:
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        create = next(
+            cmd for cmd in commands if cmd[:3] == ["docker", "volume", "create"]
+        )
+        assert "--label" in create
+        assert "com.docker.compose.project=test" in create
+        assert "com.docker.compose.volume=suricata_config_seed" in create
+        assert create[-1] == "test_suricata_config_seed"
+        seed_index = next(
+            index for index, cmd in enumerate(commands) if cmd[:2] == ["docker", "run"]
+        )
+        assert commands.index(create) < seed_index
+
+    def test_seed_skips_volume_create_when_attributed_volume_exists(self, tmp_path):
+        import json
+
+        backend = self._backend(tmp_path)
+        labels = json.dumps(
+            {
+                "com.docker.compose.project": "test",
+                "com.docker.compose.volume": "suricata_config_seed",
+            }
+        )
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=labels, stderr="")
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(cmd[:3] == ["docker", "volume", "create"] for cmd in commands)
+
+    def test_seed_refuses_existing_unattributed_volume(self, tmp_path):
+        """An unlabeled same-named volume fails fast with remediation.
+
+        Labels are immutable after creation, so adopting a volume another
+        actor auto-created (e.g. a pre-fix `docker run -v`) would only move
+        the failure to content observation, where it is far less actionable.
+        """
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="null", stderr="")
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
+
+        assert "attribution" in str(exc_info.value)
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(cmd[:2] == ["docker", "run"] for cmd in commands)
+
+    def test_seed_fails_closed_when_labeled_create_fails(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="no such volume")
+            if cmd[:3] == ["docker", "volume", "create"]:
+                return MagicMock(returncode=1, stdout="", stderr="denied")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run):
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
+
     def test_legacy_path_retired_before_seed_as_root(self, tmp_path):
         # The legacy .aptl tree may be UID-991-owned from a prior run, so the
         # host operator cannot delete it; a root container mounts the
         # host-owned parent and removes the one canonical child.
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_misp_rules")
+        ) as mock_run:
             backend.seed_named_volumes(
                 [self._misp_seed_with_legacy()], seeder_image="img:1"
             )
-        calls = [c[0][0] for c in mock_run.call_args_list]
+        calls = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if c[0][0][:3] != ["docker", "volume", "inspect"]
+        ]
         assert len(calls) == 2
         retire, seed = calls
         assert retire[:5] == ["docker", "run", "--rm", "--user", "0:0"]
@@ -2260,11 +2447,19 @@ class TestSeedNamedVolumes:
 
     def test_no_legacy_retire_when_path_absent(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_config_seed")
+        ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
-        # Exactly one container: the seed copy, no retire.
-        assert mock_run.call_count == 1
+        # Exactly one container: the seed copy, no retire. (The label
+        # inspect is a volume query, not a container.)
+        container_runs = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if c[0][0][:2] == ["docker", "run"]
+        ]
+        assert len(container_runs) == 1
+        assert "test_suricata_config_seed:/dest" in container_runs[0]
 
     def test_seed_is_idempotent_across_runs(self, tmp_path):
         # Root `cp -a` overwrites prior content, so the backend issues the
@@ -2274,8 +2469,10 @@ class TestSeedNamedVolumes:
         seed = self._config_seed()
         commands = []
         for _ in range(2):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with patch(
+                "subprocess.run",
+                side_effect=self._seed_run_mock("suricata_config_seed"),
+            ) as mock_run:
                 backend.seed_named_volumes([seed], seeder_image="img:1")
                 commands.append(mock_run.call_args[0][0])
         assert commands[0] == commands[1]
@@ -2379,8 +2576,18 @@ class TestSeedNamedVolumes:
         stderr = "docker: Error response from daemon: permission denied on /legacy"
         backend = self._backend(tmp_path)
         seed = [self._misp_seed_with_legacy()]
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            '"com.docker.compose.volume": "suricata_misp_rules"}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            return MagicMock(returncode=1, stdout="", stderr=stderr)
+
+        with patch("subprocess.run", side_effect=run):
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError) as exc_info:
                 backend.seed_named_volumes(seed, seeder_image="img:1")
@@ -2435,10 +2642,24 @@ class TestRealizeContent:
         fields.update(overrides)
         return DeploymentContentRealization(**fields)
 
+    @staticmethod
+    def _content_run_mock():
+        """Side effect answering the fileshare volume inspect with attribution."""
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            '"com.docker.compose.volume": "fileshare_data"}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        return run
+
     def test_inline_text_renders_and_seeds_into_project_scoped_volume(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch("subprocess.run", side_effect=self._content_run_mock()) as mock_run:
             backend.realize_content([self._inline_text_item()], seeder_image="img:1")
 
         cmd = mock_run.call_args[0][0]
@@ -2480,8 +2701,7 @@ class TestRealizeContent:
             source_relpath="scenarios/fixtures/techvault-content/onboarding.md",
         )
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch("subprocess.run", side_effect=self._content_run_mock()) as mock_run:
             backend.realize_content([item], seeder_image="img:1")
 
         cmd = mock_run.call_args[0][0]
@@ -2516,8 +2736,9 @@ class TestRealizeContent:
         item = self._inline_text_item()
         commands = []
         for _ in range(2):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with patch(
+                "subprocess.run", side_effect=self._content_run_mock()
+            ) as mock_run:
                 backend.realize_content([item], seeder_image="img:1")
                 commands.append(mock_run.call_args[0][0])
         assert commands[0] == commands[1]

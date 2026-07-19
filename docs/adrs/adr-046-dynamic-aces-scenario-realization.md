@@ -2,7 +2,7 @@
 
 ## Status
 
-accepted (amended 2026-07-19)
+accepted (amended 2026-07-20)
 
 ## Date
 
@@ -10,7 +10,7 @@ accepted (amended 2026-07-19)
 
 ## Last Updated
 
-2026-07-19
+2026-07-20
 
 ## Context
 
@@ -837,10 +837,22 @@ binding silently override an authored value. An exact runtime fact that cannot
 be compiled or faithfully lowered is an upstream-contract or backend-capability
 gap and fails admission; it is not filled from the legacy file.
 
+The generic materialization operations required by ADR-047 are derived driver
+instructions, not another desired-state schema. They may normalize an admitted
+`RuntimeConfiguration` into ordered, typed package, filesystem, identity,
+service-unit, and verification operations, but must retain the owning ACES
+resource address and authored explicitness/provenance and travel through
+`DeploymentRealizationSpec`. They must not copy ACES service-family models,
+invent product-level DTOs, or become a second parser/validator. A narrow internal
+materializer validation error is translated at the interpreter/admission
+boundary into the existing ACES diagnostic and `LabResult` envelopes; it does
+not escape as a new public exception hierarchy.
+
 A source/provider binding may supply backend mechanics intrinsic to an
-addressed resource, such as a trusted image/build resolution or a
-provider-owned entrypoint/readiness contract. It may not inject undeclared
-scenario topology. Every steady-state container, network, volume, mount,
+addressed resource, such as generic-substrate distribution, package-repository
+transport, or a provider-owned entrypoint/readiness mechanism. Per ADR-047, it
+may not select an appliance image or inject undeclared scenario topology or
+meaningful node state. Every steady-state container, network, volume, mount,
 publication, and dependency in the effective model must be attributable to an
 addressed compiled resource. A bounded one-shot backend helper is allowed only
 when it is mechanically derived from such a resource, project-labelled,
@@ -899,14 +911,20 @@ already mutated the Docker daemon or project files.
 
 Per-project lifecycle mutation is serialized so concurrent start/stop/kill or
 monitor actions cannot replace the fixed-path artifact underneath one another;
-reuse the existing lifecycle single-owner locking convention rather than
-inventing an unrelated lock namespace.
+promote and reuse the existing `.aptl/lifecycle/.lock` single-owner convention
+from `src/aptl/core/lifecycle_enforce.py` so manual, API, scheduled, validation,
+retry, and emergency paths share one project/backend owner. Do not add a second
+lock namespace around only the generated file. The lock implementation must
+remain effective across processes on every supported host; the current Windows
+in-process fallback is not sufficient protection for a fixed lifecycle
+artifact.
 
 Before `compose up`, backend-owned validation covers the complete standalone
-model: Compose shape, image trust/build containment, generated bind sources,
-mount destinations and access, Linux capabilities/security options, dependency
-closure, health/readiness definitions, network/IPAM/internal policy, static
-attachments, named-volume ownership/lifecycle, and host-published ports. An
+model: Compose shape, generic-substrate trust and build containment, generated
+bind sources, mount destinations and access, Linux capabilities/security
+options, dependency closure, health/readiness definitions,
+network/IPAM/internal policy, static attachments, named-volume
+ownership/lifecycle, and host-published ports. An
 authored exact host port fails on conflict; it is not silently remapped. An
 omitted host address remains loopback by default. An SSH backend fails before
 side effects while it cannot materialize project-local artifacts safely.
@@ -940,6 +958,14 @@ steady-state object, and does not consult the legacy Compose model. Unsupported
 or no-op resources are errors for the full TechVault gate. This gate is
 scenario-generic and blocking for the cutover.
 
+The static gate's `_NoStartBackend` remains a conformance harness only. Its
+simulated read-back may exercise ACES envelope plumbing, but cannot prove that a
+package, filesystem entry, identity, service unit, mount, dependency, health
+contract, content item, or account has a real backend consumer. Static cutover
+proof comes from complete lowering plus standalone-model rendering/validation
+and explicit consumer coverage; live read-after-write supplies realization
+proof. A stub that echoes the requested graph is not acceptance evidence.
+
 The live gate exercises the public clean boot (`aptl lab stop -v && aptl lab
 start`) and compares project-labelled observed containers, networks,
 attachments, mounts, ports, volumes, health, content, and accounts with the
@@ -970,7 +996,7 @@ file is reference output only.
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
 | Runtime observation gate | `observe_realization()` emits concern values only from project-scoped backend read-back, using ACES's `CONCERN_PAYLOAD_PATH`. Missing, malformed, timed-out, or mismatched evidence omits the concern and lets `RuntimeManager.apply()` fail an exact requirement closed; it never falls back to planned payload values. |
 | Deployment boundary gate | Curated compatibility paths outside operational TechVault may still drive `DeploymentBackend.start_lab` with profiles. The paper and operational TechVault scenarios drive typed `DeploymentBackend` realization methods, with Compose rendering confined to that backend. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
-| Image trust gate | Node image pull/build decisions are made from ACES `Source` / `source.build` payloads and pass an APTL image policy before backend side effects. Untrusted or insufficient image inputs fail closed through ACES diagnostics without echoing raw image refs, build args, credentials, Dockerfile text, or backend stderr. |
+| Generic substrate and software-source gate | Per ADR-047, a node's substrate resolves only from its declared OS family/version through a small, fixed, scenario-independent base-image policy. A node `Source`, provider binding, Compose service, or scenario name cannot select an appliance image that carries scenario-meaningful state. The base image and declared package/software sources pass the existing trust/digest policy before backend side effects; unsupported OS/package-manager combinations fail admission through existing ACES diagnostics without echoing registry credentials, package credentials, build inputs, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
 | Stateful prerequisite gate | ACES shape/reference/dependency/SEM-218 checks precede backend policy validation of artifact providers, contained outputs, complete certificate sets, cryptographic relationships, mount sources/destinations, stable project-scoped volume identities, lifecycle, and local/SSH feasibility. Generated overrides are rechecked after materialization and before startup; observed mounts, authenticated Wazuh readiness, and actual alert retrieval are required runtime evidence. |
@@ -992,6 +1018,11 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/backends/aces_realization.py` and
   `src/aptl/backends/aces_realization_model.py` for the interpret stage and its
   typed output.
+- `src/aptl/backends/aces_materializer.py` for ADR-047's pure,
+  product-agnostic lowering from admitted ACES runtime state to ordered typed
+  driver operations. Its operation values are derived instructions carried by
+  the deployment realization, not a local runtime/service schema and not a
+  public exception boundary.
 - `src/aptl/backends/aces_profiles.py` for curated compatibility only. It is
   not the paper-scenario or operational-TechVault topology driver.
 - `src/aptl/backends/aces_diagnostics.py` for the supported-resource-type set
@@ -1024,13 +1055,16 @@ The canonical incumbents this decision builds on are:
   `src/aptl/core/deployment/_compose_realization.py` for the typed realization
   DTO and its ordered backend-owned side effects; do not create a Wazuh
   orchestrator beside them.
-- `src/aptl/core/deployment/_compose_image_realization.py` and
-  `src/aptl/core/deployment/_compose_port_realization.py` for composing fixed,
-  typed image and port decisions and their validation. Reuse those policies and
-  move rendering behind the standalone Compose-model boundary; their existing
-  overlay/base merge is compatibility behavior, not a cutover contract. Apply
-  ADR-028 containment, symlink, atomic-write, permission, and effective-model
-  validation rather than copying unchecked file-write details.
+- `src/aptl/core/deployment/_compose_port_realization.py` for typed host-port
+  exposure decisions and conflict validation. The image-pull/build behavior in
+  `src/aptl/core/deployment/_compose_image_realization.py` is compatibility code
+  superseded by ADR-047 for operational TechVault; reuse only generic image
+  trust/digest mechanics that apply to the fixed base substrate, never its
+  appliance-image or overlay/base assumptions. Move rendering behind the
+  standalone Compose-model boundary; existing overlay/base merge behavior is
+  not a cutover contract. Apply ADR-028 containment, symlink, atomic-write,
+  permission, and effective-model validation rather than copying unchecked
+  file-write details.
 - `src/aptl/core/seed_spec.py` and existing named-volume seed behavior for
   project-contained source-to-runtime materialization when content placement
   needs file or directory side effects. Mutable Wazuh persistence reuses its
@@ -1087,12 +1121,15 @@ for the authored link. Future scenarios should be able to vary segmentation,
 addressing, and egress policy without editing the compatibility
 `docker-compose.yml` network block or branching on scenario names.
 
-For image realization, the extensibility seam is the tuple of ACES source
-identity, optional build provenance, image trust policy, resolved image
-reference/digest, backend provider, and platform/build context. The next likely
-change is multi-architecture images, registry authentication, SBOM/attestation
-checks, or another backend provider. Those should add policy fields or typed
-backend parameters, not scenario branches or Compose-service rewrites.
+For ADR-047 node materialization, the extensibility seam is the tuple of
+declared OS family/version, fixed generic-substrate policy, compiled
+`RuntimeConfiguration`, ordered typed materialization operations, backend
+provider/target capability, and read-after-write observations. The next likely
+change is another OS family or package manager, multi-architecture generic base
+selection, package-repository authentication, or SBOM/attestation policy. Those
+extend the fixed policy map or typed operation/provider boundary; they do not
+restore ACES `Source`, Compose service identity, or scenario names as appliance
+image selectors, and they do not add product-named materializer branches.
 
 For content and account realization, the seam is a typed placement record:
 ACES placement address, target node/service/container, content or account

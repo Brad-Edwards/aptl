@@ -31,6 +31,14 @@ _BASE_IMAGE_MAP: dict[str, str] = {
     "linux": "debian:12-slim",
 }
 
+# Generic OS + init substrate for nodes that declare service units, so a service
+# manager (systemd) actually runs inside the container. Still generic: OS + init
+# only, no product. Built from containers/generic-systemd-base/Dockerfile and
+# validated locally against Docker.
+_SERVICE_BASE_IMAGE_MAP: dict[str, str] = {
+    "linux": "aptl/generic-systemd-base:latest",
+}
+
 
 class UnsupportedOsFamilyError(ValueError):
     """Raised when APTL has no generic base substrate for an OS family.
@@ -99,16 +107,19 @@ MaterializationOp = (
 )
 
 
-def base_image_for_os(os: str, os_version: str) -> str:
+def base_image_for_os(os: str, os_version: str, *, runs_services: bool = False) -> str:
     """Return the generic base image for an OS family, or fail closed.
 
-    Deterministic: the same (os, os_version) always maps to the same base.
-    `os_version` is accepted for forward compatibility (family plus version
-    keys) but the current map keys on family only.
+    Deterministic: the same (os, os_version, runs_services) always maps to the
+    same base. A node that declares service units gets an init-capable generic
+    substrate so a service manager can run; otherwise a minimal generic base.
+    `os_version` is accepted for forward compatibility (family plus version keys)
+    but the current maps key on family only.
     """
 
     family = (os or "").strip().lower()
-    image = _BASE_IMAGE_MAP.get(family)
+    table = _SERVICE_BASE_IMAGE_MAP if runs_services else _BASE_IMAGE_MAP
+    image = table.get(family)
     if image is None:
         raise UnsupportedOsFamilyError(
             f"no generic base substrate for OS family {os!r}"
@@ -173,8 +184,11 @@ def plan_node_materialization(
     service-unit enable, service-unit start. Emits nothing product-specific.
     """
 
+    runs_services = bool(runtime is not None and runtime.service_manager_units)
     ops: list[MaterializationOp] = [
-        BaseSubstrateOp(image_ref=base_image_for_os(os, os_version))
+        BaseSubstrateOp(
+            image_ref=base_image_for_os(os, os_version, runs_services=runs_services)
+        )
     ]
     if runtime is not None:
         ops.extend(_package_ops(runtime))

@@ -25,6 +25,26 @@ from aptl.backends.aces_materializer import (
 
 
 @dataclass(frozen=True)
+class InitRequirements:
+    """Run requirements for a node whose declared service units need a service
+    manager (systemd) as container init.
+
+    These are the flags APTL already uses for its systemd nodes, validated
+    locally against Docker: a host cgroup namespace, a read-write cgroupfs
+    mount, `/run` and `/tmp` tmpfs, the capabilities systemd needs, an
+    unconfined seccomp profile, and `/usr/sbin/init` as PID 1. They are
+    generic (init mechanics), never product-specific.
+    """
+
+    init_command: tuple[str, ...] = ("/usr/sbin/init",)
+    capabilities: tuple[str, ...] = ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
+    cgroup_host: bool = True
+    cgroupfs_rw_mount: bool = True
+    tmpfs: tuple[str, ...] = ("/run", "/tmp")
+    seccomp_unconfined: bool = True
+
+
+@dataclass(frozen=True)
 class BaseContainerSpec:
     """The generic base container a node is realized onto."""
 
@@ -32,6 +52,7 @@ class BaseContainerSpec:
     container_name: str
     image_ref: str
     runs_services: bool
+    init: InitRequirements | None = None
 
 
 def _container_name(node_address: str) -> str:
@@ -57,8 +78,9 @@ def base_container_spec(
     return BaseContainerSpec(
         node_address=node_address,
         container_name=_container_name(node_address),
-        image_ref=base_image_for_os(os, os_version),
+        image_ref=base_image_for_os(os, os_version, runs_services=runs_services),
         runs_services=runs_services,
+        init=InitRequirements() if runs_services else None,
     )
 
 

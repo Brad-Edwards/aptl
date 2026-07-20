@@ -53,8 +53,26 @@ class TestBaseContainerSpec:
             "n.node", os="linux", os_version="", runtime=RuntimeConfiguration()
         )
         assert spec.runs_services is False
+        assert spec.init is None
         spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
         assert spec_none.runs_services is False
+        assert spec_none.init is None
+
+    def test_service_node_gets_init_substrate_and_requirements(self):
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=_runtime_with_service()
+        )
+        # A distinct, init-capable generic substrate (not the minimal base).
+        non_service = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=None
+        )
+        assert spec.image_ref != non_service.image_ref
+        # The validated systemd run requirements are carried, not fabricated per call.
+        assert spec.init is not None
+        assert spec.init.init_command == ("/usr/sbin/init",)
+        assert "SYS_ADMIN" in spec.init.capabilities
+        assert spec.init.cgroup_host is True
+        assert spec.init.seccomp_unconfined is True
 
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):

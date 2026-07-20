@@ -107,7 +107,8 @@ def interpret_provisioning_plan(
         nodes,
         diagnostics,
     )
-    _append_profile_diagnostics(profiles, config, diagnostics)
+    if not _all_nodes_image_free(nodes):
+        _append_profile_diagnostics(profiles, config, diagnostics)
 
     return _realization_from_parts(
         nodes,
@@ -183,11 +184,28 @@ def _realize_nodes_and_networks(
             )
             nodes.append(node)
             profiles.update(node.profiles)
-            if not node.profiles:
+            if not node.profiles and not _is_materializable_node(node):
                 _append_node_profile_diagnostic(resource, diagnostics)
         elif resource.resource_type == "network":
             networks.append(_realize_network(resource, payload))
     return nodes, networks, profiles
+
+
+def _is_materializable_node(node: NodeRealization) -> bool:
+    """Whether a node is realized image-free by the generic materializer (ADR-047).
+
+    Such a node declares an OS and typed runtime desired state and carries no
+    appliance image, so it legitimately maps to no compose profile.
+    """
+
+    return bool(node.os and node.runtime is not None and node.image is None)
+
+
+def _all_nodes_image_free(nodes: list[NodeRealization]) -> bool:
+    """Whether every OS-bearing node is materialized image-free."""
+
+    os_nodes = [node for node in nodes if node.os]
+    return bool(os_nodes) and all(_is_materializable_node(node) for node in os_nodes)
 
 
 def _append_node_profile_diagnostic(

@@ -261,10 +261,16 @@ def normalize_identifier(raw: str) -> str:
 
 
 def _load_compose_services(project_dir: Path) -> Mapping[str, object]:
-    """Return the validated Compose services mapping."""
+    """Return the validated Compose services mapping.
+
+    ADR-047: an absent ``docker-compose.yml`` is not an error. An image-free
+    scenario has no compose file, and its nodes realize from declared desired
+    state, so the profile index is simply empty. A legacy scenario ships its
+    compose file, so it is unaffected.
+    """
     compose_path = project_dir / "docker-compose.yml"
     if not compose_path.exists():
-        raise ValueError(f"docker-compose.yml not found under {project_dir}")
+        return {}
     data = yaml.safe_load(compose_path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, Mapping):
         raise ValueError(f"{compose_path} must contain a YAML mapping")

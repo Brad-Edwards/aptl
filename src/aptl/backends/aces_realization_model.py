@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aces_contracts.diagnostics import Diagnostic
+from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -38,6 +39,13 @@ class NodeRealization(object):
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
     ordering_dependencies: tuple[str, ...] = ()
+    # ADR-047: the declared desired state the generic materializer realizes onto
+    # a base substrate. `os`/`os_version` choose the generic base; `runtime`
+    # carries the compiled ACES RuntimeConfiguration (packages, identity, service
+    # units, ...). None until the node payload declares them.
+    os: str = ""
+    os_version: str = ""
+    runtime: RuntimeConfiguration | None = None
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -62,6 +70,21 @@ class NodeRealization(object):
             "published_ports": [binding.details() for binding in self.published_ports],
             "ordering_dependencies": list(self.ordering_dependencies),
         }
+        if self.os:
+            details["os"] = self.os
+        if self.os_version:
+            details["os_version"] = self.os_version
+        if self.runtime is not None:
+            details["runtime"] = {
+                "packages": len(self.runtime.packages),
+                "software_components": len(self.runtime.software_components),
+                "local_users": (
+                    len(self.runtime.local_identity.users)
+                    if self.runtime.local_identity is not None
+                    else 0
+                ),
+                "service_units": len(self.runtime.service_manager_units),
+            }
         if self.image is not None:
             details["image"] = self.image.details()
         return details

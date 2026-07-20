@@ -18,6 +18,8 @@ from aptl.backends.aces_diagnostics import (
     unsupported_resource_diagnostics,
 )
 from aptl.backends.aces_dependency_closure import append_dependency_closure
+from aces_sdl.runtime_configuration import RuntimeConfiguration
+
 from aptl.backends.aces_image_realization import resolve_node_image
 from aptl.backends.aces_placement_realization import (
     placement_node_lookup as _node_lookup,
@@ -344,7 +346,37 @@ def _realize_node(
             diagnostics=diagnostics,
         ),
         ordering_dependencies=resource.ordering_dependencies,
+        os=_node_os(node_spec),
+        os_version=_node_os_version(node_spec),
+        runtime=_node_runtime(node_spec),
     )
+
+
+def _node_os(node_spec: Mapping[str, Any] | None) -> str:
+    return str(node_spec.get("os") or "") if node_spec else ""
+
+
+def _node_os_version(node_spec: Mapping[str, Any] | None) -> str:
+    return str(node_spec.get("os_version") or "") if node_spec else ""
+
+
+def _node_runtime(node_spec: Mapping[str, Any] | None) -> RuntimeConfiguration | None:
+    """Reconstruct the typed ACES RuntimeConfiguration from a node payload.
+
+    Best-effort: a node with no declared runtime returns None. A malformed
+    runtime block returns None rather than aborting the whole realization; the
+    materializer/manifest gates surface the missing desired state downstream.
+    """
+
+    if not node_spec:
+        return None
+    raw = node_spec.get("runtime")
+    if not isinstance(raw, Mapping):
+        return None
+    try:
+        return RuntimeConfiguration.model_validate(dict(raw))
+    except (ValueError, TypeError):
+        return None
 
 
 def _is_aces_conformance_probe_node(

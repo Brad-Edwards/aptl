@@ -15,6 +15,7 @@ expansion (a later stage) is that consumer's home, not this one.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from types import MappingProxyType
@@ -25,6 +26,24 @@ from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 #: policy revision (e.g. a new supported allocation method) bumps this
 #: string so a persisted plan can record exactly which policy admitted it.
 _POLICY_VERSION = "aptl-admission/v1"
+
+
+@dataclass(frozen=True)
+class CaptureLimitationAcceptance:
+    """A trusted operator's explicit acceptance of one supported capture degradation.
+
+    ADR-047 / EXP-010 preflight ("One declaration, one admitted binding"): ACES
+    capture-spec v1 has no general ``required`` flag, so authored capture
+    requirements are **required by default**. A degradation is admitted ONLY
+    when the policy carries an explicit acceptance here — a stable
+    ``limitation_code`` plus the ``comparability_disclosure_ref`` that discloses
+    its effect on comparability — and that acceptance is persisted into the
+    plan binding. Optionality is NEVER inferred from notes, validity text, an
+    empty collector result, or historical best-effort behavior.
+    """
+
+    limitation_code: str
+    comparability_disclosure_ref: str
 
 
 class OrderingKind(str, Enum):
@@ -111,6 +130,17 @@ class AdmissionPolicy:
     #: regardless of this flag — it narrows exactly one documented,
     #: structural gap, never the whole admission surface.
     allow_uncertified_apparatus: bool = False
+
+    #: Explicit per-requirement capture-degradation acceptances, keyed by the
+    #: fully-qualified ``"{capture_spec_id}.{requirement_id}"`` (EXP-010
+    #: preflight). Empty by default: with no entry, every authored capture
+    #: requirement is required and an unbound requirement fails closed. An
+    #: entry annotates its bound requirement's plan binding with the accepted
+    #: limitation + comparability disclosure so the degradation is auditable,
+    #: never silent.
+    accepted_capture_limitations: Mapping[str, CaptureLimitationAcceptance] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     supported_allocation_methods: MappingProxyType[str, OrderingKind] = field(
         default_factory=lambda: _DEFAULT_SUPPORTED_ALLOCATION_METHODS

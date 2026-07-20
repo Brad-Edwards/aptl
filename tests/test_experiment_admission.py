@@ -50,6 +50,12 @@ from aptl.core.experiment.admission import (
     admit_experiment,
     build_associated_artifact_source,
 )
+from aptl.core.experiment.capture_registry import (
+    CaptureLimits,
+    CaptureVisibility,
+    CollectorRegistration,
+    CollectorRegistry,
+)
 from aptl.core.experiment.errors import AdmissionRejection
 from aptl.core.experiment.policy import default_admission_policy
 from aptl.core.experiment.resolver import ResolvedArtifact
@@ -1212,3 +1218,93 @@ class TestBuildAssociatedArtifactSource:
             build_associated_artifact_source(tmp_path, "associated-artifact-manifest.json", spec, policy)
 
         assert excinfo.value.diagnostics
+
+
+# ---------------------------------------------------------------------------
+# Admitted-capture path — a covering registry binds and pins into the plan
+# ---------------------------------------------------------------------------
+
+
+def _covering_registration() -> CollectorRegistration:
+    """Return a registration covering the corpus reference ``network-trace`` requirement."""
+    return CollectorRegistration(
+        registration_id="aptl.collector.network-trace",
+        implementation_version="1.0.0",
+        contract_version="experiment-capture-spec/v1",
+        channel_kind="evaluation-history",
+        capture_kind="trace",
+        capture_scope="network",
+        window_kinds=frozenset({"run"}),
+        media_types=frozenset({"application/json"}),
+        required_artifact_roles=frozenset({"observation"}),
+        supported_sensitivities=frozenset({"internal", "public"}),
+        supports_redaction=True,
+        integrity_modes=frozenset({"sha256-digest"}),
+        sealing_modes=frozenset({"digest"}),
+        supports_chain_of_custody=False,
+        supports_retention=True,
+        supports_loss_disclosure=True,
+        visibility_class=CaptureVisibility.EVALUATOR_ONLY,
+        limits=CaptureLimits(max_bytes=1_048_576, max_artifact_count=100, max_duration_s=300),
+    )
+
+
+def _capture_bearing_bundle():
+    """Build a capability-only bundle whose spec references the corpus capture spec."""
+    backend, processor = _synthetic_manifests()
+    declared = sorted(backend.supported_contract_versions)[0]
+    task_payload = _capability_only_task_payload(declared_capability=declared)
+    capture_payload = _read_corpus_capture_spec_payload()
+    capture_payload["capture_spec_id"] = "capture-minimal"
+    capture_payload["spec_version"] = "1.0.0"
+    capture_payload["scope_refs"] = [
+        {"ref_kind": "task", "ref_id": task_payload["task_id"], "ref_version": task_payload["task_version"]}
+    ]
+    spec_payload = _flat_spec_payload(
+        capture_spec_refs=[{"ref_kind": "capture-spec", "ref_id": "capture-minimal", "ref_version": "1.0.0"}]
+    )
+    bundle = _Bundle(task_payload=task_payload, spec_payload=spec_payload, capture_spec_payload=capture_payload)
+    return bundle, backend, processor
+
+
+class TestAdmitExperimentWithCoveringRegistry:
+    def test_a_covered_capture_spec_admits_and_pins_the_binding(self, tmp_path):
+        bundle, backend, processor = _capture_bearing_bundle()
+        registry = CollectorRegistry((_covering_registration(),))
+        store = LocalRunStore(tmp_path / "store")
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=store,
+            policy=default_admission_policy(),
+            backend_manifest=backend,
+            processor_manifest=processor,
+            capture_registry=registry,
+        )
+
+        assert result.admitted is True, [d.code for d in result.diagnostics]
+        assert result.plan is not None
+        assert len(result.plan.capture_bindings) == 1
+        binding = result.plan.capture_bindings[0]
+        assert binding.registration_id == "aptl.collector.network-trace"
+        assert binding.requirement_id == "network-trace"
+        # The binding travelled into the persisted canonical bytes.
+        assert b"aptl.collector.network-trace" in result.plan.canonical_bytes
+
+    def test_the_same_registry_missing_the_capability_still_fails_closed(self, tmp_path):
+        bundle, backend, processor = _capture_bearing_bundle()
+        store = LocalRunStore(tmp_path / "store")
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=store,
+            policy=default_admission_policy(),
+            backend_manifest=backend,
+            processor_manifest=processor,
+            capture_registry=CollectorRegistry(),
+        )
+
+        assert result.admitted is False
+        assert any("capture-requirement-unsupported" in d.code for d in result.diagnostics)

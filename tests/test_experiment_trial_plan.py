@@ -38,6 +38,11 @@ from aptl.core.experiment.policy import (
     default_admission_policy,
 )
 from aptl.core.experiment import trial_plan
+from aptl.core.experiment.capture_registry import (
+    CaptureBinding,
+    CaptureLimits,
+    CaptureVisibility,
+)
 from aptl.core.experiment.trial_plan import (
     PlannedTrial,
     TrialPlan,
@@ -47,6 +52,35 @@ from aptl.core.experiment.trial_plan import (
 
 CORPUS_ROOT = corpus_family_root(FIXTURES)
 SOURCE_SET_DIGEST = "sha256:" + "ab" * 32
+
+
+def _capture_binding(**overrides: object) -> CaptureBinding:
+    """Build a representative pinned :class:`CaptureBinding` for the pinning tests."""
+    fields: dict[str, object] = {
+        "capture_spec_id": "capture-spec-1",
+        "requirement_id": "network-trace",
+        "window_refs": ("run-window",),
+        "registration_id": "aptl.collector.network-trace",
+        "implementation_version": "1.0.0",
+        "contract_version": "experiment-capture-spec/v1",
+        "effective_config_digest": "sha256:" + "cd" * 32,
+        "channel_ref_id": "evaluation-history-channel",
+        "channel_ref_version": "1.0.0",
+        "channel_kind": "evaluation-history",
+        "capture_kind": "trace",
+        "capture_scope": "network",
+        "expected_media_types": ("application/json",),
+        "required_artifact_roles": ("observation",),
+        "sensitivity": "internal",
+        "redaction_required": False,
+        "integrity_requirements": ("sha256-digest",),
+        "retention_policy": "retain-review-window",
+        "loss_disclosure_required": True,
+        "visibility_class": CaptureVisibility.EVALUATOR_ONLY,
+        "limits": CaptureLimits(max_bytes=1024, max_artifact_count=10, max_duration_s=60),
+    }
+    fields.update(overrides)
+    return CaptureBinding(**fields)
 
 
 def _read_corpus_reference() -> dict:
@@ -877,3 +911,60 @@ class TestFuzzDictOrderingNeverChangesCanonicalBytes:
         plan_canonical = expand_trial_plan(spec_canonical, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
 
         assert plan_shuffled.canonical_bytes == plan_canonical.canonical_bytes
+
+
+# ---------------------------------------------------------------------------
+# Capture-binding pinning (EXP-010 / #752)
+# ---------------------------------------------------------------------------
+
+
+class TestCaptureBindingPinning:
+    """The admitted capture bindings are pinned in the canonical plan bytes so
+    runtime executes exactly them, never re-matching a changed registry."""
+
+    def test_bindings_are_carried_on_the_plan(self):
+        spec = _flat_spec(target_run_count=2)
+        binding = _capture_binding()
+        plan = expand_trial_plan(
+            spec, source_set_digest=SOURCE_SET_DIGEST, capture_bindings=(binding,), policy=default_admission_policy()
+        )
+        assert plan.capture_bindings == (binding,)
+
+    def test_no_bindings_yields_an_empty_tuple(self):
+        spec = _flat_spec(target_run_count=2)
+        plan = expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
+        assert plan.capture_bindings == ()
+
+    def test_bindings_change_the_plan_digest(self):
+        spec = _flat_spec(target_run_count=2)
+        policy = default_admission_policy()
+        without = expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
+        with_binding = expand_trial_plan(
+            spec, source_set_digest=SOURCE_SET_DIGEST, capture_bindings=(_capture_binding(),), policy=policy
+        )
+        assert without.plan_digest != with_binding.plan_digest
+
+    def test_same_bindings_produce_byte_identical_plans(self):
+        spec = _flat_spec(target_run_count=2)
+        policy = default_admission_policy()
+        first = expand_trial_plan(
+            spec, source_set_digest=SOURCE_SET_DIGEST, capture_bindings=(_capture_binding(),), policy=policy
+        )
+        second = expand_trial_plan(
+            spec, source_set_digest=SOURCE_SET_DIGEST, capture_bindings=(_capture_binding(),), policy=policy
+        )
+        assert first.canonical_bytes == second.canonical_bytes
+
+    def test_a_changed_binding_field_changes_the_digest(self):
+        spec = _flat_spec(target_run_count=2)
+        policy = default_admission_policy()
+        base = expand_trial_plan(
+            spec, source_set_digest=SOURCE_SET_DIGEST, capture_bindings=(_capture_binding(),), policy=policy
+        )
+        changed = expand_trial_plan(
+            spec,
+            source_set_digest=SOURCE_SET_DIGEST,
+            capture_bindings=(_capture_binding(accepted_limitation="partial-window"),),
+            policy=policy,
+        )
+        assert base.plan_digest != changed.plan_digest

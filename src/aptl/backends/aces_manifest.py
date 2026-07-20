@@ -45,6 +45,10 @@ except ImportError:
     BACKEND_SUPPORTED_CONTRACT_IDS = ()
 
 from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+from aptl.core.experiment.capture_registry import (
+    DEFAULT_COLLECTOR_REGISTRY,
+    OBSERVATION_EVIDENCE_CONTRACTS,
+)
 
 APTL_ACES_TARGET_NAME = "aptl"
 APTL_ACES_TARGET_VERSION = "0.1.0"
@@ -216,11 +220,29 @@ _CONCEPT_BINDINGS = (
 
 
 def create_aptl_manifest() -> BackendManifest:
-    """Return APTL's canonical full remote-control-plane backend manifest."""
+    """Return APTL's canonical full remote-control-plane backend manifest.
+
+    The ``observation`` capability is an aggregate projection of the code-owned
+    collector registry (EXP-010 / issue #752), NOT a hand-maintained matrix.
+    :data:`~aptl.core.experiment.capture_registry.DEFAULT_COLLECTOR_REGISTRY`
+    is empty until a capture capability is genuinely backed end-to-end, so the
+    projection is ``None`` and no observation is declared — the honest EXP-002
+    posture. When (EXP-010 PR 2) real registrations turn the projection on, the
+    ACES ``observation_capability_contract_gaps`` invariant requires the
+    capture-spec/evidence-record/derived-measure/experiment-run contracts in
+    ``supported_contract_versions``, so they are added exactly then and never
+    speculatively.
+    """
+    observation = DEFAULT_COLLECTOR_REGISTRY.observation_projection()
+    supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
+    capability_options: dict[str, object] = {}
+    if observation is not None:
+        supported_contract_versions = supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS
+        capability_options["observation"] = observation
     return BackendManifest(
         name=APTL_ACES_TARGET_NAME,
         version=APTL_ACES_TARGET_VERSION,
-        supported_contract_versions=_SUPPORTED_CONTRACT_VERSIONS,
+        supported_contract_versions=supported_contract_versions,
         compatible_processors=_COMPATIBLE_PROCESSORS,
         realization_support=_REALIZATION_SUPPORT,
         concept_bindings=_CONCEPT_BINDINGS,
@@ -228,4 +250,5 @@ def create_aptl_manifest() -> BackendManifest:
         orchestrator=_ORCHESTRATOR,
         evaluator=_EVALUATOR,
         participant_runtime=_PARTICIPANT_RUNTIME,
+        **capability_options,
     )

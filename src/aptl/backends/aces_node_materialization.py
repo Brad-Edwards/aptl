@@ -9,12 +9,14 @@ declared state, verified by read-after-write.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Protocol
+
+from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_base_substrate import BaseContainerSpec, plan_node
 from aptl.backends.aces_docker_materializer import DockerMaterializationExecutor
 from aptl.backends.aces_materializer_engine import materialize_node
-from aptl.backends.aces_realization_model import NodeRealization
 from aptl.core.lab_types import LabResult
 
 
@@ -25,7 +27,20 @@ class _NodeBackend(Protocol):
     def container_exec(self, name: str, cmd: list[str], *, timeout: int | None = None): ...
 
 
-def realize_node(node: NodeRealization, backend: _NodeBackend) -> LabResult | None:
+class _MaterializableNode(Protocol):
+    """A node carrying the declared desired state to materialize.
+
+    Satisfied by both the ACES-side ``NodeRealization`` and the backend-facing
+    ``DeploymentNodeRealization``; the coordinator needs only these fields.
+    """
+
+    address: str
+    os: str
+    os_version: str
+    runtime: RuntimeConfiguration | None
+
+
+def realize_node(node: _MaterializableNode, backend: _NodeBackend) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
     Returns ``None`` on fully-verified success, or a fail-closed
@@ -49,3 +64,23 @@ def realize_node(node: NodeRealization, backend: _NodeBackend) -> LabResult | No
         start_base=start_base,
     )
     return materialize_node(node.address, ops, executor)
+
+
+def realize_nodes(
+    nodes: Iterable[_MaterializableNode], backend: _NodeBackend
+) -> LabResult | None:
+    """Materialize every node that declares desired state, failing closed.
+
+    Nodes with no declared `os` (switches, unaddressed nodes) are skipped: there
+    is nothing to materialize onto a substrate. The first node that fails to
+    materialize-and-verify returns its fail-closed `LabResult`; the rest are not
+    started, so a partial range never masquerades as realized.
+    """
+
+    for node in nodes:
+        if not node.os:
+            continue
+        result = realize_node(node, backend)
+        if result is not None:
+            return result
+    return None

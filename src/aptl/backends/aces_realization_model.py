@@ -249,4 +249,7 @@ def _deployment_node_realization(
         services=node.services,
         published_ports=node.published_ports,
         ordering_dependencies=node.ordering_dependencies,
+        os=node.os,
+        os_version=node.os_version,
+        runtime=node.runtime,
     )

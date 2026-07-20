@@ -13,7 +13,7 @@ from aces_sdl.runtime_configuration import (
 )
 
 from aptl.backends.aces_base_substrate import BaseContainerSpec
-from aptl.backends.aces_node_materialization import realize_node
+from aptl.backends.aces_node_materialization import realize_node, realize_nodes
 from aptl.backends.aces_realization_model import NodeRealization
 
 
@@ -94,3 +94,34 @@ def test_realize_node_fails_closed_when_state_unverifiable():
     result = realize_node(_node(), _SilentBackend())
     assert result is not None and result.success is False
     assert "curl" in (result.error or "")
+
+
+def _switch() -> NodeRealization:
+    return NodeRealization(
+        address="techvault.sw",
+        name="sw",
+        aliases=(),
+        profiles=(),
+        backend_services=(),
+        container_name=None,
+        services=(),
+        networks=(),
+        static_addresses=(),
+        os="",  # a switch: no OS, nothing to materialize
+    )
+
+
+def test_realize_nodes_skips_os_less_nodes_and_materializes_the_rest():
+    backend = _FakeBackend()
+    assert realize_nodes([_switch(), _node()], backend) is None
+    assert len(backend.started) == 1  # only the real node got a base container
+
+
+def test_realize_nodes_fails_closed_on_first_failure():
+    class _BrokenBackend(_FakeBackend):
+        def start_base_container(self, spec):
+            raise RuntimeError("cannot start base")
+
+    result = realize_nodes([_node()], _BrokenBackend())
+    assert result is not None and result.success is False
+    assert "techvault.analyst-box" in (result.error or "")

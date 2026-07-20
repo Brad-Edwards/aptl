@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 
 ImageRealizationMode = Literal["pull", "build"]
@@ -127,6 +130,11 @@ class DeploymentNodeRealization(object):
     services: tuple[DeploymentServicePort, ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
+    # ADR-047: declared desired state the generic materializer realizes onto a
+    # base substrate. None until the node payload declares them.
+    os: str = ""
+    os_version: str = ""
+    runtime: "RuntimeConfiguration | None" = None
 
 
 ContentSourceKind = Literal[

@@ -7,7 +7,10 @@ import json
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from aptl.backends.aces_base_substrate import BaseContainerSpec
 
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
@@ -162,6 +165,50 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             raise BackendTimeoutError(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
+
+    def start_base_container(self, spec: "BaseContainerSpec") -> None:
+        """Start a node's generic base container (ADR-047).
+
+        Runs the generic base image with the validated init requirements when the
+        node declares service units (host cgroup ns, cgroupfs rw, tmpfs,
+        capabilities, unconfined seccomp, systemd as PID 1). A node with no
+        service units runs the base with a keepalive so the materializer can exec
+        into it. Idempotent: any stale container of the same name is removed
+        first. Raises on failure so the materialization engine translates it into
+        the ACES `LabResult` envelope.
+        """
+
+        self._run(["docker", "rm", "-f", spec.container_name])
+        argv = [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            spec.container_name,
+            "--label",
+            f"aptl.lifecycle.project={self._project_name}",
+            "--label",
+            f"aptl.node.address={spec.node_address}",
+        ]
+        if spec.init is not None:
+            if spec.init.cgroup_host:
+                argv.append("--cgroupns=host")
+            if spec.init.cgroupfs_rw_mount:
+                argv += ["-v", "/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+            for path in spec.init.tmpfs:
+                argv += ["--tmpfs", path]
+            for capability in spec.init.capabilities:
+                argv += ["--cap-add", capability]
+            if spec.init.seccomp_unconfined:
+                argv += ["--security-opt", "seccomp:unconfined"]
+            argv.append(spec.image_ref)  # image CMD (/usr/sbin/init) keeps it alive
+        else:
+            argv += [spec.image_ref, "sleep", "infinity"]
+        result = self._run(argv, timeout=180)
+        if result.returncode != 0:
+            raise BackendSeedError(
+                f"failed to start base container for node {spec.node_address}"
+            )
 
     def _run_streaming(
         self,

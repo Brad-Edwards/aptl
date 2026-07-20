@@ -80,3 +80,66 @@ def test_start_base_container_with_init_still_carries_the_label(tmp_path):
     run_call = next(c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"])
     argv = run_call.args[0]
     assert "com.docker.compose.project=test-proj" in argv
+
+
+class TestRemoveGenericMaterializerContainers:
+    """`docker compose down`/`kill` never touch these - stop/kill must (P7).
+
+    Discovered by a real live-gate boot: stopping the lab left every
+    generic-materializer container running, attached to the project's
+    networks, which then failed to remove with "network has active
+    endpoints" - the whole stop/kill operation failed, not just a warning.
+    """
+
+    def test_removes_containers_matching_the_lifecycle_label(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "ps", "-aq"]:
+                return MagicMock(returncode=0, stdout="abc123\ndef456\n", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.remove_generic_materializer_containers()
+
+        assert failures == []
+        list_call = next(c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "ps"])
+        assert "label=aptl.lifecycle.project=test-proj" in list_call.args[0]
+        rm_call = next(c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "rm"])
+        assert rm_call.args[0] == ["docker", "rm", "-f", "abc123", "def456"]
+
+    def test_no_containers_is_a_clean_noop(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            failures = backend.remove_generic_materializer_containers()
+
+        assert failures == []
+        # No `docker rm` call at all when there is nothing to remove.
+        assert not any(c.args[0][:2] == ["docker", "rm"] for c in mock_run.call_args_list)
+
+    def test_removal_failure_is_reported_not_raised(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "ps", "-aq"]:
+                return MagicMock(returncode=0, stdout="abc123\n", stderr="")
+            return MagicMock(returncode=1, stdout="", stderr="container in use")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            failures = backend.remove_generic_materializer_containers()
+
+        assert failures and "container in use" in failures[0]
+
+    def test_docker_unavailable_is_reported_not_raised(self, tmp_path):
+        # kill_compose_lab's own tests hit this exact path: every subprocess
+        # call fails, and the whole operation must still return gracefully.
+        backend = _backend(tmp_path)
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("docker not found")):
+            failures = backend.remove_generic_materializer_containers()
+
+        assert failures and "docker not found" in failures[0]

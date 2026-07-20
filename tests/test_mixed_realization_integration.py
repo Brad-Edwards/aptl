@@ -26,6 +26,8 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration, RuntimePackage
 
 from aptl.core.deployment import (
     DeploymentImageRealization,
+    DeploymentNetworkAttachment,
+    DeploymentNetworkRealization,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
     DockerComposeBackend,
@@ -70,7 +72,10 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         name="free-box",
         service_name="free-box",
         container_name=free_container,
-        networks=(),
+        networks=("mixed-net",),
+        network_attachments=(
+            DeploymentNetworkAttachment(network="mixed-net", ipv4_address="172.31.0.10"),
+        ),
         os="linux",
         os_version="",
         runtime=RuntimeConfiguration(
@@ -82,7 +87,10 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         name="image-box",
         service_name="image-box",
         container_name=image_container,
-        networks=(),
+        networks=("mixed-net",),
+        network_attachments=(
+            DeploymentNetworkAttachment(network="mixed-net", ipv4_address="172.31.0.11"),
+        ),
         os="linux",
         os_version="",
         runtime=None,
@@ -90,7 +98,9 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     spec = DeploymentRealizationSpec(
         profiles=("default",),
         nodes=(free_node, image_node),
-        networks=(),
+        networks=(
+            DeploymentNetworkRealization(name="mixed-net", cidr="172.31.0.0/24", gateway="172.31.0.1"),
+        ),
         images=(
             DeploymentImageRealization(
                 address="provision.node.image-box",
@@ -134,7 +144,21 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
                 break
             time.sleep(1)
         assert pg_ready is not None and pg_ready.returncode == 0, pg_ready.stdout
+
+        # The generic materializer's directly-run container is connected to
+        # the declared scenario network with its declared static IP, exactly
+        # like a Compose-managed node - the existing post-start network
+        # reconciliation step operates by container name, so it already
+        # covers both realization styles without any change.
+        network = "aptl-mixed-test_aptl-mixed"
+        inspect = subprocess.run(
+            ["docker", "inspect", free_container, "--format",
+             f"{{{{(index .NetworkSettings.Networks \"{network}\").IPAddress}}}}"],
+            capture_output=True, text=True,
+        )
+        assert inspect.stdout.strip() == "172.31.0.10", (inspect.stdout, inspect.stderr)
     finally:
         subprocess.run(
             ["docker", "rm", "-f", free_container, image_container], capture_output=True, text=True
         )
+        subprocess.run(["docker", "network", "rm", "aptl-mixed-test_aptl-mixed"], capture_output=True, text=True)

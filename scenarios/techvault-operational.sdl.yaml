@@ -163,6 +163,7 @@ nodes:
         - {manager: apt, name: postgresql, version: "*"}
       service_manager_units:
         - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
+        - {unit_id: db-bootstrap, unit_name: db-bootstrap.service, enabled_state: enabled, active_state: active}
   workstation:
     type: vm
     os: linux
@@ -560,6 +561,65 @@ content:
     destination: /srv/shares/onboarding
     source:
       name: scenarios/fixtures/techvault-content/onboarding
+  # The stock `postgresql` package creates an empty cluster with no
+  # techvault database/user and no schema — the legacy compose db service
+  # got these from postgres:16-alpine's POSTGRES_DB/USER/PASSWORD
+  # auto-init plus containers/db/init/*.sql mounted at
+  # /docker-entrypoint-initdb.d, neither of which apply to a generically
+  # materialized node. db-bootstrap.service (below) reproduces both by
+  # hand: opens postgres to the network, creates the techvault role/
+  # database, then loads the same schema/seed SQL webapp's own defaults
+  # (containers/webapp/app/app.py) already expect (issue #581).
+  db-init-schema:
+    type: file
+    target: db
+    path: /opt/db-init/01-schema.sql
+    source:
+      name: containers/db/init/01-schema.sql
+  db-init-seed:
+    type: file
+    target: db
+    path: /opt/db-init/02-seed-data.sql
+    source:
+      name: containers/db/init/02-seed-data.sql
+  db-bootstrap-script:
+    type: file
+    target: db
+    path: /opt/db-bootstrap.sh
+    text: |
+      #!/bin/bash
+      set -e
+      PG_CONF=$(find /etc/postgresql -maxdepth 3 -name postgresql.conf | head -n1)
+      PG_HBA=$(find /etc/postgresql -maxdepth 3 -name pg_hba.conf | head -n1)
+      sed -i "s/^#\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
+      grep -q "^host techvault techvault " "$PG_HBA" || echo "host techvault techvault 0.0.0.0/0 md5" >> "$PG_HBA"
+      systemctl restart postgresql
+      for i in $(seq 1 30); do
+        su -s /bin/bash postgres -c "pg_isready -q" && break
+        sleep 1
+      done
+      su -s /bin/bash postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='techvault'\"" | grep -q 1 || \
+        su -s /bin/bash postgres -c "psql -c \"CREATE USER techvault WITH PASSWORD 'techvault_db_pass';\""
+      su -s /bin/bash postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='techvault'\"" | grep -q 1 || \
+        su -s /bin/bash postgres -c "psql -c \"CREATE DATABASE techvault OWNER techvault;\""
+      PGPASSWORD=techvault_db_pass psql -h 127.0.0.1 -U techvault -d techvault -f /opt/db-init/01-schema.sql
+      PGPASSWORD=techvault_db_pass psql -h 127.0.0.1 -U techvault -d techvault -f /opt/db-init/02-seed-data.sql
+  db-bootstrap-unit:
+    type: file
+    target: db
+    path: /etc/systemd/system/db-bootstrap.service
+    text: |
+      [Unit]
+      Description=TechVault database bootstrap (create techvault DB/user, load schema+seed)
+      After=postgresql.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash /opt/db-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
   # SEC #417: victim/workstation authorize both the operator control-plane
   # key and the kali pivot key (target_authorized_keys is the two combined,
   # generated at lab standup — src/aptl/core/ssh.py). kali itself is

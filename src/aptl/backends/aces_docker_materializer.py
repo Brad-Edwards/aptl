@@ -18,10 +18,10 @@ from __future__ import annotations
 import base64
 import shlex
 from collections.abc import Callable
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Protocol
 
-from aptl.backends.aces_materializer import EnsureUserOp
+from aptl.backends.aces_materializer import EnsureUserOp, PlaceProjectContentOp
 from aptl.backends.aces_package_managers import (
     install_argv,
     parse_installed,
@@ -55,10 +55,14 @@ class DockerMaterializationExecutor:
         run: ExecFn,
         container_for: Callable[[str], str],
         start_base: Callable[[str, str], None],
+        copy_in: Callable[[str, str, str, bool], None] | None = None,
+        project_dir: Path | None = None,
     ) -> None:
         self._run = run
         self._container_for = container_for
         self._start_base = start_base
+        self._copy_in = copy_in
+        self._project_dir = project_dir
 
     # -- mutations -------------------------------------------------------
 
@@ -95,6 +99,28 @@ class DockerMaterializationExecutor:
         if mode:
             script += f" && chmod {shlex.quote(mode)} {quoted_path}"
         self._require_ok(node_address, ["sh", "-c", script], "place file")
+
+    def place_project_content(
+        self, node_address: str, op: PlaceProjectContentOp
+    ) -> None:
+        if self._project_dir is None or self._copy_in is None:
+            raise MaterializationCommandError(
+                f"project content placement needs a project dir on {node_address}"
+            )
+        root = self._project_dir.resolve()
+        source = (self._project_dir / op.source_relpath).resolve()
+        if source != root and root not in source.parents:
+            raise MaterializationCommandError(
+                f"project content source escapes the project root on {node_address}"
+            )
+        if not source.exists():
+            raise MaterializationCommandError(
+                f"project content source missing on {node_address}: {op.source_relpath}"
+            )
+        container = self._container_for(node_address)
+        parent = str(PurePosixPath(op.dest_path).parent)
+        self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
+        self._copy_in(container, str(source), op.dest_path, op.is_directory)
 
     def enable_service_unit(self, node_address: str, unit_name: str) -> None:
         self._require_ok(node_address, ["systemctl", "enable", unit_name], "enable unit")

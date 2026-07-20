@@ -103,6 +103,19 @@ class PlaceFileOp:
 
 
 @dataclass(frozen=True)
+class PlaceProjectContentOp:
+    """Copy a checked-in, project-contained file/directory into the node.
+
+    ``source_relpath`` is project-relative (containment-validated at resolution
+    time). Ordered with file placement, before service start.
+    """
+
+    dest_path: str
+    source_relpath: str
+    is_directory: bool = False
+
+
+@dataclass(frozen=True)
 class EnableServiceUnitOp:
     """Enable a service-manager unit (start on boot)."""
 
@@ -122,6 +135,7 @@ MaterializationOp = (
     | EnsureGroupOp
     | EnsureUserOp
     | PlaceFileOp
+    | PlaceProjectContentOp
     | EnableServiceUnitOp
     | StartServiceUnitOp
 )
@@ -215,7 +229,7 @@ def plan_node_materialization(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
-    content: tuple[PlaceFileOp, ...] = (),
+    content: tuple[MaterializationOp, ...] = (),
 ) -> tuple[MaterializationOp, ...]:
     """Lower one node's declared desired state into ordered generic operations.
 

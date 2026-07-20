@@ -26,6 +26,7 @@ from aptl.backends.aces_materializer import (
     InstallPackagesOp,
     MaterializationOp,
     PlaceFileOp,
+    PlaceProjectContentOp,
     StartServiceUnitOp,
 )
 from aptl.core.lab_types import LabResult
@@ -44,6 +45,7 @@ class MaterializationExecutor(Protocol):
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None: ...
     def ensure_user(self, node_address: str, op: EnsureUserOp) -> None: ...
     def place_file(self, node_address: str, path: str, content: str, mode: str) -> None: ...
+    def place_project_content(self, node_address: str, op: PlaceProjectContentOp) -> None: ...
     def enable_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def start_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def observe_installed_packages(
@@ -69,6 +71,8 @@ def _execute_op(
         executor.ensure_user(node_address, op)
     elif isinstance(op, PlaceFileOp):
         executor.place_file(node_address, op.path, op.content, op.mode)
+    elif isinstance(op, PlaceProjectContentOp):
+        executor.place_project_content(node_address, op)
     elif isinstance(op, EnableServiceUnitOp):
         executor.enable_service_unit(node_address, op.unit_name)
     elif isinstance(op, StartServiceUnitOp):
@@ -101,6 +105,9 @@ def _verify_op(
     elif isinstance(op, PlaceFileOp):
         if not executor.observe_file(node_address, op.path):
             return f"config file not present: {op.path}"
+    elif isinstance(op, PlaceProjectContentOp):
+        if not executor.observe_file(node_address, op.dest_path):
+            return f"content not present: {op.dest_path}"
     elif isinstance(op, EnableServiceUnitOp):
         if not executor.observe_service_unit_enabled(node_address, op.unit_name):
             return f"service unit not enabled: {op.unit_name}"

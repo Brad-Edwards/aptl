@@ -24,8 +24,13 @@ from aptl.core.lab_types import LabResult
 class _NodeBackend(Protocol):
     """The narrow backend surface node materialization needs."""
 
+    @property
+    def project_dir(self): ...
     def start_base_container(self, spec: BaseContainerSpec) -> None: ...
     def container_exec(self, name: str, cmd: list[str], *, timeout: int | None = None): ...
+    def copy_into_container(
+        self, container: str, source_path: str, dest_path: str, is_directory: bool
+    ) -> None: ...
 
 
 class _MaterializableNode(Protocol):
@@ -44,7 +49,7 @@ class _MaterializableNode(Protocol):
 def realize_node(
     node: _MaterializableNode,
     backend: _NodeBackend,
-    content: tuple[PlaceFileOp, ...] = (),
+    content: tuple[MaterializationOp, ...] = (),
 ) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
@@ -71,6 +76,8 @@ def realize_node(
         run=run_in,
         container_for=lambda _addr: container,
         start_base=start_base,
+        copy_in=backend.copy_into_container,
+        project_dir=getattr(backend, "project_dir", None),
     )
     return materialize_node(node.address, ops, executor)
 
@@ -78,7 +85,7 @@ def realize_node(
 def realize_nodes(
     nodes: Iterable[_MaterializableNode],
     backend: _NodeBackend,
-    content_by_node: dict[str, tuple[PlaceFileOp, ...]] | None = None,
+    content_by_node: dict[str, tuple[MaterializationOp, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 

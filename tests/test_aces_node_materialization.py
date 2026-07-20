@@ -26,8 +26,15 @@ class _FakeBackend:
         self.users: set[str] = set()
         self.groups: set[str] = set()
 
+    @property
+    def project_dir(self):
+        return None
+
     def start_base_container(self, spec: BaseContainerSpec) -> None:
         self.started.append(spec)
+
+    def copy_into_container(self, container, source_path, dest_path, is_directory):
+        pass
 
     def container_exec(self, name, cmd, *, timeout=None):
         # Emulate the real container: mutations accumulate, observers read back.

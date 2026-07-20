@@ -214,6 +214,23 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
                 f"failed to start base container for node {spec.node_address}"
             )
 
+    def copy_into_container(
+        self, container: str, source_path: str, dest_path: str, is_directory: bool
+    ) -> None:
+        """Copy a checked-in project source into a container (ADR-047).
+
+        For a directory, the source's contents are placed at ``dest_path``;
+        for a file, ``dest_path`` is the file. Raises on failure so the
+        materialization engine translates it into the ACES envelope.
+        """
+
+        source = f"{source_path}/." if is_directory else source_path
+        result = self._run(["docker", "cp", source, f"{container}:{dest_path}"], timeout=120)
+        if result.returncode != 0:
+            raise BackendSeedError(
+                f"failed to copy project content into container {container}"
+            )
+
     def _run_streaming(
         self,
         cmd: list[str],

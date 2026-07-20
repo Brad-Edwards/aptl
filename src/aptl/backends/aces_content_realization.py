@@ -383,6 +383,9 @@ def resolve_image_free_content_placement(
     text = _content_text(spec)
     dest = _optional_string(spec, "path") or _optional_string(spec, "destination")
     name = _optional_string(payload, "content_name") or _optional_string(payload, "name") or ""
+    content_type = _optional_string(spec, "type") or ""
+    source_name = _content_source_name(spec)
+
     if text is not None and dest:
         return (
             DeploymentContentRealization(
@@ -397,11 +400,46 @@ def resolve_image_free_content_placement(
             ),
             [],
         )
+
+    if source_name and dest:
+        if source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
+            return None, [
+                diagnostic(
+                    "aptl.provisioner.content-not-realizable",
+                    resource.address,
+                    "runtime-observed content cannot be recreated from source.",
+                )
+            ]
+        try:
+            _resolve_within_project(Path(""), source_name)
+        except PathContainmentError:
+            return None, [
+                diagnostic(
+                    "aptl.provisioner.content-source-escapes-project",
+                    resource.address,
+                    "content source path escapes the project root.",
+                )
+            ]
+        kind = "project-directory" if content_type == "directory" else "project-file"
+        return (
+            DeploymentContentRealization(
+                address=resource.address,
+                target_address=target_address,
+                content_name=name,
+                volume_suffix="",
+                dest_relpath=dest.lstrip("/"),
+                source_kind=kind,
+                source_relpath=source_name,
+                sensitive=spec.get("sensitive") is True,
+            ),
+            [],
+        )
+
     return None, [
         diagnostic(
             "aptl.provisioner.image-free-content-unsupported",
             resource.address,
-            "image-free content placement currently supports an inline-text file "
-            "(type: file with text and path).",
+            "image-free content placement supports an inline-text file or a "
+            "project-contained file/directory source with a destination path.",
         )
     ]

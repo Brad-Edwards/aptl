@@ -156,6 +156,11 @@ nodes:
     os: linux
     services:
       - {name: smb, port: 445, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: samba, version: "*"}
+      service_manager_units:
+        - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
   dns:
     type: vm
     os: linux

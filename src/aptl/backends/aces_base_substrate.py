@@ -98,7 +98,7 @@ def plan_node(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
-    content: tuple[PlaceFileOp, ...] = (),
+    content: tuple[MaterializationOp, ...] = (),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 

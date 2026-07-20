@@ -161,4 +161,7 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
         subprocess.run(
             ["docker", "rm", "-f", free_container, image_container], capture_output=True, text=True
         )
-        subprocess.run(["docker", "network", "rm", "aptl-mixed-test_aptl-mixed"], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "network", "rm", "aptl-mixed-test_aptl-mixed", "aptl-mixed-test_default"],
+            capture_output=True, text=True,
+        )

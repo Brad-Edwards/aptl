@@ -24,10 +24,13 @@ from typing import Protocol
 from aptl.backends.aces_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
+    InstallDependencyManifestOp,
     PlaceProjectContentOp,
 )
 from aptl.backends.aces_package_managers import (
     install_argv,
+    manifest_install_argv,
+    manifest_query_argv,
     parse_installed,
     query_installed_argv,
     refresh_argv,
@@ -137,6 +140,16 @@ class DockerMaterializationExecutor:
         self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
         self._copy_in(container, str(source), op.dest_path, op.is_directory)
 
+    def install_dependency_manifest(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> None:
+        directory = str(PurePosixPath(op.path).parent)
+        self._require_ok(
+            node_address,
+            manifest_install_argv(op.ecosystem, directory),
+            "install dependency manifest",
+        )
+
     def enable_service_unit(self, node_address: str, unit_name: str) -> None:
         self._require_ok(node_address, ["systemctl", "enable", unit_name], "enable unit")
 
@@ -162,6 +175,17 @@ class DockerMaterializationExecutor:
 
     def observe_file(self, node_address: str, path: str) -> bool:
         return self._exec(node_address, ["test", "-e", path]).returncode == 0
+
+    def observe_dependency_manifest_installed(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> bool:
+        # A manifest with no declared package name has nothing a query tool
+        # can check by name; the manifest file existing is not proof the
+        # install succeeded, so this fails closed rather than accepting a
+        # weaker check.
+        if not op.name:
+            return False
+        return self._exec(node_address, manifest_query_argv(op.ecosystem, op.name)).returncode == 0
 
     def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool:
         outcome = self._exec(node_address, ["systemctl", "is-enabled", unit_name])

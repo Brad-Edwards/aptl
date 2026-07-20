@@ -68,6 +68,11 @@ nodes:
     type: vm
     os: linux
     services: []
+    runtime:
+      packages:
+        - {manager: apt, name: python3-pip, version: "*"}
+      dependency_manifests:
+        - {ecosystem: pip, path: /app/pyproject.toml, name: aptl-labs}
   thehive:
     type: vm
     os: linux
@@ -463,6 +468,30 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  misp-suricata-sync-pyproject:
+    type: file
+    target: misp-suricata-sync
+    path: /app/pyproject.toml
+    source:
+      name: pyproject.toml
+  misp-suricata-sync-readme:
+    type: file
+    target: misp-suricata-sync
+    path: /app/README.md
+    source:
+      name: README.md
+  misp-suricata-sync-hatch-build:
+    type: file
+    target: misp-suricata-sync
+    path: /app/hatch_build.py
+    source:
+      name: hatch_build.py
+  misp-suricata-sync-src:
+    type: directory
+    target: misp-suricata-sync
+    destination: /app/src
+    source:
+      name: src
   webapp-app-code:
     type: directory
     target: webapp

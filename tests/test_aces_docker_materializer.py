@@ -18,7 +18,11 @@ from aptl.backends.aces_docker_materializer import (
     DockerMaterializationExecutor,
     MaterializationCommandError,
 )
-from aptl.backends.aces_materializer import EnsureDirectoryOp, EnsureUserOp
+from aptl.backends.aces_materializer import (
+    EnsureDirectoryOp,
+    EnsureUserOp,
+    InstallDependencyManifestOp,
+)
 
 
 class _FakeExec:
@@ -153,6 +157,47 @@ class TestFilesystem:
         absent = _executor(_FakeExec(lambda c, a: (1, "")))
         assert present.observe_directory("n.node", "/var/log/named") is True
         assert absent.observe_directory("n.node", "/var/log/named") is False
+
+
+class TestDependencyManifest:
+    def test_install_runs_ecosystem_install_against_the_manifest_directory(self):
+        fake = _FakeExec()
+        _executor(fake).install_dependency_manifest(
+            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        )
+        argv = fake.calls[-1][1]
+        assert argv == ["pip", "install", "--break-system-packages", "/app"]
+
+    def test_install_nonzero_raises_translatable_command_error(self):
+        fake = _FakeExec(lambda c, a: (1, "error"))
+        executor = _executor(fake)
+        op = InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        with pytest.raises(MaterializationCommandError):
+            executor.install_dependency_manifest("n.node", op)
+
+    def test_observe_installed_queries_by_declared_name(self):
+        fake = _FakeExec(lambda c, a: (0, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+        )
+        assert observed is True
+        assert fake.calls[-1][1] == ["pip", "show", "aptl-labs"]
+
+    def test_observe_installed_false_when_query_fails(self):
+        fake = _FakeExec(lambda c, a: (1, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+        )
+        assert observed is False
+
+    def test_observe_installed_fails_closed_without_a_declared_name(self):
+        fake = _FakeExec(lambda c, a: (0, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        )
+        assert observed is False
 
 
 class TestServices:

@@ -371,10 +371,14 @@ def _realize_node(
 
 
 def _node_os(node_spec: Mapping[str, Any] | None) -> str:
+    """Return the node's declared OS family, or empty when undeclared."""
+
     return str(node_spec.get("os") or "") if node_spec else ""
 
 
 def _node_os_version(node_spec: Mapping[str, Any] | None) -> str:
+    """Return the node's declared OS version, or empty when undeclared."""
+
     return str(node_spec.get("os_version") or "") if node_spec else ""
 
 
@@ -386,9 +390,7 @@ def _node_runtime(node_spec: Mapping[str, Any] | None) -> RuntimeConfiguration |
     materializer/manifest gates surface the missing desired state downstream.
     """
 
-    if not node_spec:
-        return None
-    raw = node_spec.get("runtime")
+    raw = node_spec.get("runtime") if node_spec else None
     if not isinstance(raw, Mapping):
         return None
     try:

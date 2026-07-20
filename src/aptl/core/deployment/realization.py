@@ -134,7 +134,7 @@ class DeploymentNodeRealization(object):
     # base substrate. None until the node payload declares them.
     os: str = ""
     os_version: str = ""
-    runtime: "RuntimeConfiguration | None" = None
+    runtime: RuntimeConfiguration | None = None
 
 
 ContentSourceKind = Literal[

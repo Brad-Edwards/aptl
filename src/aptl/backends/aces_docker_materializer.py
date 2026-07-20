@@ -43,6 +43,8 @@ class MaterializationCommandError(RuntimeError):
 
 
 class _ExecOutcome(Protocol):
+    """The result shape a backend's exec callable returns."""
+
     returncode: int
     stdout: str
 
@@ -90,7 +92,8 @@ class DockerMaterializationExecutor:
 
     def ensure_user(self, node_address: str, op: EnsureUserOp) -> None:
         if self.observe_local_user(node_address, op.username):
-            return  # reconcile-not-recreate: a present user is left in place
+            # reconcile-not-recreate: a present user is left in place
+            return
         self._require_ok(node_address, _useradd_argv(op), "ensure user")
 
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
@@ -181,6 +184,8 @@ class DockerMaterializationExecutor:
 
 
 def _useradd_argv(op: EnsureUserOp) -> list[str]:
+    """Build the `useradd` argv for one declared user's non-secret attributes."""
+
     argv = ["useradd", "--create-home"]
     if op.uid is not None:
         argv += ["-u", str(op.uid)]

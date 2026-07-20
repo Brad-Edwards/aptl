@@ -65,8 +65,9 @@ class TestPackages:
 
     def test_install_nonzero_raises_translatable_command_error(self):
         fake = _FakeExec(lambda c, a: (100, "E: Unable to locate package"))
+        executor = _executor(fake)
         with pytest.raises(MaterializationCommandError):
-            _executor(fake).install_packages("n.node", "apt", ("nope",))
+            executor.install_packages("n.node", "apt", ("nope",))
 
     def test_apt_install_refreshes_index_before_installing(self):
         # A slim base image ships no apt lists, so install must be preceded by
@@ -111,7 +112,7 @@ class TestIdentity:
             EnsureUserOp(username="wazuh", shell="/bin/bash", supplemental_groups=("wazuh",)),
         )
         useradd = next(argv for argv in fake.argvs() if argv[0] == "useradd")
-        assert "wazuh" == useradd[-1]
+        assert useradd[-1] == "wazuh"
         assert "/bin/bash" in useradd and "wazuh" in useradd  # shell + group
 
     def test_observe_local_user_and_group_from_returncode(self):
@@ -142,8 +143,10 @@ class TestFilesystem:
 
     def test_ensure_directory_nonzero_raises_translatable_command_error(self):
         fake = _FakeExec(lambda c, a: (1, "mkdir: cannot create directory"))
+        executor = _executor(fake)
+        op = EnsureDirectoryOp(path="/root-owned")
         with pytest.raises(MaterializationCommandError):
-            _executor(fake).ensure_directory("n.node", EnsureDirectoryOp(path="/root-owned"))
+            executor.ensure_directory("n.node", op)
 
     def test_observe_directory_from_returncode(self):
         present = _executor(_FakeExec(lambda c, a: (0, "")))

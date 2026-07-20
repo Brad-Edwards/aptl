@@ -19,7 +19,6 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_materializer import (
     MaterializationOp,
-    PlaceFileOp,
     base_image_for_os,
     package_family,
     plan_node_materialization,
@@ -44,7 +43,7 @@ class InitRequirements:
     capabilities: tuple[str, ...] = ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
     cgroup_host: bool = True
     cgroupfs_rw_mount: bool = True
-    tmpfs: tuple[str, ...] = ("/run", "/run/lock", "/tmp")
+    tmpfs: tuple[str, ...] = ("/run", "/run/lock", "/tmp")  # NOSONAR python:S5443 - tmpfs mount targets for the container's own init, not application file I/O into a shared host directory
     seccomp_unconfined: bool = True
     env: tuple[tuple[str, str], ...] = (("container", "docker"),)
     stop_signal: str = "SIGRTMIN+3"
@@ -62,8 +61,11 @@ class BaseContainerSpec:
 
 
 def _container_name(node_address: str) -> str:
-    # Project-scoped, node-derived; never product-specific. The leaf of the
-    # address is the node's local name.
+    """Derive the project-scoped container name from a node's address.
+
+    Never product-specific: the leaf of the address is the node's local name.
+    """
+
     return "aptl-" + node_address.rsplit(".", 1)[-1]
 
 

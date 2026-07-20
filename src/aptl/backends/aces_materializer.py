@@ -16,7 +16,7 @@ never a raw argv passthrough, and verifies the result by read-after-write.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from aces_sdl.runtime_configuration import (
     RuntimeConfiguration,
@@ -172,7 +172,7 @@ def package_family(runtime: RuntimeConfiguration | None) -> str:
 
 def base_image_for_os(
     os: str,
-    os_version: str,
+    _os_version: str,
     *,
     runs_services: bool = False,
     family: str = "debian",
@@ -181,8 +181,9 @@ def base_image_for_os(
 
     Deterministic. A node that declares service units gets the validated
     init-capable RHEL/systemd substrate; otherwise a minimal generic base chosen
-    by package family (apt -> Debian, dnf -> RHEL). `os_version` is accepted for
-    forward compatibility but the current maps key on family only.
+    by package family (apt -> Debian, dnf -> RHEL). The OS version is accepted
+    positionally for forward compatibility but the current maps key on family
+    only.
     """
 
     os_family = (os or "").strip().lower()
@@ -198,6 +199,8 @@ def base_image_for_os(
 
 
 def _package_ops(runtime: RuntimeConfiguration) -> list[InstallPackagesOp]:
+    """Group declared packages by manager into one install op per manager."""
+
     by_manager: dict[str, set[str]] = {}
     for package in runtime.packages:
         by_manager.setdefault(package.manager, set()).add(package.name)
@@ -208,6 +211,8 @@ def _package_ops(runtime: RuntimeConfiguration) -> list[InstallPackagesOp]:
 
 
 def _identity_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
+    """Lower declared local groups/users into ensure-group/ensure-user ops."""
+
     inventory = runtime.local_identity
     if inventory is None:
         return []
@@ -229,10 +234,14 @@ def _identity_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
 
 
 def _filesystem_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
-    # Only directory entries are materializable from metadata alone; a FILE
-    # entry with no inline content describes an expected fact about content
-    # placed elsewhere (content: is the file-placement authority), so it is
-    # not lowered into an op here.
+    """Lower declared directory entries in filesystem_inventory into ops.
+
+    Only directory entries are materializable from metadata alone; a FILE
+    entry with no inline content describes an expected fact about content
+    placed elsewhere (content: is the file-placement authority), so it is
+    not lowered into an op here.
+    """
+
     return [
         EnsureDirectoryOp(
             path=entry.path, owner=entry.owner_user, group=entry.owner_group, mode=entry.mode
@@ -243,6 +252,8 @@ def _filesystem_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
 
 
 def _service_unit_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
+    """Lower declared service units into enable/start ops for enabled/active ones."""
+
     ops: list[MaterializationOp] = [
         EnableServiceUnitOp(unit_name=unit.unit_name)
         for unit in runtime.service_manager_units

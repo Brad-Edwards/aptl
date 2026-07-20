@@ -75,8 +75,9 @@ def test_service_without_software_is_a_violation():
 
 def test_assert_raises_with_all_violations():
     node = _node("n.box", runtime=None)
+    spec = _spec([node], image_free=False)
     with pytest.raises(ImageFreeGateError) as exc:
-        assert_image_free(_spec([node], image_free=False))
+        assert_image_free(spec)
     assert len(exc.value.violations) >= 2
 
 

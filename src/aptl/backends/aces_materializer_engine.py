@@ -83,6 +83,8 @@ _EXECUTORS: dict[type, _Execute] = {
 def _execute_op(
     op: MaterializationOp, node_address: str, executor: MaterializationExecutor
 ) -> None:
+    """Dispatch one op to its typed executor method via the op-type table."""
+
     handler = _EXECUTORS.get(type(op))
     if handler is not None:
         handler(op, node_address, executor)
@@ -92,40 +94,56 @@ _Verify = Callable[[MaterializationOp, str, MaterializationExecutor], "str | Non
 
 
 def _verify_install_packages(op: InstallPackagesOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify every declared package is observed installed."""
+
     observed = ex.observe_installed_packages(addr, op.manager, op.packages)
     missing = tuple(name for name in op.packages if name not in observed)
     return f"packages not installed via {op.manager}: {', '.join(missing)}" if missing else None
 
 
 def _verify_ensure_group(op: EnsureGroupOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the declared local group is observed present."""
+
     return None if ex.observe_local_group(addr, op.name) else f"local group not present: {op.name}"
 
 
 def _verify_ensure_user(op: EnsureUserOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the declared local user is observed present."""
+
     return None if ex.observe_local_user(addr, op.username) else f"local user not present: {op.username}"
 
 
 def _verify_ensure_directory(op: EnsureDirectoryOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the declared directory is observed present."""
+
     return None if ex.observe_directory(addr, op.path) else f"directory not present: {op.path}"
 
 
 def _verify_place_file(op: PlaceFileOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the placed config file is observed present."""
+
     return None if ex.observe_file(addr, op.path) else f"config file not present: {op.path}"
 
 
 def _verify_place_project_content(
     op: PlaceProjectContentOp, addr: str, ex: MaterializationExecutor
 ) -> str | None:
+    """Verify the copied project-sourced content is observed present."""
+
     return None if ex.observe_file(addr, op.dest_path) else f"content not present: {op.dest_path}"
 
 
 def _verify_enable_service_unit(op: EnableServiceUnitOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the declared service unit is observed enabled."""
+
     if ex.observe_service_unit_enabled(addr, op.unit_name):
         return None
     return f"service unit not enabled: {op.unit_name}"
 
 
 def _verify_start_service_unit(op: StartServiceUnitOp, addr: str, ex: MaterializationExecutor) -> str | None:
+    """Verify the declared service unit is observed active."""
+
     if ex.observe_service_unit_active(addr, op.unit_name):
         return None
     return f"service unit not active: {op.unit_name}"
@@ -169,9 +187,10 @@ def materialize_node(
     for op in operations:
         try:
             _execute_op(op, node_address, executor)
-        except Exception:  # noqa: BLE001 - admission boundary: translate every
-            # internal/backend failure into the ACES LabResult envelope; the raw
-            # detail is deliberately not echoed (redaction + no verbatim message).
+        except Exception:
+            # Admission boundary: translate every internal/backend failure into
+            # the ACES LabResult envelope; the raw detail is deliberately not
+            # echoed (redaction + no verbatim message).
             return LabResult(
                 success=False,
                 error=render_aces_diagnostics(

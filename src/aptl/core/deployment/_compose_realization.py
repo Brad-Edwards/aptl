@@ -67,40 +67,49 @@ class ComposeRealizationMixin(
             return self._realize_image_free(realization)
 
         profiles = list(realization.profiles)
-        result = self._validate_stateful_realization(realization)
-        compose_files = None
-        if result is None:
-            result = self._validate_stateful_compose_capability(realization)
-        if result is None:
-            result = self._realize_stateful_prerequisites(realization)
-        if result is None:
+        compose_files: tuple[Path, ...] | None = None
+
+        def _images() -> LabResult | None:
+            nonlocal compose_files
             result, compose_files = self._prepare_realization_images(realization)
-        if result is None:
-            result = self._realize_published_ports(realization)
-        if result is None:
+            return result
+
+        def _networks() -> LabResult | None:
             network_failures = self._ensure_realization_networks(realization)
-            result = (
-                LabResult(success=False, error="; ".join(network_failures[:5]))
-                if network_failures
-                else None
-            )
-        if result is None:
-            result = self._realize_content(realization)
-        if result is None:
+            if network_failures:
+                return LabResult(success=False, error="; ".join(network_failures[:5]))
+            return None
+
+        def _compose_model() -> LabResult | None:
+            nonlocal compose_files
             compose_files = self._realization_compose_files(compose_files, realization)
-            result = self._validate_realization_compose_model(
-                profiles,
-                compose_files,
-                realization,
-            )
-        if result is None:
+            return self._validate_realization_compose_model(profiles, compose_files, realization)
+
+        def _start() -> LabResult:
             start_result = self._start_realized_services(
-                profiles,
-                build=build,
-                compose_files=compose_files,
+                profiles, build=build, compose_files=compose_files
             )
-            result = self._realization_result(start_result, realization)
-        return result
+            return self._realization_result(start_result, realization)
+
+        # Each step realizes one stage and returns a fail-closed LabResult, or
+        # None to fall through to the next stage. The last stage always
+        # returns, so the pipeline always ends in a concrete result.
+        steps = (
+            lambda: self._validate_stateful_realization(realization),
+            lambda: self._validate_stateful_compose_capability(realization),
+            lambda: self._realize_stateful_prerequisites(realization),
+            _images,
+            lambda: self._realize_published_ports(realization),
+            _networks,
+            lambda: self._realize_content(realization),
+            _compose_model,
+            _start,
+        )
+        for step in steps:
+            result = step()
+            if result is not None:
+                return result
+        return LabResult(success=True)
 
     def _realize_image_free(
         self,

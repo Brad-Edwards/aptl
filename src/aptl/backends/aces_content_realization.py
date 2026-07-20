@@ -356,11 +356,90 @@ def _reject(address: str, reason_code: str) -> Diagnostic:
     )
 
 
+_ImageFreeResult = tuple[DeploymentContentRealization | None, list[Diagnostic]]
+
+
+def _inline_text_image_free_placement(
+    resource: PlannedResource,
+    target_address: str,
+    *,
+    dest: str,
+    name: str,
+    text: str | None,
+    spec: Mapping[str, Any],
+) -> _ImageFreeResult | None:
+    """Lower an inline-text placement, or None if this spec is not one."""
+
+    if text is None or not dest:
+        return None
+    return (
+        DeploymentContentRealization(
+            address=resource.address,
+            target_address=target_address,
+            content_name=name,
+            volume_suffix="",
+            dest_relpath=dest.lstrip("/"),
+            source_kind="inline-text",
+            inline_text=text,
+            sensitive=spec.get("sensitive") is True,
+        ),
+        [],
+    )
+
+
+def _project_source_image_free_placement(
+    resource: PlannedResource,
+    target_address: str,
+    *,
+    dest: str,
+    name: str,
+    source_name: str,
+    content_type: str,
+    spec: Mapping[str, Any],
+) -> _ImageFreeResult | None:
+    """Lower a project-contained source placement, or None if this spec is not one."""
+
+    if not source_name or not dest:
+        return None
+    if source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
+        return None, [
+            diagnostic(
+                "aptl.provisioner.content-not-realizable",
+                resource.address,
+                "runtime-observed content cannot be recreated from source.",
+            )
+        ]
+    try:
+        _resolve_within_project(Path(""), source_name)
+    except PathContainmentError:
+        return None, [
+            diagnostic(
+                "aptl.provisioner.content-source-escapes-project",
+                resource.address,
+                "content source path escapes the project root.",
+            )
+        ]
+    kind = "project-directory" if content_type == "directory" else "project-file"
+    return (
+        DeploymentContentRealization(
+            address=resource.address,
+            target_address=target_address,
+            content_name=name,
+            volume_suffix="",
+            dest_relpath=dest.lstrip("/"),
+            source_kind=kind,
+            source_relpath=source_name,
+            sensitive=spec.get("sensitive") is True,
+        ),
+        [],
+    )
+
+
 def resolve_image_free_content_placement(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     target_address: str,
-) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+) -> _ImageFreeResult:
     """Resolve content for an image-free node (ADR-048).
 
     The generic materializer places declared config directly into the node's
@@ -381,66 +460,29 @@ def resolve_image_free_content_placement(
                 "content placement has no spec.",
             )
         ]
-    text = _content_text(spec)
     dest = _optional_string(spec, "path") or _optional_string(spec, "destination")
     name = _optional_string(payload, "content_name") or _optional_string(payload, "name") or ""
-    content_type = _optional_string(spec, "type") or ""
-    source_name = _content_source_name(spec)
 
-    if text is not None and dest:
-        return (
-            DeploymentContentRealization(
-                address=resource.address,
-                target_address=target_address,
-                content_name=name,
-                volume_suffix="",
-                dest_relpath=dest.lstrip("/"),
-                source_kind="inline-text",
-                inline_text=text,
-                sensitive=spec.get("sensitive") is True,
-            ),
-            [],
+    result = _inline_text_image_free_placement(
+        resource, target_address, dest=dest, name=name, text=_content_text(spec), spec=spec
+    )
+    if result is None:
+        result = _project_source_image_free_placement(
+            resource,
+            target_address,
+            dest=dest,
+            name=name,
+            source_name=_content_source_name(spec),
+            content_type=_optional_string(spec, "type") or "",
+            spec=spec,
         )
-
-    if source_name and dest:
-        if source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
-            return None, [
-                diagnostic(
-                    "aptl.provisioner.content-not-realizable",
-                    resource.address,
-                    "runtime-observed content cannot be recreated from source.",
-                )
-            ]
-        try:
-            _resolve_within_project(Path(""), source_name)
-        except PathContainmentError:
-            return None, [
-                diagnostic(
-                    "aptl.provisioner.content-source-escapes-project",
-                    resource.address,
-                    "content source path escapes the project root.",
-                )
-            ]
-        kind = "project-directory" if content_type == "directory" else "project-file"
-        return (
-            DeploymentContentRealization(
-                address=resource.address,
-                target_address=target_address,
-                content_name=name,
-                volume_suffix="",
-                dest_relpath=dest.lstrip("/"),
-                source_kind=kind,
-                source_relpath=source_name,
-                sensitive=spec.get("sensitive") is True,
-            ),
-            [],
-        )
-
-    return None, [
-        diagnostic(
-            "aptl.provisioner.image-free-content-unsupported",
-            resource.address,
-            "image-free content placement supports an inline-text file or a "
-            "project-contained file/directory source with a destination path.",
-        )
-    ]
+    if result is None:
+        result = None, [
+            diagnostic(
+                "aptl.provisioner.image-free-content-unsupported",
+                resource.address,
+                "image-free content placement supports an inline-text file or a "
+                "project-contained file/directory source with a destination path.",
+            )
+        ]
+    return result

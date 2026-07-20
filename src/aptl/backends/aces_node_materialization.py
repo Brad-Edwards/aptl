@@ -9,14 +9,16 @@ declared state, verified by read-after-write.
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Protocol
 
 from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_base_substrate import BaseContainerSpec, plan_node
 from aptl.backends.aces_docker_materializer import DockerMaterializationExecutor
-from aptl.backends.aces_materializer import PlaceFileOp
+from aptl.backends.aces_materializer import MaterializationOp
 from aptl.backends.aces_materializer_engine import materialize_node
 from aptl.core.lab_types import LabResult
 
@@ -25,9 +27,11 @@ class _NodeBackend(Protocol):
     """The narrow backend surface node materialization needs."""
 
     @property
-    def project_dir(self): ...
+    def project_dir(self) -> Path | None: ...
     def start_base_container(self, spec: BaseContainerSpec) -> None: ...
-    def container_exec(self, name: str, cmd: list[str], *, timeout: int | None = None): ...
+    def container_exec(
+        self, name: str, cmd: list[str], *, timeout: int | None = None
+    ) -> subprocess.CompletedProcess: ...
     def copy_into_container(
         self, container: str, source_path: str, dest_path: str, is_directory: bool
     ) -> None: ...
@@ -67,9 +71,13 @@ def realize_node(
     container = spec.container_name
 
     def start_base(_addr: str, _image_ref: str) -> None:
+        """Start this node's already-planned base container, ignoring the
+        placeholder address/image the engine passes (the real spec is closed
+        over)."""
         backend.start_base_container(spec)
 
-    def run_in(container_name: str, argv: list[str]):
+    def run_in(container_name: str, argv: list[str]) -> subprocess.CompletedProcess:
+        """Run one materialization command inside the node's container."""
         return backend.container_exec(container_name, argv)
 
     executor = DockerMaterializationExecutor(

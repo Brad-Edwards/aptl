@@ -26,6 +26,8 @@ class UnsupportedPackageManagerError(ValueError):
 
 @dataclass(frozen=True)
 class _Manager:
+    """One package manager's install/query/parse mechanism."""
+
     install: Callable[[tuple[str, ...]], list[str]]
     query: Callable[[tuple[str, ...]], list[str]]
     parse: Callable[[str], frozenset[str]]
@@ -36,6 +38,8 @@ class _Manager:
 
 
 def _apt_install(packages: tuple[str, ...]) -> list[str]:
+    """Build the non-interactive `apt-get install` argv for declared packages."""
+
     return [
         "env",
         "DEBIAN_FRONTEND=noninteractive",
@@ -48,30 +52,44 @@ def _apt_install(packages: tuple[str, ...]) -> list[str]:
 
 
 def _apt_query(packages: tuple[str, ...]) -> list[str]:
+    """Build the `dpkg-query` argv that reports which declared packages are installed."""
+
     return ["dpkg-query", "-W", "-f=${Package}\n", *sorted(packages)]
 
 
 def _lines_to_set(stdout: str) -> frozenset[str]:
+    """Parse one-package-name-per-line query output into a set of names."""
+
     return frozenset(line.strip() for line in stdout.splitlines() if line.strip())
 
 
 def _dnf_install(packages: tuple[str, ...]) -> list[str]:
+    """Build the `dnf install` argv for declared packages."""
+
     return ["dnf", "install", "-y", *sorted(packages)]
 
 
 def _dnf_query(packages: tuple[str, ...]) -> list[str]:
+    """Build the `rpm -q` argv that reports which declared packages are installed."""
+
     return ["rpm", "-q", "--qf", "%{NAME}\n", *sorted(packages)]
 
 
 def _pip_install(packages: tuple[str, ...]) -> list[str]:
+    """Build the `pip install` argv for declared packages."""
+
     return ["pip", "install", *sorted(packages)]
 
 
 def _pip_query(packages: tuple[str, ...]) -> list[str]:
+    """Build the `pip freeze` argv that reports all installed packages."""
+
     return ["pip", "freeze"]
 
 
 def _pip_parse(stdout: str) -> frozenset[str]:
+    """Parse `pip freeze` output into a set of installed package names."""
+
     names: set[str] = set()
     for line in stdout.splitlines():
         token = line.strip()
@@ -99,6 +117,8 @@ _MANAGERS: dict[str, _Manager] = {
 
 
 def _manager(name: str) -> _Manager:
+    """Look up a declared package manager's mechanism, or fail closed."""
+
     manager = _MANAGERS.get(name)
     if manager is None:
         raise UnsupportedPackageManagerError(

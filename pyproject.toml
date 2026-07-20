@@ -32,6 +32,7 @@ dependencies = [
     "opentelemetry-semantic-conventions>=0.54b0",
     "cryptography>=42.0.0",
     "aces-sdl>=0.23.1,<0.24.0",
+    "rfc8785>=0.1.4,<0.2.0",
 ]
 
 [project.urls]

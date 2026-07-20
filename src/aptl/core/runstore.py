@@ -19,10 +19,37 @@ import shutil
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol, TypedDict
 
+import rfc8785
+
 from aptl.utils.logging import get_logger
+from aptl.utils.pathsafe import create_exclusive_nofollow, read_contained_nofollow
 from aptl.utils.redaction import redact
 
 log = get_logger("runstore")
+
+
+class SecretInvariantError(ValueError):
+    """Raised by :meth:`LocalRunStore.create_json_once` when applying the
+    shared secret-classification policy (:mod:`aptl.utils.redaction`) would
+    change the payload.
+
+    ADR-047 "Persistence and state model": the create-once operation must
+    preserve semantic bytes exactly. It must never silently persist a
+    payload that differs from what was approved for execution, so a
+    payload containing identity-bearing secret-shaped content is rejected
+    outright rather than redacted-and-written.
+    """
+
+
+class RunStoreConflictError(ValueError):
+    """Raised by :meth:`LocalRunStore.create_json_once` when the target
+    already exists with canonical bytes that differ from the payload being
+    written.
+
+    A byte-identical existing payload is treated as idempotent success
+    (ADR-047); only a genuine mismatch is an error.
+    """
+
 
 # OBS-003: run / session identifiers become directory components, so they
 # must be filesystem-safe. ``trace_id`` from ``trace-context.json`` is hex
@@ -66,6 +93,44 @@ def _validate_relative_path(relative_path: str) -> str:
             f"invalid relative_path (contains '..'): {relative_path!r}"
         )
     return relative_path
+
+
+def _canonicalize_payload(payload: object) -> tuple[bytes, object]:
+    """Return ``(RFC 8785 canonical bytes, JSON-round-tripped structure)``
+    for :meth:`LocalRunStore.create_json_once`.
+
+    The round-tripped structure is what is actually compared and
+    persisted: a tuple normalizes to a list, and any value that is not
+    already JSON-serializable is a caller bug, not something to silently
+    stringify — ``create_json_once`` payloads are structured plan/trial
+    projections, not free-form archive data, so (unlike :func:`_safe_default`
+    below) no ``default=str`` escape hatch is offered here.
+    """
+    try:
+        raw = json.dumps(payload)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"create_json_once payload is not JSON-serializable: {exc}") from exc
+    normalized = json.loads(raw)
+    return rfc8785.dumps(normalized), normalized
+
+
+def _assert_no_secret_drift(normalized: object) -> None:
+    """Reject ``normalized`` if the shared :func:`redact` policy would
+    change it at all (ADR-047 create-once secret invariant).
+
+    Reuses the exact production :func:`redact` — the same classification
+    :func:`aptl.utils.redaction.is_sensitive_key` and
+    :func:`aptl.utils.redaction.is_secret_shaped_value` are built from — so
+    this can never silently drift out of lockstep with what actually gets
+    redacted elsewhere.
+    """
+    if redact(normalized) != normalized:
+        raise SecretInvariantError(
+            "create_json_once payload contains identity-bearing content "
+            "the shared secret-classification policy (aptl.utils.redaction) "
+            "would change; rejecting rather than silently persisting a "
+            "payload that differs from what was approved for execution"
+        )
 
 
 def _safe_default(obj: object) -> str:
@@ -114,6 +179,8 @@ class RunStorageBackend(Protocol):
     ) -> None: ...
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None: ...
+
+    def create_json_once(self, namespace: str, name: str, payload: object) -> Path: ...
 
     def list_runs(self) -> list[str]: ...
 
@@ -213,6 +280,59 @@ class LocalRunStore:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         log.debug("Copied %s -> %s", source, target)
+
+    def create_json_once(self, namespace: str, name: str, payload: object) -> Path:
+        """Create-once, canonical, no-follow, atomic persistence for a
+        controller-owned journal artifact (e.g. a future admitted
+        experiment trial plan).
+
+        ADR-047 "Persistence and state model": distinct from the run-id
+        run-archive tree (:meth:`write_json`/``_run_dir``) — this targets
+        ``<base_dir>/<namespace>/<name>.json``, an explicit non-run
+        namespace beneath the injected store root. It never synthesizes a
+        ``manifest.json`` and is invisible to :meth:`list_runs`.
+
+        Semantics:
+          1. Canonicalize ``payload`` ONCE to RFC 8785 bytes, after a JSON
+             round-trip so both the secret-invariant comparison and the
+             persisted bytes reflect exactly the same structure (a tuple or
+             other non-JSON shape cannot silently disagree with what lands
+             on disk).
+          2. Secret invariant: if the shared ``redact()`` policy would
+             change the canonicalized structure at all, raise
+             :class:`SecretInvariantError` — never silently persist a
+             payload that differs from what was approved.
+          3. Publish with ``O_CREAT | O_EXCL`` under a descriptor-relative,
+             no-follow path (:mod:`aptl.utils.pathsafe`), so a pre-existing
+             symlink at any path component cannot redirect the write
+             outside ``base_dir``.
+          4. Idempotent: a target that already exists with byte-identical
+             canonical content is a no-op success. Different existing
+             bytes raise :class:`RunStoreConflictError`.
+
+        Returns the absolute path written (or already present).
+        """
+        safe_namespace = _validate_id(namespace, "namespace")
+        safe_name = _validate_id(name, "name")
+        canonical, normalized = _canonicalize_payload(payload)
+        _assert_no_secret_drift(normalized)
+
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        relative_path = f"{safe_namespace}/{safe_name}.json"
+        target = self._base_dir / safe_namespace / f"{safe_name}.json"
+        try:
+            create_exclusive_nofollow(self._base_dir, relative_path, canonical)
+        except FileExistsError:
+            existing = read_contained_nofollow(self._base_dir, relative_path)
+            if existing != canonical:
+                raise RunStoreConflictError(
+                    "create_json_once target already exists with different "
+                    f"content: {namespace}/{name}"
+                ) from None
+            log.debug("create_json_once idempotent no-op: %s", target)
+            return target
+        log.info("create_json_once wrote %d bytes to %s", len(canonical), target)
+        return target
 
     def list_runs(self) -> list[str]:
         if not self._base_dir.exists():

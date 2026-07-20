@@ -176,7 +176,7 @@ nodes:
         groups:
           - {name: labadmin}
         users:
-          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+          - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
   fileshare:
@@ -215,7 +215,7 @@ nodes:
         groups:
           - {name: labadmin}
         users:
-          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+          - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
 
@@ -231,7 +231,7 @@ nodes:
         groups:
           - {name: kali}
         users:
-          - {username: kali, supplemental_groups: [kali]}
+          - {username: kali, primary_group: kali}
       service_manager_units:
         - {unit_id: ssh, unit_name: ssh.service, enabled_state: enabled, active_state: active}
   kali-capture:

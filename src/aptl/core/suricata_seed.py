@@ -23,6 +23,7 @@ from aptl.core.credentials import (
     _canonical_generated_path,
     _resolve_within_project,
 )
+from aptl.core.deployment._compose_seed_safety import redacted_stderr_hint
 from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
 from aptl.utils.logging import get_logger
 
@@ -127,6 +128,12 @@ def _restore_via_container(
         perm_result = subprocess.run(
             [
                 "docker", "run", "--rm",
+                # Harden the throwaway repair helper: no network namespace
+                # (it only chowns local bind-mounted files — zero egress
+                # surface), and an explicit root identity so the chown works
+                # regardless of the seeder image's default user.
+                "--network", "none",
+                "--user", "0:0",
                 "--entrypoint", "chown",
                 "-v", f"{project_dir}:/project",
                 seeder_image,
@@ -147,11 +154,14 @@ def _restore_via_container(
         )
 
     if perm_result.returncode != 0:
+        # Route container stderr through the canonical seed-path redactor
+        # rather than surfacing it verbatim, so a leaked host path or secret
+        # in the tool's output never reaches the error string or logs.
         return SuricataSourceOwnershipResult(
             success=False,
             error=(
-                perm_result.stderr.strip()
-                or "Suricata config ownership restore failed"
+                "Suricata config ownership restore failed"
+                + redacted_stderr_hint(perm_result.stderr)
             ),
         )
 

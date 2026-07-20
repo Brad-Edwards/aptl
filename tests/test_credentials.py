@@ -898,6 +898,12 @@ class TestEnsureSuricataConfigSourceOwnership:
         assert "run" in calls[0] and "--entrypoint" in calls[0] and "chown" in calls[0]
         assert "sudo" not in calls[0]
         assert self._IMAGE in calls[0]
+        # #678 hardening: the throwaway helper has no network and runs as an
+        # explicit root, so it can chown regardless of the image default user
+        # while offering no egress.
+        cmd = calls[0]
+        assert cmd[cmd.index("--network") + 1] == "none"
+        assert cmd[cmd.index("--user") + 1] == "0:0"
 
     def test_reports_error_when_container_repair_fails(self, tmp_path, monkeypatch):
         from aptl.core.suricata_seed import ensure_suricata_config_source_ownership
@@ -920,14 +926,30 @@ class TestEnsureSuricataConfigSourceOwnership:
             lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()),
         )
 
+        # Credential-shaped fragment so the assertions below exercise the
+        # actual redact() pass, not just the message envelope: a regression
+        # to interpolating raw perm_result.stderr would leak this token.
+        secret = "s3cr3tLEAK123"
+
         def fake_run(cmd, **kwargs):
-            return subprocess.CompletedProcess(cmd, 1, "", "chown: operation not permitted")
+            return subprocess.CompletedProcess(
+                cmd, 1, "", f"chown: operation not permitted; token={secret}"
+            )
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
         result = ensure_suricata_config_source_ownership(tmp_path, self._IMAGE)
         assert result.success is False
-        assert "not permitted" in result.error
+        # #678 hardening: container stderr is routed through the canonical
+        # redaction helper (fixed base message + " — stderr: …"), never
+        # returned verbatim.
+        assert result.error.startswith("Suricata config ownership restore failed")
+        assert "stderr:" in result.error
+        # The secret is stripped and marked, while a benign portion of the
+        # same stderr survives — proving redact() actually ran on it.
+        assert secret not in result.error
+        assert "[REDACTED]" in result.error
+        assert "operation not permitted" in result.error
         assert "sudo" not in result.error
 
 

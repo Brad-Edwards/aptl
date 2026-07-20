@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from aptl.utils.redaction import REDACTED, redact
+from aptl.utils.redaction import REDACTED, is_secret_shaped_value, is_sensitive_key, redact
 
 
 class TestRedactScalars:
@@ -873,3 +873,133 @@ class TestRedactorBounds:
     def test_bytes_in_container_are_redacted(self):
         out = redact({"blob": b"api_key=AKIA1234567890"})
         assert out == {"blob": f"api_key={REDACTED}"}
+
+
+class TestIsSensitiveKeyPredicate:
+    """``is_sensitive_key`` is the public yes/no wrapper around the same
+    ``_is_sensitive_key``/``_SENSITIVE_TOKENS`` table ``redact()`` uses for
+    dict keys (ADR-047 "Secret handling"). It must stay in lockstep with
+    what ``redact()`` actually does to a dict value under that key — no
+    separate token table.
+    """
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "password",
+            "passwd",
+            "passphrase",
+            "secret",
+            "token",
+            "credential",
+            "credentials",
+            "authorization",
+            "cookie",
+            "jwt",
+            "bearer",
+            "api_key",
+            "apikey",
+            "key",
+            "session",
+            "session_id",
+            "Password",
+            "API_KEY",
+            "ssl_authorization_header",
+            "oauth_token_url",
+        ],
+    )
+    def test_true_for_every_sensitive_key(self, key):
+        assert is_sensitive_key(key) is True
+
+    @pytest.mark.parametrize("key", ["name", "host", "port", "ok", "num"])
+    def test_false_for_non_sensitive_keys(self, key):
+        assert is_sensitive_key(key) is False
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "key_path",
+            "key_file",
+            "keypath",
+            "keyfile",
+            "ssh_key_path",
+            "ssh_keyfile",
+            "public_key",
+            "publickey",
+        ],
+    )
+    def test_false_for_safe_key_allowlist(self, key):
+        assert is_sensitive_key(key) is False
+
+    @pytest.mark.parametrize("key", ["ssh_key", "sshkey"])
+    def test_true_for_bare_ssh_key(self, key):
+        assert is_sensitive_key(key) is True
+
+    @pytest.mark.parametrize("key", ["password", "host", "key_path", "ssh_key"])
+    def test_agrees_with_redact_on_a_dict_value(self, key):
+        # Ground truth: is_sensitive_key(key) must predict exactly whether
+        # redact({key: "value"}) masks "value" wholesale.
+        out = redact({key: "value"})
+        assert is_sensitive_key(key) == (out[key] == REDACTED)
+
+
+class TestIsSecretShapedValuePredicate:
+    """``is_secret_shaped_value`` is the public yes/no wrapper reusing
+    ``redact()``'s own recursive core — it IS the transform, compared
+    against its input, so it cannot drift out of lockstep with what
+    ``redact()`` actually changes (ADR-047 "Secret handling": reuse
+    classification rather than copying token/regex tables).
+    """
+
+    def test_true_for_a_bare_password_string(self):
+        assert is_secret_shaped_value("password: hunter2") is True
+
+    def test_true_for_authorization_header_value(self):
+        assert is_secret_shaped_value("Authorization: Bearer abc.def.ghi") is True
+
+    def test_true_for_cli_flag_credential_value(self):
+        assert is_secret_shaped_value("--password=hunter2") is True
+
+    def test_false_for_ordinary_string(self):
+        assert is_secret_shaped_value("hello world") is False
+
+    def test_false_for_non_string_scalars(self):
+        assert is_secret_shaped_value(42) is False
+        assert is_secret_shaped_value(True) is False
+        assert is_secret_shaped_value(None) is False
+
+    def test_true_for_bytes_with_embedded_credential(self):
+        assert is_secret_shaped_value(b"token: abc") is True
+
+    def test_false_for_unmodified_bytes(self):
+        assert is_secret_shaped_value(b"just plain bytes") is False
+
+    def test_true_for_dict_with_sensitive_key(self):
+        # A container "value" is secret-shaped if redact() would touch it
+        # anywhere inside — including via a nested sensitive key.
+        assert is_secret_shaped_value({"password": "x"}) is True
+
+    def test_false_for_dict_with_no_secret_content(self):
+        assert is_secret_shaped_value({"host": "dc01", "port": 445}) is False
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "password: hunter2",
+            "hello world",
+            {"password": "x"},
+            {"host": "dc01"},
+            b"token: abc",
+            b"just plain bytes",
+            42,
+            None,
+        ],
+    )
+    def test_agrees_with_redact_on_arbitrary_values(self, value):
+        # Ground truth: is_secret_shaped_value(value) must predict exactly
+        # whether redact() changes `value` at all.
+        if isinstance(value, (bytes, bytearray)):
+            baseline = bytes(value).decode("utf-8", "replace")
+        else:
+            baseline = value
+        assert is_secret_shaped_value(value) == (redact(value) != baseline)

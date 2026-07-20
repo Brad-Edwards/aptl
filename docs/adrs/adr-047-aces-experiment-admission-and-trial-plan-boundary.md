@@ -24,9 +24,9 @@ The repository already owns the relevant boundaries:
 
 - `aces_contracts.experiment_spec.parse_experiment_spec` and the exported ACES
   contract models own experiment structure and model-level semantic invariants.
-- `aces_sdl.parse_sdl_file`, `RuntimeManager.plan()`, and planner diagnostics
-  own scenario semantics, parameter binding, realization requirements, and the
-  backend capability gate.
+- `aces_sdl.parse_sdl` / `parse_sdl_file`, the ACES reference processor, and
+  planner diagnostics own scenario semantics, parameter binding, realization
+  requirements, and the backend capability gate.
 - `create_aptl_manifest()` owns APTL backend identity and runtime capability
   claims. The ACES reference processor manifest is the corresponding processor
   identity surface.
@@ -73,10 +73,10 @@ new input, matching the existing admitted-plan retry rule in `aces.py`.
 
 The controller is a coordinator, not another runtime manager. Do not split it
 into speculative repository, service, provider, DTO, and policy hierarchies.
-Its dependencies should be explicit inputs: ACES public loaders/models, the
-canonical processor and backend manifests, an authorized artifact resolver,
-an admission policy with resource limits, and the existing
-`RunStorageBackend`. Deployment is not an admission dependency.
+Its dependencies should be explicit inputs: ACES public loaders/models and
+reference processor, the canonical processor and backend manifests, an
+authorized artifact resolver, an admission policy with resource limits, and
+the existing `RunStorageBackend`. Deployment is not an admission dependency.
 
 ### ACES contracts remain authoritative
 
@@ -88,16 +88,29 @@ The admitted graph retains ACES objects and identities directly:
   `ExperimentTaskModel` and `ExperimentCaptureSpecModel` public surfaces. The
   installed ACES fixture corpus is the contract test source; fixtures are not
   copied into an APTL-owned schema corpus.
-- Scenario material enters through `parse_sdl_file`; canonical scenario or
-  instantiated-snapshot identity uses the ACES canonical digest API.
+- Import-free scenario material is parsed from the resolver's already bounded
+  UTF-8 bytes with `aces_sdl.parse_sdl`; canonical scenario or
+  instantiated-snapshot identity uses the ACES canonical digest API. Never
+  hand the original untrusted path to `parse_sdl_file`, because doing so
+  reopens it after digest verification.
 - Associated-artifact manifests enter through
   `load_associated_artifact_manifest_json` and
   `validate_associated_artifact_manifest`, with caller-supplied bounded readers
   and `AssociatedArtifactValidationLimits`.
-- Each unique condition binding is submitted to `RuntimeManager.plan()` against
-  `create_aptl_manifest()` before admission succeeds. ACES planner diagnostics,
-  realization support, variable typing, and semantic validation are not
-  duplicated locally.
+- Each unique condition binding is submitted to the public ACES reference
+  processor against `create_aptl_manifest()` before admission succeeds. This is
+  the planning-only seam: it does not require an APTL `RuntimeTarget`,
+  `AptlConfig`, or `DeploymentBackend`. ACES planner diagnostics, realization
+  support, variable typing, and semantic validation are not duplicated locally.
+
+`parse_experiment_spec` currently applies `yaml.safe_load` before the
+closed-world model and therefore does not reject duplicate mapping keys. Bound
+the bytes and perform one narrow duplicate-key/ambiguous-document preflight
+before calling the public loader. This is parser hardening, not a second
+experiment schema: field shape and semantic rules remain exclusively with the
+ACES models. Task and capture artifacts likewise use only their published
+serialization format and exported ACES model; do not silently accept a second
+YAML/JSON dialect.
 
 APTL performs only joins and apparatus policy that require multiple already
 validated artifacts: reference identity/version equality, unique resolution,
@@ -148,6 +161,14 @@ inputs:
   not only associated-artifact manifests. Persist portable references and
   digests, not host-absolute paths.
 
+ACES SDL imports are a second resolver surface. `parse_sdl(content, path=...)`
+delegates imports to ACES file/OCI resolution and reopens local import files.
+Initial admission therefore rejects scenarios with imports unless the
+authorized resolver has first materialized the complete digest-pinned,
+size-bounded transitive graph into a private staging tree and ACES parses only
+that tree with its import lock verified. Never let an admitted root switch from
+the controller resolver to ambient ACES import discovery.
+
 Network, OCI, or registry fetching is disabled by default. A future remote
 resolver is a separately authorized implementation of the same narrow
 resolver contract, parameterized by allowed scheme/authority, offline mode,
@@ -168,6 +189,12 @@ manifest and `create_aptl_manifest()` payload.
 Scenario-specific feasibility remains with `RuntimeManager.plan()`. Docker or
 Compose must not be probed directly during admission, and config flags must not
 be treated as proof of a capability the manifest or planner rejects.
+
+For admission, use the equivalent planning-only ACES reference-processor API.
+`RuntimeManager.plan()` remains the execution-side incumbent, but constructing
+APTL's runtime target pulls in `AptlConfig` and a `DeploymentBackend`, which
+would violate the admission dependency boundary even if a no-op backend were
+passed.
 
 Capture admission needs one code-owned mapping from ACES capture requirement
 terms to existing APTL capture owners (`collectors.py`, MCP/Kali capture,
@@ -243,15 +270,32 @@ storage currently use both roots in different paths, so EXP-002 must not deepen
 that inconsistency. Callers resolve and inject one store/target, as they already
 do with `AcesRunTarget`.
 
-The existing `LocalRunStore.write_json()` is contained and redacting, but it is
-overwrite-capable and emits presentation JSON rather than canonical bytes.
+The existing `LocalRunStore.write_json()` performs lexical path validation and
+redaction, but it is overwrite-capable, follows existing symlink components,
+and emits presentation JSON rather than canonical bytes.
 Immutability therefore requires a narrow create-once canonical JSON operation
 on the existing run-store protocol, not a second experiment repository. That
-operation redacts first, canonicalizes once, writes atomically with
-create-exclusive semantics, and treats an identical existing payload as an
-idempotent success while rejecting different bytes. `write_file()` and
-`copy_file()` are not acceptable for structured plans because they bypass
-structural redaction.
+operation applies the shared secret policy as an invariant check, canonicalizes
+once, writes atomically with create-exclusive semantics, and treats an
+identical existing payload as an idempotent success while rejecting different
+bytes. `write_file()` and `copy_file()` are not acceptable for structured plans
+because they bypass structural redaction.
+
+The create-once operation must preserve semantic bytes: admission rejects a
+plan projection if applying the shared secret classifier/redaction policy would
+change an identity-bearing value. It must never persist a silently redacted
+plan that differs from the plan approved for execution. RFC 8785 is a direct
+runtime dependency for this operation; do not rely on it only as a transitive
+dependency of `aces-sdl`.
+
+Use an explicit plan namespace beneath the injected store. A plan ID is not a
+`run_id`, and the plan must not acquire a fake `manifest.json` merely to fit
+`LocalRunStore.list_runs()`. Extend the existing storage boundary narrowly
+rather than teaching run listing/export code that controller journals are
+runs. The operation must use descriptor-relative, no-follow publication for
+every path component. Current `LocalRunStore._run_dir()` follows an existing
+`<base>/<run_id>` symlink and can escape the configured root, so its lexical
+containment check is not sufficient for this integrity boundary.
 
 Persist the full admitted plan once under a controller-owned plan namespace.
 Each planned trial archive stores only the plan identity/digest and its own
@@ -274,36 +318,36 @@ duplicate those incumbents.
 
 | Layer | Required behavior |
 | --- | --- |
-| Auth surface | Core admission performs no authentication. A local CLI caller is the current trusted operator boundary. Any future `/api` admission route must inherit the API-wide `verify_token` dependency before resolving paths or reading bodies, use a bounded Pydantic request projection, and never accept credentials in a URL. |
+| Auth surface | Core admission performs no authentication. A local CLI caller is the current trusted operator boundary. Any future `/api` admission route must inherit the API-wide `verify_token` dependency and BFF Host/CSRF/session gates before resolving paths, enforce request-size limits before body parsing, use a bounded Pydantic request projection, and never accept credentials in a URL. |
 | Input shape | Bound the root bytes before `parse_experiment_spec`; use ACES closed-world models and validators for all ACES payloads. Reject unknown versions and malformed/duplicate or ambiguous bindings rather than coercing them into a local shape. |
-| Semantic validation | Use ACES model validators, canonical digest APIs, associated-artifact validation, and `RuntimeManager.plan()` diagnostics. Local checks are cross-artifact identity joins and explicit apparatus policy only. |
+| Semantic validation | Use ACES model validators, canonical digest APIs, associated-artifact validation, and reference-processor planning diagnostics. Local checks are parser resource/ambiguity hardening, cross-artifact identity joins, and explicit apparatus policy only. |
 | Artifact resolution | Use the injected authorized resolver, no-follow contained opens, one-handle hash/parse, digest and size verification, aggregate limits, offline default, and no ambient lookup. No input controls imports, commands, collectors, backend methods, environment names, or filesystem roots. |
-| Secret handling | Treat the whole experiment graph as untrusted. Reject secret-shaped scalar content and parameter name/value pairs using the canonical `redact()` taxonomy before plan construction; never rely on later redaction to make an executable secret safe. Keep control-plane secrets out of source artifacts and locators. |
+| Secret handling | Treat the whole experiment graph as untrusted. Reject secret-shaped scalar content and parameter name/value pairs using the taxonomy owned by `aptl.utils.redaction` before plan construction; never rely on later redaction to make executable data safe. `redact()` is currently a transformation, not a yes/no validator, so expose/reuse classification in that same module rather than copying its private token/regex tables or silently changing admitted values. Keep control-plane secrets out of source artifacts and locators. |
 | Config shape | Non-secret admission limits or resolver policy that become durable settings must be strict `AptlConfig` fields with real consumers. The experiment document cannot add config keys or override deployment provider/project identity. |
 | Environment binding | Admission must not call `.env` hydration or construct `EnvVars`. Experiment parameters cannot name or read environment variables. Runtime secrets remain in `EnvVars`, placeholder validation, and generated config after admission succeeds. |
 | Apparatus capability | Compare both task and spec constraints with canonical manifest payloads and ACES planner diagnostics. Unknown contract/capability/capture terms fail closed before `_LAB_START_STEPS`. |
 | OS/process exposure | Default admission uses no subprocess. Do not put parameter values, digests used as credentials, auth headers, or artifact contents in argv, process titles, URLs, or environment. A future resolver uses in-process transport or the existing `curl_safe` boundary without credential-bearing argv. |
 | Range-mutation gate | The complete plan must be admitted and persisted before `.env` hydration, key/cert generation, rendered config, volume seeding, image pulls, session creation, or any `DeploymentBackend` call. Clean boot/teardown is execution and cannot precede admission. |
-| Persistence | Inject `RunStorageBackend`; reuse ID/path containment and shared redaction. Add only create-once canonical structured writes. Exporter packages already-safe records and is never the first sanitizer. |
+| Persistence | Inject `RunStorageBackend`; reuse its configured root and shared redaction, but harden the create-once path against symlink components rather than assuming current lexical containment is sufficient. Keep plans in an explicit non-run namespace. Exporter packages already-safe run records and is never the first sanitizer. |
 | Logs and telemetry | Use `get_logger`; log contract/diagnostic codes, safe identities, counts, and digests only. Raw documents, parameter values, artifact bytes, locators with queries, exception strings, and validation `input` fields never enter logs or OTel attributes. Admission spans may carry plan/trial counts and digests after `redact()`. |
-| Error envelope | Normalize failures into redacted ACES `Diagnostic` values in an experiment-admission domain, then reuse `render_aces_diagnostics`, `StartupDiagnostic`, `LabResult`, Typer exits, and existing API response conventions. Do not expose raw Pydantic errors with `input_value`, YAML excerpts, absolute paths, resolver exceptions, or backend stderr. |
+| Error envelope | Normalize failures into redacted ACES `Diagnostic` values in an experiment-admission domain. Reuse the existing diagnostic formatter by parameterizing its currently hard-coded `"ACES runtime handoff failed"` prefix; do not add a second formatter or misclassify admission as a startup-readiness warning. Project only stable codes/addresses and safe messages through Typer or a future narrow authenticated API response. Do not expose raw Pydantic errors with `input_value`, YAML excerpts, absolute paths, resolver exceptions, or backend stderr. |
 
 ## Canonical incumbents
 
 | Concern | Reuse |
 | --- | --- |
-| Experiment contracts and examples | `aces_contracts.experiment_spec`, exported `aces_contracts.contracts` models, associated-artifact APIs, and the installed ACES fixture corpus |
-| Scenario parsing and parameter semantics | `aces_sdl.parse_sdl_file`, ACES canonical scenario digests, and `RuntimeManager.plan()` |
-| Backend identity and feasibility | `create_aptl_manifest()`, ACES manifest payload/model APIs, planner diagnostics, and existing conformance tests |
-| Runtime handoff | `start_aces_scenario()`, `AcesRunTarget`, `AcesStartOutcome`, and the admitted-plan retry behavior in `aces.py` |
+| Experiment contracts and examples | `aces_contracts.experiment_spec`, exported `aces_contracts.contracts` models, associated-artifact APIs, and `aces_contracts.corpus.corpus_family_root(FIXTURES)` rather than private package-path reconstruction |
+| Scenario parsing and parameter semantics | `aces_sdl.parse_sdl` over resolver-owned bytes, ACES parser limits/canonical scenario digests, and the ACES reference processor |
+| Backend identity and feasibility | `create_aptl_manifest()`, `aces_backend_protocols.manifest.backend_manifest_payload`, `aces_processor.manifest.reference_processor_manifest_model`, planner diagnostics, and existing conformance tests |
+| Runtime handoff | The apply/retry path already used by `start_aces_scenario()`, plus `AcesRunTarget` and `AcesStartOutcome`; `start_aces_scenario()` itself replans and therefore cannot be the admitted-plan entrypoint unchanged |
 | Lab lifecycle | `_LAB_START_STEPS`, orchestration contract predicates, `LabResult`, `StartupOutcome`, and `StartupDiagnostic` |
 | Deployment | `DeploymentBackend` and its typed local/SSH Compose implementations |
 | Scenario containment precedent | `scenario_catalog._resolve_project_file`, strengthened to no-follow one-open semantics rather than copied into a second path checker |
 | Config and secrets | `load_config`/`AptlConfig`, `EnvVars`, placeholder checks, ADR-028/029 generated-state rules, and `redact()` |
 | Capture | `collectors.py`, MCP/Kali capture owners, `RuntimeSnapshot`, workflow/evaluation history, and the ADR-033/044 evidence layout |
 | Persistence and export | `RunStorageBackend`/`LocalRunStore`, `RangeSnapshot.to_dict()`, ADR-044 run records, and `exporter.py` |
-| Diagnostics and observability | ACES `Diagnostic`, `render_aces_diagnostics()`, `_emit_diagnostic()`, `get_logger`, and ADR-012 telemetry rules |
-| API exposure if added | API-wide `verify_token`, `WebAuthSettings`, existing router assembly, and narrow Pydantic response projections |
+| Diagnostics and observability | ACES `Diagnostic`, the formatting logic in `render_aces_diagnostics()`, `get_logger`, and ADR-012 telemetry rules; `_emit_diagnostic()` remains the lifecycle-only projection when an execution failure enters lab startup |
+| API exposure if added | API-wide `verify_token`, `WebAuthSettings`, BFF Host/CSRF/session middleware, existing router assembly, request-size enforcement, and narrow Pydantic response projections |
 
 ## Extensibility
 
@@ -334,7 +378,8 @@ Implementation must prove the boundary without creating a new test harness:
   decisions, exact mutation ordering, redacted diagnostics, canonical bytes,
   create-once persistence, and stable IDs.
 - Property-based tests under the existing `fuzz` marker cover traversal and
-  symlink inputs, resource limits, secret-shaped values, map/list order,
+  symlink inputs (including pre-existing run-store symlinks), resource limits,
+  duplicate YAML/JSON keys, secret-shaped values, map/list order,
   condition/replication counts, digest changes, ID uniqueness, and repeated
   admission determinism.
 - Contract tests assert that every planned trial resolves to exactly one task,
@@ -353,9 +398,16 @@ version authority used by the fixtures and public APIs.
 - Pydantic validation strings can contain the rejected `input_value`; wrapping
   `str(exc)` in a diagnostic can leak an injected secret. Render only stable
   error type/location metadata and omit input values and documentation URLs.
+- The locked dependency is `aces-sdl` 0.23.1, but a stale local `.venv` can
+  still contain 0.21.0 and fail importing the current APTL manifest. Validate
+  APIs and fixtures through the locked environment; direct `python` output from
+  a stale environment is not contract evidence.
 - `parse_experiment_spec` is the public schema loader, but callers still need a
-  byte limit before passing text to it. Do not use `load_experiment_spec` on an
-  unbounded attacker-controlled file.
+  byte limit and duplicate-key preflight before passing text to it. Do not use
+  `load_experiment_spec` on an unbounded attacker-controlled file.
+- `parse_sdl_file` and SDL import expansion reopen paths. Hashing a resolver
+  handle and then parsing the original path is a TOCTOU bug; imported scenarios
+  need a fully authorized staged graph or must be rejected.
 - ACES task and capture references deliberately do not carry digest/path fields
   in their typed reference models. Pin resolved byte digests in the internal
   admission journal or an ACES associated-artifact binding; do not add forbidden
@@ -373,9 +425,27 @@ version authority used by the fixtures and public APIs.
 - Current trace capture favors `.aptl/runs`, while configured CLI run storage
   can point elsewhere. Injection of one resolved `RunStorageBackend` is
   mandatory; hardcoding either root would split evidence again.
+- `LocalRunStore._run_dir()` currently follows an existing run-directory
+  symlink outside the configured base. The admitted-plan writer must not inherit
+  that escape, and plan IDs must not be disguised as run IDs.
 - `LocalRunStore.write_json` overwrites and is not canonical. Calling it twice
   is not an immutability guarantee, and bypassing it with `write_file` loses
   structural redaction.
+- At the locked ACES surface, the published reference processor manifest names
+  only `stub` as a compatible backend while APTL names
+  `aces-reference-processor` as compatible. Strict mutual apparatus-manifest
+  compatibility cannot be fabricated by patching either payload locally; fail
+  closed until the canonical ACES declaration and the requested task
+  constraints are mutually satisfiable.
+- `create_aptl_manifest().observation` is currently `None`, and the existing
+  collectors are best-effort primitives that often collapse failure into an
+  empty result. Do not admit a capture requirement merely because a collector
+  function exists. Capture-bearing inputs need one evidence-backed shared
+  capability mapping (and an honest manifest observation declaration where the
+  ACES authority requires it); otherwise they fail closed.
+- `render_aces_diagnostics()` currently labels every failure as an ACES runtime
+  handoff failure. Reuse its formatting logic only after making the safe stage
+  label explicit; do not emit misleading admission errors.
 - A plan generated with timestamps, absolute paths, Python set/dict traversal,
   `random`, or UUIDs can look stable in one test process and still drift across
   hosts or retries.
@@ -408,6 +478,8 @@ version authority used by the fixtures and public APIs.
   hierarchy, diagnostic DTO, readiness taxonomy, or workflow state machine.
 - Resolving references after the first trial starts or reopening a path after
   hashing it.
+- Letting `parse_sdl_file` or SDL import expansion bypass the authorized
+  resolver after the root artifact was pinned.
 - Treating a digest as optional when bytes can affect execution, or treating an
   image tag/path/URI as immutable identity.
 - Passing input strings to `getattr`, `importlib`, `subprocess`, shell, Docker,
@@ -418,6 +490,8 @@ version authority used by the fixtures and public APIs.
   error envelopes.
 - Replanning a trial at execution time and accepting a plan that differs from
   the persisted digest.
+- Storing a plan as a synthetic run, adding a fake run manifest, or silently
+  redacting identity-bearing plan values during persistence.
 - Using exporter filtering, file permissions, `.gitignore`, or an offline flag
   as a substitute for admission-time containment, authorization, and redaction.
 

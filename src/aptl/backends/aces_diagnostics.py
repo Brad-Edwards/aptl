@@ -17,6 +17,7 @@ from aptl.utils.redaction import redact
 log = get_logger("aces-diagnostics")
 
 PROVISIONING_ADDRESS = "runtime.apply.provisioning"
+DEFAULT_STAGE_LABEL = "ACES runtime handoff failed"
 SUPPORTED_RESOURCE_TYPES = frozenset(
     {
         "network",
@@ -49,8 +50,18 @@ def has_error(diagnostics: list[Diagnostic]) -> bool:
 _RENDERED_DIAGNOSTIC_CAP = 5
 
 
-def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
+def render_aces_diagnostics(
+    diagnostics: list[Diagnostic], *, stage_label: str = DEFAULT_STAGE_LABEL
+) -> str:
     """Render ACES diagnostics into the APTL ``LabResult`` error surface.
+
+    ``stage_label`` names the failing phase and defaults to the original
+    hard-coded ``"ACES runtime handoff failed"`` prefix, so every existing
+    caller is unchanged. ADR-047's error envelope reuses this same
+    formatter for the experiment-admission failure surface by passing a
+    distinct label (e.g. ``"ACES experiment admission failed"``) instead of
+    adding a second formatter — do not misclassify admission as a
+    startup-readiness warning by leaving the default label in place there.
 
     The error surface stays bounded, but truncation must never be silent: a
     dropped diagnostic can be the actionable one (issue #677), so the full
@@ -58,7 +69,7 @@ def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
     entries it omitted.
     """
     if not diagnostics:
-        return "ACES runtime handoff failed."
+        return f"{stage_label}."
     rendered = [_format_diagnostic(item) for item in diagnostics if item.is_error]
     if not rendered:
         rendered = [_format_diagnostic(item) for item in diagnostics]
@@ -71,7 +82,7 @@ def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
             f"[{len(rendered) - _RENDERED_DIAGNOSTIC_CAP} more diagnostics "
             "omitted; full set in the log]",
         ]
-    return redact("ACES runtime handoff failed: " + "; ".join(shown))
+    return redact(f"{stage_label}: " + "; ".join(shown))
 
 
 def unsupported_resource_diagnostics(

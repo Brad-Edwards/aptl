@@ -130,11 +130,27 @@ nodes:
     os: linux
     services:
       - {name: postgres, port: 5432, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: postgresql, version: "*"}
+      service_manager_units:
+        - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
   workstation:
     type: vm
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: dnf, name: openssh-server, version: "*"}
+        - {manager: dnf, name: sudo, version: "*"}
+      local_identity:
+        groups:
+          - {name: labadmin}
+        users:
+          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+      service_manager_units:
+        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
   fileshare:
     type: vm
     os: linux
@@ -150,12 +166,33 @@ nodes:
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: dnf, name: openssh-server, version: "*"}
+        - {manager: dnf, name: sudo, version: "*"}
+      local_identity:
+        groups:
+          - {name: labadmin}
+        users:
+          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+      service_manager_units:
+        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
 
   kali:
     type: vm
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: openssh-server, version: "*"}
+      local_identity:
+        groups:
+          - {name: kali}
+        users:
+          - {username: kali, supplemental_groups: [kali]}
+      service_manager_units:
+        - {unit_id: ssh, unit_name: ssh.service, enabled_state: enabled, active_state: active}
   kali-capture:
     type: vm
     os: linux

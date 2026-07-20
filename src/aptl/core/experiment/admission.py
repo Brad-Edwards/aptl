@@ -85,7 +85,8 @@ from aptl.core.experiment.admission_steps import (
     _resolve_capture_specs,
 )
 from aptl.core.experiment.apparatus import check_apparatus_admission
-from aptl.core.experiment.capture_mapping import map_capture_requirements
+from aptl.core.experiment.capture_mapping import bind_capture_requirements
+from aptl.core.experiment.capture_registry import DEFAULT_COLLECTOR_REGISTRY, CollectorRegistry
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.core.experiment.resolver import ResolvedArtifact
@@ -220,6 +221,7 @@ def _admit_experiment_inner(
     policy: AdmissionPolicy,
     backend_manifest: BackendManifest,
     processor_manifest: ProcessorManifest,
+    capture_registry: CollectorRegistry,
 ) -> AdmissionResult:
     """Run the full admission sequence once; raises AdmissionRejection on any fail-closed gap."""
     # Step 1: root.
@@ -248,8 +250,12 @@ def _admit_experiment_inner(
         policy=policy,
     )
 
-    # Step 5: capture-requirement mapping (fail-closed; empty w/o refs).
-    map_capture_requirements(capture_specs, backend_manifest=backend_manifest, policy=policy)
+    # Step 5: capture-requirement binding against the collector registry
+    # (fail-closed; empty w/o refs). The immutable bindings are pinned into
+    # the trial plan at Step 8 so runtime never re-matches a changed registry.
+    capture_bindings = bind_capture_requirements(
+        capture_specs, registry=capture_registry, policy=policy
+    )
 
     # Step 6: per-condition planning-only feasibility + snapshot digests.
     condition_snapshot_digests, flat_instantiated_digest = _plan_conditions(
@@ -270,11 +276,12 @@ def _admit_experiment_inner(
     )
     source_set_digest = compute_source_set_digest(source_set_projection)
 
-    # Step 8: pure trial-plan expansion.
+    # Step 8: pure trial-plan expansion, pinning the admitted capture bindings.
     plan = expand_trial_plan(
         spec,
         source_set_digest=source_set_digest,
         condition_snapshot_digests=condition_snapshot_digests or None,
+        capture_bindings=capture_bindings,
         policy=policy,
     )
 
@@ -299,6 +306,7 @@ def admit_experiment(
     policy: AdmissionPolicy,
     backend_manifest: BackendManifest | None = None,
     processor_manifest: ProcessorManifest | None = None,
+    capture_registry: CollectorRegistry = DEFAULT_COLLECTOR_REGISTRY,
 ) -> AdmissionResult:
     """Run ADR-047 admission for one experiment-authoring-input document.
 
@@ -330,6 +338,7 @@ def admit_experiment(
             policy=policy,
             backend_manifest=resolved_backend,
             processor_manifest=resolved_processor,
+            capture_registry=capture_registry,
         )
     except AdmissionRejection as exc:
         return AdmissionResult.rejected(exc.diagnostics)

@@ -36,11 +36,12 @@ _NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
 
 # Generic OS + init substrate for nodes that declare service units, so a service
 # manager (systemd) actually runs inside the container. Still generic: OS + init
-# only, no product. Built from containers/generic-systemd-base/Dockerfile and
-# validated locally against Docker. Service nodes standardize on this validated
-# RHEL/systemd substrate, so their declared packages use dnf.
-_SERVICE_BASE_IMAGE: dict[str, str] = {
-    "linux": "aptl/generic-systemd-base:latest",
+# only, no product. Family-aware so an apt node keeps apt and a dnf node keeps
+# dnf. Built from containers/generic-systemd-base{,-debian}/Dockerfile and
+# validated locally against Docker.
+_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
+    ("linux", "debian"): "aptl/generic-systemd-base-debian:latest",
+    ("linux", "rhel"): "aptl/generic-systemd-base:latest",
 }
 
 
@@ -139,7 +140,7 @@ def base_image_for_os(
 
     os_family = (os or "").strip().lower()
     if runs_services:
-        image = _SERVICE_BASE_IMAGE.get(os_family)
+        image = _SERVICE_BASE_IMAGE.get((os_family, family))
     else:
         image = _NON_SERVICE_BASE_IMAGE.get((os_family, family))
     if image is None:

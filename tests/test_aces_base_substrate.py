@@ -69,10 +69,12 @@ class TestBaseContainerSpec:
         assert spec.image_ref != non_service.image_ref
         # The validated systemd run requirements are carried, not fabricated per call.
         assert spec.init is not None
-        assert spec.init.init_command == ("/usr/sbin/init",)
         assert "SYS_ADMIN" in spec.init.capabilities
         assert spec.init.cgroup_host is True
         assert spec.init.seccomp_unconfined is True
+        assert ("container", "docker") in spec.init.env
+        assert spec.init.stop_signal == "SIGRTMIN+3"
+        assert "/run/lock" in spec.init.tmpfs
 
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):

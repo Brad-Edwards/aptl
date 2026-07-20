@@ -37,12 +37,16 @@ class InitRequirements:
     generic (init mechanics), never product-specific.
     """
 
-    init_command: tuple[str, ...] = ("/usr/sbin/init",)
+    # Empty: the generic systemd base image's own CMD runs init (/sbin/init or
+    # /usr/sbin/init), so the run does not override the command.
+    init_command: tuple[str, ...] = ()
     capabilities: tuple[str, ...] = ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
     cgroup_host: bool = True
     cgroupfs_rw_mount: bool = True
-    tmpfs: tuple[str, ...] = ("/run", "/tmp")
+    tmpfs: tuple[str, ...] = ("/run", "/run/lock", "/tmp")
     seccomp_unconfined: bool = True
+    env: tuple[tuple[str, str], ...] = (("container", "docker"),)
+    stop_signal: str = "SIGRTMIN+3"
 
 
 @dataclass(frozen=True)

@@ -163,11 +163,13 @@ class TestPackageFamilyBaseSelection:
         assert base_image_for_os("linux", "", family="debian") == "debian:12-slim"
         assert base_image_for_os("linux", "", family="rhel") == "rockylinux:9"
 
-    def test_service_nodes_use_validated_systemd_substrate(self):
-        # Service nodes standardize on the validated RHEL/systemd base regardless
-        # of the non-service family key.
-        assert base_image_for_os("linux", "", runs_services=True, family="debian") == \
-            base_image_for_os("linux", "", runs_services=True, family="rhel")
+    def test_service_nodes_use_family_aware_systemd_substrate(self):
+        # An apt service node keeps a Debian systemd base; a dnf service node
+        # keeps a RHEL systemd base. Both are validated locally against Docker.
+        deb = base_image_for_os("linux", "", runs_services=True, family="debian")
+        rhel = base_image_for_os("linux", "", runs_services=True, family="rhel")
+        assert deb != rhel
+        assert "debian" in deb and "debian" not in rhel
 
     def test_unknown_family_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):

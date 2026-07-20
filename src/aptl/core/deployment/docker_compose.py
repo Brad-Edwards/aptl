@@ -201,7 +201,11 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
                 argv += ["--cap-add", capability]
             if spec.init.seccomp_unconfined:
                 argv += ["--security-opt", "seccomp:unconfined"]
-            argv.append(spec.image_ref)  # image CMD (/usr/sbin/init) keeps it alive
+            for env_name, env_value in spec.init.env:
+                argv += ["-e", f"{env_name}={env_value}"]
+            if spec.init.stop_signal:
+                argv += ["--stop-signal", spec.init.stop_signal]
+            argv.append(spec.image_ref)  # the base image CMD runs systemd as init
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
         result = self._run(argv, timeout=180)

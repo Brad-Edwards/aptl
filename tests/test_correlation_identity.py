@@ -208,7 +208,7 @@ class TestDeterminismAcrossProcesses:
 # Fuzz (property-based)
 # ---------------------------------------------------------------------------
 
-from hypothesis import given, settings  # noqa: E402
+from hypothesis import assume, given, settings  # noqa: E402
 from hypothesis import strategies as st  # noqa: E402
 
 _PART_TEXT = st.text(min_size=1, max_size=40)
@@ -228,8 +228,7 @@ class TestFuzzStableRef:
     @given(parts_a=st.lists(_PART_TEXT, min_size=1, max_size=6), parts_b=st.lists(_PART_TEXT, min_size=1, max_size=6))
     @settings(max_examples=50, deadline=None)
     def test_different_part_lists_are_extremely_unlikely_to_collide(self, parts_a, parts_b):
-        if parts_a == parts_b:
-            return
+        assume(parts_a != parts_b)
         ref_a = stable_ref(*parts_a, domain=_DOMAIN)
         ref_b = stable_ref(*parts_b, domain=_DOMAIN)
         assert ref_a != ref_b

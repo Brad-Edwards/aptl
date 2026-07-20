@@ -128,6 +128,7 @@ def assert_non_secret(value: str, *, field_name: str) -> str:
 
 
 def _validate_non_empty(field_name: str, value: str) -> None:
+    """Raise ``ValueError`` if ``value`` is not a non-empty string."""
     if not isinstance(value, str) or not value:
         raise ValueError(f"{field_name} must be a non-empty string")
 
@@ -236,14 +237,17 @@ class CorrelationEdge:
 
 
 def _node_projection(node: CorrelationNode) -> dict[str, object]:
+    """Canonical dict projection of a node."""
     return {"ref": node.ref, "ref_kind": node.ref_kind}
 
 
 def _node_sort_key(node: CorrelationNode) -> tuple[str, str]:
+    """Sort key for deterministic node ordering."""
     return (node.ref, node.ref_kind)
 
 
 def _edge_projection(edge: CorrelationEdge) -> dict[str, object]:
+    """Canonical dict projection of an edge (disclosure_refs sorted)."""
     return {
         "source_ref": edge.source_ref,
         "target_ref": edge.target_ref,
@@ -258,6 +262,7 @@ def _edge_projection(edge: CorrelationEdge) -> dict[str, object]:
 
 
 def _edge_sort_key(edge: CorrelationEdge) -> tuple[str, str, str, str, str, str, str]:
+    """Sort key for deterministic edge ordering."""
     return (
         edge.source_ref,
         edge.target_ref,
@@ -270,6 +275,7 @@ def _edge_sort_key(edge: CorrelationEdge) -> tuple[str, str, str, str, str, str,
 
 
 def _clock_context_projection(ctx: ClockContext) -> dict[str, object]:
+    """Canonical dict projection of a clock context."""
     return {
         "source_kind": ctx.source_kind,
         "source_id": ctx.source_id,
@@ -284,10 +290,12 @@ def _clock_context_projection(ctx: ClockContext) -> dict[str, object]:
 
 
 def _clock_context_sort_key(ctx: ClockContext) -> tuple[str, str, str]:
+    """Sort key for deterministic clock-context ordering."""
     return (ctx.source_kind, ctx.source_id, ctx.measurement_time)
 
 
 def _clock_context_from_dict(data: Mapping[str, object]) -> ClockContext:
+    """Reconstruct a ClockContext from its canonical dict projection."""
     return ClockContext(
         source_kind=data["source_kind"],
         source_id=data["source_id"],
@@ -302,6 +310,7 @@ def _clock_context_from_dict(data: Mapping[str, object]) -> ClockContext:
 
 
 def _edge_from_dict(data: Mapping[str, object]) -> CorrelationEdge:
+    """Reconstruct a CorrelationEdge from its canonical dict projection."""
     return CorrelationEdge(
         source_ref=data["source_ref"],
         target_ref=data["target_ref"],
@@ -314,6 +323,7 @@ def _edge_from_dict(data: Mapping[str, object]) -> CorrelationEdge:
 
 
 def _node_from_dict(data: Mapping[str, object]) -> CorrelationNode:
+    """Reconstruct a CorrelationNode from its canonical dict projection."""
     return CorrelationNode(ref=data["ref"], ref_kind=data["ref_kind"])
 
 

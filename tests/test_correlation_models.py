@@ -333,22 +333,24 @@ class TestCorrelationProjection:
 
     def test_rejects_an_edge_whose_source_ref_is_not_a_declared_node(self):
         node_b = _node("task-1", "task")
+        bad_edge = _edge(source_ref="missing-node", target_ref="task-1")
         with pytest.raises(ValueError, match="source_ref"):
             CorrelationProjection(
                 run_id="run-1",
                 nodes=(node_b,),
-                edges=(_edge(source_ref="missing-node", target_ref="task-1"),),
+                edges=(bad_edge,),
                 clock_contexts=(),
                 disclosures=(),
             )
 
     def test_rejects_an_edge_whose_target_ref_is_not_a_declared_node(self):
         node_a = _node("exp-spec-1", "experiment-spec")
+        bad_edge = _edge(source_ref="exp-spec-1", target_ref="missing-node")
         with pytest.raises(ValueError, match="target_ref"):
             CorrelationProjection(
                 run_id="run-1",
                 nodes=(node_a,),
-                edges=(_edge(source_ref="exp-spec-1", target_ref="missing-node"),),
+                edges=(bad_edge,),
                 clock_contexts=(),
                 disclosures=(),
             )

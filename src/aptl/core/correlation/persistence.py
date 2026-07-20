@@ -66,6 +66,8 @@ def _diagnostic(code: str, address: str, message: str) -> Diagnostic:
 
 
 def _read_manifest(run_store: RunStorageBackend, run_id: str) -> dict[str, object]:
+    """Read ``<run_id>/manifest.json``, raising a redacted AdmissionRejection
+    on a missing or unparseable manifest."""
     try:
         return run_store.get_run_manifest(run_id)
     except FileNotFoundError as exc:
@@ -85,6 +87,8 @@ def _read_manifest(run_store: RunStorageBackend, run_id: str) -> dict[str, objec
 
 
 def _read_orchestration_result(address_dir: Path, run_id: str, address: str) -> dict[str, object]:
+    """Read one orchestration address's ``result.json`` (``{}`` when absent;
+    AdmissionRejection when present but unreadable)."""
     result_path = address_dir / "result.json"
     if not result_path.is_file():
         return {}
@@ -104,6 +108,8 @@ def _read_orchestration_result(address_dir: Path, run_id: str, address: str) -> 
 
 
 def _read_orchestration_history(address_dir: Path, run_id: str, address: str) -> list[dict[str, object]]:
+    """Read one orchestration address's ``history.jsonl`` events (``[]`` when
+    absent; AdmissionRejection on an unreadable or malformed file)."""
     history_path = address_dir / "history.jsonl"
     if not history_path.is_file():
         return []
@@ -141,6 +147,8 @@ def _read_orchestration_history(address_dir: Path, run_id: str, address: str) ->
 
 
 def _read_orchestration(run_store: RunStorageBackend, run_id: str) -> dict[str, dict[str, object]]:
+    """Read every ``<run_id>/orchestration/<address>/`` result + history into
+    the ``{address: {result, history}}`` shape the builder consumes."""
     orchestration_dir = run_store.get_run_path(run_id) / "orchestration"
     orchestration: dict[str, dict[str, object]] = {}
     if not orchestration_dir.is_dir():
@@ -224,7 +232,8 @@ def persist_run_correlation_best_effort(
             "OBS-002: correlation projection not persisted for run %s (%s)", run_id, codes
         )
         return None
-    except Exception:  # defensive: an OBS-002 audit projection is never fatal to the run
+    # Defensive: an OBS-002 audit projection is never fatal to the run.
+    except Exception:
         _log.warning(
             "OBS-002: correlation projection not persisted for run %s (unexpected error)", run_id
         )

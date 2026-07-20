@@ -55,6 +55,8 @@ from aptl.core.correlation._assemble import (
     _add_orchestration,
     _add_planned_trial,
     _add_run_node,
+)
+from aptl.core.correlation._extract import (
     _collect_action_ids,
     _collect_episode_ids,
     _find_disclosure_refs,

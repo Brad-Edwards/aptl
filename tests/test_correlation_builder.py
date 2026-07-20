@@ -304,13 +304,10 @@ class TestCorrelationRuleSet:
     def test_rejects_duplicate_rule_ids(self):
         from aptl.core.correlation.builder import CorrelationRule
 
+        dup_a = CorrelationRule(rule_id="dup", description="a")
+        dup_b = CorrelationRule(rule_id="dup", description="b")
         with pytest.raises(ValueError, match="unique"):
-            CorrelationRuleSet(
-                rules=(
-                    CorrelationRule(rule_id="dup", description="a"),
-                    CorrelationRule(rule_id="dup", description="b"),
-                )
-            )
+            CorrelationRuleSet(rules=(dup_a, dup_b))
 
 
 # ---------------------------------------------------------------------------

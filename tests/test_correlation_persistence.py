@@ -149,6 +149,11 @@ def _clock_provider() -> FixedClockProvider:
     return FixedClockProvider(measurement_time="2026-01-01T00:10:00Z")
 
 
+# Shared instance so a call does not sit inside a `with pytest.raises(...)` block
+# (SonarCloud S5778: only one throwing invocation per exception test).
+_FIXED_CLOCK = _clock_provider()
+
+
 # ---------------------------------------------------------------------------
 # build_and_persist_correlation — happy path.
 # ---------------------------------------------------------------------------
@@ -160,7 +165,7 @@ class TestBuildAndPersistCorrelation:
         run_id = "run-persist-1"
         _write_run_archive(store, run_id)
 
-        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
         correlation_path = tmp_path / "runs" / run_id / "correlation.json"
         assert correlation_path.is_file()
@@ -175,7 +180,7 @@ class TestBuildAndPersistCorrelation:
         base_dir = tmp_path / "runs"
         before = {p.relative_to(base_dir) for p in base_dir.rglob("*") if p.is_file()}
 
-        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
         after = {p.relative_to(base_dir) for p in base_dir.rglob("*") if p.is_file()}
         new_files = after - before
@@ -187,7 +192,7 @@ class TestBuildAndPersistCorrelation:
         _write_run_archive(store, run_id)
 
         projection = build_and_persist_correlation(
-            run_id=run_id, run_store=store, clock_provider=_clock_provider()
+            run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK
         )
 
         correlation_path = tmp_path / "runs" / run_id / "correlation.json"
@@ -200,7 +205,7 @@ class TestBuildAndPersistCorrelation:
         _write_run_archive(store, run_id)
 
         projection = build_and_persist_correlation(
-            run_id=run_id, run_store=store, clock_provider=_clock_provider()
+            run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK
         )
 
         correlation_path = tmp_path / "runs" / run_id / "correlation.json"
@@ -218,7 +223,7 @@ class TestBuildAndPersistCorrelation:
         _write_run_archive(store, run_id)
 
         projection = build_and_persist_correlation(
-            run_id=run_id, run_store=store, clock_provider=_clock_provider()
+            run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK
         )
         methods = {e.association_method.value for e in projection.edges}
         assert "explicit_identifier" in methods
@@ -245,7 +250,7 @@ class TestRedaction:
             ],
         )
 
-        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
         correlation_path = tmp_path / "runs" / run_id / "correlation.json"
         raw_text = correlation_path.read_text(encoding="utf-8")
@@ -263,7 +268,7 @@ class TestExportIncludesCorrelation:
         store = LocalRunStore(tmp_path / "runs")
         run_id = "run-persist-export-1"
         _write_run_archive(store, run_id)
-        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+        build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
         output_dir = tmp_path / "exports"
         archive_path = export_local(store, run_id, output_dir)
@@ -285,7 +290,7 @@ class TestFailClosedDiagnostics:
         store.create_run(run_id)  # no manifest.json written
 
         with pytest.raises(AdmissionRejection) as exc_info:
-            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
         assert len(exc_info.value.diagnostics) == 1
         assert exc_info.value.diagnostics[0].domain == "obs-002-correlation"
 
@@ -300,7 +305,7 @@ class TestFailClosedDiagnostics:
         )
 
         with pytest.raises(AdmissionRejection):
-            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
     def test_diagnostic_message_never_leaks_a_secret_shaped_value(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")
@@ -308,7 +313,7 @@ class TestFailClosedDiagnostics:
         store.create_run(run_id)
 
         with pytest.raises(AdmissionRejection) as exc_info:
-            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+            build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
         for diag in exc_info.value.diagnostics:
             assert "password=" not in diag.message
 
@@ -331,8 +336,8 @@ class TestFuzzPersistenceDeterminism:
         run_id = f"run-fuzz-{run_suffix}"
         _write_run_archive(store, run_id)
 
-        first = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
-        second = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_clock_provider())
+        first = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
+        second = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
         assert first.canonical_bytes == second.canonical_bytes
 
@@ -349,7 +354,7 @@ class TestPersistRunCorrelationBestEffort:
         run_id = "run-besteffort-ok"
         _write_run_archive(store, run_id)
         projection = persist_run_correlation_best_effort(
-            run_id=run_id, run_store=store, clock_provider=_clock_provider()
+            run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK
         )
         assert isinstance(projection, CorrelationProjection)
         assert (store.get_run_path(run_id) / "correlation.json").is_file()
@@ -361,7 +366,7 @@ class TestPersistRunCorrelationBestEffort:
         # build_and_persist_correlation would raise AdmissionRejection here;
         # the best-effort wrapper must swallow it and return None instead.
         result = persist_run_correlation_best_effort(
-            run_id=run_id, run_store=store, clock_provider=_clock_provider()
+            run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK
         )
         assert result is None
         assert not (store.get_run_path(run_id) / "correlation.json").exists()

@@ -82,12 +82,21 @@ class _Backend:
         self._exec_results = exec_results
         self._exec_raises = exec_raises
         self._health_sequence = list(health_sequence or [])
+        self._exec_call_counts: dict[str, int] = {}
 
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
             raise BackendTimeoutError("docker exec timed out")
         assert self._exec_results is not None, "container_exec must not be called"
-        returncode, stdout = self._exec_results[name]
+        entry = self._exec_results[name]
+        if isinstance(entry, list):
+            # Consecutive calls against the same container (e.g. `test -d`
+            # then `test -f`) consume the list in order.
+            index = self._exec_call_counts.get(name, 0)
+            self._exec_call_counts[name] = index + 1
+            returncode, stdout = entry[index]
+        else:
+            returncode, stdout = entry
         return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
 
     def container_exists(self, name):
@@ -909,6 +918,111 @@ def test_content_probe_timeout_omits_concern_without_echoing_plan():
     """Unobservable exact content fails closed instead of becoming a file."""
     address, plan, realization = _content_placement_fixture()
     backend = _Backend(containers=("aptl-vm",), content_probe_raises=True)
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {}
+
+
+def _image_free_content_placement_fixture():
+    """Same shape as _content_placement_fixture but with no named volume
+    (ADR-048): the generic materializer places content directly into the
+    node's container filesystem, so volume_suffix is empty and the probe
+    that reads a Compose named volume has nothing to inspect."""
+
+    address = "provision.content.notice"
+    target_address = "provision.node.vm"
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload={
+            "name": "notice",
+            "target_address": target_address,
+            "spec": {"type": "file", "path": "/srv/shares/public/notice.txt"},
+        },
+    )
+    plan = ProvisioningPlan(
+        resources={address: resource},
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address=address,
+                resource_type=resource.resource_type,
+                payload=resource.payload,
+            )
+        ],
+    )
+    content = DeploymentContentRealization(
+        address=address,
+        target_address=target_address,
+        content_name="notice",
+        volume_suffix="",
+        dest_relpath="srv/shares/public/notice.txt",
+        source_kind="inline-text",
+        inline_text="hello",
+    )
+    placement = PlacementRealization(
+        address=address,
+        resource_type="content-placement",
+        name="notice",
+        target_address=target_address,
+        target_node="vm",
+        content=content,
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(),),
+        networks=(),
+        placements=(placement,),
+        diagnostics=(),
+    )
+    return address, plan, realization
+
+
+def test_image_free_content_type_observed_via_container_exec_not_volume_probe():
+    """No named volume to probe (ADR-048) - read the destination back directly."""
+    address, plan, realization = _image_free_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": [(1, ""), (0, "")]},  # test -d fails, test -f succeeds
+    )
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {("spec", "type"): "file"}
+
+
+def test_image_free_content_type_directory_observed_via_container_exec():
+    address, plan, realization = _image_free_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": [(0, "")]},  # test -d succeeds; test -f never runs
+    )
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.concerns == {("spec", "type"): "directory"}
+
+
+def test_image_free_content_missing_omits_concern_without_echoing_plan():
+    address, plan, realization = _image_free_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        exec_results={"aptl-vm": [(1, ""), (1, "")]},  # neither -d nor -f
+    )
+
+    observation = observe_realization(backend, realization, plan)[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {}
+
+
+def test_image_free_content_exec_timeout_fails_closed_not_crash():
+    address, plan, realization = _image_free_content_placement_fixture()
+    backend = _Backend(containers=("aptl-vm",), exec_raises=True)
 
     observation = observe_realization(backend, realization, plan)[address]
 

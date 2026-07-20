@@ -225,11 +225,22 @@ def container_realized(info: Mapping[str, Any]) -> bool:
 def observed_content_type(
     backend: "DeploymentBackend",
     content: DeploymentContentRealization | None,
+    container_name: str | None = None,
 ) -> str | None:
-    """Return the destination kind observed by the deployment provider."""
+    """Return the destination kind observed by the deployment provider.
+
+    ``observe_content_type`` reads back a Compose-managed named volume - it
+    has nothing to inspect for image-free content (ADR-048), which the
+    generic materializer places directly into a node's container filesystem,
+    never a volume (``content.volume_suffix`` is empty for that shape). When
+    a container name is available for that case, read back the destination
+    directly instead of going through the volume-shaped provider probe.
+    """
 
     if content is None:
         return None
+    if not content.volume_suffix and container_name:
+        return _observed_image_free_content_type(backend, container_name, content)
     try:
         observed = backend.observe_content_type(content)
     except (BackendSeedError, BackendTimeoutError, OSError) as exc:
@@ -240,6 +251,28 @@ def observed_content_type(
         )
         return None
     return observed if observed in ("file", "directory") else None
+
+
+def _observed_image_free_content_type(
+    backend: "DeploymentBackend",
+    container_name: str,
+    content: DeploymentContentRealization,
+) -> str | None:
+    """Read back an image-free content destination's kind via container_exec."""
+
+    destination = "/" + content.dest_relpath.lstrip("/")
+    try:
+        if backend.container_exec(container_name, ["test", "-d", destination]).returncode == 0:
+            return "directory"
+        if backend.container_exec(container_name, ["test", "-f", destination]).returncode == 0:
+            return "file"
+    except (BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe image-free content type for %s (%s)",
+            content.address,
+            type(exc).__name__,
+        )
+    return None
 
 
 def observed_os_family(info: Mapping[str, Any]) -> str | None:

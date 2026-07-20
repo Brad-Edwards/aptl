@@ -224,7 +224,7 @@ def _observe_placement(
         return ObservedResource(realized=False)
 
     concerns: dict[tuple[str, ...], object] = {}
-    content_type = _observed_content_type(backend, content)
+    content_type = _observed_content_type(backend, content, container_name)
     if content_type is not None:
         concerns[_CONTENT_TYPE_PATH] = content_type
     return ObservedResource(realized=True, concerns=concerns)

@@ -130,32 +130,82 @@ nodes:
     os: linux
     services:
       - {name: postgres, port: 5432, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: postgresql, version: "*"}
+      service_manager_units:
+        - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
   workstation:
     type: vm
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: dnf, name: openssh-server, version: "*"}
+        - {manager: dnf, name: sudo, version: "*"}
+      local_identity:
+        groups:
+          - {name: labadmin}
+        users:
+          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+      service_manager_units:
+        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
   fileshare:
     type: vm
     os: linux
     services:
       - {name: smb, port: 445, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: samba, version: "*"}
+      service_manager_units:
+        - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
   dns:
     type: vm
     os: linux
     services:
       - {name: dns, port: 53, protocol: udp}
+    runtime:
+      packages:
+        - {manager: apt, name: bind9, version: "*"}
+        - {manager: apt, name: dnsutils, version: "*"}
+      filesystem_inventory:
+        - {path: /var/log/named, entry_type: directory, owner_user: bind, owner_group: bind}
+      service_manager_units:
+        - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
   victim:
     type: vm
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: dnf, name: openssh-server, version: "*"}
+        - {manager: dnf, name: sudo, version: "*"}
+      local_identity:
+        groups:
+          - {name: labadmin}
+        users:
+          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+      service_manager_units:
+        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
 
   kali:
     type: vm
     os: linux
     services:
       - {name: ssh, port: 22, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: openssh-server, version: "*"}
+      local_identity:
+        groups:
+          - {name: kali}
+        users:
+          - {username: kali, supplemental_groups: [kali]}
+      service_manager_units:
+        - {unit_id: ssh, unit_name: ssh.service, enabled_state: enabled, active_state: active}
   kali-capture:
     type: vm
     os: linux
@@ -387,10 +437,34 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  dns-named-conf:
+    type: file
+    target: dns
+    path: /etc/bind/named.conf
+    source:
+      name: containers/dns/named.conf
+  dns-zone-fwd:
+    type: file
+    target: dns
+    path: /etc/bind/zones/techvault.local.zone
+    source:
+      name: containers/dns/zones/techvault.local.zone
+  dns-zone-rev:
+    type: file
+    target: dns
+    path: /etc/bind/zones/172.20.rev
+    source:
+      name: containers/dns/zones/172.20.rev
+  fileshare-smb-conf:
+    type: file
+    target: fileshare
+    path: /etc/samba/smb.conf
+    source:
+      name: containers/fileshare/smb.conf
   fileshare-public-notice:
     type: file
     target: fileshare
-    path: public/notice.txt
+    path: /srv/shares/public/notice.txt
     text: |
       Welcome to TechVault Solutions file server.
       This notice is planted by the operational ACES scenario's
@@ -400,7 +474,7 @@ content:
   fileshare-onboarding-packet:
     type: directory
     target: fileshare
-    destination: onboarding
+    destination: /srv/shares/onboarding
     source:
       name: scenarios/fixtures/techvault-content/onboarding
 

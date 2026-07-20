@@ -2,15 +2,15 @@
 
 ## Status
 
-accepted (amended 2026-06-29 and 2026-07-12 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
+accepted (amended 2026-06-29, 2026-07-12, and 2026-07-19 by [ADR-046](adr-046-dynamic-aces-scenario-realization.md))
 
 ## Date
 
-2026-05-18 (amended 2026-06-29, 2026-07-12)
+2026-05-18 (amended 2026-06-29, 2026-07-12, 2026-07-19)
 
 ## Last Updated
 
-2026-07-12
+2026-07-19
 
 ## Status update—2026-06-29
 
@@ -43,6 +43,17 @@ ACES; APTL keeps only `scenarios/techvault-operational.sdl.yaml` as the
 driving contract, with no separate capture/parity evidence surface behind it.
 This is a point-in-time correction, not a rewrite of the decision record
 below—see ADR-046 for the current state.
+
+## Status update—2026-07-19
+
+**Superseded further, by [ADR-046](adr-046-dynamic-aces-scenario-realization.md)'s
+TechVault Full Dynamic Cutover Addendum.** The remaining compatibility statement
+that `docker-compose.yml` is the profile-selected realization vehicle is no
+longer true for the operational TechVault scenario. Docker Compose remains an
+APTL deployment backend format, but its standalone model is derived from the
+single admitted ACES execution/realization graph and is not an authoring,
+topology, service-catalog, profile, or lifecycle input. A checked-in Compose
+file, if retained, is a deterministic reference artifact only.
 
 ## Context
 

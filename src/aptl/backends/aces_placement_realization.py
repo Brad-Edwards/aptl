@@ -18,7 +18,10 @@ from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import PlannedResource
 
 from aptl.backends.aces_account_realization import resolve_account_placement
-from aptl.backends.aces_content_realization import resolve_content_placement
+from aptl.backends.aces_content_realization import (
+    resolve_content_placement,
+    resolve_image_free_content_placement,
+)
 from aptl.backends.aces_diagnostics import diagnostic
 from aptl.backends.aces_profiles import normalize_identifier
 from aptl.backends.aces_realization_model import (
@@ -148,13 +151,20 @@ def _realize_placement_resource(
     target_service = _single_or_none(target_node.backend_services) if target_node else None
 
     if resource.resource_type == "content-placement":
-        content, diagnostics = resolve_content_placement(
-            resource=resource,
-            payload=payload,
-            target_address=target_address,
-            target_service=target_service,
-            project_dir=project_dir,
-        )
+        if target_node is not None and target_node.os and target_node.runtime is not None:
+            # Image-free node: the materializer places content directly into the
+            # container, no compose service / named volume required.
+            content, diagnostics = resolve_image_free_content_placement(
+                resource, payload, target_address
+            )
+        else:
+            content, diagnostics = resolve_content_placement(
+                resource=resource,
+                payload=payload,
+                target_address=target_address,
+                target_service=target_service,
+                project_dir=project_dir,
+            )
         return content, None, diagnostics
     if resource.resource_type == "account-placement":
         account, diagnostics = resolve_account_placement(

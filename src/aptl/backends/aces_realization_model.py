@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aces_contracts.diagnostics import Diagnostic
+from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -38,6 +39,13 @@ class NodeRealization(object):
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
     ordering_dependencies: tuple[str, ...] = ()
+    # ADR-048: the declared desired state the generic materializer realizes onto
+    # a base substrate. `os`/`os_version` choose the generic base; `runtime`
+    # carries the compiled ACES RuntimeConfiguration (packages, identity, service
+    # units, ...). None until the node payload declares them.
+    os: str = ""
+    os_version: str = ""
+    runtime: RuntimeConfiguration | None = None
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -62,6 +70,21 @@ class NodeRealization(object):
             "published_ports": [binding.details() for binding in self.published_ports],
             "ordering_dependencies": list(self.ordering_dependencies),
         }
+        if self.os:
+            details["os"] = self.os
+        if self.os_version:
+            details["os_version"] = self.os_version
+        if self.runtime is not None:
+            details["runtime"] = {
+                "packages": len(self.runtime.packages),
+                "software_components": len(self.runtime.software_components),
+                "local_users": (
+                    len(self.runtime.local_identity.users)
+                    if self.runtime.local_identity is not None
+                    else 0
+                ),
+                "service_units": len(self.runtime.service_manager_units),
+            }
         if self.image is not None:
             details["image"] = self.image.details()
         return details
@@ -131,10 +154,11 @@ class AptlRealization(object):
 
         return DeploymentRealizationSpec(
             profiles=tuple(profiles),
+            image_free=_realization_is_image_free(self.nodes),
             nodes=tuple(
                 _deployment_node_realization(node)
                 for node in self.nodes
-                if node.backend_services or node.container_name
+                if node.backend_services or node.container_name or node.os
             ),
             networks=tuple(
                 DeploymentNetworkRealization(
@@ -204,6 +228,24 @@ def _single_or_none(values: tuple[str, ...]) -> str | None:
     return None
 
 
+def _realization_is_image_free(nodes: tuple[NodeRealization, ...]) -> bool:
+    """Whether this realization is fully image-free (ADR-048).
+
+    True only when every materializable (os-bearing) node declares runtime
+    desired state AND no node carries an appliance image. A scenario that still
+    has any appliance image, or an os-bearing node without declared runtime,
+    stays on the legacy compose path so a partially-authored scenario never
+    boots an empty range.
+    """
+
+    materializable = [node for node in nodes if node.os]
+    if not materializable:
+        return False
+    if any(node.image is not None for node in nodes):
+        return False
+    return all(node.runtime is not None for node in materializable)
+
+
 def _deployment_node_realization(
     node: NodeRealization,
 ) -> DeploymentNodeRealization:
@@ -226,4 +268,7 @@ def _deployment_node_realization(
         services=node.services,
         published_ports=node.published_ports,
         ordering_dependencies=node.ordering_dependencies,
+        os=node.os,
+        os_version=node.os_version,
+        runtime=node.runtime,
     )

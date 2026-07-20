@@ -20,6 +20,7 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration
 from aptl.backends.aces_materializer import (
     MaterializationOp,
     base_image_for_os,
+    package_family,
     plan_node_materialization,
 )
 
@@ -78,7 +79,9 @@ def base_container_spec(
     return BaseContainerSpec(
         node_address=node_address,
         container_name=_container_name(node_address),
-        image_ref=base_image_for_os(os, os_version, runs_services=runs_services),
+        image_ref=base_image_for_os(
+            os, os_version, runs_services=runs_services, family=package_family(runtime)
+        ),
         runs_services=runs_services,
         init=InitRequirements() if runs_services else None,
     )

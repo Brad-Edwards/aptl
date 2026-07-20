@@ -144,3 +144,31 @@ class TestPlanNodeMaterialization:
         a = plan_node_materialization(os="linux", os_version="", runtime=runtime)
         b = plan_node_materialization(os="linux", os_version="", runtime=runtime)
         assert a == b
+
+
+class TestPackageFamilyBaseSelection:
+    def test_family_from_declared_managers(self):
+        from aces_sdl.runtime_configuration import RuntimeConfiguration, RuntimePackage
+        from aptl.backends.aces_materializer import package_family
+        assert package_family(None) == "debian"
+        assert package_family(RuntimeConfiguration()) == "debian"
+        assert package_family(
+            RuntimeConfiguration(packages=[RuntimePackage(manager="apt", name="curl", version="*")])
+        ) == "debian"
+        assert package_family(
+            RuntimeConfiguration(packages=[RuntimePackage(manager="dnf", name="httpd", version="*")])
+        ) == "rhel"
+
+    def test_non_service_base_is_family_aware(self):
+        assert base_image_for_os("linux", "", family="debian") == "debian:12-slim"
+        assert base_image_for_os("linux", "", family="rhel") == "rockylinux:9"
+
+    def test_service_nodes_use_validated_systemd_substrate(self):
+        # Service nodes standardize on the validated RHEL/systemd base regardless
+        # of the non-service family key.
+        assert base_image_for_os("linux", "", runs_services=True, family="debian") == \
+            base_image_for_os("linux", "", runs_services=True, family="rhel")
+
+    def test_unknown_family_fails_closed(self):
+        with pytest.raises(UnsupportedOsFamilyError):
+            base_image_for_os("linux", "", family="arch")

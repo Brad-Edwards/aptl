@@ -24,18 +24,22 @@ from aces_sdl.runtime_configuration import (
     ServiceUnitEnabledState,
 )
 
-# Fixed, scenario-independent base substrate per OS family. A node runs on a
-# generic OS base image; its scenario-meaningful software is materialized onto
-# that base from declared state, never baked into an appliance image (ADR-047).
-_BASE_IMAGE_MAP: dict[str, str] = {
-    "linux": "debian:12-slim",
+# Fixed, scenario-independent base substrate per (OS family, package family). A
+# node runs on a generic OS base image; its scenario-meaningful software is
+# materialized onto that base from declared state, never baked into an appliance
+# image (ADR-047). The package family (from the declared package manager) picks a
+# base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
+_NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
+    ("linux", "debian"): "debian:12-slim",
+    ("linux", "rhel"): "rockylinux:9",
 }
 
 # Generic OS + init substrate for nodes that declare service units, so a service
 # manager (systemd) actually runs inside the container. Still generic: OS + init
 # only, no product. Built from containers/generic-systemd-base/Dockerfile and
-# validated locally against Docker.
-_SERVICE_BASE_IMAGE_MAP: dict[str, str] = {
+# validated locally against Docker. Service nodes standardize on this validated
+# RHEL/systemd substrate, so their declared packages use dnf.
+_SERVICE_BASE_IMAGE: dict[str, str] = {
     "linux": "aptl/generic-systemd-base:latest",
 }
 
@@ -107,22 +111,40 @@ MaterializationOp = (
 )
 
 
-def base_image_for_os(os: str, os_version: str, *, runs_services: bool = False) -> str:
-    """Return the generic base image for an OS family, or fail closed.
+def package_family(runtime: RuntimeConfiguration | None) -> str:
+    """Return the package family (``debian`` / ``rhel``) implied by declared
+    package managers. Defaults to ``debian`` when nothing dnf/yum is declared."""
 
-    Deterministic: the same (os, os_version, runs_services) always maps to the
-    same base. A node that declares service units gets an init-capable generic
-    substrate so a service manager can run; otherwise a minimal generic base.
-    `os_version` is accepted for forward compatibility (family plus version keys)
-    but the current maps key on family only.
+    if runtime is not None:
+        for pkg in runtime.packages:
+            if pkg.manager in ("dnf", "yum"):
+                return "rhel"
+    return "debian"
+
+
+def base_image_for_os(
+    os: str,
+    os_version: str,
+    *,
+    runs_services: bool = False,
+    family: str = "debian",
+) -> str:
+    """Return the generic base image for a node, or fail closed.
+
+    Deterministic. A node that declares service units gets the validated
+    init-capable RHEL/systemd substrate; otherwise a minimal generic base chosen
+    by package family (apt -> Debian, dnf -> RHEL). `os_version` is accepted for
+    forward compatibility but the current maps key on family only.
     """
 
-    family = (os or "").strip().lower()
-    table = _SERVICE_BASE_IMAGE_MAP if runs_services else _BASE_IMAGE_MAP
-    image = table.get(family)
+    os_family = (os or "").strip().lower()
+    if runs_services:
+        image = _SERVICE_BASE_IMAGE.get(os_family)
+    else:
+        image = _NON_SERVICE_BASE_IMAGE.get((os_family, family))
     if image is None:
         raise UnsupportedOsFamilyError(
-            f"no generic base substrate for OS family {os!r}"
+            f"no generic base substrate for OS family {os!r} (package family {family!r})"
         )
     return image
 
@@ -187,7 +209,12 @@ def plan_node_materialization(
     runs_services = bool(runtime is not None and runtime.service_manager_units)
     ops: list[MaterializationOp] = [
         BaseSubstrateOp(
-            image_ref=base_image_for_os(os, os_version, runs_services=runs_services)
+            image_ref=base_image_for_os(
+                os,
+                os_version,
+                runs_services=runs_services,
+                family=package_family(runtime),
+            )
         )
     ]
     if runtime is not None:

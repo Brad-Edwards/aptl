@@ -72,6 +72,13 @@ class ComposeBaseSubstrateMixin(object):
             f"aptl.lifecycle.project={self._project_name}",
             "--label",
             f"aptl.node.address={spec.node_address}",
+            # Every project-ownership check (container_exists, the host
+            # snapshot listing, observation) filters on this label - it is
+            # Compose's own convention, not Compose-specific knowledge here:
+            # a directly-run container is just as project-owned as a
+            # Compose-started one, so it carries the same label (ADR-048).
+            "--label",
+            f"com.docker.compose.project={self._project_name}",
         ]
         if spec.init is not None:
             argv += _init_run_flags(spec.init)

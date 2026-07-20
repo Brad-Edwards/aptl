@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 
 ImageRealizationMode = Literal["pull", "build"]
@@ -127,6 +130,11 @@ class DeploymentNodeRealization(object):
     services: tuple[DeploymentServicePort, ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
+    # ADR-048: declared desired state the generic materializer realizes onto a
+    # base substrate. None until the node payload declares them.
+    os: str = ""
+    os_version: str = ""
+    runtime: RuntimeConfiguration | None = None
 
 
 ContentSourceKind = Literal[
@@ -308,3 +316,9 @@ class DeploymentRealizationSpec(object):
     accounts: tuple[DeploymentAccountRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
+    # ADR-048: when True, the backend realizes every node by materializing its
+    # declared desired state onto a generic base substrate (no appliance image,
+    # no compose-up of the hand-authored model). Set by the interpreter only
+    # when the scenario is fully image-free authored; False keeps the legacy
+    # compose path unchanged so a partially-authored scenario never boots empty.
+    image_free: bool = False

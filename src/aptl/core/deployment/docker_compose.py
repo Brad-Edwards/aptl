@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
@@ -43,7 +44,10 @@ _SEED_TIMEOUT = 600
 
 
 class DockerComposeBackend(
-    ComposeQueryMixin, ComposeRealizationMixin, ComposeSeedAttributionMixin
+    ComposeQueryMixin,
+    ComposeRealizationMixin,
+    ComposeSeedAttributionMixin,
+    ComposeBaseSubstrateMixin,
 ):
     """Docker Compose deployment backend.
 

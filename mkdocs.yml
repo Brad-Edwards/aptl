@@ -172,6 +172,7 @@ nav:
     - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
     - ADR-046 Dynamic ACES Scenario Realization: adrs/adr-046-dynamic-aces-scenario-realization.md
     - ADR-047 ACES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-aces-experiment-admission-and-trial-plan-boundary.md
+    - ADR-048 APTL Image-Free, Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
 
 extra:
   social:

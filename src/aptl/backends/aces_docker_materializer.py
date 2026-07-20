@@ -23,6 +23,7 @@ from aptl.backends.aces_package_managers import (
     install_argv,
     parse_installed,
     query_installed_argv,
+    refresh_argv,
 )
 
 
@@ -64,6 +65,9 @@ class DockerMaterializationExecutor:
     def install_packages(
         self, node_address: str, manager: str, packages: tuple[str, ...]
     ) -> None:
+        refresh = refresh_argv(manager)
+        if refresh is not None:
+            self._require_ok(node_address, refresh, "refresh package index")
         self._require_ok(node_address, install_argv(manager, packages), "install packages")
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:

@@ -68,6 +68,16 @@ class TestPackages:
         with pytest.raises(MaterializationCommandError):
             _executor(fake).install_packages("n.node", "apt", ("nope",))
 
+    def test_apt_install_refreshes_index_before_installing(self):
+        # A slim base image ships no apt lists, so install must be preceded by
+        # `apt-get update`. Regression guard for a real failure fakes missed.
+        fake = _FakeExec()
+        _executor(fake).install_packages("n.node", "apt", ("curl",))
+        argvs = fake.argvs()
+        update_idx = next(i for i, a in enumerate(argvs) if "update" in a)
+        install_idx = next(i for i, a in enumerate(argvs) if "install" in a)
+        assert update_idx < install_idx
+
     def test_observe_installed_parses_manager_query_output(self):
         def responder(container, argv):
             if "dpkg-query" in argv:

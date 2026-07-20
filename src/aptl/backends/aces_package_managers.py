@@ -29,6 +29,10 @@ class _Manager:
     install: Callable[[tuple[str, ...]], list[str]]
     query: Callable[[tuple[str, ...]], list[str]]
     parse: Callable[[str], frozenset[str]]
+    # Optional index-refresh run before install (apt needs it on a slim base
+    # image whose package lists were stripped). None when the manager refreshes
+    # implicitly at install time.
+    refresh: tuple[str, ...] | None = None
 
 
 def _apt_install(packages: tuple[str, ...]) -> list[str]:
@@ -83,7 +87,12 @@ def _pip_parse(stdout: str) -> frozenset[str]:
 
 
 _MANAGERS: dict[str, _Manager] = {
-    "apt": _Manager(install=_apt_install, query=_apt_query, parse=_lines_to_set),
+    "apt": _Manager(
+        install=_apt_install,
+        query=_apt_query,
+        parse=_lines_to_set,
+        refresh=("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "update"),
+    ),
     "dnf": _Manager(install=_dnf_install, query=_dnf_query, parse=_lines_to_set),
     "pip": _Manager(install=_pip_install, query=_pip_query, parse=_pip_parse),
 }
@@ -96,6 +105,16 @@ def _manager(name: str) -> _Manager:
             f"no generic mechanism for package manager {name!r}"
         )
     return manager
+
+
+def refresh_argv(manager: str) -> list[str] | None:
+    """Return the index-refresh argv to run before install, or None.
+
+    apt needs `apt-get update` on a slim base image whose package lists were
+    stripped; dnf/pip refresh implicitly and return None.
+    """
+    refresh = _manager(manager).refresh
+    return list(refresh) if refresh is not None else None
 
 
 def install_argv(manager: str, packages: tuple[str, ...]) -> list[str]:

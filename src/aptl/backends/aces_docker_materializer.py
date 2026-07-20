@@ -1,4 +1,4 @@
-"""Concrete Docker materialization executor (ADR-047).
+"""Concrete Docker materialization executor (ADR-048).
 
 Implements the generic :class:`~aptl.backends.aces_materializer_engine.MaterializationExecutor`
 surface by running generic OS commands inside a node's base-OS container: a

@@ -361,7 +361,7 @@ def resolve_image_free_content_placement(
     payload: Mapping[str, Any],
     target_address: str,
 ) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
-    """Resolve content for an image-free node (ADR-047).
+    """Resolve content for an image-free node (ADR-048).
 
     The generic materializer places declared config directly into the node's
     container, so there is no compose service / named-volume requirement. An

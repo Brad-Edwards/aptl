@@ -67,5 +67,6 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [043](adr-043-suricata-runtime-config-ownership-boundary.md) | Suricata Runtime Config Ownership Boundary | accepted | 2026-06-20 |
 | [044](adr-044-aces-aligned-run-reproducibility-record.md) | ACES-Aligned Run Reproducibility Record | accepted | 2026-06-25 |
 | [045](adr-045-ephemeral-lifecycle-policy-enforcement.md) | Ephemeral Lifecycle Policy Enforcement | accepted | 2026-06-28 |
-| [046](adr-046-dynamic-aces-scenario-realization.md) | Dynamic ACES Scenario Realization (Image Realization Addendum superseded by ADR-047) | accepted (amended) | 2026-06-29 |
-| [047](adr-047-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | accepted | 2026-07-20 |
+| [046](adr-046-dynamic-aces-scenario-realization.md) | Dynamic ACES Scenario Realization (Image Realization Addendum superseded by ADR-048) | accepted (amended) | 2026-06-29 |
+| [047](adr-047-aces-experiment-admission-and-trial-plan-boundary.md) | ACES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
+| [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | accepted | 2026-07-20 |

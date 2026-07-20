@@ -1,4 +1,4 @@
-"""Static image-free realization gate (ADR-047, #581 P7).
+"""Static image-free realization gate (ADR-048, #581 P7).
 
 Asserts that a deployment realization is fully image-free and coherent: no
 appliance image, every OS-bearing node declares runtime desired state, and every

@@ -1,4 +1,4 @@
-"""Tests for the generic, scenario-agnostic node materializer planner (ADR-047).
+"""Tests for the generic, scenario-agnostic node materializer planner (ADR-048).
 
 The planner turns a node's declared ACES desired state into an ordered list of
 generic materialization operations. It contains no per-product knowledge: two

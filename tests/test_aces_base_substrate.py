@@ -1,4 +1,4 @@
-"""Tests for the generic base-substrate decision (ADR-047).
+"""Tests for the generic base-substrate decision (ADR-048).
 
 A node runs on a generic base-OS container chosen solely from its declared
 `os`/`os_version` (never a per-node or appliance image). A node that declares

@@ -1,4 +1,4 @@
-"""Generic, scenario-agnostic node materializer planner (ADR-047).
+"""Generic, scenario-agnostic node materializer planner (ADR-048).
 
 Turns a node's declared ACES desired state (`os` plus a
 `RuntimeConfiguration`) into an ordered tuple of generic materialization
@@ -27,7 +27,7 @@ from aces_sdl.runtime_configuration import (
 # Fixed, scenario-independent base substrate per (OS family, package family). A
 # node runs on a generic OS base image; its scenario-meaningful software is
 # materialized onto that base from declared state, never baked into an appliance
-# image (ADR-047). The package family (from the declared package manager) picks a
+# image (ADR-048). The package family (from the declared package manager) picks a
 # base whose package manager matches: apt -> Debian, dnf/yum -> RHEL.
 _NON_SERVICE_BASE_IMAGE: dict[tuple[str, str], str] = {
     ("linux", "debian"): "debian:12-slim",

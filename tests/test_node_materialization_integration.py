@@ -1,6 +1,6 @@
 """End-to-end real-Docker test: realize a node through the deployment backend.
 
-Drives the whole ADR-047 path with a real `DockerComposeBackend`: start the
+Drives the whole ADR-048 path with a real `DockerComposeBackend`: start the
 node's generic base container, materialize its declared packages/identity, and
 verify by read-after-write. Product-agnostic; validates locally on Docker.
 

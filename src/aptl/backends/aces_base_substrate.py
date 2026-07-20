@@ -1,4 +1,4 @@
-"""Generic base-substrate decision for a node (ADR-047).
+"""Generic base-substrate decision for a node (ADR-048).
 
 Decides which generic base-OS container a node runs on, and whether that
 container must be init-capable (so declared `service_manager_units` can run under

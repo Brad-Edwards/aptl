@@ -1,4 +1,4 @@
-"""Tests for the concrete Docker materialization executor (ADR-047).
+"""Tests for the concrete Docker materialization executor (ADR-048).
 
 The executor implements the generic `MaterializationExecutor` surface by running
 generic OS commands (package manager, `groupadd`/`useradd`/`getent`/`id`,

@@ -39,7 +39,7 @@ class NodeRealization(object):
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     image: DeploymentImageRealization | None = None
     ordering_dependencies: tuple[str, ...] = ()
-    # ADR-047: the declared desired state the generic materializer realizes onto
+    # ADR-048: the declared desired state the generic materializer realizes onto
     # a base substrate. `os`/`os_version` choose the generic base; `runtime`
     # carries the compiled ACES RuntimeConfiguration (packages, identity, service
     # units, ...). None until the node payload declares them.
@@ -229,7 +229,7 @@ def _single_or_none(values: tuple[str, ...]) -> str | None:
 
 
 def _realization_is_image_free(nodes: tuple[NodeRealization, ...]) -> bool:
-    """Whether this realization is fully image-free (ADR-047).
+    """Whether this realization is fully image-free (ADR-048).
 
     True only when every materializable (os-bearing) node declares runtime
     desired state AND no node carries an appliance image. A scenario that still

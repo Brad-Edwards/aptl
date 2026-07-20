@@ -192,7 +192,7 @@ def _realize_nodes_and_networks(
 
 
 def _is_materializable_node(node: NodeRealization) -> bool:
-    """Whether a node is realized image-free by the generic materializer (ADR-047).
+    """Whether a node is realized image-free by the generic materializer (ADR-048).
 
     Such a node declares an OS and typed runtime desired state and carries no
     appliance image, so it legitimately maps to no compose profile.

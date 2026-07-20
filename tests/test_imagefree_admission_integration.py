@@ -1,4 +1,4 @@
-"""Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-047).
+"""Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-048).
 
 Exercises the entire path through the real ACES compiler:
 parse -> plan -> interpret -> deployment_spec (image_free derived) ->
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.integration
 
 _SDL = """\
 name: imagefree-admission-smoke
-description: Minimal image-free scenario (ADR-047 full-stack validation).
+description: Minimal image-free scenario (ADR-048 full-stack validation).
 nodes:
   smoke-net:
     type: switch
@@ -87,7 +87,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
 
 _SERVICE_SDL = """\
 name: imagefree-service-smoke
-description: Image-free scenario with a running service (ADR-047 systemd path).
+description: Image-free scenario with a running service (ADR-048 systemd path).
 nodes:
   svc-net:
     type: switch

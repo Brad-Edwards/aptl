@@ -1,4 +1,4 @@
-"""Real-Docker integration test for the generic materializer (ADR-047).
+"""Real-Docker integration test for the generic materializer (ADR-048).
 
 Materializes a node's declared state onto an actual base-OS container and
 verifies it by read-after-write, with no product-specific code. This is the

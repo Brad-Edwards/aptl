@@ -1,11 +1,11 @@
-"""Generic node materialization engine (ADR-047).
+"""Generic node materialization engine (ADR-048).
 
 Executes a node's planned generic operations (from
 :func:`aptl.backends.aces_materializer.plan_node_materialization`) against a
 backend materialization surface, then verifies the result by read-after-write.
 
 The engine is product-agnostic: it dispatches purely on operation type, never on
-any node or product name. Per ADR-046 (as amended for ADR-047), an internal or
+any node or product name. Per ADR-046 (as amended for ADR-048), an internal or
 backend failure is translated at this admission boundary into the existing ACES
 `LabResult` envelope; it never escapes as a new public exception hierarchy, and
 the raw failure detail never crosses into the envelope. A fact that cannot be

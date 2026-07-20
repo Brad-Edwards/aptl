@@ -1,4 +1,4 @@
-"""Tests for the generic package-manager mechanism registry (ADR-047).
+"""Tests for the generic package-manager mechanism registry (ADR-048).
 
 The registry is OS-mechanism knowledge (how to drive apt/dnf/pip), not product
 knowledge. It is parameterized entirely by the declared package manager and

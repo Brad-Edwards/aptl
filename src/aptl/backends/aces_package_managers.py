@@ -1,4 +1,4 @@
-"""Generic package-manager mechanism registry (ADR-047).
+"""Generic package-manager mechanism registry (ADR-048).
 
 Encodes how to drive a package manager (build an install command, query what is
 installed, parse the result) as OS-mechanism knowledge, parameterized entirely

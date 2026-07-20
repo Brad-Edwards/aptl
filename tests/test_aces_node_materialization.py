@@ -1,4 +1,4 @@
-"""Tests for per-node materialization coordination (ADR-047)."""
+"""Tests for per-node materialization coordination (ADR-048)."""
 
 from __future__ import annotations
 

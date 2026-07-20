@@ -36,6 +36,7 @@ from aptl.backends.aces_start_model import (
     AcesStartOutcome,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -253,8 +254,15 @@ def admitted_stateful_artifact_ownership(
     config: AptlConfig,
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
-) -> frozenset[tuple[str, str, str, str]]:
-    """Return exact addressed artifact consumers from the admitted graph."""
+) -> frozenset[tuple[str, str, str, str, str]]:
+    """Return exact addressed artifact consumers from the admitted graph.
+
+    Each entry is ``(address, generator, service_name, mount_destination,
+    source_relpath)``. The canonical generated source travels with the
+    consumer so downstream exemptions (the bind-mount pre-flight) can match
+    a mount on both sides — a stray bind whose destination merely nests
+    beneath an owned directory is not owned by the artifact (issue #677).
+    """
 
     resolved_scenario = scenario_path or DEFAULT_ACES_SCENARIO
     if not resolved_scenario.is_absolute():
@@ -281,6 +289,9 @@ def admitted_stateful_artifact_ownership(
             artifact.generator,
             consumer.service_name,
             consumer.mount_destination,
+            artifact_source_path(project_dir, artifact)
+            .relative_to(project_dir.resolve())
+            .as_posix(),
         )
         for artifact in realization.generated_artifacts
         for consumer in artifact.consumers
@@ -345,6 +356,35 @@ def _run_execution_plan(
     )
 
 
+def _with_backend_failure_diagnostics(
+    target: RuntimeTarget,
+    diagnostics: list["Diagnostic"],
+) -> list["Diagnostic"]:
+    """Re-attach the provisioner's own failure report to a failed apply.
+
+    ``aces_runtime``'s backend-call boundary replaces a failed backend apply's
+    diagnostics with its snapshot-contract / SEM-218 gate output — the gate
+    evaluates the never-realized snapshot, so every exact declaration reads as
+    unrealized. That hides the backend's actionable failure (for example a
+    Docker subnet conflict with its remediation steps) and severs the
+    retryable-code signal the SOC retry keys on. The backend's own report is
+    authoritative for what failed, so it renders first.
+    """
+    captured = tuple(getattr(target.provisioner, "last_failure_diagnostics", ()))
+    if not captured:
+        return diagnostics
+    seen = {
+        (diagnostic.code, diagnostic.address, diagnostic.message)
+        for diagnostic in diagnostics
+    }
+    fresh = [
+        diagnostic
+        for diagnostic in captured
+        if (diagnostic.code, diagnostic.address, diagnostic.message) not in seen
+    ]
+    return [*fresh, *diagnostics]
+
+
 def _apply_execution_plan(
     target: RuntimeTarget,
     execution_plan: "ExecutionPlan",
@@ -373,15 +413,18 @@ def _apply_execution_plan(
     apply_result = manager.apply(execution_plan)
     snapshot = apply_result.snapshot
     if not apply_result.success:
+        diagnostics = _with_backend_failure_diagnostics(
+            target, list(apply_result.diagnostics)
+        )
         return (
             LabResult(
                 success=False,
-                error=render_aces_diagnostics(list(apply_result.diagnostics)),
+                error=render_aces_diagnostics(diagnostics),
             ),
             snapshot,
             any(
                 diagnostic.code in _RETRYABLE_APPLY_DIAGNOSTIC_CODES
-                for diagnostic in apply_result.diagnostics
+                for diagnostic in diagnostics
             ),
         )
     evaluation_results = _evaluation_results(target, execution_plan)

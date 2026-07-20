@@ -130,7 +130,7 @@ class DeploymentNodeRealization(object):
     services: tuple[DeploymentServicePort, ...] = ()
     published_ports: tuple[DeploymentPublishedPort, ...] = ()
     ordering_dependencies: tuple[str, ...] = ()
-    # ADR-047: declared desired state the generic materializer realizes onto a
+    # ADR-048: declared desired state the generic materializer realizes onto a
     # base substrate. None until the node payload declares them.
     os: str = ""
     os_version: str = ""
@@ -316,7 +316,7 @@ class DeploymentRealizationSpec(object):
     accounts: tuple[DeploymentAccountRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
-    # ADR-047: when True, the backend realizes every node by materializing its
+    # ADR-048: when True, the backend realizes every node by materializing its
     # declared desired state onto a generic base substrate (no appliance image,
     # no compose-up of the hand-authored model). Set by the interpreter only
     # when the scenario is fully image-free authored; False keeps the legacy

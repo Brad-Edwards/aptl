@@ -1,4 +1,4 @@
-"""Tests for the generic node materialization engine (ADR-047).
+"""Tests for the generic node materialization engine (ADR-048).
 
 The engine executes a node's planned generic operations against a backend
 materialization surface, then verifies the result by read-after-write. It is

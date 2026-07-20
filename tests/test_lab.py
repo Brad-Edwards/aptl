@@ -640,6 +640,152 @@ class TestCheckBindMounts:
         assert len(errors) == 1
         assert "parse" in errors[0].lower() or "Failed" in errors[0]
 
+    def test_skips_missing_source_owned_by_stateful_realization(self, tmp_path):
+        """A missing source the admitted plan realizes must not fail pre-flight.
+
+        Stateful realization generates artifacts (e.g. the Wazuh certificate
+        bundle) inside ``DeploymentBackend.realize`` before Compose starts the
+        consuming services, so on a fresh checkout the sources legitimately do
+        not exist yet at bind-mount pre-flight time (issue #677 fresh-start
+        regression from #796).
+        """
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.manager:\n"
+            "    volumes:\n"
+            "      - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem"
+            ":/etc/ssl/wazuh/root-ca-manager.pem:ro\n"
+        )
+
+        errors = _check_bind_mounts(
+            tmp_path,
+            stateful_owned_mounts=frozenset(
+                {("wazuh.manager", "/etc/ssl/wazuh", "config/wazuh_indexer_ssl_certs")}
+            ),
+        )
+        assert errors == []
+
+    def test_ownership_skip_is_scoped_to_owning_service(self, tmp_path):
+        """Another service's missing source under the same path still fails."""
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.indexer:\n"
+            "    volumes:\n"
+            "      - ./config/wazuh_indexer_ssl_certs/root-ca.pem"
+            ":/usr/share/wazuh-indexer/certs/root-ca.pem:ro\n"
+        )
+
+        errors = _check_bind_mounts(
+            tmp_path,
+            stateful_owned_mounts=frozenset(
+                {("wazuh.manager", "/etc/ssl/wazuh", "config/wazuh_indexer_ssl_certs")}
+            ),
+        )
+        assert len(errors) == 1
+        assert "wazuh.indexer" in errors[0]
+
+    def test_ownership_skip_matches_exact_file_destination(self, tmp_path):
+        """A file-granular owned destination (e.g. ossec.conf) is skipped."""
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.manager:\n"
+            "    volumes:\n"
+            "      - ./.aptl/config/wazuh_cluster/wazuh_manager.conf"
+            ":/wazuh-config-mount/etc/ossec.conf:ro\n"
+        )
+
+        errors = _check_bind_mounts(
+            tmp_path,
+            stateful_owned_mounts=frozenset(
+                {
+                    (
+                        "wazuh.manager",
+                        "/wazuh-config-mount/etc/ossec.conf",
+                        ".aptl/config/wazuh_cluster/wazuh_manager.conf",
+                    )
+                }
+            ),
+        )
+        assert errors == []
+
+    def test_ownership_requires_matching_source(self, tmp_path):
+        """A stray bind under an owned destination is still checked.
+
+        The exemption exists for sources the admitted realization will
+        generate; a mistyped or additional bind whose source is not the
+        artifact's generated path must not ride along on the destination
+        prefix (issue #677 codex finding).
+        """
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.manager:\n"
+            "    volumes:\n"
+            "      - ./missing:/etc/ssl/wazuh/extra.pem:ro\n"
+        )
+
+        errors = _check_bind_mounts(
+            tmp_path,
+            stateful_owned_mounts=frozenset(
+                {("wazuh.manager", "/etc/ssl/wazuh", "config/wazuh_indexer_ssl_certs")}
+            ),
+        )
+        assert len(errors) == 1
+        assert "./missing" in errors[0]
+
+    def test_ownership_does_not_mask_unrelated_destination(self, tmp_path):
+        """The owning service's mounts outside the owned destination still fail."""
+        from aptl.core.lab import _check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.manager:\n"
+            "    volumes:\n"
+            "      - ./missing-elsewhere:/var/ossec/data\n"
+        )
+
+        errors = _check_bind_mounts(
+            tmp_path,
+            stateful_owned_mounts=frozenset(
+                {("wazuh.manager", "/etc/ssl/wazuh", "config/wazuh_indexer_ssl_certs")}
+            ),
+        )
+        assert len(errors) == 1
+        assert "missing-elsewhere" in errors[0]
+
+    def test_step_passes_stateful_ownership_to_check(self, tmp_path):
+        """_step_check_bind_mounts must thread ctx ownership into the check."""
+        from aptl.core.lab import _LabStartContext, _step_check_bind_mounts
+
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  wazuh.manager:\n"
+            "    volumes:\n"
+            "      - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem"
+            ":/etc/ssl/wazuh/wazuh.manager.pem:ro\n"
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False)
+        ctx.stateful_artifact_ownership = frozenset(
+            {
+                (
+                    "provision.generated-artifact.wazuh-manager-certs",
+                    "certificate_bundle",
+                    "wazuh.manager",
+                    "/etc/ssl/wazuh",
+                    "config/wazuh_indexer_ssl_certs",
+                )
+            }
+        )
+
+        assert _step_check_bind_mounts(ctx) is None
+
 
 class TestStartupClassificationTypes:
     """Tests for the StartupOutcome / DiagnosticImpact / StartupDiagnostic types.
@@ -1230,6 +1376,30 @@ class TestOrchestrateLabStart:
             == env[_env_key("API", "PASSWORD")]
         )
         assert mocks["manager_creds"].call_args.args[1]
+
+    def test_refuses_start_when_env_keeps_placeholder_secret(self, mocker, tmp_path):
+        """A .env.example placeholder secret must stop the start fail-closed.
+
+        Hydration only repairs the vars it owns generators for; a sensitive
+        var outside `_HYDRATED_ENV_SPECS` (THEHIVE_SECRET) keeps its copied
+        .env.example placeholder, and booting with it would bring the SOC
+        stack up with admin credentials anyone can read in the repo. If
+        `_validate_env_secrets` were unwired from `_step_load_env`, only
+        this test notices.
+        """
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            env_file.read_text() + "THEHIVE_SECRET=CHANGE_ME_thehive_secret\n"
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "THEHIVE_SECRET" in result.error
+        mocks["start"].assert_not_called()
 
     def test_stops_on_env_loading_failure(self, mocker, tmp_path):
         """Should fail early if .env cannot be read or hydrated."""

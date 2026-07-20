@@ -1,4 +1,4 @@
-"""Tests for the static image-free realization gate (ADR-047 P7)."""
+"""Tests for the static image-free realization gate (ADR-048 P7)."""
 
 from __future__ import annotations
 

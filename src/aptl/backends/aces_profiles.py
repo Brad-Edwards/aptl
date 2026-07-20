@@ -263,7 +263,7 @@ def normalize_identifier(raw: str) -> str:
 def _load_compose_services(project_dir: Path) -> Mapping[str, object]:
     """Return the validated Compose services mapping.
 
-    ADR-047: an absent ``docker-compose.yml`` is not an error. An image-free
+    ADR-048: an absent ``docker-compose.yml`` is not an error. An image-free
     scenario has no compose file, and its nodes realize from declared desired
     state, so the profile index is simply empty. A legacy scenario ships its
     compose file, so it is unaffected.

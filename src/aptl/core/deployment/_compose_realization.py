@@ -107,7 +107,7 @@ class ComposeRealizationMixin(
         realization: DeploymentRealizationSpec,
     ) -> LabResult:
         """Realize every node by materializing declared state onto a generic
-        base substrate, with no appliance image and no compose-up (ADR-047).
+        base substrate, with no appliance image and no compose-up (ADR-048).
 
         Networks first, then each node's declared packages/identity/services are
         materialized and verified by read-after-write, then content placements.

@@ -1,4 +1,4 @@
-"""The node realization carries the declared ACES desired state (ADR-047).
+"""The node realization carries the declared ACES desired state (ADR-048).
 
 `_realize_node` extracts `os`/`os_version` and reconstructs the typed
 `RuntimeConfiguration` from the node payload so the generic materializer can

@@ -1,4 +1,4 @@
-# APTL generic systemd base substrate (ADR-047).
+# APTL generic systemd base substrate (ADR-048).
 #
 # A GENERIC operating-system + init image: no product, no scenario, no baked
 # service. It exists only so the generic materializer can start a node

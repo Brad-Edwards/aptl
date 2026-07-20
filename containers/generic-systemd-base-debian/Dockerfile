@@ -1,4 +1,4 @@
-# APTL generic Debian systemd base substrate (ADR-047). OS + init only, no
+# APTL generic Debian systemd base substrate (ADR-048). OS + init only, no
 # product, no baked service. For apt-family nodes that declare service units so
 # systemd runs their units. Validated locally against Docker with APTL's systemd
 # run flags (env container=docker, cgroupns=host, /sys/fs/cgroup:rw, tmpfs

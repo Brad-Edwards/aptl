@@ -18,6 +18,9 @@ from aptl.core.deployment._compose_build_dedupe import (
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
+from aptl.core.deployment._compose_seed_attribution import (
+    ComposeSeedAttributionMixin,
+)
 from aptl.core.deployment._compose_seed_safety import (
     assert_safe_relpath,
     redacted_stderr_hint,
@@ -42,7 +45,9 @@ _DOCKER_TIMEOUT = 30
 _SEED_TIMEOUT = 600
 
 
-class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
+class DockerComposeBackend(
+    ComposeQueryMixin, ComposeRealizationMixin, ComposeSeedAttributionMixin
+):
     """Docker Compose deployment backend.
 
     Manages lab lifecycle via ``docker compose`` subprocess calls.
@@ -167,7 +172,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
             ) from exc
 
     def start_base_container(self, spec: "BaseContainerSpec") -> None:
-        """Start a node's generic base container (ADR-047).
+        """Start a node's generic base container (ADR-048).
 
         Runs the generic base image with the validated init requirements when the
         node declares service units (host cgroup ns, cgroupfs rw, tmpfs,
@@ -217,7 +222,7 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
     def copy_into_container(
         self, container: str, source_path: str, dest_path: str, is_directory: bool
     ) -> None:
-        """Copy a checked-in project source into a container (ADR-047).
+        """Copy a checked-in project source into a container (ADR-048).
 
         For a directory, the source's contents are placed at ``dest_path``;
         for a file, ``dest_path`` is the file. Raises on failure so the
@@ -394,7 +399,14 @@ class DockerComposeBackend(ComposeQueryMixin, ComposeRealizationMixin):
         backend's own ``_run`` so this stays a narrow, typed operation
         rather than a generic Docker passthrough.
         """
+        # Validate every declared relpath before the first Docker command so
+        # an unsafe seed can never cause any container or volume side effect.
         for seed in seeds:
+            for seed_file in seed.files:
+                assert_safe_relpath(seed_file.src)
+                assert_safe_relpath(seed_file.dest)
+        for seed in seeds:
+            self._ensure_labeled_seed_volume(seed)
             self._retire_legacy_seed_path(seed, seeder_image)
             self._seed_one_named_volume(seed, seeder_image)
 

@@ -1,4 +1,4 @@
-"""Realize one node by materializing its declared state (ADR-047).
+"""Realize one node by materializing its declared state (ADR-048).
 
 Ties a node's realization (its `os` + typed `RuntimeConfiguration`) to a
 deployment backend: start the node's generic base container, then run the

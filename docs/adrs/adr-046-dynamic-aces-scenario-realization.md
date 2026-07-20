@@ -216,7 +216,7 @@ branch.
 
 ## Image Realization Addendum
 
-> **Superseded by [ADR-047](adr-047-image-free-placement-realization.md)
+> **Superseded by [ADR-048](adr-048-image-free-placement-realization.md)
 > (2026-07-20).** APTL no longer realizes a node's scenario-meaningful
 > software, services, content, accounts, or configuration from a pulled or
 > built *appliance* image. A node's realized state comes from the ACES
@@ -226,7 +226,7 @@ branch.
 > permitted container substrate; an appliance image that encodes the range
 > outside the SDL is not. The pull/build model described below is retained only
 > for historical context and for a generic base substrate; it is not the
-> node-realization authority. See ADR-047 for the current model.
+> node-realization authority. See ADR-048 for the current model.
 
 Issue #574 realizes node images from ACES `source` and captured
 `source.build` provenance. This is part of the same dynamic realization
@@ -837,7 +837,7 @@ binding silently override an authored value. An exact runtime fact that cannot
 be compiled or faithfully lowered is an upstream-contract or backend-capability
 gap and fails admission; it is not filled from the legacy file.
 
-The generic materialization operations required by ADR-047 are derived driver
+The generic materialization operations required by ADR-048 are derived driver
 instructions, not another desired-state schema. They may normalize an admitted
 `RuntimeConfiguration` into ordered, typed package, filesystem, identity,
 service-unit, and verification operations, but must retain the owning ACES
@@ -850,7 +850,7 @@ not escape as a new public exception hierarchy.
 
 A source/provider binding may supply backend mechanics intrinsic to an
 addressed resource, such as generic-substrate distribution, package-repository
-transport, or a provider-owned entrypoint/readiness mechanism. Per ADR-047, it
+transport, or a provider-owned entrypoint/readiness mechanism. Per ADR-048, it
 may not select an appliance image or inject undeclared scenario topology or
 meaningful node state. Every steady-state container, network, volume, mount,
 publication, and dependency in the effective model must be attributable to an
@@ -996,7 +996,7 @@ file is reference output only.
 | Realization requirement gate | SEM-218 open and closed semantics are enforced by the ACES planner's `realization_support_diagnostics` against APTL's `RealizationSupportDeclaration`. APTL reads `realization_requirements`; it does not re-derive explicitness classes locally. |
 | Runtime observation gate | `observe_realization()` emits concern values only from project-scoped backend read-back, using ACES's `CONCERN_PAYLOAD_PATH`. Missing, malformed, timed-out, or mismatched evidence omits the concern and lets `RuntimeManager.apply()` fail an exact requirement closed; it never falls back to planned payload values. |
 | Deployment boundary gate | Curated compatibility paths outside operational TechVault may still drive `DeploymentBackend.start_lab` with profiles. The paper and operational TechVault scenarios drive typed `DeploymentBackend` realization methods, with Compose rendering confined to that backend. No ACES adapter code calls raw Docker, `docker compose`, or parses compose output directly (ADR-037). |
-| Generic substrate and software-source gate | Per ADR-047, a node's substrate resolves only from its declared OS family/version through a small, fixed, scenario-independent base-image policy. A node `Source`, provider binding, Compose service, or scenario name cannot select an appliance image that carries scenario-meaningful state. The base image and declared package/software sources pass the existing trust/digest policy before backend side effects; unsupported OS/package-manager combinations fail admission through existing ACES diagnostics without echoing registry credentials, package credentials, build inputs, or backend stderr. |
+| Generic substrate and software-source gate | Per ADR-048, a node's substrate resolves only from its declared OS family/version through a small, fixed, scenario-independent base-image policy. A node `Source`, provider binding, Compose service, or scenario name cannot select an appliance image that carries scenario-meaningful state. The base image and declared package/software sources pass the existing trust/digest policy before backend side effects; unsupported OS/package-manager combinations fail admission through existing ACES diagnostics without echoing registry credentials, package credentials, build inputs, or backend stderr. |
 | Network topology gate | Network creation, IPAM, `internal` egress policy, and per-node attachments come from typed realization specs. Backend validation parses CIDR/gateway/static IP values, preserves project scoping, labels backend-created networks, and fails closed before side effects when authored exact/constrained values cannot be honored. |
 | Content placement gate | Operational TechVault content must be bounded inline text, project-contained checked-in file source, or project-contained checked-in directory source lowered into typed backend placement input. Path containment, safe relative-path validation, project-scoped volumes/copies, and redacted backend failures reuse existing deployment and seed precedents; captured runtime content is rejected. |
 | Stateful prerequisite gate | ACES shape/reference/dependency/SEM-218 checks precede backend policy validation of artifact providers, contained outputs, complete certificate sets, cryptographic relationships, mount sources/destinations, stable project-scoped volume identities, lifecycle, and local/SSH feasibility. Generated overrides are rechecked after materialization and before startup; observed mounts, authenticated Wazuh readiness, and actual alert retrieval are required runtime evidence. |
@@ -1018,7 +1018,7 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/backends/aces_realization.py` and
   `src/aptl/backends/aces_realization_model.py` for the interpret stage and its
   typed output.
-- `src/aptl/backends/aces_materializer.py` for ADR-047's pure,
+- `src/aptl/backends/aces_materializer.py` for ADR-048's pure,
   product-agnostic lowering from admitted ACES runtime state to ordered typed
   driver operations. Its operation values are derived instructions carried by
   the deployment realization, not a local runtime/service schema and not a
@@ -1058,7 +1058,7 @@ The canonical incumbents this decision builds on are:
 - `src/aptl/core/deployment/_compose_port_realization.py` for typed host-port
   exposure decisions and conflict validation. The image-pull/build behavior in
   `src/aptl/core/deployment/_compose_image_realization.py` is compatibility code
-  superseded by ADR-047 for operational TechVault; reuse only generic image
+  superseded by ADR-048 for operational TechVault; reuse only generic image
   trust/digest mechanics that apply to the fixed base substrate, never its
   appliance-image or overlay/base assumptions. Move rendering behind the
   standalone Compose-model boundary; existing overlay/base merge behavior is
@@ -1121,7 +1121,7 @@ for the authored link. Future scenarios should be able to vary segmentation,
 addressing, and egress policy without editing the compatibility
 `docker-compose.yml` network block or branching on scenario names.
 
-For ADR-047 node materialization, the extensibility seam is the tuple of
+For ADR-048 node materialization, the extensibility seam is the tuple of
 declared OS family/version, fixed generic-substrate policy, compiled
 `RuntimeConfiguration`, ordered typed materialization operations, backend
 provider/target capability, and read-after-write observations. The next likely

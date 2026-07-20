@@ -63,6 +63,9 @@ class ComposeRealizationMixin(
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose."""
 
+        if realization.image_free:
+            return self._realize_image_free(realization)
+
         profiles = list(realization.profiles)
         result = self._validate_stateful_realization(realization)
         compose_files = None
@@ -98,6 +101,32 @@ class ComposeRealizationMixin(
             )
             result = self._realization_result(start_result, realization)
         return result
+
+    def _realize_image_free(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult:
+        """Realize every node by materializing declared state onto a generic
+        base substrate, with no appliance image and no compose-up (ADR-047).
+
+        Networks first, then each node's declared packages/identity/services are
+        materialized and verified by read-after-write, then content placements.
+        Fails closed on the first unrealized node so a partial range never
+        reports success.
+        """
+
+        from aptl.backends.aces_node_materialization import realize_nodes
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        node_result = realize_nodes(realization.nodes, self)
+        if node_result is not None:
+            return node_result
+        content_result = self._realize_content(realization)
+        if content_result is not None:
+            return content_result
+        return LabResult(success=True)
 
     def _realize_published_ports(
         self,

@@ -316,3 +316,9 @@ class DeploymentRealizationSpec(object):
     accounts: tuple[DeploymentAccountRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
+    # ADR-047: when True, the backend realizes every node by materializing its
+    # declared desired state onto a generic base substrate (no appliance image,
+    # no compose-up of the hand-authored model). Set by the interpreter only
+    # when the scenario is fully image-free authored; False keeps the legacy
+    # compose path unchanged so a partially-authored scenario never boots empty.
+    image_free: bool = False

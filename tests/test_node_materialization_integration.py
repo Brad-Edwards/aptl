@@ -75,3 +75,39 @@ def test_realize_node_through_backend_on_real_docker(tmp_path):
         assert backend.container_exec(container, ["getent", "group", "techvault"]).returncode == 0
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+
+
+@pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
+def test_realize_routes_image_free_spec_through_materializer(tmp_path):
+    """backend.realize() with image_free=True materializes nodes (no compose-up)."""
+    from aptl.core.deployment.realization import (
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    container = "aptl-e2e-realize"
+    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-itest-realize")
+
+    node = DeploymentNodeRealization(
+        address="itest.e2e-realize",
+        name="e2e-realize",
+        service_name=None,
+        container_name=None,
+        networks=(),
+        os="linux",
+        runtime=RuntimeConfiguration(
+            packages=[RuntimePackage(manager="apt", name="curl", version="*")],
+        ),
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(), nodes=(node,), networks=(), image_free=True
+    )
+    try:
+        result = backend.realize(spec)
+        assert result.success, result.error
+        assert "curl" in backend.container_exec(
+            container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]
+        ).stdout
+    finally:
+        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)

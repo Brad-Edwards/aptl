@@ -63,41 +63,107 @@ class ComposeRealizationMixin(
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose."""
 
+        if realization.image_free:
+            return self._realize_image_free(realization)
+
         profiles = list(realization.profiles)
-        result = self._validate_stateful_realization(realization)
-        compose_files = None
-        if result is None:
-            result = self._validate_stateful_compose_capability(realization)
-        if result is None:
-            result = self._realize_stateful_prerequisites(realization)
-        if result is None:
+        compose_files: tuple[Path, ...] | None = None
+
+        def _images() -> LabResult | None:
+            """Pull/build declared images and capture the resulting compose override."""
+
+            nonlocal compose_files
             result, compose_files = self._prepare_realization_images(realization)
-        if result is None:
-            result = self._realize_published_ports(realization)
-        if result is None:
+            return result
+
+        def _networks() -> LabResult | None:
+            """Ensure declared networks exist, or fail closed on the first error."""
+
             network_failures = self._ensure_realization_networks(realization)
-            result = (
-                LabResult(success=False, error="; ".join(network_failures[:5]))
-                if network_failures
-                else None
-            )
-        if result is None:
-            result = self._realize_content(realization)
-        if result is None:
+            if network_failures:
+                return LabResult(success=False, error="; ".join(network_failures[:5]))
+            return None
+
+        def _compose_model() -> LabResult | None:
+            """Render and validate the generated Compose model."""
+
+            nonlocal compose_files
             compose_files = self._realization_compose_files(compose_files, realization)
-            result = self._validate_realization_compose_model(
-                profiles,
-                compose_files,
-                realization,
-            )
-        if result is None:
+            return self._validate_realization_compose_model(profiles, compose_files, realization)
+
+        def _start() -> LabResult:
+            """Start the realized services and return the final realization result."""
+
             start_result = self._start_realized_services(
-                profiles,
-                build=build,
-                compose_files=compose_files,
+                profiles, build=build, compose_files=compose_files
             )
-            result = self._realization_result(start_result, realization)
-        return result
+            return self._realization_result(start_result, realization)
+
+        # Each step realizes one stage and returns a fail-closed LabResult, or
+        # None to fall through to the next stage. The last stage always
+        # returns, so the pipeline always ends in a concrete result.
+        steps = (
+            lambda: self._validate_stateful_realization(realization),
+            lambda: self._validate_stateful_compose_capability(realization),
+            lambda: self._realize_stateful_prerequisites(realization),
+            _images,
+            lambda: self._realize_published_ports(realization),
+            _networks,
+            lambda: self._realize_content(realization),
+            _compose_model,
+            _start,
+        )
+        for step in steps:
+            result = step()
+            if result is not None:
+                return result
+        return LabResult(success=True)
+
+    def _realize_image_free(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult:
+        """Realize every node by materializing declared state onto a generic
+        base substrate, with no appliance image and no compose-up (ADR-048).
+
+        Networks first, then each node's declared packages/identity/services are
+        materialized and verified by read-after-write, then content placements.
+        Fails closed on the first unrealized node so a partial range never
+        reports success.
+        """
+
+        from aptl.backends.aces_materializer import (
+            PlaceFileOp,
+            PlaceProjectContentOp,
+        )
+        from aptl.backends.aces_node_materialization import realize_nodes
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+
+        content_by_node: dict[str, list[object]] = {}
+        for content in realization.content:
+            dest = "/" + content.dest_relpath.lstrip("/")
+            if content.source_kind == "inline-text" and content.inline_text is not None:
+                op: object = PlaceFileOp(path=dest, content=content.inline_text)
+            elif content.source_kind in ("project-file", "project-directory") and content.source_relpath:
+                op = PlaceProjectContentOp(
+                    dest_path=dest,
+                    source_relpath=content.source_relpath,
+                    is_directory=content.source_kind == "project-directory",
+                )
+            else:
+                continue
+            content_by_node.setdefault(content.target_address, []).append(op)
+        node_result = realize_nodes(
+            realization.nodes,
+            self,
+            {addr: tuple(ops) for addr, ops in content_by_node.items()},
+        )
+        if node_result is not None:
+            return node_result
+        return LabResult(success=True)
 
     def _realize_published_ports(
         self,

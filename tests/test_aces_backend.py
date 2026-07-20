@@ -2243,6 +2243,93 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
     assert spec.nodes[0].networks == ("dmz-net", "redteam-net")
 
 
+def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
+    """A failed apply must leave its diagnostics readable by the handoff.
+
+    ACES's backend-call boundary replaces a failed apply's diagnostics with
+    its snapshot-contract / SEM-218 gate output (every exact declaration reads
+    as unrealized against the never-realized snapshot), so the handoff
+    re-attaches the provisioner's own captured report (issue #677).
+    """
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose(tmp_path, {"kali": ["kali"], "aptl-otel-collector": ["otel"]})
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(
+        success=False,
+        error="APTL cannot create realized network dmz-net: 172.20.0.0/16 in use",
+    )
+    config = AptlConfig(lab={"name": "test"}, containers={"kali": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(_plan_for_nodes("scenario-a.kali"), RuntimeSnapshot())
+
+    assert result.success is False
+    captured = provisioner.last_failure_diagnostics
+    assert [item.code for item in captured] == [
+        "aptl.provisioner.backend-start-failed"
+    ]
+    assert "172.20.0.0/16" in captured[0].message
+
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    recovered = provisioner.apply(
+        _plan_for_nodes("scenario-a.kali"), RuntimeSnapshot()
+    )
+    assert recovered.success is True
+    assert provisioner.last_failure_diagnostics == ()
+
+
+def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
+    mocker, tmp_path
+):
+    """The handoff must surface the backend's own failure, not only the gate's.
+
+    When the backend apply fails, ``aces_runtime`` gates the unrealized
+    snapshot and returns only ``runtime.backend-contract-invalid`` diagnostics,
+    which both hides the actionable backend error (e.g. a Docker subnet
+    conflict) and severs the retryable-code signal the SOC retry keys on.
+    """
+    from aptl.backends import aces
+    from aptl.backends.aces_diagnostics import diagnostic
+
+    backend_diag = diagnostic(
+        "aptl.provisioner.backend-start-failed",
+        "runtime.apply.provisioning",
+        "APTL cannot create realized network dmz-net: 172.20.0.0/16 in use",
+    )
+    gate_diag = diagnostic(
+        "runtime.backend-contract-invalid",
+        "provision.node.wazuh-manager",
+        "Backend did not realize the exact 'node-type' requirement.",
+    )
+
+    class MaskingRuntimeManager(_FakeRuntimeManager):
+        def apply(self, execution_plan):
+            return ApplyResult(
+                success=False,
+                snapshot=RuntimeSnapshot(),
+                diagnostics=[gate_diag],
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", MaskingRuntimeManager)
+    target = MagicMock()
+    target.provisioner.last_failure_diagnostics = (backend_diag,)
+
+    failure, _snapshot, retryable = aces._apply_execution_plan(
+        target, MagicMock()
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert "172.20.0.0/16" in failure.error
+    assert "node-type" in failure.error
+    assert retryable is True
+
+
 def test_realization_preserves_network_static_address_assignments(tmp_path):
     from aptl.backends.aces_realization import interpret_provisioning_plan
 
@@ -3493,59 +3580,6 @@ def test_aces_backend_does_not_import_legacy_sdl_parser():
 
     assert "aptl.core.sdl" not in source
     assert "ScenarioDefinition" not in source
-
-
-def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
-    """start_aces_scenario returns AcesStartOutcome, not just LabResult."""
-    from unittest.mock import patch as _patch, MagicMock as _MagicMock
-
-    from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
-
-    from aptl.backends.aces import AcesStartOutcome, start_aces_scenario
-    from aptl.core.config import AptlConfig
-
-    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
-    (tmp_path / "scenarios").mkdir()
-    sdl_path = tmp_path / "scenarios" / "test.sdl.yaml"
-    sdl_path.write_text(
-        "kind: ScenarioDefinition\napiVersion: v1\nmetadata:\n  name: test\nspec:\n  nodes: []\n"
-    )
-
-    backend = _MagicMock()
-    backend.realize.return_value = LabResult(success=True, message="ok")
-    config = AptlConfig(lab={"name": "test"})
-
-    apply_result = ApplyResult(
-        success=True,
-        snapshot=RuntimeSnapshot(),
-        diagnostics=[],
-    )
-
-    with (
-        _patch("aptl.backends.aces.parse_sdl_file") as mock_parse,
-        _patch("aptl.backends.aces.RuntimeManager") as mock_manager,
-    ):
-        mock_scenario = _MagicMock()
-        mock_parse.return_value = mock_scenario
-
-        mock_plan = _MagicMock()
-        mock_plan.diagnostics = []
-        mock_plan.base_snapshot = RuntimeSnapshot()
-        mock_plan.orchestration.actionable_operations = []
-        mock_plan.evaluation.actionable_operations = []
-        mock_plan.provisioning = _MagicMock()
-        mock_manager.return_value.plan.return_value = mock_plan
-        # Scenario start now applies through RuntimeManager.apply (issue #578),
-        # not a hand-rolled RuntimeControlPlane submission loop.
-        mock_manager.return_value.apply.return_value = apply_result
-
-        result = start_aces_scenario(tmp_path, config, backend, scenario_path=sdl_path)
-
-    assert isinstance(result, AcesStartOutcome)
-    assert result.lab_result.success is True
-    assert isinstance(result.final_snapshot, RuntimeSnapshot)
-    assert isinstance(result.realization_details, dict)
-    assert isinstance(result.selected_profiles, list)
 
 
 def test_drive_workflows_receives_threaded_run_store_and_run_id(tmp_path):

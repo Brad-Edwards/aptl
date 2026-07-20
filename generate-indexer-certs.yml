@@ -4,6 +4,33 @@ services:
   generator:
     image: wazuh/wazuh-certs-generator:0.0.2
     hostname: wazuh-certs-generator
+    # The upstream entrypoint is 700 root:root, so it cannot run as an
+    # arbitrary host UID (see issue #677). This override runs the same
+    # Wazuh certificate workflow the shipped entrypoint performs, so output
+    # is producer-owned by whatever UID Compose is invoked with.
+    #
+    # The generator tool is vendored at config/wazuh-certs-tool.sh (from
+    # https://packages.wazuh.com/4.8/wazuh-certs-tool.sh, GPLv2) and its
+    # digest is verified before execution: the certificate producer must
+    # never execute mutable network content (the shipped entrypoint's
+    # runtime download is the supply-chain flaw this replaces).
+    working_dir: /tmp
+    environment:
+      - HOME=/tmp
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        echo "acd4fb48c9646904069d81ed9c67f849cf910ab5eb127e051fe9db1dae068874  /tools/wazuh-certs-tool.sh" | sha256sum -c -
+        cp /tools/wazuh-certs-tool.sh ./wazuh-certs-tool.sh
+        cp /config/certs.yml ./config.yml
+        chmod 700 wazuh-certs-tool.sh
+        bash ./wazuh-certs-tool.sh -A
+        cp ./wazuh-certificates/* /certificates/
+        cp /certificates/root-ca.pem /certificates/root-ca-manager.pem
+        cp /certificates/root-ca.key /certificates/root-ca-manager.key
     volumes:
       - ./config/wazuh_indexer_ssl_certs/:/certificates/
       - ./config/certs.yml:/config/certs.yml
+      - ./config/wazuh-certs-tool.sh:/tools/wazuh-certs-tool.sh:ro

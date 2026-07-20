@@ -237,17 +237,20 @@ nodes:
   aptl-otel-collector:
     type: vm
     os: linux
+    source: {name: "otel/opentelemetry-collector-contrib", version: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"}
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
     type: vm
     os: linux
+    source: {name: "grafana/tempo", version: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"}
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
     type: vm
     os: linux
+    source: {name: "grafana/grafana", version: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"}
     services:
       - {name: grafana, port: 3000, protocol: tcp}
 

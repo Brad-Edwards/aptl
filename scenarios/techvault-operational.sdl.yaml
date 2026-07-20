@@ -37,26 +37,31 @@ nodes:
   wazuh-dashboard:
     type: vm
     os: linux
+    source: {name: wazuh-dashboard, version: 4.x}
     services:
       - {name: dashboard, port: 5601, protocol: tcp}
 
   suricata:
     type: vm
     os: linux
+    source: {name: "jasonish/suricata", version: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"}
     services: []
   misp:
     type: vm
     os: linux
+    source: {name: "ghcr.io/misp/misp-docker/misp-core", version: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"}
     services:
       - {name: https, port: 443, protocol: tcp}
   misp-db:
     type: vm
     os: linux
+    source: {name: mariadb, version: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"}
     services:
       - {name: mysql, port: 3306, protocol: tcp}
   misp-redis:
     type: vm
     os: linux
+    source: {name: redis, version: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"}
     services:
       - {name: redis, port: 6379, protocol: tcp}
   misp-suricata-sync:
@@ -66,41 +71,49 @@ nodes:
   thehive:
     type: vm
     os: linux
+    source: {name: "strangebee/thehive", version: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"}
     services:
       - {name: thehive-api, port: 9000, protocol: tcp}
   thehive-cassandra:
     type: vm
     os: linux
+    source: {name: cassandra, version: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"}
     services:
       - {name: cassandra, port: 9042, protocol: tcp}
   thehive-es:
     type: vm
     os: linux
+    source: {name: "docker.elastic.co/elasticsearch/elasticsearch", version: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"}
     services:
       - {name: elasticsearch, port: 9200, protocol: tcp}
   cortex:
     type: vm
     os: linux
+    source: {name: "thehiveproject/cortex", version: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"}
     services:
       - {name: cortex-api, port: 9001, protocol: tcp}
   shuffle-backend:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-backend", version: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"}
     services:
       - {name: shuffle-api, port: 5001, protocol: tcp}
   shuffle-frontend:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-frontend", version: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"}
     services:
       - {name: https, port: 443, protocol: tcp}
       - {name: http, port: 80, protocol: tcp}
   shuffle-orborus:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-orborus", version: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"}
     services: []
   shuffle-opensearch:
     type: vm
     os: linux
+    source: {name: "opensearchproject/opensearch", version: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"}
     services:
       - {name: opensearch-rest, port: 9200, protocol: tcp}
       - {name: opensearch-transport, port: 9300, protocol: tcp}
@@ -118,6 +131,16 @@ nodes:
     os: linux
     services:
       - {name: http, port: 8080, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: python3-flask, version: "*"}
+        - {manager: apt, name: python3-gunicorn, version: "*"}
+        - {manager: apt, name: python3-psycopg2, version: "*"}
+        - {manager: apt, name: python3-jwt, version: "*"}
+      filesystem_inventory:
+        - {path: /var/log/gunicorn, entry_type: directory}
+      service_manager_units:
+        - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
   ad:
     type: vm
     os: linux
@@ -437,6 +460,28 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  webapp-app-code:
+    type: directory
+    target: webapp
+    destination: /app
+    source:
+      name: containers/webapp/app
+  webapp-service-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/webapp.service
+    text: |
+      [Unit]
+      Description=TechVault webapp (gunicorn)
+      After=network.target
+
+      [Service]
+      WorkingDirectory=/app
+      ExecStart=/usr/bin/python3 -m gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
   dns-named-conf:
     type: file
     target: dns

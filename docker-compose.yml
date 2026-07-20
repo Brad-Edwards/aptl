@@ -1340,8 +1340,12 @@ services:
   # evidence the sidecar owns — defeating the whole boundary (codex pre-push
   # cycle 1 finding F2). auditd and process accounting are kernel-wide and do
   # not need PID sharing to observe Kali's processes. NOTE: `network_mode:
-  # service:kali` forbids hostname/ports/networks/extra_hosts on this service —
-  # Docker rejects the combination at `up` time. Do not re-add a `hostname:`.
+  # container:aptl-kali` forbids hostname/ports/networks/extra_hosts on this
+  # service — Docker rejects the combination at `up` time. Do not re-add a
+  # `hostname:`. Referenced by the container name (not `service:kali`) because
+  # ADR-048 (#581) materializes kali directly via the generic materializer,
+  # not as a Compose-started container — `service:kali` cannot resolve a
+  # container Compose never started. The container name is stable either way.
   # ---------------------------------------------------------------------------
   kali-capture:
     profiles: ["kali"]
@@ -1355,7 +1359,7 @@ services:
     init: true
     # Share ONLY Kali's network namespace (abstract socket + tcpdump). PID
     # namespace is deliberately NOT shared (codex F2 — /proc traversal).
-    network_mode: "service:kali"
+    network_mode: "container:aptl-kali"
     depends_on:
       - kali
     volumes:

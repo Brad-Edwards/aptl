@@ -166,6 +166,12 @@ nodes:
     os: linux
     services:
       - {name: dns, port: 53, protocol: udp}
+    runtime:
+      packages:
+        - {manager: apt, name: bind9, version: "*"}
+        - {manager: apt, name: dnsutils, version: "*"}
+      service_manager_units:
+        - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
   victim:
     type: vm
     os: linux
@@ -429,10 +435,16 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  fileshare-smb-conf:
+    type: file
+    target: fileshare
+    path: /etc/samba/smb.conf
+    source:
+      name: containers/fileshare/smb.conf
   fileshare-public-notice:
     type: file
     target: fileshare
-    path: public/notice.txt
+    path: /srv/shares/public/notice.txt
     text: |
       Welcome to TechVault Solutions file server.
       This notice is planted by the operational ACES scenario's
@@ -442,7 +454,7 @@ content:
   fileshare-onboarding-packet:
     type: directory
     target: fileshare
-    destination: onboarding
+    destination: /srv/shares/onboarding
     source:
       name: scenarios/fixtures/techvault-content/onboarding
 

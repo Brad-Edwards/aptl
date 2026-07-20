@@ -364,11 +364,12 @@ def resolve_image_free_content_placement(
     """Resolve content for an image-free node (ADR-048).
 
     The generic materializer places declared config directly into the node's
-    container, so there is no compose service / named-volume requirement. An
-    inline-text file lowers to a ``DeploymentContentRealization`` whose
-    ``dest_relpath`` is the authored (absolute) path. Project sources, datasets,
-    and directories are not yet supported here and fail closed rather than being
-    silently dropped.
+    container, so there is no compose service / named-volume requirement.
+    ``path``/``destination`` is the authored, literal absolute destination
+    (never volume-relative). Inline text and project-contained file/directory
+    sources both lower to a ``DeploymentContentRealization``; dataset content
+    and runtime-observed sources are not realizable and fail closed rather
+    than being silently dropped.
     """
 
     spec = _placement_spec(payload)

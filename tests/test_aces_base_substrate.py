@@ -16,8 +16,12 @@ from aces_sdl.runtime_configuration import (
     ServiceManagerUnit,
 )
 
-from aptl.backends.aces_base_substrate import base_container_spec
-from aptl.backends.aces_materializer import UnsupportedOsFamilyError
+from aptl.backends.aces_base_substrate import base_container_spec, plan_node
+from aptl.backends.aces_materializer import (
+    BaseSubstrateOp,
+    StartServiceUnitOp,
+    UnsupportedOsFamilyError,
+)
 
 
 def _runtime_with_service() -> RuntimeConfiguration:
@@ -55,3 +59,23 @@ class TestBaseContainerSpec:
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):
             base_container_spec("n.node", os="haiku", os_version="", runtime=None)
+
+
+class TestPlanNode:
+    def test_spec_and_ops_are_coherent(self):
+        spec, ops = plan_node(
+            "techvault.wazuh-manager",
+            os="linux",
+            os_version="",
+            runtime=_runtime_with_service(),
+        )
+        # First op stands up the base the spec chose.
+        assert ops[0] == BaseSubstrateOp(image_ref=spec.image_ref)
+        # A node that declares service units both needs init and gets start ops.
+        assert spec.runs_services is True
+        assert any(isinstance(op, StartServiceUnitOp) for op in ops)
+
+    def test_no_service_units_means_no_init_and_no_start_ops(self):
+        spec, ops = plan_node("n.node", os="linux", os_version="", runtime=None)
+        assert spec.runs_services is False
+        assert not any(isinstance(op, StartServiceUnitOp) for op in ops)

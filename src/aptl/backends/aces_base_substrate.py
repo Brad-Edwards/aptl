@@ -17,7 +17,11 @@ from dataclasses import dataclass
 
 from aces_sdl.runtime_configuration import RuntimeConfiguration
 
-from aptl.backends.aces_materializer import base_image_for_os
+from aptl.backends.aces_materializer import (
+    MaterializationOp,
+    base_image_for_os,
+    plan_node_materialization,
+)
 
 
 @dataclass(frozen=True)
@@ -56,3 +60,26 @@ def base_container_spec(
         image_ref=base_image_for_os(os, os_version),
         runs_services=runs_services,
     )
+
+
+def plan_node(
+    node_address: str,
+    *,
+    os: str,
+    os_version: str,
+    runtime: RuntimeConfiguration | None,
+) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
+    """Plan one node: its generic base container plus its materialization ops.
+
+    The single entry point a deployment backend consumes per node. It starts the
+    container described by the returned :class:`BaseContainerSpec` (with an init
+    when ``runs_services`` is set), then runs the returned operations through the
+    materialization engine. Both halves are derived only from declared state, so
+    the substrate decision and the ops stay coherent.
+    """
+
+    spec = base_container_spec(
+        node_address, os=os, os_version=os_version, runtime=runtime
+    )
+    ops = plan_node_materialization(os=os, os_version=os_version, runtime=runtime)
+    return spec, ops

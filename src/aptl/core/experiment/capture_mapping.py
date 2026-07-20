@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Iterable
+from typing import cast
 
 from aces_contracts.contracts import ExperimentCaptureSpecModel
 
@@ -58,10 +59,16 @@ def _apply_limitation(
     acceptance = policy.accepted_capture_limitations.get(key)
     if acceptance is None:
         return binding
-    return dataclasses.replace(
-        binding,
-        accepted_limitation=acceptance.limitation_code,
-        comparability_disclosure_ref=acceptance.comparability_disclosure_ref,
+    # ``dataclasses.replace`` is typed to return ``DataclassInstance``; cast
+    # back to the concrete type so the annotation matches without a pointless
+    # temporary (avoids both the loose-return and declare-then-return smells).
+    return cast(
+        CaptureBinding,
+        dataclasses.replace(
+            binding,
+            accepted_limitation=acceptance.limitation_code,
+            comparability_disclosure_ref=acceptance.comparability_disclosure_ref,
+        ),
     )
 
 

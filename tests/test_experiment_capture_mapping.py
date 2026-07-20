@@ -89,18 +89,20 @@ def _covering_registration(**overrides: object) -> CollectorRegistration:
 class TestBindCaptureRequirementsFailsClosed:
     def test_the_realistic_corpus_capture_spec_is_rejected_by_default(self):
         spec = _load_reference_capture_spec()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            bind_capture_requirements([spec], policy=default_admission_policy())
+            bind_capture_requirements([spec], policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
 
     def test_the_rejection_names_the_unsupported_capture_kind_and_scope(self):
         spec = _load_reference_capture_spec()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            bind_capture_requirements([spec], policy=default_admission_policy())
+            bind_capture_requirements([spec], policy=policy)
 
         messages = " ".join(d.message + " " + d.address for d in excinfo.value.diagnostics)
         assert "trace" in messages
@@ -113,9 +115,10 @@ class TestBindCaptureRequirementsFailsClosed:
         assert callable(collect_traces)
         spec = _load_reference_capture_spec()
         assert spec.capture_requirements["network-trace"].capture_kind == "trace"
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            bind_capture_requirements([spec], policy=default_admission_policy())
+            bind_capture_requirements([spec], policy=policy)
 
 
 # ---------------------------------------------------------------------------
@@ -155,9 +158,10 @@ class TestBindCaptureRequirementsSuccess:
         requirement["capture_kind"] = "log"
         payload["capture_requirements"] = {requirement["requirement_id"]: requirement}
         uncovered = ExperimentCaptureSpecModel.model_validate(payload)
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            bind_capture_requirements([covered, uncovered], registry=registry, policy=default_admission_policy())
+            bind_capture_requirements([covered, uncovered], registry=registry, policy=policy)
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +239,7 @@ class TestFuzzCaptureRequirementsFailClosed:
         requirement["capture_scope"] = capture_scope
         payload["capture_requirements"] = {requirement["requirement_id"]: requirement}
         spec = ExperimentCaptureSpecModel.model_validate(payload)
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            bind_capture_requirements([spec], policy=default_admission_policy())
+            bind_capture_requirements([spec], policy=policy)

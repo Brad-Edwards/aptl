@@ -167,9 +167,10 @@ class TestImmutability:
             binding.registration_id = "other"
 
     def test_registry_rejects_duplicate_registration_ids(self):
-        registration = _covering_registration()
+        first = _covering_registration()
+        second = _covering_registration()
         with pytest.raises(ValueError, match="duplicate registration IDs"):
-            CollectorRegistry((registration, _covering_registration()))
+            CollectorRegistry((first, second))
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +289,9 @@ class TestMatchIsDeterministic:
 
 class TestConfigDigest:
     def test_two_identical_registrations_share_a_digest(self):
-        assert _covering_registration().effective_config_digest() == _covering_registration().effective_config_digest()
+        left = _covering_registration().effective_config_digest()
+        right = _covering_registration().effective_config_digest()
+        assert left == right
 
     def test_changing_any_declared_field_changes_the_digest(self):
         base = _covering_registration().effective_config_digest()

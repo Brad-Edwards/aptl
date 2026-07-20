@@ -90,8 +90,27 @@ def base_container_spec(
             os, os_version, runs_services=runs_services, family=package_family(runtime)
         ),
         runs_services=runs_services,
-        init=InitRequirements() if runs_services else None,
+        init=_init_requirements(runtime) if runs_services else None,
     )
+
+
+def _init_requirements(runtime: RuntimeConfiguration | None) -> InitRequirements:
+    """Build init requirements, extended with any declared extra capabilities.
+
+    ``runtime.linux_capabilities.add`` entries are in Linux ``CAP_*`` form
+    (ACES's typed convention); the container run flag form Docker expects
+    (and this module's own fixed defaults already use) drops that prefix.
+    """
+
+    extra = tuple(
+        name.removeprefix("CAP_")
+        for name in (runtime.linux_capabilities.add if runtime and runtime.linux_capabilities else ())
+    )
+    if not extra:
+        return InitRequirements()
+    base = InitRequirements()
+    merged = base.capabilities + tuple(cap for cap in extra if cap not in base.capabilities)
+    return InitRequirements(capabilities=merged)
 
 
 def plan_node(

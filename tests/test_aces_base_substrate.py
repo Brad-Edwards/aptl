@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from aces_sdl.runtime_capabilities import RuntimeCapabilityPolicy
 from aces_sdl.runtime_configuration import (
     RuntimeConfiguration,
     ServiceManagerUnit,
@@ -79,6 +80,26 @@ class TestBaseContainerSpec:
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):
             base_container_spec("n.node", os="haiku", os_version="", runtime=None)
+
+    def test_declared_extra_capabilities_extend_the_fixed_init_set(self):
+        runtime = RuntimeConfiguration(
+            service_manager_units=[
+                ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
+            ],
+            linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_AUDIT_CONTROL"]),
+        )
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
+        assert spec.init is not None
+        assert "AUDIT_CONTROL" in spec.init.capabilities
+        # The fixed systemd requirements are still present alongside the addition.
+        assert "SYS_ADMIN" in spec.init.capabilities
+
+    def test_no_declared_capabilities_keeps_the_fixed_default_set(self):
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=_runtime_with_service()
+        )
+        assert spec.init is not None
+        assert spec.init.capabilities == ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
 
 
 class TestPlanNode:

@@ -193,21 +193,30 @@ _CLI_ARGS = [
 
 
 class TestExperimentAdmitCliHelp:
-    def test_help_renders(self, runner: CliRunner) -> None:
-        # Force a wide terminal so Rich does not wrap the metavar/option tokens
-        # by the CI default width of 80 (no TTY -> COLUMNS-or-80).
-        result = runner.invoke(
-            app, ["experiment", "admit", "--help"], env={"COLUMNS": "200"}
-        )
-        assert result.exit_code == 0
-        assert "SPEC_PATH" in result.stdout
-        assert "--manifest" in result.stdout
-        assert "DEBUG/DEV ONLY" in result.stdout
+    def test_admit_command_declares_its_documented_parameters(self) -> None:
+        # The Rich-rendered ``--help`` output is TTY/width/Rich-version
+        # dependent and unreliable to assert on across CI environments (some
+        # non-TTY renderers capture only an empty bordered panel). Assert the
+        # declared command surface directly — it is what the help is generated
+        # from — so the contract holds regardless of the rendering environment.
+        import typer.main
 
-    def test_group_help_renders(self, runner: CliRunner) -> None:
-        result = runner.invoke(app, ["experiment", "--help"], env={"COLUMNS": "200"})
-        assert result.exit_code == 0
-        assert "admit" in result.stdout
+        admit = typer.main.get_command(app).commands["experiment"].commands["admit"]
+        names = {p.name for p in admit.params}
+        opts = {opt for p in admit.params for opt in p.opts}
+        assert "spec_path" in names
+        assert "--manifest" in opts
+        assert "--allow-uncertified-apparatus" in opts
+        allow = next(
+            p for p in admit.params if "--allow-uncertified-apparatus" in p.opts
+        )
+        assert "DEBUG/DEV ONLY" in (allow.help or "")
+
+    def test_experiment_group_exposes_the_admit_command(self) -> None:
+        import typer.main
+
+        experiment = typer.main.get_command(app).commands["experiment"]
+        assert "admit" in experiment.commands
 
 
 class TestExperimentAdmitDebugOverrideFlag:

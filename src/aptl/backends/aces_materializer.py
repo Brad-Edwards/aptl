@@ -23,6 +23,7 @@ from aces_sdl.runtime_configuration import (
     ServiceUnitActiveState,
     ServiceUnitEnabledState,
 )
+from aces_sdl.runtime_filesystem import RuntimeFilesystemEntryType
 
 # Fixed, scenario-independent base substrate per (OS family, package family). A
 # node runs on a generic OS base image; its scenario-meaningful software is
@@ -89,6 +90,22 @@ class EnsureUserOp:
 
 
 @dataclass(frozen=True)
+class EnsureDirectoryOp:
+    """Ensure a declared directory exists with its declared ownership/mode.
+
+    Lowered from ``runtime.filesystem_inventory`` entries of type
+    ``directory``. Ordered after identity (so a declared owner/group already
+    exists) and before content placement (so content landing inside it
+    inherits an already-correct directory).
+    """
+
+    path: str
+    owner: str = ""
+    group: str = ""
+    mode: str = ""
+
+
+@dataclass(frozen=True)
 class PlaceFileOp:
     """Place a declared config file into the node at an absolute path.
 
@@ -134,6 +151,7 @@ MaterializationOp = (
     | InstallPackagesOp
     | EnsureGroupOp
     | EnsureUserOp
+    | EnsureDirectoryOp
     | PlaceFileOp
     | PlaceProjectContentOp
     | EnableServiceUnitOp
@@ -210,6 +228,20 @@ def _identity_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
     return ops
 
 
+def _filesystem_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
+    # Only directory entries are materializable from metadata alone; a FILE
+    # entry with no inline content describes an expected fact about content
+    # placed elsewhere (content: is the file-placement authority), so it is
+    # not lowered into an op here.
+    return [
+        EnsureDirectoryOp(
+            path=entry.path, owner=entry.owner_user, group=entry.owner_group, mode=entry.mode
+        )
+        for entry in runtime.filesystem_inventory
+        if entry.entry_type == RuntimeFilesystemEntryType.DIRECTORY
+    ]
+
+
 def _service_unit_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
     ops: list[MaterializationOp] = [
         EnableServiceUnitOp(unit_name=unit.unit_name)
@@ -234,9 +266,10 @@ def plan_node_materialization(
     """Lower one node's declared desired state into ordered generic operations.
 
     Order is dependency-safe: base substrate, package installs, groups, users,
-    config-file placement, service-unit enable, service-unit start. Config is
-    placed before services so a config-dependent service starts configured.
-    Emits nothing product-specific.
+    declared directories, config-file placement, service-unit enable,
+    service-unit start. Config is placed before services so a
+    config-dependent service starts configured. Emits nothing
+    product-specific.
     """
 
     runs_services = bool(runtime is not None and runtime.service_manager_units)
@@ -253,6 +286,7 @@ def plan_node_materialization(
     if runtime is not None:
         ops.extend(_package_ops(runtime))
         ops.extend(_identity_ops(runtime))
+        ops.extend(_filesystem_ops(runtime))
     ops.extend(content)
     if runtime is not None:
         ops.extend(_service_unit_ops(runtime))

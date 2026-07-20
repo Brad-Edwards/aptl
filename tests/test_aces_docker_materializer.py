@@ -18,7 +18,7 @@ from aptl.backends.aces_docker_materializer import (
     DockerMaterializationExecutor,
     MaterializationCommandError,
 )
-from aptl.backends.aces_materializer import EnsureUserOp
+from aptl.backends.aces_materializer import EnsureDirectoryOp, EnsureUserOp
 
 
 class _FakeExec:
@@ -121,6 +121,35 @@ class TestIdentity:
         assert absent.observe_local_user("n.node", "wazuh") is False
         assert present.observe_local_group("n.node", "wazuh") is True
         assert absent.observe_local_group("n.node", "wazuh") is False
+
+
+class TestFilesystem:
+    def test_ensure_directory_mkdirs_then_chowns_and_chmods(self):
+        fake = _FakeExec()
+        _executor(fake).ensure_directory(
+            "n.node", EnsureDirectoryOp(path="/var/log/named", owner="bind", group="bind", mode="0755")
+        )
+        argvs = fake.argvs()
+        assert ["mkdir", "-p", "/var/log/named"] in argvs
+        assert ["chown", "bind:bind", "/var/log/named"] in argvs
+        assert ["chmod", "0755", "/var/log/named"] in argvs
+
+    def test_ensure_directory_skips_chown_and_chmod_when_undeclared(self):
+        fake = _FakeExec()
+        _executor(fake).ensure_directory("n.node", EnsureDirectoryOp(path="/srv/data"))
+        argvs = fake.argvs()
+        assert argvs == [["mkdir", "-p", "/srv/data"]]
+
+    def test_ensure_directory_nonzero_raises_translatable_command_error(self):
+        fake = _FakeExec(lambda c, a: (1, "mkdir: cannot create directory"))
+        with pytest.raises(MaterializationCommandError):
+            _executor(fake).ensure_directory("n.node", EnsureDirectoryOp(path="/root-owned"))
+
+    def test_observe_directory_from_returncode(self):
+        present = _executor(_FakeExec(lambda c, a: (0, "")))
+        absent = _executor(_FakeExec(lambda c, a: (1, "")))
+        assert present.observe_directory("n.node", "/var/log/named") is True
+        assert absent.observe_directory("n.node", "/var/log/named") is False
 
 
 class TestServices:

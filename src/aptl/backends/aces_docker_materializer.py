@@ -21,7 +21,11 @@ from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
-from aptl.backends.aces_materializer import EnsureUserOp, PlaceProjectContentOp
+from aptl.backends.aces_materializer import (
+    EnsureDirectoryOp,
+    EnsureUserOp,
+    PlaceProjectContentOp,
+)
 from aptl.backends.aces_package_managers import (
     install_argv,
     parse_installed,
@@ -89,6 +93,14 @@ class DockerMaterializationExecutor:
             return  # reconcile-not-recreate: a present user is left in place
         self._require_ok(node_address, _useradd_argv(op), "ensure user")
 
+    def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
+        self._require_ok(node_address, ["mkdir", "-p", op.path], "ensure directory")
+        if op.owner or op.group:
+            owner_spec = op.owner + (f":{op.group}" if op.group else "")
+            self._require_ok(node_address, ["chown", owner_spec, op.path], "chown directory")
+        if op.mode:
+            self._require_ok(node_address, ["chmod", op.mode, op.path], "chmod directory")
+
     def place_file(self, node_address: str, path: str, content: str, mode: str = "") -> None:
         # base64-encode the content so no authored value is interpreted by the
         # shell; the path is quoted. Creates parent dirs, then chmods if asked.
@@ -141,6 +153,9 @@ class DockerMaterializationExecutor:
 
     def observe_local_user(self, node_address: str, username: str) -> bool:
         return self._exec(node_address, ["id", "-u", username]).returncode == 0
+
+    def observe_directory(self, node_address: str, path: str) -> bool:
+        return self._exec(node_address, ["test", "-d", path]).returncode == 0
 
     def observe_file(self, node_address: str, path: str) -> bool:
         return self._exec(node_address, ["test", "-e", path]).returncode == 0

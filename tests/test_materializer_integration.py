@@ -22,6 +22,7 @@ from aces_sdl.runtime_configuration import (
     RuntimeLocalUser,
     RuntimePackage,
 )
+from aces_sdl.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesystemEntryType
 
 from aptl.backends.aces_base_substrate import plan_node
 from aptl.backends.aces_docker_materializer import DockerMaterializationExecutor
@@ -54,6 +55,15 @@ def test_materializer_realizes_declared_state_on_a_real_container():
             groups=[RuntimeLocalGroup(name="techvault", gid=1500)],
             users=[RuntimeLocalUser(username="analyst", supplemental_groups=["techvault"])],
         ),
+        filesystem_inventory=[
+            RuntimeFilesystemEntry(
+                path="/var/log/techvault",
+                entry_type=RuntimeFilesystemEntryType.DIRECTORY,
+                owner_user="analyst",
+                owner_group="techvault",
+                mode="0750",
+            ),
+        ],
     )
 
     def start_base(addr: str, image_ref: str) -> None:
@@ -89,5 +99,9 @@ def test_materializer_realizes_declared_state_on_a_real_container():
         assert "curl" in run_in(container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]).stdout
         assert run_in(container, ["id", "-u", "analyst"]).returncode == 0
         assert run_in(container, ["getent", "group", "techvault"]).returncode == 0
+        assert (
+            run_in(container, ["stat", "-c", "%U:%G %a", "/var/log/techvault"]).stdout.strip()
+            == "analyst:techvault 750"
+        )
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)

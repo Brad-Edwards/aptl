@@ -170,6 +170,8 @@ nodes:
       packages:
         - {manager: apt, name: bind9, version: "*"}
         - {manager: apt, name: dnsutils, version: "*"}
+      filesystem_inventory:
+        - {path: /var/log/named, entry_type: directory, owner_user: bind, owner_group: bind}
       service_manager_units:
         - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
   victim:
@@ -435,6 +437,24 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  dns-named-conf:
+    type: file
+    target: dns
+    path: /etc/bind/named.conf
+    source:
+      name: containers/dns/named.conf
+  dns-zone-fwd:
+    type: file
+    target: dns
+    path: /etc/bind/zones/techvault.local.zone
+    source:
+      name: containers/dns/zones/techvault.local.zone
+  dns-zone-rev:
+    type: file
+    target: dns
+    path: /etc/bind/zones/172.20.rev
+    source:
+      name: containers/dns/zones/172.20.rev
   fileshare-smb-conf:
     type: file
     target: fileshare

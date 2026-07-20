@@ -18,10 +18,12 @@ from aces_sdl.runtime_configuration import (
     RuntimePackage,
     ServiceManagerUnit,
 )
+from aces_sdl.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesystemEntryType
 
 from aptl.backends.aces_materializer import (
     BaseSubstrateOp,
     EnableServiceUnitOp,
+    EnsureDirectoryOp,
     EnsureGroupOp,
     EnsureUserOp,
     InstallPackagesOp,
@@ -133,6 +135,46 @@ class TestPlanNodeMaterialization:
             "EnableServiceUnitOp",
             "StartServiceUnitOp",
         ]
+
+    def test_directory_filesystem_entries_ensured_after_identity_before_content(self):
+        runtime = RuntimeConfiguration(
+            local_identity=RuntimeLocalIdentityInventory(
+                groups=[RuntimeLocalGroup(name="bind")],
+                users=[RuntimeLocalUser(username="bind", primary_group="bind")],
+            ),
+            filesystem_inventory=[
+                RuntimeFilesystemEntry(
+                    path="/var/log/named",
+                    entry_type=RuntimeFilesystemEntryType.DIRECTORY,
+                    owner_user="bind",
+                    owner_group="bind",
+                    mode="0755",
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+        assert EnsureDirectoryOp(
+            path="/var/log/named", owner="bind", group="bind", mode="0755"
+        ) in ops
+        dir_idx = next(i for i, op in enumerate(ops) if isinstance(op, EnsureDirectoryOp))
+        user_idx = next(i for i, op in enumerate(ops) if isinstance(op, EnsureUserOp))
+        assert user_idx < dir_idx
+
+    def test_non_directory_filesystem_entries_are_not_materialized(self):
+        # An observed-fact FILE entry (no inline content) describes an
+        # expected file, not something the planner can conjure from metadata
+        # alone; it is not lowered into an op (content: is the file-placement
+        # authority).
+        runtime = RuntimeConfiguration(
+            filesystem_inventory=[
+                RuntimeFilesystemEntry(
+                    path="/etc/bind/named.conf",
+                    entry_type=RuntimeFilesystemEntryType.FILE,
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+        assert not any(isinstance(op, EnsureDirectoryOp) for op in ops)
 
     def test_planner_is_product_agnostic(self):
         # Identical declared state produces identical ops. The planner has no

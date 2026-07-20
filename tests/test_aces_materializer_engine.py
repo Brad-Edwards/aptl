@@ -18,7 +18,10 @@ from aces_sdl.runtime_configuration import (
     ServiceManagerUnit,
 )
 
+from aces_sdl.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesystemEntryType
+
 from aptl.backends.aces_materializer import (
+    EnsureDirectoryOp,
     EnsureUserOp,
     plan_node_materialization,
 )
@@ -37,9 +40,16 @@ class _RecordingExecutor:
         self.users: set[tuple[str, str]] = set()
         self.enabled: set[tuple[str, str]] = set()
         self.active: set[tuple[str, str]] = set()
+        self.directories: set[tuple[str, str]] = set()
 
     def ensure_base_substrate(self, node_address: str, image_ref: str) -> None:
         self.base[node_address] = image_ref
+
+    def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
+        self.directories.add((node_address, op.path))
+
+    def observe_directory(self, node_address: str, path: str) -> bool:
+        return (node_address, path) in self.directories
 
     def install_packages(self, node_address: str, manager: str, packages: tuple[str, ...]) -> None:
         self.installed.setdefault((node_address, manager), set()).update(packages)
@@ -141,6 +151,46 @@ class TestMaterializeNode:
         assert "techvault.wazuh-manager" in (result.error or "")
         # The raw internal detail is not echoed verbatim into the envelope.
         assert "hunter2" not in (result.error or "")
+
+    def test_directory_entry_is_materialized_and_verified(self):
+        runtime = RuntimeConfiguration(
+            local_identity=RuntimeLocalIdentityInventory(
+                groups=[RuntimeLocalGroup(name="bind")],
+                users=[RuntimeLocalUser(username="bind")],
+            ),
+            filesystem_inventory=[
+                RuntimeFilesystemEntry(
+                    path="/var/log/named",
+                    entry_type=RuntimeFilesystemEntryType.DIRECTORY,
+                    owner_user="bind",
+                    owner_group="bind",
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+        ex = _RecordingExecutor()
+        result = materialize_node("techvault.dns", ops, ex)
+        assert result is None
+        assert ("techvault.dns", "/var/log/named") in ex.directories
+
+    def test_unverifiable_directory_fails_closed(self):
+        runtime = RuntimeConfiguration(
+            filesystem_inventory=[
+                RuntimeFilesystemEntry(
+                    path="/var/log/named",
+                    entry_type=RuntimeFilesystemEntryType.DIRECTORY,
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+
+        class _SilentDirectory(_RecordingExecutor):
+            def ensure_directory(self, node_address, op):
+                pass  # runs but materializes nothing
+
+        result = materialize_node("techvault.dns", ops, _SilentDirectory())
+        assert result is not None and result.success is False
+        assert "/var/log/named" in (result.error or "")
 
     def test_empty_runtime_only_needs_base_substrate(self):
         ops = plan_node_materialization(os="linux", os_version="", runtime=None)

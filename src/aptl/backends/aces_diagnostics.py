@@ -14,6 +14,7 @@ from aptl.backends.aces_observation import ObservedResource
 from aptl.utils.redaction import redact
 
 PROVISIONING_ADDRESS = "runtime.apply.provisioning"
+DEFAULT_STAGE_LABEL = "ACES runtime handoff failed"
 SUPPORTED_RESOURCE_TYPES = frozenset(
     {
         "network",
@@ -43,14 +44,25 @@ def has_error(diagnostics: list[Diagnostic]) -> bool:
     return any(item.is_error for item in diagnostics)
 
 
-def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
-    """Render ACES diagnostics into the APTL ``LabResult`` error surface."""
+def render_aces_diagnostics(
+    diagnostics: list[Diagnostic], *, stage_label: str = DEFAULT_STAGE_LABEL
+) -> str:
+    """Render ACES diagnostics into the APTL ``LabResult`` error surface.
+
+    ``stage_label`` names the failing phase and defaults to the original
+    hard-coded ``"ACES runtime handoff failed"`` prefix, so every existing
+    caller is unchanged. ADR-047's error envelope reuses this same
+    formatter for the experiment-admission failure surface by passing a
+    distinct label (e.g. ``"ACES experiment admission failed"``) instead of
+    adding a second formatter — do not misclassify admission as a
+    startup-readiness warning by leaving the default label in place there.
+    """
     if not diagnostics:
-        return "ACES runtime handoff failed."
+        return f"{stage_label}."
     rendered = [_format_diagnostic(item) for item in diagnostics if item.is_error]
     if not rendered:
         rendered = [_format_diagnostic(item) for item in diagnostics]
-    return redact("ACES runtime handoff failed: " + "; ".join(rendered[:5]))
+    return redact(f"{stage_label}: " + "; ".join(rendered[:5]))
 
 
 def unsupported_resource_diagnostics(

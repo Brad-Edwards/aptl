@@ -130,6 +130,23 @@ def _is_sensitive_key(name: str) -> bool:
     return any(token in lower for token in _SENSITIVE_TOKENS)
 
 
+def is_sensitive_key(key: str) -> bool:
+    """Public yes/no predicate: does ``redact()`` treat ``key`` as a
+    sensitive dict key (redacting its value wholesale, regardless of the
+    value's own shape)?
+
+    This is a thin public wrapper around the exact same
+    ``_is_sensitive_key``/``_SENSITIVE_TOKENS``/``_SAFE_KEY_NAMES`` table
+    :func:`redact` uses internally for dict keys — ADR-047 "Secret
+    handling" requires reusing this classification (e.g. to validate an
+    experiment parameter *name* before it is ever used to build a plan)
+    rather than copying the token table into a second checker. Keep
+    ``tests/test_redaction.py``'s parity assertions passing when either
+    changes.
+    """
+    return _is_sensitive_key(key)
+
+
 # Inline-secret patterns for plain-text strings (command lines, headers,
 # query strings, etc.). Mirrors the TypeScript helper so artifacts emitted
 # from either language match shape.
@@ -1007,6 +1024,32 @@ def redact(value: Any) -> Any:
     bound collapses to ``[REDACTED]`` rather than raising ``RecursionError``.
     """
     return _redact(value, 0)
+
+
+def is_secret_shaped_value(value: Any) -> bool:
+    """Public yes/no predicate: would :func:`redact` change ``value`` at all?
+
+    Delegates to the exact recursive core ``redact()`` uses
+    (:func:`_redact`) rather than a separate token/regex table, so this
+    predicate can never drift out of lockstep with the transform — it IS
+    the transform, compared against its own input. Useful as a validator
+    ahead of persistence (ADR-047 "Secret handling": reject secret-shaped
+    parameter values before plan construction, never rely on later
+    redaction to make executable data safe).
+
+    Works over scalars (a plain string/bytes value) and over containers
+    (a dict/list "value" is secret-shaped if ``redact()`` would touch
+    anything inside it, including via a nested sensitive key — see
+    :func:`is_sensitive_key` for the key-only check). ``bytes``/
+    ``bytearray`` are decoded the same way :func:`redact` decodes them
+    before comparing, so an unmodified byte string correctly reports
+    ``False`` instead of always reporting ``True`` from a bytes-vs-str
+    type mismatch.
+    """
+    baseline: Any = bytes(value).decode("utf-8", "replace") if isinstance(
+        value, (bytes, bytearray)
+    ) else value
+    return _redact(value, 0) != baseline
 
 
 def _redact_scalar(value: object, depth: int) -> object:

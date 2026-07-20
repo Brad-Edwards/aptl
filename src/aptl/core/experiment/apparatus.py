@@ -193,19 +193,20 @@ def check_apparatus_admission(
         # debug override — never silently dropped from the raised set.
         raise AdmissionRejection(tuple(diagnostics) + mutual_diagnostics)
 
+    warnings: list[Diagnostic] = []
     if mutual_diagnostics:
-        if policy.allow_uncertified_apparatus:
-            warning = diagnostic(
+        if not policy.allow_uncertified_apparatus:
+            raise AdmissionRejection(mutual_diagnostics)
+        warnings.append(
+            diagnostic(
                 _CODE_UNCERTIFIED_COMPATIBILITY,
                 f"{_ADDRESS_APPARATUS}.mutual_compatibility",
                 "backend and processor manifests do not mutually declare each other "
                 "compatible; admitted under the allow_uncertified_apparatus debug override",
                 severity=Severity.WARNING,
             )
-            return tuple([warning])
-        raise AdmissionRejection(mutual_diagnostics)
-
-    return tuple([])
+        )
+    return tuple(warnings)
 
 
 def _intent_processor_refs(
@@ -307,18 +308,19 @@ def _identity_violations(
     is the (already-narrowing-validated) intent list when the intent
     supplies one, else the task's own list.
     """
-    if not task_refs:
-        return ()
-    effective_refs = intent_refs if intent_refs else task_refs
-    names = {ref.ref_id for ref in effective_refs}
-    if manifest_name in names:
-        return ()
-    violation = diagnostic(
-        _CODE_IDENTITY_UNRESOLVED,
-        address,
-        "the resolved manifest identity is not present in the admitted allow-list",
-    )
-    return tuple([violation])
+    violations: list[Diagnostic] = []
+    if task_refs:
+        effective_refs = intent_refs if intent_refs else task_refs
+        names = {ref.ref_id for ref in effective_refs}
+        if manifest_name not in names:
+            violations.append(
+                diagnostic(
+                    _CODE_IDENTITY_UNRESOLVED,
+                    address,
+                    "the resolved manifest identity is not present in the admitted allow-list",
+                )
+            )
+    return tuple(violations)
 
 
 def _manifest_ref_violations(
@@ -397,14 +399,16 @@ def _mutual_compat_violations(
     """Return the mutual-incompatibility violation when backend/processor don't both declare each other, else empty."""
     backend_declares_processor = processor_manifest.name in backend_manifest.compatible_processors
     processor_declares_backend = backend_manifest.name in processor_manifest.compatible_backends
-    if backend_declares_processor and processor_declares_backend:
-        return ()
-    violation = diagnostic(
-        _CODE_MUTUAL_INCOMPATIBLE,
-        f"{_ADDRESS_APPARATUS}.mutual_compatibility",
-        "backend and processor manifests do not mutually declare each other compatible",
-    )
-    return tuple([violation])
+    violations: list[Diagnostic] = []
+    if not (backend_declares_processor and processor_declares_backend):
+        violations.append(
+            diagnostic(
+                _CODE_MUTUAL_INCOMPATIBLE,
+                f"{_ADDRESS_APPARATUS}.mutual_compatibility",
+                "backend and processor manifests do not mutually declare each other compatible",
+            )
+        )
+    return tuple(violations)
 
 
 def plan_condition_feasibility(

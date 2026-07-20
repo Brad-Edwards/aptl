@@ -384,6 +384,132 @@ services:
         ] in commands
         assert all("unmanaged" not in command for command in commands)
 
+    def test_realize_disconnects_implicit_default_bridge(self, tmp_path):
+        """A generic-materializer node (ADR-048) is `docker run` with no
+        `--network`, so Docker implicitly attaches the default "bridge"
+        network at creation; reconciliation must detach it once the node's
+        declared networks are connected, or it leaks onto the default bridge
+        forever (issue #581 - this is what let kali "reach" a target only
+        through a spurious shared bridge attachment, not its real declared
+        network, corrupting the live gate's kali_reachability check).
+        "bridge" is never itself an "unmanaged" network APTL must leave
+        alone (per the sibling test above): it is Docker's own fixed
+        default, not something a user attached on purpose.
+        """
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.red-workbench",
+                    name="red-workbench",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=("redteam-net",),
+                ),
+            ),
+            networks=(DeploymentNetworkRealization(name="redteam-net"),),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "State": {"Running": True},
+                    "NetworkSettings": {
+                        "Networks": {
+                            "test_aptl-redteam": {},
+                            "bridge": {},
+                        }
+                    },
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=_network_inspect_payload(cmd[3], "aptl-redteam"),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "network",
+            "disconnect",
+            "bridge",
+            "aptl-kali",
+        ] in commands
+
+    def test_realize_leaves_bridge_alone_when_no_bridge_attachment(self, tmp_path):
+        """A Compose-started node never picks up the default bridge (Compose
+        attaches its declared network(s) directly at container creation), so
+        reconciliation must not try to disconnect a network the container
+        was never on."""
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.red-workbench",
+                    name="red-workbench",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=("redteam-net",),
+                ),
+            ),
+            networks=(DeploymentNetworkRealization(name="redteam-net"),),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "State": {"Running": True},
+                    "NetworkSettings": {"Networks": {"test_aptl-redteam": {}}},
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=_network_inspect_payload(cmd[3], "aptl-redteam"),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(
+            command[:3] == ["docker", "network", "disconnect"] for command in commands
+        )
+
     def test_realize_creates_declared_networks_and_connects_static_ip(self, tmp_path):
         backend = self._make_backend(tmp_path)
         spec = DeploymentRealizationSpec(

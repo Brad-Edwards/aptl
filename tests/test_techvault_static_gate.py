@@ -328,6 +328,63 @@ def test_no_start_backend_reads_back_simulated_content_kind():
     assert backend.container_exists("unrealized") is False
 
 
+def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec():
+    """Image-free content (empty volume_suffix) is read back via container_exec.
+
+    The generic materializer places content directly into a node's
+    filesystem, so ``observed_content_type`` skips ``observe_content_type``
+    (which reads a Compose volume that does not exist for this shape) and
+    calls ``backend.container_exec`` instead. ``_NoStartBackend`` must answer
+    that probe from its simulated shapes rather than starting Docker; a
+    missing ``container_exec`` method previously crashed the static gate
+    with an AttributeError the moment a scenario used image-free content
+    (caught only by a real live-gate boot, not by any prior unit test).
+    """
+    from aptl.backends._aces_observation_helpers import observed_content_type
+    from aptl.core.deployment.realization import (
+        DeploymentContentRealization,
+        DeploymentRealizationSpec,
+    )
+
+    file_item = DeploymentContentRealization(
+        address="provision.content.webapp-service-unit",
+        target_address="provision.node.webapp",
+        content_name="webapp-service-unit",
+        volume_suffix="",
+        dest_relpath="etc/systemd/system/webapp.service",
+        source_kind="inline-text",
+        inline_text="must not be materialized by the static gate",
+    )
+    directory_item = DeploymentContentRealization(
+        address="provision.content.webapp-app-code",
+        target_address="provision.node.webapp",
+        content_name="webapp-app-code",
+        volume_suffix="",
+        dest_relpath="opt/webapp",
+        source_kind="project-directory",
+    )
+    backend = _NoStartBackend()
+
+    result = backend.realize(
+        DeploymentRealizationSpec(
+            profiles=(),
+            nodes=(),
+            networks=(),
+            content=(file_item, directory_item),
+        )
+    )
+
+    assert result.success is True
+    assert (
+        observed_content_type(backend, file_item, container_name="aptl-webapp")
+        == "file"
+    )
+    assert (
+        observed_content_type(backend, directory_item, container_name="aptl-webapp")
+        == "directory"
+    )
+
+
 @pytest.mark.integration
 def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
     # Spawns the `aces conformance backend` CLI subprocess via

@@ -73,7 +73,11 @@ from aptl.core.snapshot import (
     container_networks,
     list_container_snapshots,
 )
-from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
+from aptl.core.ssh import (
+    ensure_pivot_key,
+    ensure_ssh_keys,
+    ensure_target_authorized_keys,
+)
 from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -384,6 +388,13 @@ def stop_lab(
             log.warning("Could not load config for profiles: %s", exc)
     if not profiles:
         profiles = list(ALL_KNOWN_PROFILES)
+    # OTel stack (Collector + Tempo + Grafana) is core infrastructure the
+    # start path always includes (see start_lab above) even though it is not
+    # an aptl.json container toggle; stop must tear down what start brings up
+    # or its containers stay attached to the project's networks/volumes and
+    # every later cleanup step fails with "network has active endpoints".
+    if "otel" not in profiles:
+        profiles = [*profiles, "otel"]
 
     if backend is None:
         backend = _get_backend(search_dir, config)
@@ -965,12 +976,30 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
     # dir and bind-mounted (private -> kali, public -> targets).
-    pivot_result = ensure_pivot_key(pivot_dir=ctx.project_dir / "config" / "lab-ssh")
+    pivot_dir = ctx.project_dir / "config" / "lab-ssh"
+    pivot_result = ensure_pivot_key(pivot_dir=pivot_dir)
     if not pivot_result.success:
         log.error("Pivot key generation failed: %s", pivot_result.error)
         return LabResult(
             success=False,
             error=f"Pivot key generation failed: {pivot_result.error}",
+        )
+
+    # SEC #417: targets (victim, workstation, ...) authorize both the
+    # control-plane key and the kali pivot key; the SDL places this combined
+    # file at ~labadmin/.ssh/authorized_keys (issue #581).
+    combined_result = ensure_target_authorized_keys(
+        keys_dir=keys_dir, pivot_dir=pivot_dir
+    )
+    if not combined_result.success:
+        log.error(
+            "Target authorized_keys generation failed: %s", combined_result.error
+        )
+        return LabResult(
+            success=False,
+            error=(
+                f"Target authorized_keys generation failed: {combined_result.error}"
+            ),
         )
     return None
 

@@ -227,6 +227,12 @@ nodes:
     runtime:
       packages:
         - {manager: apt, name: openssh-server, version: "*"}
+        # iputils-ping: the live gate's kali_reachability check ICMP-pings
+        # every shared-network host from kali. nmap: telemetry_evidence_path
+        # drives an nmap scan + failed-ssh-auth as the representative event
+        # Suricata/Wazuh must correlate (issue #581).
+        - {manager: apt, name: iputils-ping, version: "*"}
+        - {manager: apt, name: nmap, version: "*"}
       local_identity:
         groups:
           - {name: kali}
@@ -554,6 +560,38 @@ content:
     destination: /srv/shares/onboarding
     source:
       name: scenarios/fixtures/techvault-content/onboarding
+  # SEC #417: victim/workstation authorize both the operator control-plane
+  # key and the kali pivot key (target_authorized_keys is the two combined,
+  # generated at lab standup — src/aptl/core/ssh.py). kali itself is
+  # authorized with only the control-plane key, and separately receives the
+  # pivot key's *private* half to SSH out into these targets. This mirrors
+  # the entrypoint-script SSH provisioning the legacy hand-authored images
+  # ran, now realized generically from declared content (issue #581).
+  victim-authorized-keys:
+    type: file
+    target: victim
+    path: /home/labadmin/.ssh/authorized_keys
+    source:
+      name: keys/target_authorized_keys
+  workstation-authorized-keys:
+    type: file
+    target: workstation
+    path: /home/labadmin/.ssh/authorized_keys
+    source:
+      name: keys/target_authorized_keys
+  kali-authorized-keys:
+    type: file
+    target: kali
+    path: /home/kali/.ssh/authorized_keys
+    source:
+      name: keys/authorized_keys
+  kali-pivot-key:
+    type: file
+    target: kali
+    path: /home/kali/.ssh/kali_pivot_key
+    source:
+      name: config/lab-ssh/kali_pivot_key
+    sensitive: true
 
 # Realizable accounts (ADR-046 Account and Identity Realization Addendum,
 # #577): the deployment backend's realize_accounts operation ensures these

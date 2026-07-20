@@ -142,6 +142,25 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,web]"
+      - name: Generate lab SSH keys
+        # issue #581: the operational scenario's content: now declares the
+        # SSH-reachable targets' authorized_keys (SEC #417), sourced from the
+        # gitignored keys/ and config/lab-ssh/ files lab start generates —
+        # the static gate resolves and requires that source file to exist on
+        # disk, so it must be generated before the gate runs, same as it
+        # would be by the time a real `aptl lab start` reaches content
+        # placement.
+        run: |
+          python -c "
+          from pathlib import Path
+          from aptl.core.ssh import ensure_ssh_keys, ensure_pivot_key, ensure_target_authorized_keys
+          project = Path('.')
+          keys_dir = project / 'keys'
+          pivot_dir = project / 'config' / 'lab-ssh'
+          assert ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=Path.home() / '.ssh').success
+          assert ensure_pivot_key(pivot_dir=pivot_dir).success
+          assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
+          "
       - name: ACES static validation gate (techvault-operational)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker

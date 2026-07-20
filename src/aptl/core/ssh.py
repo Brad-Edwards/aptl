@@ -133,6 +133,40 @@ def _ensure_keypair(
     return True, ""
 
 
+def ensure_target_authorized_keys(keys_dir: Path, pivot_dir: Path) -> SSHKeyResult:
+    """Write the combined authorized_keys file SSH-reachable targets receive.
+
+    SEC #417: a target (victim, workstation, ...) authorizes both the
+    operator/MCP control-plane public key and the kali pivot public key — the
+    pivot key is what makes kali's in-scenario SSH into the target work. kali
+    itself is authorized separately with only the control-plane key (it is
+    the pivot key's *private* half that lives on kali, never its own
+    authorized_keys). Requires both keypairs to already exist (from
+    ``ensure_ssh_keys`` / ``ensure_pivot_key``, always called first).
+    """
+    control_plane_pub = keys_dir / f"{_KEY_NAME}.pub"
+    pivot_pub = pivot_dir / f"{_PIVOT_KEY_NAME}.pub"
+    for path in (control_plane_pub, pivot_pub):
+        if not path.exists():
+            return SSHKeyResult(
+                success=False, generated=False, error=f"Public key not found at {path}"
+            )
+    combined = _with_trailing_newline(control_plane_pub.read_text()) + _with_trailing_newline(
+        pivot_pub.read_text()
+    )
+    target_file = keys_dir / "target_authorized_keys"
+    target_file.write_text(combined)
+    permission_error = _set_public_key_mode(target_file)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=False, error=permission_error)
+    return SSHKeyResult(success=True, generated=False, key_path=target_file)
+
+
+def _with_trailing_newline(text: str) -> str:
+    """Return ``text`` guaranteed to end with a single newline."""
+    return text if text.endswith("\n") else text + "\n"
+
+
 def _finish_control_plane_key_setup(
     private_key: Path,
     public_key: Path,

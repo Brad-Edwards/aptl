@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from aces_sdl import parse_sdl_file
 from aces_runtime.manager import RuntimeManager
 from aces_contracts.planning import (
     ChangeAction,
@@ -33,6 +34,7 @@ from aptl.backends.aces_profiles import (
 from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
+from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
 from aptl.validation._account_parity import check_account_provisioner_parity
@@ -50,6 +52,7 @@ from aptl.validation._gate_checks import (
     check_parse,
     check_provisioning_realization,
 )
+from aptl.validation.imagefree_gate import assert_image_free
 from aptl.validation.techvault_gate import (
     GateCheck,
     GateOptions,
@@ -97,6 +100,38 @@ def test_operational_gate_passes():
         "provisioning_realization",
         "account_provisioner_parity",
     ]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata are blocked on "
+        "genuine ACES SDL expressivity gaps, not local workarounds: "
+        "Brad-Edwards/aces#845 (no compiled placement for domain-controller "
+        "bootstrap), #847 (RuntimePackage has no documented way to declare a "
+        "third-party package repository - needed for the Wazuh agent), #849 "
+        "(no SDL concept for a node sharing another node's network namespace). "
+        "Remove this marker once all four are authored; strict=True fails the "
+        "build the moment that happens without the marker being removed."
+    ),
+    strict=True,
+)
+def test_operational_scenario_passes_the_realization_declaration_gate():
+    """Every OS-bearing node in the shipped SDL resolves through a declared
+    realization (ADR-048 P7): generic-materializer runtime: or a trust-
+    policy-resolved source:, never docker-compose.yml alone with nothing
+    declared in the SDL. This is the blocking check the operational
+    TechVault cutover must pass, growing stricter as more nodes convert.
+    """
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
+    plan = RuntimeManager(
+        create_aptl_runtime_target(project_dir=PROJECT_ROOT, config=config, backend=backend)
+    ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
+    realization = interpret_provisioning_plan(
+        plan=plan.provisioning, project_dir=PROJECT_ROOT, config=config
+    )
+    assert [d.message for d in realization.diagnostics if d.is_error] == []
+    assert_image_free(realization.deployment_spec([]))  # raises with every violation
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():

@@ -72,3 +72,31 @@ class TestSerialization:
         details = node.details()
         assert details["os"] == "linux"
         assert details["runtime"]["packages"] == 1
+
+
+class TestImageFreeDerivation:
+    def _node(self, *, os="linux", runtime=..., image=None):
+        from aces_sdl.runtime_configuration import RuntimeConfiguration
+        rt = RuntimeConfiguration() if runtime is ... else runtime
+        return NodeRealization(
+            address="n." + (os or "sw"), name="n", aliases=(), profiles=(),
+            backend_services=(), container_name=None, services=(), networks=(),
+            static_addresses=(), os=os, runtime=rt, image=image,
+        )
+
+    def test_all_os_nodes_have_runtime_and_no_images_is_image_free(self):
+        from aptl.backends.aces_realization_model import _realization_is_image_free
+        assert _realization_is_image_free((self._node(), self._node())) is True
+
+    def test_any_appliance_image_is_not_image_free(self):
+        from aptl.backends.aces_realization_model import _realization_is_image_free
+        # Any non-None image marks a node as appliance-image realized.
+        assert _realization_is_image_free((self._node(image=object()),)) is False
+
+    def test_os_node_without_runtime_is_not_image_free(self):
+        from aptl.backends.aces_realization_model import _realization_is_image_free
+        assert _realization_is_image_free((self._node(runtime=None),)) is False
+
+    def test_no_os_nodes_is_not_image_free(self):
+        from aptl.backends.aces_realization_model import _realization_is_image_free
+        assert _realization_is_image_free((self._node(os=""),)) is False

@@ -154,10 +154,11 @@ class AptlRealization(object):
 
         return DeploymentRealizationSpec(
             profiles=tuple(profiles),
+            image_free=_realization_is_image_free(self.nodes),
             nodes=tuple(
                 _deployment_node_realization(node)
                 for node in self.nodes
-                if node.backend_services or node.container_name
+                if node.backend_services or node.container_name or node.os
             ),
             networks=tuple(
                 DeploymentNetworkRealization(
@@ -225,6 +226,24 @@ def _single_or_none(values: tuple[str, ...]) -> str | None:
     if len(values) == 1:
         return values[0]
     return None
+
+
+def _realization_is_image_free(nodes: tuple[NodeRealization, ...]) -> bool:
+    """Whether this realization is fully image-free (ADR-047).
+
+    True only when every materializable (os-bearing) node declares runtime
+    desired state AND no node carries an appliance image. A scenario that still
+    has any appliance image, or an os-bearing node without declared runtime,
+    stays on the legacy compose path so a partially-authored scenario never
+    boots an empty range.
+    """
+
+    materializable = [node for node in nodes if node.os]
+    if not materializable:
+        return False
+    if any(node.image is not None for node in nodes):
+        return False
+    return all(node.runtime is not None for node in materializable)
 
 
 def _deployment_node_realization(

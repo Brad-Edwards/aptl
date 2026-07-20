@@ -23,7 +23,6 @@ from aptl.core.credentials import (
     _canonical_generated_path,
     _resolve_within_project,
 )
-from aptl.core.deployment._compose_seed_safety import redacted_stderr_hint
 from aptl.core.seed_spec import NamedVolumeSeed, SeedFile
 from aptl.utils.logging import get_logger
 
@@ -121,6 +120,14 @@ def _restore_via_container(
     runs as root and chowns the bind-mounted files to the invoking user.
     Reuses the Suricata seeder image, which is already present at this step.
     """
+    # Import at point of use, not module scope: importing anything from
+    # ``aptl.core.deployment`` runs that package's __init__ (docker_compose →
+    # … → cryptography), which the lightweight ``suricata-config-source-
+    # ownership`` pre-commit hook environment does not install. This repair
+    # path only runs on a native-Linux host with the full deps present, so the
+    # heavy import is safe here while keeping module import lightweight.
+    from aptl.core.deployment._compose_seed_safety import redacted_stderr_hint
+
     rel_targets = [
         f"/project/{p.relative_to(project_dir).as_posix()}" for p in still_foreign
     ]

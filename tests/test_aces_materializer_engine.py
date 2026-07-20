@@ -56,7 +56,9 @@ class _RecordingExecutor:
     def start_service_unit(self, node_address: str, unit_name: str) -> None:
         self.active.add((node_address, unit_name))
 
-    def observe_installed_packages(self, node_address: str, manager: str) -> frozenset[str]:
+    def observe_installed_packages(
+        self, node_address: str, manager: str, packages: tuple[str, ...]
+    ) -> frozenset[str]:
         return frozenset(self.installed.get((node_address, manager), set()))
 
     def observe_local_group(self, node_address: str, name: str) -> bool:

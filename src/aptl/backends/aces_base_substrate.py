@@ -19,6 +19,7 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_materializer import (
     MaterializationOp,
+    PlaceFileOp,
     base_image_for_os,
     package_family,
     plan_node_materialization,
@@ -97,6 +98,7 @@ def plan_node(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
+    content: tuple[PlaceFileOp, ...] = (),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -110,5 +112,7 @@ def plan_node(
     spec = base_container_spec(
         node_address, os=os, os_version=os_version, runtime=runtime
     )
-    ops = plan_node_materialization(os=os, os_version=os_version, runtime=runtime)
+    ops = plan_node_materialization(
+        os=os, os_version=os_version, runtime=runtime, content=content
+    )
     return spec, ops

@@ -89,6 +89,20 @@ class EnsureUserOp:
 
 
 @dataclass(frozen=True)
+class PlaceFileOp:
+    """Place a declared config file into the node at an absolute path.
+
+    Content is inline text authored in the SDL (never a secret value; secrets go
+    through the generated-config path). Ordered after identity and before service
+    start so a config-dependent service starts with its config present.
+    """
+
+    path: str
+    content: str
+    mode: str = ""
+
+
+@dataclass(frozen=True)
 class EnableServiceUnitOp:
     """Enable a service-manager unit (start on boot)."""
 
@@ -107,6 +121,7 @@ MaterializationOp = (
     | InstallPackagesOp
     | EnsureGroupOp
     | EnsureUserOp
+    | PlaceFileOp
     | EnableServiceUnitOp
     | StartServiceUnitOp
 )
@@ -200,11 +215,14 @@ def plan_node_materialization(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
+    content: tuple[PlaceFileOp, ...] = (),
 ) -> tuple[MaterializationOp, ...]:
     """Lower one node's declared desired state into ordered generic operations.
 
     Order is dependency-safe: base substrate, package installs, groups, users,
-    service-unit enable, service-unit start. Emits nothing product-specific.
+    config-file placement, service-unit enable, service-unit start. Config is
+    placed before services so a config-dependent service starts configured.
+    Emits nothing product-specific.
     """
 
     runs_services = bool(runtime is not None and runtime.service_manager_units)
@@ -221,5 +239,7 @@ def plan_node_materialization(
     if runtime is not None:
         ops.extend(_package_ops(runtime))
         ops.extend(_identity_ops(runtime))
+    ops.extend(content)
+    if runtime is not None:
         ops.extend(_service_unit_ops(runtime))
     return tuple(ops)

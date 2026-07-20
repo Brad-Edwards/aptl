@@ -16,6 +16,7 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_base_substrate import BaseContainerSpec, plan_node
 from aptl.backends.aces_docker_materializer import DockerMaterializationExecutor
+from aptl.backends.aces_materializer import PlaceFileOp
 from aptl.backends.aces_materializer_engine import materialize_node
 from aptl.core.lab_types import LabResult
 
@@ -40,7 +41,11 @@ class _MaterializableNode(Protocol):
     runtime: RuntimeConfiguration | None
 
 
-def realize_node(node: _MaterializableNode, backend: _NodeBackend) -> LabResult | None:
+def realize_node(
+    node: _MaterializableNode,
+    backend: _NodeBackend,
+    content: tuple[PlaceFileOp, ...] = (),
+) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
     Returns ``None`` on fully-verified success, or a fail-closed
@@ -48,7 +53,11 @@ def realize_node(node: _MaterializableNode, backend: _NodeBackend) -> LabResult 
     """
 
     spec, ops = plan_node(
-        node.address, os=node.os, os_version=node.os_version, runtime=node.runtime
+        node.address,
+        os=node.os,
+        os_version=node.os_version,
+        runtime=node.runtime,
+        content=content,
     )
     container = spec.container_name
 
@@ -67,7 +76,9 @@ def realize_node(node: _MaterializableNode, backend: _NodeBackend) -> LabResult 
 
 
 def realize_nodes(
-    nodes: Iterable[_MaterializableNode], backend: _NodeBackend
+    nodes: Iterable[_MaterializableNode],
+    backend: _NodeBackend,
+    content_by_node: dict[str, tuple[PlaceFileOp, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 
@@ -77,10 +88,11 @@ def realize_nodes(
     started, so a partial range never masquerades as realized.
     """
 
+    content_by_node = content_by_node or {}
     for node in nodes:
         if not node.os:
             continue
-        result = realize_node(node, backend)
+        result = realize_node(node, backend, content_by_node.get(node.address, ()))
         if result is not None:
             return result
     return None

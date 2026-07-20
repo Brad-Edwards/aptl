@@ -115,17 +115,29 @@ class ComposeRealizationMixin(
         reports success.
         """
 
+        from aptl.backends.aces_materializer import PlaceFileOp
         from aptl.backends.aces_node_materialization import realize_nodes
 
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
-        node_result = realize_nodes(realization.nodes, self)
+
+        content_by_node: dict[str, list[PlaceFileOp]] = {}
+        for content in realization.content:
+            if content.source_kind == "inline-text" and content.inline_text is not None:
+                content_by_node.setdefault(content.target_address, []).append(
+                    PlaceFileOp(
+                        path="/" + content.dest_relpath.lstrip("/"),
+                        content=content.inline_text,
+                    )
+                )
+        node_result = realize_nodes(
+            realization.nodes,
+            self,
+            {addr: tuple(ops) for addr, ops in content_by_node.items()},
+        )
         if node_result is not None:
             return node_result
-        content_result = self._realize_content(realization)
-        if content_result is not None:
-            return content_result
         return LabResult(success=True)
 
     def _realize_published_ports(

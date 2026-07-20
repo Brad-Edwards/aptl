@@ -354,3 +354,54 @@ def _reject(address: str, reason_code: str) -> Diagnostic:
             f"realization policy (reason={reason_code})."
         ),
     )
+
+
+def resolve_image_free_content_placement(
+    resource: PlannedResource,
+    payload: Mapping[str, Any],
+    target_address: str,
+) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+    """Resolve content for an image-free node (ADR-047).
+
+    The generic materializer places declared config directly into the node's
+    container, so there is no compose service / named-volume requirement. An
+    inline-text file lowers to a ``DeploymentContentRealization`` whose
+    ``dest_relpath`` is the authored (absolute) path. Project sources, datasets,
+    and directories are not yet supported here and fail closed rather than being
+    silently dropped.
+    """
+
+    spec = _placement_spec(payload)
+    if spec is None:
+        return None, [
+            diagnostic(
+                "aptl.provisioner.invalid-content-spec",
+                resource.address,
+                "content placement has no spec.",
+            )
+        ]
+    text = _content_text(spec)
+    dest = _optional_string(spec, "path") or _optional_string(spec, "destination")
+    name = _optional_string(payload, "content_name") or _optional_string(payload, "name") or ""
+    if text is not None and dest:
+        return (
+            DeploymentContentRealization(
+                address=resource.address,
+                target_address=target_address,
+                content_name=name,
+                volume_suffix="",
+                dest_relpath=dest.lstrip("/"),
+                source_kind="inline-text",
+                inline_text=text,
+                sensitive=spec.get("sensitive") is True,
+            ),
+            [],
+        )
+    return None, [
+        diagnostic(
+            "aptl.provisioner.image-free-content-unsupported",
+            resource.address,
+            "image-free content placement currently supports an inline-text file "
+            "(type: file with text and path).",
+        )
+    ]

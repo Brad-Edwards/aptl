@@ -15,7 +15,10 @@ the admission boundary and translates into the ACES `LabResult` envelope.
 
 from __future__ import annotations
 
+import base64
+import shlex
 from collections.abc import Callable
+from pathlib import PurePosixPath
 from typing import Protocol
 
 from aptl.backends.aces_materializer import EnsureUserOp
@@ -82,6 +85,17 @@ class DockerMaterializationExecutor:
             return  # reconcile-not-recreate: a present user is left in place
         self._require_ok(node_address, _useradd_argv(op), "ensure user")
 
+    def place_file(self, node_address: str, path: str, content: str, mode: str = "") -> None:
+        # base64-encode the content so no authored value is interpreted by the
+        # shell; the path is quoted. Creates parent dirs, then chmods if asked.
+        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        quoted_path = shlex.quote(path)
+        parent = shlex.quote(str(PurePosixPath(path).parent))
+        script = f"mkdir -p {parent} && printf %s {shlex.quote(encoded)} | base64 -d > {quoted_path}"
+        if mode:
+            script += f" && chmod {shlex.quote(mode)} {quoted_path}"
+        self._require_ok(node_address, ["sh", "-c", script], "place file")
+
     def enable_service_unit(self, node_address: str, unit_name: str) -> None:
         self._require_ok(node_address, ["systemctl", "enable", unit_name], "enable unit")
 
@@ -101,6 +115,9 @@ class DockerMaterializationExecutor:
 
     def observe_local_user(self, node_address: str, username: str) -> bool:
         return self._exec(node_address, ["id", "-u", username]).returncode == 0
+
+    def observe_file(self, node_address: str, path: str) -> bool:
+        return self._exec(node_address, ["test", "-e", path]).returncode == 0
 
     def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool:
         outcome = self._exec(node_address, ["systemctl", "is-enabled", unit_name])

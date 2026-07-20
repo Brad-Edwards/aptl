@@ -25,6 +25,7 @@ from aptl.backends.aces_materializer import (
     EnsureUserOp,
     InstallPackagesOp,
     MaterializationOp,
+    PlaceFileOp,
     StartServiceUnitOp,
 )
 from aptl.core.lab_types import LabResult
@@ -42,6 +43,7 @@ class MaterializationExecutor(Protocol):
     def install_packages(self, node_address: str, manager: str, packages: tuple[str, ...]) -> None: ...
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None: ...
     def ensure_user(self, node_address: str, op: EnsureUserOp) -> None: ...
+    def place_file(self, node_address: str, path: str, content: str, mode: str) -> None: ...
     def enable_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def start_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def observe_installed_packages(
@@ -49,6 +51,7 @@ class MaterializationExecutor(Protocol):
     ) -> frozenset[str]: ...
     def observe_local_group(self, node_address: str, name: str) -> bool: ...
     def observe_local_user(self, node_address: str, username: str) -> bool: ...
+    def observe_file(self, node_address: str, path: str) -> bool: ...
     def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool: ...
     def observe_service_unit_active(self, node_address: str, unit_name: str) -> bool: ...
 
@@ -64,6 +67,8 @@ def _execute_op(
         executor.ensure_group(node_address, op.name, op.gid)
     elif isinstance(op, EnsureUserOp):
         executor.ensure_user(node_address, op)
+    elif isinstance(op, PlaceFileOp):
+        executor.place_file(node_address, op.path, op.content, op.mode)
     elif isinstance(op, EnableServiceUnitOp):
         executor.enable_service_unit(node_address, op.unit_name)
     elif isinstance(op, StartServiceUnitOp):
@@ -93,6 +98,9 @@ def _verify_op(
     elif isinstance(op, EnsureUserOp):
         if not executor.observe_local_user(node_address, op.username):
             return f"local user not present: {op.username}"
+    elif isinstance(op, PlaceFileOp):
+        if not executor.observe_file(node_address, op.path):
+            return f"config file not present: {op.path}"
     elif isinstance(op, EnableServiceUnitOp):
         if not executor.observe_service_unit_enabled(node_address, op.unit_name):
             return f"service unit not enabled: {op.unit_name}"

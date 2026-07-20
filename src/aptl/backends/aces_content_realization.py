@@ -387,6 +387,32 @@ def _inline_text_image_free_placement(
     )
 
 
+def _project_source_rejection(
+    resource: PlannedResource, source_name: str
+) -> list[Diagnostic] | None:
+    """Return fail-closed diagnostics if a project source can't be realized, else None."""
+
+    if source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
+        return [
+            diagnostic(
+                "aptl.provisioner.content-not-realizable",
+                resource.address,
+                "runtime-observed content cannot be recreated from source.",
+            )
+        ]
+    try:
+        _resolve_within_project(Path(""), source_name)
+    except PathContainmentError:
+        return [
+            diagnostic(
+                "aptl.provisioner.content-source-escapes-project",
+                resource.address,
+                "content source path escapes the project root.",
+            )
+        ]
+    return None
+
+
 def _project_source_image_free_placement(
     resource: PlannedResource,
     target_address: str,
@@ -401,24 +427,9 @@ def _project_source_image_free_placement(
 
     if not source_name or not dest:
         return None
-    if source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
-        return None, [
-            diagnostic(
-                "aptl.provisioner.content-not-realizable",
-                resource.address,
-                "runtime-observed content cannot be recreated from source.",
-            )
-        ]
-    try:
-        _resolve_within_project(Path(""), source_name)
-    except PathContainmentError:
-        return None, [
-            diagnostic(
-                "aptl.provisioner.content-source-escapes-project",
-                resource.address,
-                "content source path escapes the project root.",
-            )
-        ]
+    diagnostics = _project_source_rejection(resource, source_name)
+    if diagnostics is not None:
+        return None, diagnostics
     kind = "project-directory" if content_type == "directory" else "project-file"
     return (
         DeploymentContentRealization(

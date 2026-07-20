@@ -70,22 +70,30 @@ class ComposeRealizationMixin(
         compose_files: tuple[Path, ...] | None = None
 
         def _images() -> LabResult | None:
+            """Pull/build declared images and capture the resulting compose override."""
+
             nonlocal compose_files
             result, compose_files = self._prepare_realization_images(realization)
             return result
 
         def _networks() -> LabResult | None:
+            """Ensure declared networks exist, or fail closed on the first error."""
+
             network_failures = self._ensure_realization_networks(realization)
             if network_failures:
                 return LabResult(success=False, error="; ".join(network_failures[:5]))
             return None
 
         def _compose_model() -> LabResult | None:
+            """Render and validate the generated Compose model."""
+
             nonlocal compose_files
             compose_files = self._realization_compose_files(compose_files, realization)
             return self._validate_realization_compose_model(profiles, compose_files, realization)
 
         def _start() -> LabResult:
+            """Start the realized services and return the final realization result."""
+
             start_result = self._start_realized_services(
                 profiles, build=build, compose_files=compose_files
             )

@@ -153,6 +153,7 @@ class ComposeRealizationImageMixin:
         *,
         build: bool,
         compose_files: tuple[Path, ...],
+        exclude_services: tuple[str, ...] = (),
     ) -> LabResult:
         """Start lab services using a generated realization override."""
 
@@ -160,6 +161,8 @@ class ComposeRealizationImageMixin:
         if build:
             cmd.append("--build")
         cmd.append("-d")
+        for service in exclude_services:
+            cmd += ["--scale", f"{service}=0"]
         result = self._run(cmd)
         if result.returncode != 0:
             return LabResult(success=False, error=result.stderr)
@@ -171,13 +174,20 @@ class ComposeRealizationImageMixin:
         *,
         build: bool,
         compose_files: tuple[Path, ...] | None,
+        exclude_services: tuple[str, ...] = (),
     ) -> LabResult:
-        """Start services with the generated override when one exists."""
+        """Start services with the generated override when one exists.
+
+        ``exclude_services`` (ADR-048 mixed realization) scales those Compose
+        service names to zero: they were already realized directly by the
+        generic materializer and must not also start as Compose containers.
+        """
 
         if compose_files is None:
-            return self.start(profiles, build=build)
+            return self.start(profiles, build=build, exclude_services=exclude_services)
         return self._start_with_compose_files(
             profiles,
             build=build,
             compose_files=compose_files,
+            exclude_services=exclude_services,
         )

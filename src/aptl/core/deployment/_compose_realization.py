@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from aptl.core.deployment._compose_account_realization import (
@@ -66,6 +67,28 @@ class ComposeRealizationMixin(
         if realization.image_free:
             return self._realize_image_free(realization)
 
+        image_free_addresses = _image_free_node_addresses(realization)
+        if image_free_addresses:
+            # Mixed realization (ADR-048): materialize the runtime:-declared
+            # subset directly first - it never becomes a Compose container -
+            # then run the legacy pipeline for the rest, with those service
+            # names excluded from `compose up` so neither side starts, skips,
+            # or double-realizes the other's nodes.
+            node_result = self._materialize_image_free_nodes(
+                realization, image_free_addresses
+            )
+            if node_result is not None:
+                return node_result
+            excluded_services = _image_free_service_names(realization, image_free_addresses)
+            legacy_content = tuple(
+                item
+                for item in realization.content
+                if item.target_address not in image_free_addresses
+            )
+            realization = replace(realization, content=legacy_content)
+        else:
+            excluded_services = ()
+
         profiles = list(realization.profiles)
         compose_files: tuple[Path, ...] | None = None
 
@@ -95,7 +118,10 @@ class ComposeRealizationMixin(
             """Start the realized services and return the final realization result."""
 
             start_result = self._start_realized_services(
-                profiles, build=build, compose_files=compose_files
+                profiles,
+                build=build,
+                compose_files=compose_files,
+                exclude_services=excluded_services,
             )
             return self._realization_result(start_result, realization)
 
@@ -119,6 +145,28 @@ class ComposeRealizationMixin(
                 return result
         return LabResult(success=True)
 
+    def _materialize_image_free_nodes(
+        self,
+        realization: DeploymentRealizationSpec,
+        addresses: frozenset[str],
+    ) -> LabResult | None:
+        """Materialize just the runtime:-declared node subset (ADR-048).
+
+        Shares the same node materialization and content-op lowering as the
+        fully image-free path, scoped to ``addresses`` so mixed-realization
+        content meant for a Compose-managed node is never misinterpreted as
+        an image-free placement.
+        """
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        nodes = tuple(n for n in realization.nodes if n.address in addresses)
+        content = tuple(
+            item for item in realization.content if item.target_address in addresses
+        )
+        return _realize_node_subset(self, nodes, content)
+
     def _realize_image_free(
         self,
         realization: DeploymentRealizationSpec,
@@ -132,38 +180,11 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        from aptl.backends.aces_materializer import (
-            PlaceFileOp,
-            PlaceProjectContentOp,
-        )
-        from aptl.backends.aces_node_materialization import realize_nodes
-
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
-
-        content_by_node: dict[str, list[object]] = {}
-        for content in realization.content:
-            dest = "/" + content.dest_relpath.lstrip("/")
-            if content.source_kind == "inline-text" and content.inline_text is not None:
-                op: object = PlaceFileOp(path=dest, content=content.inline_text)
-            elif content.source_kind in ("project-file", "project-directory") and content.source_relpath:
-                op = PlaceProjectContentOp(
-                    dest_path=dest,
-                    source_relpath=content.source_relpath,
-                    is_directory=content.source_kind == "project-directory",
-                )
-            else:
-                continue
-            content_by_node.setdefault(content.target_address, []).append(op)
-        node_result = realize_nodes(
-            realization.nodes,
-            self,
-            {addr: tuple(ops) for addr, ops in content_by_node.items()},
-        )
-        if node_result is not None:
-            return node_result
-        return LabResult(success=True)
+        node_result = _realize_node_subset(self, realization.nodes, realization.content)
+        return node_result if node_result is not None else LabResult(success=True)
 
     def _realize_published_ports(
         self,
@@ -365,3 +386,66 @@ class ComposeRealizationMixin(
                 success=False,
                 error=f"Account realization timed out: {exc}",
             )
+
+
+def _image_free_node_addresses(realization: DeploymentRealizationSpec) -> frozenset[str]:
+    """Return the addresses of every node declaring runtime desired state."""
+
+    return frozenset(node.address for node in realization.nodes if node.runtime is not None)
+
+
+def _image_free_service_names(
+    realization: DeploymentRealizationSpec, image_free_addresses: frozenset[str]
+) -> tuple[str, ...]:
+    """Return the Compose service names of nodes materialized directly (ADR-048).
+
+    These must be scaled to zero when Compose starts the rest of the
+    realization: they were already realized by the generic materializer, and
+    starting them again as Compose containers would either collide on the
+    shared container name or silently duplicate the node.
+    """
+
+    return tuple(
+        sorted(
+            node.service_name
+            for node in realization.nodes
+            if node.address in image_free_addresses and node.service_name
+        )
+    )
+
+
+def _realize_node_subset(
+    backend: object,
+    nodes: tuple[object, ...],
+    content: tuple[object, ...],
+) -> LabResult | None:
+    """Materialize a node subset's declared state via the generic materializer.
+
+    Shared by the fully image-free path and the mixed-realization path
+    (ADR-048); the only difference between them is which nodes/content are
+    passed in. Lowers each content item to its placement op and dispatches
+    per node, verified by read-after-write.
+    """
+
+    from aptl.backends.aces_materializer import PlaceFileOp, PlaceProjectContentOp
+    from aptl.backends.aces_node_materialization import realize_nodes
+
+    content_by_node: dict[str, list[object]] = {}
+    for item in content:
+        dest = "/" + item.dest_relpath.lstrip("/")
+        if item.source_kind == "inline-text" and item.inline_text is not None:
+            op: object = PlaceFileOp(path=dest, content=item.inline_text)
+        elif item.source_kind in ("project-file", "project-directory") and item.source_relpath:
+            op = PlaceProjectContentOp(
+                dest_path=dest,
+                source_relpath=item.source_relpath,
+                is_directory=item.source_kind == "project-directory",
+            )
+        else:
+            continue
+        content_by_node.setdefault(item.target_address, []).append(op)
+    return realize_nodes(
+        nodes,
+        backend,
+        {addr: tuple(ops) for addr, ops in content_by_node.items()},
+    )

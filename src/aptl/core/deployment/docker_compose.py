@@ -192,12 +192,22 @@ class DockerComposeBackend(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
 
-    def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
+    def start(
+        self,
+        profiles: list[str],
+        *,
+        build: bool = True,
+        exclude_services: tuple[str, ...] = (),
+    ) -> LabResult:
         """Start lab services via docker compose up.
 
         Args:
             profiles: List of profile names to activate.
             build: If True, rebuild images before starting.
+            exclude_services: Compose service names to scale to zero (ADR-048
+                mixed realization): everything else in the active profiles
+                starts normally, but a node the generic materializer already
+                realized directly must not also start as a Compose container.
 
         Returns:
             LabResult indicating success or failure.
@@ -207,6 +217,8 @@ class DockerComposeBackend(
         if build:
             cmd.append("--build")
         cmd.append("-d")
+        for service in exclude_services:
+            cmd += ["--scale", f"{service}=0"]
 
         log.info("Starting lab with profiles: %s", profiles)
         log.debug("Command: %s", " ".join(cmd))

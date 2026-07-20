@@ -9,6 +9,8 @@ table to a supported :class:`OrderingKind`. An unmapped value fails closed.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from aptl.core.experiment.errors import EXPERIMENT_ADMISSION_DOMAIN, AdmissionRejection
@@ -27,7 +29,7 @@ class TestDefaultAdmissionPolicy:
 
     def test_is_frozen(self):
         policy = default_admission_policy()
-        with pytest.raises(Exception):  # noqa: B017 - dataclass frozen raises FrozenInstanceError
+        with pytest.raises(dataclasses.FrozenInstanceError):
             policy.max_root_bytes = 1  # type: ignore[misc]
 
     @pytest.mark.parametrize(
@@ -128,9 +130,10 @@ class TestResolveAllocationOrdering:
     def test_is_case_sensitive_not_fuzzy_matched(self):
         policy = default_admission_policy()
         method, _ = next(iter(policy.supported_allocation_methods.items()))
+        garbled_method = method.upper() + "-not-quite"
 
         with pytest.raises(AdmissionRejection):
-            resolve_allocation_ordering(policy, method.upper() + "-not-quite")
+            resolve_allocation_ordering(policy, garbled_method)
 
 
 class TestOrderingKind:

@@ -146,16 +146,19 @@ def compute_source_set_digest(source_set_projection: Mapping[str, object]) -> st
 
 
 def _reject(code: str, address: str, message: str) -> AdmissionRejection:
+    """Build a one-diagnostic AdmissionRejection for a trial-plan expansion failure."""
     return AdmissionRejection((diagnostic(code, address, message),))
 
 
 def _coordinate(condition_id: str | None) -> str:
+    """Return condition_id, or the flat-allocation sentinel when there is no condition."""
     return _FLAT_CONDITION_SENTINEL if condition_id is None else condition_id
 
 
 def _derive_seed(
     *, source_set_digest: str, condition_id: str | None, replication_ordinal: int, control_id: str
 ) -> str:
+    """Derive one stochastic control's seed hex digest from the plan's source-set digest and trial coordinate."""
     digest_input = (
         _SEED_DOMAIN
         + _FIELD_SEP
@@ -173,6 +176,7 @@ def _derive_seed(
 def _derive_planned_trial_id(
     *, source_set_digest: str, condition_id: str | None, replication_ordinal: int
 ) -> str:
+    """Derive one trial's planned_trial_id hex digest from the plan's source-set digest and trial coordinate."""
     digest_input = (
         _TRIAL_ID_DOMAIN
         + _FIELD_SEP
@@ -186,6 +190,7 @@ def _derive_planned_trial_id(
 
 
 def _validate_stochastic_controls(spec: ExperimentSpecModel, *, policy: AdmissionPolicy) -> None:
+    """Reject when any stochastic control's role does not map to a supported controller policy."""
     for control in spec.run_plan.stochastic_controls:
         if control.role not in policy.supported_stochastic_control_roles:
             raise _reject(
@@ -196,6 +201,7 @@ def _validate_stochastic_controls(spec: ExperimentSpecModel, *, policy: Admissio
 
 
 def _resolve_ordering_kind(spec: ExperimentSpecModel, *, policy: AdmissionPolicy) -> OrderingKind:
+    """Resolve run_plan's ordering kind (flat vs. condition-major), failing closed on an unsupported alloc method."""
     run_plan = spec.run_plan
     has_allocation = run_plan.allocation is not None
     has_flat_count = run_plan.target_run_count is not None
@@ -225,6 +231,7 @@ def _resolve_ordering_kind(spec: ExperimentSpecModel, *, policy: AdmissionPolicy
 
 
 def _capture_spec_refs(spec: ExperimentSpecModel) -> tuple[str, ...]:
+    """Return the capture-spec reference IDs every trial in this plan carries."""
     return tuple(ref.ref_id for ref in spec.capture_spec_refs)
 
 
@@ -235,6 +242,7 @@ def _build_seeds(
     condition_id: str | None,
     replication_ordinal: int,
 ) -> tuple[tuple[str, str], ...]:
+    """Build one trial's sorted (control_id, seed) pairs for every seed-bearing stochastic control."""
     seeds = [
         (
             control.control_id,
@@ -251,37 +259,47 @@ def _build_seeds(
     return tuple(sorted(seeds))
 
 
+@dataclass(frozen=True)
+class _TrialCoordinate:
+    """One trial's ordering coordinate: its condition (``None`` for a flat
+    plan), replication ordinal, and overall ordering index. Bundled so
+    :func:`_build_trial` stays within the 7-parameter budget (S107)."""
+
+    condition_id: str | None
+    replication_ordinal: int
+    ordering_index: int
+
+
 def _build_trial(
     spec: ExperimentSpecModel,
     *,
     source_set_digest: str,
-    condition_id: str | None,
-    replication_ordinal: int,
-    ordering_index: int,
+    coordinate: _TrialCoordinate,
     factor_levels: tuple[tuple[str, str], ...],
     parameter_bindings: tuple[tuple[str, object], ...],
     condition_snapshot_digests: Mapping[str, str] | None,
     capture_spec_refs: tuple[str, ...],
 ) -> PlannedTrial:
+    """Build one immutable PlannedTrial, deriving its ID and stochastic seeds from source_set_digest and coordinate."""
     scenario_snapshot_digest = (
-        condition_snapshot_digests.get(condition_id) if condition_snapshot_digests else None
+        condition_snapshot_digests.get(coordinate.condition_id) if condition_snapshot_digests else None
     )
     return PlannedTrial(
         planned_trial_id=_derive_planned_trial_id(
             source_set_digest=source_set_digest,
-            condition_id=condition_id,
-            replication_ordinal=replication_ordinal,
+            condition_id=coordinate.condition_id,
+            replication_ordinal=coordinate.replication_ordinal,
         ),
-        condition_id=condition_id,
-        replication_ordinal=replication_ordinal,
-        ordering_index=ordering_index,
+        condition_id=coordinate.condition_id,
+        replication_ordinal=coordinate.replication_ordinal,
+        ordering_index=coordinate.ordering_index,
         factor_levels=factor_levels,
         parameter_bindings=parameter_bindings,
         stochastic_seeds=_build_seeds(
             spec,
             source_set_digest=source_set_digest,
-            condition_id=condition_id,
-            replication_ordinal=replication_ordinal,
+            condition_id=coordinate.condition_id,
+            replication_ordinal=coordinate.replication_ordinal,
         ),
         scenario_snapshot_digest=scenario_snapshot_digest,
         capture_spec_refs=capture_spec_refs,
@@ -294,14 +312,13 @@ def _expand_flat(
     source_set_digest: str,
     capture_spec_refs: tuple[str, ...],
 ) -> tuple[PlannedTrial, ...]:
+    """Expand a flat (unconditioned) run_plan into target_run_count independently-replicated trials."""
     target_run_count = spec.run_plan.target_run_count
     return tuple(
         _build_trial(
             spec,
             source_set_digest=source_set_digest,
-            condition_id=None,
-            replication_ordinal=ordinal,
-            ordering_index=ordinal,
+            coordinate=_TrialCoordinate(condition_id=None, replication_ordinal=ordinal, ordering_index=ordinal),
             factor_levels=(),
             parameter_bindings=(),
             condition_snapshot_digests=None,
@@ -318,6 +335,7 @@ def _expand_condition(
     condition_snapshot_digests: Mapping[str, str] | None,
     capture_spec_refs: tuple[str, ...],
 ) -> tuple[PlannedTrial, ...]:
+    """Expand a condition allocation into condition-major-replication-ordered trials, one per condition/replication."""
     allocation = spec.run_plan.allocation
     trials: list[PlannedTrial] = []
     ordering_index = 0
@@ -335,9 +353,11 @@ def _expand_condition(
                 _build_trial(
                     spec,
                     source_set_digest=source_set_digest,
-                    condition_id=condition_id,
-                    replication_ordinal=replication_ordinal,
-                    ordering_index=ordering_index,
+                    coordinate=_TrialCoordinate(
+                        condition_id=condition_id,
+                        replication_ordinal=replication_ordinal,
+                        ordering_index=ordering_index,
+                    ),
                     factor_levels=factor_levels,
                     parameter_bindings=parameter_bindings,
                     condition_snapshot_digests=condition_snapshot_digests,
@@ -349,6 +369,7 @@ def _expand_condition(
 
 
 def _trial_projection(trial: PlannedTrial) -> dict[str, object]:
+    """Project one PlannedTrial into its canonical-JSON-ready dict shape."""
     return {
         "planned_trial_id": trial.planned_trial_id,
         "condition_id": trial.condition_id,
@@ -373,6 +394,7 @@ def _canonicalize(
     ordering_kind: OrderingKind,
     trials: tuple[PlannedTrial, ...],
 ) -> tuple[bytes, str, str]:
+    """Canonicalize the plan projection to RFC 8785 bytes and derive (canonical_bytes, plan_digest, plan_id)."""
     projection = {
         "plan_schema": _PLAN_PROJECTION_SCHEMA,
         "policy_version": policy_version,

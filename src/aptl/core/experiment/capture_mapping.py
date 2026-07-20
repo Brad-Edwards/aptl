@@ -79,6 +79,7 @@ SUPPORTED_CAPTURE_CAPABILITIES: tuple[CaptureCapability, ...] = ()
 def _resolve_capture_owner(
     requirement: ExperimentCaptureRequirementModel, backend_manifest: BackendManifest
 ) -> str | None:
+    """Return the evidence-backed capture owner for requirement, or None if unsupported."""
     observation = backend_manifest.observation
     if observation is None:
         return None
@@ -118,7 +119,8 @@ def map_capture_requirements(
     requires at least one entry in ``capture_requirements``, so an
     individual resolved spec can never itself be "empty".
     """
-    del policy  # reserved: no capture-specific limit exists yet.
+    # reserved: no capture-specific limit exists yet.
+    del policy
 
     manifest = backend_manifest if backend_manifest is not None else create_aptl_manifest()
     result: dict[str, str] = {}

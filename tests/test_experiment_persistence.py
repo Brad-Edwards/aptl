@@ -157,5 +157,6 @@ class TestCreateJsonOnceInputValidation:
 
     def test_rejects_non_json_serializable_payload(self, tmp_path):
         store = LocalRunStore(tmp_path / "store")
+        payload = {"a": object()}
         with pytest.raises(ValueError):
-            store.create_json_once("ns", "plan-1", {"a": object()})
+            store.create_json_once("ns", "plan-1", payload)

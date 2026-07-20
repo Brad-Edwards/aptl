@@ -86,13 +86,10 @@ def _minimal_scenario_bytes() -> bytes:
 class TestCheckApparatusAdmissionMutualCompatGotcha:
     def test_the_realistic_corpus_task_requiring_aces_reference_processor_is_rejected(self):
         task = _load_reference_task()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(
-                task,
-                None,
-                policy=default_admission_policy(),
-            )
+            check_apparatus_admission(task, None, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -140,9 +137,10 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
                 "notes": [],
             }
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)
 
         messages = " ".join(d.message for d in excinfo.value.diagnostics)
         assert "compat" in messages.lower()
@@ -189,14 +187,16 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
                 "notes": [],
             }
         )
+        backend_manifest = create_aptl_manifest()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
             check_apparatus_admission(
                 task,
                 None,
-                backend_manifest=create_aptl_manifest(),
+                backend_manifest=backend_manifest,
                 processor_manifest=real_processor_manifest,
-                policy=default_admission_policy(),
+                policy=policy,
             )
 
 
@@ -317,9 +317,11 @@ class TestCheckApparatusAdmissionIdentityAndManifestRefViolations:
             }
         )
 
+        policy = default_admission_policy()
+
         with pytest.raises(AdmissionRejection) as excinfo:
             check_apparatus_admission(
-                task, None, backend_manifest=backend, processor_manifest=processor, policy=default_admission_policy()
+                task, None, backend_manifest=backend, processor_manifest=processor, policy=policy
             )
 
         codes = {d.code for d in excinfo.value.diagnostics}
@@ -355,9 +357,11 @@ class TestCheckApparatusAdmissionIdentityAndManifestRefViolations:
             }
         )
 
+        policy = default_admission_policy()
+
         with pytest.raises(AdmissionRejection) as excinfo:
             check_apparatus_admission(
-                task, None, backend_manifest=backend, processor_manifest=processor, policy=default_admission_policy()
+                task, None, backend_manifest=backend, processor_manifest=processor, policy=policy
             )
 
         codes = {d.code for d in excinfo.value.diagnostics}
@@ -390,10 +394,11 @@ class TestCheckApparatusAdmissionIdentityAndManifestRefViolations:
                 "notes": [],
             }
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
             check_apparatus_admission(
-                task, None, backend_manifest=backend, processor_manifest=processor, policy=default_admission_policy()
+                task, None, backend_manifest=backend, processor_manifest=processor, policy=policy
             )
 
         codes = {d.code for d in excinfo.value.diagnostics}
@@ -422,10 +427,11 @@ class TestCheckApparatusAdmissionIdentityAndManifestRefViolations:
                 "notes": [],
             }
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
             check_apparatus_admission(
-                task, None, backend_manifest=backend, processor_manifest=processor, policy=default_admission_policy()
+                task, None, backend_manifest=backend, processor_manifest=processor, policy=policy
             )
 
         codes = {d.code for d in excinfo.value.diagnostics}
@@ -499,9 +505,10 @@ class TestCheckApparatusAdmissionUncertifiedApparatusOverride:
 
     def test_flag_off_the_mutual_compat_mismatch_still_raises(self):
         task = self._pinned_task()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)
 
         assert excinfo.value.diagnostics
 
@@ -632,18 +639,20 @@ class TestCheckApparatusAdmissionIntentNarrowing:
     def test_intent_naming_a_processor_the_task_does_not_allow_is_rejected(self):
         task = _load_reference_task()
         intent = self._processor_intent("some-other-processor", "9.9.9")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, intent, policy=default_admission_policy())
+            check_apparatus_admission(task, intent, policy=policy)
 
         assert excinfo.value.diagnostics
 
     def test_intent_naming_a_backend_the_task_does_not_allow_is_rejected(self):
         task = _load_reference_task()
         intent = self._backend_intent("some-other-backend", "9.9.9")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            check_apparatus_admission(task, intent, policy=default_admission_policy())
+            check_apparatus_admission(task, intent, policy=policy)
 
     def test_intent_that_only_narrows_to_an_already_allowed_processor_does_not_add_a_narrowing_violation(self):
         # The task's own allow-list still fails admission (mutual compat /
@@ -651,9 +660,10 @@ class TestCheckApparatusAdmissionIntentNarrowing:
         # what rejects a same-or-subset intent.
         task = _load_reference_task()
         intent = self._processor_intent("aces-reference-processor", "0.1.0")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, intent, policy=default_admission_policy())
+            check_apparatus_admission(task, intent, policy=policy)
 
         codes = {d.code for d in excinfo.value.diagnostics}
         assert not any("intent-expands" in code for code in codes)
@@ -669,9 +679,10 @@ class TestCheckApparatusAdmissionRequiredCapabilities:
         task = _task_with_apparatus_constraints(
             {"required_capabilities": ["totally-made-up-capability"], "notes": []}
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)
 
         assert excinfo.value.diagnostics
 
@@ -681,12 +692,13 @@ class TestCheckApparatusAdmissionRequiredCapabilities:
         task = _task_with_apparatus_constraints(
             {"required_capabilities": [declared], "notes": []}
         )
+        policy = default_admission_policy()
 
         # Overall admission still fails (mutual compat is unconditional at
         # the locked surface), but the diagnostics must not include a
         # capability-unsupported complaint about this specific capability.
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)
 
         for d in excinfo.value.diagnostics:
             assert declared not in d.address or "capability" not in d.code
@@ -702,9 +714,10 @@ class TestCheckApparatusAdmissionDoesNotLeak:
         task = _task_with_apparatus_constraints(
             {"required_capabilities": ["made-up"], "notes": [f"secret={SECRET}"]}
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)
 
         for d in excinfo.value.diagnostics:
             assert SECRET not in d.message
@@ -885,9 +898,10 @@ class TestFuzzApparatusIntentSupersetsAlwaysReject:
                 ],
             }
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            check_apparatus_admission(task, intent, policy=default_admission_policy())
+            check_apparatus_admission(task, intent, policy=policy)
 
     @given(
         capture_kind=st.text(alphabet="abcdefghijklmnopqrstuvwxyz-", min_size=1, max_size=24),
@@ -897,6 +911,7 @@ class TestFuzzApparatusIntentSupersetsAlwaysReject:
         task = _task_with_apparatus_constraints(
             {"required_capabilities": [capture_kind], "notes": []}
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            check_apparatus_admission(task, None, policy=default_admission_policy())
+            check_apparatus_admission(task, None, policy=policy)

@@ -195,33 +195,35 @@ def check_apparatus_admission(
 
     if mutual_diagnostics:
         if policy.allow_uncertified_apparatus:
-            return (
-                diagnostic(
-                    _CODE_UNCERTIFIED_COMPATIBILITY,
-                    f"{_ADDRESS_APPARATUS}.mutual_compatibility",
-                    "backend and processor manifests do not mutually declare each other "
-                    "compatible; admitted under the allow_uncertified_apparatus debug override",
-                    severity=Severity.WARNING,
-                ),
+            warning = diagnostic(
+                _CODE_UNCERTIFIED_COMPATIBILITY,
+                f"{_ADDRESS_APPARATUS}.mutual_compatibility",
+                "backend and processor manifests do not mutually declare each other "
+                "compatible; admitted under the allow_uncertified_apparatus debug override",
+                severity=Severity.WARNING,
             )
+            return tuple([warning])
         raise AdmissionRejection(mutual_diagnostics)
 
-    return ()
+    return tuple([])
 
 
 def _intent_processor_refs(
     apparatus_intent: ExperimentApparatusConstraintModel | None,
 ) -> Sequence[ExperimentProcessorReferenceModel]:
+    """Return the intent's allowed processor refs, or empty when there is no intent."""
     return apparatus_intent.allowed_processor_refs if apparatus_intent is not None else ()
 
 
 def _intent_backend_refs(
     apparatus_intent: ExperimentApparatusConstraintModel | None,
 ) -> Sequence[ExperimentBackendReferenceModel]:
+    """Return the intent's allowed backend refs, or empty when there is no intent."""
     return apparatus_intent.allowed_backend_refs if apparatus_intent is not None else ()
 
 
 def _ref_key(ref: _ManifestRef) -> tuple[str, str | None]:
+    """Return the (ref_id, ref_version) identity key used to compare manifest refs."""
     return (ref.ref_id, ref.ref_version)
 
 
@@ -272,6 +274,11 @@ def _narrowing_violations(
 def _ref_narrowing_violations(
     task_refs: Sequence[_ManifestRef], intent_refs: Sequence[_ManifestRef], address: str
 ) -> tuple[Diagnostic, ...]:
+    """Return one violation per intent ref whose identity is absent from task_refs.
+
+    Empty when either side is empty (nothing declared to narrow, or nothing
+    declared to check).
+    """
     if not task_refs or not intent_refs:
         return ()
     allowed_keys = {_ref_key(ref) for ref in task_refs}
@@ -306,13 +313,12 @@ def _identity_violations(
     names = {ref.ref_id for ref in effective_refs}
     if manifest_name in names:
         return ()
-    return (
-        diagnostic(
-            _CODE_IDENTITY_UNRESOLVED,
-            address,
-            "the resolved manifest identity is not present in the admitted allow-list",
-        ),
+    violation = diagnostic(
+        _CODE_IDENTITY_UNRESOLVED,
+        address,
+        "the resolved manifest identity is not present in the admitted allow-list",
     )
+    return tuple([violation])
 
 
 def _manifest_ref_violations(
@@ -320,6 +326,7 @@ def _manifest_ref_violations(
     backend_manifest: BackendManifest,
     processor_manifest: ProcessorManifest,
 ) -> tuple[Diagnostic, ...]:
+    """Return one violation per required_manifest_refs entry that is unverifiable, mispinned, or misidentified."""
     violations: list[Diagnostic] = []
     for ref in manifest_refs:
         subject = ref.subject_ref
@@ -369,6 +376,7 @@ def _capability_violations(
     backend_manifest: BackendManifest,
     processor_manifest: ProcessorManifest,
 ) -> tuple[Diagnostic, ...]:
+    """Return one violation per required capability not declared by either manifest's supported_contract_versions."""
     declared = set(backend_manifest.supported_contract_versions) | set(
         processor_manifest.supported_contract_versions
     )
@@ -386,17 +394,17 @@ def _capability_violations(
 def _mutual_compat_violations(
     backend_manifest: BackendManifest, processor_manifest: ProcessorManifest
 ) -> tuple[Diagnostic, ...]:
+    """Return the mutual-incompatibility violation when backend/processor don't both declare each other, else empty."""
     backend_declares_processor = processor_manifest.name in backend_manifest.compatible_processors
     processor_declares_backend = backend_manifest.name in processor_manifest.compatible_backends
     if backend_declares_processor and processor_declares_backend:
         return ()
-    return (
-        diagnostic(
-            _CODE_MUTUAL_INCOMPATIBLE,
-            f"{_ADDRESS_APPARATUS}.mutual_compatibility",
-            "backend and processor manifests do not mutually declare each other compatible",
-        ),
+    violation = diagnostic(
+        _CODE_MUTUAL_INCOMPATIBLE,
+        f"{_ADDRESS_APPARATUS}.mutual_compatibility",
+        "backend and processor manifests do not mutually declare each other compatible",
     )
+    return tuple([violation])
 
 
 def plan_condition_feasibility(

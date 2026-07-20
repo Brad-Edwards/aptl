@@ -18,6 +18,7 @@ test source rather than a copied-in schema, per ADR-047's testing contract.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -172,7 +173,7 @@ class TestSupportedCaptureCapabilitiesBaseline:
             integrity_requirements=frozenset({"sha256-digest"}),
             capture_owner="aptl.core.collectors.collect_traces",
         )
-        with pytest.raises(Exception):  # noqa: B017 - frozen dataclass FrozenInstanceError
+        with pytest.raises(dataclasses.FrozenInstanceError):
             capability.capture_kind = "log"
 
 
@@ -184,18 +185,20 @@ class TestSupportedCaptureCapabilitiesBaseline:
 class TestMapCaptureRequirementsFailsClosed:
     def test_the_realistic_corpus_capture_spec_is_rejected(self):
         spec = _load_reference_capture_spec()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            map_capture_requirements([spec], policy=default_admission_policy())
+            map_capture_requirements([spec], policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
 
     def test_the_rejection_names_the_unsupported_capture_kind_and_scope(self):
         spec = _load_reference_capture_spec()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            map_capture_requirements([spec], policy=default_admission_policy())
+            map_capture_requirements([spec], policy=policy)
 
         messages = " ".join(d.message + " " + d.address for d in excinfo.value.diagnostics)
         assert "trace" in messages
@@ -203,9 +206,10 @@ class TestMapCaptureRequirementsFailsClosed:
 
     def test_an_unknown_capture_kind_also_fails_closed(self):
         spec = _capture_spec_with_requirement(capture_kind="other", capture_scope="service")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], policy=default_admission_policy())
+            map_capture_requirements([spec], policy=policy)
 
     def test_a_collector_function_existing_does_not_cause_admission(self):
         # collect_traces is a real, importable, callable collector for
@@ -214,9 +218,10 @@ class TestMapCaptureRequirementsFailsClosed:
         assert callable(collect_traces)
         spec = _load_reference_capture_spec()
         assert spec.capture_requirements["network-trace"].capture_kind == "trace"
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], policy=default_admission_policy())
+            map_capture_requirements([spec], policy=policy)
 
     def test_never_fabricates_support_by_injecting_a_backend_manifest_with_non_none_observation_but_wrong_terms(self):
         # Even if a caller injects a backend manifest whose observation IS
@@ -247,9 +252,10 @@ class TestMapCaptureRequirementsFailsClosed:
             ),
         )
         spec = _load_reference_capture_spec()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=with_observation, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=with_observation, policy=policy)
 
 
 # ---------------------------------------------------------------------------
@@ -303,18 +309,20 @@ class TestResolveCaptureOwnerEachContinueConditionFailsClosed:
         monkeypatch.setattr(capture_mapping, "SUPPORTED_CAPTURE_CAPABILITIES", (capability,))
         manifest = _backend_manifest_with_observation(_matching_observation())
         spec = _capture_spec_with_requirement_fields(capture_kind="observation", capture_scope="network")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
     def test_capture_scope_mismatch(self, monkeypatch):
         capability = _matching_capability()  # capture_scope="network"
         monkeypatch.setattr(capture_mapping, "SUPPORTED_CAPTURE_CAPABILITIES", (capability,))
         manifest = _backend_manifest_with_observation(_matching_observation())
         spec = _capture_spec_with_requirement_fields(capture_kind="trace", capture_scope="service")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
     def test_expected_media_types_not_a_subset_of_the_capability(self, monkeypatch):
         capability = _matching_capability()  # media_types={"application/json"}
@@ -329,18 +337,20 @@ class TestResolveCaptureOwnerEachContinueConditionFailsClosed:
             _matching_observation(supported_media_types=frozenset({"application/json", "application/xml"}))
         )
         spec = _capture_spec_with_requirement_fields(expected_media_types=["application/xml"])
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
     def test_integrity_requirements_not_a_subset_of_the_capability(self, monkeypatch):
         capability = _matching_capability()  # integrity_requirements={"sha256-digest"}
         monkeypatch.setattr(capture_mapping, "SUPPORTED_CAPTURE_CAPABILITIES", (capability,))
         manifest = _backend_manifest_with_observation(_matching_observation())
         spec = _capture_spec_with_requirement_fields(integrity_requirements=["sha512-digest"])
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
     def test_capability_capture_kind_not_declared_by_the_observation(self, monkeypatch):
         # Requirement fully matches the capability on every one of its own
@@ -352,9 +362,10 @@ class TestResolveCaptureOwnerEachContinueConditionFailsClosed:
             _matching_observation(supported_capture_kinds=frozenset({"log"}))
         )
         spec = _capture_spec_with_requirement_fields()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
     def test_expected_media_types_not_a_subset_of_the_observation(self, monkeypatch):
         # Requirement/capability fully match each other (and the
@@ -367,9 +378,10 @@ class TestResolveCaptureOwnerEachContinueConditionFailsClosed:
             _matching_observation(supported_media_types=frozenset({"text/plain"}))
         )
         spec = _capture_spec_with_requirement_fields()
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], backend_manifest=manifest, policy=default_admission_policy())
+            map_capture_requirements([spec], backend_manifest=manifest, policy=policy)
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +406,7 @@ class TestFuzzCaptureRequirementsAlwaysFailClosed:
         self, capture_kind, capture_scope
     ):
         spec = _capture_spec_with_requirement(capture_kind=capture_kind, capture_scope=capture_scope)
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            map_capture_requirements([spec], policy=default_admission_policy())
+            map_capture_requirements([spec], policy=policy)

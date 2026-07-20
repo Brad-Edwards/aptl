@@ -1026,7 +1026,7 @@ def redact(value: Any) -> Any:
     return _redact(value, 0)
 
 
-def is_secret_shaped_value(value: Any) -> bool:
+def is_secret_shaped_value(value: object) -> bool:
     """Public yes/no predicate: would :func:`redact` change ``value`` at all?
 
     Delegates to the exact recursive core ``redact()`` uses
@@ -1046,9 +1046,9 @@ def is_secret_shaped_value(value: Any) -> bool:
     ``False`` instead of always reporting ``True`` from a bytes-vs-str
     type mismatch.
     """
-    baseline: Any = bytes(value).decode("utf-8", "replace") if isinstance(
-        value, (bytes, bytearray)
-    ) else value
+    baseline: object = (
+        bytes(value).decode("utf-8", "replace") if isinstance(value, (bytes, bytearray)) else value
+    )
     return _redact(value, 0) != baseline
 
 

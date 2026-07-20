@@ -77,9 +77,11 @@ class TestLoadExperimentRootDuplicateKeyPreflight:
             "task_ref: {ref_kind: task, ref_id: t1}\n"
             "run_plan: {}\n"
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -94,24 +96,30 @@ class TestLoadExperimentRootDuplicateKeyPreflight:
             "task_ref: {ref_kind: task, ref_id: t1, ref_id: t2}\n"
             "run_plan: {}\n"
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
     def test_rejects_a_multi_document_stream(self):
         text = "schema_version: experiment-authoring-input/v1\n---\nspec_id: s1\n"
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
     def test_a_document_without_duplicate_keys_reaches_aces_validation(self):
         # No duplicate key, but otherwise incomplete -> ACES itself rejects
         # it (a real ValidationError normalized), proving the preflight
         # does not itself reject well-formed-but-incomplete documents.
         text = "schema_version: experiment-authoring-input/v1\n"
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
         assert excinfo.value.diagnostics
 
@@ -137,13 +145,15 @@ class TestLoadExperimentRootByteLimit:
 
 class TestLoadExperimentRootInvalidUtf8AndNul:
     def test_rejects_invalid_utf8(self):
+        policy = default_admission_policy()
         with pytest.raises(AdmissionRejection):
-            load_experiment_root(b"\xff\xfe\x00\x01", policy=default_admission_policy())
+            load_experiment_root(b"\xff\xfe\x00\x01", policy=policy)
 
     def test_rejects_an_embedded_nul_byte(self):
         text = b"schema_version: experiment-authoring-input/v1\x00\n"
+        policy = default_admission_policy()
         with pytest.raises(AdmissionRejection):
-            load_experiment_root(text, policy=default_admission_policy())
+            load_experiment_root(text, policy=policy)
 
 
 class TestLoadExperimentRootDoesNotLeakSecrets:
@@ -157,9 +167,11 @@ class TestLoadExperimentRootDoesNotLeakSecrets:
             f"task_ref: {{ref_kind: {SECRET}, ref_id: t1}}\n"
             "run_plan: {}\n"
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
         for d in excinfo.value.diagnostics:
             assert SECRET not in d.message
@@ -185,9 +197,11 @@ class TestLoadTaskHappyPath:
 class TestLoadTaskRejections:
     def test_rejects_a_duplicate_json_member(self):
         text = '{"schema_version": "experiment-task/v1", "task_id": "a", "task_id": "b"}'
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_task(text.encode("utf-8"), policy=default_admission_policy())
+            load_task(data, policy=policy)
 
     def test_rejects_over_max_artifact_bytes(self):
         data = _read("experiment-core", "experiment-task-v1", "valid", "reference.json")
@@ -197,8 +211,9 @@ class TestLoadTaskRejections:
             load_task(data, policy=policy)
 
     def test_rejects_invalid_json(self):
+        policy = default_admission_policy()
         with pytest.raises(AdmissionRejection):
-            load_task(b"not json at all {{{", policy=default_admission_policy())
+            load_task(b"not json at all {{{", policy=policy)
 
     def test_does_not_leak_a_secret_in_a_rejected_field(self):
         payload = {
@@ -209,9 +224,11 @@ class TestLoadTaskRejections:
             # rejected value is the secret.
         }
         text = json.dumps(payload)
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            load_task(text.encode("utf-8"), policy=default_admission_policy())
+            load_task(data, policy=policy)
 
         for d in excinfo.value.diagnostics:
             assert SECRET not in d.message
@@ -240,9 +257,11 @@ class TestLoadCaptureSpecRejections:
             '{"schema_version": "experiment-capture-spec/v1", '
             '"capture_spec_id": "a", "capture_spec_id": "b"}'
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_capture_spec(text.encode("utf-8"), policy=default_admission_policy())
+            load_capture_spec(data, policy=policy)
 
     def test_rejects_over_max_artifact_bytes(self):
         data = _read(
@@ -288,9 +307,11 @@ class TestParseScenarioBytesHappyPath:
 class TestParseScenarioBytesRejectsImports:
     def test_rejects_a_scenario_that_declares_imports(self):
         text = "name: x\nimports:\n  - path: some-module.yaml\n"
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            parse_scenario_bytes(text.encode("utf-8"), policy=default_admission_policy())
+            parse_scenario_bytes(data, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -310,14 +331,17 @@ class TestParseScenarioBytesByteLimitAndRejections:
             parse_scenario_bytes(data, policy=policy)
 
     def test_rejects_structurally_invalid_sdl(self):
+        policy = default_admission_policy()
         with pytest.raises(AdmissionRejection):
-            parse_scenario_bytes(b"not: [valid, sdl", policy=default_admission_policy())
+            parse_scenario_bytes(b"not: [valid, sdl", policy=policy)
 
     def test_does_not_leak_a_secret_embedded_in_invalid_sdl(self):
         text = f"name: x\nnodes:\n  {SECRET}: not-a-valid-node-shape\n"
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            parse_scenario_bytes(text.encode("utf-8"), policy=default_admission_policy())
+            parse_scenario_bytes(data, policy=policy)
 
         for d in excinfo.value.diagnostics:
             assert SECRET not in d.message
@@ -381,13 +405,14 @@ class TestValidateAssociatedArtifacts:
 
     def test_raises_admission_rejection_when_a_reader_binding_is_missing(self):
         manifest, task, _ = _build_valid_manifest_and_parent()
+        limits = AssociatedArtifactValidationLimits()
 
         with pytest.raises(AdmissionRejection) as excinfo:
             validate_associated_artifacts(
                 manifest,
                 parent=task,
                 artifact_readers={},
-                limits=AssociatedArtifactValidationLimits(),
+                limits=limits,
             )
 
         assert excinfo.value.diagnostics
@@ -400,13 +425,15 @@ class TestValidateAssociatedArtifacts:
         )
         other_task_payload["task_id"] = "a-completely-different-task"
         other_task = ExperimentTaskModel.model_validate(other_task_payload)
+        reader = io.BytesIO(data)
+        limits = AssociatedArtifactValidationLimits()
 
         with pytest.raises(AdmissionRejection):
             validate_associated_artifacts(
                 manifest,
                 parent=other_task,
-                artifact_readers={"art1": io.BytesIO(data)},
-                limits=AssociatedArtifactValidationLimits(),
+                artifact_readers={"art1": reader},
+                limits=limits,
             )
 
 
@@ -438,9 +465,11 @@ class TestFuzzDuplicateKeyDocumentsAlwaysReject:
             f"{key}: {value_a}\n"
             f"{key}: {value_b}\n"
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_experiment_root(text.encode("utf-8"), policy=default_admission_policy())
+            load_experiment_root(data, policy=policy)
 
     @given(
         key=st.text(alphabet="abcdefghijklmnopqrstuvwxyz_", min_size=1, max_size=12),
@@ -453,6 +482,8 @@ class TestFuzzDuplicateKeyDocumentsAlwaysReject:
             '{"schema_version": "experiment-task/v1", '
             f'"{key}": "{value_a}", "{key}": "{value_b}"}}'
         )
+        data = text.encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            load_task(text.encode("utf-8"), policy=default_admission_policy())
+            load_task(data, policy=policy)

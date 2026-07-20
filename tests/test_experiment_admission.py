@@ -1205,13 +1205,10 @@ class TestBuildAssociatedArtifactSource:
             scenario_bytes=scenario_bytes,
             corrupt_checksum=True,
         )
-        spec = load_experiment_root(
-            yaml.safe_dump(spec_payload).encode("utf-8"), policy=default_admission_policy()
-        )
+        policy = default_admission_policy()
+        spec = load_experiment_root(yaml.safe_dump(spec_payload).encode("utf-8"), policy=policy)
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            build_associated_artifact_source(
-                tmp_path, "associated-artifact-manifest.json", spec, default_admission_policy()
-            )
+            build_associated_artifact_source(tmp_path, "associated-artifact-manifest.json", spec, policy)
 
         assert excinfo.value.diagnostics

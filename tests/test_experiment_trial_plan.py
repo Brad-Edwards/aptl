@@ -20,6 +20,7 @@ to exercise dict-key reordering).
 from __future__ import annotations
 
 import copy
+import dataclasses
 import inspect
 import json
 import subprocess
@@ -173,7 +174,9 @@ class TestComputeSourceSetDigest:
 
     def test_is_stable_across_calls(self):
         projection = {"task": {"ref_id": "t", "digest": "sha256:" + "0" * 64}}
-        assert compute_source_set_digest(projection) == compute_source_set_digest(projection)
+        first = compute_source_set_digest(projection)
+        second = compute_source_set_digest(projection)
+        assert first == second
 
     def test_is_independent_of_key_insertion_order(self):
         d1 = compute_source_set_digest({"a": 1, "b": 2, "c": {"x": 1, "y": 2}})
@@ -680,14 +683,14 @@ class TestImmutability:
     def test_trial_plan_is_frozen(self):
         spec = _flat_spec(target_run_count=1)
         plan = expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
-        with pytest.raises(Exception):  # noqa: B017 - dataclass frozen raises FrozenInstanceError
+        with pytest.raises(dataclasses.FrozenInstanceError):
             plan.trials = ()  # type: ignore[misc]
 
     def test_planned_trial_is_frozen(self):
         spec = _flat_spec(target_run_count=1)
         plan = expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
         trial = plan.trials[0]
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(dataclasses.FrozenInstanceError):
             trial.condition_id = "mutated"  # type: ignore[misc]
 
     def test_trials_is_a_tuple_not_a_list(self):
@@ -730,9 +733,10 @@ class TestUnsupportedStochasticRole:
             target_run_count=1,
             stochastic_controls=[{"control_id": "sampler", "role": "sampling", "value": 1}],
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
+            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -746,9 +750,10 @@ class TestUnsupportedStochasticRole:
                 {"control_id": "scheduler-a", "role": "scheduler", "value": "x"},
             ],
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
+            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
 
 
 class TestUnsupportedAllocationMethod:
@@ -762,9 +767,10 @@ class TestUnsupportedAllocationMethod:
             allocation_method="definitely-not-a-real-method",
         )
         spec = ExperimentSpecModel.model_validate(payload)
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
+            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -783,9 +789,10 @@ class TestUnsupportedAllocationMethod:
             allocation_method="flat",
         )
         spec = ExperimentSpecModel.model_validate(payload)
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=default_admission_policy())
+            expand_trial_plan(spec, source_set_digest=SOURCE_SET_DIGEST, policy=policy)
 
 
 # ---------------------------------------------------------------------------

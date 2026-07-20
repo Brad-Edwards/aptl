@@ -109,16 +109,27 @@ def _reason_for(exc: OSError, component: str, parent_fd: int) -> str:
     """
     if exc.errno == errno.ELOOP:
         return REASON_SYMLINK
-    if exc.errno in (errno.ENOENT, errno.ENOTDIR):
-        try:
-            st = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
-        except OSError:
-            return REASON_NOT_FOUND
-        return REASON_SYMLINK if stat.S_ISLNK(st.st_mode) else REASON_NOT_FOUND
-    return REASON_OPEN_FAILED
+    if exc.errno not in (errno.ENOENT, errno.ENOTDIR):
+        return REASON_OPEN_FAILED
+    return _reason_for_missing_component(component, parent_fd)
+
+
+def _reason_for_missing_component(component: str, parent_fd: int) -> str:
+    """Distinguish a genuinely missing path component from an existing symlink at that path.
+
+    Called only for the ``ENOENT``/``ENOTDIR`` case, where a symlinked
+    intermediate component surfaces as ``ENOTDIR`` rather than ``ELOOP``
+    (see :func:`_reason_for`).
+    """
+    try:
+        st = os.stat(component, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError:
+        return REASON_NOT_FOUND
+    return REASON_SYMLINK if stat.S_ISLNK(st.st_mode) else REASON_NOT_FOUND
 
 
 def _open_base_fd(base_dir: Path | str) -> int:
+    """Open base_dir as a read-only directory file descriptor, the trusted root every walk starts from."""
     try:
         return os.open(base_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     except OSError as exc:
@@ -158,6 +169,7 @@ def _walk(
 
 
 def _open_dir_nofollow(component: str, parent_fd: int) -> int:
+    """Open component as a directory under parent_fd, no-follow; raise PathContainmentError on any failure."""
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         return os.open(component, flags, dir_fd=parent_fd)
@@ -169,6 +181,7 @@ def _open_dir_nofollow(component: str, parent_fd: int) -> int:
 
 
 def _open_leaf_read_nofollow(component: str, parent_fd: int) -> int:
+    """Open component read-only under parent_fd, no-follow, rejecting a non-regular-file target."""
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         fd = os.open(component, flags, dir_fd=parent_fd)
@@ -242,7 +255,8 @@ def _open_dir_nofollow_or_create(component: str, parent_fd: int) -> int:
     try:
         os.mkdir(component, 0o700, dir_fd=parent_fd)
     except FileExistsError:
-        pass  # lost a create race with another writer; fall through to open
+        # lost a create race with another writer; fall through to open
+        pass
     except OSError as exc:
         raise PathContainmentError(
             _reason_for(exc, component, parent_fd),
@@ -258,6 +272,7 @@ def _open_dir_nofollow_or_create(component: str, parent_fd: int) -> int:
 
 
 def _open_leaf_create_exclusive_nofollow(component: str, parent_fd: int) -> int:
+    """Create-exclusive-open component under parent_fd, no-follow, for the create-once write path."""
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         return os.open(component, flags, 0o600, dir_fd=parent_fd)

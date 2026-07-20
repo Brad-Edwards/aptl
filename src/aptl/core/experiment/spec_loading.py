@@ -75,10 +75,12 @@ _CODE_SCENARIO_IMPORTS_UNSUPPORTED = "aptl.experiment-admission.scenario-imports
 
 
 def _reject(code: str, address: str, message: str) -> AdmissionRejection:
+    """Build a one-diagnostic AdmissionRejection for a document-loading failure."""
     return AdmissionRejection((diagnostic(code, address, message),))
 
 
 def _decode_bounded_utf8(data: bytes, *, max_bytes: int, address: str, code: str) -> str:
+    """Decode data as UTF-8 text, rejecting an over-size payload, invalid UTF-8, or an embedded NUL byte."""
     if len(data) > max_bytes:
         raise _reject(code, address, "document exceeds the configured byte limit")
     try:
@@ -104,6 +106,7 @@ class _DuplicateKeyRejectingLoader(yaml.SafeLoader):
 def _construct_mapping_no_duplicates(
     loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False
 ) -> dict[object, object]:
+    """YAML mapping constructor that raises on a duplicate key instead of silently keeping the last one."""
     mapping: dict[object, object] = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -154,6 +157,7 @@ def _reject_duplicate_json_members(pairs: list[tuple[str, object]]) -> dict[str,
 def _load_bounded_json(
     data: bytes, *, policy: AdmissionPolicy, address: str, code: str
 ) -> object:
+    """Bounded-decode and duplicate-member-rejecting JSON load of data."""
     text = _decode_bounded_utf8(data, max_bytes=policy.max_artifact_bytes, address=address, code=code)
     try:
         return json.loads(text, object_pairs_hook=_reject_duplicate_json_members)

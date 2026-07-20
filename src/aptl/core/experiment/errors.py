@@ -29,7 +29,7 @@ parameter *name*, never the bound *value*), so it is normalized identically.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import pydantic
 from aces_contracts.diagnostics import Diagnostic, Severity
@@ -91,10 +91,12 @@ def diagnostic(
 
 
 def _scrub_absolute_paths(text: str) -> str:
+    """Replace any POSIX-looking absolute path in text with a placeholder, as defense in depth."""
     return _ABSOLUTE_PATH_RE.sub(_PATH_PLACEHOLDER, text)
 
 
 def _safe_loc_address(base_address: str, loc: tuple[object, ...]) -> str:
+    """Append a pydantic error's ``loc`` tuple to base_address as a dotted suffix."""
     if not loc:
         return base_address
     suffix = ".".join(str(part) for part in loc)
@@ -123,6 +125,74 @@ def _diagnostics_from_pydantic_errors(
     return tuple(built)
 
 
+def _normalize_pydantic_validation_error(
+    exc: pydantic.ValidationError, *, address: str, code: str
+) -> tuple[Diagnostic, ...]:
+    """Normalize a pydantic ``ValidationError`` via its structured ``.errors()``."""
+    return _diagnostics_from_pydantic_errors(exc.errors(), address=address, code=code)
+
+
+def _normalize_experiment_spec_validation_error(
+    exc: ExperimentSpecValidationError, *, address: str, code: str
+) -> tuple[Diagnostic, ...]:
+    """Normalize an ``ExperimentSpecValidationError`` by unwrapping its pydantic cause (never its own ``str()``)."""
+    cause = exc.__cause__
+    if isinstance(cause, pydantic.ValidationError):
+        return _diagnostics_from_pydantic_errors(cause.errors(), address=address, code=code)
+    return (
+        diagnostic(
+            code,
+            address,
+            "experiment specification document failed to parse or validate",
+        ),
+    )
+
+
+def _normalize_sdl_parse_error(exc: SDLParseError, *, address: str, code: str) -> tuple[Diagnostic, ...]:
+    """Normalize an ``SDLParseError``, preferring its structured ``diagnostics`` over the raw ``details`` string."""
+    if exc.diagnostics:
+        return tuple(
+            diagnostic(code, address, _scrub_absolute_paths(item.message)) for item in exc.diagnostics
+        )
+    return (diagnostic(code, address, _scrub_absolute_paths(exc.details)),)
+
+
+def _normalize_sdl_errors_shape(
+    exc: SDLValidationError | SDLInstantiationError, *, address: str, code: str
+) -> tuple[Diagnostic, ...]:
+    """Normalize an ``SDLValidationError``/``SDLInstantiationError``'s developer-authored ``errors`` list."""
+    return tuple(diagnostic(code, address, _scrub_absolute_paths(message)) for message in exc.errors)
+
+
+#: Ordered (exception type(s), handler) dispatch table for
+#: :func:`_normalize_exception_shape`. A single-pass lookup instead of a
+#: chain of early returns, so that function stays within the 3-return
+#: budget (S1142) regardless of how many shapes are added.
+_ShapeHandler = Callable[..., tuple[Diagnostic, ...]]
+
+_SHAPE_HANDLERS: tuple[
+    tuple[type[BaseException] | tuple[type[BaseException], ...], _ShapeHandler], ...
+] = (
+    (pydantic.ValidationError, _normalize_pydantic_validation_error),
+    (ExperimentSpecValidationError, _normalize_experiment_spec_validation_error),
+    (SDLParseError, _normalize_sdl_parse_error),
+    ((SDLValidationError, SDLInstantiationError), _normalize_sdl_errors_shape),
+)
+
+
+def _normalize_exception_shape(exc: BaseException, *, address: str, code: str) -> tuple[Diagnostic, ...]:
+    """Route a raised ACES/pydantic exception to its shape-specific normalizer.
+
+    Falls back to a single generic, safe diagnostic for any exception type
+    outside the documented shapes — never ``str(exc)``, which has no
+    proven-safe rendering.
+    """
+    for exc_types, handler in _SHAPE_HANDLERS:
+        if isinstance(exc, exc_types):
+            return handler(exc, address=address, code=code)
+    return (diagnostic(code, address, "admission failed: unrecognized validation failure"),)
+
+
 def normalize_aces_failure(
     exc: BaseException | Diagnostic | tuple[Diagnostic, ...],
     *,
@@ -146,44 +216,12 @@ def normalize_aces_failure(
       (with an absolute-path scrub applied as defense in depth);
     * a ``Diagnostic`` or a tuple of ``Diagnostic`` — passed through
       unchanged (an ACES API that already returns the canonical shape).
+
+    Every other exception shape (including the four documented raised
+    shapes) is dispatched through :func:`_normalize_exception_shape`.
     """
     if isinstance(exc, Diagnostic):
         return (exc,)
     if isinstance(exc, tuple):
         return exc
-
-    if isinstance(exc, pydantic.ValidationError):
-        return _diagnostics_from_pydantic_errors(exc.errors(), address=address, code=code)
-
-    if isinstance(exc, ExperimentSpecValidationError):
-        cause = exc.__cause__
-        if isinstance(cause, pydantic.ValidationError):
-            return _diagnostics_from_pydantic_errors(
-                cause.errors(), address=address, code=code
-            )
-        return (
-            diagnostic(
-                code,
-                address,
-                "experiment specification document failed to parse or validate",
-            ),
-        )
-
-    if isinstance(exc, SDLParseError):
-        if exc.diagnostics:
-            return tuple(
-                diagnostic(code, address, _scrub_absolute_paths(item.message))
-                for item in exc.diagnostics
-            )
-        return (diagnostic(code, address, _scrub_absolute_paths(exc.details)),)
-
-    if isinstance(exc, (SDLValidationError, SDLInstantiationError)):
-        return tuple(
-            diagnostic(code, address, _scrub_absolute_paths(message))
-            for message in exc.errors
-        )
-
-    # Fail closed on any unrecognized exception shape: never fall back to
-    # str(exc) — an exception type outside the four documented shapes has
-    # no proven-safe rendering.
-    return (diagnostic(code, address, "admission failed: unrecognized validation failure"),)
+    return _normalize_exception_shape(exc, address=address, code=code)

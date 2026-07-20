@@ -114,6 +114,7 @@ class ArtifactResolver(Protocol):
 
 
 def _reject(code: str, address: str, message: str) -> AdmissionRejection:
+    """Build a one-diagnostic AdmissionRejection for a locator/resolver failure."""
     return AdmissionRejection((diagnostic(code, address, message),))
 
 
@@ -176,47 +177,64 @@ def parse_locator(raw: str, *, address: str = "artifact-locator") -> ProjectFile
     )
 
 
+def _validate_query_key(key: str, value: str, *, address: str) -> None:
+    """Reject an unrecognized or secret-shaped locator query key/value before it is interpreted."""
+    if key not in _RECOGNIZED_QUERY_KEYS:
+        raise _reject(
+            "aptl.experiment-admission.locator-unrecognized-query-field",
+            address,
+            "artifact locator query field is not recognized",
+        )
+    if is_sensitive_key(key) or is_secret_shaped_value(value):
+        raise _reject(
+            "aptl.experiment-admission.locator-secret-bearing-query",
+            address,
+            "artifact locator query field looks secret-shaped",
+        )
+
+
+def _parse_size_field(value: str, *, address: str) -> int:
+    """Validate and parse the locator query's ``size`` field into a non-negative int."""
+    if not value.isdigit():
+        raise _reject(
+            "aptl.experiment-admission.locator-invalid-size",
+            address,
+            "artifact locator size field must be a non-negative integer",
+        )
+    return int(value)
+
+
+def _parse_digest_field(value: str, *, address: str) -> str:
+    """Validate the locator query's ``digest`` field against the supported prefixed-digest pattern."""
+    if not _DIGEST_PATTERN.match(value):
+        raise _reject(
+            "aptl.experiment-admission.locator-invalid-digest",
+            address,
+            "artifact locator digest field is not a supported prefixed digest",
+        )
+    return value
+
+
 def _parse_query(
     query: str, *, address: str
 ) -> tuple[int | None, str | None, str | None]:
+    """Parse and validate the locator's query string into (declared_size, declared_digest, media_type)."""
     declared_size: int | None = None
     declared_digest: str | None = None
     media_type: str | None = None
     for key, value in parse_qsl(query, keep_blank_values=True):
-        if key not in _RECOGNIZED_QUERY_KEYS:
-            raise _reject(
-                "aptl.experiment-admission.locator-unrecognized-query-field",
-                address,
-                "artifact locator query field is not recognized",
-            )
-        if is_sensitive_key(key) or is_secret_shaped_value(value):
-            raise _reject(
-                "aptl.experiment-admission.locator-secret-bearing-query",
-                address,
-                "artifact locator query field looks secret-shaped",
-            )
+        _validate_query_key(key, value, address=address)
         if key == "size":
-            if not value.isdigit():
-                raise _reject(
-                    "aptl.experiment-admission.locator-invalid-size",
-                    address,
-                    "artifact locator size field must be a non-negative integer",
-                )
-            declared_size = int(value)
+            declared_size = _parse_size_field(value, address=address)
         elif key == "digest":
-            if not _DIGEST_PATTERN.match(value):
-                raise _reject(
-                    "aptl.experiment-admission.locator-invalid-digest",
-                    address,
-                    "artifact locator digest field is not a supported prefixed digest",
-                )
-            declared_digest = value
+            declared_digest = _parse_digest_field(value, address=address)
         elif key == "media_type":
             media_type = value
     return declared_size, declared_digest, media_type
 
 
 def _validate_relative_path(path: str, *, address: str) -> None:
+    """Reject an empty, absolute, or '.'/'..'/empty-component-bearing relative path."""
     if not path:
         raise _reject(
             "aptl.experiment-admission.locator-empty-path",
@@ -239,6 +257,7 @@ def _validate_relative_path(path: str, *, address: str) -> None:
 
 
 def _digest_hex(data: bytes, algorithm: str) -> str:
+    """Return the lowercase hex digest of data under the named algorithm (blake3 or a hashlib algorithm)."""
     if algorithm == "blake3":
         return blake3.blake3(data).hexdigest()
     hasher = hashlib.new(algorithm)

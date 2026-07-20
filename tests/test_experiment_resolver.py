@@ -194,9 +194,10 @@ class TestProjectContainedResolverDeclaredSize:
         (tmp_path / "f.txt").write_bytes(b"exactly-11b")  # 11 bytes
         resolver = ProjectContainedResolver(tmp_path)
         locator = parse_locator("file:f.txt?size=999")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(locator, policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
     def test_accepts_a_matching_declared_size(self, tmp_path):
         (tmp_path / "f.txt").write_bytes(b"exactly-11b")
@@ -214,9 +215,10 @@ class TestProjectContainedResolverDeclaredDigest:
         resolver = ProjectContainedResolver(tmp_path)
         wrong_digest = "sha256:" + ("0" * 64)
         locator = parse_locator(f"file:f.txt?digest={wrong_digest}")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(locator, policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
     def test_accepts_a_matching_declared_digest(self, tmp_path):
         data = b"hello world"
@@ -254,9 +256,10 @@ class TestProjectContainedResolverDeclaredDigest:
             declared_digest="md5:5eb63bbbe01eeed093cb22bb8f5acdc3",
             media_type=None,
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(locator, policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
 
 class TestProjectContainedResolverSizeLimit:
@@ -264,9 +267,10 @@ class TestProjectContainedResolverSizeLimit:
         (tmp_path / "big.txt").write_bytes(b"x" * 1000)
         resolver = ProjectContainedResolver(tmp_path)
         policy = AdmissionPolicy(max_artifact_bytes=10)
+        locator = parse_locator("big.txt")
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(parse_locator("big.txt"), policy=policy)
+            resolver.resolve(locator, policy=policy)
 
     def test_accepts_at_exactly_the_limit(self, tmp_path):
         (tmp_path / "exact.txt").write_bytes(b"x" * 10)
@@ -284,9 +288,11 @@ class TestProjectContainedResolverSymlinks:
         link = tmp_path / "link.txt"
         link.symlink_to(target)
         resolver = ProjectContainedResolver(tmp_path)
+        locator = parse_locator("link.txt")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(parse_locator("link.txt"), policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
     def test_rejects_a_symlinked_directory_component(self, tmp_path):
         real_dir = tmp_path / "real_dir"
@@ -295,9 +301,11 @@ class TestProjectContainedResolverSymlinks:
         link_dir = tmp_path / "link_dir"
         link_dir.symlink_to(real_dir, target_is_directory=True)
         resolver = ProjectContainedResolver(tmp_path)
+        locator = parse_locator("link_dir/f.txt")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(parse_locator("link_dir/f.txt"), policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
 
 class TestProjectContainedResolverAggregateLimits:
@@ -308,8 +316,9 @@ class TestProjectContainedResolverAggregateLimits:
         policy = AdmissionPolicy(max_artifact_bytes=100, max_aggregate_bytes=10)
 
         resolver.resolve(parse_locator("a.txt"), policy=policy)
+        locator_b = parse_locator("b.txt")
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(parse_locator("b.txt"), policy=policy)
+            resolver.resolve(locator_b, policy=policy)
 
     def test_fails_closed_past_max_reference_count(self, tmp_path):
         (tmp_path / "a.txt").write_bytes(b"a")
@@ -318,8 +327,9 @@ class TestProjectContainedResolverAggregateLimits:
         policy = AdmissionPolicy(max_reference_count=1)
 
         resolver.resolve(parse_locator("a.txt"), policy=policy)
+        locator_b = parse_locator("b.txt")
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(parse_locator("b.txt"), policy=policy)
+            resolver.resolve(locator_b, policy=policy)
 
     def test_independent_resolvers_do_not_share_accumulated_state(self, tmp_path):
         (tmp_path / "a.txt").write_bytes(b"a")
@@ -334,9 +344,11 @@ class TestProjectContainedResolverAggregateLimits:
 class TestProjectContainedResolverRejectionShape:
     def test_raises_admission_rejection_with_safe_diagnostics(self, tmp_path):
         resolver = ProjectContainedResolver(tmp_path)
+        locator = parse_locator("missing.txt")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
-            resolver.resolve(parse_locator("missing.txt"), policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
         assert excinfo.value.diagnostics
         assert all(d.domain == EXPERIMENT_ADMISSION_DOMAIN for d in excinfo.value.diagnostics)
@@ -394,9 +406,10 @@ class TestFuzzProjectContainedResolver:
         locator = ProjectFileLocator(
             relative_path="f.txt", declared_size=declared_size, declared_digest=None, media_type=None
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(locator, policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)
 
     @given(bad_hex=st.text(alphabet="0123456789abcdef", min_size=64, max_size=64))
     @settings(max_examples=50, deadline=1000)
@@ -411,6 +424,7 @@ class TestFuzzProjectContainedResolver:
         locator = ProjectFileLocator(
             relative_path="f.txt", declared_size=None, declared_digest=candidate, media_type=None
         )
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection):
-            resolver.resolve(locator, policy=default_admission_policy())
+            resolver.resolve(locator, policy=policy)

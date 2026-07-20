@@ -14,9 +14,11 @@ no CLI surface here.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Iterable
 from pathlib import Path
 
 import typer
+from aces_contracts.diagnostics import Diagnostic
 
 from aptl.backends.aces_diagnostics import render_aces_diagnostics
 from aptl.cli._common import resolve_run_store
@@ -31,7 +33,7 @@ log = get_logger("cli.experiment")
 app = typer.Typer(help="ACES experiment admission (EXP-002).")
 
 
-def _print_diagnostics(diagnostics) -> None:
+def _print_diagnostics(diagnostics: Iterable[Diagnostic]) -> None:
     """Render already-safe diagnostics to stderr via the shared formatter."""
     typer.echo(
         render_aces_diagnostics(list(diagnostics), stage_label=EXPERIMENT_ADMISSION_STAGE_LABEL),
@@ -58,7 +60,10 @@ def admit(
         Path("."),
         "--base-dir",
         "-d",
-        help="Containment boundary every relative locator (spec, manifest, and its bound artifacts) is resolved against.",
+        help=(
+            "Containment boundary every relative locator (spec, manifest, and its bound "
+            "artifacts) is resolved against."
+        ),
     ),
     allow_uncertified_apparatus: bool = typer.Option(
         False,

@@ -83,3 +83,54 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         assert backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+
+
+_SERVICE_SDL = """\
+name: imagefree-service-smoke
+description: Image-free scenario with a running service (ADR-047 systemd path).
+nodes:
+  svc-net:
+    type: switch
+    description: svc net
+  svc-box:
+    type: vm
+    os: linux
+    runtime:
+      packages:
+        - {manager: dnf, name: openssh-server, version: "*"}
+      service_manager_units:
+        - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
+"""
+
+
+@pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
+def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
+    # Ensure the generic systemd base exists (built from the checked-in Dockerfile).
+    subprocess.run(
+        ["docker", "build", "-t", "aptl/generic-systemd-base:latest",
+         "containers/generic-systemd-base"],
+        capture_output=True, text=True, timeout=600,
+    )
+    sdl = tmp_path / "svc.sdl.yaml"
+    sdl.write_text(_SERVICE_SDL, encoding="utf-8")
+    container = "aptl-svc-box"
+    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+
+    cfg = AptlConfig(lab={"name": "svc"}, containers={})
+    backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-svc")
+    scenario = parse_sdl_file(sdl)
+    target = create_aptl_runtime_target(project_dir=tmp_path, config=cfg, backend=backend)
+    plan = RuntimeManager(target).plan(scenario)
+    realization = interpret_provisioning_plan(plan=plan.provisioning, project_dir=tmp_path, config=cfg)
+    assert [d.message for d in realization.diagnostics if d.is_error] == []
+    spec = realization.deployment_spec([])
+    assert spec.image_free is True
+
+    try:
+        result = backend.realize(spec)
+        assert result.success, result.error
+        # The service the SDL declared is really running.
+        active = backend.container_exec(container, ["systemctl", "is-active", "sshd.service"])
+        assert active.stdout.strip() == "active"
+    finally:
+        subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)

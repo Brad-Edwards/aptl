@@ -491,12 +491,19 @@ class TestDeterminism:
         )
         digests = set()
         for seed in ("0", "1", "3391772699"):
+            _os = __import__("os")
+            _src = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "src"
+            )
             result = subprocess.run(
                 [sys.executable, "-c", script],
-                env={"PYTHONHASHSEED": seed, "PATH": __import__("os").environ.get("PATH", "")},
+                env={
+                    **_os.environ,
+                    "PYTHONHASHSEED": seed,
+                    "PYTHONPATH": _src + _os.pathsep + _os.environ.get("PYTHONPATH", ""),
+                },
                 capture_output=True,
                 text=True,
-                cwd="/home/atomik/src/aptl",
                 check=True,
             )
             digests.add(result.stdout.strip())

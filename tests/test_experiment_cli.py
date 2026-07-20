@@ -194,14 +194,18 @@ _CLI_ARGS = [
 
 class TestExperimentAdmitCliHelp:
     def test_help_renders(self, runner: CliRunner) -> None:
-        result = runner.invoke(app, ["experiment", "admit", "--help"])
+        # Force a wide terminal so Rich does not wrap the metavar/option tokens
+        # by the CI default width of 80 (no TTY -> COLUMNS-or-80).
+        result = runner.invoke(
+            app, ["experiment", "admit", "--help"], env={"COLUMNS": "200"}
+        )
         assert result.exit_code == 0
         assert "SPEC_PATH" in result.stdout
         assert "--manifest" in result.stdout
         assert "DEBUG/DEV ONLY" in result.stdout
 
     def test_group_help_renders(self, runner: CliRunner) -> None:
-        result = runner.invoke(app, ["experiment", "--help"])
+        result = runner.invoke(app, ["experiment", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
         assert "admit" in result.stdout
 

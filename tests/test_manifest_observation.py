@@ -55,13 +55,23 @@ def _registration() -> CollectorRegistration:
     )
 
 
-class TestHonestDefault:
-    def test_default_manifest_declares_no_observation(self):
-        assert create_aptl_manifest().observation is None
+class TestBackedDefault:
+    """EXP-010 PR 2 turned the production registry on together with the
+    acquisition machinery + adapters + conformance fixtures (the honesty
+    rule), so the default manifest now declares a real observation capability
+    and carries the required evidence contracts."""
 
-    def test_default_manifest_omits_the_observation_only_contracts(self):
+    def test_default_manifest_declares_observation(self):
+        assert create_aptl_manifest().observation is not None
+
+    def test_default_manifest_includes_the_observation_contracts(self):
         supported = create_aptl_manifest().supported_contract_versions
-        assert OBSERVATION_EVIDENCE_CONTRACTS.isdisjoint(supported)
+        assert OBSERVATION_EVIDENCE_CONTRACTS <= supported
+
+    def test_default_manifest_has_no_observation_contract_gaps(self):
+        from aces_backend_protocols.capabilities import observation_capability_contract_gaps
+
+        assert observation_capability_contract_gaps(create_aptl_manifest()) == ()
 
 
 class TestPopulatedProjection:

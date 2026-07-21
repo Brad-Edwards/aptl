@@ -306,8 +306,13 @@ class TestConfigDigest:
 
 class TestObservationProjection:
     def test_empty_registry_projects_no_observation(self):
-        assert DEFAULT_COLLECTOR_REGISTRY.observation_projection() is None
+        # A fresh empty registry is honestly None; the production default is
+        # now populated (EXP-010 PR 2 turned the fleet on).
         assert CollectorRegistry().observation_projection() is None
+
+    def test_default_registry_is_populated_and_projects_observation(self):
+        assert DEFAULT_COLLECTOR_REGISTRY.registrations
+        assert DEFAULT_COLLECTOR_REGISTRY.observation_projection() is not None
 
     def test_populated_registry_aggregates_declarations(self):
         registry = CollectorRegistry(

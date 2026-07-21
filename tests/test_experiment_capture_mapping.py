@@ -224,15 +224,31 @@ from hypothesis import strategies as st  # noqa: E402
 _CAPTURE_KINDS = ("artifact", "observation", "trace", "telemetry", "log", "packet-capture", "other")
 _CAPTURE_SCOPES = ("task", "run", "apparatus", "participant", "backend", "processor", "network", "service")
 
+#: The (capture_kind, capture_scope) pairs the production built-in fleet covers
+#: for the reference requirement's other axes (media/integrity/window/etc.).
+#: EXP-010 PR 2 turned these on; every other legal combination still fails
+#: closed.
+_COVERED_BY_DEFAULT_FLEET = frozenset(
+    {
+        ("observation", "participant"),
+        ("log", "service"),
+        ("log", "network"),
+        ("telemetry", "service"),
+        ("trace", "run"),
+    }
+)
+
 
 @pytest.mark.fuzz
-class TestFuzzCaptureRequirementsFailClosed:
+class TestFuzzCaptureRequirementsDeterministic:
     @given(
         capture_kind=st.sampled_from(_CAPTURE_KINDS),
         capture_scope=st.sampled_from(_CAPTURE_SCOPES),
     )
     @settings(max_examples=56, deadline=2000)
-    def test_every_legal_kind_scope_combination_fails_closed_by_default(self, capture_kind, capture_scope):
+    def test_every_legal_kind_scope_combination_is_deterministic_against_the_default_fleet(
+        self, capture_kind, capture_scope
+    ):
         payload = json.loads(_read("experiment-core", "experiment-capture-spec-v1", "valid", "reference.json"))
         requirement = next(iter(payload["capture_requirements"].values()))
         requirement["capture_kind"] = capture_kind
@@ -241,5 +257,9 @@ class TestFuzzCaptureRequirementsFailClosed:
         spec = ExperimentCaptureSpecModel.model_validate(payload)
         policy = default_admission_policy()
 
-        with pytest.raises(AdmissionRejection):
-            bind_capture_requirements([spec], policy=policy)
+        if (capture_kind, capture_scope) in _COVERED_BY_DEFAULT_FLEET:
+            bindings = bind_capture_requirements([spec], policy=policy)
+            assert len(bindings) == 1
+        else:
+            with pytest.raises(AdmissionRejection):
+                bind_capture_requirements([spec], policy=policy)

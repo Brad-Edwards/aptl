@@ -42,9 +42,10 @@ class SecretInvariantError(ValueError):
 
 
 class RunStoreConflictError(ValueError):
-    """Raised by :meth:`LocalRunStore.create_json_once` when the target
-    already exists with canonical bytes that differ from the payload being
-    written.
+    """Raised by the create-once persistence paths (``create_json_once`` and
+    the run-scoped / content-addressed extensions in
+    :mod:`aptl.core.evidence.content_store`) when the target already exists
+    with bytes that differ from those being written.
 
     A byte-identical existing payload is treated as idempotent success
     (ADR-047); only a genuine mismatch is an error.

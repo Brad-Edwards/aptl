@@ -35,6 +35,19 @@ CollectorHandle = object
 
 
 @dataclass(frozen=True)
+class RunScope:
+    """The run / planned-trial / attempt identity one trial's acquisition is scoped to.
+
+    Bundled so the coordinator's entry point and helpers stay within the
+    parameter budget while threading the same immutable identity everywhere.
+    """
+
+    run_id: str
+    planned_trial_id: str
+    attempt_id: str
+
+
+@dataclass(frozen=True)
 class CollectorContext:
     """The immutable admitted context a collector is given at start.
 

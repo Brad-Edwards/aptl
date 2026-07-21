@@ -14,11 +14,12 @@ import pytest
 from aptl.core.correlation.clock import FixedClockProvider
 from aptl.core.evidence.coordinator import acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
-from aptl.core.evidence.protocol import CollectorOutcome
+from aptl.core.evidence.protocol import CollectorOutcome, RunScope
 from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
 from aptl.core.runstore import LocalRunStore
 
 _CLOCK = FixedClockProvider(measurement_time="2026-07-20T00:00:00Z")
+_SCOPE = RunScope(run_id="run-1", planned_trial_id="trial-1", attempt_id="attempt-1")
 
 
 def _binding(*, requirement_id="req-a", registration_id="aptl.collector.a", max_bytes=4096, **overrides) -> CaptureBinding:
@@ -96,9 +97,7 @@ def _acquire(tmp_path, bindings, collectors, **kwargs):
         bindings=bindings,
         collectors=collectors,
         run_store=store,
-        run_id="run-1",
-        planned_trial_id="trial-1",
-        attempt_id="attempt-1",
+        scope=_SCOPE,
         clock=_CLOCK,
         **kwargs,
     )
@@ -122,9 +121,7 @@ class TestSuccessPath:
             bindings=[binding],
             collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a")},
             run_store=store,
-            run_id="run-1",
-            planned_trial_id="trial-1",
-            attempt_id="attempt-1",
+            scope=_SCOPE,
             clock=_CLOCK,
         )
         ref = result.refs[0]

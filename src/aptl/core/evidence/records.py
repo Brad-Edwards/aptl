@@ -21,6 +21,7 @@ mandatory ``loss_disclosure`` records it.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 
 import rfc8785
 from aces_contracts.contracts import (
@@ -40,6 +41,20 @@ from aptl.core.experiment.capture_registry import CaptureBinding
 _EVIDENCE_ID_DOMAIN = "aptl.exp.evidence-record/v1"
 _EVIDENCE_ID_PREFIX = "evidence-"
 _RECORD_VERSION = "1.0.0"
+
+
+@dataclass(frozen=True)
+class RecordDisclosure:
+    """The coordinator's decided sensitivity + redaction/loss disposition for a record.
+
+    Bundled so :func:`build_evidence_record` stays within the parameter budget;
+    every field reflects what the coordinator actually did to the bytes, never
+    something inferred in the record builder.
+    """
+
+    sensitivity: str
+    redaction_state: str
+    loss_disclosure: str | None = None
 
 
 def _bare_hex(prefixed_digest: str) -> str:
@@ -89,17 +104,15 @@ def build_evidence_record(
     content: ContentInsertion,
     outcome: CollectorOutcome,
     captured_at: str,
-    sensitivity: str,
-    redaction_state: str,
-    loss_disclosure: str | None = None,
+    disclosure: RecordDisclosure,
 ) -> ExperimentEvidenceRecordModel:
     """Assemble one ACES :class:`ExperimentEvidenceRecordModel` for a captured binding.
 
-    ``sensitivity`` / ``redaction_state`` are decided by the coordinator (they
-    reflect what it actually did to the bytes), never inferred here. The record
-    references the run, the capture spec, and the source measurement channel
-    the evidence satisfies; identity is derived deterministically from the
-    binding + retained-content digest.
+    ``disclosure`` carries the coordinator's decided sensitivity + redaction/
+    loss disposition (what it actually did to the bytes), never inferred here.
+    The record references the run, the capture spec, and the source measurement
+    channel the evidence satisfies; identity is derived deterministically from
+    the binding + retained-content digest.
     """
     window_ref = binding.window_refs[0] if binding.window_refs else binding.requirement_id
     record_id = derive_evidence_record_id(
@@ -125,8 +138,8 @@ def build_evidence_record(
         captured_at=captured_at,
         capture_window_ref=window_ref,
         raw_content=_raw_content(
-            content, event_count=outcome.event_count, loss_disclosure=loss_disclosure
+            content, event_count=outcome.event_count, loss_disclosure=disclosure.loss_disclosure
         ),
-        sensitivity=sensitivity,
-        redaction_state=redaction_state,
+        sensitivity=disclosure.sensitivity,
+        redaction_state=disclosure.redaction_state,
     )

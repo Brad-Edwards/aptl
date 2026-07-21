@@ -18,9 +18,10 @@ from datetime import datetime
 from aces_contracts.contracts import ExperimentEvidenceRecordModel
 
 from aptl.core.evidence import content_store
+from aptl.core.evidence.content_store import ContentInsertion
 from aptl.core.evidence.outcomes import CollectorStatus
 from aptl.core.evidence.protocol import CollectorOutcome
-from aptl.core.evidence.records import build_evidence_record
+from aptl.core.evidence.records import RecordDisclosure, build_evidence_record
 from aptl.core.experiment.capture_registry import CaptureBinding, CaptureVisibility
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.redaction import redact
@@ -162,9 +163,11 @@ def persist_success_outcome(
         content=content,
         outcome=outcome,
         captured_at=captured_at,
-        sensitivity=binding.sensitivity,
-        redaction_state=redaction_state,
-        loss_disclosure=loss_disclosure,
+        disclosure=RecordDisclosure(
+            sensitivity=binding.sensitivity,
+            redaction_state=redaction_state,
+            loss_disclosure=loss_disclosure,
+        ),
     )
     # Persist the record into the explicit, create-once run-scoped evidence
     # ledger (identity is content-derived, so re-persisting is idempotent).
@@ -212,7 +215,9 @@ def _elapsed_seconds(outcome: CollectorOutcome) -> float:
     return max(0.0, (end - start).total_seconds())
 
 
-def _effective_status(outcome: CollectorOutcome, *, content, binding: CaptureBinding) -> CollectorStatus:
+def _effective_status(
+    outcome: CollectorOutcome, *, content: ContentInsertion, binding: CaptureBinding
+) -> CollectorStatus:
     """Downgrade a reported OK to a limit/loss status the coordinator enforces.
 
     The binding's admitted duration, artifact-count, and byte limits are ALL
@@ -227,12 +232,12 @@ def _effective_status(outcome: CollectorOutcome, *, content, binding: CaptureBin
         return CollectorStatus.TIMEOUT
     if content.truncated or outcome.event_count > limits.max_artifact_count:
         return CollectorStatus.TRUNCATION
-    if outcome.dropped_count > 0:
-        return CollectorStatus.MID_RUN_LOSS
-    return outcome.status
+    return CollectorStatus.MID_RUN_LOSS if outcome.dropped_count > 0 else outcome.status
 
 
-def _loss_disclosure(outcome: CollectorOutcome, *, effective_status: CollectorStatus, redaction_state: str) -> str | None:
+def _loss_disclosure(
+    outcome: CollectorOutcome, *, effective_status: CollectorStatus, redaction_state: str
+) -> str | None:
     """Return a mandatory, bounded loss/redaction disclosure, or ``None`` when there is nothing to disclose.
 
     A limit/loss status (timeout, truncation, mid-run loss) always discloses;

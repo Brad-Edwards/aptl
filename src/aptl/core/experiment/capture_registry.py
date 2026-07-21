@@ -461,6 +461,6 @@ def _bind(
 #: turns ``create_aptl_manifest().observation`` from ``None`` into a real
 #: aggregate projection — done together with the acquisition machinery + the
 #: adapter wiring + conformance fixtures (the honesty rule).
-from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS  # noqa: E402
+from aptl.core.experiment.capture_registrations import BUILTIN_REGISTRATIONS
 
 DEFAULT_COLLECTOR_REGISTRY = CollectorRegistry(BUILTIN_REGISTRATIONS)

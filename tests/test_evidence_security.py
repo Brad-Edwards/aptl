@@ -17,13 +17,14 @@ from aptl.core.evidence._persist import EvidenceRef
 from aptl.core.evidence.content_store import create_content_addressed
 from aptl.core.evidence.coordinator import acquire_evidence
 from aptl.core.evidence.outcomes import AcquisitionDisposition, CollectorStatus
-from aptl.core.evidence.protocol import CollectorOutcome
+from aptl.core.evidence.protocol import CollectorOutcome, RunScope
 from aptl.core.evidence.visibility import project_for_participant
 from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.pathsafe import PathContainmentError
 
 _CLOCK = FixedClockProvider(measurement_time="2026-07-20T00:00:00Z")
+_SCOPE = RunScope(run_id="run-1", planned_trial_id="trial-1", attempt_id="a1")
 _SECRET = "sk-live-super-secret-token-abcdef1234567890"
 
 
@@ -73,7 +74,7 @@ class TestSecretRedaction:
         outcome = _json_outcome([{"user": "admin", "api_key": _SECRET}])
         result = acquire_evidence(
             bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, run_id="run-1", planned_trial_id="trial-1", attempt_id="a1", clock=_CLOCK,
+            run_store=store, scope=_SCOPE, clock=_CLOCK,
         )
         stored = (store.get_run_path("run-1") / result.refs[0].content_uri).read_bytes()
         assert _SECRET.encode() not in stored
@@ -85,7 +86,7 @@ class TestSecretRedaction:
         outcome = _json_outcome([{"token": _SECRET}])
         result = acquire_evidence(
             bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, run_id="run-1", planned_trial_id="trial-1", attempt_id="a1", clock=_CLOCK,
+            run_store=store, scope=_SCOPE, clock=_CLOCK,
         )
         assert result.records[0].raw_content.loss_disclosure is not None
 
@@ -115,7 +116,7 @@ class TestVisibilityProjection:
         outcome = _json_outcome([{"detection": 1}])
         result = acquire_evidence(
             bindings=[binding], collectors={"aptl.collector.a": _FakeCollector("aptl.collector.a", outcome)},
-            run_store=store, run_id="run-1", planned_trial_id="trial-1", attempt_id="a1", clock=_CLOCK,
+            run_store=store, scope=_SCOPE, clock=_CLOCK,
         )
         assert result.disposition is AcquisitionDisposition.SEALED_READY
         assert project_for_participant(result.refs) == ()

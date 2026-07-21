@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from aptl.core.evidence.adapters.sources import CallableWindowedSource, SourceResult, WindowedSource
 from aptl.core.evidence.outcomes import CollectorStatus
@@ -45,10 +46,11 @@ class RunArchiveSource:
 
     def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
         """Read the subtree's JSONL records (the window is the run's own scope)."""
-        del start_iso, end_iso  # the archive subtree is already run-scoped
+        # The archive subtree is already run-scoped, so the window is unused.
+        del start_iso, end_iso
         try:
             subtree = self._run_store.get_run_path(self._run_id) / self._subdir
-        except Exception:  # noqa: BLE001 - a bad run id is a source-availability problem
+        except Exception:
             return SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
         if not subtree.is_dir():
             return SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
@@ -73,13 +75,13 @@ class ContainerLogSource:
 
     def fetch(self, start_iso: str, end_iso: str) -> SourceResult:
         """Capture each container's window of logs, distinguishing failure from empty."""
-        records: list[dict] = []
+        records: list[dict[str, object]] = []
         for container in self._containers:
             try:
                 result = self._backend.container_logs_capture(
                     container, since=start_iso, until=end_iso, timeout=30
                 )
-            except Exception:  # noqa: BLE001 - backend error is a distinct availability failure
+            except Exception:
                 return SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
             if result.returncode != 0:
                 return SourceResult(status=CollectorStatus.SOURCE_UNAVAILABLE)
@@ -90,7 +92,7 @@ class ContainerLogSource:
         return SourceResult(status=status, records=records)
 
 
-def soc_windowed_source(query: Callable[[str, str], list | None]) -> WindowedSource:
+def soc_windowed_source(query: Callable[[str, str], list[dict[str, object]] | None]) -> WindowedSource:
     """Adapt a SOC query returning ``list`` (events) or ``None`` (transport failure).
 
     ``None`` — what the ``curl_safe`` boundary returns on an HTTP/transport
@@ -109,9 +111,9 @@ def soc_windowed_source(query: Callable[[str, str], list | None]) -> WindowedSou
     return CallableWindowedSource(_fetch)
 
 
-def _read_jsonl_tree(subtree) -> tuple[list[dict], int]:
+def _read_jsonl_tree(subtree: Path) -> tuple[list[dict[str, object]], int]:
     """Return (records, dropped_count) for every valid JSON line under ``subtree``."""
-    records: list[dict] = []
+    records: list[dict[str, object]] = []
     dropped = 0
     for path in sorted(subtree.rglob("*.jsonl")):
         if not path.is_file():

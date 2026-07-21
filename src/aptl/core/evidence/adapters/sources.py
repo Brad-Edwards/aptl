@@ -20,6 +20,7 @@ trusted composition code — never selected by experiment input.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -39,7 +40,7 @@ class SourceResult:
     """
 
     status: CollectorStatus
-    records: list[dict] = field(default_factory=list)
+    records: list[dict[str, object]] = field(default_factory=list)
     dropped_count: int = 0
     source_min_time: str | None = None
     source_max_time: str | None = None
@@ -69,7 +70,7 @@ class CallableWindowedSource:
     source owner) rather than a class, while keeping the narrow protocol.
     """
 
-    def __init__(self, fetch) -> None:
+    def __init__(self, fetch: Callable[[str, str], SourceResult]) -> None:
         """Wrap a ``fetch(start_iso, end_iso) -> SourceResult`` callable."""
         self._fetch = fetch
 
@@ -98,7 +99,8 @@ class WindowedQueryCollector:
         """The registration this collector realizes."""
         return self._registration_id
 
-    def start(self, context: CollectorContext) -> _WindowHandle:
+    @staticmethod
+    def start(context: CollectorContext) -> _WindowHandle:
         """Open the observation window from the injected clock."""
         return _WindowHandle(started_at=context.clock.now(), clock=context.clock)
 
@@ -106,28 +108,34 @@ class WindowedQueryCollector:
         """Close the window, query the source, and map its typed result."""
         finished_at = handle.clock.now()
         result = self._source.fetch(handle.started_at, finished_at)
-        return self._to_outcome(result, handle.started_at, finished_at)
+        return _to_outcome(result, handle.started_at, finished_at)
 
-    def _to_outcome(self, result: SourceResult, started_at: str, finished_at: str) -> CollectorOutcome:
-        """Map a :class:`SourceResult` to a :class:`CollectorOutcome`."""
-        if result.status not in SUCCESS_STATUSES:
-            return CollectorOutcome(
-                status=result.status,
-                started_at=started_at,
-                finished_at=finished_at,
-                dropped_count=result.dropped_count,
-                detail=f"source reported {result.status.value}",
-            )
-        status = CollectorStatus.OK if result.records else CollectorStatus.EMPTY_OK
-        chunks = [json.dumps(result.records, separators=(",", ":")).encode("utf-8")]
+
+def _to_outcome(result: SourceResult, started_at: str, finished_at: str) -> CollectorOutcome:
+    """Map a :class:`SourceResult` to a :class:`CollectorOutcome`.
+
+    A source failure passes through without chunks; a success serializes the
+    structured records to ``application/json`` (empty records are a legitimate
+    ``EMPTY_OK``, never a failure).
+    """
+    if result.status not in SUCCESS_STATUSES:
         return CollectorOutcome(
-            status=status,
+            status=result.status,
             started_at=started_at,
             finished_at=finished_at,
-            chunks=chunks,
-            media_type="application/json",
-            event_count=len(result.records),
             dropped_count=result.dropped_count,
-            source_min_time=result.source_min_time,
-            source_max_time=result.source_max_time,
+            detail=f"source reported {result.status.value}",
         )
+    status = CollectorStatus.OK if result.records else CollectorStatus.EMPTY_OK
+    chunks = [json.dumps(result.records, separators=(",", ":")).encode("utf-8")]
+    return CollectorOutcome(
+        status=status,
+        started_at=started_at,
+        finished_at=finished_at,
+        chunks=chunks,
+        media_type="application/json",
+        event_count=len(result.records),
+        dropped_count=result.dropped_count,
+        source_min_time=result.source_min_time,
+        source_max_time=result.source_max_time,
+    )

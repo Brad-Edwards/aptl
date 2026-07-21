@@ -15,11 +15,12 @@ from aptl.core.correlation.builder import build_correlation_projection
 from aptl.core.correlation.clock import FixedClockProvider
 from aptl.core.evidence.coordinator import acquire_evidence
 from aptl.core.evidence.outcomes import CollectorStatus
-from aptl.core.evidence.protocol import CollectorOutcome
+from aptl.core.evidence.protocol import CollectorOutcome, RunScope
 from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
 from aptl.core.runstore import LocalRunStore
 
 _CLOCK = FixedClockProvider(measurement_time="2026-07-20T00:00:00Z")
+_SCOPE = RunScope(run_id="run-1", planned_trial_id="trial-1", attempt_id="a1")
 
 
 def _binding() -> CaptureBinding:
@@ -53,7 +54,7 @@ def test_acquired_evidence_refs_appear_in_the_correlation_projection(tmp_path):
     store = LocalRunStore(tmp_path / "runs")
     result = acquire_evidence(
         bindings=[_binding()], collectors={"aptl.collector.a": _FakeCollector()},
-        run_store=store, run_id="run-1", planned_trial_id="trial-1", attempt_id="a1", clock=_CLOCK,
+        run_store=store, scope=_SCOPE, clock=_CLOCK,
     )
     assert result.refs
 
@@ -75,7 +76,7 @@ def test_reference_dict_carries_bounded_identity_only(tmp_path):
     store = LocalRunStore(tmp_path / "runs")
     result = acquire_evidence(
         bindings=[_binding()], collectors={"aptl.collector.a": _FakeCollector()},
-        run_store=store, run_id="run-1", planned_trial_id="trial-1", attempt_id="a1", clock=_CLOCK,
+        run_store=store, scope=_SCOPE, clock=_CLOCK,
     )
     ref_dict = result.refs[0].as_reference_dict()
     assert ref_dict["kind"] == "experiment-evidence"

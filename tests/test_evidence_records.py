@@ -13,7 +13,7 @@ from aces_contracts.contracts import ExperimentEvidenceRecordModel
 
 from aptl.core.evidence.protocol import CollectorOutcome
 from aptl.core.evidence.outcomes import CollectorStatus
-from aptl.core.evidence.records import build_evidence_record, derive_evidence_record_id
+from aptl.core.evidence.records import RecordDisclosure, build_evidence_record, derive_evidence_record_id
 from aptl.core.evidence.content_store import ContentInsertion
 from aptl.core.experiment.capture_registry import CaptureBinding, CaptureLimits, CaptureVisibility
 
@@ -42,13 +42,16 @@ def _outcome() -> CollectorOutcome:
     return CollectorOutcome(status=CollectorStatus.OK, started_at="2026-07-20T00:00:00Z", finished_at="2026-07-20T00:00:05Z", event_count=3)
 
 
-def _record(**overrides):
+def _record(*, sensitivity="internal", redaction_state="none", loss_disclosure=None, **overrides):
     kwargs = dict(
         binding=_binding(), run_id="run-1", planned_trial_id="trial-1", content=_content(), outcome=_outcome(),
-        captured_at="2026-07-20T00:00:05Z", sensitivity="internal", redaction_state="none",
+        captured_at="2026-07-20T00:00:05Z",
     )
     kwargs.update(overrides)
-    return build_evidence_record(**kwargs)
+    disclosure = RecordDisclosure(
+        sensitivity=sensitivity, redaction_state=redaction_state, loss_disclosure=loss_disclosure
+    )
+    return build_evidence_record(disclosure=disclosure, **kwargs)
 
 
 class TestIdentity:

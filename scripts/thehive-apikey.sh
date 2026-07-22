@@ -5,11 +5,13 @@ set -euo pipefail
 # TheHive API Key Provisioner
 # =============================================================================
 # Ensures the APTL organisation exists in TheHive, creates an org-admin user,
-# and outputs a fresh API key. Prints the key to stdout:
+# and outputs its API key. Prints the key to stdout:
 #
 #   THEHIVE_API_KEY=$(./scripts/thehive-apikey.sh)
 #
-# Idempotent -- safe to re-run. Creates org/user only if missing.
+# Idempotent -- safe to re-run. Creates org/user only if missing and REUSES
+# the existing API key (does not rotate it) so keys handed out earlier -- such
+# as the one baked into the seeded Shuffle workflow -- keep working.
 # =============================================================================
 
 # SEC-006 / ADR-034: TheHive now serves HTTPS on 9000 using the
@@ -81,11 +83,20 @@ else
     USER_ID="$USER_EXISTS"
 fi
 
-# 4. Renew API key for the org user
-API_KEY=$(_curl -X POST "${THEHIVE_URL}/api/v1/user/${USER_ID}/key/renew") || {
-    echo "ERROR: Failed to renew API key for user ${USER_ID}" >&2
-    exit 1
-}
+# 4. Return the org user's existing API key; renew only if none exists.
+# ``key/renew`` ROTATES the key and invalidates every previously issued
+# copy -- including the key baked into the seeded Shuffle workflow at boot.
+# This script is re-run by the live tests and by re-seeds, so an
+# unconditional renew silently breaks the Shuffle -> TheHive action with a
+# 401 ("no TheHive case created"). GET returns the current key, so prefer
+# it and keep the key stable across calls; renew only to bootstrap.
+API_KEY=$(_curl "${THEHIVE_URL}/api/v1/user/${USER_ID}/key") || API_KEY=""
+if [ -z "$API_KEY" ]; then
+    API_KEY=$(_curl -X POST "${THEHIVE_URL}/api/v1/user/${USER_ID}/key/renew") || {
+        echo "ERROR: Failed to provision API key for user ${USER_ID}" >&2
+        exit 1
+    }
+fi
 
 # 5. Output the key
 echo "$API_KEY"

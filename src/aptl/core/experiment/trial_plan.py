@@ -32,14 +32,21 @@ stochastic control ID).
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import rfc8785
 from aces_contracts.experiment_spec import ExperimentSpecModel
 
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 from aptl.core.experiment.policy import AdmissionPolicy, OrderingKind, resolve_allocation_ordering
+
+if TYPE_CHECKING:
+    # Typing-only import: at runtime ``capture_registry`` imports from THIS
+    # module, so a runtime import here would cycle. ``expand_trial_plan`` only
+    # calls ``binding_projection()`` structurally, needing no runtime import.
+    from aptl.core.experiment.capture_registry import CaptureBinding
 
 # ---------------------------------------------------------------------------
 # Domain-separation constants
@@ -81,10 +88,11 @@ _SEED_BEARING_ROLES = frozenset({"seed", "randomization"})
 _PLAN_ID_PREFIX = "plan-"
 _TRIAL_ID_PREFIX = "trial-"
 
-#: Versioned identity for the canonical plan projection shape itself
-#: (distinct from any ACES ``schema_version`` literal — this is an
-#: APTL-internal journal format, never an ACES contract).
-_PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v1"
+#: Versioned identity for the canonical plan projection shape (an APTL-internal
+#: journal format, never an ACES contract). Bumped to v2 by EXP-010 (#752): the
+#: projection now pins the admitted capture bindings, changing the shape and
+#: digest, so old v1 bytes cannot silently reinterpret under it.
+_PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v2"
 
 _ADDRESS_RUN_PLAN = "run_plan"
 _ADDRESS_STOCHASTIC_CONTROLS = "run_plan.stochastic_controls"
@@ -129,6 +137,7 @@ class TrialPlan:
     source_set_digest: str
     ordering_kind: OrderingKind
     trials: tuple[PlannedTrial, ...]
+    capture_bindings: tuple[CaptureBinding, ...]
     canonical_bytes: bytes
     plan_digest: str
 
@@ -393,6 +402,7 @@ def _canonicalize(
     source_set_digest: str,
     ordering_kind: OrderingKind,
     trials: tuple[PlannedTrial, ...],
+    capture_bindings: Sequence[CaptureBinding],
 ) -> tuple[bytes, str, str]:
     """Canonicalize the plan projection to RFC 8785 bytes and derive (canonical_bytes, plan_digest, plan_id)."""
     projection = {
@@ -403,6 +413,9 @@ def _canonicalize(
         # The trial sequence itself is an authored-meaningful ordered list
         # (execution order) and stays a JSON array.
         "trials": [_trial_projection(trial) for trial in trials],
+        # The admitted capture bindings, pinned so runtime executes exactly
+        # these. Always present (``[]`` w/o capture spec) for a stable shape.
+        "capture_bindings": [binding.binding_projection() for binding in capture_bindings],
     }
     canonical_bytes = rfc8785.dumps(projection)
     digest_hex = hashlib.sha256(canonical_bytes).hexdigest()
@@ -416,13 +429,16 @@ def expand_trial_plan(
     *,
     source_set_digest: str,
     condition_snapshot_digests: Mapping[str, str] | None = None,
+    capture_bindings: Sequence[CaptureBinding] = (),
     policy: AdmissionPolicy,
 ) -> TrialPlan:
     """Pure expansion of an admitted spec's ``run_plan`` into an immutable :class:`TrialPlan`.
 
-    ``source_set_digest`` and ``condition_snapshot_digests`` are supplied by
-    the caller (a later admission stage) — this function does no artifact
-    resolution or digesting of its own beyond the plan projection itself.
+    ``source_set_digest``, ``condition_snapshot_digests``, and
+    ``capture_bindings`` are supplied by the caller (a later admission stage) —
+    this function does no artifact resolution, capability matching, or
+    digesting of its own. The bindings are pinned verbatim into the canonical
+    bytes so runtime executes exactly the admitted capture.
 
     Raises :class:`AdmissionRejection` when the planned trial count would
     exceed ``policy.max_allocation_size``, a stochastic control's role does
@@ -461,11 +477,14 @@ def expand_trial_plan(
     if len(set(ids)) != len(ids):
         raise AssertionError("planned_trial_id collision within one trial plan")
 
+    # Bindings arrive pre-sorted by stable identity (``bind_capture_requirements``).
+    capture_bindings_tuple = tuple(capture_bindings)
     canonical_bytes, plan_digest, plan_id = _canonicalize(
         policy_version=policy.policy_version,
         source_set_digest=source_set_digest,
         ordering_kind=ordering_kind,
         trials=trials,
+        capture_bindings=capture_bindings_tuple,
     )
 
     return TrialPlan(
@@ -474,6 +493,7 @@ def expand_trial_plan(
         source_set_digest=source_set_digest,
         ordering_kind=ordering_kind,
         trials=trials,
+        capture_bindings=capture_bindings_tuple,
         canonical_bytes=canonical_bytes,
         plan_digest=plan_digest,
     )

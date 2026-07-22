@@ -1937,6 +1937,14 @@ def _write_run_record(ctx: _LabStartContext) -> None:
     store.write_json(run_id, "manifest.json", record)
     log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
 
+    # OBS-002: layer the correlation-identity + clock-context projection over
+    # the now-sealed run archive so an action can be traced end-to-end and
+    # every source's clock is disclosed. Best-effort by contract — an audit
+    # projection must never turn a successful run into a failed one.
+    from aptl.core.correlation.persistence import persist_run_correlation_best_effort
+
+    persist_run_correlation_best_effort(run_id=run_id, run_store=store)
+
 
 # Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each
 # existing file under these directories is referenced by its relative path;

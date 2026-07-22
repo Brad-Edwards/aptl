@@ -154,6 +154,12 @@ TRIGGER_ID="trigger-webhook-$(date +%s)"
 MISP_ACTION_ID="action-misp-lookup-$(date +%s)"
 CASE_ACTION_ID="action-create-case-$(date +%s)"
 
+# NOTE: values interpolated into a node's JSON `body` must be SCALARS
+# (e.g. $exec.data.srcip). Never embed a whole node output such as
+# $misp_ip_lookup: Shuffle splices the raw JSON (with its own quotes) into
+# the surrounding string, producing an invalid body that the create-case
+# action rejects with "unterminated string literal", so no TheHive case is
+# ever created even though the workflow reports FINISHED.
 read -r -d '' WORKFLOW_JSON << ENDJSON || true
 {
     "name": "${WORKFLOW_NAME}",
@@ -188,7 +194,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\n\$misp_ip_lookup\", \"severity\": 3}"},
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment: source IP \$exec.data.srcip was checked against MISP threat intelligence.\", \"severity\": 3}"},
                 {"name": "verify_ssl", "value": "false"}
             ]
         }

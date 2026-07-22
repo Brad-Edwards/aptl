@@ -2,3 +2,10 @@
 # GitGuardian configuration for APTL security lab
 
 version: 2
+secret:
+  ignored_matches:
+    # tests/test_correlation_models.py: assert_non_secret() must reject
+    # secret-shaped strings, so its test fixtures are intentionally
+    # secret-shaped fakes, never real credentials (incident 34972675).
+    - name: correlation-models-secret-shape-test-fixture
+      match: "token=abc123def456"

@@ -87,9 +87,11 @@ class ComposeBaseSubstrateMixin(object):
             ],
             timeout=600,
         )
-        if build_result.returncode != 0:
-            return [f"failed to build generic base image {image_ref}"]
-        return []
+        return (
+            []
+            if build_result.returncode == 0
+            else [f"failed to build generic base image {image_ref}"]
+        )
 
     def start_base_container(self, spec: "BaseContainerSpec") -> None:
         """Start a node's generic base container (ADR-048).
@@ -190,6 +192,8 @@ class ComposeBaseSubstrateMixin(object):
             result = self._run(["docker", "rm", "-f", *names], timeout=60)
         except (BackendTimeoutError, OSError) as exc:
             return [f"failed to remove generic-materializer containers: {exc}"]
-        if result.returncode != 0:
-            return [f"failed to remove generic-materializer containers: {result.stderr.strip()}"]
-        return []
+        return (
+            []
+            if result.returncode == 0
+            else [f"failed to remove generic-materializer containers: {result.stderr.strip()}"]
+        )

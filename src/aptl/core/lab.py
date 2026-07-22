@@ -74,6 +74,7 @@ from aptl.core.snapshot import (
     list_container_snapshots,
 )
 from aptl.core.ssh import (
+    SSHKeyResult,
     ensure_pivot_key,
     ensure_ssh_keys,
     ensure_target_authorized_keys,
@@ -961,74 +962,55 @@ def _load_stateful_artifact_ownership(
     return None
 
 
+def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
+    """Translate a failed :class:`SSHKeyResult` into a fail-closed ``LabResult``."""
+
+    if result.success:
+        return None
+    log.error("%s failed: %s", what, result.error)
+    return LabResult(success=False, error=f"{what} failed: {result.error}")
+
+
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     """Ensure the host-side lab SSH key exists."""
     log.info("Step 3: Generating SSH keys...")
     keys_dir = ctx.project_dir / "keys"
     host_ssh_dir = Path.home() / ".ssh"
+    pivot_dir = ctx.project_dir / "config" / "lab-ssh"
+
     ssh_result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
-    if not ssh_result.success:
-        log.error("SSH key generation failed: %s", ssh_result.error)
-        return LabResult(
-            success=False,
-            error=f"SSH key generation failed: {ssh_result.error}",
-        )
+    failure = _ssh_key_step_failure(ssh_result, "SSH key generation")
+    if failure is not None:
+        return failure
     ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
-    # dir and bind-mounted (private -> kali, public -> targets).
-    pivot_dir = ctx.project_dir / "config" / "lab-ssh"
-    pivot_result = ensure_pivot_key(pivot_dir=pivot_dir)
-    if not pivot_result.success:
-        log.error("Pivot key generation failed: %s", pivot_result.error)
-        return LabResult(
-            success=False,
-            error=f"Pivot key generation failed: {pivot_result.error}",
-        )
-
-    # SEC #417: targets (victim, workstation, ...) authorize both the
-    # control-plane key and the kali pivot key; the SDL places this combined
-    # file at ~labadmin/.ssh/authorized_keys (issue #581).
-    combined_result = ensure_target_authorized_keys(
-        keys_dir=keys_dir, pivot_dir=pivot_dir
+    # dir and bind-mounted (private -> kali, public -> targets). Targets
+    # (victim, workstation, ...) authorize both the control-plane key and
+    # this pivot key; the SDL places the combined file at
+    # ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
+    # and victim's own combined authorized_keys are the Prime scenario's
+    # separate workstation -> victim lateral-movement path (issue #581).
+    remaining_steps = (
+        ("Pivot key generation", lambda: ensure_pivot_key(pivot_dir=pivot_dir)),
+        (
+            "Target authorized_keys generation",
+            lambda: ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+        ),
+        (
+            "Workstation pivot key generation",
+            lambda: ensure_workstation_pivot_key(pivot_dir=pivot_dir),
+        ),
+        (
+            "Victim authorized_keys generation",
+            lambda: ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+        ),
     )
-    if not combined_result.success:
-        log.error(
-            "Target authorized_keys generation failed: %s", combined_result.error
-        )
-        return LabResult(
-            success=False,
-            error=(
-                f"Target authorized_keys generation failed: {combined_result.error}"
-            ),
-        )
-
-    # Prime scenario lateral movement: workstation -> victim. Scenario
-    # content, not the control-plane/kali pivot keys above (issue #581).
-    workstation_pivot_result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
-    if not workstation_pivot_result.success:
-        log.error(
-            "Workstation pivot key generation failed: %s",
-            workstation_pivot_result.error,
-        )
-        return LabResult(
-            success=False,
-            error=(
-                "Workstation pivot key generation failed: "
-                f"{workstation_pivot_result.error}"
-            ),
-        )
-
-    victim_result = ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
-    if not victim_result.success:
-        log.error("Victim authorized_keys generation failed: %s", victim_result.error)
-        return LabResult(
-            success=False,
-            error=(
-                f"Victim authorized_keys generation failed: {victim_result.error}"
-            ),
-        )
+    for what, step in remaining_steps:
+        failure = _ssh_key_step_failure(step(), what)
+        if failure is not None:
+            return failure
     return None
 
 

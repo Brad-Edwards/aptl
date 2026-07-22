@@ -66,6 +66,20 @@ class ComposeRealizationMixin(
 
         if realization.image_free:
             return self._realize_image_free(realization)
+        return self._realize_mixed_or_legacy(realization, build=build)
+
+    def _realize_mixed_or_legacy(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        build: bool,
+    ) -> LabResult:
+        """Realize a spec with at least one still-Compose-managed node.
+
+        Covers both shapes: fully legacy (nothing image-free) and mixed
+        (ADR-048's image-free subset materialized first, then the legacy
+        Compose pipeline for the rest).
+        """
 
         image_free_addresses = _image_free_node_addresses(realization)
         if image_free_addresses:
@@ -85,7 +99,7 @@ class ComposeRealizationMixin(
                 for item in realization.content
                 if item.target_address not in image_free_addresses
             )
-            realization = replace(realization, content=legacy_content)
+            realization: DeploymentRealizationSpec = replace(realization, content=legacy_content)
             realization = _strip_image_free_published_ports(realization, image_free_addresses)
         else:
             excluded_services = ()
@@ -409,7 +423,8 @@ def _strip_image_free_published_ports(
         replace(node, published_ports=()) if node.address in image_free_addresses else node
         for node in realization.nodes
     )
-    return replace(realization, nodes=legacy_nodes)
+    updated: DeploymentRealizationSpec = replace(realization, nodes=legacy_nodes)
+    return updated
 
 
 def _image_free_node_addresses(realization: DeploymentRealizationSpec) -> frozenset[str]:

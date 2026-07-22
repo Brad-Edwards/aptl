@@ -249,7 +249,7 @@ def observed_content_type(
             content.address,
             type(exc).__name__,
         )
-        return None
+        observed = None
     return observed if observed in ("file", "directory") else None
 
 

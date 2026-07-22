@@ -39,7 +39,7 @@ class _FakeExec:
         return [argv for _, argv in self.calls]
 
 
-def _executor(exec_fn, *, started=None):
+def _executor(exec_fn, *, started=None, sleep=None):
     def start_base(addr, image):
         if started is not None:
             started.append((addr, image))
@@ -48,6 +48,9 @@ def _executor(exec_fn, *, started=None):
         run=exec_fn,
         container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
         start_base=start_base,
+        # Real time.sleep would make retry tests (and the unrelated failure
+        # tests that now also exhaust the refresh retry) take ~15s each.
+        sleep=sleep or (lambda seconds: None),
     )
 
 
@@ -93,6 +96,47 @@ class TestPackages:
             "n.node", "apt", ("curl", "wazuh-manager", "absent")
         )
         assert observed == frozenset({"curl", "wazuh-manager"})
+
+
+class TestPackageIndexRefreshRetry:
+    """A just-started container's network isn't always immediately ready:
+    the first `apt-get update` after `docker run` can transiently fail
+    (issue #581, root-caused via a real fresh-VM reproduction showing 4/5
+    fresh containers fail immediately, 0/5 fail after a 1s delay). The
+    refresh command is idempotent, so a bounded retry recovers from this
+    without masking a genuine failure."""
+
+    def test_transient_refresh_failure_recovers_then_installs(self):
+        calls = {"update": 0}
+
+        def responder(container, argv):
+            if "update" in argv:
+                calls["update"] += 1
+                if calls["update"] < 3:
+                    return 100, "W: GPG error"
+                return 0, ""
+            return 0, ""
+
+        fake = _FakeExec(responder)
+        sleeps: list[float] = []
+        _executor(fake, sleep=sleeps.append).install_packages("n.node", "apt", ("curl",))
+
+        assert calls["update"] == 3
+        assert sleeps == [1.0, 2.0]
+        assert any("install" in argv for argv in fake.argvs())
+
+    def test_refresh_exhausts_all_retries_then_raises(self):
+        fake = _FakeExec(lambda c, a: (100, "W: GPG error") if "update" in a else (0, ""))
+        sleeps: list[float] = []
+        executor = _executor(fake, sleep=sleeps.append)
+
+        with pytest.raises(MaterializationCommandError):
+            executor.install_packages("n.node", "apt", ("curl",))
+
+        update_calls = sum(1 for argv in fake.argvs() if "update" in argv)
+        assert update_calls == 5  # 1 initial attempt + 4 retries
+        assert sleeps == [1.0, 2.0, 4.0, 8.0]
+        assert not any("install" in argv for argv in fake.argvs())
 
 
 class TestIdentity:

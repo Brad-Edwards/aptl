@@ -63,7 +63,7 @@ from aptl.validation.techvault_gate import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
-PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
+PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
 
 # --------------------------------------------------------------------------- #

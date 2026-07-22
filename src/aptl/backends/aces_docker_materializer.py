@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import shlex
+import time
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -35,6 +36,15 @@ from aptl.backends.aces_package_managers import (
     query_installed_argv,
     refresh_argv,
 )
+
+# A just-started container's network interface is not always immediately ready
+# for outbound traffic: a fresh-VM reproduction (issue #581) showed a node's
+# very first package-index refresh failing with a corrupted-download GPG
+# signature error on 4 of 5 attempts run immediately after `docker run`, and
+# 0 of 5 after a 1s delay. The refresh command is idempotent, so retrying it
+# handles this general Docker-boot timing characteristic without a blind
+# fixed delay that would be wrong for both slower and faster hosts.
+_PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0)
 
 
 class MaterializationCommandError(RuntimeError):
@@ -66,12 +76,14 @@ class DockerMaterializationExecutor:
         start_base: Callable[[str, str], None],
         copy_in: Callable[[str, str, str, bool], None] | None = None,
         project_dir: Path | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._run = run
         self._container_for = container_for
         self._start_base = start_base
         self._copy_in = copy_in
         self._project_dir = project_dir
+        self._sleep = sleep
 
     # -- mutations -------------------------------------------------------
 
@@ -83,7 +95,12 @@ class DockerMaterializationExecutor:
     ) -> None:
         refresh = refresh_argv(manager)
         if refresh is not None:
-            self._require_ok(node_address, refresh, "refresh package index")
+            self._require_ok_with_retry(
+                node_address,
+                refresh,
+                "refresh package index",
+                _PACKAGE_INDEX_REFRESH_RETRY_DELAYS_SECONDS,
+            )
         self._require_ok(node_address, install_argv(manager, packages), "install packages")
 
     def ensure_group(self, node_address: str, name: str, gid: int | str | None) -> None:
@@ -202,6 +219,24 @@ class DockerMaterializationExecutor:
 
     def _require_ok(self, node_address: str, argv: list[str], what: str) -> None:
         if self._exec(node_address, argv).returncode != 0:
+            raise MaterializationCommandError(
+                f"generic materialization step '{what}' failed on {node_address}"
+            )
+
+    def _require_ok_with_retry(
+        self,
+        node_address: str,
+        argv: list[str],
+        what: str,
+        delays: tuple[float, ...],
+    ) -> None:
+        outcome = self._exec(node_address, argv)
+        for delay in delays:
+            if outcome.returncode == 0:
+                return
+            self._sleep(delay)
+            outcome = self._exec(node_address, argv)
+        if outcome.returncode != 0:
             raise MaterializationCommandError(
                 f"generic materialization step '{what}' failed on {node_address}"
             )

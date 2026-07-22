@@ -77,6 +77,8 @@ from aptl.core.ssh import (
     ensure_pivot_key,
     ensure_ssh_keys,
     ensure_target_authorized_keys,
+    ensure_victim_authorized_keys,
+    ensure_workstation_pivot_key,
 )
 from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
 from aptl.utils.logging import get_logger
@@ -999,6 +1001,32 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
             success=False,
             error=(
                 f"Target authorized_keys generation failed: {combined_result.error}"
+            ),
+        )
+
+    # Prime scenario lateral movement: workstation -> victim. Scenario
+    # content, not the control-plane/kali pivot keys above (issue #581).
+    workstation_pivot_result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
+    if not workstation_pivot_result.success:
+        log.error(
+            "Workstation pivot key generation failed: %s",
+            workstation_pivot_result.error,
+        )
+        return LabResult(
+            success=False,
+            error=(
+                "Workstation pivot key generation failed: "
+                f"{workstation_pivot_result.error}"
+            ),
+        )
+
+    victim_result = ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+    if not victim_result.success:
+        log.error("Victim authorized_keys generation failed: %s", victim_result.error)
+        return LabResult(
+            success=False,
+            error=(
+                f"Victim authorized_keys generation failed: {victim_result.error}"
             ),
         )
     return None

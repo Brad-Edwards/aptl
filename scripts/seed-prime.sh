@@ -78,7 +78,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 0. Wait for SOC tools to be healthy
 # ---------------------------------------------------------------------------
-echo "[0/7] Waiting for SOC tools to be healthy..."
+echo "[0/6] Waiting for SOC tools to be healthy..."
 
 # SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
 # at https://localhost:3443. The readiness gate waits for
@@ -113,7 +113,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Provision TheHive API key
 # ---------------------------------------------------------------------------
-echo "[1/7] Provisioning TheHive API key..."
+echo "[1/6] Provisioning TheHive API key..."
 
 if [ -x "$SCRIPT_DIR/thehive-apikey.sh" ]; then
     if THEHIVE_API_KEY=$("$SCRIPT_DIR/thehive-apikey.sh" 2>/dev/null) && \
@@ -144,7 +144,7 @@ fi
 # 2. Provision Cortex API key for TheHive connector
 # ---------------------------------------------------------------------------
 echo ""
-echo "[2/7] Provisioning Cortex API key..."
+echo "[2/6] Provisioning Cortex API key..."
 
 if [ -x "$SCRIPT_DIR/cortex-apikey.sh" ]; then
     if CORTEX_API_KEY=$("$SCRIPT_DIR/cortex-apikey.sh") && \
@@ -163,7 +163,7 @@ fi
 # 3. Wait for Wazuh Indexer to be healthy
 # ---------------------------------------------------------------------------
 echo ""
-echo "[3/7] Waiting for Wazuh Indexer to be healthy..."
+echo "[3/6] Waiting for Wazuh Indexer to be healthy..."
 
 INDEXER_PORT="${APTL_HP_WAZUH_INDEXER_9200:-9200}"
 INDEXER_URL="${INDEXER_URL:-https://localhost:${INDEXER_PORT}}"
@@ -199,7 +199,7 @@ fi
 # 4. Seed MISP with threat intelligence
 # ---------------------------------------------------------------------------
 echo ""
-echo "[4/7] Seeding MISP with lab threat intelligence..."
+echo "[4/6] Seeding MISP with lab threat intelligence..."
 
 if [ -x "$SCRIPT_DIR/seed-misp.sh" ]; then
     if ! "$SCRIPT_DIR/seed-misp.sh"; then
@@ -213,7 +213,7 @@ fi
 # 5. Seed Shuffle with SOAR workflows
 # ---------------------------------------------------------------------------
 echo ""
-echo "[5/7] Seeding Shuffle with SOAR workflows..."
+echo "[5/6] Seeding Shuffle with SOAR workflows..."
 
 if [ -x "$SCRIPT_DIR/seed-shuffle.sh" ]; then
     if ! "$SCRIPT_DIR/seed-shuffle.sh"; then
@@ -227,7 +227,7 @@ fi
 # 6. Configure Wazuh -> Shuffle integration
 # ---------------------------------------------------------------------------
 echo ""
-echo "[6/7] Configuring Wazuh -> Shuffle integration..."
+echo "[6/6] Configuring Wazuh -> Shuffle integration..."
 
 WEBHOOK_FILE="${APTL_SHUFFLE_WEBHOOK_FILE:-/tmp/aptl_shuffle_webhook_url}"
 if [ -f "$WEBHOOK_FILE" ]; then
@@ -246,31 +246,12 @@ else
         "Shuffle seed did not produce a webhook URL"
 fi
 
-# ---------------------------------------------------------------------------
-# 7. Plant workstation SSH key into victim authorized_keys (if needed)
-# ---------------------------------------------------------------------------
-echo ""
-echo "[7/7] Ensuring workstation SSH key is authorized on victim..."
-
-# Extract the workstation's dev-user public key and add to victim's labadmin
-ws_pubkey=$(docker exec aptl-workstation cat /home/dev-user/.ssh/id_rsa.pub 2>/dev/null) || true
-
-if [ -n "$ws_pubkey" ]; then
-    # Check if already present
-    existing=$(docker exec aptl-victim grep -c "$(echo "$ws_pubkey" | awk '{print $2}')" \
-        /home/labadmin/.ssh/authorized_keys 2>/dev/null) || existing=0
-
-    if [ "$existing" -eq 0 ]; then
-        docker exec aptl-victim bash -c "echo '$ws_pubkey' >> /home/labadmin/.ssh/authorized_keys"
-        echo "  Added workstation dev-user key to victim labadmin authorized_keys"
-    else
-        echo "  Workstation key already present in victim authorized_keys"
-    fi
-else
-    record_seed_failure \
-        "Workstation to victim" \
-        "Could not read workstation SSH public key"
-fi
+# Workstation -> victim SSH trust (Prime scenario lateral movement) is
+# provisioned declaratively at `aptl lab start` time now (the workstation
+# pivot keypair placed by src/aptl/core/ssh.py + the SDL's
+# workstation-pivot-key/victim-authorized-keys content), not seeded here
+# (issue #581 — this used to plant the legacy workstation entrypoint's
+# throwaway dev-user key into victim's authorized_keys after the fact).
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -299,7 +280,6 @@ echo "  - Wazuh Indexer: healthy"
 echo "  - MISP: Kali IOCs and attack patterns"
 echo "  - Shuffle: Alert-to-Case workflow (webhook -> MISP enrichment -> TheHive case)"
 echo "  - Wazuh -> Shuffle: integration configured (level 10+ alerts)"
-echo "  - Workstation -> Victim: SSH key trust"
 echo ""
 echo "Ready for: aptl scenario start prime-enterprise"
 echo ""

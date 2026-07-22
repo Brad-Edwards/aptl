@@ -86,6 +86,7 @@ class ComposeRealizationMixin(
                 if item.target_address not in image_free_addresses
             )
             realization = replace(realization, content=legacy_content)
+            realization = _strip_image_free_published_ports(realization, image_free_addresses)
         else:
             excluded_services = ()
 
@@ -388,6 +389,29 @@ class ComposeRealizationMixin(
             )
 
 
+def _strip_image_free_published_ports(
+    realization: DeploymentRealizationSpec, image_free_addresses: frozenset[str]
+) -> DeploymentRealizationSpec:
+    """Clear ``published_ports`` on nodes the generic materializer already started.
+
+    An image-free node's declared host ports were already bound by its own
+    ``docker run -p`` (``start_base_container``) during image-free
+    materialization, which runs before the legacy Compose pipeline below.
+    Left alone, that pipeline's own published-port conflict check and
+    Compose port override would re-probe the same host port their own
+    earlier stage already bound, failing the whole ``realize()`` call on a
+    false conflict with itself (issue #581). The node's docker-compose.yml
+    stub is also never started (``--scale=0``), so a Compose port override
+    for it would be silently inert either way.
+    """
+
+    legacy_nodes = tuple(
+        replace(node, published_ports=()) if node.address in image_free_addresses else node
+        for node in realization.nodes
+    )
+    return replace(realization, nodes=legacy_nodes)
+
+
 def _image_free_node_addresses(realization: DeploymentRealizationSpec) -> frozenset[str]:
     """Return the addresses of every node declaring runtime desired state."""
 
@@ -427,8 +451,27 @@ def _realize_node_subset(
     per node, verified by read-after-write.
     """
 
+    from aptl.backends.aces_base_substrate import base_container_spec
     from aptl.backends.aces_materializer import PlaceFileOp, PlaceProjectContentOp
     from aptl.backends.aces_node_materialization import realize_nodes
+
+    # A fresh machine has none of the locally-built generic base images in
+    # its Docker cache (issue #581 - a developer's existing cache had
+    # silently masked this gap since ADR-048 shipped). Ensure every image
+    # this node subset needs exists once, up front, rather than having each
+    # node's own start_base_container discover it missing one at a time.
+    image_build_failures: list[str] = []
+    for image_ref in sorted(
+        {
+            base_container_spec(
+                node.address, os=node.os, os_version=node.os_version, runtime=node.runtime
+            ).image_ref
+            for node in nodes
+        }
+    ):
+        image_build_failures.extend(backend.ensure_generic_base_image(image_ref))
+    if image_build_failures:
+        return LabResult(success=False, error="; ".join(image_build_failures[:5]))
 
     content_by_node: dict[str, list[object]] = {}
     for item in content:

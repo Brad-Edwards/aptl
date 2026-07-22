@@ -1252,6 +1252,25 @@ class TestOrchestrateLabStart:
                 key_path=keys_dir / "target_authorized_keys",
             ),
         )
+        # #581: the workstation -> victim lateral-movement pivot key and
+        # victim's own combined authorized_keys file, mocked for the same
+        # reason as the two keygen steps above.
+        mocks["workstation_pivot"] = mocker.patch(
+            "aptl.core.lab.ensure_workstation_pivot_key",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=Path("config") / "lab-ssh" / "workstation_pivot_key",
+            ),
+        )
+        mocks["victim_authorized_keys"] = mocker.patch(
+            "aptl.core.lab.ensure_victim_authorized_keys",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=keys_dir / "victim_authorized_keys",
+            ),
+        )
 
         # Mock sysreqs
         from aptl.core.sysreqs import SysReqResult, ToolReqResult

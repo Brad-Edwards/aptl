@@ -73,6 +73,13 @@ nodes:
         - {manager: apt, name: python3-pip, version: "*"}
       dependency_manifests:
         - {ecosystem: pip, path: /app/pyproject.toml, name: aptl-labs}
+      # Shares suricata's rules volume (ADR-043): this service writes
+      # misp-iocs.rules here for suricata to load, and the command socket to
+      # trigger its reload. Both are Compose-managed named volumes suricata
+      # (still Compose-realized) already mounts at the same paths.
+      mounts:
+        - {target: /var/run/suricata, source: suricata_command_socket, source_kind: volume}
+        - {target: /var/lib/suricata/rules/misp, source: suricata_misp_rules, source_kind: volume}
   thehive:
     type: vm
     os: linux
@@ -144,6 +151,20 @@ nodes:
         - {manager: apt, name: python3-jwt, version: "*"}
       filesystem_inventory:
         - {path: /var/log/gunicorn, entry_type: directory}
+      # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
+      # iptables against this node's INPUT chain to revert blanket kali
+      # source-IP DROPs; that needs CAP_NET_ADMIN, which Docker's default
+      # capability set does not grant.
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
+      # webapp is a deliberate attack-surface target, reachable from other
+      # machines on the LAN like the in-range red team (test_docker_compose_
+      # port_bindings.py TARGET_SURFACES), not an operator/management
+      # surface -- so it does NOT get a loopback ADR-034 published_ports
+      # declaration here. Its own networks (aptl-dmz, aptl-internal) are
+      # both internal: true (SAF-002), which Docker never routes host
+      # traffic through regardless of host_ip; the docker-compose.yml
+      # webapp-proxy service is the real host publication (issue #581).
       service_manager_units:
         - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
   ad:
@@ -188,6 +209,10 @@ nodes:
     runtime:
       packages:
         - {manager: apt, name: samba, version: "*"}
+      # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
+      # source-IP DROPs on this node's INPUT chain (src/aptl/core/continuity.py).
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
       service_manager_units:
         - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
   dns:
@@ -201,6 +226,22 @@ nodes:
         - {manager: apt, name: dnsutils, version: "*"}
       filesystem_inventory:
         - {path: /var/log/named, entry_type: directory, owner_user: bind, owner_group: bind}
+      # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
+      # source-IP DROPs on this node's INPUT chain (src/aptl/core/continuity.py).
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
+      # Host port 5353 (53 is commonly already bound on the host by a local
+      # resolver): both protocols, since DNS genuinely uses UDP for queries
+      # and TCP for zone transfers / large responses. dns is a deliberate
+      # attack-surface target like webapp (test_docker_compose_port_bindings.py
+      # TARGET_SURFACES), so host_ip is explicit all-interfaces, not the
+      # ADR-034 loopback default meant for operator/management surfaces
+      # (issue #581). dns also sits on aptl-security (not internal: true),
+      # so unlike webapp this publishes correctly without a proxy.
+      network:
+        published_ports:
+          - {container_port: 53, protocol: tcp, host_port: 5353, host_ip: "0.0.0.0"}
+          - {container_port: 53, protocol: udp, host_port: 5353, host_ip: "0.0.0.0"}
       service_manager_units:
         - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
   victim:
@@ -234,6 +275,14 @@ nodes:
         # Suricata/Wazuh must correlate (issue #581).
         - {manager: apt, name: iputils-ping, version: "*"}
         - {manager: apt, name: nmap, version: "*"}
+        # OBS-003 (ADR-033/ADR-041) per-session capture wiring: bsdmainutils
+        # provides script(1) (the PTY recording pipe), python3 runs
+        # aptl-capture-client, libcap2-bin provides capsh (drops
+        # CAP_AUDIT_CONTROL from sshd so the kali user's passwordless sudo
+        # cannot touch the audit trail the aptl-kali-capture sidecar owns).
+        - {manager: apt, name: bsdmainutils, version: "*"}
+        - {manager: apt, name: python3, version: "*"}
+        - {manager: apt, name: libcap2-bin, version: "*"}
       local_identity:
         groups:
           - {name: kali}
@@ -241,6 +290,7 @@ nodes:
           - {username: kali, primary_group: kali}
       service_manager_units:
         - {unit_id: ssh, unit_name: ssh.service, enabled_state: enabled, active_state: active}
+        - {unit_id: kali-capture-bootstrap, unit_name: kali-capture-bootstrap.service, enabled_state: enabled, active_state: active}
   kali-capture:
     type: vm
     os: linux
@@ -627,18 +677,33 @@ content:
   # pivot key's *private* half to SSH out into these targets. This mirrors
   # the entrypoint-script SSH provisioning the legacy hand-authored images
   # ran, now realized generically from declared content (issue #581).
+  #
+  # victim additionally trusts the workstation pivot key below (Prime
+  # scenario lateral movement, workstation -> victim), so it gets its own
+  # combined file instead of sharing target_authorized_keys with workstation.
   victim-authorized-keys:
     type: file
     target: victim
     path: /home/labadmin/.ssh/authorized_keys
     source:
-      name: keys/target_authorized_keys
+      name: keys/victim_authorized_keys
   workstation-authorized-keys:
     type: file
     target: workstation
     path: /home/labadmin/.ssh/authorized_keys
     source:
       name: keys/target_authorized_keys
+  # workstation's private half of the lateral-movement pivot into victim;
+  # placed as the default identity file so `ssh labadmin@victim` from
+  # workstation needs no -i flag, matching how the legacy entrypoint's
+  # throwaway dev-user keypair was used (issue #581).
+  workstation-pivot-key:
+    type: file
+    target: workstation
+    path: /home/labadmin/.ssh/id_ed25519
+    source:
+      name: config/lab-ssh/workstation_pivot_key
+    sensitive: true
   kali-authorized-keys:
     type: file
     target: kali
@@ -652,6 +717,76 @@ content:
     source:
       name: config/lab-ssh/kali_pivot_key
     sensitive: true
+  # OBS-003 (ADR-033/ADR-041) per-session capture wiring, restored after the
+  # SDL conversion dropped it (issue #581): sshd's ForceCommand hands every
+  # kali-user session to aptl-wrap-shell.sh, which records the PTY via
+  # script(1) and streams it to the aptl-kali-capture sidecar (a separate,
+  # still-Compose-managed node sharing kali's network namespace) instead of
+  # writing evidence inside this container, where the kali user's
+  # passwordless sudo could tamper with it.
+  kali-wrap-shell-script:
+    type: file
+    target: kali
+    path: /usr/local/bin/aptl-wrap-shell.sh
+    source:
+      name: containers/kali/scripts/aptl-wrap-shell.sh
+  kali-capture-client:
+    type: file
+    target: kali
+    path: /usr/local/bin/aptl-capture-client
+    source:
+      name: containers/kali/scripts/aptl-capture-client
+  # Drops CAP_AUDIT_CONTROL from sshd itself — belt-and-suspenders on top of
+  # kali's container capability set (which never includes AUDIT_CONTROL to
+  # begin with; that capability lives only on the capture sidecar).
+  kali-ssh-capsh-override:
+    type: file
+    target: kali
+    path: /etc/systemd/system/ssh.service.d/override.conf
+    text: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/sbin/capsh --drop=cap_audit_control -- -c "exec /usr/sbin/sshd -D $SSHD_OPTS"
+  # Appends the ForceCommand/AcceptEnv wiring to the stock sshd_config and
+  # applies both this and the capsh override above with one restart —
+  # neither content: placement above can itself trigger sshd to notice a
+  # config change it may already have started with (issue #581, same
+  # pattern as db-bootstrap.sh).
+  kali-capture-bootstrap-script:
+    type: file
+    target: kali
+    path: /opt/kali-capture-bootstrap.sh
+    text: |
+      #!/bin/bash
+      set -e
+      if ! grep -q "^AcceptEnv APTL_SESSION_ID" /etc/ssh/sshd_config; then
+        {
+          echo ""
+          echo "# OBS-003 / ADR-033: per-session capture wiring"
+          echo "AcceptEnv APTL_SESSION_ID APTL_RUN_ID APTL_TRACE_ID"
+          echo "Match User kali"
+          echo "    ForceCommand /bin/bash /usr/local/bin/aptl-wrap-shell.sh"
+        } >> /etc/ssh/sshd_config
+      fi
+      sshd -t
+      systemctl daemon-reload
+      systemctl restart ssh
+  kali-capture-bootstrap-unit:
+    type: file
+    target: kali
+    path: /etc/systemd/system/kali-capture-bootstrap.service
+    text: |
+      [Unit]
+      Description=TechVault kali OBS-003 per-session capture wiring
+      After=ssh.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash /opt/kali-capture-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
 
 # Realizable accounts (ADR-046 Account and Identity Realization Addendum,
 # #577): the deployment backend's realize_accounts operation ensures these

@@ -42,9 +42,11 @@ SHUFFLE_API_KEY="${SHUFFLE_API_KEY:-31a211c4-ea5c-4a49-b022-5e2434e758a7}"
 # Container-internal URLs used INSIDE Shuffle workflow actions. These
 # are intra-trust-boundary calls on the aptl-security Docker network
 # (ADR-034 § Decision: SOC consumers OF Shuffle verify; Shuffle's own
-# SOAR-internal HTTP actions are not the SOC-consumer surface and
-# retain ``verify_ssl: false`` until Shuffle's bundled HTTP app is
-# taught about the lab CA bundle — see workflow JSON below).
+# SOAR-internal HTTP actions are not the SOC-consumer surface and skip
+# verification until Shuffle's bundled HTTP app is taught about the lab
+# CA bundle. NOTE: the HTTP app parameter is ``verify`` (not
+# ``verify_ssl``); the wrong name is silently ignored and the app then
+# defaults to verifying, which fails against the lab CA — see below).
 THEHIVE_INTERNAL_URL="https://172.20.0.18:9000"
 MISP_INTERNAL_URL="https://172.20.0.16"
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
@@ -154,6 +156,16 @@ TRIGGER_ID="trigger-webhook-$(date +%s)"
 MISP_ACTION_ID="action-misp-lookup-$(date +%s)"
 CASE_ACTION_ID="action-create-case-$(date +%s)"
 
+# NOTE: a node's JSON `body` must be a single-line JSON object built ONLY
+# from scalar interpolations (e.g. $exec.data.srcip). Two traps that both
+# yield "SyntaxError - unterminated string literal" so no TheHive case is
+# created even though the workflow reports FINISHED:
+#   1. Embedding a whole node output (e.g. $misp_ip_lookup) -- Shuffle
+#      splices the raw JSON, with its own quotes, into the surrounding
+#      string and breaks it.
+#   2. Any "\n" in a string value -- Shuffle unescapes it to a real newline,
+#      which is illegal inside a JSON/Python string literal. Keep bodies on
+#      one line and separate fields with "; ".
 read -r -d '' WORKFLOW_JSON << ENDJSON || true
 {
     "name": "${WORKFLOW_NAME}",
@@ -173,7 +185,7 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: ${MISP_API_KEY}\nContent-Type: application/json\nAccept: application/json"},
                 {"name": "body", "value": "{\"value\": \"\$exec.data.srcip\", \"type\": \"ip-src\", \"returnFormat\": \"json\"}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "verify", "value": "false"}
             ]
         },
         {
@@ -188,8 +200,8 @@ read -r -d '' WORKFLOW_JSON << ENDJSON || true
                 {"name": "url", "value": "${THEHIVE_INTERNAL_URL}/api/v1/case"},
                 {"name": "method", "value": "POST"},
                 {"name": "headers", "value": "Authorization: Bearer ${THEHIVE_API_KEY}\nContent-Type: application/json"},
-                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh Alert Details:\\n- Rule: \$exec.rule.id (\$exec.rule.description)\\n- Level: \$exec.rule.level\\n- Source IP: \$exec.data.srcip\\n- Agent: \$exec.agent.name\\n- Timestamp: \$exec.timestamp\\n\\nMISP Enrichment:\\n\$misp_ip_lookup\", \"severity\": 3}"},
-                {"name": "verify_ssl", "value": "false"}
+                {"name": "body", "value": "{\"title\": \"[Wazuh \$exec.rule.id] \$exec.rule.description\", \"description\": \"Wazuh alert: rule \$exec.rule.id (\$exec.rule.description); level \$exec.rule.level; source IP \$exec.data.srcip; agent \$exec.agent.name; time \$exec.timestamp; MISP: source IP \$exec.data.srcip checked against threat intelligence.\", \"severity\": 3}"},
+                {"name": "verify", "value": "false"}
             ]
         }
     ],

@@ -174,6 +174,8 @@ nodes:
       # webapp-proxy service is the real host publication (issue #581).
       service_manager_units:
         - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
         # Custom rsyslog unit (below): the stock rsyslog.service carries systemd
         # sandboxing (ProtectKernelTunables/RestrictNamespaces/...) that fails
         # 226/NAMESPACE under the materializer's restricted caps, and a drop-in
@@ -206,6 +208,13 @@ nodes:
     runtime:
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
+        # openssh-clients (the `ssh` binary) + postgresql (the `psql` client):
+        # #581 parity for the compromised-workstation attack paths. dev-user's
+        # leaked SSH key pivots into victim (workstation -> victim lateral
+        # movement) and the leaked .pgpass reaches the DB; neither works without
+        # a client. The v5.0.0 workstation image shipped both.
+        - {manager: dnf, name: openssh-clients, version: "*"}
+        - {manager: dnf, name: postgresql, version: "*"}
         - {manager: dnf, name: sudo, version: "*"}
       local_identity:
         groups:
@@ -220,6 +229,12 @@ nodes:
           - {username: dev-user, primary_group: dev-user, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
+        # Fix dev-user loot ownership + secret-file perms after the content copy
+        # (the directory copy lands as labadmin:labadmin 664; .pgpass at 664 is
+        # ignored by psql, and dev-user's home should be dev-user-owned).
+        - {unit_id: aptl-workstation-loot, unit_name: aptl-workstation-loot.service, enabled_state: enabled, active_state: active}
   fileshare:
     type: vm
     os: linux
@@ -234,6 +249,8 @@ nodes:
         add: [CAP_NET_ADMIN]
       service_manager_units:
         - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
   dns:
     type: vm
     os: linux
@@ -285,6 +302,8 @@ nodes:
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
         - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
 
   kali:
     type: vm
@@ -744,16 +763,34 @@ content:
     destination: /home/dev-user
     source:
       name: scenarios/fixtures/techvault-content/dev-user-home
-  # dev-user's leaked SSH private key (loot WS-03), placed inline: a tracked
-  # file literally named `id_rsa` is rejected by the repo no-secrets guard
-  # (tests/test_assets.py). Redacted placeholder — the loot only needs to exist.
+  # dev-user's leaked SSH private key (loot WS-03) is the real workstation->
+  # victim lateral-movement pivot: the standup-generated workstation pivot
+  # keypair (config/lab-ssh/workstation_pivot_key, ensure_workstation_pivot_key
+  # in src/aptl/core/ssh.py) whose public half victim already authorizes
+  # (victim-authorized-keys below). Placing its private half here as dev-user's
+  # ~/.ssh/id_rsa reproduces the v5.0.0 workstation entrypoint's throwaway
+  # dev-user keypair, so `ssh -i ~/.ssh/id_rsa labadmin@victim` from the
+  # compromised workstation works. The key is never tracked (lab-ssh is
+  # gitignored + generated per standup), so no id_rsa/PEM secret ships in-repo.
   workstation-dev-user-privkey:
     type: file
     target: workstation
     path: /home/dev-user/.ssh/id_rsa
-    text: |
-      # Leaked developer SSH private key (loot artifact WS-03).
-      # Redacted placeholder in-repo; a real weak key can be regenerated per lab.
+    source:
+      name: config/lab-ssh/workstation_pivot_key
+    sensitive: true
+  # The matching public half, so dev-user's keypair is self-consistent. This
+  # must be the pivot key's real .pub: `ssh -i id_rsa` reads id_rsa.pub (not the
+  # private key) to pick which key to offer, so a mismatched .pub makes ssh
+  # offer the wrong key and victim rejects the pivot. Sourced from the same
+  # standup-generated keypair (not the fixture, which cannot know the per-lab
+  # key) — the fixture's stale placeholder .pub was removed for this reason.
+  workstation-dev-user-pubkey:
+    type: file
+    target: workstation
+    path: /home/dev-user/.ssh/id_rsa.pub
+    source:
+      name: config/lab-ssh/workstation_pivot_key.pub
   # The stock `postgresql` package creates an empty cluster with no
   # techvault database/user and no schema — the legacy compose db service
   # got these from postgres:16-alpine's POSTGRES_DB/USER/PASSWORD
@@ -927,6 +964,137 @@ content:
       Type=oneshot
       RemainAfterExit=yes
       ExecStart=/bin/bash /opt/kali-capture-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------------------------------------------------------------------------
+  # CTF flag generation (#581 parity). The v5.0.0 base image and the still-image
+  # AD node generate per-boot signed flags at container start; the image-free
+  # generic nodes (victim, workstation, webapp, fileshare) reproduce it with a
+  # oneshot systemd unit running the shared aptl-flaggen.sh. flags.py (scoring)
+  # reads /home/labadmin|dev-user/user.txt, /app/user.txt,
+  # /srv/shares/shared/user-flag.txt, and /root/root.txt and verifies the
+  # aptl:v1 md5 token. One script; each node's unit supplies its Environment=.
+  # ---------------------------------------------------------------------------
+  victim-flaggen-script:
+    type: file
+    target: victim
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  workstation-flaggen-script:
+    type: file
+    target: workstation
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  webapp-flaggen-script:
+    type: file
+    target: webapp
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  fileshare-flaggen-script:
+    type: file
+    target: fileshare
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  victim-flaggen-unit:
+    type: file
+    target: victim
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=victim
+      Environment=APTL_FLAG_USER_PATH=/home/labadmin/user.txt
+      Environment=APTL_FLAG_USER_OWNER=labadmin:labadmin
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  workstation-flaggen-unit:
+    type: file
+    target: workstation
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=workstation
+      Environment=APTL_FLAG_USER_PATH=/home/dev-user/user.txt
+      Environment=APTL_FLAG_USER_OWNER=dev-user:dev-user
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  webapp-flaggen-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=webapp
+      Environment=APTL_FLAG_USER_PATH=/app/user.txt
+      Environment=APTL_FLAG_USER_OWNER=root:root
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  fileshare-flaggen-unit:
+    type: file
+    target: fileshare
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=fileshare
+      Environment=APTL_FLAG_USER_PATH=/srv/shares/shared/user-flag.txt
+      Environment=APTL_FLAG_USER_OWNER=root:root
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  # Finalizes dev-user loot after the directory copy: the copy lands the home
+  # as labadmin:labadmin 664, but psql ignores a group/world-readable .pgpass
+  # and dev-user's home should be dev-user-owned. chown + tighten the secret
+  # files to 600 (matching the v5.0.0 setup-workstation.sh perms). Best-effort
+  # per file so a fixture reshuffle never fails the whole boot.
+  workstation-loot-unit:
+    type: file
+    target: workstation
+    path: /etc/systemd/system/aptl-workstation-loot.service
+    text: |
+      [Unit]
+      Description=APTL workstation dev-user loot ownership + perms
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash -c 'chown -R dev-user:dev-user /home/dev-user 2>/dev/null; for f in /home/dev-user/.pgpass /home/dev-user/.ssh/id_rsa /home/dev-user/.bash_history /home/dev-user/.config/credentials.json /home/dev-user/projects/techvault-portal/.env; do [ -f "$f" ] && chmod 600 "$f"; done; true'
 
       [Install]
       WantedBy=multi-user.target

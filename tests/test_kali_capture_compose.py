@@ -147,8 +147,12 @@ class TestComposeConsistency:
         """
         compose = _load_compose()
         sidecar = compose["services"]["kali-capture"]
-        assert sidecar.get("network_mode") == "service:kali", (
-            f"kali-capture must use network_mode service:kali; got: "
+        # container:aptl-kali, not service:kali (ADR-048 / #581): kali is
+        # materialized directly by the generic materializer, not started by
+        # Compose, so `service:kali` cannot resolve a container Compose never
+        # started. The container name is stable either way.
+        assert sidecar.get("network_mode") == "container:aptl-kali", (
+            f"kali-capture must use network_mode container:aptl-kali; got: "
             f"{sidecar.get('network_mode')!r}"
         )
         assert "pid" not in sidecar, (
@@ -158,7 +162,7 @@ class TestComposeConsistency:
         )
 
     def test_sidecar_has_no_hostname(self):
-        """`hostname` conflicts with `network_mode: service:` at `up` time.
+        """`hostname` conflicts with `network_mode: container:` at `up` time.
 
         Docker rejects the combination when creating the container, so a stray
         hostname here would break a clean `aptl lab start`.
@@ -167,5 +171,5 @@ class TestComposeConsistency:
         sidecar = compose["services"]["kali-capture"]
         assert "hostname" not in sidecar, (
             "kali-capture must not set hostname — it conflicts with "
-            "network_mode: service:kali and fails at container create"
+            "network_mode: container:aptl-kali and fails at container create"
         )

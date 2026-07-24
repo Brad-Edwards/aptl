@@ -79,12 +79,13 @@ SRC_WRAPPER = REPO_ROOT / "containers" / "_wazuh-agent" / "aptl-firewall-drop.sh
 SRC_INSTALL = REPO_ROOT / "containers" / "_wazuh-agent" / "install.sh"
 
 # Dockerfiles that must each install the wrapper + whitelist via the
-# install.sh /tmp pre-COPY pattern.
+# install.sh /tmp pre-COPY pattern. webapp/fileshare/dns moved to SDL
+# `runtime:` realization (issue #581) and no longer have a Dockerfile —
+# they have no in-process Wazuh agent (and so no AR wrapper) at all until
+# aces#847 (no typed way to declare a third-party apt repository, which
+# install.sh's wazuh-agent package needs) is resolved; tracked as #809.
 AGENT_DOCKERFILES: tuple[Path, ...] = (
-    REPO_ROOT / "containers" / "webapp" / "Dockerfile",
-    REPO_ROOT / "containers" / "fileshare" / "Dockerfile",
     REPO_ROOT / "containers" / "ad" / "Dockerfile",
-    REPO_ROOT / "containers" / "dns" / "Dockerfile",
     REPO_ROOT / "containers" / "wazuh-sidecar" / "Dockerfile",
 )
 

@@ -100,23 +100,27 @@ class TestComposeConsistency:
 
         Nothing checked-in or under ``.aptl/`` may be bind-mounted onto a
         path the Suricata image entrypoint chowns (that rewrote host-side
-        ownership, issue #325). Both ``suricata`` and ``misp-suricata-sync``
-        share the ``suricata_misp_rules`` named volume instead.
+        ownership, issue #325). ``suricata`` (still Compose-managed) and
+        ``misp-suricata-sync`` (realized generically from the SDL, issue
+        #581, via ``runtime.mounts`` — never a Compose volume mount) share
+        the ``suricata_misp_rules`` named volume instead. The env-var side
+        of misp-suricata-sync's config (RULES_OUT_PATH, MISP_API_KEY, ...)
+        is a separate, not-yet-built secrets-injection concern for
+        image-free nodes (tracked alongside #809) and is not asserted here.
         """
-        services = compose_config["services"]
+        from aces_sdl import parse_sdl_file
+        from aces_sdl.runtime_mounts import RuntimeMountSourceKind
 
+        services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
-        sync_volumes = services["misp-suricata-sync"]["volumes"]
 
         misp_mount = "suricata_misp_rules:/var/lib/suricata/rules/misp:rw"
         assert misp_mount in suricata_volumes
-        assert misp_mount in sync_volumes
 
         # No host bind (checked-in or .aptl) onto the chowned rules tree.
-        all_volumes = suricata_volumes + sync_volumes
         assert not any(
             volume.startswith("./") and "/var/lib/suricata/rules/misp" in volume
-            for volume in all_volumes
+            for volume in suricata_volumes
         )
         # The seed volumes are declared at top level (project-scoped, no
         # explicit global name).
@@ -124,10 +128,17 @@ class TestComposeConsistency:
         assert "suricata_misp_rules" in top_level
         assert "suricata_config_seed" in top_level
 
-        assert (
-            "RULES_OUT_PATH=/var/lib/suricata/rules/misp/misp-iocs.rules"
-            in services["misp-suricata-sync"]["environment"]
+        scenario = parse_sdl_file(
+            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
         )
+        sync_node = scenario.nodes["misp-suricata-sync"]
+        volume_mounts = {
+            mount.source: mount.target
+            for mount in sync_node.runtime.mounts
+            if mount.source_kind == RuntimeMountSourceKind.VOLUME
+        }
+        assert volume_mounts.get("suricata_misp_rules") == "/var/lib/suricata/rules/misp"
+        assert volume_mounts.get("suricata_command_socket") == "/var/run/suricata"
 
     def test_suricata_config_seeded_not_bind_mounted(self, compose_config):
         """ADR-043: suricata.yaml / local.rules are seeded via a named volume
@@ -221,32 +232,54 @@ class TestComposeConsistency:
 
 class TestKaliContainerLifecycle:
     """Issue #293 / ADR-033 §2: the kali container must reap children and
-    its healthcheck must reflect the usable surface, not just port 22."""
+    its readiness must reflect the usable surface, not just port 22.
 
-    def test_kali_service_runs_under_init_reaper(self, compose_config):
-        """The kali service must set `init: true` so Docker injects an
-        init/reaper (docker-init / tini) as PID 1. Without it the
-        entrypoint's `exec sleep infinity` is PID 1 and cannot reap
-        orphaned children — the zombie defect in issue #293."""
-        kali = compose_config["services"]["kali"]
-        assert kali.get("init") is True, (
-            "kali service must set `init: true` (ADR-033 §2): PID 1 must "
-            "reap children, otherwise red-team-spawned background processes "
-            "zombie out (issue #293)."
+    kali is realized generically from the SDL (issue #581), never
+    Compose-started, so these two properties no longer live in
+    docker-compose.yml — they are asserted against the SDL node instead.
+    """
+
+    @staticmethod
+    def _kali_node():
+        from aces_sdl import parse_sdl_file
+
+        scenario = parse_sdl_file(
+            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+        )
+        return scenario.nodes["kali"]
+
+    def test_kali_runs_under_systemd_reaper(self):
+        """kali must declare service_manager_units so the generic
+        materializer boots it on the init-capable systemd base image
+        (`base_image_for_os`, src/aptl/backends/aces_materializer.py) —
+        systemd is PID 1 there and reaps orphaned children natively.
+        Without any service unit declared, kali would get the bare
+        non-service base image instead, with no reaper (the zombie defect
+        in issue #293, now a property of image selection, not a Compose
+        `init: true` flag)."""
+        kali = self._kali_node()
+        assert kali.runtime is not None and kali.runtime.service_manager_units, (
+            "kali must declare at least one service_manager_units entry "
+            "(ADR-033 §2 / issue #293): with none, the materializer selects "
+            "the non-service base image, which has no PID-1 reaper."
         )
 
-    def test_kali_healthcheck_is_not_bare_port_probe(self, compose_config):
-        """The kali healthcheck must not be the port-22-only probe — that
-        masks a failed boot-time child behind an open SSH port
-        (ADR-033 §2). It must invoke the readiness healthcheck script."""
-        kali = compose_config["services"]["kali"]
-        test = kali.get("healthcheck", {}).get("test")
-        assert test, "kali service must define a healthcheck"
-        joined = " ".join(test) if isinstance(test, list) else str(test)
-        assert "aptl-healthcheck.sh" in joined, (
-            "kali healthcheck must invoke /usr/local/bin/aptl-healthcheck.sh, "
-            f"which verifies sshd + the ForceCommand wrapper + the boot "
-            f"readiness marker — not just an open port; got: {test!r}"
+    def test_kali_capture_wiring_is_verified_not_a_bare_port_probe(self):
+        """kali's readiness must reflect the usable surface — sshd AND the
+        OBS-003 ForceCommand capture wrapper — not merely an open port
+        (ADR-033 §2). The generic materializer's read-after-write
+        verification of these two service units (fail-closed: a lab start
+        does not report ready if either is not observed active) replaces
+        the old aptl-healthcheck.sh script."""
+        kali = self._kali_node()
+        unit_names = {
+            unit.unit_name for unit in kali.runtime.service_manager_units
+        }
+        assert "ssh.service" in unit_names, "kali must run and verify sshd"
+        assert "kali-capture-bootstrap.service" in unit_names, (
+            "kali must run and verify the unit that wires the OBS-003 "
+            "ForceCommand capture wrapper — sshd alone is exactly the bare "
+            "port-22 probe this test exists to reject"
         )
 
     def test_kali_loopback_ssh_proxy_matches_mcp_red(self, compose_config):

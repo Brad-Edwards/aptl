@@ -76,9 +76,17 @@ def _dnf_query(packages: tuple[str, ...]) -> list[str]:
 
 
 def _pip_install(packages: tuple[str, ...]) -> list[str]:
-    """Build the `pip install` argv for declared packages."""
+    """Build the `pip install` argv for declared packages.
 
-    return ["pip", "install", *sorted(packages)]
+    ``--break-system-packages`` is required on a PEP 668-protected system pip
+    (Debian's own python3-pip package, which the generic base installs) -
+    without it every install fails closed with "externally-managed-
+    environment" before anything is materialized. There is no venv here to
+    scope the install to instead: the generic base substrate has no other
+    Python consumer to conflict with.
+    """
+
+    return ["pip", "install", "--break-system-packages", *sorted(packages)]
 
 
 def _pip_query(packages: tuple[str, ...]) -> list[str]:
@@ -150,3 +158,46 @@ def query_installed_argv(manager: str, packages: tuple[str, ...]) -> list[str]:
 def parse_installed(manager: str, stdout: str) -> frozenset[str]:
     """Parse the query output into the set of installed package names."""
     return _manager(manager).parse(stdout)
+
+
+class UnsupportedDependencyEcosystemError(ValueError):
+    """Raised when APTL has no generic mechanism for a declared dependency ecosystem.
+
+    Fail closed: an unknown ecosystem is an admission error, never a guessed
+    command.
+    """
+
+
+# Manifest-driven install: a project's own manifest (e.g. pyproject.toml)
+# declares its dependencies; the generic mechanism is "install from this
+# manifest's directory", parameterized only by ecosystem. No knowledge of
+# what any specific manifest declares.
+_MANIFEST_INSTALLERS: dict[str, Callable[[str], list[str]]] = {
+    "pip": lambda directory: ["pip", "install", "--break-system-packages", directory],
+}
+
+_MANIFEST_QUERIES: dict[str, Callable[[str], list[str]]] = {
+    "pip": lambda name: ["pip", "show", name],
+}
+
+
+def manifest_install_argv(ecosystem: str, directory: str) -> list[str]:
+    """Return the argv that installs a project from its manifest's directory."""
+
+    builder = _MANIFEST_INSTALLERS.get(ecosystem)
+    if builder is None:
+        raise UnsupportedDependencyEcosystemError(
+            f"no generic mechanism for dependency ecosystem {ecosystem!r}"
+        )
+    return builder(directory)
+
+
+def manifest_query_argv(ecosystem: str, name: str) -> list[str]:
+    """Return the argv that reports whether the manifest's declared package is installed."""
+
+    builder = _MANIFEST_QUERIES.get(ecosystem)
+    if builder is None:
+        raise UnsupportedDependencyEcosystemError(
+            f"no generic mechanism for dependency ecosystem {ecosystem!r}"
+        )
+    return builder(name)

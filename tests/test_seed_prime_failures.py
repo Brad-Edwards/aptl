@@ -44,10 +44,6 @@ def test_required_seed_failure_returns_nonzero_and_names_component(tmp_path):
         """#!/bin/sh
 if [ "$1" = inspect ]; then
     printf 'healthy\n'
-elif [ "$1 $2 $3" = "exec aptl-workstation cat" ]; then
-    printf 'ssh-rsa AAAATEST participant@workstation\n'
-elif [ "$1 $2 $3" = "exec aptl-victim grep" ]; then
-    printf '1\n'
 fi
 """,
     )

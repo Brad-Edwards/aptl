@@ -65,6 +65,62 @@ _CONTENT_REALIZABLE_SERVICES: dict[str, str] = {
 _RUNTIME_OBSERVED_PREFIX = "runtime-observed:"
 _SAFE_DEST_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
+# Pure secret material with no legitimate scenario-content use, regardless
+# of project-root containment (issue #816): a content placement naming one
+# of these as its source could copy a real operator credential into any
+# addressed node, including one a lab participant can reach (e.g. kali over
+# SSH). Checked before containment so nothing about the target node or the
+# author's self-reported `sensitive` flag can authorize it.
+_FORBIDDEN_SOURCE_PREFIXES = (
+    ".git/",
+    "config/soc_certs/",
+    "config/wazuh_indexer_ssl_certs/",
+)
+
+# keys/ and config/lab-ssh/ are the one exception: they hold both the
+# public/combined authorized_keys files legitimately distributed onto
+# target nodes and the SEC #417 pivot private keys intentionally placed
+# onto their designated node (src/aptl/core/ssh.py). A blanket deny would
+# break those already-shipped placements, so instead only the exact
+# filenames that module generates are allowed; anything else under these
+# directories is unexpected and rejected the same as a forbidden path.
+_KEY_MATERIAL_PREFIXES = ("keys/", "config/lab-ssh/")
+_ALLOWED_KEY_SOURCE_NAMES = frozenset(
+    {
+        "keys/aptl_lab_key.pub",
+        "keys/authorized_keys",
+        "keys/target_authorized_keys",
+        "keys/victim_authorized_keys",
+        "config/lab-ssh/kali_pivot_key",
+        "config/lab-ssh/kali_pivot_key.pub",
+        "config/lab-ssh/workstation_pivot_key",
+        "config/lab-ssh/workstation_pivot_key.pub",
+    }
+)
+
+
+def _forbidden_source_reason(source_name: str) -> str | None:
+    """Return a reason code if `source_name` must never be a content source.
+
+    Independent of, and checked before, the project-containment check: a
+    path can be entirely inside the project root and still be something a
+    scenario must never be able to select (issue #816).
+    """
+
+    normalized = source_name.lstrip("/")
+    if normalized == ".env" or normalized.startswith(".env."):
+        return "source-is-environment-file"
+    if normalized == ".git" or any(
+        normalized.startswith(prefix) for prefix in _FORBIDDEN_SOURCE_PREFIXES
+    ):
+        return "source-is-forbidden-path"
+    if (
+        any(normalized.startswith(prefix) for prefix in _KEY_MATERIAL_PREFIXES)
+        and normalized not in _ALLOWED_KEY_SOURCE_NAMES
+    ):
+        return "source-is-unlisted-key-material"
+    return None
+
 
 @dataclass(frozen=True)
 class _ContentPlacementInputs(object):
@@ -320,6 +376,9 @@ def _resolve_project_source(
 ) -> tuple[Path | None, list[Diagnostic]]:
     """Resolve a checked-in source path, failing closed on containment escape."""
 
+    forbidden_reason = _forbidden_source_reason(source_name)
+    if forbidden_reason is not None:
+        return None, [_reject(address, forbidden_reason)]
     try:
         resolved = _resolve_within_project(project_dir, Path(source_name))
     except PathContainmentError:
@@ -398,6 +457,15 @@ def _project_source_rejection(
                 "aptl.provisioner.content-not-realizable",
                 resource.address,
                 "runtime-observed content cannot be recreated from source.",
+            )
+        ]
+    forbidden_reason = _forbidden_source_reason(source_name)
+    if forbidden_reason is not None:
+        return [
+            diagnostic(
+                "aptl.provisioner.content-source-forbidden",
+                resource.address,
+                f"content source is not permitted (reason={forbidden_reason}).",
             )
         ]
     try:

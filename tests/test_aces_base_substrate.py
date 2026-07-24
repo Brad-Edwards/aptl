@@ -4,7 +4,8 @@ A node runs on a generic base-OS container chosen solely from its declared
 `os`/`os_version` (never a per-node or appliance image). A node that declares
 service units needs an init-capable substrate so `systemctl` works; a node that
 declares none does not. This module encodes that scenario-independent decision;
-the concrete init mechanism is backend/host integration validated in AWS.
+the concrete init mechanism is backend/host integration validated against real
+local Docker.
 """
 
 from __future__ import annotations
@@ -17,7 +18,11 @@ from aces_sdl.runtime_configuration import (
     ServiceManagerUnit,
 )
 
-from aptl.backends.aces_base_substrate import base_container_spec, plan_node
+from aptl.backends.aces_base_substrate import (
+    UnauthorizedCapabilityError,
+    base_container_spec,
+    plan_node,
+)
 from aptl.backends.aces_materializer import (
     BaseSubstrateOp,
     StartServiceUnitOp,
@@ -86,13 +91,25 @@ class TestBaseContainerSpec:
             service_manager_units=[
                 ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
             ],
-            linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_AUDIT_CONTROL"]),
+            linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_NET_ADMIN"]),
         )
         spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
         assert spec.init is not None
-        assert "AUDIT_CONTROL" in spec.init.capabilities
+        assert "NET_ADMIN" in spec.init.capabilities
         # The fixed systemd requirements are still present alongside the addition.
         assert "SYS_ADMIN" in spec.init.capabilities
+
+    def test_declared_capability_outside_the_allowlist_is_rejected(self):
+        # issue #816: a scenario declaring a host-impacting capability APTL
+        # has no verified need for must fail admission, not be granted.
+        runtime = RuntimeConfiguration(
+            service_manager_units=[
+                ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
+            ],
+            linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_SYS_ADMIN"]),
+        )
+        with pytest.raises(UnauthorizedCapabilityError, match="CAP_SYS_ADMIN"):
+            base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
 
     def test_no_declared_capabilities_keeps_the_fixed_default_set(self):
         spec = base_container_spec(

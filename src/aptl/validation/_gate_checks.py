@@ -73,6 +73,7 @@ class _NoStartBackend(object):
         self._network_names: list[str] = []
         self._content_root: TemporaryDirectory[str] | None = None
         self._content_paths: dict[str, Path] = {}
+        self._image_free_destinations: dict[str, str] = {}
 
     def realize(self, realization: object, *, build: bool = True) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
@@ -101,6 +102,12 @@ class _NoStartBackend(object):
         an empty file/directory per typed realization, then the same observation
         boundary reads that filesystem state back. This keeps the offline
         simulation non-secret and non-vacuous without starting Docker.
+
+        Image-free content (ADR-048, empty ``volume_suffix``) is read back by
+        the observation layer via ``container_exec`` rather than
+        ``observe_content_type``, so its destination path is additionally
+        recorded under ``_image_free_destinations`` for ``container_exec`` to
+        answer against.
         """
 
         if self._content_root is not None:
@@ -108,6 +115,7 @@ class _NoStartBackend(object):
         self._content_root = TemporaryDirectory(prefix="aptl-static-conformance-")
         root = Path(self._content_root.name)
         self._content_paths = {}
+        self._image_free_destinations = {}
         for index, item in enumerate(content):
             address = getattr(item, "address", None)
             source_kind = getattr(item, "source_kind", None)
@@ -116,11 +124,35 @@ class _NoStartBackend(object):
             path = root / f"content-{index}"
             if source_kind in ("project-directory", "empty-directory"):
                 path.mkdir()
+                kind = "directory"
             elif source_kind in ("inline-text", "project-file"):
                 path.touch()
+                kind = "file"
             else:
                 continue
             self._content_paths[address] = path
+            dest_relpath = getattr(item, "dest_relpath", None)
+            volume_suffix = getattr(item, "volume_suffix", None)
+            if not volume_suffix and isinstance(dest_relpath, str):
+                destination = "/" + dest_relpath.lstrip("/")
+                self._image_free_destinations[destination] = kind
+
+    def container_exec(
+        self, name: str, cmd: list[str], *, timeout: int | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        """Answer the image-free content-type readback probe from simulated shapes.
+
+        This mirrors only the ``test -d``/``test -f`` probes observation issues
+        for image-free content (ADR-048); it is not a general exec simulator.
+        """
+
+        del name, timeout
+        kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
+        matched = bool(cmd) and (
+            (cmd[0:2] == ["test", "-d"] and kind == "directory")
+            or (cmd[0:2] == ["test", "-f"] and kind == "file")
+        )
+        return subprocess.CompletedProcess(args=cmd, returncode=0 if matched else 1)
 
     def container_exists(self, name: str) -> bool:
         """Return whether the simulated project realized this container."""

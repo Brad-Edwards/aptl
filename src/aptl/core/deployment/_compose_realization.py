@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
@@ -27,6 +29,12 @@ from aptl.core.deployment._compose_image_realization import (
 from aptl.core.deployment._compose_network_realization import (
     ComposeRealizationNetworkMixin,
 )
+from aptl.core.deployment._compose_image_free_realization import (
+    _image_free_node_addresses,
+    _image_free_service_names,
+    _realize_node_subset,
+    _strip_image_free_published_ports,
+)
 from aptl.core.deployment._compose_realization_networks import (
     _container_networks,
     _network_name_candidates,
@@ -39,8 +47,12 @@ from aptl.core.lab_types import LabResult
 __all__ = [
     "ComposeRealizationMixin",
     "_container_networks",
+    "_image_free_node_addresses",
+    "_image_free_service_names",
     "_network_name_candidates",
+    "_realize_node_subset",
     "_resolve_realization_networks",
+    "_strip_image_free_published_ports",
 ]
 
 _COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
@@ -65,6 +77,45 @@ class ComposeRealizationMixin(
 
         if realization.image_free:
             return self._realize_image_free(realization)
+        return self._realize_mixed_or_legacy(realization, build=build)
+
+    def _realize_mixed_or_legacy(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        build: bool,
+    ) -> LabResult:
+        """Realize a spec with at least one still-Compose-managed node.
+
+        Covers both shapes: fully legacy (nothing image-free) and mixed
+        (ADR-048's image-free subset materialized first, then the legacy
+        Compose pipeline for the rest).
+        """
+
+        image_free_addresses = _image_free_node_addresses(realization)
+        if image_free_addresses:
+            # Mixed realization (ADR-048): materialize the runtime:-declared
+            # subset directly first - it never becomes a Compose container -
+            # then run the legacy pipeline for the rest, with those service
+            # names excluded from `compose up` so neither side starts, skips,
+            # or double-realizes the other's nodes.
+            node_result = self._materialize_image_free_nodes(
+                realization, image_free_addresses
+            )
+            if node_result is not None:
+                return node_result
+            excluded_services = _image_free_service_names(realization, image_free_addresses)
+            legacy_content = tuple(
+                item
+                for item in realization.content
+                if item.target_address not in image_free_addresses
+            )
+            realization = cast(
+                DeploymentRealizationSpec, replace(realization, content=legacy_content)
+            )
+            realization = _strip_image_free_published_ports(realization, image_free_addresses)
+        else:
+            excluded_services = ()
 
         profiles = list(realization.profiles)
         compose_files: tuple[Path, ...] | None = None
@@ -95,7 +146,10 @@ class ComposeRealizationMixin(
             """Start the realized services and return the final realization result."""
 
             start_result = self._start_realized_services(
-                profiles, build=build, compose_files=compose_files
+                profiles,
+                build=build,
+                compose_files=compose_files,
+                exclude_services=excluded_services,
             )
             return self._realization_result(start_result, realization)
 
@@ -119,6 +173,28 @@ class ComposeRealizationMixin(
                 return result
         return LabResult(success=True)
 
+    def _materialize_image_free_nodes(
+        self,
+        realization: DeploymentRealizationSpec,
+        addresses: frozenset[str],
+    ) -> LabResult | None:
+        """Materialize just the runtime:-declared node subset (ADR-048).
+
+        Shares the same node materialization and content-op lowering as the
+        fully image-free path, scoped to ``addresses`` so mixed-realization
+        content meant for a Compose-managed node is never misinterpreted as
+        an image-free placement.
+        """
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        nodes = tuple(n for n in realization.nodes if n.address in addresses)
+        content = tuple(
+            item for item in realization.content if item.target_address in addresses
+        )
+        return _realize_node_subset(self, nodes, content)
+
     def _realize_image_free(
         self,
         realization: DeploymentRealizationSpec,
@@ -132,38 +208,11 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        from aptl.backends.aces_materializer import (
-            PlaceFileOp,
-            PlaceProjectContentOp,
-        )
-        from aptl.backends.aces_node_materialization import realize_nodes
-
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
-
-        content_by_node: dict[str, list[object]] = {}
-        for content in realization.content:
-            dest = "/" + content.dest_relpath.lstrip("/")
-            if content.source_kind == "inline-text" and content.inline_text is not None:
-                op: object = PlaceFileOp(path=dest, content=content.inline_text)
-            elif content.source_kind in ("project-file", "project-directory") and content.source_relpath:
-                op = PlaceProjectContentOp(
-                    dest_path=dest,
-                    source_relpath=content.source_relpath,
-                    is_directory=content.source_kind == "project-directory",
-                )
-            else:
-                continue
-            content_by_node.setdefault(content.target_address, []).append(op)
-        node_result = realize_nodes(
-            realization.nodes,
-            self,
-            {addr: tuple(ops) for addr, ops in content_by_node.items()},
-        )
-        if node_result is not None:
-            return node_result
-        return LabResult(success=True)
+        node_result = _realize_node_subset(self, realization.nodes, realization.content)
+        return node_result if node_result is not None else LabResult(success=True)
 
     def _realize_published_ports(
         self,

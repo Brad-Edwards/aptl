@@ -83,6 +83,10 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
         assert backend.container_exec(container, ["id", "-u", "analyst"]).returncode == 0
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "network", "rm", "aptl-imagefree-admit_aptl-smoke"],
+            capture_output=True, text=True,
+        )
 
 
 _SERVICE_SDL = """\
@@ -134,3 +138,7 @@ def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
         assert active.stdout.strip() == "active"
     finally:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True)
+        subprocess.run(
+            ["docker", "network", "rm", "aptl-imagefree-svc_aptl-svc"],
+            capture_output=True, text=True,
+        )

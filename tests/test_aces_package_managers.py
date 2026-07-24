@@ -10,8 +10,11 @@ from __future__ import annotations
 import pytest
 
 from aptl.backends.aces_package_managers import (
+    UnsupportedDependencyEcosystemError,
     UnsupportedPackageManagerError,
     install_argv,
+    manifest_install_argv,
+    manifest_query_argv,
     parse_installed,
     query_installed_argv,
 )
@@ -28,6 +31,12 @@ class TestInstallArgv:
     def test_dnf_and_pip_are_supported_generically(self):
         assert "install" in install_argv("dnf", ("httpd",))
         assert "install" in install_argv("pip", ("requests",))
+
+    def test_pip_install_breaks_system_packages(self):
+        # The generic base's system pip is PEP 668-protected (Debian's own
+        # python3-pip); without this flag every pip install fails closed
+        # with "externally-managed-environment" before installing anything.
+        assert "--break-system-packages" in install_argv("pip", ("requests",))
 
     def test_unknown_manager_fails_closed(self):
         with pytest.raises(UnsupportedPackageManagerError):
@@ -56,3 +65,19 @@ class TestQueryAndParse:
             query_installed_argv("brew", ("wget",))
         with pytest.raises(UnsupportedPackageManagerError):
             parse_installed("brew", "")
+
+
+class TestManifestInstall:
+    def test_pip_manifest_install_targets_the_manifest_directory(self):
+        argv = manifest_install_argv("pip", "/app")
+        assert argv == ["pip", "install", "--break-system-packages", "/app"]
+
+    def test_pip_manifest_query_checks_the_declared_name(self):
+        argv = manifest_query_argv("pip", "aptl-labs")
+        assert argv == ["pip", "show", "aptl-labs"]
+
+    def test_unknown_ecosystem_fails_closed(self):
+        with pytest.raises(UnsupportedDependencyEcosystemError):
+            manifest_install_argv("npm", "/app")
+        with pytest.raises(UnsupportedDependencyEcosystemError):
+            manifest_query_argv("npm", "some-pkg")

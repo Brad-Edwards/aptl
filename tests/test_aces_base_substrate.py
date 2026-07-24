@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from aces_sdl.runtime_capabilities import RuntimeCapabilityPolicy
 from aces_sdl.runtime_configuration import (
     RuntimeConfiguration,
     ServiceManagerUnit,
@@ -79,6 +80,88 @@ class TestBaseContainerSpec:
     def test_unknown_os_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):
             base_container_spec("n.node", os="haiku", os_version="", runtime=None)
+
+    def test_declared_extra_capabilities_extend_the_fixed_init_set(self):
+        runtime = RuntimeConfiguration(
+            service_manager_units=[
+                ServiceManagerUnit(unit_id="svc", unit_name="svc.service", active_state="active")
+            ],
+            linux_capabilities=RuntimeCapabilityPolicy(add=["CAP_AUDIT_CONTROL"]),
+        )
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
+        assert spec.init is not None
+        assert "AUDIT_CONTROL" in spec.init.capabilities
+        # The fixed systemd requirements are still present alongside the addition.
+        assert "SYS_ADMIN" in spec.init.capabilities
+
+    def test_no_declared_capabilities_keeps_the_fixed_default_set(self):
+        spec = base_container_spec(
+            "n.node", os="linux", os_version="", runtime=_runtime_with_service()
+        )
+        assert spec.init is not None
+        assert spec.init.capabilities == ("SYS_ADMIN", "SYS_NICE", "SYS_RESOURCE")
+
+    def test_declared_published_ports_are_lowered(self):
+        from aces_sdl.runtime_network import (
+            RuntimeNetworkRealization,
+            RuntimePublishedPort,
+        )
+
+        runtime = RuntimeConfiguration(
+            network=RuntimeNetworkRealization(
+                published_ports=[
+                    RuntimePublishedPort(container_port=8080, host_port=8080),
+                    RuntimePublishedPort(
+                        container_port=53, protocol="udp", host_ip="127.0.0.1", host_port=5353
+                    ),
+                ]
+            )
+        )
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
+        assert len(spec.published_ports) == 2
+        assert spec.published_ports[0].container_port == 8080
+        assert spec.published_ports[0].protocol == "tcp"
+        assert spec.published_ports[0].host_port == 8080
+        # An author who omits host_ip gets loopback, never all interfaces
+        # (ADR-034 Host Exposure Amendment).
+        assert spec.published_ports[0].host_ip == "127.0.0.1"
+        assert spec.published_ports[1].protocol == "udp"
+        assert spec.published_ports[1].host_ip == "127.0.0.1"
+
+    def test_no_declared_network_yields_no_published_ports(self):
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=RuntimeConfiguration())
+        assert spec.published_ports == ()
+        spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
+        assert spec_none.published_ports == ()
+
+    def test_declared_volume_mount_is_lowered(self):
+        from aces_sdl.runtime_mounts import RuntimeMount
+
+        runtime = RuntimeConfiguration(
+            mounts=[
+                RuntimeMount(
+                    target="/var/lib/suricata/rules/misp",
+                    source="suricata_misp_rules",
+                    source_kind="volume",
+                ),
+                RuntimeMount(
+                    target="/etc/config",
+                    source="/host/config",
+                    source_kind="bind",
+                ),
+            ]
+        )
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=runtime)
+        assert len(spec.volume_mounts) == 1
+        assert spec.volume_mounts[0].source == "suricata_misp_rules"
+        assert spec.volume_mounts[0].target == "/var/lib/suricata/rules/misp"
+        assert spec.volume_mounts[0].read_only is False
+
+    def test_no_declared_mounts_yields_no_volume_mounts(self):
+        spec = base_container_spec("n.node", os="linux", os_version="", runtime=RuntimeConfiguration())
+        assert spec.volume_mounts == ()
+        spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
+        assert spec_none.volume_mounts == ()
 
 
 class TestPlanNode:

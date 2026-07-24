@@ -163,6 +163,59 @@ def _manager_definition(
                     "config/wazuh_cluster/patch-rule-path.py",
                     "/docker-entrypoint-initdb.d/patch-rule-path.py",
                 ),
+                # Custom detection content the manager loads through its
+                # rendered ossec.conf (<rule_include>/<decoder_dir>) plus the
+                # Shuffle SOAR integration. These are static, checked-in,
+                # read-only files -- the same category as the two support
+                # binds above -- so the graph-owned definition must carry them
+                # here. Because this override replaces the base compose service
+                # wholesale, omitting them drops the binds entirely and every
+                # custom rule silently fails to load ("Could not open file
+                # 'etc/rules/webapp_rules.xml'"), disabling webapp/AD/database/
+                # Suricata detection and the Wazuh->Shuffle hand-off. Targets
+                # sit under the wazuh-manager-etc volume (/var/ossec/etc);
+                # Docker mounts by path depth, so the more-specific bind
+                # overlays the volume and the files appear.
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/webapp_rules.xml",
+                    "/var/ossec/etc/rules/webapp_rules.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/ad_rules.xml",
+                    "/var/ossec/etc/rules/ad_rules.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/suricata_rules.xml",
+                    "/var/ossec/etc/rules/suricata_rules.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/database_rules.xml",
+                    "/var/ossec/etc/rules/database_rules.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/falco_rules.xml",
+                    "/var/ossec/etc/rules/falco_rules.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/samba_decoders.xml",
+                    "/var/ossec/etc/decoders/samba_decoders.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/postgresql_decoders.xml",
+                    "/var/ossec/etc/decoders/postgresql_decoders.xml",
+                ),
+                _bind(
+                    project_dir,
+                    "config/wazuh_cluster/custom-shuffle",
+                    "/var/ossec/integrations/custom-shuffle",
+                ),
             ],
             "entrypoint": ["/bin/bash", "-c", _manager_entrypoint()],
             "healthcheck": {

@@ -302,6 +302,76 @@ def test_stateful_override_uses_contained_artifact_and_project_volume(
     }
 
 
+def test_stateful_manager_carries_custom_detection_content(
+    tmp_path: Path,
+) -> None:
+    """The manager override must bind-mount every custom rule, decoder, and the
+    Shuffle integration it loads via its rendered ossec.conf.
+
+    Because the override replaces the base compose service wholesale, omitting
+    these static binds silently unloads webapp/AD/database/Suricata detection
+    and the Wazuh->Shuffle hand-off -- the manager still boots healthy, so only
+    a live attack reveals the gap. This pins the mount contract so that
+    regression (originally shipped in #796) cannot recur.
+    """
+    from aptl.core.deployment._compose_stateful_services import (
+        _manager_definition,
+    )
+
+    node = DeploymentNodeRealization(
+        address="provision.node.wazuh-manager",
+        name="wazuh-manager",
+        service_name="wazuh.manager",
+        container_name="aptl-wazuh-manager",
+        networks=(),
+    )
+    definition = _manager_definition(
+        tmp_path, node, "wazuh/wazuh-manager:4.12.0", (node,)
+    )
+    mounts = definition["volumes"]
+    seen = {
+        (mount.get("source"), mount.get("target"), bool(mount.get("read_only")))
+        for mount in mounts
+        if isinstance(mount, dict) and mount.get("type") == "bind"
+    }
+
+    def _cfg(name: str) -> str:
+        return str(tmp_path.resolve() / "config/wazuh_cluster" / name)
+
+    required = {
+        (_cfg("webapp_rules.xml"), "/var/ossec/etc/rules/webapp_rules.xml", True),
+        (_cfg("ad_rules.xml"), "/var/ossec/etc/rules/ad_rules.xml", True),
+        (
+            _cfg("suricata_rules.xml"),
+            "/var/ossec/etc/rules/suricata_rules.xml",
+            True,
+        ),
+        (
+            _cfg("database_rules.xml"),
+            "/var/ossec/etc/rules/database_rules.xml",
+            True,
+        ),
+        (_cfg("falco_rules.xml"), "/var/ossec/etc/rules/falco_rules.xml", True),
+        (
+            _cfg("samba_decoders.xml"),
+            "/var/ossec/etc/decoders/samba_decoders.xml",
+            True,
+        ),
+        (
+            _cfg("postgresql_decoders.xml"),
+            "/var/ossec/etc/decoders/postgresql_decoders.xml",
+            True,
+        ),
+        (
+            _cfg("custom-shuffle"),
+            "/var/ossec/integrations/custom-shuffle",
+            True,
+        ),
+    }
+    missing = required - seen
+    assert not missing, f"manager override dropped detection binds: {missing}"
+
+
 def test_stateful_override_rejects_symlinked_generated_path(tmp_path: Path) -> None:
     (tmp_path / ".aptl").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
     spec = _spec()

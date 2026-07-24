@@ -16,14 +16,14 @@ from __future__ import annotations
 import pytest
 from aces_contracts.planning import PlannedResource, RuntimeDomain
 
-from aptl.backends.aces_content_realization import (
-    _forbidden_source_reason,
-    resolve_content_placement,
+from aptl.backends.aces_content_realization import resolve_content_placement
+from aptl.backends.aces_content_source_policy import forbidden_source_reason
+from aptl.backends.aces_image_free_content_realization import (
     resolve_image_free_content_placement,
 )
 
 # --------------------------------------------------------------------------- #
-# _forbidden_source_reason — pure policy function
+# forbidden_source_reason — pure policy function
 # --------------------------------------------------------------------------- #
 
 
@@ -43,7 +43,7 @@ from aptl.backends.aces_content_realization import (
     ],
 )
 def test_forbidden_or_unlisted_sources_are_rejected(source_name):
-    assert _forbidden_source_reason(source_name) is not None
+    assert forbidden_source_reason(source_name) is not None
 
 
 @pytest.mark.parametrize(
@@ -66,12 +66,12 @@ def test_forbidden_or_unlisted_sources_are_rejected(source_name):
     ],
 )
 def test_legitimate_sources_are_not_forbidden(source_name):
-    assert _forbidden_source_reason(source_name) is None
+    assert forbidden_source_reason(source_name) is None
 
 
 def test_leading_slash_does_not_bypass_the_check():
-    assert _forbidden_source_reason("/.env") is not None
-    assert _forbidden_source_reason("/config/soc_certs/ca.key") is not None
+    assert forbidden_source_reason("/.env") is not None
+    assert forbidden_source_reason("/config/soc_certs/ca.key") is not None
 
 
 # --------------------------------------------------------------------------- #

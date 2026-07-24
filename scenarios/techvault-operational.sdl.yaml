@@ -149,6 +149,13 @@ nodes:
         - {manager: apt, name: python3-gunicorn, version: "*"}
         - {manager: apt, name: python3-psycopg2, version: "*"}
         - {manager: apt, name: python3-jwt, version: "*"}
+        # rsyslog forwards gunicorn's access log to the Wazuh manager's syslog
+        # port (172.20.2.30:514) so webapp SQLi/XSS/cmd-injection fire rules
+        # 302010/302020/302030. #581 parity: the v5.0.0 webapp ran an in-process
+        # Wazuh agent for this; on the generic node we forward via syslog (the
+        # manager accepts remote syslog on 514 from 172.20.0.0/16), which the
+        # web-accesslog decoder + custom rules process identically.
+        - {manager: apt, name: rsyslog, version: "*"}
       filesystem_inventory:
         - {path: /var/log/gunicorn, entry_type: directory}
       # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
@@ -167,6 +174,12 @@ nodes:
       # webapp-proxy service is the real host publication (issue #581).
       service_manager_units:
         - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
+        # Custom rsyslog unit (below): the stock rsyslog.service carries systemd
+        # sandboxing (ProtectKernelTunables/RestrictNamespaces/...) that fails
+        # 226/NAMESPACE under the materializer's restricted caps, and a drop-in
+        # would need a daemon-reload the materializer does not run. A fresh unit
+        # file loads on start (like webapp.service) with no sandboxing.
+        - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
   ad:
     type: vm
     os: linux
@@ -259,6 +272,11 @@ nodes:
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
         - {manager: dnf, name: sudo, version: "*"}
+        # rsyslog forwards the victim's syslog to the Wazuh manager
+        # (172.20.2.30:514) so host events (auth failures, the smoke
+        # log-ingestion probe) reach the SIEM. #581 parity: the v5.0.0 victim
+        # ran an in-process Wazuh agent; the generic node forwards via syslog.
+        - {manager: dnf, name: rsyslog, version: "*"}
       local_identity:
         groups:
           - {name: labadmin}
@@ -266,6 +284,7 @@ nodes:
           - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
+        - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
 
   kali:
     type: vm
@@ -617,6 +636,66 @@ content:
       ExecStart=/usr/bin/python3 -m gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
       Restart=always
 
+      [Install]
+      WantedBy=multi-user.target
+  # rsyslog forward configs (#581 Tier-2 monitoring parity). imfile reads
+  # gunicorn's access log and forwards every message to the Wazuh manager's
+  # remote-syslog port; the gunicorn-tagged access lines are what the
+  # web-accesslog decoder + rules 302010/302020/302030 match (verified live:
+  # a forwarded SQLi line fires 302010). victim forwards its host syslog so
+  # auth failures + the smoke log-ingestion probe reach the SIEM.
+  webapp-rsyslog-forward:
+    type: file
+    target: webapp
+    path: /etc/rsyslog.d/90-aptl-forward.conf
+    text: |
+      module(load="imfile")
+      # Forward gunicorn access lines RAW (no syslog program tag) so the
+      # manager's built-in web-accesslog decoder matches them and rules
+      # 302010/302020/302030 fire. A program tag (e.g. "gunicorn:") makes the
+      # manager's predecoder claim the line as that program and the
+      # web-accesslog decoder then no longer matches (verified live).
+      template(name="aptl_rawfwd" type="string" string="<134>%timestamp:::date-rfc3164% %hostname% %msg%\n")
+      input(type="imfile"
+            File="/var/log/gunicorn/access.log"
+            Tag="webapp"
+            ruleset="aptl_fwd")
+      ruleset(name="aptl_fwd") {
+        action(type="omfwd" Target="172.20.2.30" Port="514" Protocol="udp" Template="aptl_rawfwd")
+      }
+  victim-rsyslog-forward:
+    type: file
+    target: victim
+    path: /etc/rsyslog.d/90-aptl-forward.conf
+    text: |
+      *.* @172.20.2.30:514
+  # Custom rsyslog units for the generic systemd nodes (see the
+  # service_manager_units note on webapp): a fresh unit with no sandboxing so
+  # systemd can start rsyslogd under the materializer's restricted caps.
+  webapp-rsyslog-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/aptl-rsyslog.service
+    text: |
+      [Unit]
+      Description=APTL rsyslog log forwarder
+      After=network.target
+      [Service]
+      ExecStart=/usr/sbin/rsyslogd -n
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+  victim-rsyslog-unit:
+    type: file
+    target: victim
+    path: /etc/systemd/system/aptl-rsyslog.service
+    text: |
+      [Unit]
+      Description=APTL rsyslog log forwarder
+      After=network.target
+      [Service]
+      ExecStart=/usr/sbin/rsyslogd -n
+      Restart=always
       [Install]
       WantedBy=multi-user.target
   dns-named-conf:

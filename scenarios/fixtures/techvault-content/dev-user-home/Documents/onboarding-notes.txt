@@ -1,0 +1,35 @@
+cat > "$HOMEDIR/Documents/onboarding-notes.txt" << 'EOF'
+TechVault Engineering Onboarding Notes
+=======================================
+Author: Michael Thompson
+Date: 2024-01-15
+
+Welcome to the team! Here's what you need to get started:
+
+1. AD Account Setup
+   - Domain: TECHVAULT.LOCAL
+   - Your account should already be provisioned by IT
+   - Default password for new accounts: Welcome1!
+   - Please change on first login (but honestly most people don't)
+
+2. VPN Access
+   - Use your AD credentials
+   - Contractor accounts (like contractor.temp) have VPN + RDP access
+   - Ask IT if you need additional access groups
+
+3. Development Environment
+   - Clone the portal repo: git clone git@github.com:techvault/portal.git
+   - Copy .env.example to .env and fill in DB credentials
+   - DB host: 172.20.2.11, user: techvault, ask me for password if needed
+   - JWT secret for local dev: techvault-jwt-weak
+
+4. SSH Access to Servers
+   - app server (victim): 172.20.2.20, use labadmin account
+   - Keep your SSH key in ~/.ssh/id_rsa (no passphrase for convenience)
+   - The deploy key on the fileshare (/IT-Backups/keys/) also works
+
+5. Important
+   - DO NOT commit credentials to git (I know the .env has some... working on it)
+   - The deploy.sh script has hardcoded creds -- legacy issue, will fix "soon"
+   - Password rotation is overdue -- Jessica mentioned it in the last meeting
+EOF

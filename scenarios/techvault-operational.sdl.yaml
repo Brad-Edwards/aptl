@@ -197,8 +197,14 @@ nodes:
       local_identity:
         groups:
           - {name: labadmin}
+          - {name: dev-user}
         users:
           - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
+          # dev-user (michael.thompson): the compromised-workstation persona,
+          # #581 parity. Distinct weak-cred developer account whose home holds
+          # the planted credential loot the red-team exercise mines; separate
+          # from the labadmin admin account. Loot placed via content below.
+          - {username: dev-user, primary_group: dev-user, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
   fileshare:
@@ -283,6 +289,23 @@ nodes:
         - {manager: apt, name: bsdmainutils, version: "*"}
         - {manager: apt, name: python3, version: "*"}
         - {manager: apt, name: libcap2-bin, version: "*"}
+        # Offensive toolset — #581 parity with the v5.0.0 Kali image. The
+        # live tests drive curl-based web attacks (SQLi/XSS/cmd-injection) and
+        # the TechVault attack path uses these enumeration/exploitation tools.
+        # NOTE: Kali metapackages (kali-linux-core / kali-tools-top10, which
+        # carry metasploit) live in the Kali apt repo, not Debian, so restoring
+        # those on the generic Debian base needs an upstream third-party-repo
+        # materializer capability (aces#847). Here we install the
+        # Debian-available subset the scenario actually exercises.
+        - {manager: apt, name: curl, version: "*"}
+        - {manager: apt, name: wget, version: "*"}
+        - {manager: apt, name: dnsutils, version: "*"}
+        - {manager: apt, name: netcat-openbsd, version: "*"}
+        - {manager: apt, name: smbclient, version: "*"}
+        - {manager: apt, name: ldap-utils, version: "*"}
+        - {manager: apt, name: sqlmap, version: "*"}
+        - {manager: apt, name: hydra, version: "*"}
+        - {manager: apt, name: python3-impacket, version: "*"}
       local_identity:
         groups:
           - {name: kali}
@@ -381,29 +404,54 @@ infrastructure:
     links: [security-net]
     dependencies: [wazuh-manager, suricata]
 
+  # Fixed addressing for the enterprise + attacker set. #581 parity: the
+  # v5.0.0 fixed-compose lab assigned these deterministically, and the DNS
+  # zones, seeded credentials/loot, and the live tests all hardcode them.
+  # Without a pinned address the node is auto-allocated and drifts.
   webapp:
     links: [dmz-net, internal-net]
     dependencies: [db, wazuh-manager]
+    properties:
+      - {dmz-net: 172.20.1.20}
+      - {internal-net: 172.20.2.25}
   ad:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.10}
   db:
     links: [internal-net]
+    properties:
+      - {internal-net: 172.20.2.11}
   workstation:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.40}
   fileshare:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.12}
   dns:
     links: [security-net, dmz-net, internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {security-net: 172.20.0.25}
+      - {dmz-net: 172.20.1.22}
+      - {internal-net: 172.20.2.27}
   victim:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.20}
 
   kali:
     links: [redteam-net, dmz-net, internal-net]
+    properties:
+      - {redteam-net: 172.20.4.30}
+      - {dmz-net: 172.20.1.30}
+      - {internal-net: 172.20.2.35}
   kali-capture:
     dependencies: [kali]
 
@@ -595,22 +643,38 @@ content:
     path: /etc/samba/smb.conf
     source:
       name: containers/fileshare/smb.conf
-  fileshare-public-notice:
-    type: file
-    target: fileshare
-    path: /srv/shares/public/notice.txt
-    text: |
-      Welcome to TechVault Solutions file server.
-      This notice is planted by the operational ACES scenario's
-      content-placement realization (issue #689) — dynamically realized
-      from inline text authored in techvault-operational.sdl.yaml, not
-      hand-copied onto the image.
-  fileshare-onboarding-packet:
+  # Full TechVault file-share loot tree — #581 parity. smb.conf advertises
+  # Public/Engineering/Finance/HR/IT-Backups/Shared; the red-team exercise
+  # mines the planted creds (engineering/deployments/deploy.sh), PII
+  # (hr/employees/directory.csv), wifi passwords (shared/wifi-passwords.txt),
+  # and a leaked deploy key (it-backups/keys/). Realized from a checked-in
+  # fixture, not baked onto an image. Keeps the onboarding + public notice.
+  fileshare-shares:
     type: directory
     target: fileshare
-    destination: /srv/shares/onboarding
+    destination: /srv/shares
     source:
-      name: scenarios/fixtures/techvault-content/onboarding
+      name: scenarios/fixtures/techvault-content/fileshare-shares
+  # Workstation dev-user loot home — #581 parity (WS-01..WS-05). Planted
+  # credential artifacts (.bash_history, .pgpass, .config/credentials.json,
+  # projects/techvault-portal/{.env,deploy.sh}, Documents/onboarding-notes.txt,
+  # .ssh keypair) the attack path harvests off the compromised workstation.
+  workstation-dev-user-home:
+    type: directory
+    target: workstation
+    destination: /home/dev-user
+    source:
+      name: scenarios/fixtures/techvault-content/dev-user-home
+  # dev-user's leaked SSH private key (loot WS-03), placed inline: a tracked
+  # file literally named `id_rsa` is rejected by the repo no-secrets guard
+  # (tests/test_assets.py). Redacted placeholder — the loot only needs to exist.
+  workstation-dev-user-privkey:
+    type: file
+    target: workstation
+    path: /home/dev-user/.ssh/id_rsa
+    text: |
+      # Leaked developer SSH private key (loot artifact WS-03).
+      # Redacted placeholder in-repo; a real weak key can be regenerated per lab.
   # The stock `postgresql` package creates an empty cluster with no
   # techvault database/user and no schema — the legacy compose db service
   # got these from postgres:16-alpine's POSTGRES_DB/USER/PASSWORD

@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 from aces_sdl.runtime_configuration import (
     RuntimeConfiguration,
+    RuntimeDependencyManifest,
     RuntimeLocalGroup,
     RuntimeLocalIdentityInventory,
     RuntimeLocalUser,
@@ -26,7 +27,9 @@ from aptl.backends.aces_materializer import (
     EnsureDirectoryOp,
     EnsureGroupOp,
     EnsureUserOp,
+    InstallDependencyManifestOp,
     InstallPackagesOp,
+    PlaceFileOp,
     StartServiceUnitOp,
     UnsupportedOsFamilyError,
     base_image_for_os,
@@ -175,6 +178,33 @@ class TestPlanNodeMaterialization:
         )
         ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
         assert not any(isinstance(op, EnsureDirectoryOp) for op in ops)
+
+    def test_dependency_manifest_installed_after_content_before_services(self):
+        runtime = RuntimeConfiguration(
+            dependency_manifests=[
+                RuntimeDependencyManifest(
+                    ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+                ),
+            ],
+            service_manager_units=[
+                ServiceManagerUnit(
+                    unit_id="svc", unit_name="svc.service", enabled_state="enabled", active_state="active"
+                ),
+            ],
+        )
+        content = (PlaceFileOp(path="/app/pyproject.toml", content="[project]\n"),)
+        ops = plan_node_materialization(
+            os="linux", os_version="", runtime=runtime, content=content
+        )
+        assert InstallDependencyManifestOp(
+            ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+        ) in ops
+        manifest_idx = next(
+            i for i, op in enumerate(ops) if isinstance(op, InstallDependencyManifestOp)
+        )
+        content_idx = next(i for i, op in enumerate(ops) if isinstance(op, PlaceFileOp))
+        start_idx = next(i for i, op in enumerate(ops) if isinstance(op, StartServiceUnitOp))
+        assert content_idx < manifest_idx < start_idx
 
     def test_planner_is_product_agnostic(self):
         # Identical declared state produces identical ops. The planner has no

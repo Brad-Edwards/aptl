@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from aces_sdl.runtime_configuration import (
     RuntimeConfiguration,
+    RuntimeDependencyManifest,
     RuntimeLocalGroup,
     RuntimeLocalIdentityInventory,
     RuntimeLocalUser,
@@ -23,6 +24,7 @@ from aces_sdl.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesyste
 from aptl.backends.aces_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
+    InstallDependencyManifestOp,
     plan_node_materialization,
 )
 from aptl.backends.aces_materializer_engine import materialize_node
@@ -41,9 +43,18 @@ class _RecordingExecutor:
         self.enabled: set[tuple[str, str]] = set()
         self.active: set[tuple[str, str]] = set()
         self.directories: set[tuple[str, str]] = set()
+        self.dependency_manifests: set[tuple[str, str]] = set()
 
     def ensure_base_substrate(self, node_address: str, image_ref: str) -> None:
         self.base[node_address] = image_ref
+
+    def install_dependency_manifest(self, node_address: str, op: InstallDependencyManifestOp) -> None:
+        self.dependency_manifests.add((node_address, op.path))
+
+    def observe_dependency_manifest_installed(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> bool:
+        return (node_address, op.path) in self.dependency_manifests
 
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None:
         self.directories.add((node_address, op.path))
@@ -191,6 +202,38 @@ class TestMaterializeNode:
         result = materialize_node("techvault.dns", ops, _SilentDirectory())
         assert result is not None and result.success is False
         assert "/var/log/named" in (result.error or "")
+
+    def test_dependency_manifest_is_materialized_and_verified(self):
+        runtime = RuntimeConfiguration(
+            dependency_manifests=[
+                RuntimeDependencyManifest(
+                    ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+        ex = _RecordingExecutor()
+        result = materialize_node("techvault.sync", ops, ex)
+        assert result is None
+        assert ("techvault.sync", "/app/pyproject.toml") in ex.dependency_manifests
+
+    def test_unverifiable_dependency_manifest_fails_closed(self):
+        runtime = RuntimeConfiguration(
+            dependency_manifests=[
+                RuntimeDependencyManifest(
+                    ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"
+                ),
+            ],
+        )
+        ops = plan_node_materialization(os="linux", os_version="", runtime=runtime)
+
+        class _SilentInstall(_RecordingExecutor):
+            def install_dependency_manifest(self, node_address, op):
+                pass  # runs but materializes nothing
+
+        result = materialize_node("techvault.sync", ops, _SilentInstall())
+        assert result is not None and result.success is False
+        assert "/app/pyproject.toml" in (result.error or "")
 
     def test_empty_runtime_only_needs_base_substrate(self):
         ops = plan_node_materialization(os="linux", os_version="", runtime=None)

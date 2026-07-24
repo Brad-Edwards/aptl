@@ -15,6 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from aces_sdl import parse_sdl_file
 from aces_runtime.manager import RuntimeManager
 from aces_contracts.planning import (
     ChangeAction,
@@ -33,6 +34,7 @@ from aptl.backends.aces_profiles import (
 from aptl.backends.aces import create_aptl_runtime_target
 from aptl.backends.aces_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
+from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
 from aptl.validation._account_parity import check_account_provisioner_parity
@@ -50,6 +52,7 @@ from aptl.validation._gate_checks import (
     check_parse,
     check_provisioning_realization,
 )
+from aptl.validation.imagefree_gate import assert_image_free
 from aptl.validation.techvault_gate import (
     GateCheck,
     GateOptions,
@@ -60,7 +63,7 @@ from aptl.validation.techvault_gate import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
-PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy"})
+PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
 
 # --------------------------------------------------------------------------- #
@@ -97,6 +100,38 @@ def test_operational_gate_passes():
         "provisioning_realization",
         "account_provisioner_parity",
     ]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata are blocked on "
+        "genuine ACES SDL expressivity gaps, not local workarounds: "
+        "Brad-Edwards/aces#845 (no compiled placement for domain-controller "
+        "bootstrap), #847 (RuntimePackage has no documented way to declare a "
+        "third-party package repository - needed for the Wazuh agent), #849 "
+        "(no SDL concept for a node sharing another node's network namespace). "
+        "Remove this marker once all four are authored; strict=True fails the "
+        "build the moment that happens without the marker being removed."
+    ),
+    strict=True,
+)
+def test_operational_scenario_passes_the_realization_declaration_gate():
+    """Every OS-bearing node in the shipped SDL resolves through a declared
+    realization (ADR-048 P7): generic-materializer runtime: or a trust-
+    policy-resolved source:, never docker-compose.yml alone with nothing
+    declared in the SDL. This is the blocking check the operational
+    TechVault cutover must pass, growing stricter as more nodes convert.
+    """
+    config = load_config(PROJECT_ROOT / "aptl.json")
+    backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
+    plan = RuntimeManager(
+        create_aptl_runtime_target(project_dir=PROJECT_ROOT, config=config, backend=backend)
+    ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
+    realization = interpret_provisioning_plan(
+        plan=plan.provisioning, project_dir=PROJECT_ROOT, config=config
+    )
+    assert [d.message for d in realization.diagnostics if d.is_error] == []
+    assert_image_free(realization.deployment_spec([]))  # raises with every violation
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():
@@ -291,6 +326,63 @@ def test_no_start_backend_reads_back_simulated_content_kind():
     assert backend.observe_content_type(file_item) == "file"
     assert backend.observe_content_type(directory_item) == "directory"
     assert backend.container_exists("unrealized") is False
+
+
+def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec():
+    """Image-free content (empty volume_suffix) is read back via container_exec.
+
+    The generic materializer places content directly into a node's
+    filesystem, so ``observed_content_type`` skips ``observe_content_type``
+    (which reads a Compose volume that does not exist for this shape) and
+    calls ``backend.container_exec`` instead. ``_NoStartBackend`` must answer
+    that probe from its simulated shapes rather than starting Docker; a
+    missing ``container_exec`` method previously crashed the static gate
+    with an AttributeError the moment a scenario used image-free content
+    (caught only by a real live-gate boot, not by any prior unit test).
+    """
+    from aptl.backends._aces_observation_helpers import observed_content_type
+    from aptl.core.deployment.realization import (
+        DeploymentContentRealization,
+        DeploymentRealizationSpec,
+    )
+
+    file_item = DeploymentContentRealization(
+        address="provision.content.webapp-service-unit",
+        target_address="provision.node.webapp",
+        content_name="webapp-service-unit",
+        volume_suffix="",
+        dest_relpath="etc/systemd/system/webapp.service",
+        source_kind="inline-text",
+        inline_text="must not be materialized by the static gate",
+    )
+    directory_item = DeploymentContentRealization(
+        address="provision.content.webapp-app-code",
+        target_address="provision.node.webapp",
+        content_name="webapp-app-code",
+        volume_suffix="",
+        dest_relpath="opt/webapp",
+        source_kind="project-directory",
+    )
+    backend = _NoStartBackend()
+
+    result = backend.realize(
+        DeploymentRealizationSpec(
+            profiles=(),
+            nodes=(),
+            networks=(),
+            content=(file_item, directory_item),
+        )
+    )
+
+    assert result.success is True
+    assert (
+        observed_content_type(backend, file_item, container_name="aptl-webapp")
+        == "file"
+    )
+    assert (
+        observed_content_type(backend, directory_item, container_name="aptl-webapp")
+        == "directory"
+    )
 
 
 @pytest.mark.integration

@@ -52,6 +52,11 @@ class _ComposeStopBackend(Protocol):
 
         ...
 
+    def remove_generic_materializer_containers(self) -> list[str]:
+        """Force-remove containers the generic materializer started directly."""
+
+        ...
+
 
 def stop_compose_lab(
     backend: _ComposeStopBackend,
@@ -125,9 +130,16 @@ def _cleanup_failures(
     discovery_error: str,
     timeout: int,
 ) -> list[str]:
-    """Collect project cleanup failures after Compose stops."""
+    """Collect project cleanup failures after Compose stops.
 
-    failures = backend.remove_project_networks()
+    Generic-materializer containers (ADR-048) first: `docker compose down`
+    never touches them (Compose didn't start them), so they would otherwise
+    stay attached to the very networks/volumes cleaned up next, failing that
+    removal outright with "network has active endpoints".
+    """
+
+    failures = backend.remove_generic_materializer_containers()
+    failures += backend.remove_project_networks()
     if not remove_volumes:
         return failures
     if discovery_error:

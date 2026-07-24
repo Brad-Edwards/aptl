@@ -142,6 +142,25 @@ jobs:
       - run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev,web]"
+      - name: Generate lab SSH keys
+        # issue #581: the operational scenario's content: now declares the
+        # SSH-reachable targets' authorized_keys (SEC #417), sourced from the
+        # gitignored keys/ and config/lab-ssh/ files lab start generates —
+        # the static gate resolves and requires that source file to exist on
+        # disk, so it must be generated before the gate runs, same as it
+        # would be by the time a real `aptl lab start` reaches content
+        # placement.
+        run: |
+          python -c "
+          from pathlib import Path
+          from aptl.core.ssh import ensure_ssh_keys, ensure_pivot_key, ensure_target_authorized_keys
+          project = Path('.')
+          keys_dir = project / 'keys'
+          pivot_dir = project / 'config' / 'lab-ssh'
+          assert ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=Path.home() / '.ssh').success
+          assert ensure_pivot_key(pivot_dir=pivot_dir).success
+          assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
+          "
       - name: ACES static validation gate (techvault-operational)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker
@@ -337,8 +356,11 @@ jobs:
     runs-on: ubuntu-latest
     # Advisory image scan per locally-built Dockerfile. Matrix is bounded
     # to images defined in `web/` and `containers/`; upstream-image-only
-    # services (wazuh/, misp/, etc.) are out of scope. ADR-026 calls out
-    # the cost of one-image-per-job. These advisory builds intentionally
+    # services (wazuh/, misp/, etc.) are out of scope, as are TechVault's
+    # image-free nodes (dns, fileshare, kali, victim, webapp, workstation)
+    # (issue #581) — they realize onto the generic base substrate from the
+    # SDL, with no product Dockerfile of their own to scan. ADR-026 calls
+    # out the cost of one-image-per-job. These advisory builds intentionally
     # avoid buildx GHA layer cache because expired cache blob URLs can fail
     # the job before Trivy runs.
     continue-on-error: true
@@ -355,33 +377,15 @@ jobs:
           - name: base-ubuntu
             dockerfile: containers/base/Dockerfile.ubuntu
             context: ./containers
-          - name: dns
-            dockerfile: containers/dns/Dockerfile
-            context: .
-          - name: fileshare
-            dockerfile: containers/fileshare/Dockerfile
-            context: .
-          - name: kali
-            dockerfile: containers/kali/Dockerfile
-            context: ./containers/kali
           - name: misp-suricata-sync
             dockerfile: containers/misp-suricata-sync/Dockerfile
             context: .
           - name: reverse
             dockerfile: containers/reverse/Dockerfile
             context: ./containers
-          - name: victim
-            dockerfile: containers/victim/Dockerfile
-            context: ./containers
           - name: wazuh-sidecar
             dockerfile: containers/wazuh-sidecar/Dockerfile
             context: .
-          - name: webapp
-            dockerfile: containers/webapp/Dockerfile
-            context: .
-          - name: workstation
-            dockerfile: containers/workstation/Dockerfile
-            context: ./containers
           - name: web
             dockerfile: web/Dockerfile
             context: web
@@ -392,39 +396,8 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-      - name: Decide whether this image needs scanning
-        id: image-scope
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          scan=true
-          if [ "${{ matrix.name }}" = "kali" ]; then
-            scan=false
-            base=""
-            head="HEAD"
-
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              base="${{ github.event.pull_request.base.sha }}"
-            elif [ "${{ github.event_name }}" = "push" ]; then
-              base="${{ github.event.before }}"
-            fi
-
-            if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
-              scan=true
-            elif ! git cat-file -e "$base^{commit}"; then
-              scan=true
-            elif git diff --name-only "$base" "$head" | grep -Eq '^(containers/kali/|\.github/workflows/checks\.yml$)'; then
-              scan=true
-            fi
-          fi
-
-          echo "scan=$scan" >> "$GITHUB_OUTPUT"
-          echo "scan=$scan"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-        if: steps.image-scope.outputs.scan == 'true'
       - name: Build image
-        if: steps.image-scope.outputs.scan == 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ matrix.context }}
@@ -433,7 +406,6 @@ jobs:
           load: true
           push: false
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        if: steps.image-scope.outputs.scan == 'true'
         with:
           scan-type: image
           image-ref: aptl-scan/${{ matrix.name }}:ci
@@ -444,7 +416,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
           limit-severities-for-sarif: 'true'
       - name: Upload SARIF
-        if: always() && steps.image-scope.outputs.scan == 'true'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-image-${{ matrix.name }}-sarif

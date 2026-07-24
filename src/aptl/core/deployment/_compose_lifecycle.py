@@ -36,6 +36,9 @@ class _ComposeLifecycleBackend(Protocol):
     def remove_project_networks(self) -> list[str]:
         """Remove leftover project-scoped realization networks."""
 
+    def remove_generic_materializer_containers(self) -> list[str]:
+        """Force-remove containers the generic materializer started directly."""
+
 
 def kill_compose_lab(
     backend: _ComposeLifecycleBackend,
@@ -43,7 +46,13 @@ def kill_compose_lab(
     *,
     timeout: int,
 ) -> tuple[bool, str]:
-    """Emergency-stop all lab containers and cleanup realization networks."""
+    """Emergency-stop all lab containers and cleanup realization networks.
+
+    `docker compose kill`/`down` only affects containers Compose itself
+    started; a node the generic materializer realized directly (ADR-048) is
+    invisible to both, so it survives an emergency stop unless force-removed
+    separately.
+    """
 
     kill_ok, kill_error = _run_compose_kill(
         backend,
@@ -51,6 +60,12 @@ def kill_compose_lab(
         timeout=timeout,
     )
     _run_compose_down(backend, profiles, timeout=timeout)
+    container_failures = backend.remove_generic_materializer_containers()
+    if container_failures:
+        log.warning(
+            "generic-materializer container cleanup failed: %s",
+            "; ".join(container_failures[:5]),
+        )
     network_failures = backend.remove_project_networks()
     if network_failures:
         log.warning(
@@ -58,7 +73,7 @@ def kill_compose_lab(
             "; ".join(network_failures[:5]),
         )
 
-    error = _kill_error(kill_error, network_failures, kill_ok)
+    error = _kill_error(kill_error, container_failures + network_failures, kill_ok)
     success = not error
     if success:
         log.info("All lab containers stopped")

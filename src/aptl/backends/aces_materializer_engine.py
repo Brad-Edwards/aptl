@@ -25,6 +25,7 @@ from aptl.backends.aces_materializer import (
     EnsureDirectoryOp,
     EnsureGroupOp,
     EnsureUserOp,
+    InstallDependencyManifestOp,
     InstallPackagesOp,
     MaterializationOp,
     PlaceFileOp,
@@ -49,6 +50,9 @@ class MaterializationExecutor(Protocol):
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None: ...
     def place_file(self, node_address: str, path: str, content: str, mode: str) -> None: ...
     def place_project_content(self, node_address: str, op: PlaceProjectContentOp) -> None: ...
+    def install_dependency_manifest(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> None: ...
     def enable_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def start_service_unit(self, node_address: str, unit_name: str) -> None: ...
     def observe_installed_packages(
@@ -58,6 +62,9 @@ class MaterializationExecutor(Protocol):
     def observe_local_user(self, node_address: str, username: str) -> bool: ...
     def observe_directory(self, node_address: str, path: str) -> bool: ...
     def observe_file(self, node_address: str, path: str) -> bool: ...
+    def observe_dependency_manifest_installed(
+        self, node_address: str, op: InstallDependencyManifestOp
+    ) -> bool: ...
     def observe_service_unit_enabled(self, node_address: str, unit_name: str) -> bool: ...
     def observe_service_unit_active(self, node_address: str, unit_name: str) -> bool: ...
 
@@ -75,6 +82,7 @@ _EXECUTORS: dict[type, _Execute] = {
     EnsureDirectoryOp: lambda op, addr, ex: ex.ensure_directory(addr, op),
     PlaceFileOp: lambda op, addr, ex: ex.place_file(addr, op.path, op.content, op.mode),
     PlaceProjectContentOp: lambda op, addr, ex: ex.place_project_content(addr, op),
+    InstallDependencyManifestOp: lambda op, addr, ex: ex.install_dependency_manifest(addr, op),
     EnableServiceUnitOp: lambda op, addr, ex: ex.enable_service_unit(addr, op.unit_name),
     StartServiceUnitOp: lambda op, addr, ex: ex.start_service_unit(addr, op.unit_name),
 }
@@ -133,6 +141,16 @@ def _verify_place_project_content(
     return None if ex.observe_file(addr, op.dest_path) else f"content not present: {op.dest_path}"
 
 
+def _verify_install_dependency_manifest(
+    op: InstallDependencyManifestOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
+    """Verify the manifest's declared package is observed installed."""
+
+    if ex.observe_dependency_manifest_installed(addr, op):
+        return None
+    return f"dependency manifest not installed: {op.path}"
+
+
 def _verify_enable_service_unit(op: EnableServiceUnitOp, addr: str, ex: MaterializationExecutor) -> str | None:
     """Verify the declared service unit is observed enabled."""
 
@@ -158,6 +176,7 @@ _VERIFIERS: dict[type, _Verify] = {
     EnsureDirectoryOp: _verify_ensure_directory,
     PlaceFileOp: _verify_place_file,
     PlaceProjectContentOp: _verify_place_project_content,
+    InstallDependencyManifestOp: _verify_install_dependency_manifest,
     EnableServiceUnitOp: _verify_enable_service_unit,
     StartServiceUnitOp: _verify_start_service_unit,
 }

@@ -133,6 +133,24 @@ class PlaceProjectContentOp:
 
 
 @dataclass(frozen=True)
+class InstallDependencyManifestOp:
+    """Install a project's declared dependency manifest (ADR-048).
+
+    ``path`` is the absolute in-container path to the manifest file (already
+    placed via content), ``name`` the package name the manifest installs
+    (used to verify by read-after-write). Generic: the backend only knows how
+    to run one ecosystem's install tool against a manifest's directory; it
+    carries no knowledge of what that manifest declares. Ordered after
+    content (the manifest file must already be in place) and before service
+    start (a dependent service needs the package installed first).
+    """
+
+    ecosystem: str
+    path: str
+    name: str = ""
+
+
+@dataclass(frozen=True)
 class EnableServiceUnitOp:
     """Enable a service-manager unit (start on boot)."""
 
@@ -154,6 +172,7 @@ MaterializationOp = (
     | EnsureDirectoryOp
     | PlaceFileOp
     | PlaceProjectContentOp
+    | InstallDependencyManifestOp
     | EnableServiceUnitOp
     | StartServiceUnitOp
 )
@@ -251,6 +270,15 @@ def _filesystem_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
     ]
 
 
+def _dependency_manifest_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
+    """Lower declared dependency manifests into install ops."""
+
+    return [
+        InstallDependencyManifestOp(ecosystem=entry.ecosystem, path=entry.path, name=entry.name)
+        for entry in runtime.dependency_manifests
+    ]
+
+
 def _service_unit_ops(runtime: RuntimeConfiguration) -> list[MaterializationOp]:
     """Lower declared service units into enable/start ops for enabled/active ones."""
 
@@ -300,5 +328,6 @@ def plan_node_materialization(
         ops.extend(_filesystem_ops(runtime))
     ops.extend(content)
     if runtime is not None:
+        ops.extend(_dependency_manifest_ops(runtime))
         ops.extend(_service_unit_ops(runtime))
     return tuple(ops)

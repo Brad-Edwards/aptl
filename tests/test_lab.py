@@ -318,6 +318,37 @@ class TestLabStop:
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
 
+    def test_stop_always_includes_otel_profile(self, mock_subprocess, tmp_path):
+        """stop_lab must tear down every profile start_lab always brings up.
+
+        start_lab unconditionally adds "otel" (Collector + Tempo + Grafana
+        are core infrastructure, not an aptl.json container toggle) even
+        when aptl.json has no "otel" key at all. Before this fix, stop_lab's
+        profile set came from config.containers.enabled_profiles() alone, so
+        `docker compose down` never targeted the otel-profiled containers —
+        they stayed attached to the project's networks/volumes, and a
+        subsequent clean-state reboot failed cleanup outright with "network
+        has active endpoints" (caught by a real local live-gate boot).
+        """
+        import json
+        from aptl.core.lab import stop_lab
+
+        (tmp_path / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "lab": {"name": "test"},
+                    "containers": {"victim": True, "kali": False, "wazuh": True},
+                }
+            )
+        )
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        result = stop_lab(project_dir=tmp_path)
+
+        assert result.success is True
+        cmd_args = self._compose_down_args(mock_subprocess)
+        assert "otel" in cmd_args
+
 
 class TestCleanBootLab:
     """Tests for the RNG-001 clean-boot lifecycle mode.
@@ -1208,6 +1239,36 @@ class TestOrchestrateLabStart:
                 success=True,
                 generated=False,
                 key_path=Path("config") / "lab-ssh" / "kali_pivot_key",
+            ),
+        )
+        # SEC #417 / #581: the combined target authorized_keys file needs
+        # both real pubkeys on disk to build; mock it like the two keygen
+        # steps above so orchestration tests do not depend on real key files.
+        mocks["target_authorized_keys"] = mocker.patch(
+            "aptl.core.lab.ensure_target_authorized_keys",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=keys_dir / "target_authorized_keys",
+            ),
+        )
+        # #581: the workstation -> victim lateral-movement pivot key and
+        # victim's own combined authorized_keys file, mocked for the same
+        # reason as the two keygen steps above.
+        mocks["workstation_pivot"] = mocker.patch(
+            "aptl.core.lab.ensure_workstation_pivot_key",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=Path("config") / "lab-ssh" / "workstation_pivot_key",
+            ),
+        )
+        mocks["victim_authorized_keys"] = mocker.patch(
+            "aptl.core.lab.ensure_victim_authorized_keys",
+            return_value=SSHKeyResult(
+                success=True,
+                generated=False,
+                key_path=keys_dir / "victim_authorized_keys",
             ),
         )
 

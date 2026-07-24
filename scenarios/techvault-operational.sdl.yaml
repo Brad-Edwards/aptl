@@ -37,70 +37,95 @@ nodes:
   wazuh-dashboard:
     type: vm
     os: linux
+    source: {name: wazuh-dashboard, version: 4.x}
     services:
       - {name: dashboard, port: 5601, protocol: tcp}
 
   suricata:
     type: vm
     os: linux
+    source: {name: "jasonish/suricata", version: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"}
     services: []
   misp:
     type: vm
     os: linux
+    source: {name: "ghcr.io/misp/misp-docker/misp-core", version: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"}
     services:
       - {name: https, port: 443, protocol: tcp}
   misp-db:
     type: vm
     os: linux
+    source: {name: mariadb, version: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"}
     services:
       - {name: mysql, port: 3306, protocol: tcp}
   misp-redis:
     type: vm
     os: linux
+    source: {name: redis, version: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"}
     services:
       - {name: redis, port: 6379, protocol: tcp}
   misp-suricata-sync:
     type: vm
     os: linux
     services: []
+    runtime:
+      packages:
+        - {manager: apt, name: python3-pip, version: "*"}
+      dependency_manifests:
+        - {ecosystem: pip, path: /app/pyproject.toml, name: aptl-labs}
+      # Shares suricata's rules volume (ADR-043): this service writes
+      # misp-iocs.rules here for suricata to load, and the command socket to
+      # trigger its reload. Both are Compose-managed named volumes suricata
+      # (still Compose-realized) already mounts at the same paths.
+      mounts:
+        - {target: /var/run/suricata, source: suricata_command_socket, source_kind: volume}
+        - {target: /var/lib/suricata/rules/misp, source: suricata_misp_rules, source_kind: volume}
   thehive:
     type: vm
     os: linux
+    source: {name: "strangebee/thehive", version: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"}
     services:
       - {name: thehive-api, port: 9000, protocol: tcp}
   thehive-cassandra:
     type: vm
     os: linux
+    source: {name: cassandra, version: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"}
     services:
       - {name: cassandra, port: 9042, protocol: tcp}
   thehive-es:
     type: vm
     os: linux
+    source: {name: "docker.elastic.co/elasticsearch/elasticsearch", version: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"}
     services:
       - {name: elasticsearch, port: 9200, protocol: tcp}
   cortex:
     type: vm
     os: linux
+    source: {name: "thehiveproject/cortex", version: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"}
     services:
       - {name: cortex-api, port: 9001, protocol: tcp}
   shuffle-backend:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-backend", version: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"}
     services:
       - {name: shuffle-api, port: 5001, protocol: tcp}
   shuffle-frontend:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-frontend", version: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"}
     services:
       - {name: https, port: 443, protocol: tcp}
       - {name: http, port: 80, protocol: tcp}
   shuffle-orborus:
     type: vm
     os: linux
+    source: {name: "ghcr.io/shuffle/shuffle-orborus", version: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"}
     services: []
   shuffle-opensearch:
     type: vm
     os: linux
+    source: {name: "opensearchproject/opensearch", version: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"}
     services:
       - {name: opensearch-rest, port: 9200, protocol: tcp}
       - {name: opensearch-transport, port: 9300, protocol: tcp}
@@ -118,6 +143,30 @@ nodes:
     os: linux
     services:
       - {name: http, port: 8080, protocol: tcp}
+    runtime:
+      packages:
+        - {manager: apt, name: python3-flask, version: "*"}
+        - {manager: apt, name: python3-gunicorn, version: "*"}
+        - {manager: apt, name: python3-psycopg2, version: "*"}
+        - {manager: apt, name: python3-jwt, version: "*"}
+      filesystem_inventory:
+        - {path: /var/log/gunicorn, entry_type: directory}
+      # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
+      # iptables against this node's INPUT chain to revert blanket kali
+      # source-IP DROPs; that needs CAP_NET_ADMIN, which Docker's default
+      # capability set does not grant.
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
+      # webapp is a deliberate attack-surface target, reachable from other
+      # machines on the LAN like the in-range red team (test_docker_compose_
+      # port_bindings.py TARGET_SURFACES), not an operator/management
+      # surface -- so it does NOT get a loopback ADR-034 published_ports
+      # declaration here. Its own networks (aptl-dmz, aptl-internal) are
+      # both internal: true (SAF-002), which Docker never routes host
+      # traffic through regardless of host_ip; the docker-compose.yml
+      # webapp-proxy service is the real host publication (issue #581).
+      service_manager_units:
+        - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
   ad:
     type: vm
     os: linux
@@ -135,6 +184,7 @@ nodes:
         - {manager: apt, name: postgresql, version: "*"}
       service_manager_units:
         - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
+        - {unit_id: db-bootstrap, unit_name: db-bootstrap.service, enabled_state: enabled, active_state: active}
   workstation:
     type: vm
     os: linux
@@ -148,7 +198,7 @@ nodes:
         groups:
           - {name: labadmin}
         users:
-          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+          - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
   fileshare:
@@ -159,6 +209,10 @@ nodes:
     runtime:
       packages:
         - {manager: apt, name: samba, version: "*"}
+      # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
+      # source-IP DROPs on this node's INPUT chain (src/aptl/core/continuity.py).
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
       service_manager_units:
         - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
   dns:
@@ -172,6 +226,22 @@ nodes:
         - {manager: apt, name: dnsutils, version: "*"}
       filesystem_inventory:
         - {path: /var/log/named, entry_type: directory, owner_user: bind, owner_group: bind}
+      # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
+      # source-IP DROPs on this node's INPUT chain (src/aptl/core/continuity.py).
+      linux_capabilities:
+        add: [CAP_NET_ADMIN]
+      # Host port 5353 (53 is commonly already bound on the host by a local
+      # resolver): both protocols, since DNS genuinely uses UDP for queries
+      # and TCP for zone transfers / large responses. dns is a deliberate
+      # attack-surface target like webapp (test_docker_compose_port_bindings.py
+      # TARGET_SURFACES), so host_ip is explicit all-interfaces, not the
+      # ADR-034 loopback default meant for operator/management surfaces
+      # (issue #581). dns also sits on aptl-security (not internal: true),
+      # so unlike webapp this publishes correctly without a proxy.
+      network:
+        published_ports:
+          - {container_port: 53, protocol: tcp, host_port: 5353, host_ip: "0.0.0.0"}
+          - {container_port: 53, protocol: udp, host_port: 5353, host_ip: "0.0.0.0"}
       service_manager_units:
         - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
   victim:
@@ -187,7 +257,7 @@ nodes:
         groups:
           - {name: labadmin}
         users:
-          - {username: labadmin, supplemental_groups: [labadmin, wheel]}
+          - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
 
@@ -199,13 +269,28 @@ nodes:
     runtime:
       packages:
         - {manager: apt, name: openssh-server, version: "*"}
+        # iputils-ping: the live gate's kali_reachability check ICMP-pings
+        # every shared-network host from kali. nmap: telemetry_evidence_path
+        # drives an nmap scan + failed-ssh-auth as the representative event
+        # Suricata/Wazuh must correlate (issue #581).
+        - {manager: apt, name: iputils-ping, version: "*"}
+        - {manager: apt, name: nmap, version: "*"}
+        # OBS-003 (ADR-033/ADR-041) per-session capture wiring: bsdmainutils
+        # provides script(1) (the PTY recording pipe), python3 runs
+        # aptl-capture-client, libcap2-bin provides capsh (drops
+        # CAP_AUDIT_CONTROL from sshd so the kali user's passwordless sudo
+        # cannot touch the audit trail the aptl-kali-capture sidecar owns).
+        - {manager: apt, name: bsdmainutils, version: "*"}
+        - {manager: apt, name: python3, version: "*"}
+        - {manager: apt, name: libcap2-bin, version: "*"}
       local_identity:
         groups:
           - {name: kali}
         users:
-          - {username: kali, supplemental_groups: [kali]}
+          - {username: kali, primary_group: kali}
       service_manager_units:
         - {unit_id: ssh, unit_name: ssh.service, enabled_state: enabled, active_state: active}
+        - {unit_id: kali-capture-bootstrap, unit_name: kali-capture-bootstrap.service, enabled_state: enabled, active_state: active}
   kali-capture:
     type: vm
     os: linux
@@ -214,17 +299,20 @@ nodes:
   aptl-otel-collector:
     type: vm
     os: linux
+    source: {name: "otel/opentelemetry-collector-contrib", version: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"}
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
     type: vm
     os: linux
+    source: {name: "grafana/tempo", version: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"}
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
     type: vm
     os: linux
+    source: {name: "grafana/grafana", version: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"}
     services:
       - {name: grafana, port: 3000, protocol: tcp}
 
@@ -437,6 +525,52 @@ vulnerabilities:
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
 content:
+  misp-suricata-sync-pyproject:
+    type: file
+    target: misp-suricata-sync
+    path: /app/pyproject.toml
+    source:
+      name: pyproject.toml
+  misp-suricata-sync-readme:
+    type: file
+    target: misp-suricata-sync
+    path: /app/README.md
+    source:
+      name: README.md
+  misp-suricata-sync-hatch-build:
+    type: file
+    target: misp-suricata-sync
+    path: /app/hatch_build.py
+    source:
+      name: hatch_build.py
+  misp-suricata-sync-src:
+    type: directory
+    target: misp-suricata-sync
+    destination: /app/src
+    source:
+      name: src
+  webapp-app-code:
+    type: directory
+    target: webapp
+    destination: /app
+    source:
+      name: containers/webapp/app
+  webapp-service-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/webapp.service
+    text: |
+      [Unit]
+      Description=TechVault webapp (gunicorn)
+      After=network.target
+
+      [Service]
+      WorkingDirectory=/app
+      ExecStart=/usr/bin/python3 -m gunicorn --bind 0.0.0.0:8080 --workers 2 --access-logfile /var/log/gunicorn/access.log --error-logfile - app:app
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
   dns-named-conf:
     type: file
     target: dns
@@ -477,6 +611,182 @@ content:
     destination: /srv/shares/onboarding
     source:
       name: scenarios/fixtures/techvault-content/onboarding
+  # The stock `postgresql` package creates an empty cluster with no
+  # techvault database/user and no schema — the legacy compose db service
+  # got these from postgres:16-alpine's POSTGRES_DB/USER/PASSWORD
+  # auto-init plus containers/db/init/*.sql mounted at
+  # /docker-entrypoint-initdb.d, neither of which apply to a generically
+  # materialized node. db-bootstrap.service (below) reproduces both by
+  # hand: opens postgres to the network, creates the techvault role/
+  # database, then loads the same schema/seed SQL webapp's own defaults
+  # (containers/webapp/app/app.py) already expect (issue #581).
+  db-init-schema:
+    type: file
+    target: db
+    path: /opt/db-init/01-schema.sql
+    source:
+      name: containers/db/init/01-schema.sql
+  db-init-seed:
+    type: file
+    target: db
+    path: /opt/db-init/02-seed-data.sql
+    source:
+      name: containers/db/init/02-seed-data.sql
+  db-bootstrap-script:
+    type: file
+    target: db
+    path: /opt/db-bootstrap.sh
+    text: |
+      #!/bin/bash
+      set -e
+      PG_CONF=$(find /etc/postgresql -maxdepth 3 -name postgresql.conf | head -n1)
+      PG_HBA=$(find /etc/postgresql -maxdepth 3 -name pg_hba.conf | head -n1)
+      sed -i "s/^#\?listen_addresses.*/listen_addresses = '*'/" "$PG_CONF"
+      grep -q "^host techvault techvault " "$PG_HBA" || echo "host techvault techvault 0.0.0.0/0 md5" >> "$PG_HBA"
+      systemctl restart postgresql
+      for i in $(seq 1 30); do
+        su -s /bin/bash postgres -c "pg_isready -q" && break
+        sleep 1
+      done
+      su -s /bin/bash postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='techvault'\"" | grep -q 1 || \
+        su -s /bin/bash postgres -c "psql -c \"CREATE USER techvault WITH PASSWORD 'techvault_db_pass';\""
+      su -s /bin/bash postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='techvault'\"" | grep -q 1 || \
+        su -s /bin/bash postgres -c "psql -c \"CREATE DATABASE techvault OWNER techvault;\""
+      PGPASSWORD=techvault_db_pass psql -h 127.0.0.1 -U techvault -d techvault -f /opt/db-init/01-schema.sql
+      PGPASSWORD=techvault_db_pass psql -h 127.0.0.1 -U techvault -d techvault -f /opt/db-init/02-seed-data.sql
+  db-bootstrap-unit:
+    type: file
+    target: db
+    path: /etc/systemd/system/db-bootstrap.service
+    text: |
+      [Unit]
+      Description=TechVault database bootstrap (create techvault DB/user, load schema+seed)
+      After=postgresql.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash /opt/db-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  # SEC #417: victim/workstation authorize both the operator control-plane
+  # key and the kali pivot key (target_authorized_keys is the two combined,
+  # generated at lab standup — src/aptl/core/ssh.py). kali itself is
+  # authorized with only the control-plane key, and separately receives the
+  # pivot key's *private* half to SSH out into these targets. This mirrors
+  # the entrypoint-script SSH provisioning the legacy hand-authored images
+  # ran, now realized generically from declared content (issue #581).
+  #
+  # victim additionally trusts the workstation pivot key below (Prime
+  # scenario lateral movement, workstation -> victim), so it gets its own
+  # combined file instead of sharing target_authorized_keys with workstation.
+  victim-authorized-keys:
+    type: file
+    target: victim
+    path: /home/labadmin/.ssh/authorized_keys
+    source:
+      name: keys/victim_authorized_keys
+  workstation-authorized-keys:
+    type: file
+    target: workstation
+    path: /home/labadmin/.ssh/authorized_keys
+    source:
+      name: keys/target_authorized_keys
+  # workstation's private half of the lateral-movement pivot into victim;
+  # placed as the default identity file so `ssh labadmin@victim` from
+  # workstation needs no -i flag, matching how the legacy entrypoint's
+  # throwaway dev-user keypair was used (issue #581).
+  workstation-pivot-key:
+    type: file
+    target: workstation
+    path: /home/labadmin/.ssh/id_ed25519
+    source:
+      name: config/lab-ssh/workstation_pivot_key
+    sensitive: true
+  kali-authorized-keys:
+    type: file
+    target: kali
+    path: /home/kali/.ssh/authorized_keys
+    source:
+      name: keys/authorized_keys
+  kali-pivot-key:
+    type: file
+    target: kali
+    path: /home/kali/.ssh/kali_pivot_key
+    source:
+      name: config/lab-ssh/kali_pivot_key
+    sensitive: true
+  # OBS-003 (ADR-033/ADR-041) per-session capture wiring, restored after the
+  # SDL conversion dropped it (issue #581): sshd's ForceCommand hands every
+  # kali-user session to aptl-wrap-shell.sh, which records the PTY via
+  # script(1) and streams it to the aptl-kali-capture sidecar (a separate,
+  # still-Compose-managed node sharing kali's network namespace) instead of
+  # writing evidence inside this container, where the kali user's
+  # passwordless sudo could tamper with it.
+  kali-wrap-shell-script:
+    type: file
+    target: kali
+    path: /usr/local/bin/aptl-wrap-shell.sh
+    source:
+      name: containers/kali/scripts/aptl-wrap-shell.sh
+  kali-capture-client:
+    type: file
+    target: kali
+    path: /usr/local/bin/aptl-capture-client
+    source:
+      name: containers/kali/scripts/aptl-capture-client
+  # Drops CAP_AUDIT_CONTROL from sshd itself — belt-and-suspenders on top of
+  # kali's container capability set (which never includes AUDIT_CONTROL to
+  # begin with; that capability lives only on the capture sidecar).
+  kali-ssh-capsh-override:
+    type: file
+    target: kali
+    path: /etc/systemd/system/ssh.service.d/override.conf
+    text: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/sbin/capsh --drop=cap_audit_control -- -c "exec /usr/sbin/sshd -D $SSHD_OPTS"
+  # Appends the ForceCommand/AcceptEnv wiring to the stock sshd_config and
+  # applies both this and the capsh override above with one restart —
+  # neither content: placement above can itself trigger sshd to notice a
+  # config change it may already have started with (issue #581, same
+  # pattern as db-bootstrap.sh).
+  kali-capture-bootstrap-script:
+    type: file
+    target: kali
+    path: /opt/kali-capture-bootstrap.sh
+    text: |
+      #!/bin/bash
+      set -e
+      if ! grep -q "^AcceptEnv APTL_SESSION_ID" /etc/ssh/sshd_config; then
+        {
+          echo ""
+          echo "# OBS-003 / ADR-033: per-session capture wiring"
+          echo "AcceptEnv APTL_SESSION_ID APTL_RUN_ID APTL_TRACE_ID"
+          echo "Match User kali"
+          echo "    ForceCommand /bin/bash /usr/local/bin/aptl-wrap-shell.sh"
+        } >> /etc/ssh/sshd_config
+      fi
+      sshd -t
+      systemctl daemon-reload
+      systemctl restart ssh
+  kali-capture-bootstrap-unit:
+    type: file
+    target: kali
+    path: /etc/systemd/system/kali-capture-bootstrap.service
+    text: |
+      [Unit]
+      Description=TechVault kali OBS-003 per-session capture wiring
+      After=ssh.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash /opt/kali-capture-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
 
 # Realizable accounts (ADR-046 Account and Identity Realization Addendum,
 # #577): the deployment backend's realize_accounts operation ensures these

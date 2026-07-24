@@ -18,6 +18,7 @@ log = get_logger("ssh")
 
 _KEY_NAME = "aptl_lab_key"
 _PIVOT_KEY_NAME = "kali_pivot_key"
+_WORKSTATION_PIVOT_KEY_NAME = "workstation_pivot_key"
 
 
 @dataclass
@@ -114,6 +115,38 @@ def ensure_pivot_key(pivot_dir: Path) -> SSHKeyResult:
     return result
 
 
+def ensure_workstation_pivot_key(pivot_dir: Path) -> SSHKeyResult:
+    """Ensure the workstation-to-victim pivot keypair exists.
+
+    Scenario content mirroring the kali pivot key above: workstation SSHes
+    into victim as part of the Prime scenario's lateral-movement path. The
+    legacy hand-authored workstation entrypoint generated this keypair itself
+    at container start (a throwaway ``dev-user`` identity); the SDL-declared
+    node has no entrypoint to do that, so it is generated here instead and
+    placed the same way (private half on workstation, public half authorized
+    on victim only) — issue #581.
+
+    Both halves live in ``pivot_dir`` alongside the kali pivot keypair.
+    """
+    pivot_dir.mkdir(parents=True, exist_ok=True)
+
+    private_key = pivot_dir / _WORKSTATION_PIVOT_KEY_NAME
+    public_key = pivot_dir / f"{_WORKSTATION_PIVOT_KEY_NAME}.pub"
+
+    generated, error_msg = _ensure_keypair(
+        private_key=private_key,
+        comment="aptl-workstation-pivot",
+        label="ssh-keygen (workstation pivot)",
+    )
+    if error_msg:
+        return SSHKeyResult(success=False, generated=generated, error=error_msg)
+    return _finish_pivot_key_setup(
+        private_key=private_key,
+        public_key=public_key,
+        generated=generated,
+    )
+
+
 def _ensure_keypair(
     private_key: Path,
     comment: str,
@@ -131,6 +164,73 @@ def _ensure_keypair(
 
     log.info("SSH key pair generated successfully")
     return True, ""
+
+
+def ensure_target_authorized_keys(keys_dir: Path, pivot_dir: Path) -> SSHKeyResult:
+    """Write the combined authorized_keys file SSH-reachable targets receive.
+
+    SEC #417: a target (victim, workstation, ...) authorizes both the
+    operator/MCP control-plane public key and the kali pivot public key — the
+    pivot key is what makes kali's in-scenario SSH into the target work. kali
+    itself is authorized separately with only the control-plane key (it is
+    the pivot key's *private* half that lives on kali, never its own
+    authorized_keys). Requires both keypairs to already exist (from
+    ``ensure_ssh_keys`` / ``ensure_pivot_key``, always called first).
+    """
+    control_plane_pub = keys_dir / f"{_KEY_NAME}.pub"
+    pivot_pub = pivot_dir / f"{_PIVOT_KEY_NAME}.pub"
+    for path in (control_plane_pub, pivot_pub):
+        if not path.exists():
+            return SSHKeyResult(
+                success=False, generated=False, error=f"Public key not found at {path}"
+            )
+    combined = _with_trailing_newline(control_plane_pub.read_text()) + _with_trailing_newline(
+        pivot_pub.read_text()
+    )
+    target_file = keys_dir / "target_authorized_keys"
+    target_file.write_text(combined)
+    permission_error = _set_public_key_mode(target_file)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=False, error=permission_error)
+    return SSHKeyResult(success=True, generated=False, key_path=target_file)
+
+
+def ensure_victim_authorized_keys(keys_dir: Path, pivot_dir: Path) -> SSHKeyResult:
+    """Write victim's authorized_keys: control-plane + kali pivot + workstation pivot.
+
+    Victim additionally trusts the workstation pivot key so the Prime
+    scenario's workstation -> victim lateral-movement path is already wired
+    up by the time materialization completes. Workstation itself does not
+    receive this key back (it is the one holding the private half, not
+    authorizing it), which is why victim needs a distinct authorized_keys
+    file rather than sharing ``target_authorized_keys`` (issue #581 — this
+    replaces a runtime "plant the key" step scripts/seed-prime.sh used to
+    perform against the legacy workstation entrypoint's throwaway keypair).
+    Requires all three keypairs to already exist.
+    """
+    control_plane_pub = keys_dir / f"{_KEY_NAME}.pub"
+    kali_pivot_pub = pivot_dir / f"{_PIVOT_KEY_NAME}.pub"
+    workstation_pivot_pub = pivot_dir / f"{_WORKSTATION_PIVOT_KEY_NAME}.pub"
+    for path in (control_plane_pub, kali_pivot_pub, workstation_pivot_pub):
+        if not path.exists():
+            return SSHKeyResult(
+                success=False, generated=False, error=f"Public key not found at {path}"
+            )
+    combined = "".join(
+        _with_trailing_newline(path.read_text())
+        for path in (control_plane_pub, kali_pivot_pub, workstation_pivot_pub)
+    )
+    target_file = keys_dir / "victim_authorized_keys"
+    target_file.write_text(combined)
+    permission_error = _set_public_key_mode(target_file)
+    if permission_error:
+        return SSHKeyResult(success=False, generated=False, error=permission_error)
+    return SSHKeyResult(success=True, generated=False, key_path=target_file)
+
+
+def _with_trailing_newline(text: str) -> str:
+    """Return ``text`` guaranteed to end with a single newline."""
+    return text if text.endswith("\n") else text + "\n"
 
 
 def _finish_control_plane_key_setup(

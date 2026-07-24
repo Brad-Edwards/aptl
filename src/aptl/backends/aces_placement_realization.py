@@ -18,11 +18,11 @@ from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import PlannedResource
 
 from aptl.backends.aces_account_realization import resolve_account_placement
-from aptl.backends.aces_content_realization import (
-    resolve_content_placement,
+from aptl.backends.aces_content_realization import resolve_content_placement
+from aptl.backends.aces_diagnostics import diagnostic
+from aptl.backends.aces_image_free_content_realization import (
     resolve_image_free_content_placement,
 )
-from aptl.backends.aces_diagnostics import diagnostic
 from aptl.backends.aces_profiles import normalize_identifier
 from aptl.backends.aces_realization_model import (
     NodeRealization,

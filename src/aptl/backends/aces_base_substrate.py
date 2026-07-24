@@ -26,6 +26,28 @@ from aptl.backends.aces_materializer import (
 )
 from aptl.core.deployment.realization import LOOPBACK_HOST_IP
 
+# ADR-047: a scenario declares runtime.linux_capabilities.add and APTL grants
+# it directly via `docker run --cap-add`, with no per-product code standing
+# between the SDL and the host-privilege flag. Without a bound on which
+# capabilities are grantable, any scenario could request CAP_SYS_ADMIN or
+# another host-impacting capability and APTL would honor it unquestioningly
+# (issue #816). Only capabilities APTL's own scenarios have a verified need
+# for are permitted; anything else fails admission rather than a silent
+# grant. Expanding this set is a deliberate decision, matching the
+# manifest-honesty rule elsewhere in the materializer: never claim more than
+# is proven necessary.
+_ALLOWED_EXTRA_CAPABILITIES = frozenset(
+    {
+        # aptl lab continuity-audit reverts blanket kali source-IP DROPs on a
+        # target's own INPUT chain (src/aptl/core/continuity.py).
+        "NET_ADMIN",
+    }
+)
+
+
+class UnauthorizedCapabilityError(ValueError):
+    """Raised when a scenario declares a Linux capability outside APTL's allowlist."""
+
 
 @dataclass(frozen=True)
 class InitRequirements:
@@ -177,6 +199,14 @@ def _init_requirements(runtime: RuntimeConfiguration | None) -> InitRequirements
         name.removeprefix("CAP_")
         for name in (runtime.linux_capabilities.add if runtime and runtime.linux_capabilities else ())
     )
+    unauthorized = sorted(set(extra) - _ALLOWED_EXTRA_CAPABILITIES)
+    if unauthorized:
+        raise UnauthorizedCapabilityError(
+            "runtime.linux_capabilities.add declared a capability APTL does "
+            f"not permit: {', '.join('CAP_' + cap for cap in unauthorized)}. "
+            "Allowed: "
+            f"{', '.join('CAP_' + cap for cap in sorted(_ALLOWED_EXTRA_CAPABILITIES))}."
+        )
     if not extra:
         return InitRequirements()
     base = InitRequirements()

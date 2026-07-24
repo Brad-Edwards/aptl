@@ -18,7 +18,11 @@ from aptl.backends.aces_docker_materializer import (
     DockerMaterializationExecutor,
     MaterializationCommandError,
 )
-from aptl.backends.aces_materializer import EnsureDirectoryOp, EnsureUserOp
+from aptl.backends.aces_materializer import (
+    EnsureDirectoryOp,
+    EnsureUserOp,
+    InstallDependencyManifestOp,
+)
 
 
 class _FakeExec:
@@ -35,7 +39,7 @@ class _FakeExec:
         return [argv for _, argv in self.calls]
 
 
-def _executor(exec_fn, *, started=None):
+def _executor(exec_fn, *, started=None, sleep=None):
     def start_base(addr, image):
         if started is not None:
             started.append((addr, image))
@@ -44,6 +48,9 @@ def _executor(exec_fn, *, started=None):
         run=exec_fn,
         container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
         start_base=start_base,
+        # Real time.sleep would make retry tests (and the unrelated failure
+        # tests that now also exhaust the refresh retry) take ~15s each.
+        sleep=sleep or (lambda seconds: None),
     )
 
 
@@ -89,6 +96,47 @@ class TestPackages:
             "n.node", "apt", ("curl", "wazuh-manager", "absent")
         )
         assert observed == frozenset({"curl", "wazuh-manager"})
+
+
+class TestPackageIndexRefreshRetry:
+    """A just-started container's network isn't always immediately ready:
+    the first `apt-get update` after `docker run` can transiently fail
+    (issue #581, root-caused via a real fresh-VM reproduction showing 4/5
+    fresh containers fail immediately, 0/5 fail after a 1s delay). The
+    refresh command is idempotent, so a bounded retry recovers from this
+    without masking a genuine failure."""
+
+    def test_transient_refresh_failure_recovers_then_installs(self):
+        calls = {"update": 0}
+
+        def responder(container, argv):
+            if "update" in argv:
+                calls["update"] += 1
+                if calls["update"] < 3:
+                    return 100, "W: GPG error"
+                return 0, ""
+            return 0, ""
+
+        fake = _FakeExec(responder)
+        sleeps: list[float] = []
+        _executor(fake, sleep=sleeps.append).install_packages("n.node", "apt", ("curl",))
+
+        assert calls["update"] == 3
+        assert sleeps == [1.0, 2.0]
+        assert any("install" in argv for argv in fake.argvs())
+
+    def test_refresh_exhausts_all_retries_then_raises(self):
+        fake = _FakeExec(lambda c, a: (100, "W: GPG error") if "update" in a else (0, ""))
+        sleeps: list[float] = []
+        executor = _executor(fake, sleep=sleeps.append)
+
+        with pytest.raises(MaterializationCommandError):
+            executor.install_packages("n.node", "apt", ("curl",))
+
+        update_calls = sum(1 for argv in fake.argvs() if "update" in argv)
+        assert update_calls == 5  # 1 initial attempt + 4 retries
+        assert sleeps == [1.0, 2.0, 4.0, 8.0]
+        assert not any("install" in argv for argv in fake.argvs())
 
 
 class TestIdentity:
@@ -153,6 +201,47 @@ class TestFilesystem:
         absent = _executor(_FakeExec(lambda c, a: (1, "")))
         assert present.observe_directory("n.node", "/var/log/named") is True
         assert absent.observe_directory("n.node", "/var/log/named") is False
+
+
+class TestDependencyManifest:
+    def test_install_runs_ecosystem_install_against_the_manifest_directory(self):
+        fake = _FakeExec()
+        _executor(fake).install_dependency_manifest(
+            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        )
+        argv = fake.calls[-1][1]
+        assert argv == ["pip", "install", "--break-system-packages", "/app"]
+
+    def test_install_nonzero_raises_translatable_command_error(self):
+        fake = _FakeExec(lambda c, a: (1, "error"))
+        executor = _executor(fake)
+        op = InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        with pytest.raises(MaterializationCommandError):
+            executor.install_dependency_manifest("n.node", op)
+
+    def test_observe_installed_queries_by_declared_name(self):
+        fake = _FakeExec(lambda c, a: (0, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+        )
+        assert observed is True
+        assert fake.calls[-1][1] == ["pip", "show", "aptl-labs"]
+
+    def test_observe_installed_false_when_query_fails(self):
+        fake = _FakeExec(lambda c, a: (1, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node",
+            InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml", name="aptl-labs"),
+        )
+        assert observed is False
+
+    def test_observe_installed_fails_closed_without_a_declared_name(self):
+        fake = _FakeExec(lambda c, a: (0, ""))
+        observed = _executor(fake).observe_dependency_manifest_installed(
+            "n.node", InstallDependencyManifestOp(ecosystem="pip", path="/app/pyproject.toml")
+        )
+        assert observed is False
 
 
 class TestServices:

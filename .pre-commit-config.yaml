@@ -28,10 +28,17 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # config/wazuh-certs-tool.sh is a digest-pinned vendored upstream file
+      # (Wazuh 4.8 wazuh-certs-tool.sh), whose sha256 is verified in
+      # generate-indexer-certs.yml before the certificate producer executes
+      # it. These two hooks rewrite files in place, so letting them strip
+      # trailing whitespace / fix the final newline changes the file's
+      # sha256, breaks the pin, and fails certificate generation on every
+      # `aptl lab start`. Keep the vendored tool byte-identical to upstream.
       - id: trailing-whitespace
-        exclude: ^config/suricata/rules/.*\.rules$
+        exclude: ^(config/suricata/rules/.*\.rules|config/wazuh-certs-tool\.sh)$
       - id: end-of-file-fixer
-        exclude: ^config/suricata/rules/.*\.rules$
+        exclude: ^(config/suricata/rules/.*\.rules|config/wazuh-certs-tool\.sh)$
       - id: check-yaml
         args: [--unsafe]
       - id: check-json

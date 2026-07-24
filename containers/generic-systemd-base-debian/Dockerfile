@@ -4,9 +4,14 @@
 # run flags (env container=docker, cgroupns=host, /sys/fs/cgroup:rw, tmpfs
 # /run+/run/lock+/tmp, cap SYS_ADMIN, seccomp:unconfined, /sbin/init).
 FROM debian:12
+# gnupg: debian:12 ships gpgv (verify-only) but not the full gpg binary
+# apt-key needs for some bookworm InRelease signature paths — without it,
+# a materialized node's own first `apt-get update` intermittently fails
+# with "Unknown error executing apt-key" (issue #581, caught only by a
+# real fresh-machine boot with no pre-existing apt cache to mask it).
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        systemd systemd-sysv dbus \
+        systemd systemd-sysv dbus gnupg \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 STOPSIGNAL SIGRTMIN+3

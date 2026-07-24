@@ -32,7 +32,7 @@ from aptl.core import host_ports
         ),
         (
             "${APTL_HP_WEBAPP_8080:-8080}:8080",
-            ("webapp", "APTL_HP_WEBAPP_8080", 8080, 8080, "tcp", None),
+            ("webapp-proxy", "APTL_HP_WEBAPP_8080", 8080, 8080, "tcp", None),
         ),
         (
             "127.0.0.1:9200:9200",  # unparameterized literal: no env var

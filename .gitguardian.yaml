@@ -3,9 +3,22 @@
 
 version: 2
 secret:
+  ignored_paths:
+    # The techvault scenario is a deliberately vulnerable CTF range. Every
+    # cred-shaped string under this fixtures tree is intentional planted loot
+    # -- the attack surface participants are meant to discover (leaked .env /
+    # .pgpass / credentials.json, deploy scripts with the AWS documentation
+    # example key, wifi passwords, a placeholder deploy key) -- never a real
+    # secret. Restoring this loot is the whole point of #581 parity.
+    - 'scenarios/fixtures/techvault-content/**'
   ignored_matches:
     # tests/test_correlation_models.py: assert_non_secret() must reject
     # secret-shaped strings, so its test fixtures are intentionally
     # secret-shaped fakes, never real credentials (incident 34972675).
     - name: correlation-models-secret-shape-test-fixture
       match: "token=abc123def456"
+    # The intentional weak password the vulnerable techvault DB bootstraps with
+    # (scenarios/techvault-operational.sdl.yaml db-bootstrap + the loot above).
+    # A scenario honeypot credential, never a real secret.
+    - name: techvault-honeypot-db-password
+      match: "techvault_db_pass"

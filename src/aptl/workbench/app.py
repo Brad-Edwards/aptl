@@ -20,6 +20,7 @@ def create_participant_workbench_app(
     app = FastAPI(title="APTL Participant Workbench", docs_url=None, redoc_url=None)
 
     def require_participant_session(request: Request) -> None:
+        """Reject requests that do not carry an admitted participant session."""
         if not authorizer(request):
             raise HTTPException(status_code=401, detail="Participant session required")
 
@@ -45,13 +46,19 @@ def create_participant_workbench_app(
             "mcp_servers": list(profile.server_ids),
         }
 
-    @app.post("/workbench/profiles/{profile}", dependencies=session)
+    @app.post(
+        "/workbench/profiles/{profile}",
+        dependencies=session,
+        responses={409: {"description": "Profile transition unavailable"}},
+    )
     async def select_profile(profile: str) -> dict[str, str]:
         """Switch profiles without accepting credentials, commands, or endpoints."""
         try:
             launch = runtime.switch(profile)
         except (ValueError, WorkbenchStateError):
-            raise HTTPException(status_code=409, detail="Profile transition unavailable") from None
+            raise HTTPException(
+                status_code=409, detail="Profile transition unavailable"
+            ) from None
         return {"profile": launch.profile.value, "run_id": launch.run_id}
 
     return app

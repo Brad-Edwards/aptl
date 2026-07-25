@@ -54,6 +54,8 @@ class SessionCredentialBroker(Protocol):
 
 @dataclass
 class _ActiveProfile:
+    """Track cleanup proof for the single process compartment owned by the runtime."""
+
     launch: ProfileLaunch
     handle: object
     agent_closed: bool = False
@@ -170,14 +172,8 @@ class WorkbenchRuntime:
                 cleanup_error = cleanup_error or exc
             else:
                 active.credentials_destroyed = True
-        if not active.config_removed:
-            try:
-                self._remove_generated_config(active.launch)
-            except OSError as exc:
-                self._record("config_teardown_failed", active.launch)
-                cleanup_error = cleanup_error or exc
-            else:
-                active.config_removed = True
+        config_error = self._cleanup_generated_config(active)
+        cleanup_error = cleanup_error or config_error
         if cleanup_error is not None:
             raise WorkbenchStateError(
                 "participant profile cleanup failed"
@@ -210,3 +206,15 @@ class WorkbenchRuntime:
         if launch.client_config_path.parent.resolve() != generated_root:
             raise OSError("generated configuration escaped its managed directory")
         os.unlink(launch.client_config_path)
+
+    def _cleanup_generated_config(self, active: _ActiveProfile) -> OSError | None:
+        """Remove managed client configuration and retain incomplete-cleanup state."""
+        if active.config_removed:
+            return None
+        try:
+            self._remove_generated_config(active.launch)
+        except OSError as exc:
+            self._record("config_teardown_failed", active.launch)
+            return exc
+        active.config_removed = True
+        return None

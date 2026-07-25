@@ -12,6 +12,8 @@ from pathlib import Path
 from aptl.utils.pathsafe import PathContainmentError, create_exclusive_nofollow
 
 _TRACE_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+
+
 class WorkbenchConfigurationError(ValueError):
     """The requested profile cannot safely produce a client configuration."""
 
@@ -49,7 +51,13 @@ class WorkbenchProfile:
     @property
     def credential_aliases(self) -> tuple[str, ...]:
         return tuple(
-            sorted({alias for server in self.servers for alias in server.credential_aliases})
+            sorted(
+                {
+                    alias
+                    for server in self.servers
+                    for alias in server.credential_aliases
+                }
+            )
         )
 
 
@@ -161,14 +169,18 @@ def profile_for(profile: ProfileId | str) -> WorkbenchProfile:
 
 
 def _validate_run_id(run_id: str) -> str:
+    """Return a canonical active trace identifier or reject the input."""
     if not _TRACE_ID_RE.fullmatch(run_id):
-        raise WorkbenchConfigurationError("run_id must be the active 32-character trace id")
+        raise WorkbenchConfigurationError(
+            "run_id must be the active 32-character trace id"
+        )
     return run_id
 
 
 def _validate_aliases(
     profile: WorkbenchProfile, credential_aliases: Collection[str]
 ) -> None:
+    """Require every alias selected by the closed workbench profile."""
     available = set(credential_aliases)
     missing = [alias for alias in profile.credential_aliases if alias not in available]
     if missing:
@@ -178,6 +190,7 @@ def _validate_aliases(
 
 
 def _validate_artifacts(profile: WorkbenchProfile, payload_root: Path) -> None:
+    """Require each released MCP artifact to remain inside the payload root."""
     root = payload_root.resolve()
     for server in profile.servers:
         artifact = (root / server.artifact_ref).resolve()
@@ -192,10 +205,16 @@ def verify_profile_tool_inventory(
 ) -> None:
     """Reject a launched profile unless every server reports its exact tools/list set."""
     selected = profile_for(profile)
-    expected = {server.server_id: frozenset(server.tool_names) for server in selected.servers}
-    actual = {server_id: frozenset(tool_names) for server_id, tool_names in inventory.items()}
+    expected = {
+        server.server_id: frozenset(server.tool_names) for server in selected.servers
+    }
+    actual = {
+        server_id: frozenset(tool_names) for server_id, tool_names in inventory.items()
+    }
     if actual != expected:
-        raise WorkbenchConfigurationError("MCP tool inventory does not match the selected profile")
+        raise WorkbenchConfigurationError(
+            "MCP tool inventory does not match the selected profile"
+        )
 
 
 def render_profile_config(
@@ -231,13 +250,19 @@ def render_profile_config(
         },
     }
     output_parent = output_dir.parent
-    relative_path = f"{output_dir.name}/{selected.profile_id.value}-{active_run_id}.json"
+    relative_path = (
+        f"{output_dir.name}/{selected.profile_id.value}-{active_run_id}.json"
+    )
     try:
         create_exclusive_nofollow(
             output_parent,
             relative_path,
-            (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+            (
+                json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
+            ).encode(),
         )
     except (FileExistsError, PathContainmentError) as exc:
-        raise WorkbenchConfigurationError("unable to create private profile config") from exc
+        raise WorkbenchConfigurationError(
+            "unable to create private profile config"
+        ) from exc
     return output_parent / relative_path

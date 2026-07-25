@@ -24,6 +24,10 @@ from aptl.core.deployment._compose_seed_safety import (
     redacted_stderr_hint,
 )
 from aptl.core.deployment._compose_stop import stop_compose_lab
+from aptl.core.deployment._compose_boundary import (
+    realize_boundary as _realize_boundary,
+)
+from aptl.core.deployment.boundary import BoundaryEnforcementSpec
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -191,6 +195,29 @@ class DockerComposeBackend(
             raise BackendTimeoutError(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
+
+    def _run_with_input(
+        self,
+        cmd: list[str],
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run one fixed command with non-secret structured stdin."""
+
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
+        kwargs["input"] = payload
+        try:
+            return subprocess.run(cmd, **kwargs)
+        except subprocess.TimeoutExpired as exc:
+            raise BackendTimeoutError(
+                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
+            ) from exc
+
+    def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
+        """Apply and observe policy on the selected Docker daemon host."""
+
+        return _realize_boundary(self, policy)
 
     def start(
         self,

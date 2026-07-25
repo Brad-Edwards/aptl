@@ -18,6 +18,7 @@ from aptl.backends.aces_diagnostics import (
     unsupported_resource_diagnostics,
 )
 from aptl.backends.aces_dependency_closure import append_dependency_closure
+from aptl.backends.aces_acl_realization import realize_acls
 from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.aces_image_realization import resolve_node_image
@@ -57,6 +58,7 @@ from aptl.backends.aces_realization_values import (
 )
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import (
+    DeploymentAclRealization,
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
 )
@@ -95,6 +97,7 @@ def interpret_provisioning_plan(
         diagnostics,
     )
     append_network_topology_diagnostics(nodes, networks, diagnostics)
+    acls = realize_acls(payload_resources, networks, diagnostics)
     placements = _realize_placements(
         payload_resources,
         _node_lookup(nodes),
@@ -118,6 +121,7 @@ def interpret_provisioning_plan(
         persistent_volumes,
         profiles,
         diagnostics,
+        acls,
     )
 
 
@@ -267,6 +271,7 @@ def _realization_from_parts(
     persistent_volumes: list[DeploymentPersistentVolumeRealization],
     profiles: set[str],
     diagnostics: list[Diagnostic],
+    acls: list[DeploymentAclRealization],
 ) -> AptlRealization:
     """Build the stable realization value from collected resource parts."""
 
@@ -276,6 +281,7 @@ def _realization_from_parts(
         networks=tuple(sorted(networks, key=lambda item: item.address)),
         placements=tuple(sorted(placements, key=lambda item: item.address)),
         diagnostics=tuple(diagnostics),
+        acls=tuple(acls),
         generated_artifacts=tuple(
             sorted(generated_artifacts, key=lambda item: item.address)
         ),

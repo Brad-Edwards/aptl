@@ -25,6 +25,7 @@ from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
+from aptl.core.deployment.boundary import BoundaryEnforcementSpec
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
@@ -76,6 +77,11 @@ class DeploymentBackend(Protocol):
         Returns:
             LabResult indicating success or failure.
         """
+        ...
+
+    def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
+        """Apply and read back one project-owned appliance boundary policy."""
+
         ...
 
     def stop(

@@ -101,6 +101,7 @@ nav:
     - Authoring Boundary: sdl/index.md
     - Curated ACES Variants: sdl/techvault-curated-variants.md
   - ACES:
+    - APP-1 Appliance Boundary Materialization Preflight: aces/app-1-appliance-boundary-materialization-preflight.md
     - TechVault Static Validation Preflight: aces/techvault-static-validation-preflight.md
     - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
     - TechVault Live Validation Preflight: aces/techvault-live-validation-preflight.md

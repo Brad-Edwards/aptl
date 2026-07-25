@@ -199,17 +199,35 @@ class ComposeQueryMixin(object):
         )
         if not payload:
             return {}
-        ipam = (payload.get("IPAM", {}).get("Config") or [{}])[0]
+        ipam_configs = payload.get("IPAM", {}).get("Config") or [{}]
+        ipam = ipam_configs[0]
         containers_map = payload.get("Containers", {})
         labels = payload.get("Labels")
+        options = payload.get("Options")
         if not isinstance(labels, dict):
             labels = {}
+        if not isinstance(options, dict):
+            options = {}
+        network_id = str(payload.get("Id", ""))
+        bridge = str(options.get("com.docker.network.bridge.name", ""))
+        if not bridge and payload.get("Driver") == "bridge" and network_id:
+            bridge = f"br-{network_id[:12]}"
+        subnets = [
+            str(config.get("Subnet", ""))
+            for config in ipam_configs
+            if isinstance(config, dict) and config.get("Subnet")
+        ]
         return {
             "name": name,
+            "id": network_id,
+            "driver": str(payload.get("Driver", "")),
+            "bridge": bridge,
             "internal": bool(payload.get("Internal", False)),
             "subnet": ipam.get("Subnet", ""),
+            "subnets": subnets,
             "gateway": ipam.get("Gateway", ""),
             "labels": {str(key): str(value) for key, value in labels.items()},
+            "options": {str(key): str(value) for key, value in options.items()},
             "containers": sorted(c.get("Name", "") for c in containers_map.values()),
         }
 

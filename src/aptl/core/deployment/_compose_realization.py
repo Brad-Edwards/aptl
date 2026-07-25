@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -37,10 +38,16 @@ from aptl.core.deployment._compose_image_free_realization import (
 )
 from aptl.core.deployment._compose_realization_networks import (
     _container_networks,
+    _match_managed_network,
     _network_name_candidates,
     _resolve_realization_networks,
 )
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.boundary import BoundaryNetwork
+from aptl.core.deployment.boundary_compiler import (
+    BoundaryCompileError,
+    compile_aces_boundary,
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
@@ -133,7 +140,7 @@ class ComposeRealizationMixin(
             network_failures = self._ensure_realization_networks(realization)
             if network_failures:
                 return LabResult(success=False, error="; ".join(network_failures[:5]))
-            return None
+            return self._realize_aces_boundary(realization)
 
         def _compose_model() -> LabResult | None:
             """Render and validate the generated Compose model."""
@@ -189,6 +196,9 @@ class ComposeRealizationMixin(
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
+        boundary_result = self._realize_aces_boundary(realization)
+        if boundary_result is not None:
+            return boundary_result
         nodes = tuple(n for n in realization.nodes if n.address in addresses)
         content = tuple(
             item for item in realization.content if item.target_address in addresses
@@ -211,8 +221,98 @@ class ComposeRealizationMixin(
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
+        boundary_result = self._realize_aces_boundary(realization)
+        if boundary_result is not None:
+            return boundary_result
         node_result = _realize_node_subset(self, realization.nodes, realization.content)
         return node_result if node_result is not None else LabResult(success=True)
+
+    def _realize_aces_boundary(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Apply admitted ACES ACLs before a scenario workload can start."""
+
+        if not realization.acls:
+            return None
+        try:
+            networks = self._boundary_network_observations(realization)
+            policy = compile_aces_boundary(
+                realization,
+                networks,
+                owner=self._project_name,
+            )
+        except BoundaryCompileError:
+            return LabResult(
+                success=False,
+                error="ACES boundary could not be bound without widening policy.",
+            )
+        result = self.realize_boundary(policy)
+        return None if result.success else result
+
+    def _boundary_network_observations(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> tuple[BoundaryNetwork, ...]:
+        """Return concrete bridge identities for scenario-declared networks."""
+
+        if not realization.acls:
+            return ()
+        managed = set(self.host_list_lab_networks(self._project_name))
+        observed: list[BoundaryNetwork] = []
+        for desired in realization.networks:
+            concrete = _match_managed_network(
+                desired.name,
+                managed,
+                self._project_name,
+            )
+            details = self.host_inspect_network(concrete) if concrete else {}
+            bridge = details.get("bridge")
+            if not isinstance(bridge, str) or not bridge:
+                raise BoundaryCompileError(
+                    "realized network bridge was not observable"
+                )
+            subnets = details.get("subnets")
+            if not isinstance(subnets, list):
+                subnets = [details.get("subnet", "")]
+            ipv4 = next(
+                (
+                    value
+                    for value in subnets
+                    if isinstance(value, str)
+                    and value
+                    and ipaddress.ip_network(value, strict=False).version == 4
+                ),
+                None,
+            )
+            ipv6 = next(
+                (
+                    value
+                    for value in subnets
+                    if isinstance(value, str)
+                    and value
+                    and ipaddress.ip_network(value, strict=False).version == 6
+                ),
+                None,
+            )
+            labels = details.get("labels")
+            observed.append(
+                BoundaryNetwork(
+                    name=desired.name,
+                    bridge=bridge,
+                    ipv4_cidr=ipv4,
+                    ipv6_cidr=ipv6,
+                    labels=tuple(
+                        sorted(
+                            (str(key), str(value))
+                            for key, value in (
+                                labels.items() if isinstance(labels, dict) else ()
+                            )
+                        )
+                    ),
+                )
+            )
+        return tuple(observed)
 
     def _realize_published_ports(
         self,

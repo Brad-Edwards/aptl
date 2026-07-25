@@ -9,6 +9,14 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.1.1](https://github.com/Brad-Edwards/aptl/compare/v5.1.0...v5.1.1) (2026-07-25)
+
+
+### Documentation
+
+* adopt sealed appliance delivery boundary ([#830](https://github.com/Brad-Edwards/aptl/issues/830)) ([98dd2a6](https://github.com/Brad-Edwards/aptl/commit/98dd2a693b300739433535a95f99946e8465bd0c))
+* clarify raes env pack ownership ([#831](https://github.com/Brad-Edwards/aptl/issues/831)) ([5a0ee78](https://github.com/Brad-Edwards/aptl/commit/5a0ee787dcb0ce63b69019ed61114700b3f2527c))
+
 ## [5.1.0](https://github.com/Brad-Edwards/aptl/compare/v5.0.0...v5.1.0) (2026-07-25)
 
 

@@ -163,3 +163,4 @@ The victim and kali containers publish no host ports; use
 - [Issue #677 Certificate Producer Ownership](issue-677-cert-producer-ownership-preflight.md)
 - [OBS-002 Correlation Identity And Clock Context](obs-002-correlation-identity-clock-preflight.md)
 - [EXP-010 Capture Admission And Evidence Acquisition](exp-010-capture-admission-evidence-preflight.md)
+- [Issue #589 Scenario-Pack Capture Workflow Ownership](issue-589-scenario-pack-capture-ownership-preflight.md)

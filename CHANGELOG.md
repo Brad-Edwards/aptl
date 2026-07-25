@@ -9,6 +9,56 @@ This file is maintained by [release-please](https://github.com/googleapis/releas
 from Conventional Commit messages; release sections are generated on release,
 not hand-edited in PRs.
 
+## [5.1.0](https://github.com/Brad-Edwards/aptl/compare/v5.0.0...v5.1.0) (2026-07-25)
+
+
+### Features
+
+* **aces:** image-free generic-materializer realization envelope ([#581](https://github.com/Brad-Edwards/aptl/issues/581)) ([#805](https://github.com/Brad-Edwards/aptl/issues/805)) ([421a836](https://github.com/Brad-Edwards/aptl/commit/421a836d47135008d4cfc831f3b4f1669a860c2e))
+* **aces:** realize the TechVault SDL dynamically, retire hand-authored compose plumbing ([#581](https://github.com/Brad-Edwards/aptl/issues/581)) ([#812](https://github.com/Brad-Edwards/aptl/issues/812)) ([96a14a0](https://github.com/Brad-Edwards/aptl/commit/96a14a029e98db3ba6dd9e8d993bc8b60d4fcb2e))
+* **aces:** realize Wazuh stateful services from SDL ([#796](https://github.com/Brad-Edwards/aptl/issues/796)) ([a4423db](https://github.com/Brad-Edwards/aptl/commit/a4423db9a5f49be6dc2462cb52c1e53e1935d0a6))
+* add ACES experiment specification admission and trial planning (EXP-002) ([#806](https://github.com/Brad-Edwards/aptl/issues/806)) ([955f7d6](https://github.com/Brad-Edwards/aptl/commit/955f7d6c772d6007fff4b35017a958a60cd1506d))
+* add experiment correlation identity and clock-context projection (OBS-002) ([#808](https://github.com/Brad-Edwards/aptl/issues/808)) ([a4c60db](https://github.com/Brad-Edwards/aptl/commit/a4c60db424301cb0814a9af57f8edc39796303ac))
+* consume ACES runtime-substituted plans ([#798](https://github.com/Brad-Edwards/aptl/issues/798)) ([c0dc206](https://github.com/Brad-Edwards/aptl/commit/c0dc206982810e71009a3e17e5d441ef195649e2))
+* **evidence:** acquire ACES experiment evidence from admitted capture bindings ([#811](https://github.com/Brad-Edwards/aptl/issues/811)) ([e9373f5](https://github.com/Brad-Edwards/aptl/commit/e9373f5bec57b2c315c4a9c5d7ab837983b19595))
+* **experiment:** admit capture requirements via a code-owned collector registry ([#810](https://github.com/Brad-Edwards/aptl/issues/810)) ([5dfc017](https://github.com/Brad-Edwards/aptl/commit/5dfc017b103895fd191531920ad9d25d887e6060))
+* **scenario:** restore TechVault content parity for dynamic realization ([#581](https://github.com/Brad-Edwards/aptl/issues/581)) ([#818](https://github.com/Brad-Edwards/aptl/issues/818)) ([2a3bd09](https://github.com/Brad-Edwards/aptl/commit/2a3bd099611cd48d2db6e42b9a7d02d7710c6f7d))
+
+
+### Bug Fixes
+
+* **aces:** restore custom Wazuh rule/decoder mounts dropped by stateful !override ([#814](https://github.com/Brad-Edwards/aptl/issues/814)) ([3da3bee](https://github.com/Brad-Edwards/aptl/commit/3da3beee5f6552e681de84085dc075e16b10a78c))
+* **aces:** restore custom Wazuh rule/decoder mounts in stateful realization ([3da3bee](https://github.com/Brad-Edwards/aptl/commit/3da3beee5f6552e681de84085dc075e16b10a78c))
+* **aces:** truth up backend manifest ([#792](https://github.com/Brad-Edwards/aptl/issues/792)) ([9ce7ef3](https://github.com/Brad-Edwards/aptl/commit/9ce7ef3af3e88d0bfad025dccc7d6ea6cd0cfee3))
+* align live smoke tests with current lab ([70f0731](https://github.com/Brad-Edwards/aptl/commit/70f0731d067356b7e64dc140d6fcd57d17a30f6e))
+* **certs:** restore vendored wazuh-certs-tool.sh to its pinned digest ([#813](https://github.com/Brad-Edwards/aptl/issues/813)) ([ec54ee2](https://github.com/Brad-Edwards/aptl/commit/ec54ee2da2cd59c58eb17f1dd7737483901b1838))
+* document Linux Buildx prerequisite ([#789](https://github.com/Brad-Edwards/aptl/issues/789)) ([c573dca](https://github.com/Brad-Edwards/aptl/commit/c573dca42854c5542787e00862c8b06d493f8612))
+* flush Kali captures before session close ([#780](https://github.com/Brad-Edwards/aptl/issues/780)) ([cf15604](https://github.com/Brad-Edwards/aptl/commit/cf1560451e54abc9b5d144de90e5f4b08ebac267))
+* generate certs producer-owned and repair fresh lab start ([#801](https://github.com/Brad-Edwards/aptl/issues/801)) ([abb3fc1](https://github.com/Brad-Edwards/aptl/commit/abb3fc1b42dc78baac51e59b4d57b3e7a2db65db))
+* generate current MCP client configuration ([#788](https://github.com/Brad-Edwards/aptl/issues/788)) ([aafa008](https://github.com/Brad-Edwards/aptl/commit/aafa008c6c4821e7d972ab7b67b1daec98454f52))
+* harden Suricata seed ownership-repair helper container ([#807](https://github.com/Brad-Edwards/aptl/issues/807)) ([304d121](https://github.com/Brad-Edwards/aptl/commit/304d1217f72d053b0e4201844eb731d5f513e24a))
+* hide disabled reverse access ([#773](https://github.com/Brad-Edwards/aptl/issues/773)) ([bf97101](https://github.com/Brad-Edwards/aptl/commit/bf97101f9d85dc5b185fa911407554c78398486b))
+* keep Shuffle writable on high-usage hosts ([#779](https://github.com/Brad-Edwards/aptl/issues/779)) ([00e7d87](https://github.com/Brad-Edwards/aptl/commit/00e7d8707616da0e9a591a9b4d9c605b949689d5))
+* keep TheHive and Cortex writable on high-usage hosts ([#784](https://github.com/Brad-Edwards/aptl/issues/784)) ([85b3645](https://github.com/Brad-Edwards/aptl/commit/85b36455527141af9d2157fea95656ecc2f8ce55))
+* make MISP event seeding idempotent ([#785](https://github.com/Brad-Edwards/aptl/issues/785)) ([1b7cc40](https://github.com/Brad-Edwards/aptl/commit/1b7cc40671eedbed465f5c33e717f3f940336290))
+* make SEM-218 realization disclosure non-vacuous ([#794](https://github.com/Brad-Edwards/aptl/issues/794)) ([c05fedd](https://github.com/Brad-Edwards/aptl/commit/c05fedd9f64a1bff075e0f0ea49853b8246a7f5f))
+* preserve participant endpoints on repeated starts ([#775](https://github.com/Brad-Edwards/aptl/issues/775)) ([c9b3754](https://github.com/Brad-Edwards/aptl/commit/c9b3754dd5dadce969e87496c40a0debda1e7393))
+* remove seeded volumes during full lab cleanup ([#776](https://github.com/Brad-Edwards/aptl/issues/776)) ([f50593b](https://github.com/Brad-Edwards/aptl/commit/f50593b83b9a91203d56454f33ac58aa3da5afe1))
+* report live host-port remaps accurately ([#774](https://github.com/Brad-Edwards/aptl/issues/774)) ([057d645](https://github.com/Brad-Edwards/aptl/commit/057d6458f868e1364157a4698465a332745105d4))
+* reuse generated credentials in manual SOC seeding ([#777](https://github.com/Brad-Edwards/aptl/issues/777)) ([386a7e0](https://github.com/Brad-Edwards/aptl/commit/386a7e0d7c662cd03e6c80f44e28c6392b68ede7))
+* reuse lab credentials in manual SOC seeding ([386a7e0](https://github.com/Brad-Edwards/aptl/commit/386a7e0d7c662cd03e6c80f44e28c6392b68ede7))
+* scope host port planning to active profiles ([#787](https://github.com/Brad-Edwards/aptl/issues/787)) ([fc31e1a](https://github.com/Brad-Edwards/aptl/commit/fc31e1a74d436d7ced2c3d85baa02e64e3f01787))
+* scope SOC seed and retry to the scenario's selected profiles ([#797](https://github.com/Brad-Edwards/aptl/issues/797)) ([7b7769c](https://github.com/Brad-Edwards/aptl/commit/7b7769c1c6c1e0359575ac5811cf7febe628d250))
+* **security:** content-source deny-list + Linux capability allowlist ([#817](https://github.com/Brad-Edwards/aptl/issues/817)) ([5f8d6a8](https://github.com/Brad-Edwards/aptl/commit/5f8d6a88bbff169f08a8a22bff857af4505cc0d4))
+* serialize first-run Vale bootstrap ([#781](https://github.com/Brad-Edwards/aptl/issues/781)) ([19c1101](https://github.com/Brad-Edwards/aptl/commit/19c1101032b5a8125de9203d7cd29bf62b64bafd))
+* **shuffle:** make the Wazuh-&gt;Shuffle-&gt;TheHive alert-to-case loop work ([#815](https://github.com/Brad-Edwards/aptl/issues/815)) ([b9dc59e](https://github.com/Brad-Edwards/aptl/commit/b9dc59ea70510919cbf8fd7fe2f5098d333e8a2c))
+* surface required prime seed failures ([#786](https://github.com/Brad-Edwards/aptl/issues/786)) ([932c0ea](https://github.com/Brad-Edwards/aptl/commit/932c0eac809ecfd25da4c5b27243dc5c2ffde9ed))
+
+
+### Documentation
+
+* add ADR-047 for ACES experiment admission and trial-plan boundary ([#800](https://github.com/Brad-Edwards/aptl/issues/800)) ([e931d28](https://github.com/Brad-Edwards/aptl/commit/e931d287eb90e3bf55b58dbb06d174773c8ba7bf))
+
 ## [5.0.0](https://github.com/Brad-Edwards/aptl/compare/v4.2.2...v5.0.0) (2026-07-15)
 
 

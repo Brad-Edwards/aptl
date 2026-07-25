@@ -24,13 +24,19 @@ def _decision_rows(note: str) -> dict[str, str]:
     }
 
 
-def test_scenario_pack_ownership_remains_three_way_and_current() -> None:
+def test_scenario_pack_ownership_remains_four_way_and_current() -> None:
     note = _OWNERSHIP_NOTE.read_text(encoding="utf-8")
     owners = _decision_rows(note)
 
-    assert set(owners) == {"RAES", "RAESystem/env-packs", "APTL"}
+    assert set(owners) == {
+        "RAES",
+        "RAESystem/env-packs",
+        "Downstream scenario or experiment owner",
+        "APTL",
+    }
     assert "semantic" in owners["RAES"].lower()
-    assert "pack" in owners["RAESystem/env-packs"].lower()
+    assert "format" in owners["RAESystem/env-packs"].lower()
+    assert "scenario" in owners["Downstream scenario or experiment owner"].lower()
     assert "realization" in owners["APTL"].lower()
     assert "https://github.com/RAESystem/rae/issues/629" in note
     assert "https://github.com/RAESystem/env-packs/issues/138" in note

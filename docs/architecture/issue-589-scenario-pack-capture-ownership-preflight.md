@@ -10,21 +10,32 @@ evidence.
 
 ## Decision
 
-There are three distinct owners. Their contracts must not be conflated.
+There are four distinct owners. Their contracts must not be conflated.
 
 | Concern | Owner | APTL boundary |
 | --- | --- | --- |
 | Portable attack-path, workflow, capture, evidence, and inventory semantics | RAES | APTL consumes the published RAES SDL, contract models, compiler, planner, diagnostics, and controlled vocabulary. It does not mirror them in an APTL schema or taxonomy. |
-| Scenario-pack source, authored scenario content, pack metadata, versioning, placement, and distribution references | `RAESystem/env-packs` | A pack may describe portable intent, not APTL container names, Compose fragments, host paths, `.env` keys, credentials, shell commands, collector implementations, or backend-specific persistence paths. |
+| Environment-pack format, templates, schemas, validation, release tooling, and adoption guidance | `RAESystem/env-packs` | The companion repository defines how an RAES environment pack is shaped and validated. It does not own the particular experiment, scenario, or execution a downstream user creates with that format. |
+| Particular scenario content, experiment design, and execution choices | Downstream scenario or experiment owner | The downstream owner chooses and authors the specific RAES scenario or experiment within the published format and capability constraints. It cannot use that choice to select APTL container names, Compose fragments, host paths, `.env` keys, credentials, shell commands, collector implementations, or backend-specific persistence paths. |
 | Runtime realization, lab lifecycle, source acquisition, backend observation, and APTL-local evidence persistence | APTL | APTL lowers an admitted RAES execution plan through the existing runtime target and `DeploymentBackend`, then records backend evidence through the existing snapshot/run-store boundaries. |
 
 Specifically:
 
-- **Attack paths:** pack authors express portable scenario intent through RAES;
-  RAES validates and plans it. APTL supplies only actual lab topology,
+- **Attack paths:** RAES defines portable scenario intent and its validation and
+  planning semantics. A downstream scenario or experiment owner authors the
+  particular intent within the RAES environment-pack format. APTL supplies only actual lab topology,
   participant execution, and observed runtime effects through its declared
   backend capabilities. APTL must not recreate a pack-specific attack-path
   executor, static scenario branch, or local semantic model.
+- **Environment-pack format:** `RAESystem/env-packs` owns the reusable pack
+  format, templates, schemas, validation, release tooling, and adoption
+  guidance. It does not select a particular scenario, experiment, participant,
+  or execution for a downstream user.
+- **Scenario and experiment choice:** the downstream scenario or experiment
+  owner supplies the specific authored content, experiment design, and
+  execution choices that use an environment pack. Those choices remain RAES
+  inputs and must stay within the admitted format and declared APTL capability;
+  they are not an authority over APTL implementation details.
 - **Capture:** RAES owns capture-spec semantics, requirement meaning, portable
   evidence records, and inventory methodology. Pack authors select only RAES
   capture requirements. APTL's `CollectorRegistry`/`CaptureBinding` pair is a
@@ -46,8 +57,9 @@ follow-ups already named by the issue remain the authorities for their scopes:
 [RAES #629](https://github.com/RAESystem/rae/issues/629) for semantic
 capture/inventory ownership and
 [env-packs #138](https://github.com/RAESystem/env-packs/issues/138) for the
-companion reference. There is no APTL asset migration to create: the former
-APTL capture/parity surfaces were intentionally removed under #690/#757.
+environment-pack format reference. There is no APTL asset migration to create:
+the former APTL capture/parity surfaces were intentionally removed under
+#690/#757.
 
 ## Required Reuse And Validation Passage
 
@@ -72,11 +84,12 @@ retain the clean-lab validation required by `.gc/plan-rules.md`.
 
 ## Extensibility And Guardrails
 
-The external seam is a RAES-owned, immutable pack artifact binding:
-`(pack identity, version/digest, scenario entry point) -> RAES bytes ->
-RuntimeModel/ExecutionPlan`. APTL may parameterize the catalog/resolver policy
-only by authorized trust roots, bounded limits, and digest requirements. It
-must not dispatch by pack name, path, or scenario-specific branch.
+The external seam is a RAES format applied to a downstream-owned immutable pack
+artifact binding: `(pack identity, version/digest, scenario entry point) ->
+RAES bytes -> RuntimeModel/ExecutionPlan`. APTL may parameterize the
+catalog/resolver policy only by authorized trust roots, bounded limits, and
+digest requirements. It must not dispatch by pack name, path, or
+scenario-specific branch.
 
 The execution seam is the existing `(RAES capture requirement,
 CaptureBinding, registration_id, trusted source adapter)` chain. A new source
@@ -94,6 +107,9 @@ Avoid these anti-patterns:
 - embedding APTL realization specifics in a pack or teaching APTL a RAES
   attack-path/capture DTO, validation layer, exception hierarchy, or workflow
   engine;
+- treating the environment-pack format as the owner of a particular scenario,
+  experiment, or execution, or treating a downstream scenario choice as an
+  authority over RAES semantics or APTL implementation details;
 - accepting pack-provided collector IDs as import paths, commands, URLs,
   backend method names, environment names, output paths, or credentials;
 - using raw Docker/Compose/SSH/curl calls, bypassing redaction, or leaking

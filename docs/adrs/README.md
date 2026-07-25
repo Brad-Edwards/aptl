@@ -70,3 +70,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [046](adr-046-dynamic-aces-scenario-realization.md) | Dynamic ACES Scenario Realization (Image Realization Addendum superseded by ADR-048) | accepted (amended) | 2026-06-29 |
 | [047](adr-047-aces-experiment-admission-and-trial-plan-boundary.md) | ACES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
 | [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | accepted | 2026-07-20 |
+| [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | accepted | 2026-07-25 |

@@ -8,6 +8,15 @@ accepted
 
 2026-05-10
 
+## Status update—2026-07-25
+
+The per-asset inventory implementation mentioned in the historical text below
+was removed from APTL by issue #690/#757. Asset-inventory methodology and
+semantic capture evidence now belong to RAES; APTL still applies this ADR's
+secret classification and serialization boundary to its own backend
+observations and run evidence. New work must not recreate an APTL inventory
+tree, bundle ledger, or capture runner merely to carry out redaction.
+
 ## Context
 
 APTL intentionally contains vulnerable lab targets and designed lab

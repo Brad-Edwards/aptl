@@ -18,7 +18,6 @@ from tests.helpers import (
     CUSTOM_MCP_SERVERS,
     LIVE_LAB,
     PROJECT_ROOT,
-    PUBLISHED_MCP_PATHS,
     VICTIM_IP,
     WS_IP,
     container_running,
@@ -214,7 +213,7 @@ class TestNetworkConnectivity:
 
 @LIVE_LAB
 class TestMCPServers:
-    """MCP server builds and published binaries exist."""
+    """Every repository-owned MCP server has a compiled build."""
 
     @pytest.mark.parametrize("server", CUSTOM_MCP_SERVERS)
     def test_custom_build_exists(self, server):
@@ -226,29 +225,6 @@ class TestMCPServers:
             f"{entry} not found -- "
             "run ./mcp/build-all-mcps.sh"
         )
-
-    @pytest.mark.parametrize(
-        "name,path",
-        list(PUBLISHED_MCP_PATHS.items()),
-        ids=list(PUBLISHED_MCP_PATHS.keys()),
-    )
-    def test_published_binary_exists(self, name, path):
-        """Published MCP server binary or script is installed (optional).
-
-        The published wazuh/thehive/misp MCP servers are third-party, installed
-        per-machine and gitignored (``tools/.gitignore``); they back only the
-        optional full-SOC MCP path. Skip when absent so a core-workshop setup
-        (red + indexer, built from source) reports a clean smoke run, while
-        still validating the binary when a facilitator has installed it.
-        """
-        if not os.path.isfile(path):
-            pytest.skip(
-                f"Published MCP '{name}' not installed at {path} -- optional "
-                "per-machine install (see tools/.gitignore); required only for "
-                "the full-SOC MCP path."
-            )
-        assert os.path.isfile(path)
-
 
 # -------------------------------------------------------------------
 # Section 7: Workstation credential artifacts

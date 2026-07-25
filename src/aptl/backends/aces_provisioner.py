@@ -17,7 +17,7 @@ from aptl.backends.aces_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.aces_observation import observe_realization
+from aptl.backends.aces_observation import observation_evidence, observe_realization
 from aptl.backends.aces_realization import (
     AptlRealization,
     interpret_provisioning_plan,
@@ -40,6 +40,12 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
+    # ACES's backend-call boundary replaces a failed apply's diagnostics with
+    # its snapshot-contract / SEM-218 gate output (the gate reads the
+    # never-realized snapshot, so every exact declaration looks unrealized).
+    # Keep the last failed apply's own report here so the handoff can
+    # re-attach the actionable failure (issue #677).
+    last_failure_diagnostics: tuple[Diagnostic, ...] = ()
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the ACES provisioning plan is APTL-realizable."""
@@ -84,6 +90,9 @@ class AptlProvisioner(object):
                     diagnostics=diagnostics,
                     details={"realization": realization.details()},
                 )
+        self.last_failure_diagnostics = (
+            () if result.success else tuple(result.diagnostics)
+        )
         return result
 
     def _apply_valid_plan(
@@ -144,6 +153,7 @@ class AptlProvisioner(object):
             details={
                 "profiles": selected_profiles,
                 "realization": realization.details(),
+                "observation_evidence": observation_evidence(observations),
             },
         )
 

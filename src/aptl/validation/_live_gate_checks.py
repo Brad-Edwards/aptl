@@ -22,6 +22,7 @@ check branch without a live lab. The boot / telemetry probes that live in
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,22 +38,18 @@ from aptl.validation._live_gate_probes import (
     _boot_lab,
     _check,
     _check_to_dict,
-    _collect_until_evidence,
     _compute_realization,
     _default_run_store,
     _distinct_profile_nodes,
-    _event_type_tally,
     _find_container,
-    _generate_event,
-    _is_traffic_event,
     _missing_manifest_keys,
-    _now_iso,
     _ping_from_kali,
     _scenario_name,
     _shared_network_targets,
     _single_node_plan,
     _variation_diagnostics,
 )
+from aptl.validation._live_gate_telemetry import telemetry_diagnostics
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
     _warn_unhealthy_infra,
@@ -309,12 +306,14 @@ def check_telemetry_evidence_path(
     config: "AptlConfig",
     options: "LiveGateOptions",
     state: "LiveGateState",
+    env_loader: Callable[[Path], dict[str, str]] | None = None,
 ) -> LiveGateCheck:
     """Generate one representative event and confirm it traverses the defensive stack.
 
     Drives traffic from Kali at a reachable DMZ host, then collects Suricata EVE
-    and Wazuh alerts in the bounded window. At least one evidence artifact must
-    be captured; the summary is recorded for the run archive.
+    and Wazuh alerts in the bounded post-trigger window. A Wazuh alert is
+    mandatory; Suricata evidence is recorded as supporting evidence but cannot
+    satisfy the realized-Wazuh proof by itself.
     """
     snapshot = state.snapshot or {}
     containers = snapshot.get("containers", [])
@@ -335,42 +334,15 @@ def check_telemetry_evidence_path(
             ["no reachable target to generate defensive-stack telemetry"],
         )
 
-    diagnostics = _telemetry_diagnostics(targets, config, project_dir, options, state)
-    return _check("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, diagnostics)
-
-
-def _telemetry_diagnostics(
-    targets: list[tuple[str, str]],
-    config: "AptlConfig",
-    project_dir: Path,
-    options: "LiveGateOptions",
-    state: "LiveGateState",
-) -> list[str]:
-    """Generate an event, collect evidence, record the summary, and grade it."""
-    backend = get_backend(config, project_dir)
-    start_iso = _now_iso()
-    _generate_event(backend, targets)
-    eve, alerts = _collect_until_evidence(
-        backend, start_iso, options.event_window_seconds
+    diagnostics = telemetry_diagnostics(
+        targets,
+        config,
+        project_dir,
+        options,
+        state,
+        env_loader=env_loader,
     )
-    end_iso = _now_iso()
-
-    traffic_eve = [e for e in eve if _is_traffic_event(e)]
-    summary = {
-        "generator": "kali nmap + failed-ssh-auth against reachable targets",
-        "window": [start_iso, end_iso],
-        "suricata_event_types": _event_type_tally(eve),
-        "suricata_traffic_event_count": len(traffic_eve),
-        "wazuh_alert_count": len(alerts),
-    }
-    state.evidence = {**(state.evidence or {}), "telemetry": summary}
-
-    if (len(traffic_eve) + len(alerts)) < 1:
-        return [
-            "no traffic-derived alert/log/evidence traversed the defensive "
-            "stack in the window (Suricata stats-only events do not count)"
-        ]
-    return []
+    return _check("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, diagnostics)
 
 
 # --------------------------------------------------------------------------- #

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -26,7 +26,6 @@ from aptl.core.contracts import (
     backend_is_initialized,
     config_is_loaded,
     env_is_loaded,
-    required_profiles_enabled,
     ssh_key_is_ready,
 )
 from aptl.core.credentials import (
@@ -54,6 +53,7 @@ from aptl.core.lab_types import (
     StartupOutcome as StartupOutcome,
 )
 from aptl.core.services import (
+    ServiceResult,
     check_indexer_ready,
     check_indexer_status,
     check_manager_api_ready,
@@ -73,7 +73,14 @@ from aptl.core.snapshot import (
     container_networks,
     list_container_snapshots,
 )
-from aptl.core.ssh import ensure_pivot_key, ensure_ssh_keys
+from aptl.core.ssh import (
+    SSHKeyResult,
+    ensure_pivot_key,
+    ensure_ssh_keys,
+    ensure_target_authorized_keys,
+    ensure_victim_authorized_keys,
+    ensure_workstation_pivot_key,
+)
 from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -82,6 +89,7 @@ if TYPE_CHECKING:
     from docker.client import DockerClient
 
     from aptl.backends.aces import AcesStartOutcome
+    from aptl.backends.aces_start_model import AcesRunTarget
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -91,6 +99,7 @@ ProgressCallback = Callable[[str], None]
 _STALE_NETWORK_RECOVERY_HINT = (
     "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
+_WAZUH_MANAGER_SERVICE = "wazuh.manager"
 
 
 def _looks_like_stale_realization_network_error(error: str) -> bool:
@@ -118,14 +127,17 @@ def start_aces_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
     *,
-    run_store: object = None,
-    run_id: str | None = None,
+    run_target: AcesRunTarget | None = None,
+    parameters: Mapping[str, object] | None = None,
+    before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome | LabResult:
     """Lazy ACES handoff import for the public lab-start path.
 
-    ``run_store``/``run_id`` (resolved once per lab-start run, REP-001 / GAP 4)
-    are threaded into the ACES handoff so orchestration persists workflow
-    artifacts under the same run directory the run record is written to.
+    ``run_target`` (resolved once per lab-start run, REP-001 / GAP 4) is
+    threaded into the ACES handoff so orchestration persists workflow artifacts
+    under the same run directory the run record is written to.
+    ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
+    the backend retains and reapplies the already admitted execution plan.
     """
     try:
         from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
@@ -139,8 +151,9 @@ def start_aces_scenario(
         config,
         backend,
         scenario_path=scenario_path,
-        run_store=run_store,
-        run_id=run_id,
+        run_target=run_target,
+        parameters=parameters,
+        before_backend_retry=before_backend_retry,
     )
 
 
@@ -150,12 +163,12 @@ def selected_profiles_for_scenario(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> set[str]:
-    """Lazy ACES import for the scenario's selected Compose profiles.
+    """Inspect a scenario's selected Compose profiles without starting it.
 
-    Returns the profile set the scenario actually starts, so post-start
-    readiness checks scope to it instead of the global config flags. On import
-    failure returns an empty set (the readiness steps then skip rather than
-    falsely waiting on services).
+    This remains an independent validation/inspection surface. The actual lab
+    start path consumes ``AcesStartOutcome.selected_profiles`` from its one
+    admitted execution plan and does not call this helper after deployment.
+    On import or planning failure, return an empty set.
     """
     try:
         from aptl.backends.aces import (
@@ -167,10 +180,8 @@ def selected_profiles_for_scenario(
                 project_dir, config, backend, scenario_path=scenario_path
             )
         )
-    # broad-except: resolving selected profiles is best-effort enrichment for
-    # the readiness steps. The lab already started; any failure (import,
-    # missing/invalid SDL, ACES planning error) must degrade to an empty set so
-    # the readiness steps skip rather than crash the start or falsely wait.
+    # broad-except: resolving profiles is best-effort inspection. Any failure
+    # (import, missing/invalid SDL, ACES planning error) degrades to an empty set.
     except Exception as exc:
         log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
         return set()
@@ -219,6 +230,19 @@ def _runtime_require(
         enabled=True,
         error=_narrow_violation,
     )
+
+
+def admitted_stateful_artifact_ownership(
+    project_dir: Path,
+    config: AptlConfig,
+    backend: "DeploymentBackend",
+    scenario_path: Path | None = None,
+) -> frozenset[tuple[str, str, str, str]]:
+    """Lazy ACES import for exact pre-mutation artifact ownership."""
+
+    from aptl.backends.aces import admitted_stateful_artifact_ownership as _load
+
+    return _load(project_dir, config, backend, scenario_path=scenario_path)
 
 
 WAZUH_IMAGE_VERSION = "4.12.0"
@@ -367,6 +391,13 @@ def stop_lab(
             log.warning("Could not load config for profiles: %s", exc)
     if not profiles:
         profiles = list(ALL_KNOWN_PROFILES)
+    # OTel stack (Collector + Tempo + Grafana) is core infrastructure the
+    # start path always includes (see start_lab above) even though it is not
+    # an aptl.json container toggle; stop must tear down what start brings up
+    # or its containers stay attached to the project's networks/volumes and
+    # every later cleanup step fails with "network has active endpoints".
+    if "otel" not in profiles:
+        profiles = [*profiles, "otel"]
 
     if backend is None:
         backend = _get_backend(search_dir, config)
@@ -485,6 +516,7 @@ def lab_terminal_ssh_endpoints(
 def _check_bind_mounts(
     project_dir: Path,
     enabled_profiles: list[str] | None = None,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[str]:
     """Check that bind-mount source paths exist as files, not root-owned dirs.
 
@@ -501,6 +533,17 @@ def _check_bind_mounts(
     would otherwise fail this preflight on a non-SOC lab start, even
     though the service is never started. ``enabled_profiles=None`` keeps
     the original "check every service" behaviour for direct callers.
+
+    ``stateful_owned_mounts`` holds ``(service_name, mount_destination,
+    source_relpath)`` triples owned by admitted stateful realization. Those
+    sources are generated inside ``DeploymentBackend.realize`` before
+    Compose starts the consuming services, so on a fresh checkout they
+    legitimately do not exist yet; requiring them here would make a fresh
+    ``lab start`` unstartable (issue #677). The exemption matches BOTH the
+    destination and the declared source — a stray bind whose destination
+    merely nests beneath an owned directory is not owned by the artifact
+    and is still checked. A realization failure still fails the run before
+    Compose can create any root-owned directory.
     """
     compose_path = project_dir / "docker-compose.yml"
     if not compose_path.exists():
@@ -517,7 +560,9 @@ def _check_bind_mounts(
     errors: list[str] = []
     for svc_name, svc_def in services.items():
         errors.extend(
-            _check_service_bind_mounts(svc_name, svc_def, project_dir, active)
+            _check_service_bind_mounts(
+                svc_name, svc_def, project_dir, active, stateful_owned_mounts
+            )
         )
     return errors
 
@@ -527,6 +572,7 @@ def _check_service_bind_mounts(
     svc_def: object,
     project_dir: Path,
     active_profiles: set[str] | None,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[str]:
     """Return bind-mount errors for one Compose service.
 
@@ -543,19 +589,65 @@ def _check_service_bind_mounts(
         # a service with profiles only runs when at least one is active.
         if svc_profiles and not (set(svc_profiles) & active_profiles):
             return []
-    errors: list[str] = []
-    for vol in svc_def.get("volumes", []):
-        if not isinstance(vol, str) or not vol.startswith("./"):
-            continue
-        src = vol.split(":")[0]
-        src_path = (project_dir / src).resolve()
-        if not src_path.exists():
-            errors.append(
-                f"Service '{svc_name}': bind-mount source "
-                f"'{src}' does not exist. Create it before "
-                f"starting the lab to avoid root-owned directories."
-            )
-    return errors
+    errors = (
+        _bind_mount_error(svc_name, vol, project_dir, stateful_owned_mounts)
+        for vol in svc_def.get("volumes", [])
+    )
+    return [error for error in errors if error is not None]
+
+
+def _bind_mount_error(
+    svc_name: str,
+    vol: object,
+    project_dir: Path,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]],
+) -> str | None:
+    """Return the pre-flight error for one Compose volume entry, if any."""
+    if not isinstance(vol, str) or not vol.startswith("./"):
+        return None
+    parts = vol.split(":")
+    src = parts[0]
+    destination = parts[1] if len(parts) > 1 else ""
+    exempt_or_present = _stateful_realization_owns_mount(
+        svc_name, destination, src, stateful_owned_mounts
+    ) or (project_dir / src).resolve().exists()
+    if exempt_or_present:
+        return None
+    return (
+        f"Service '{svc_name}': bind-mount source "
+        f"'{src}' does not exist. Create it before "
+        f"starting the lab to avoid root-owned directories."
+    )
+
+
+def _stateful_realization_owns_mount(
+    svc_name: str,
+    destination: str,
+    source: str,
+    stateful_owned_mounts: frozenset[tuple[str, str, str]],
+) -> bool:
+    """Return whether an admitted stateful artifact owns this service mount.
+
+    Owned destinations and sources may be directories (the certificate
+    bundle mounts individual files beneath ``/etc/ssl/wazuh`` from
+    ``config/wazuh_indexer_ssl_certs``) or exact files (the rendered
+    ``ossec.conf``), so each side matches on equality or directory
+    containment — and BOTH sides must match. A stray bind whose destination
+    nests beneath an owned directory but whose source is not the artifact's
+    generated path stays subject to the pre-flight (issue #677).
+    """
+    normalized_source = source.removeprefix("./")
+    return any(
+        svc_name == owned_service
+        and _path_within(destination, owned_destination)
+        and _path_within(normalized_source, owned_source)
+        for owned_service, owned_destination, owned_source in stateful_owned_mounts
+    )
+
+
+def _path_within(candidate: str, owned: str) -> bool:
+    """Return whether a path equals an owned path or nests beneath it."""
+    return candidate == owned or candidate.startswith(owned.rstrip("/") + "/")
 
 
 def _validate_env_secrets(raw_env: dict[str, str]) -> "LabResult | None":
@@ -618,6 +710,47 @@ class _LabStartContext(object):
     # workflow artifacts and the record share a single run directory.
     run_store: object = None
     run_id: str | None = None
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]] = (
+        frozenset()
+    )
+
+
+# Ownership tuples are (address, generator, service_name, mount_destination,
+# source_relpath) — the canonical generated source rides along so mount
+# exemptions can match both sides of a bind (issue #677).
+_WAZUH_CERTIFICATE_SOURCE = "config/wazuh_indexer_ssl_certs"
+_WAZUH_MANAGER_CONFIG_OWNERSHIP = (
+    "provision.generated-artifact.wazuh-manager-config",
+    "rendered_config",
+    _WAZUH_MANAGER_SERVICE,
+    "/wazuh-config-mount/etc/ossec.conf",
+    ".aptl/config/wazuh_cluster/wazuh_manager.conf",
+)
+_WAZUH_CERTIFICATE_OWNERSHIP = frozenset(
+    {
+        (
+            "provision.generated-artifact.wazuh-indexer-certs",
+            "certificate_bundle",
+            "wazuh.indexer",
+            "/usr/share/wazuh-indexer/certs",
+            _WAZUH_CERTIFICATE_SOURCE,
+        ),
+        (
+            "provision.generated-artifact.wazuh-manager-certs",
+            "certificate_bundle",
+            _WAZUH_MANAGER_SERVICE,
+            "/etc/ssl/wazuh",
+            _WAZUH_CERTIFICATE_SOURCE,
+        ),
+        (
+            "provision.generated-artifact.wazuh-dashboard-certs",
+            "certificate_bundle",
+            "wazuh.dashboard",
+            "/usr/share/wazuh-dashboard/certs",
+            _WAZUH_CERTIFICATE_SOURCE,
+        ),
+    }
+)
 
 
 # Log format string for structured diagnostics. Kept module-level so
@@ -755,8 +888,19 @@ def _step_resolve_host_ports(ctx: _LabStartContext) -> LabResult | None:
     """
     from aptl.core import host_ports
 
+    active_profiles = None
+    if ctx.config is not None:
+        active_profiles = set(ctx.config.containers.enabled_profiles())
+        # The public start path always includes observability even though it is
+        # not an aptl.json container toggle.
+        active_profiles.add("otel")
+    assert ctx.backend is not None
+    existing_bindings = host_ports.project_port_bindings(ctx.backend)
     ctx.resolved_ports = host_ports.resolve_host_ports(
-        ctx.project_dir, reserved_env=set(ctx.raw_env)
+        ctx.project_dir,
+        reserved_env=set(ctx.raw_env),
+        active_profiles=active_profiles,
+        existing_bindings=existing_bindings,
     )
     for resolved in ctx.resolved_ports:
         if resolved.remapped:
@@ -784,7 +928,47 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
         log.exception("Failed to load config")
         return LabResult(success=False, error=f"Failed to load config: {exc}")
     ctx.backend = _get_backend(ctx.project_dir, ctx.config)
+    return _load_stateful_artifact_ownership(ctx)
+
+
+def _load_stateful_artifact_ownership(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Cache exact admitted artifact consumers before legacy mutation."""
+
+    from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO
+
+    scenario_path = ctx.scenario_path or DEFAULT_ACES_SCENARIO
+    if not scenario_path.is_absolute():
+        scenario_path = ctx.project_dir / scenario_path
+    if not scenario_path.is_file():
+        return None
+    try:
+        assert ctx.config is not None and ctx.backend is not None
+        ctx.stateful_artifact_ownership = admitted_stateful_artifact_ownership(
+            ctx.project_dir,
+            ctx.config,
+            ctx.backend,
+            scenario_path=scenario_path,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return LabResult(
+            success=False,
+            error=(
+                "ACES scenario admission failed before artifact preparation: "
+                f"{redact(str(exc))}"
+            ),
+        )
     return None
+
+
+def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
+    """Translate a failed :class:`SSHKeyResult` into a fail-closed ``LabResult``."""
+
+    if result.success:
+        return None
+    log.error("%s failed: %s", what, result.error)
+    return LabResult(success=False, error=f"{what} failed: {result.error}")
 
 
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
@@ -792,25 +976,41 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 3: Generating SSH keys...")
     keys_dir = ctx.project_dir / "keys"
     host_ssh_dir = Path.home() / ".ssh"
+    pivot_dir = ctx.project_dir / "config" / "lab-ssh"
+
     ssh_result = ensure_ssh_keys(keys_dir=keys_dir, host_ssh_dir=host_ssh_dir)
-    if not ssh_result.success:
-        log.error("SSH key generation failed: %s", ssh_result.error)
-        return LabResult(
-            success=False,
-            error=f"SSH key generation failed: {ssh_result.error}",
-        )
+    failure = _ssh_key_step_failure(ssh_result, "SSH key generation")
+    if failure is not None:
+        return failure
     ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
-    # dir and bind-mounted (private -> kali, public -> targets).
-    pivot_result = ensure_pivot_key(pivot_dir=ctx.project_dir / "config" / "lab-ssh")
-    if not pivot_result.success:
-        log.error("Pivot key generation failed: %s", pivot_result.error)
-        return LabResult(
-            success=False,
-            error=f"Pivot key generation failed: {pivot_result.error}",
-        )
+    # dir and bind-mounted (private -> kali, public -> targets). Targets
+    # (victim, workstation, ...) authorize both the control-plane key and
+    # this pivot key; the SDL places the combined file at
+    # ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
+    # and victim's own combined authorized_keys are the Prime scenario's
+    # separate workstation -> victim lateral-movement path (issue #581).
+    remaining_steps = (
+        ("Pivot key generation", lambda: ensure_pivot_key(pivot_dir=pivot_dir)),
+        (
+            "Target authorized_keys generation",
+            lambda: ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+        ),
+        (
+            "Workstation pivot key generation",
+            lambda: ensure_workstation_pivot_key(pivot_dir=pivot_dir),
+        ),
+        (
+            "Victim authorized_keys generation",
+            lambda: ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+        ),
+    )
+    for what, step in remaining_steps:
+        failure = _ssh_key_step_failure(step(), what)
+        if failure is not None:
+            return failure
     return None
 
 
@@ -903,8 +1103,9 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
     # separately. See ADR-028 § Non-Goals.
     from aptl.core.deployment import SSHComposeBackend
 
+    result: LabResult | None
     if isinstance(ctx.backend, SSHComposeBackend):
-        return LabResult(
+        result = LabResult(
             success=False,
             error=(
                 "Credentialized service config is rendered to .aptl/config/ "
@@ -915,27 +1116,27 @@ def _step_sync_credentials(ctx: _LabStartContext) -> LabResult | None:
                 "to the local Docker Compose backend."
             ),
         )
-    # Both writers own their canonical project-relative source-template
-    # and rendered-output paths and validate containment internally; the
-    # orchestrator only passes the trusted project root. See ADR-028
-    # (runtime-rendered service config) and ADR-007 (security guardrail).
-    # Any render failure — containment breach or otherwise — aborts lab
-    # start because the rendered files are mandatory Compose mount
-    # sources; on success they are guaranteed freshly written this run.
-    result = _run_credential_sync(
-        "Dashboard config",
-        sync_dashboard_config,
-        ctx.project_dir,
-        ctx.env.api_password,
-    )
-    if result is not None:
-        return result
-    return _run_credential_sync(
-        "Manager config",
-        sync_manager_config,
-        ctx.project_dir,
-        ctx.env.wazuh_cluster_key,
-    )
+    else:
+        # Each writer validates its canonical source and output beneath the
+        # trusted project root. Any failure aborts before Compose sees a stale
+        # or missing bind source (ADR-007 and ADR-028).
+        result = _run_credential_sync(
+            "Dashboard config",
+            sync_dashboard_config,
+            ctx.project_dir,
+            ctx.env.api_password,
+        )
+        if (
+            result is None
+            and _WAZUH_MANAGER_CONFIG_OWNERSHIP not in ctx.stateful_artifact_ownership
+        ):
+            result = _run_credential_sync(
+                "Manager config",
+                sync_manager_config,
+                ctx.project_dir,
+                ctx.env.wazuh_cluster_key,
+            )
+    return result
 
 
 @_runtime_require(
@@ -1032,6 +1233,8 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
     """Generate SSL certificates required by the base stack."""
     log.info("Step 6: Generating SSL certificates...")
+    if _WAZUH_CERTIFICATE_OWNERSHIP <= ctx.stateful_artifact_ownership:
+        return None
     cert_result = ensure_ssl_certs(ctx.project_dir)
     if cert_result.success:
         return None
@@ -1103,7 +1306,17 @@ def _step_check_bind_mounts(ctx: _LabStartContext) -> LabResult | None:
     enabled = (
         ctx.config.containers.enabled_profiles() if ctx.config is not None else None
     )
-    mount_errors = _check_bind_mounts(ctx.project_dir, enabled_profiles=enabled)
+    stateful_owned = frozenset(
+        (service_name, mount_destination, source_relpath)
+        for _address, _generator, service_name, mount_destination, source_relpath in (
+            ctx.stateful_artifact_ownership
+        )
+    )
+    mount_errors = _check_bind_mounts(
+        ctx.project_dir,
+        enabled_profiles=enabled,
+        stateful_owned_mounts=stateful_owned,
+    )
     if not mount_errors:
         return None
     for err in mount_errors:
@@ -1164,22 +1377,19 @@ def _wazuh_manager_daemon_count(ctx: _LabStartContext) -> int | None:
     assert ctx.backend is not None
     # Amazon Linux 2023 in the manager image ships without `ps`, so walk
     # /proc directly to count the live wazuh-* daemons.
-    probe = ["sh", "-c",
-             "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
-             "read n < \"$f\"; case \"$n\" in wazuh-*) echo \"$n\";; esac; "
-             "done | sort -u | wc -l"]
+    probe = [
+        "sh",
+        "-c",
+        "ls /proc/[0-9]*/comm 2>/dev/null | while read f; do "
+        'read n < "$f"; case "$n" in wazuh-*) echo "$n";; esac; '
+        "done | sort -u | wc -l",
+    ]
     try:
         info = ctx.backend.container_inspect(_WAZUH_MANAGER_CONTAINER)
         if (info.get("State") or {}).get("Status") != "running":
             return None
-        result = ctx.backend.container_exec(
-            _WAZUH_MANAGER_CONTAINER, probe, timeout=10
-        )
-        return (
-            int((result.stdout or "0").strip())
-            if result.returncode == 0
-            else None
-        )
+        result = ctx.backend.container_exec(_WAZUH_MANAGER_CONTAINER, probe, timeout=10)
+        return int((result.stdout or "0").strip()) if result.returncode == 0 else None
     except Exception:
         # Deliberately broad: this watchdog must never let an inspect/exec
         # failure abort lab start (covered by the swallow-exceptions tests).
@@ -1216,6 +1426,22 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 
+def _prepare_aces_backend_retry(ctx: _LabStartContext) -> None:
+    """Wait for SOC dependencies and repair the manager before one apply retry."""
+
+    log.warning(
+        "Initial compose up failed (SOC dependencies may still be "
+        "initializing). Waiting 60s and retrying the admitted plan..."
+    )
+    import time
+
+    time.sleep(60)
+    # Colima on macOS reproducibly leaves the wazuh-manager container in a
+    # state where s6-supervise reports EACCES while the container remains Up.
+    # Repair that state between apply attempts without reparsing or replanning.
+    _restart_wazuh_manager_if_stuck(ctx)
+
+
 @_runtime_require(
     lambda ctx: config_is_loaded(ctx.config),
     description="config_is_loaded(ctx.config)",
@@ -1233,40 +1459,21 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
     # orchestration persists workflow artifacts and the later run-record step
     # write to the same run directory / run_id.
     ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
+    from aptl.backends.aces_start_model import AcesRunTarget
+
     outcome = start_aces_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
-        run_store=ctx.run_store,
-        run_id=ctx.run_id,
+        run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
+        # The ACES handoff invokes this only for a retryable backend-start
+        # failure whose admitted plan actually selected SOC. Keeping that gate
+        # beside the admitted plan avoids both config-flag approximation and a
+        # second parse/plan pass (issues #432 and #550).
+        before_backend_retry=partial(_prepare_aces_backend_retry, ctx),
     )
     lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
-    if not lab_result.success and ctx.config.containers.soc:
-        log.warning(
-            "Initial compose up failed (SOC dependencies may still be "
-            "initializing). Waiting 60s and retrying..."
-        )
-        import time
-
-        time.sleep(60)
-        # Colima on macOS reproducibly leaves the wazuh-manager container
-        # in a state where s6-supervise reports EACCES on the (executable)
-        # `run` scripts and the wazuh daemons never spawn (#732). The
-        # container stays Up so docker's own restart policy never fires,
-        # but no wazuh-* processes exist inside. A single `docker restart`
-        # clears the state; do that before the retry so compose isn't
-        # forced to try running `up` against a broken container instance.
-        _restart_wazuh_manager_if_stuck(ctx)
-        outcome = start_aces_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-            run_store=ctx.run_store,
-            run_id=ctx.run_id,
-        )
-        lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
     if lab_result.success:
         # Store the ACES start outcome for the run record step (REP-001).
         ctx.aces_outcome = outcome
@@ -1274,18 +1481,63 @@ def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
         # actually started, not the global config flags. A curated bounded
         # scenario starts a subset, so a config-flag gate would wait on (and
         # fail) services it never launched.
-        ctx.selected_profiles = selected_profiles_for_scenario(
-            ctx.project_dir,
-            ctx.config,
-            ctx.backend,
-            scenario_path=ctx.scenario_path,
-        )
+        ctx.selected_profiles = set(getattr(outcome, "selected_profiles", ()))
         return None
     log.error("Lab start failed: %s", lab_result.error)
     return LabResult(
         success=False,
         error=_lab_start_failure_error(lab_result.error),
     )
+
+
+def _emit_indexer_readiness_diagnostic(
+    ctx: _LabStartContext,
+    indexer_url: str,
+    indexer_result: ServiceResult,
+) -> None:
+    """Classify and report an indexer readiness failure."""
+
+    assert ctx.env is not None
+    final_status = check_indexer_status(
+        url=indexer_url,
+        username=ctx.env.indexer_username,
+        password=ctx.env.indexer_password,
+    )
+    if final_status in (401, 403):
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Indexer rejected the configured INDEXER_PASSWORD "
+                f"(HTTP {final_status}) while its listener was responding"
+            ),
+            operator_action=(
+                "The persisted wazuh-indexer-data volume likely still holds a "
+                "previous admin password, so the changed .env credentials no "
+                "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
+                "reset the indexer security state, or restore the original "
+                "INDEXER_PASSWORD in .env."
+            ),
+        )
+    else:
+        _emit_diagnostic(
+            ctx,
+            step="wait_for_services",
+            component="wazuh_indexer",
+            impact=DiagnosticImpact.TELEMETRY,
+            severity=DiagnosticSeverity.WARNING,
+            message=(
+                "Wazuh Indexer did not become ready within "
+                f"{int(indexer_result.elapsed_seconds)}s"
+            ),
+            operator_action=(
+                "Check indexer container logs; SIEM ingest will not work "
+                "until indexer is healthy"
+            ),
+        )
 
 
 @_runtime_require(
@@ -1337,57 +1589,25 @@ def _step_wait_for_services(ctx: _LabStartContext) -> LabResult | None:
         progress=ctx.progress,
     )
     if not indexer_result.ready:
-        # Indexer is the SIEM store — without it, detections never land.
-        # Lab is up but telemetry is degraded. A second, one-shot
-        # classification probe tells apart "still not listening" from
-        # "listening but rejecting the configured credentials" (#623) —
-        # the latter means the persisted indexer volume's admin password
-        # no longer matches .env, which is a distinct, actionable state.
-        final_status = check_indexer_status(
-            url=indexer_url,
-            username=ctx.env.indexer_username,
-            password=ctx.env.indexer_password,
-        )
-        if final_status in (401, 403):
-            _emit_diagnostic(
-                ctx,
-                step="wait_for_services",
-                component="wazuh_indexer",
-                impact=DiagnosticImpact.TELEMETRY,
-                severity=DiagnosticSeverity.WARNING,
-                message=(
-                    f"Wazuh Indexer rejected the configured INDEXER_PASSWORD "
-                    f"(HTTP {final_status}) while its listener was responding"
-                ),
-                operator_action=(
-                    "The persisted wazuh-indexer-data volume likely still holds a "
-                    "previous admin password, so the changed .env credentials no "
-                    "longer match. Run `aptl lab stop -v` then `aptl lab start` to "
-                    "reset the indexer security state, or restore the original "
-                    "INDEXER_PASSWORD in .env."
-                ),
-            )
-        else:
-            _emit_diagnostic(
-                ctx,
-                step="wait_for_services",
-                component="wazuh_indexer",
-                impact=DiagnosticImpact.TELEMETRY,
-                severity=DiagnosticSeverity.WARNING,
-                message=(
-                    "Wazuh Indexer did not become ready within "
-                    f"{int(indexer_result.elapsed_seconds)}s"
-                ),
-                operator_action=(
-                    "Check indexer container logs; SIEM ingest will not work "
-                    "until indexer is healthy"
-                ),
-            )
+        # A one-shot status probe distinguishes unavailable from credential
+        # mismatch against retained indexer state (#623).
+        _emit_indexer_readiness_diagnostic(ctx, indexer_url, indexer_result)
 
+    manager_port = next(
+        (
+            r.resolved_port
+            for r in ctx.resolved_ports
+            if getattr(r, "service", None) == _WAZUH_MANAGER_SERVICE
+            and getattr(r, "container_port", None) == 55000
+        ),
+        55000,
+    )
     manager_result = wait_for_service(
         check_fn=partial(
             check_manager_api_ready,
-            container_name="aptl-wazuh-manager",
+            url=f"https://localhost:{manager_port}",
+            username=ctx.env.api_username,
+            password=ctx.env.api_password,
         ),
         timeout=120,
         interval=5,
@@ -1699,6 +1919,14 @@ def _write_run_record(ctx: _LabStartContext) -> None:
     store.write_json(run_id, "manifest.json", record)
     log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
 
+    # OBS-002: layer the correlation-identity + clock-context projection over
+    # the now-sealed run archive so an action can be traced end-to-end and
+    # every source's clock is disclosed. Best-effort by contract — an audit
+    # projection must never turn a successful run into a failed one.
+    from aptl.core.correlation.persistence import persist_run_correlation_best_effort
+
+    persist_run_correlation_best_effort(run_id=run_id, run_store=store)
+
 
 # Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each
 # existing file under these directories is referenced by its relative path;
@@ -1822,11 +2050,13 @@ def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
 # without fileshare), so a missing prime profile must NOT fatally refuse
 # lab startup — it just means the prime seed cannot meaningfully run, and
 # the lab should come up with SOC empty plus a CAPABILITY diagnostic.
-# Kept module-level so the reusable `required_profiles_enabled` predicate
-# from `aptl.core.contracts` has a stable constant to read, and so a
-# future operation (e.g. an explicit `aptl scenario prime start`
-# entrypoint) can wire the same set into a hard `_runtime_require` at
-# *that* boundary without redefining it.
+# Kept module-level as a stable constant: the seed gate below diffs it
+# directly against `ctx.selected_profiles`, the scenario-realized surface
+# (issue #550 — not the config ceiling), and a future operation (e.g. an
+# explicit `aptl scenario prime start` entrypoint) can still wire the same
+# set into a hard `_runtime_require` via the config-bound
+# `required_profiles_enabled` predicate in `aptl.core.contracts` without
+# redefining it.
 _PRIME_REQUIRED_PROFILES = frozenset(
     {"wazuh", "enterprise", "victim", "kali", "fileshare", "soc"}
 )
@@ -1848,9 +2078,9 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
         log.info("Step 13: Seeding SOC tools...")
         # Runtime guard above.
         assert ctx.config is not None
-        if not ctx.config.containers.soc:
-            log.debug("SOC profile not enabled, skipping seed")
-        elif not required_profiles_enabled(ctx.config, _PRIME_REQUIRED_PROFILES):
+        if "soc" not in ctx.selected_profiles:
+            log.debug("SOC profile not selected by this scenario, skipping seed")
+        elif not _PRIME_REQUIRED_PROFILES.issubset(ctx.selected_profiles):
             _emit_missing_prime_profiles(ctx)
         else:
             _run_seed_soc_script(ctx)
@@ -1858,11 +2088,15 @@ def _step_seed_soc(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
-    """Emit the non-fatal diagnostic for partial prime profile sets."""
-    assert ctx.config is not None
-    missing = sorted(
-        _PRIME_REQUIRED_PROFILES - set(ctx.config.containers.enabled_profiles())
-    )
+    """Emit the non-fatal diagnostic for a selected-but-incomplete prime set.
+
+    Diffs against ``ctx.selected_profiles`` — the scenario-realized
+    surface — not the config ceiling: a profile can be missing here
+    because the selected scenario never included it, not only because it
+    is disabled in ``aptl.json`` (issue #550), so the operator guidance
+    below must name both possible causes.
+    """
+    missing = sorted(_PRIME_REQUIRED_PROFILES - ctx.selected_profiles)
     _emit_diagnostic(
         ctx,
         step="seed_soc",
@@ -1873,9 +2107,11 @@ def _emit_missing_prime_profiles(ctx: _LabStartContext) -> None:
             f"missing: {', '.join(missing)}. SOC tools will start empty."
         ),
         operator_action=(
-            "Enable the missing prime profiles in aptl.json and "
-            "re-run `aptl lab start`, or run `scripts/seed-prime.sh` "
-            "manually once the prime stack is up."
+            "Enable the missing prime profiles in aptl.json if they are "
+            "disabled, or start a scenario that selects them — the "
+            "current scenario may intentionally omit them. Alternatively "
+            "run `scripts/seed-prime.sh` manually once the prime stack "
+            "is up."
         ),
     )
 
@@ -1984,8 +2220,8 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 # stay aligned.
 _LAB_START_STEPS = (
     _step_load_env,
-    _step_resolve_host_ports,
     _step_load_config,
+    _step_resolve_host_ports,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
     _step_sync_credentials,
@@ -2007,8 +2243,8 @@ _LAB_START_STEPS = (
 
 _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
-    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_load_config": "Loading lab configuration.",
+    "_step_resolve_host_ports": "Checking host port availability.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
     "_step_sync_credentials": "Rendering service configuration.",
@@ -2121,20 +2357,55 @@ def orchestrate_lab_start(
     )
 
 
-def _sync_mcp_config_keys(project_dir: Path) -> None:
-    """Update `.mcp.json` env entries for dynamic API keys from `.env`.
+_MCP_SERVER_KEYS = {
+    "aptl-casemgmt": ("THEHIVE_API_KEY",),
+    "aptl-threatintel": ("MISP_API_KEY",),
+    "aptl-soar": ("SHUFFLE_API_KEY",),
+}
 
-    Idempotent: runs after seed-prime, only touches the three known dynamic
-    server names, only updates keys the seed script defines. If `.mcp.json`
-    does not exist (e.g. fresh checkout, user hasn't configured an MCP
-    client yet) this is a no-op.
+
+def _refresh_mcp_server_keys(
+    cfg: dict[str, Any], env_vals: dict[str, str]
+) -> list[str]:
+    """Refresh seeded credentials in MCP server environment blocks."""
+    updated: list[str] = []
+    servers = cfg.get("mcpServers", {})
+    if not isinstance(servers, dict):
+        return updated
+
+    for server_name, keys in _MCP_SERVER_KEYS.items():
+        spec = servers.get(server_name)
+        if not isinstance(spec, dict):
+            continue
+        spec_env = spec.setdefault("env", {})
+        if not isinstance(spec_env, dict):
+            continue
+        for key in keys:
+            if key in env_vals and env_vals[key] != spec_env.get(key):
+                spec_env[key] = env_vals[key]
+                updated.append(f"{server_name}.{key}")
+    return updated
+
+
+def _sync_mcp_config_keys(project_dir: Path) -> None:
+    """Create or update `.mcp.json` with dynamic API keys from `.env`.
+
+    A fresh lab copies the shipped example so its seven enabled custom MCPs
+    are client-ready without a manual configuration step. Existing client
+    configuration is preserved: only the three known dynamic credential
+    entries are refreshed after seed-prime.
     """
     import json
 
     mcp_path = project_dir / ".mcp.json"
+    example_path = project_dir / ".mcp.json.example"
     env_path = project_dir / ".env"
-    if not mcp_path.exists() or not env_path.exists():
-        log.debug("MCP sync: missing %s or %s, skipping", mcp_path.name, env_path.name)
+    source_path = mcp_path if mcp_path.exists() else example_path
+    if not source_path.exists() or not env_path.exists():
+        log.debug(
+            "MCP sync: missing client template/config or %s, skipping",
+            env_path.name,
+        )
         return
 
     # Use the canonical .env parser so quoted values, `export` prefixes,
@@ -2145,28 +2416,15 @@ def _sync_mcp_config_keys(project_dir: Path) -> None:
         log.debug("MCP sync: %s vanished between checks; skipping", env_path.name)
         return
 
-    # server name -> env keys it expects
-    SERVER_KEYS = {
-        "aptl-casemgmt": ["THEHIVE_API_KEY"],
-        "aptl-threatintel": ["MISP_API_KEY"],
-        "aptl-soar": ["SHUFFLE_API_KEY"],
-    }
+    cfg = json.loads(source_path.read_text())
+    updated = _refresh_mcp_server_keys(cfg, env_vals)
 
-    cfg = json.loads(mcp_path.read_text())
-    servers = cfg.get("mcpServers", {})
-    updated = []
-    for server_name, keys in SERVER_KEYS.items():
-        spec = servers.get(server_name)
-        if not spec:
-            continue
-        spec_env = spec.setdefault("env", {})
-        for key in keys:
-            if key in env_vals and env_vals[key] != spec_env.get(key):
-                spec_env[key] = env_vals[key]
-                updated.append(f"{server_name}.{key}")
-
-    if updated:
+    created = source_path == example_path
+    if updated or created:
         mcp_path.write_text(json.dumps(cfg, indent=2) + "\n")
-        log.info("MCP sync: refreshed %s in %s", ", ".join(updated), mcp_path.name)
+        mcp_path.chmod(0o600)
+        action = "created" if created else "refreshed"
+        details = f" ({', '.join(updated)})" if updated else ""
+        log.info("MCP sync: %s %s%s", action, mcp_path.name, details)
     else:
         log.debug("MCP sync: no changes needed")

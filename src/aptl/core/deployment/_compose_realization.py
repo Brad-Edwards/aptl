@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
@@ -16,11 +19,21 @@ from aptl.core.deployment._compose_port_realization import (
     write_port_override,
 )
 from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_stateful_realization import (
+    ComposeStatefulRealizationMixin,
+    effective_stateful_model_errors,
+)
 from aptl.core.deployment._compose_image_realization import (
     ComposeRealizationImageMixin,
 )
 from aptl.core.deployment._compose_network_realization import (
     ComposeRealizationNetworkMixin,
+)
+from aptl.core.deployment._compose_image_free_realization import (
+    _image_free_node_addresses,
+    _image_free_service_names,
+    _realize_node_subset,
+    _strip_image_free_published_ports,
 )
 from aptl.core.deployment._compose_realization_networks import (
     _container_networks,
@@ -34,9 +47,15 @@ from aptl.core.lab_types import LabResult
 __all__ = [
     "ComposeRealizationMixin",
     "_container_networks",
+    "_image_free_node_addresses",
+    "_image_free_service_names",
     "_network_name_candidates",
+    "_realize_node_subset",
     "_resolve_realization_networks",
+    "_strip_image_free_published_ports",
 ]
+
+_COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
 
 
 class ComposeRealizationMixin(
@@ -44,6 +63,7 @@ class ComposeRealizationMixin(
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
     ComposeRealizationAccountMixin,
+    ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
 
@@ -55,30 +75,144 @@ class ComposeRealizationMixin(
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose."""
 
-        profiles = list(realization.profiles)
-        image_result, compose_files = self._prepare_realization_images(realization)
-        result = image_result
-        if result is None:
-            result = self._realize_published_ports(realization)
-        if result is None:
-            network_failures = self._ensure_realization_networks(realization)
-            result = (
-                LabResult(success=False, error="; ".join(network_failures[:5]))
-                if network_failures
-                else None
+        if realization.image_free:
+            return self._realize_image_free(realization)
+        return self._realize_mixed_or_legacy(realization, build=build)
+
+    def _realize_mixed_or_legacy(
+        self,
+        realization: DeploymentRealizationSpec,
+        *,
+        build: bool,
+    ) -> LabResult:
+        """Realize a spec with at least one still-Compose-managed node.
+
+        Covers both shapes: fully legacy (nothing image-free) and mixed
+        (ADR-048's image-free subset materialized first, then the legacy
+        Compose pipeline for the rest).
+        """
+
+        image_free_addresses = _image_free_node_addresses(realization)
+        if image_free_addresses:
+            # Mixed realization (ADR-048): materialize the runtime:-declared
+            # subset directly first - it never becomes a Compose container -
+            # then run the legacy pipeline for the rest, with those service
+            # names excluded from `compose up` so neither side starts, skips,
+            # or double-realizes the other's nodes.
+            node_result = self._materialize_image_free_nodes(
+                realization, image_free_addresses
             )
-        if result is None:
-            result = self._realize_content(realization)
-        if result is None:
+            if node_result is not None:
+                return node_result
+            excluded_services = _image_free_service_names(realization, image_free_addresses)
+            legacy_content = tuple(
+                item
+                for item in realization.content
+                if item.target_address not in image_free_addresses
+            )
+            realization = cast(
+                DeploymentRealizationSpec, replace(realization, content=legacy_content)
+            )
+            realization = _strip_image_free_published_ports(realization, image_free_addresses)
+        else:
+            excluded_services = ()
+
+        profiles = list(realization.profiles)
+        compose_files: tuple[Path, ...] | None = None
+
+        def _images() -> LabResult | None:
+            """Pull/build declared images and capture the resulting compose override."""
+
+            nonlocal compose_files
+            result, compose_files = self._prepare_realization_images(realization)
+            return result
+
+        def _networks() -> LabResult | None:
+            """Ensure declared networks exist, or fail closed on the first error."""
+
+            network_failures = self._ensure_realization_networks(realization)
+            if network_failures:
+                return LabResult(success=False, error="; ".join(network_failures[:5]))
+            return None
+
+        def _compose_model() -> LabResult | None:
+            """Render and validate the generated Compose model."""
+
+            nonlocal compose_files
+            compose_files = self._realization_compose_files(compose_files, realization)
+            return self._validate_realization_compose_model(profiles, compose_files, realization)
+
+        def _start() -> LabResult:
+            """Start the realized services and return the final realization result."""
+
             start_result = self._start_realized_services(
                 profiles,
                 build=build,
-                compose_files=self._realization_compose_files(
-                    compose_files, realization
-                ),
+                compose_files=compose_files,
+                exclude_services=excluded_services,
             )
-            result = self._realization_result(start_result, realization)
-        return result
+            return self._realization_result(start_result, realization)
+
+        # Each step realizes one stage and returns a fail-closed LabResult, or
+        # None to fall through to the next stage. The last stage always
+        # returns, so the pipeline always ends in a concrete result.
+        steps = (
+            lambda: self._validate_stateful_realization(realization),
+            lambda: self._validate_stateful_compose_capability(realization),
+            lambda: self._realize_stateful_prerequisites(realization),
+            _images,
+            lambda: self._realize_published_ports(realization),
+            _networks,
+            lambda: self._realize_content(realization),
+            _compose_model,
+            _start,
+        )
+        for step in steps:
+            result = step()
+            if result is not None:
+                return result
+        return LabResult(success=True)
+
+    def _materialize_image_free_nodes(
+        self,
+        realization: DeploymentRealizationSpec,
+        addresses: frozenset[str],
+    ) -> LabResult | None:
+        """Materialize just the runtime:-declared node subset (ADR-048).
+
+        Shares the same node materialization and content-op lowering as the
+        fully image-free path, scoped to ``addresses`` so mixed-realization
+        content meant for a Compose-managed node is never misinterpreted as
+        an image-free placement.
+        """
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        nodes = tuple(n for n in realization.nodes if n.address in addresses)
+        content = tuple(
+            item for item in realization.content if item.target_address in addresses
+        )
+        return _realize_node_subset(self, nodes, content)
+
+    def _realize_image_free(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult:
+        """Realize every node by materializing declared state onto a generic
+        base substrate, with no appliance image and no compose-up (ADR-048).
+
+        Networks first, then each node's declared packages/identity/services are
+        materialized and verified by read-after-write, then content placements.
+        Fails closed on the first unrealized node so a partial range never
+        reports success.
+        """
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        node_result = _realize_node_subset(self, realization.nodes, realization.content)
+        return node_result if node_result is not None else LabResult(success=True)
 
     def _realize_published_ports(
         self,
@@ -102,12 +236,17 @@ class ComposeRealizationMixin(
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
     ) -> tuple[Path, ...] | None:
-        """Add the declared-host-port override to the realization compose files."""
+        """Add generated realization overrides to the Compose file set."""
 
         port_override = write_port_override(self._project_dir, realization)
-        if port_override is None:
+        stateful_override = self._write_stateful_realization_override(realization)
+        overrides = tuple(
+            path for path in (port_override, stateful_override) if path is not None
+        )
+        if not overrides:
             return compose_files
-        return (*(compose_files or ()), port_override)
+        base_files = compose_files or (self._project_dir / "docker-compose.yml",)
+        return (*base_files, *overrides)
 
     def _realize_content(
         self,
@@ -130,6 +269,61 @@ class ComposeRealizationMixin(
                 error=f"Content placement realization failed: {exc}",
             )
         return None
+
+    def _validate_realization_compose_model(
+        self,
+        profiles: list[str],
+        compose_files: tuple[Path, ...] | None,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Render and inspect the effective generated model before startup."""
+
+        if compose_files is None:
+            return None
+        command = self._build_command(
+            "config",
+            profiles,
+            compose_files=compose_files,
+        )
+        stateful = bool(
+            realization.generated_artifacts or realization.persistent_volumes
+        )
+        error = (
+            self._effective_compose_model_error(command, realization)
+            if stateful
+            else self._compose_syntax_error(command)
+        )
+        return LabResult(success=False, error=error) if error is not None else None
+
+    def _compose_syntax_error(self, command: list[str]) -> str | None:
+        """Return a bounded error when Compose rejects a stateless model."""
+
+        command.append("--quiet")
+        result = self._run(command)
+        return _COMPOSE_MODEL_VALIDATION_ERROR if result.returncode != 0 else None
+
+    def _effective_compose_model_error(
+        self,
+        command: list[str],
+        realization: DeploymentRealizationSpec,
+    ) -> str | None:
+        """Render and validate a stateful model without interpolating secrets."""
+
+        command.extend(["--no-interpolate", "--format", "json"])
+        result = self._run(command)
+        if result.returncode != 0:
+            return _COMPOSE_MODEL_VALIDATION_ERROR
+        try:
+            payload = json.loads(result.stdout)
+        except (TypeError, ValueError):
+            return _COMPOSE_MODEL_VALIDATION_ERROR
+        errors = effective_stateful_model_errors(
+            payload,
+            self._project_dir,
+            self.project_name,
+            realization,
+        )
+        return "; ".join(errors[:5]) if errors else None
 
     def _realization_result(
         self,
@@ -160,15 +354,28 @@ class ComposeRealizationMixin(
         containers). First failure wins.
         """
 
+        result: LabResult | None = None
         network_failures = self._reconcile_realization_networks(realization)
         if network_failures:
-            return LabResult(success=False, error="; ".join(network_failures[:5]))
-        health_failures = self._await_realized_service_health(realization)
-        if health_failures:
-            return LabResult(success=False, error="; ".join(health_failures[:5]))
-        return self._realize_accounts_step(realization) or LabResult(
-            success=True, message="Lab realized"
-        )
+            result = LabResult(
+                success=False,
+                error="; ".join(network_failures[:5]),
+            )
+        if result is None:
+            health_failures = self._await_realized_service_health(realization)
+            if health_failures:
+                result = LabResult(
+                    success=False,
+                    error="; ".join(health_failures[:5]),
+                )
+        if result is None:
+            result = self._verify_stateful_authenticated_readiness(realization)
+        if result is None:
+            result = self._realize_accounts_step(realization) or LabResult(
+                success=True,
+                message="Lab realized",
+            )
+        return result
 
     def _await_realized_service_health(
         self,

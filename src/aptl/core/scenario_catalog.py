@@ -12,7 +12,31 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from pydantic import model_validator
 
 from aptl.core.scenarios import ScenarioNotFoundError, ScenarioValidationError
+from aptl.utils.pathsafe import (
+    REASON_DOT_COMPONENT,
+    REASON_EMPTY_COMPONENT,
+    REASON_NOT_RELATIVE,
+    REASON_NUL_BYTE,
+    REASON_TRAVERSAL,
+    PathContainmentError,
+    open_contained_nofollow,
+)
 from aptl.utils.redaction import redact
+
+# Reasons that mean "the candidate path's own shape tried to reach outside
+# project_dir" (mirrors the legacy "outside project" ValueError). Every other
+# PathContainmentError reason (missing, symlinked, not-a-regular-file, base
+# dir unavailable) means the *target* did not safely resolve to a contained
+# file, which mirrors the legacy "does not exist or is not a file" message.
+_OUTSIDE_PROJECT_REASONS = frozenset(
+    {
+        REASON_NOT_RELATIVE,
+        REASON_TRAVERSAL,
+        REASON_NUL_BYTE,
+        REASON_EMPTY_COMPONENT,
+        REASON_DOT_COMPONENT,
+    }
+)
 
 CATALOG_RELATIVE_PATH = Path("scenarios") / "catalog.json"
 _SCENARIO_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
@@ -154,15 +178,41 @@ def resolve_scenario_selection(
 
 
 def _resolve_project_file(project_dir: Path, candidate: Path) -> Path:
-    """Resolve ``candidate`` and require it to stay within ``project_dir``."""
+    """Resolve ``candidate`` and require it to stay within ``project_dir``.
+
+    Containment walks the relative path component-by-component with
+    :func:`aptl.utils.pathsafe.open_contained_nofollow` (ADR-047 "Scenario
+    containment precedent") instead of a lexical ``resolve()`` +
+    ``is_relative_to()`` check: the lexical check could be defeated by a
+    symlink swapped in between the check and a later open (TOCTOU), and it
+    silently followed symlinks that stayed under ``project_dir``. A
+    previously-followed symlinked scenario path is now rejected outright —
+    see ``test_rejects_symlinked_scenario_path`` /
+    ``test_rejects_symlinked_scenario_directory_component`` in
+    ``tests/test_scenario_catalog.py``.
+
+    An absolute ``candidate`` is still accepted when it is lexically inside
+    ``project_dir`` (preserves the CLI ``--scenario-path`` contract); the
+    derived relative path is what actually walks the no-follow check.
+    """
     project_root = project_dir.resolve()
-    absolute = candidate if candidate.is_absolute() else project_root / candidate
-    resolved = absolute.resolve(strict=False)
-    if not resolved.is_relative_to(project_root):
-        raise ValueError(f"Scenario path is outside project: {candidate}")
-    if not resolved.is_file():
-        raise ValueError(f"Scenario path does not exist or is not a file: {candidate}")
-    return resolved
+    if candidate.is_absolute():
+        try:
+            relative = candidate.relative_to(project_root)
+        except ValueError as exc:
+            raise ValueError(f"Scenario path is outside project: {candidate}") from exc
+    else:
+        relative = candidate
+    try:
+        handle = open_contained_nofollow(project_root, relative)
+    except PathContainmentError as exc:
+        if exc.reason in _OUTSIDE_PROJECT_REASONS:
+            raise ValueError(f"Scenario path is outside project: {candidate}") from exc
+        raise ValueError(
+            f"Scenario path does not exist or is not a file: {candidate}"
+        ) from exc
+    handle.close()
+    return project_root / relative
 
 
 def resolve_and_parse_scenario(

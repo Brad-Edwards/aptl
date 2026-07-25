@@ -65,7 +65,7 @@ MANAGEMENT_SURFACES = [
 # Deliberate victim / attack-surface targets that MUST remain reachable on all
 # interfaces (NOT loopback-bound). Encodes the other half of the policy.
 TARGET_SURFACES = [
-    ("webapp", 8080),
+    ("webapp-proxy", 8080),
     ("dns", 5353),
 ]
 

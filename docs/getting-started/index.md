@@ -44,7 +44,7 @@ Four isolated Docker networks:
 
 ## Prerequisites
 
-- Docker with Compose
+- Docker with Compose and Buildx
 - 8GB RAM for the curated scenarios; more than 20GB for the full `techvault-operational` stack
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
 - Docker Desktop on macOS, Windows, or WSL2: `aptl lab start` skips the host

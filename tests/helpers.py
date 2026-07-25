@@ -5,8 +5,11 @@ import os
 import selectors
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
+
+from aptl.core.env import load_dotenv
 
 # ---------------------------------------------------------------------------
 # Live-lab shared constants
@@ -14,15 +17,25 @@ import pytest
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+try:
+    PROJECT_ENV = load_dotenv(Path(PROJECT_ROOT) / ".env")
+except (OSError, ValueError):
+    PROJECT_ENV = {}
+
+
+def _credential(name: str, fallback: str = "") -> str:
+    """Prefer the process environment, then the generated project .env."""
+    return os.getenv(name, PROJECT_ENV.get(name, fallback))
+
 INDEXER_URL = os.getenv("APTL_INDEXER_URL", "https://localhost:9200")
-INDEXER_USER = os.getenv("INDEXER_USERNAME", "admin")
-INDEXER_PASS = os.getenv("INDEXER_PASSWORD", "SecretPassword")
-API_USER = os.getenv("API_USERNAME", "wazuh-wui")
-API_PASS = os.getenv("API_PASSWORD", "WazuhPass123!")
+INDEXER_USER = _credential("INDEXER_USERNAME", "admin")
+INDEXER_PASS = _credential("INDEXER_PASSWORD", "SecretPassword")
+API_USER = _credential("API_USERNAME", "wazuh-wui")
+API_PASS = _credential("API_PASSWORD", "WazuhPass123!")
 SSH_KEY = os.path.expanduser(os.getenv("APTL_SSH_KEY", "~/.ssh/aptl_lab_key"))
 
 MISP_URL = os.getenv("MISP_URL", "https://localhost:8443")
-MISP_API_KEY = os.getenv(
+MISP_API_KEY = _credential(
     "MISP_API_KEY", "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw",
 )
 # SEC-006 / ADR-034: TheHive and Shuffle's host-facing surfaces moved
@@ -50,9 +63,9 @@ def _provision_thehive_key() -> str:
     return ""
 
 
-THEHIVE_API_KEY = os.getenv("THEHIVE_API_KEY", "") or _provision_thehive_key()
+THEHIVE_API_KEY = _credential("THEHIVE_API_KEY") or _provision_thehive_key()
 SHUFFLE_URL = os.getenv("SHUFFLE_URL", "https://localhost:3443")
-SHUFFLE_API_KEY = os.getenv(
+SHUFFLE_API_KEY = _credential(
     "SHUFFLE_API_KEY", "31a211c4-ea5c-4a49-b022-5e2434e758a7",
 )
 
@@ -93,17 +106,17 @@ def _find_node() -> str:
     return shutil.which("node") or "node"
 
 
-# Custom Node.js MCP servers (built from source in mcp/)
-CUSTOM_MCP_SERVERS = ["mcp-red", "mcp-reverse", "mcp-soar", "mcp-indexer"]
-
-# Published MCP server binaries/scripts (downloaded to tools/)
-PUBLISHED_MCP_PATHS = {
-    "wazuh": os.path.join(PROJECT_ROOT, "tools", "bin", "mcp-server-wazuh"),
-    "thehive": os.path.join(PROJECT_ROOT, "tools", "bin", "thehivemcp"),
-    "misp": os.path.join(
-        PROJECT_ROOT, "tools", "misp-mcp-server", "misp_server.py",
-    ),
-}
+# Custom Node.js MCP servers built by `aptl lab start`.
+CUSTOM_MCP_SERVERS = [
+    "mcp-red",
+    "mcp-reverse",
+    "mcp-indexer",
+    "mcp-wazuh",
+    "mcp-network",
+    "mcp-threatintel",
+    "mcp-casemgmt",
+    "mcp-soar",
+]
 
 
 def mcp_server_cmd(name: str) -> tuple[list[str], dict]:
@@ -160,38 +173,54 @@ def mcp_server_cmd(name: str) -> tuple[list[str], dict]:
             },
         },
         "wazuh": {
-            "cmd": [PUBLISHED_MCP_PATHS["wazuh"]],
+            "cmd": [
+                node_bin,
+                os.path.join(
+                    PROJECT_ROOT, "mcp", "mcp-wazuh", "build", "index.js"
+                ),
+            ],
             "env": {
-                "WAZUH_API_HOST": "localhost",
-                "WAZUH_API_PORT": "55000",
-                "WAZUH_API_USERNAME": API_USER,
-                "WAZUH_API_PASSWORD": API_PASS,
-                "WAZUH_INDEXER_HOST": "localhost",
-                "WAZUH_INDEXER_PORT": "9200",
-                "WAZUH_INDEXER_USERNAME": INDEXER_USER,
-                "WAZUH_INDEXER_PASSWORD": INDEXER_PASS,
-                "WAZUH_VERIFY_SSL": "false",
-                "RUST_LOG": "warn",
+                "INDEXER_USERNAME": INDEXER_USER,
+                "INDEXER_PASSWORD": INDEXER_PASS,
+            },
+        },
+        "network": {
+            "cmd": [
+                node_bin,
+                os.path.join(
+                    PROJECT_ROOT, "mcp", "mcp-network", "build", "index.js"
+                ),
+            ],
+            "env": {
+                "INDEXER_USERNAME": INDEXER_USER,
+                "INDEXER_PASSWORD": INDEXER_PASS,
             },
         },
         "misp": {
             "cmd": [
-                os.path.join(PROJECT_ROOT, "tools", "misp-mcp-server", ".venv", "bin", "python"),
-                PUBLISHED_MCP_PATHS["misp"],
+                node_bin,
+                os.path.join(
+                    PROJECT_ROOT,
+                    "mcp",
+                    "mcp-threatintel",
+                    "build",
+                    "index.js",
+                ),
             ],
-            "env": {
-                "MISP_URL": MISP_URL,
-                "MISP_API_KEY": MISP_API_KEY,
-                "MISP_VERIFY_SSL": "False",
-            },
+            "env": {"MISP_API_KEY": MISP_API_KEY},
         },
         "thehive": {
-            "cmd": [PUBLISHED_MCP_PATHS["thehive"], "--transport", "stdio"],
-            "env": {
-                "THEHIVE_URL": THEHIVE_URL,
-                "THEHIVE_API_KEY": THEHIVE_API_KEY,
-                "THEHIVE_ORGANISATION": "admin",
-            },
+            "cmd": [
+                node_bin,
+                os.path.join(
+                    PROJECT_ROOT,
+                    "mcp",
+                    "mcp-casemgmt",
+                    "build",
+                    "index.js",
+                ),
+            ],
+            "env": {"THEHIVE_API_KEY": THEHIVE_API_KEY},
         },
     }
 
@@ -468,6 +497,15 @@ def curl_json(
     (SEC-004 territory) and for fallback when the lab CA bundle is
     unavailable. Mutually exclusive — ``insecure`` wins when both set.
     """
+    lab_ca_urls = (MISP_URL, THEHIVE_URL, SHUFFLE_URL)
+    if (
+        not insecure
+        and ca_cert_path is None
+        and any(url == base or url.startswith(f"{base}/") for base in lab_ca_urls)
+        and os.path.isfile(LAB_CA_PATH)
+    ):
+        ca_cert_path = LAB_CA_PATH
+
     cmd = ["curl", "-sf", url]
     if insecure:
         cmd.insert(1, "-k")

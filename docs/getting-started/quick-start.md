@@ -61,8 +61,10 @@ aptl container shell aptl-victim
 aptl container shell aptl-kali
 ```
 
-The reverse engineering container is the only one with host SSH:
-`ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`.
+The optional reverse engineering container uses host SSH when enabled:
+`ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p 2027`. The default
+TechVault scenario does not realize this service, so use the command only when
+`reverse` appears in `aptl lab status`.
 
 ## Test
 

@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 
 SCHEMA_VERSION = "aptl.run-record/v1"
 
-_SEEDS_ABSENT_NOTE = (
-    "ACES ExecutionPlan does not currently expose a scenario-level "
-    "seed or parameter surface; seeds absent is the honest state."
+_PARAMETERS_OMITTED_NOTE = (
+    "Runtime parameters are intentionally omitted; APTL does not persist raw "
+    "scenario bindings or value-bearing provenance."
 )
 
 
@@ -86,7 +86,7 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
             "runtime_snapshot": runtime_snapshot_payload,
             "scenario": scenario_section,
             "scenario_parameters": None,
-            "scenario_parameters_note": _SEEDS_ABSENT_NOTE,
+            "scenario_parameters_note": _PARAMETERS_OMITTED_NOTE,
             "realization": inputs.realization_details,
         },
         "backend_evidence": {

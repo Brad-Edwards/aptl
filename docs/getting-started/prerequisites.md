@@ -6,6 +6,7 @@
 - 20GB+ disk
 - Docker Engine 20.10+ on native Linux, or Docker Desktop on macOS, Windows, or Linux
 - Docker Compose 2.0+ (`docker compose version`)
+- Docker Buildx (`docker buildx version`)
 - Python 3.11+ (for the CLI)
 - Node.js 18+ and npm (for the MCP servers, the AI-agent control plane that
   `aptl lab start` builds via `mcp/build-all-mcps.sh`; without them the lab
@@ -21,6 +22,15 @@ sudo usermod -aG docker $USER
 ```
 
 Sign out and back in after changing Docker group membership.
+
+The official Docker installer above includes Compose and Buildx. If you use
+Ubuntu's distribution packages instead, install all three explicitly:
+
+```bash
+sudo apt install docker.io docker-compose-v2 docker-buildx
+```
+
+Docker CE repositories name the last package `docker-buildx-plugin` instead.
 
 **macOS (Docker Desktop):** Install Docker Desktop and allocate enough memory
 in Settings -> Resources. The full `techvault-operational` stack needs more
@@ -135,5 +145,6 @@ using `aptl`.
 ```bash
 docker --version
 docker compose version
+docker buildx version
 docker ps
 ```

@@ -12,16 +12,7 @@ import { EventEmitter } from 'events';
 describe('Session State Management', () => {
   it('should create session metadata correctly', () => {
     const mockClient = {} as any;
-    const session = new PersistentSession(
-      'test-id',
-      'test-host',
-      'test-user',
-      'interactive',
-      mockClient,
-      2222,
-      'normal',
-      60000
-    );
+    const session = new PersistentSession('test-id', 'test-host', 'test-user', 'interactive', mockClient, { port: 2222, mode: 'normal', timeoutMs: 60000 });
 
     const info = session.getSessionInfo();
     expect(info.sessionId).toBe('test-id');
@@ -36,9 +27,7 @@ describe('Session State Management', () => {
 
   it('should return immutable session info copies', () => {
     const mockClient = {} as any;
-    const session = new PersistentSession(
-      'test', 'host', 'user', 'interactive', mockClient, 22
-    );
+    const session = new PersistentSession('test', 'host', 'user', 'interactive', mockClient, { port: 22 });
 
     const info1 = session.getSessionInfo();
     const info2 = session.getSessionInfo();
@@ -60,7 +49,7 @@ describe('Session State Management', () => {
 
     const interactive = new PersistentSession('i', 'host', 'user', 'interactive', mockClient);
     const background = new PersistentSession('b', 'host', 'user', 'background', mockClient);
-    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, 22, 'raw');
+    const raw = new PersistentSession('r', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'raw' });
 
     expect(interactive.getSessionInfo().type).toBe('interactive');
     expect(interactive.getSessionInfo().mode).toBe('normal');
@@ -110,9 +99,7 @@ describe('Session Manager State Logic', () => {
 describe('Buffer Management Logic', () => {
   it('should handle buffer operations safely', () => {
     const mockClient = {} as any;
-    const session = new PersistentSession(
-      'buffer-test', 'host', 'user', 'background', mockClient, 22
-    );
+    const session = new PersistentSession('buffer-test', 'host', 'user', 'background', mockClient, { port: 22 });
 
     // Test empty buffer
     let buffer = session.getBufferedOutput();
@@ -129,9 +116,7 @@ describe('Buffer Management Logic', () => {
 
   it('should keep newest data when buffer overflows', () => {
     const mockClient = {} as any;
-    const session = new PersistentSession(
-      'overflow-test', 'host', 'user', 'background', mockClient, 22
-    );
+    const session = new PersistentSession('overflow-test', 'host', 'user', 'background', mockClient, { port: 22 });
 
     // Drive the real handleShellOutput code path — NOT an inline replica.
     // BUFFER_LIMITS.MAX_SIZE=10000, TRIM_TO=5000 (ssh.ts). Push 12000
@@ -215,14 +200,7 @@ describe('Connection Key Generation Logic', () => {
 describe('Shell Type Support', () => {
   it('should create sessions with default bash shell', () => {
     const mockClient = {} as any;
-    const session = new PersistentSession(
-      'test-id',
-      'test-host',
-      'test-user',
-      'interactive',
-      mockClient,
-      22
-    );
+    const session = new PersistentSession('test-id', 'test-host', 'test-user', 'interactive', mockClient, { port: 22 });
 
     // Asserts the shell-type round-trips, not just that the session
     // exists (test-quality review cycle 1 finding-2). The previous
@@ -239,17 +217,7 @@ describe('Shell Type Support', () => {
     'should create session with %s shell type',
     (shellType) => {
       const mockClient = {} as any;
-      const session = new PersistentSession(
-        `test-${shellType}`,
-        'test-host',
-        'test-user',
-        'interactive',
-        mockClient,
-        22,
-        'normal',
-        60000,
-        shellType,
-      );
+      const session = new PersistentSession(`test-${shellType}`, 'test-host', 'test-user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 60000, shellType });
 
       const info = session.getSessionInfo();
       expect(info.sessionId).toBe(`test-${shellType}`);
@@ -281,17 +249,7 @@ describe('Shell Type Support', () => {
         })
       } as any;
 
-      const powershellSession = new PersistentSession(
-        'ps-test',
-        'windows-host',
-        'Administrator',
-        'interactive',
-        mockClient,
-        22,
-        'normal',
-        60000,
-        'powershell'
-      );
+      const powershellSession = new PersistentSession('ps-test', 'windows-host', 'Administrator', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 60000, shellType: 'powershell' });
 
       const initP = powershellSession.initialize();
       await vi.advanceTimersByTimeAsync(1000);
@@ -350,9 +308,7 @@ describe('OBS-003: SendEnv + continuous PTY tee', () => {
     const shellMock = vi.fn((_opts: any, cb: any) => cb(null, shellStream));
     const mockClient = { shell: shellMock } as any;
 
-    const session = new PersistentSession(
-      'sess-obs003-1', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000,
-    );
+    const session = new PersistentSession('sess-obs003-1', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
 
     const init = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
@@ -409,9 +365,7 @@ describe('OBS-003: SendEnv + continuous PTY tee', () => {
     const shellMock = vi.fn((_opts: any, cb: any) => cb(null, shellStream));
     const mockClient = { shell: shellMock } as any;
 
-    const session = new PersistentSession(
-      'sess-tee-1', 'host', 'user', 'background', mockClient, 22, 'normal', 600000,
-    );
+    const session = new PersistentSession('sess-tee-1', 'host', 'user', 'background', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
 
     const init = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
@@ -464,9 +418,7 @@ describe('Session Cleanup and Timeout Handling', () => {
       shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)),
     };
 
-    session = new PersistentSession(
-      'cleanup-test', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-    );
+    session = new PersistentSession('cleanup-test', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
 
     // initialize() has a setTimeout(resolve, 1000) that won't fire
     // under fake timers unless we advance concurrently
@@ -589,9 +541,7 @@ describe('Session Cleanup and Timeout Handling', () => {
 describe('Contract guards (preconditions)', () => {
   it('executeCommand on uninitialized session throws SSHError before any shell access', async () => {
     const mockClient = { shell: vi.fn() } as any;
-    const session = new PersistentSession(
-      'pre-uninit', 'host', 'user', 'interactive', mockClient, 22
-    );
+    const session = new PersistentSession('pre-uninit', 'host', 'user', 'interactive', mockClient, { port: 22 });
 
     // Two assertions: instance type + message substring. If the precondition
     // failed to fire, `this.shell` is still null and executeCommand would
@@ -616,9 +566,7 @@ describe('Contract guards (preconditions)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'pre-closed', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('pre-closed', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initPromise = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initPromise;
@@ -689,9 +637,7 @@ describe('Contract guards (postconditions)', () => {
       stderr: new EventEmitter(),
     });
     mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) };
-    session = new PersistentSession(
-      'post-test', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-    );
+    session = new PersistentSession('post-test', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initPromise = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initPromise;
@@ -828,9 +774,7 @@ describe('Manager-level postconditions', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'mgr-close', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('mgr-close', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initPromise = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initPromise;
@@ -870,8 +814,8 @@ describe('Manager-level postconditions', () => {
         shell: vi.fn((_opts: any, cb: any) => cb(null,stream2)),
         end: vi.fn(() => client2.emit('close')),
       });
-      const s1 = new PersistentSession('s1', 'h', 'u', 'interactive', client1 as any, 22, 'normal', 600000);
-      const s2 = new PersistentSession('s2', 'h', 'u', 'interactive', client2 as any, 22, 'normal', 600000);
+      const s1 = new PersistentSession('s1', 'h', 'u', 'interactive', client1 as any, { port: 22, mode: 'normal', timeoutMs: 600000 });
+      const s2 = new PersistentSession('s2', 'h', 'u', 'interactive', client2 as any, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP1 = s1.initialize();
       const initP2 = s2.initialize();
       await vi.advanceTimersByTimeAsync(1000);
@@ -920,7 +864,7 @@ describe('Manager-level postconditions', () => {
         shell: vi.fn((_opts: any, cb: any) => cb(null,stream)),
         end: vi.fn(() => client.emit('close')),
       });
-      const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, 22, 'normal', 600000);
+      const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = sessionA.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -974,7 +918,7 @@ describe('Manager-level postconditions', () => {
       const client = Object.assign(new EventEmitter(), {
         shell: vi.fn((_opts: any, cb: any) => cb(null,stream)),
       });
-      const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, 22, 'normal', 600000);
+      const sessionA = new PersistentSession('a', 'h', 'u', 'interactive', client as any, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = sessionA.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1011,9 +955,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'race', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('race', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1048,9 +990,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'happy', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('happy', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1078,9 +1018,7 @@ describe('Contract guards (event ordering & concurrency)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'unsolicited', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('unsolicited', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1119,10 +1057,10 @@ describe('Contract guards (event ordering & concurrency)', () => {
       // with the same client. (Tests the session-side race in isolation.)
       (manager as any).getConnection = vi.fn().mockResolvedValue(clientA);
 
-      const p1 = manager.createSession('dup', 'h', 'u', 'interactive', '/tmp/k', 22, 'normal', 600000);
+      const p1 = manager.createSession('dup', 'h', 'u', 'interactive', '/tmp/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
       // Synchronously kick the second call. The reservation must already
       // hold — otherwise its `!sessions.has('dup')` check would pass too.
-      const p2 = manager.createSession('dup', 'h', 'u', 'interactive', '/tmp/k', 22, 'normal', 600000);
+      const p2 = manager.createSession('dup', 'h', 'u', 'interactive', '/tmp/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
 
       await expect(p2).rejects.toBeInstanceOf(SSHError);
       await expect(p2).rejects.toThrow(/already exists/);
@@ -1181,9 +1119,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'init-die', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('init-die', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
 
       const initPromise = session.initialize();
       // Kill the stream BEFORE the 1s settle fires.
@@ -1206,9 +1142,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'init-err', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('init-err', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
 
       const initPromise = session.initialize();
       await vi.advanceTimersByTimeAsync(50);
@@ -1239,9 +1173,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'latch', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('latch', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1286,9 +1218,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
         stderr: new EventEmitter(),
       });
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
-      const session = new PersistentSession(
-        'error-emit', 'host', 'user', 'interactive', mockClient, 22, 'normal', 600000
-      );
+      const session = new PersistentSession('error-emit', 'host', 'user', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1337,7 +1267,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
       const mockClient = { shell: vi.fn((_opts: any, cb: any) => cb(null,mockStream)) } as any;
       (manager as any).getConnection = vi.fn().mockResolvedValue(mockClient);
 
-      const createP = manager.createSession('timer-test', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+      const createP = manager.createSession('timer-test', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
       await vi.advanceTimersByTimeAsync(1000);
       const session = await createP;
       expect(manager.getSession('timer-test')).toBe(session);
@@ -1375,7 +1305,7 @@ describe('Contract guards (lifecycle correctness — cycle 3)', () => {
 
       // Kick off createSession; it's now in pendingSessions, waiting on
       // getConnection.
-      const createP = manager.createSession('inflight', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+      const createP = manager.createSession('inflight', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
       expect((manager as any).pendingSessions.size).toBe(1);
 
       // Kick off disconnectAll. It MUST await pendingSessions before sweeping.
@@ -1444,7 +1374,7 @@ describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () 
   });
 
   it("executeCommand on a normal session with no override resolves with mode: 'normal'", async () => {
-    const session = new PersistentSession('em-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const session = new PersistentSession('em-1', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1456,7 +1386,7 @@ describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () 
   });
 
   it("executeCommand on a RAW session with no override resolves with mode: 'raw' (the inherited-raw case from issue #282)", async () => {
-    const session = new PersistentSession('em-2', 'h', 'u', 'background', mockClient, 22, 'raw', 600000);
+    const session = new PersistentSession('em-2', 'h', 'u', 'background', mockClient, { port: 22, mode: 'raw', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1469,7 +1399,7 @@ describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () 
   });
 
   it("per-call raw: true override on a normal session resolves with mode: 'raw'", async () => {
-    const session = new PersistentSession('em-3', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const session = new PersistentSession('em-3', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1479,7 +1409,7 @@ describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () 
   });
 
   it("per-call raw: false override on a RAW session resolves with mode: 'normal'", async () => {
-    const session = new PersistentSession('em-4', 'h', 'u', 'interactive', mockClient, 22, 'raw', 600000);
+    const session = new PersistentSession('em-4', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'raw', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1489,7 +1419,7 @@ describe('OBS-003 / #282: effective session-mode metadata in CommandResult', () 
   });
 
   it("background-session immediate-return envelope carries effective mode (inherited raw)", async () => {
-    const session = new PersistentSession('em-5', 'h', 'u', 'background', mockClient, 22, 'raw', 600000);
+    const session = new PersistentSession('em-5', 'h', 'u', 'background', mockClient, { port: 22, mode: 'raw', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1523,7 +1453,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
   });
 
   it("close() returns a Promise that resolves only after the stream's 'close' event fires", async () => {
-    const session = new PersistentSession('aw-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const session = new PersistentSession('aw-1', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1531,6 +1461,11 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     const closeP = session.close();
     let resolved = false;
     closeP.then(() => { resolved = true; });
+
+    // The Kali ForceCommand wrapper needs its child shell to exit normally so
+    // `script(1)` closes the transcript FIFO and the capture client can flush
+    // before sshd closes the channel. Bare EOF truncated live captures.
+    expect(mockStream.end).toHaveBeenCalledWith('exit\n');
 
     // Microtask drain — local cleanup is sync, but the close promise must
     // still be pending because remote 'close' has not fired.
@@ -1547,7 +1482,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
   it("close() resolves after the bounded timeout when stream 'close' never fires, and logs a [SSH] warning", async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const session = new PersistentSession('aw-2', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+      const session = new PersistentSession('aw-2', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
       const initP = session.initialize();
       await vi.advanceTimersByTimeAsync(1000);
       await initP;
@@ -1575,7 +1510,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
   });
 
   it("in-flight and queued command rejections happen BEFORE close()'s remote-await resolves", async () => {
-    const session = new PersistentSession('aw-3', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const session = new PersistentSession('aw-3', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1613,7 +1548,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     const manager = new SSHConnectionManager();
     (manager as any).getConnection = vi.fn().mockResolvedValue(mockClient);
 
-    const createP = manager.createSession('aw-mgr', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    const createP = manager.createSession('aw-mgr', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
     await vi.advanceTimersByTimeAsync(1000);
     await createP;
 
@@ -1636,7 +1571,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     // AFTER the bounded remote-close await, otherwise a concurrent caller
     // can re-create the same session id while the old wrapper's EXIT trap
     // is still flushing tcpdump / typescript captures.
-    const session = new PersistentSession('order-1', 'h', 'u', 'interactive', mockClient, 22, 'normal', 600000);
+    const session = new PersistentSession('order-1', 'h', 'u', 'interactive', mockClient, { port: 22, mode: 'normal', timeoutMs: 600000 });
     const initP = session.initialize();
     await vi.advanceTimersByTimeAsync(1000);
     await initP;
@@ -1678,7 +1613,7 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     (manager as any).getConnection = vi.fn().mockResolvedValue(sharedClient);
     (manager as any).connections.set('u@h:22', { client: sharedClient, connected: true });
 
-    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
     await vi.advanceTimersByTimeAsync(1000);
     await createA;
 
@@ -1725,10 +1660,10 @@ describe('#304: PersistentSession.close() awaits remote stream-close', () => {
     };
     (manager as any).getConnection = vi.fn().mockResolvedValue(sharedClient);
 
-    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    const createA = manager.createSession('a', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
     await vi.advanceTimersByTimeAsync(1000);
     await createA;
-    const createB = manager.createSession('b', 'h', 'u', 'interactive', '/k', 22, 'normal', 600000);
+    const createB = manager.createSession('b', 'h', 'u', 'interactive', '/k', { port: 22, mode: 'normal', timeoutMs: 600000 });
     await vi.advanceTimersByTimeAsync(1000);
     await createB;
 

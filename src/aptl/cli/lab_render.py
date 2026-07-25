@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from aptl.core.host_ports import ResolvedPort
+from aptl.core.host_ports import PortSpec, ResolvedPort, published_port_specs
 from aptl.core.lab import LabResult
 from aptl.core.lab_types import StartupDiagnostic, StartupOutcome
 
@@ -101,7 +101,11 @@ def _cli_backend(project_dir: Path) -> DeploymentBackend | None:
 
 
 def _binding_to_resolved_port(
-    service: str, default_port: int, proto: str, binding: dict[str, str]
+    service: str,
+    container_port: int,
+    proto: str,
+    binding: dict[str, str],
+    spec: PortSpec | None,
 ) -> ResolvedPort | None:
     """Turn one docker port binding into a ResolvedPort, or None if unusable."""
     try:
@@ -112,17 +116,22 @@ def _binding_to_resolved_port(
         return None
     return ResolvedPort(
         service=service,
-        env_var=None,
-        default_port=default_port,
+        env_var=spec.env_var if spec is not None else None,
+        default_port=spec.default_port if spec is not None else container_port,
         resolved_port=host_port,
         protos=(proto or "tcp",),
-        host_ip=binding.get("HostIp"),
-        remapped=(host_port != default_port),
+        host_ip=spec.host_ip if spec is not None else binding.get("HostIp"),
+        remapped=(
+            host_port != (spec.default_port if spec is not None else container_port)
+        ),
     )
 
 
 def _container_resolved_ports(
-    backend: DeploymentBackend, name: str, service: str
+    backend: DeploymentBackend,
+    name: str,
+    service: str,
+    specs: dict[tuple[str, int, str], PortSpec],
 ) -> list[ResolvedPort]:
     """Return the published ResolvedPorts for one running container."""
     try:
@@ -136,14 +145,44 @@ def _container_resolved_ports(
     for container_port_proto, bindings in ports.items():
         container_port_str, _, proto = container_port_proto.partition("/")
         try:
-            default_port = int(container_port_str)
+            container_port = int(container_port_str)
         except ValueError:
             continue
+        spec = specs.get((service, container_port, proto or "tcp"))
         for binding in bindings or ():
-            entry = _binding_to_resolved_port(service, default_port, proto, binding)
+            entry = _binding_to_resolved_port(
+                service, container_port, proto, binding, spec
+            )
             if entry is not None:
                 resolved.append(entry)
     return resolved
+
+
+def _coalesce_resolved_ports(entries: list[ResolvedPort]) -> list[ResolvedPort]:
+    """Collapse duplicate address bindings and shared TCP/UDP mappings."""
+    grouped: dict[tuple[str, str | None, int, int], tuple[ResolvedPort, set[str]]] = {}
+    for entry in entries:
+        key = (
+            entry.service,
+            entry.env_var,
+            entry.default_port,
+            entry.resolved_port,
+        )
+        if key not in grouped:
+            grouped[key] = (entry, set())
+        grouped[key][1].update(entry.protos)
+    return [
+        ResolvedPort(
+            service=entry.service,
+            env_var=entry.env_var,
+            default_port=entry.default_port,
+            resolved_port=entry.resolved_port,
+            protos=tuple(sorted(protos)),
+            host_ip=entry.host_ip,
+            remapped=entry.remapped,
+        )
+        for entry, protos in grouped.values()
+    ]
 
 
 def live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
@@ -167,13 +206,39 @@ def live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
         containers = backend.container_list(all_containers=False)
     except Exception:
         return []
+    specs = {
+        (spec.service, spec.container_port, spec.proto): spec
+        for spec in published_port_specs(project_dir)
+    }
     resolved: list[ResolvedPort] = []
     for entry in containers:
         service = entry.get("Service") or ""
         name = (entry.get("Name") or "").lstrip("/")
         if service and name:
-            resolved.extend(_container_resolved_ports(backend, name, service))
-    return resolved
+            resolved.extend(_container_resolved_ports(backend, name, service, specs))
+    return _coalesce_resolved_ports(resolved)
+
+
+def live_services(project_dir: Path) -> set[str]:
+    """Return the Compose service names that are currently running.
+
+    Access instructions must describe the realized scenario, not every
+    optional service declared in Compose.  Best-effort failures deliberately
+    return an empty set so the CLI never advertises an endpoint it could not
+    verify.
+    """
+    backend = _cli_backend(project_dir)
+    if backend is None:
+        return set()
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:
+        return set()
+    return {
+        str(entry.get("Service"))
+        for entry in containers
+        if isinstance(entry, dict) and entry.get("Service")
+    }
 
 
 def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
@@ -206,7 +271,9 @@ def _emit_host_port_remaps(resolved_ports: list[ResolvedPort]) -> None:
 
 
 def emit_lab_access_summary(
-    project_dir: Path, resolved_ports: list[ResolvedPort] | None = None
+    project_dir: Path,
+    resolved_ports: list[ResolvedPort] | None = None,
+    active_services: set[str] | None = None,
 ) -> None:
     """Print the credential locations and common lab entry points.
 
@@ -215,6 +282,8 @@ def emit_lab_access_summary(
     a default port was in use and the service was remapped to a free one.
     """
     resolved_ports = resolved_ports or []
+    if active_services is None:
+        active_services = live_services(project_dir)
     env_path = project_dir / ".env"
     dashboard_port = _resolved_port(
         resolved_ports, _WAZUH_DASHBOARD_SVC, _WAZUH_DASHBOARD_DEFAULT
@@ -235,6 +304,9 @@ def emit_lab_access_summary(
     typer.echo(f"  Grafana: http://localhost:{grafana_port}")
     typer.echo("    username: admin")
     typer.echo("    password: see GRAFANA_ADMIN_PASSWORD in .env")
-    typer.echo("  Reverse engineering SSH:")
-    typer.echo(f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}")
+    if _REVERSE_SVC in active_services:
+        typer.echo("  Reverse engineering SSH:")
+        typer.echo(
+            f"    ssh -i ~/.ssh/aptl_lab_key labadmin@localhost -p {reverse_port}"
+        )
     _emit_host_port_remaps(resolved_ports)

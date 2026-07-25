@@ -2,7 +2,7 @@
 
 import inspect
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -159,6 +159,7 @@ class _RealizedBackend(MagicMock):
         platform: str = "linux",
         health: str | None = None,
         running: bool = True,
+        content_types: dict[str, str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -173,7 +174,11 @@ class _RealizedBackend(MagicMock):
         self._platform = platform
         self._health = health
         self._running = running
+        self._content_types = content_types or {}
         self.realize.return_value = LabResult(success=True, message="ok")
+
+    def container_exists(self, name: str) -> bool:
+        return name in self._containers
 
     def container_inspect(self, name: str) -> dict:
         if name not in self._containers:
@@ -189,6 +194,9 @@ class _RealizedBackend(MagicMock):
 
     def host_list_lab_networks(self, name_prefix: str) -> list[str]:
         return list(self._networks)
+
+    def observe_content_type(self, content) -> str | None:
+        return self._content_types.get(content.address)
 
     def _get_child_mock(self, /, **kw):
         # ``NonCallableMock.__new__`` gives every mock instance its own
@@ -284,6 +292,41 @@ def _execution_plan_with_derived_realization_requirements():
                 type: vm
                 os: ${node_os}
                 resources: {ram: 1 gib, cpu: 1}
+            """
+        )
+    )
+    return plan(
+        compile_runtime_model(scenario),
+        create_aptl_manifest(),
+        target_name=APTL_ACES_TARGET_NAME,
+    )
+
+
+def _execution_plan_with_content_realization_requirement():
+    """Compile an EXACT file content concern through ACES's public planner."""
+    from textwrap import dedent
+
+    from aces_processor.compiler import compile_runtime_model
+    from aces_processor.planner import plan
+    from aces_sdl.parser import parse_sdl
+
+    from aptl.backends.aces_manifest import APTL_ACES_TARGET_NAME, create_aptl_manifest
+
+    scenario = parse_sdl(
+        dedent(
+            """
+            name: disclosure-content
+            nodes:
+              fileshare:
+                type: vm
+                os: linux
+                resources: {ram: 1 gib, cpu: 1}
+            content:
+              notice:
+                type: file
+                target: fileshare
+                path: public/notice.txt
+                text: hello
             """
         )
     )
@@ -422,10 +465,12 @@ class _FakeExecutionPlan:
         diagnostics=None,
         orchestration=None,
         evaluation=None,
+        model=None,
     ):
         self.provisioning = provisioning
         self.orchestration = orchestration or OrchestrationPlan()
         self.evaluation = evaluation or EvaluationPlan()
+        self.model = model if model is not None else object()
         self.base_snapshot = RuntimeSnapshot()
         self.is_valid = is_valid
         self.diagnostics = diagnostics or []
@@ -534,6 +579,53 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
         {"red"}
     )
     assert payload["capabilities"]["participant_runtime"] is not None
+
+
+def test_manifest_provisioner_declares_only_realized_capabilities():
+    """Issue #580: provisioner vocabulary must match the typed realization path."""
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    manifest = create_aptl_manifest()
+    provisioner = manifest.provisioner
+
+    assert provisioner.supported_node_types == frozenset({"switch", "vm"})
+    assert provisioner.supported_os_families == frozenset({"linux"})
+    assert provisioner.supported_content_types == frozenset({"directory", "file"})
+    assert provisioner.supported_account_features == frozenset(
+        {"disabled", "groups", "mail", "spn"}
+    )
+    assert provisioner.supports_accounts is True
+    assert provisioner.supports_acls is False
+
+
+def test_manifest_realization_support_matches_exercised_concerns():
+    """Issue #580: constrained support is limited to a non-vacuous witness."""
+    from aptl.backends.aces_manifest import create_aptl_manifest
+
+    (support,) = create_aptl_manifest().realization_support
+
+    assert support.domain == "runtime-realization"
+    assert support.supported_constraint_kinds == frozenset({"os-family"})
+    assert support.supported_exact_requirement_kinds == frozenset(
+        {"declared-capability-match"}
+    )
+    assert support.disclosure_kinds == frozenset(
+        {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
+    )
+
+
+def test_derived_realization_fixture_exercises_manifest_constrained_claim():
+    """The retained constrained claim has a compiled runtime requirement."""
+    from aces_sdl.explicitness import ExplicitnessClass
+
+    execution_plan = _execution_plan_with_derived_realization_requirements()
+
+    constrained = {
+        requirement.requirement_kind: requirement.field_path
+        for requirement in execution_plan.model.realization_requirements
+        if requirement.explicitness is ExplicitnessClass.CONSTRAINED
+    }
+    assert constrained == {"os-family": "nodes.vm.os"}
 
 
 def test_current_backend_docs_cover_declared_manifest_components():
@@ -671,6 +763,8 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
         for case in report.cases
         if not case.passed
     ]
+    case_names = {case.name for case in report.cases}
+    assert {"target-provisioning", "target-snapshot"} <= case_names
 
 
 def test_aptl_target_passes_full_remote_control_plane_conformance():
@@ -703,6 +797,8 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
         for case in report.cases
         if not case.passed
     ]
+    case_names = {case.name for case in report.cases}
+    assert {"target-provisioning", "target-snapshot"} <= case_names
 
 
 def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):
@@ -1483,6 +1579,235 @@ def test_start_aces_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser.assert_called_once_with(selected)
 
 
+def test_start_aces_scenario_passes_runtime_parameters_to_aces_planner(
+    mocker, tmp_path
+):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls: dict[str, object] = {}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None):
+            calls["scenario"] = parsed_scenario
+            calls["parameters"] = parameters
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    parameters = {"victim_os": "linux", "instance_count": 1}
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        config,
+        backend,
+        parameters=parameters,
+    )
+
+    assert result.lab_result.success is True
+    assert calls == {"scenario": scenario, "parameters": parameters}
+
+
+def test_start_aces_scenario_threads_resolved_run_target(mocker, tmp_path):
+    from aptl.backends import aces
+    from aptl.backends.aces_start_model import AcesRunTarget, AcesStartOutcome
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    mocker.patch(
+        "aptl.backends.aces.participant_action_specs_from_runtime_model",
+        return_value={},
+    )
+    outcome = AcesStartOutcome(
+        lab_result=LabResult(success=True, message="ok"),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=["victim"],
+        scenario_path=None,
+    )
+    run_plan = mocker.patch("aptl.backends.aces._run_execution_plan", return_value=outcome)
+    store = object()
+    run_target = AcesRunTarget(run_store=store, run_id="run-1")
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        MagicMock(),
+        run_target=run_target,
+    )
+
+    assert result is outcome
+    assert run_plan.call_args.kwargs == {"run_store": store, "run_id": "run-1"}
+
+
+def test_start_aces_scenario_uses_planned_runtime_model_for_participant_actions(
+    mocker, tmp_path
+):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    planned_model = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            return _FakeExecutionPlan(
+                _plan_for_nodes("aptl-victim"), model=planned_model
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    planned_specs = mocker.patch.object(
+        aces,
+        "participant_action_specs_from_runtime_model",
+        create=True,
+        return_value={},
+    )
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+
+    result = aces.start_aces_scenario(tmp_path, config, backend)
+
+    assert result.lab_result.success is True
+    planned_specs.assert_called_once_with(
+        planned_model,
+        provisioning_plan=ANY,
+        project_dir=tmp_path,
+        config=config,
+    )
+
+
+def test_start_aces_scenario_projects_instantiation_failure_without_values(
+    tmp_path,
+):
+    from aptl.backends import aces
+
+    scenario_path = tmp_path / "runtime-variables.sdl.yaml"
+    scenario_path.write_text(
+        "name: runtime-variables\n"
+        "description: Deployment tier ${deployment_tier}\n"
+        "variables:\n"
+        "  deployment_tier:\n"
+        "    type: integer\n"
+        "    required: true\n"
+        "nodes: {}\n"
+    )
+    supplied_value = "private-runtime-value"
+    backend = MagicMock()
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}),
+        backend,
+        scenario_path=scenario_path,
+        parameters={"deployment_tier": supplied_value},
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is False
+    assert "runtime variable" in result.lab_result.error.lower()
+    assert supplied_value not in result.lab_result.error
+    assert result.retryable is False
+    backend.realize.assert_not_called()
+    before_retry.assert_not_called()
+
+
+def test_start_aces_scenario_retries_soc_apply_without_replanning(mocker, tmp_path):
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-soc": ["soc"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls = {"plan": 0, "apply": 0}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario, *, parameters=None):
+            assert parsed_scenario is scenario
+            assert parameters == {"victim_os": "linux"}
+            calls["plan"] += 1
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-soc"))
+
+        def apply(self, execution_plan):
+            calls["apply"] += 1
+            return super().apply(execution_plan)
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.side_effect = [
+        LabResult(success=False, error="backend still starting"),
+        LabResult(success=True, message="ok"),
+    ]
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"soc": True}),
+        backend,
+        parameters={"victim_os": "linux"},
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is True
+    assert calls == {"plan": 1, "apply": 2}
+    assert backend.realize.call_count == 2
+    before_retry.assert_called_once_with()
+
+
+def test_start_aces_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
+    """A retryable apply is not enough; the admitted plan must select SOC."""
+    from aptl.backends import aces
+
+    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
+    scenario = object()
+    mocker.patch("aptl.backends.aces.parse_sdl_file", return_value=scenario)
+    calls = {"plan": 0, "apply": 0}
+
+    class FakeRuntimeManager(_FakeRuntimeManager):
+        def plan(self, parsed_scenario):
+            assert parsed_scenario is scenario
+            calls["plan"] += 1
+            return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
+
+        def apply(self, execution_plan):
+            calls["apply"] += 1
+            return super().apply(execution_plan)
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", FakeRuntimeManager)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(
+        success=False, error="backend still starting"
+    )
+    before_retry = MagicMock()
+
+    result = aces.start_aces_scenario(
+        tmp_path,
+        AptlConfig(lab={"name": "test"}, containers={"victim": True}),
+        backend,
+        before_backend_retry=before_retry,
+    )
+
+    assert result.lab_result.success is False
+    assert result.retryable is True
+    assert calls == {"plan": 1, "apply": 1}
+    backend.realize.assert_called_once()
+    before_retry.assert_not_called()
+
+
 def _workflow_and_evaluation_execution_plan():
     """Compile a minimal workflow+objective scenario into its full ACES plan.
 
@@ -1628,6 +1953,7 @@ def test_start_aces_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
 
     assert result.lab_result.success is False
     assert result.lab_result.error
+    assert result.retryable is True
 
 
 def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
@@ -1663,11 +1989,20 @@ def test_start_aces_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     backend = MagicMock()
     backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    before_retry = MagicMock()
 
-    result = aces.start_aces_scenario(tmp_path, config, backend)
+    result = aces.start_aces_scenario(
+        tmp_path,
+        config,
+        backend,
+        before_backend_retry=before_retry,
+    )
 
     assert result.lab_result.success is False
     assert result.lab_result.error
+    assert result.retryable is False
+    before_retry.assert_not_called()
+    backend.realize.assert_called_once()
 
 
 def test_start_aces_scenario_submits_evaluation_for_objective_scenario(
@@ -1906,6 +2241,93 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
     assert spec.nodes[0].service_name == "kali"
     assert spec.nodes[0].container_name == "kali"
     assert spec.nodes[0].networks == ("dmz-net", "redteam-net")
+
+
+def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
+    """A failed apply must leave its diagnostics readable by the handoff.
+
+    ACES's backend-call boundary replaces a failed apply's diagnostics with
+    its snapshot-contract / SEM-218 gate output (every exact declaration reads
+    as unrealized against the never-realized snapshot), so the handoff
+    re-attaches the provisioner's own captured report (issue #677).
+    """
+    from aptl.backends.aces import AptlProvisioner
+
+    _write_compose(tmp_path, {"kali": ["kali"], "aptl-otel-collector": ["otel"]})
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(
+        success=False,
+        error="APTL cannot create realized network dmz-net: 172.20.0.0/16 in use",
+    )
+    config = AptlConfig(lab={"name": "test"}, containers={"kali": True})
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=config,
+        deployment_backend=backend,
+    )
+
+    result = provisioner.apply(_plan_for_nodes("scenario-a.kali"), RuntimeSnapshot())
+
+    assert result.success is False
+    captured = provisioner.last_failure_diagnostics
+    assert [item.code for item in captured] == [
+        "aptl.provisioner.backend-start-failed"
+    ]
+    assert "172.20.0.0/16" in captured[0].message
+
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    recovered = provisioner.apply(
+        _plan_for_nodes("scenario-a.kali"), RuntimeSnapshot()
+    )
+    assert recovered.success is True
+    assert provisioner.last_failure_diagnostics == ()
+
+
+def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
+    mocker, tmp_path
+):
+    """The handoff must surface the backend's own failure, not only the gate's.
+
+    When the backend apply fails, ``aces_runtime`` gates the unrealized
+    snapshot and returns only ``runtime.backend-contract-invalid`` diagnostics,
+    which both hides the actionable backend error (e.g. a Docker subnet
+    conflict) and severs the retryable-code signal the SOC retry keys on.
+    """
+    from aptl.backends import aces
+    from aptl.backends.aces_diagnostics import diagnostic
+
+    backend_diag = diagnostic(
+        "aptl.provisioner.backend-start-failed",
+        "runtime.apply.provisioning",
+        "APTL cannot create realized network dmz-net: 172.20.0.0/16 in use",
+    )
+    gate_diag = diagnostic(
+        "runtime.backend-contract-invalid",
+        "provision.node.wazuh-manager",
+        "Backend did not realize the exact 'node-type' requirement.",
+    )
+
+    class MaskingRuntimeManager(_FakeRuntimeManager):
+        def apply(self, execution_plan):
+            return ApplyResult(
+                success=False,
+                snapshot=RuntimeSnapshot(),
+                diagnostics=[gate_diag],
+            )
+
+    mocker.patch("aptl.backends.aces.RuntimeManager", MaskingRuntimeManager)
+    target = MagicMock()
+    target.provisioner.last_failure_diagnostics = (backend_diag,)
+
+    failure, _snapshot, retryable = aces._apply_execution_plan(
+        target, MagicMock()
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert "172.20.0.0/16" in failure.error
+    assert "node-type" in failure.error
+    assert retryable is True
 
 
 def test_realization_preserves_network_static_address_assignments(tmp_path):
@@ -2925,6 +3347,9 @@ def test_manifest_account_features_match_realized_dto_fields():
         "mail",
         "spn",
     }
+    assert set(manifest.provisioner.supported_domain_profiles) == {
+        "active_directory"
+    }
 
 
 def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:
@@ -3157,59 +3582,6 @@ def test_aces_backend_does_not_import_legacy_sdl_parser():
     assert "ScenarioDefinition" not in source
 
 
-def test_start_aces_scenario_returns_aces_start_outcome(tmp_path):
-    """start_aces_scenario returns AcesStartOutcome, not just LabResult."""
-    from unittest.mock import patch as _patch, MagicMock as _MagicMock
-
-    from aces_contracts.runtime_state import ApplyResult, RuntimeSnapshot
-
-    from aptl.backends.aces import AcesStartOutcome, start_aces_scenario
-    from aptl.core.config import AptlConfig
-
-    _write_compose(tmp_path, {"aptl-victim": ["victim"]})
-    (tmp_path / "scenarios").mkdir()
-    sdl_path = tmp_path / "scenarios" / "test.sdl.yaml"
-    sdl_path.write_text(
-        "kind: ScenarioDefinition\napiVersion: v1\nmetadata:\n  name: test\nspec:\n  nodes: []\n"
-    )
-
-    backend = _MagicMock()
-    backend.realize.return_value = LabResult(success=True, message="ok")
-    config = AptlConfig(lab={"name": "test"})
-
-    apply_result = ApplyResult(
-        success=True,
-        snapshot=RuntimeSnapshot(),
-        diagnostics=[],
-    )
-
-    with (
-        _patch("aptl.backends.aces.parse_sdl_file") as mock_parse,
-        _patch("aptl.backends.aces.RuntimeManager") as mock_manager,
-    ):
-        mock_scenario = _MagicMock()
-        mock_parse.return_value = mock_scenario
-
-        mock_plan = _MagicMock()
-        mock_plan.diagnostics = []
-        mock_plan.base_snapshot = RuntimeSnapshot()
-        mock_plan.orchestration.actionable_operations = []
-        mock_plan.evaluation.actionable_operations = []
-        mock_plan.provisioning = _MagicMock()
-        mock_manager.return_value.plan.return_value = mock_plan
-        # Scenario start now applies through RuntimeManager.apply (issue #578),
-        # not a hand-rolled RuntimeControlPlane submission loop.
-        mock_manager.return_value.apply.return_value = apply_result
-
-        result = start_aces_scenario(tmp_path, config, backend, scenario_path=sdl_path)
-
-    assert isinstance(result, AcesStartOutcome)
-    assert result.lab_result.success is True
-    assert isinstance(result.final_snapshot, RuntimeSnapshot)
-    assert isinstance(result.realization_details, dict)
-    assert isinstance(result.selected_profiles, list)
-
-
 def test_drive_workflows_receives_threaded_run_store_and_run_id(tmp_path):
     """_drive_orchestrator_workflows threads its run_store/run_id args into
     AptlOrchestrator.drive_workflows (GAP 2/4): a real run store + run_id, not
@@ -3349,6 +3721,30 @@ def _apply_disclosure_scenario(tmp_path, backend, execution_plan=None):
     return manager.apply(execution_plan)
 
 
+def _apply_content_disclosure_scenario(tmp_path, observed_content_type):
+    """Apply an exact content concern with a controlled backend observation."""
+    from aces_runtime.manager import RuntimeManager
+
+    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.core.config import AptlConfig
+
+    execution_plan = _execution_plan_with_content_realization_requirement()
+    content_address = "provision.content.notice"
+    backend = _RealizedBackend(
+        containers=("fileshare",),
+        content_types={content_address: observed_content_type},
+    )
+    _write_compose(tmp_path, {"fileshare": ["otel"]})
+    target = create_aptl_runtime_target(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        backend=backend,
+    )
+    return RuntimeManager(
+        target, initial_snapshot=execution_plan.base_snapshot
+    ).apply(execution_plan)
+
+
 def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
     """A scenario that realizes nodes reports non-empty realization details."""
     from unittest.mock import MagicMock as _MagicMock
@@ -3405,6 +3801,26 @@ def test_apply_provisioning_rejects_exact_concern_realized_differently(tmp_path)
     assert result.success is False
     codes = {diagnostic.code for diagnostic in result.diagnostics}
     assert "runtime.backend-contract-invalid" in codes
+
+
+def test_apply_provisioning_rejects_exact_content_type_probe_mismatch(tmp_path):
+    """The disclosure gate rejects a real directory where a file was authored."""
+    result = _apply_content_disclosure_scenario(tmp_path, "directory")
+
+    assert result.success is False
+    assert "runtime.backend-contract-invalid" in {
+        diagnostic.code for diagnostic in result.diagnostics
+    }
+
+
+def test_apply_provisioning_records_content_type_provenance_when_honored(tmp_path):
+    """A matching content probe succeeds and reaches the provenance ledger."""
+    result = _apply_content_disclosure_scenario(tmp_path, "file")
+
+    assert result.success is True, [d.message for d in result.diagnostics]
+    assert "content-type" in {
+        entry.requirement_kind for entry in result.snapshot.realization_provenance
+    }
 
 
 def test_apply_provisioning_rejects_node_that_never_became_healthy(tmp_path):
@@ -3465,7 +3881,7 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
     unreachable at the runtime gate, so this test is the regression guard on the
     dependency floor.
     """
-    from aces_sdl.explicitness import ExplicitnessProvenance
+    from aces_sdl.explicitness import ExplicitnessClass, ExplicitnessProvenance
 
     backend = _RealizedBackend(containers=("vm",), platform="linux")
 
@@ -3480,8 +3896,13 @@ def test_apply_provisioning_discloses_processor_derived_provenance(tmp_path):
         entry.requirement_kind: entry.provenance
         for entry in result.snapshot.realization_provenance
     }
+    by_explicitness = {
+        entry.requirement_kind: entry.explicitness
+        for entry in result.snapshot.realization_provenance
+    }
     assert by_kind["os-family"] == ExplicitnessProvenance.PROCESSOR_DERIVED
     assert by_kind["node-type"] == ExplicitnessProvenance.AUTHOR_DECLARED
+    assert by_explicitness["os-family"] is ExplicitnessClass.CONSTRAINED
 
 
 def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_path):

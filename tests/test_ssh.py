@@ -491,3 +491,216 @@ class TestEnsurePivotKey:
             "/grant:r",
             "alice:R",
         ] in [call_args.args[0] for call_args in mock_run.call_args_list]
+
+
+class TestEnsureTargetAuthorizedKeys:
+    """Tests for the combined target authorized_keys file — SEC #417 / #581.
+
+    Targets (victim, workstation, ...) must authorize both the operator
+    control-plane key and the kali pivot key, or kali's in-scenario SSH
+    pivot into them fails. Caught by a real local live-gate boot: SSH to
+    victim/kali timed out because no authorized_keys content was ever placed
+    once these nodes moved off their hand-authored entrypoint scripts onto
+    SDL-declared realization.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _default_posix_hardening(self, mocker):
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=False)
+
+    def test_combines_both_public_keys(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_target_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        keys_dir.mkdir(parents=True)
+        pivot_dir.mkdir(parents=True)
+        (keys_dir / "aptl_lab_key.pub").write_text("ssh-ed25519 CONTROLPLANE\n")
+        (pivot_dir / "kali_pivot_key.pub").write_text("ssh-ed25519 PIVOT")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is True
+        combined = (keys_dir / "target_authorized_keys").read_text()
+        assert combined == "ssh-ed25519 CONTROLPLANE\nssh-ed25519 PIVOT\n"
+
+    def test_missing_control_plane_key_is_an_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_target_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        pivot_dir.mkdir(parents=True)
+        (pivot_dir / "kali_pivot_key.pub").write_text("ssh-ed25519 PIVOT")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "aptl_lab_key.pub" in result.error
+
+    def test_missing_pivot_key_is_an_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_target_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        keys_dir.mkdir(parents=True)
+        (keys_dir / "aptl_lab_key.pub").write_text("ssh-ed25519 CONTROLPLANE")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "kali_pivot_key.pub" in result.error
+
+
+class TestEnsureWorkstationPivotKey:
+    """Tests for the workstation-to-victim pivot key — issue #581.
+
+    The legacy hand-authored workstation entrypoint generated a throwaway
+    dev-user keypair itself at container start; the SDL-declared node has no
+    entrypoint to do that, so this is generated the same way as the kali
+    pivot key instead."""
+
+    @pytest.fixture(autouse=True)
+    def _default_posix_hardening(self, mocker):
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=False)
+
+    def test_generates_workstation_pivot_key_when_missing(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_workstation_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        key_path = pivot_dir / "workstation_pivot_key"
+        pub_path = pivot_dir / "workstation_pivot_key.pub"
+
+        def fake_keygen(cmd, **kwargs):
+            key_path.write_text("generated-ws-pivot-private")
+            pub_path.write_text("generated-ws-pivot-public")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_run = mocker.patch(
+            "aptl.core.ssh.subprocess.run", side_effect=fake_keygen
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is True
+        assert result.generated is True
+        assert result.key_path == key_path
+        cmd = mock_run.call_args[0][0]
+        comment_idx = cmd.index("-C")
+        assert cmd[comment_idx + 1] == "aptl-workstation-pivot"
+
+    def test_existing_workstation_pivot_key_is_reused(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_workstation_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        pivot_dir.mkdir(parents=True)
+        (pivot_dir / "workstation_pivot_key").write_text("existing-private")
+        (pivot_dir / "workstation_pivot_key.pub").write_text("existing-public")
+
+        mock_run = mocker.patch("aptl.core.ssh.subprocess.run")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is True
+        assert result.generated is False
+        mock_run.assert_not_called()
+
+    def test_keygen_failure_returns_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_workstation_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        mocker.patch(
+            "aptl.core.ssh.subprocess.run",
+            return_value=MagicMock(returncode=1, stdout="", stderr="disk full"),
+        )
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "disk full" in result.error
+
+    def test_workstation_pivot_key_is_distinct_from_kali_pivot_key(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_workstation_pivot_key
+
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+
+        def fake_keygen(cmd, **kwargs):
+            (pivot_dir / "workstation_pivot_key").write_text("priv")
+            (pivot_dir / "workstation_pivot_key.pub").write_text("pub")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.ssh.subprocess.run", side_effect=fake_keygen)
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_workstation_pivot_key(pivot_dir=pivot_dir)
+
+        assert result.key_path.name == "workstation_pivot_key"
+        assert not (pivot_dir / "kali_pivot_key").exists()
+
+
+class TestEnsureVictimAuthorizedKeys:
+    """Tests for victim's authorized_keys — issue #581.
+
+    Victim trusts control-plane + kali pivot + workstation pivot, unlike
+    workstation itself (control-plane + kali pivot only), so it needs its
+    own combined file rather than sharing target_authorized_keys."""
+
+    @pytest.fixture(autouse=True)
+    def _default_posix_hardening(self, mocker):
+        mocker.patch("aptl.core.ssh.hostenv.is_windows", return_value=False)
+
+    def test_combines_all_three_public_keys(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_victim_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        keys_dir.mkdir(parents=True)
+        pivot_dir.mkdir(parents=True)
+        (keys_dir / "aptl_lab_key.pub").write_text("ssh-ed25519 CONTROLPLANE\n")
+        (pivot_dir / "kali_pivot_key.pub").write_text("ssh-ed25519 KALIPIVOT")
+        (pivot_dir / "workstation_pivot_key.pub").write_text("ssh-ed25519 WSPIVOT")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is True
+        combined = (keys_dir / "victim_authorized_keys").read_text()
+        assert combined == (
+            "ssh-ed25519 CONTROLPLANE\nssh-ed25519 KALIPIVOT\nssh-ed25519 WSPIVOT\n"
+        )
+
+    def test_missing_workstation_pivot_key_is_an_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_victim_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        keys_dir.mkdir(parents=True)
+        pivot_dir.mkdir(parents=True)
+        (keys_dir / "aptl_lab_key.pub").write_text("ssh-ed25519 CONTROLPLANE")
+        (pivot_dir / "kali_pivot_key.pub").write_text("ssh-ed25519 KALIPIVOT")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "workstation_pivot_key.pub" in result.error
+
+    def test_missing_control_plane_key_is_an_error(self, tmp_path, mocker):
+        from aptl.core.ssh import ensure_victim_authorized_keys
+
+        keys_dir = tmp_path / "keys"
+        pivot_dir = tmp_path / "config" / "lab-ssh"
+        pivot_dir.mkdir(parents=True)
+        (pivot_dir / "kali_pivot_key.pub").write_text("ssh-ed25519 KALIPIVOT")
+        (pivot_dir / "workstation_pivot_key.pub").write_text("ssh-ed25519 WSPIVOT")
+        mocker.patch("aptl.core.ssh.os.chmod")
+
+        result = ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir)
+
+        assert result.success is False
+        assert "aptl_lab_key.pub" in result.error

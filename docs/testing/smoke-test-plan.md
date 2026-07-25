@@ -11,7 +11,7 @@ Acceptance testing for the enterprise infrastructure, SOC stack, MCP layer, and 
 **Prerequisites:**
 - Docker Engine with Docker Compose v2
 - 24GB+ RAM available (32GB recommended)
-- Python 3.11+ with `pip install -e .` (APTL CLI)
+- Python 3.11+ with `pip install -e '.[dev]'` (APTL CLI and smoke-test dependencies)
 - Node.js 20+ (MCP server builds)
 - Native Linux Docker Engine: `vm.max_map_count >= 262144`
 

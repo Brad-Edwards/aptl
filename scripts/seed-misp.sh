@@ -15,7 +15,7 @@ set -euo pipefail
 # Usage:
 #   ./scripts/seed-misp.sh
 #
-# Uses ADMIN_KEY from docker-compose.yml by default. Override with:
+# Uses MISP_API_KEY from the project .env by default. Override with:
 #   MISP_API_KEY="custom-key" ./scripts/seed-misp.sh
 #
 # The script is idempotent -- re-running it will skip event creation if the
@@ -25,6 +25,12 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_DIR/.env"
+source "$SCRIPT_DIR/aptl-env.sh"
+aptl_load_env_key "$ENV_FILE" MISP_API_KEY
+
 MISP_URL="${MISP_URL:-https://localhost:8443}"
 # SEC-006 / ADR-034: MISP now serves a lab-CA-signed certificate.
 # The seed script verifies against the lab CA bundle by default; the
@@ -44,7 +50,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Preflight checks — default to ADMIN_KEY from docker-compose.yml
+# Preflight checks — the generated .env key matches Compose's ADMIN_KEY
 # ---------------------------------------------------------------------------
 MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
 
@@ -73,6 +79,19 @@ misp_api() {
     curl "${args[@]}" "${MISP_URL}${endpoint}"
 }
 
+misp_search_event_field() {
+    local field="$1"
+    python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+events = payload.get("response", []) if isinstance(payload, dict) else payload
+event = events[0].get("Event", {}) if events else {}
+print(event.get(sys.argv[1], ""))
+' "$field"
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Check if the event already exists
 # ---------------------------------------------------------------------------
@@ -85,9 +104,9 @@ EVENT_ID=""
 EVENT_UUID=""
 if echo "${SEARCH_RESULT}" | grep -q '"id"'; then
     EVENT_ID=$(echo "${SEARCH_RESULT}" \
-        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Event']['id'] if d else '')" 2>/dev/null || true)
+        | misp_search_event_field id 2>/dev/null || true)
     EVENT_UUID=$(echo "${SEARCH_RESULT}" \
-        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['Event']['uuid'] if d else '')" 2>/dev/null || true)
+        | misp_search_event_field uuid 2>/dev/null || true)
 fi
 
 if [[ -n "${EVENT_ID}" ]]; then

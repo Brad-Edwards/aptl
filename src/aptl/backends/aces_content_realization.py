@@ -38,6 +38,7 @@ from typing import Any
 from aces_contracts.diagnostics import Diagnostic
 from aces_contracts.planning import PlannedResource
 
+from aptl.backends.aces_content_source_policy import forbidden_source_reason
 from aptl.backends.aces_diagnostics import diagnostic
 from aptl.backends.aces_realization_values import (
     content_source_name as _content_source_name,
@@ -320,6 +321,9 @@ def _resolve_project_source(
 ) -> tuple[Path | None, list[Diagnostic]]:
     """Resolve a checked-in source path, failing closed on containment escape."""
 
+    forbidden_reason = forbidden_source_reason(source_name)
+    if forbidden_reason is not None:
+        return None, [_reject(address, forbidden_reason)]
     try:
         resolved = _resolve_within_project(project_dir, Path(source_name))
     except PathContainmentError:

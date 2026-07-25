@@ -11,9 +11,13 @@ from aces_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
 from aces_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 from aptl.backends.aces_observation import ObservedResource
+from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
+log = get_logger("aces-diagnostics")
+
 PROVISIONING_ADDRESS = "runtime.apply.provisioning"
+DEFAULT_STAGE_LABEL = "ACES runtime handoff failed"
 SUPPORTED_RESOURCE_TYPES = frozenset(
     {
         "network",
@@ -21,6 +25,8 @@ SUPPORTED_RESOURCE_TYPES = frozenset(
         "feature-binding",
         "content-placement",
         "account-placement",
+        "generated-artifact",
+        "persistent-volume",
     }
 )
 
@@ -41,14 +47,42 @@ def has_error(diagnostics: list[Diagnostic]) -> bool:
     return any(item.is_error for item in diagnostics)
 
 
-def render_aces_diagnostics(diagnostics: list[Diagnostic]) -> str:
-    """Render ACES diagnostics into the APTL ``LabResult`` error surface."""
+_RENDERED_DIAGNOSTIC_CAP = 5
+
+
+def render_aces_diagnostics(
+    diagnostics: list[Diagnostic], *, stage_label: str = DEFAULT_STAGE_LABEL
+) -> str:
+    """Render ACES diagnostics into the APTL ``LabResult`` error surface.
+
+    ``stage_label`` names the failing phase and defaults to the original
+    hard-coded ``"ACES runtime handoff failed"`` prefix, so every existing
+    caller is unchanged. ADR-047's error envelope reuses this same
+    formatter for the experiment-admission failure surface by passing a
+    distinct label (e.g. ``"ACES experiment admission failed"``) instead of
+    adding a second formatter — do not misclassify admission as a
+    startup-readiness warning by leaving the default label in place there.
+
+    The error surface stays bounded, but truncation must never be silent: a
+    dropped diagnostic can be the actionable one (issue #677), so the full
+    rendered set always lands in the log and the surface names how many
+    entries it omitted.
+    """
     if not diagnostics:
-        return "ACES runtime handoff failed."
+        return f"{stage_label}."
     rendered = [_format_diagnostic(item) for item in diagnostics if item.is_error]
     if not rendered:
         rendered = [_format_diagnostic(item) for item in diagnostics]
-    return redact("ACES runtime handoff failed: " + "; ".join(rendered[:5]))
+    shown = rendered[:_RENDERED_DIAGNOSTIC_CAP]
+    if len(rendered) > _RENDERED_DIAGNOSTIC_CAP:
+        for item in rendered:
+            log.error("ACES diagnostic: %s", redact(item))
+        shown = [
+            *shown,
+            f"[{len(rendered) - _RENDERED_DIAGNOSTIC_CAP} more diagnostics "
+            "omitted; full set in the log]",
+        ]
+    return redact(f"{stage_label}: " + "; ".join(shown))
 
 
 def unsupported_resource_diagnostics(
@@ -103,7 +137,9 @@ def snapshot_after_apply(
             address=address,
             domain=RuntimeDomain.PROVISIONING,
             resource_type=resource.resource_type,
-            payload=_observed_payload(resource.payload, observed),
+            payload=_observed_payload(
+                resource.payload, observed, resource.resource_type
+            ),
             ordering_dependencies=resource.ordering_dependencies,
             refresh_dependencies=resource.refresh_dependencies,
             status="ready",
@@ -132,6 +168,7 @@ def realized_changed_addresses(
 def _observed_payload(
     planned_payload: Mapping[str, object],
     observed: ObservedResource,
+    resource_type: str,
 ) -> dict[str, object]:
     """Return the planned payload with realization concerns replaced by reality.
 
@@ -143,7 +180,13 @@ def _observed_payload(
     """
 
     payload = deepcopy(dict(planned_payload))
-    for path in CONCERN_PAYLOAD_PATH.values():
+    concern_kinds = {
+        "node": ("node-type", "os-family", "domain-topology"),
+        "content-placement": ("content-type",),
+        "generated-artifact": ("generated-artifact",),
+        "persistent-volume": ("persistent-volume",),
+    }.get(resource_type, ())
+    for path in (CONCERN_PAYLOAD_PATH[kind] for kind in concern_kinds):
         if path in observed.concerns:
             _set_path(payload, path, observed.concerns[path])
         else:

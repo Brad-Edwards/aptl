@@ -319,7 +319,7 @@ class TestCheckDockerBuildx:
         assert "~/.docker/cli-plugins/docker-buildx" in result.install_hint
 
     def test_fails_with_linux_plugin_hint(self, mocker):
-        """Linux users should get distro-plugin guidance."""
+        """Linux users should get guidance for Ubuntu and Docker CE packages."""
         from aptl.core import hostenv
         from aptl.core.sysreqs import check_docker_buildx
 
@@ -335,6 +335,7 @@ class TestCheckDockerBuildx:
         result = check_docker_buildx()
 
         assert result.passed is False
+        assert "apt install docker-buildx`" in result.install_hint
         assert "docker-buildx-plugin" in result.install_hint
 
     def test_fails_when_docker_cli_is_missing(self, mocker):

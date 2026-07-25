@@ -138,6 +138,65 @@ scenarios:
         resolve_scenario_selection(tmp_path, scenario_id="escape")
 
 
+def test_rejects_symlinked_scenario_path(tmp_path):
+    """ADR-047 strengthens ``_resolve_project_file`` to no-follow, one-open
+    containment (``aptl.utils.pathsafe``). A symlinked scenario file is a
+    behavior change from the prior lexical ``resolve()`` +
+    ``is_relative_to()`` check, which *would* have followed it as long as
+    the resolved target stayed under ``project_dir``. That prior check was
+    TOCTOU-able (the symlink could change between check and the later
+    ``parse_sdl_file`` open), so the safer behavior is outright rejection —
+    this pins that as the new, intended contract.
+    """
+    from aptl.core.scenario_catalog import resolve_scenario_selection
+
+    (tmp_path / "scenarios").mkdir()
+    real_target = tmp_path / "scenarios" / "real.sdl.yaml"
+    real_target.write_text("name: custom\n")
+    (tmp_path / "scenarios" / "custom.sdl.yaml").symlink_to(real_target)
+    _write_catalog(
+        tmp_path,
+        """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+""",
+    )
+
+    with pytest.raises(ValueError, match="does not exist"):
+        resolve_scenario_selection(tmp_path, scenario_id="custom")
+
+
+def test_rejects_symlinked_scenario_directory_component(tmp_path):
+    """A symlinked *directory* component (not just the leaf) is rejected too."""
+    from aptl.core.scenario_catalog import resolve_scenario_selection
+
+    outside_dir = tmp_path.parent / "scenario-catalog-outside-dir"
+    outside_dir.mkdir(exist_ok=True)
+    (outside_dir / "custom.sdl.yaml").write_text("name: custom\n")
+    try:
+        (tmp_path / "scenarios").symlink_to(outside_dir, target_is_directory=True)
+        _write_catalog(
+            tmp_path,
+            """
+version: 1
+scenarios:
+  - id: custom
+    name: Custom ACES
+    path: scenarios/custom.sdl.yaml
+""",
+        )
+
+        with pytest.raises(ValueError, match="does not exist"):
+            resolve_scenario_selection(tmp_path, scenario_id="custom")
+    finally:
+        import shutil
+
+        shutil.rmtree(outside_dir, ignore_errors=True)
+
+
 def test_rejects_missing_catalog_sdl(tmp_path):
     from aptl.core.scenario_catalog import resolve_scenario_selection
 

@@ -31,7 +31,7 @@ from aptl.core.deployment._compose_realization import (
     _resolve_realization_networks,
 )
 from aptl.core.deployment._compose_queries import _select_shell
-from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab import LabResult, LabStatus
 
 # SSHComposeBackend validates the *local* ssh identity path with
@@ -342,7 +342,7 @@ services:
                             "test_aptl-internal": {},
                             "unmanaged": {},
                         }
-                    }
+                    },
                 }
             ]
         )
@@ -383,6 +383,132 @@ services:
             "aptl-kali",
         ] in commands
         assert all("unmanaged" not in command for command in commands)
+
+    def test_realize_disconnects_implicit_default_bridge(self, tmp_path):
+        """A generic-materializer node (ADR-048) is `docker run` with no
+        `--network`, so Docker implicitly attaches the default "bridge"
+        network at creation; reconciliation must detach it once the node's
+        declared networks are connected, or it leaks onto the default bridge
+        forever (issue #581 - this is what let kali "reach" a target only
+        through a spurious shared bridge attachment, not its real declared
+        network, corrupting the live gate's kali_reachability check).
+        "bridge" is never itself an "unmanaged" network APTL must leave
+        alone (per the sibling test above): it is Docker's own fixed
+        default, not something a user attached on purpose.
+        """
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.red-workbench",
+                    name="red-workbench",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=("redteam-net",),
+                ),
+            ),
+            networks=(DeploymentNetworkRealization(name="redteam-net"),),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "State": {"Running": True},
+                    "NetworkSettings": {
+                        "Networks": {
+                            "test_aptl-redteam": {},
+                            "bridge": {},
+                        }
+                    },
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=_network_inspect_payload(cmd[3], "aptl-redteam"),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert [
+            "docker",
+            "network",
+            "disconnect",
+            "bridge",
+            "aptl-kali",
+        ] in commands
+
+    def test_realize_leaves_bridge_alone_when_no_bridge_attachment(self, tmp_path):
+        """A Compose-started node never picks up the default bridge (Compose
+        attaches its declared network(s) directly at container creation), so
+        reconciliation must not try to disconnect a network the container
+        was never on."""
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("kali",),
+            nodes=(
+                DeploymentNodeRealization(
+                    address="provision.node.red-workbench",
+                    name="red-workbench",
+                    service_name="kali",
+                    container_name="aptl-kali",
+                    networks=("redteam-net",),
+                ),
+            ),
+            networks=(DeploymentNetworkRealization(name="redteam-net"),),
+        )
+        inspect_payload = json.dumps(
+            [
+                {
+                    "State": {"Running": True},
+                    "NetworkSettings": {"Networks": {"test_aptl-redteam": {}}},
+                }
+            ]
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:4] == ["docker", "compose", "-p", "test"]:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=_network_inspect_payload(cmd[3], "aptl-redteam"),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                return MagicMock(returncode=0, stdout=inspect_payload, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(
+            command[:3] == ["docker", "network", "disconnect"] for command in commands
+        )
 
     def test_realize_creates_declared_networks_and_connects_static_ip(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -865,6 +991,80 @@ services:
         assert desired == {"test_aptl-dmz"}
         assert missing == ["unknown-net"]
 
+    @pytest.mark.parametrize(
+        ("image_kwargs", "failing_cmd", "expected_error"),
+        [
+            (
+                {"mode": "pull"},
+                ["docker", "pull"],
+                "Image pull failed",
+            ),
+            (
+                {
+                    "mode": "build",
+                    "dockerfile_path": "containers/custom/Dockerfile",
+                    "context_path": ".",
+                },
+                ["docker", "build"],
+                "Image build failed",
+            ),
+            (
+                {"mode": "build"},
+                None,
+                "Image build input missing",
+            ),
+            (
+                {"mode": "sideload"},
+                None,
+                "Unsupported image realization mode",
+            ),
+        ],
+    )
+    def test_realize_image_failures_stop_before_compose_up(
+        self, tmp_path, image_kwargs, failing_cmd, expected_error
+    ):
+        """A failed or invalid image operation must fail realize() fail-closed.
+
+        If a non-zero pull/build exit stopped propagating, realize() would
+        report success and start the stack against a stale or never-built
+        image — the vacuous-realization failure mode this module exists to
+        prevent.
+        """
+        backend = self._make_backend(tmp_path)
+        spec = DeploymentRealizationSpec(
+            profiles=("enterprise",),
+            nodes=(),
+            networks=(),
+            images=(
+                DeploymentImageRealization(
+                    address="provision.node.custom",
+                    service_name="custom",
+                    source_name="aptl-custom",
+                    source_version="aptl-custom@sha256:" + "b" * 64,
+                    image_ref="aptl-custom:local",
+                    policy_rule="project-build-provenance",
+                    **image_kwargs,
+                ),
+            ),
+        )
+        (tmp_path / "docker-compose.yml").write_text("services: {}\n")
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if failing_cmd is not None and cmd[: len(failing_cmd)] == failing_cmd:
+                return MagicMock(returncode=1, stdout="", stderr="boom")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.realize(spec, build=False)
+
+        assert result.success is False
+        assert expected_error in result.error
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any("up" in cmd for cmd in commands)
+        override = tmp_path / ".aptl" / "realization" / "compose-images.yml"
+        assert not override.exists()
+
     def test_realize_pulls_builds_and_overrides_images(self, tmp_path):
         backend = self._make_backend(tmp_path)
         digest = "sha256:" + "a" * 64
@@ -957,7 +1157,10 @@ services:
         assert f"image: postgres@{digest}" in override
         assert "custom:" in override
         assert "image: aptl-custom:local" in override
-        assert "build: null" in override
+        # Compose >= 2.24 rejects `build: null` at schema validation; the
+        # override must remove the key with the `!reset` tag instead.
+        assert "build: null" not in override
+        assert "build: !reset" in override
         assert b"\r\n" not in override_path.read_bytes()
 
     def test_stop_calls_compose_down(self, tmp_path):
@@ -977,6 +1180,9 @@ services:
 
     def test_stop_with_volumes(self, tmp_path):
         backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n  seeded_data:\n"
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -985,6 +1191,83 @@ services:
         assert result.success is True
         cmd = mock_run.call_args_list[0][0][0]
         assert "-v" in cmd
+
+    def test_stop_with_volumes_includes_persisted_stateful_override(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text("volumes: {}\n")
+        override = tmp_path / ".aptl/realization/compose.stateful.yml"
+        override.parent.mkdir(parents=True)
+        override.write_text("services: {}\nvolumes: {}\n")
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is True
+        cmd = mock_run.call_args_list[0][0][0]
+        assert cmd[cmd.index("-f") + 1] == str(tmp_path / "docker-compose.yml")
+        assert cmd[cmd.index("-f", cmd.index("-f") + 1) + 1] == str(override)
+
+    def test_stop_with_volumes_removes_only_declared_project_leftovers(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n"
+            "  seeded_data:\n"
+            "  compose_data: {}\n"
+            "  shared_data:\n"
+            "    external: true\n"
+            "  explicit_data:\n"
+            "    name: global-data\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                return MagicMock(
+                    returncode=0,
+                    stdout=(
+                        "test_seeded_data\n"
+                        "other_seeded_data\n"
+                        "global-data\n"
+                    ),
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is True
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert ["docker", "volume", "rm", "test_seeded_data"] in commands
+        assert all("other_seeded_data" not in command for command in commands)
+        assert all("global-data" not in command for command in commands)
+
+    def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(
+        self, tmp_path
+    ):
+        backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text(
+            "volumes:\n  seeded_data:\n"
+        )
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                return MagicMock(
+                    returncode=0, stdout="test_seeded_data\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "volume", "rm"]:
+                return MagicMock(returncode=1, stdout="", stderr="still in use")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            result = backend.stop(["wazuh"], remove_volumes=True)
+
+        assert result.success is False
+        assert "Failed to remove project volumes" in result.error
 
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1757,6 +2040,7 @@ class TestSSHComposeBackend:
 
     def test_inherits_stop_behavior(self, tmp_path):
         backend = self._make_backend(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text("volumes: {}\n")
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
@@ -2129,10 +2413,28 @@ class TestSeedNamedVolumes:
             legacy_retire_path=Path("/proj/.aptl/suricata/rules/misp"),
         )
 
+    @staticmethod
+    def _seed_run_mock(volume_suffix, **result_overrides):
+        """Side effect answering the label inspect with valid attribution."""
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            f'"com.docker.compose.volume": "{volume_suffix}"}}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            defaults = {"returncode": 0, "stdout": "", "stderr": ""}
+            defaults.update(result_overrides)
+            return MagicMock(**defaults)
+
+        return run
+
     def test_seed_runs_root_copy_into_project_scoped_volume(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_config_seed")
+        ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
         cmd = mock_run.call_args[0][0]
         assert cmd[:7] == [
@@ -2157,17 +2459,109 @@ class TestSeedNamedVolumes:
         assert "mkdir -p /dest/rules" in script
         assert "cp -a /src/rules/local.rules /dest/rules/local.rules" in script
 
+    def test_seed_creates_missing_volume_with_compose_labels(self, tmp_path):
+        """A seeded volume must carry the Compose project labels.
+
+        A bare ``docker run -v`` auto-creates a missing named volume without
+        labels; the content observation gate (``observe_content_type``) then
+        refuses the volume as not project-owned, failing the SEM-218
+        realization gate on every fresh start (issue #677).
+        """
+        backend = self._backend(tmp_path)
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="no such volume")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run) as mock_run:
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        create = next(
+            cmd for cmd in commands if cmd[:3] == ["docker", "volume", "create"]
+        )
+        assert "--label" in create
+        assert "com.docker.compose.project=test" in create
+        assert "com.docker.compose.volume=suricata_config_seed" in create
+        assert create[-1] == "test_suricata_config_seed"
+        seed_index = next(
+            index for index, cmd in enumerate(commands) if cmd[:2] == ["docker", "run"]
+        )
+        assert commands.index(create) < seed_index
+
+    def test_seed_skips_volume_create_when_attributed_volume_exists(self, tmp_path):
+        import json
+
+        backend = self._backend(tmp_path)
+        labels = json.dumps(
+            {
+                "com.docker.compose.project": "test",
+                "com.docker.compose.volume": "suricata_config_seed",
+            }
+        )
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=labels, stderr="")
+            backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
+
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(cmd[:3] == ["docker", "volume", "create"] for cmd in commands)
+
+    def test_seed_refuses_existing_unattributed_volume(self, tmp_path):
+        """An unlabeled same-named volume fails fast with remediation.
+
+        Labels are immutable after creation, so adopting a volume another
+        actor auto-created (e.g. a pre-fix `docker run -v`) would only move
+        the failure to content observation, where it is far less actionable.
+        """
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="null", stderr="")
+            with pytest.raises(BackendSeedError) as exc_info:
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
+
+        assert "attribution" in str(exc_info.value)
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert not any(cmd[:2] == ["docker", "run"] for cmd in commands)
+
+    def test_seed_fails_closed_when_labeled_create_fails(self, tmp_path):
+        from aptl.core.deployment.errors import BackendSeedError
+
+        backend = self._backend(tmp_path)
+        seeds = [self._config_seed()]
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="no such volume")
+            if cmd[:3] == ["docker", "volume", "create"]:
+                return MagicMock(returncode=1, stdout="", stderr="denied")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=run):
+            with pytest.raises(BackendSeedError):
+                backend.seed_named_volumes(seeds, seeder_image="img:1")
+
     def test_legacy_path_retired_before_seed_as_root(self, tmp_path):
         # The legacy .aptl tree may be UID-991-owned from a prior run, so the
         # host operator cannot delete it; a root container mounts the
         # host-owned parent and removes the one canonical child.
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_misp_rules")
+        ) as mock_run:
             backend.seed_named_volumes(
                 [self._misp_seed_with_legacy()], seeder_image="img:1"
             )
-        calls = [c[0][0] for c in mock_run.call_args_list]
+        calls = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if c[0][0][:3] != ["docker", "volume", "inspect"]
+        ]
         assert len(calls) == 2
         retire, seed = calls
         assert retire[:5] == ["docker", "run", "--rm", "--user", "0:0"]
@@ -2179,11 +2573,19 @@ class TestSeedNamedVolumes:
 
     def test_no_legacy_retire_when_path_absent(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch(
+            "subprocess.run", side_effect=self._seed_run_mock("suricata_config_seed")
+        ) as mock_run:
             backend.seed_named_volumes([self._config_seed()], seeder_image="img:1")
-        # Exactly one container: the seed copy, no retire.
-        assert mock_run.call_count == 1
+        # Exactly one container: the seed copy, no retire. (The label
+        # inspect is a volume query, not a container.)
+        container_runs = [
+            c[0][0]
+            for c in mock_run.call_args_list
+            if c[0][0][:2] == ["docker", "run"]
+        ]
+        assert len(container_runs) == 1
+        assert "test_suricata_config_seed:/dest" in container_runs[0]
 
     def test_seed_is_idempotent_across_runs(self, tmp_path):
         # Root `cp -a` overwrites prior content, so the backend issues the
@@ -2193,8 +2595,10 @@ class TestSeedNamedVolumes:
         seed = self._config_seed()
         commands = []
         for _ in range(2):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with patch(
+                "subprocess.run",
+                side_effect=self._seed_run_mock("suricata_config_seed"),
+            ) as mock_run:
                 backend.seed_named_volumes([seed], seeder_image="img:1")
                 commands.append(mock_run.call_args[0][0])
         assert commands[0] == commands[1]
@@ -2298,8 +2702,18 @@ class TestSeedNamedVolumes:
         stderr = "docker: Error response from daemon: permission denied on /legacy"
         backend = self._backend(tmp_path)
         seed = [self._misp_seed_with_legacy()]
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr=stderr)
+
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            '"com.docker.compose.volume": "suricata_misp_rules"}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            return MagicMock(returncode=1, stdout="", stderr=stderr)
+
+        with patch("subprocess.run", side_effect=run):
             caplog.set_level(logging.ERROR, logger="aptl")
             with pytest.raises(BackendSeedError) as exc_info:
                 backend.seed_named_volumes(seed, seeder_image="img:1")
@@ -2354,10 +2768,24 @@ class TestRealizeContent:
         fields.update(overrides)
         return DeploymentContentRealization(**fields)
 
+    @staticmethod
+    def _content_run_mock():
+        """Side effect answering the fileshare volume inspect with attribution."""
+        labels = (
+            '{"com.docker.compose.project": "test", '
+            '"com.docker.compose.volume": "fileshare_data"}'
+        )
+
+        def run(cmd, **kwargs):
+            if cmd[:3] == ["docker", "volume", "inspect"]:
+                return MagicMock(returncode=0, stdout=labels, stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        return run
+
     def test_inline_text_renders_and_seeds_into_project_scoped_volume(self, tmp_path):
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch("subprocess.run", side_effect=self._content_run_mock()) as mock_run:
             backend.realize_content([self._inline_text_item()], seeder_image="img:1")
 
         cmd = mock_run.call_args[0][0]
@@ -2399,8 +2827,7 @@ class TestRealizeContent:
             source_relpath="scenarios/fixtures/techvault-content/onboarding.md",
         )
         backend = self._backend(tmp_path)
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        with patch("subprocess.run", side_effect=self._content_run_mock()) as mock_run:
             backend.realize_content([item], seeder_image="img:1")
 
         cmd = mock_run.call_args[0][0]
@@ -2435,8 +2862,9 @@ class TestRealizeContent:
         item = self._inline_text_item()
         commands = []
         for _ in range(2):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with patch(
+                "subprocess.run", side_effect=self._content_run_mock()
+            ) as mock_run:
                 backend.realize_content([item], seeder_image="img:1")
                 commands.append(mock_run.call_args[0][0])
         assert commands[0] == commands[1]
@@ -2460,6 +2888,140 @@ class TestRealizeContent:
                 backend.realize_content(content, seeder_image="img:1")
         assert "fileshare_data" in str(exc_info.value)
         assert "secret docker stderr" not in str(exc_info.value)
+
+
+class TestObserveContentType:
+    """Read back the realized filesystem kind without reading its content."""
+
+    def _item(self, **overrides):
+        from aptl.core.deployment.realization import DeploymentContentRealization
+
+        fields = {
+            "address": "provision.content-placement.notice",
+            "target_address": "provision.node.fileshare",
+            "content_name": "notice",
+            "volume_suffix": "fileshare_data",
+            "dest_relpath": "public/notice.txt",
+            "source_kind": "inline-text",
+            "inline_text": "secret payload",
+        }
+        fields.update(overrides)
+        return DeploymentContentRealization(**fields)
+
+    @pytest.mark.parametrize(
+        ("returncode", "expected"),
+        [(10, "file"), (11, "directory"), (12, None), (1, None)],
+    )
+    def test_classifies_project_scoped_volume_destination(
+        self, tmp_path, returncode, expected
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(
+                    returncode=0,
+                    stdout=json.dumps(
+                        {
+                            "com.docker.compose.project": "test",
+                            "com.docker.compose.volume": "fileshare_data",
+                        }
+                    ),
+                    stderr="",
+                ),
+                MagicMock(
+                    returncode=returncode,
+                    stdout="must-not-be-consumed",
+                    stderr="must-not-be-consumed",
+                ),
+            ]
+
+            observed = backend.observe_content_type(self._item())
+
+        assert observed == expected
+        assert run.call_args_list[0].args[0] == [
+            "docker",
+            "volume",
+            "inspect",
+            "test_fileshare_data",
+            "--format",
+            "{{json .Labels}}",
+        ]
+        cmd = run.call_args_list[1].args[0]
+        assert "test_fileshare_data:/dest:ro" in cmd
+        assert cmd[:3] == ["docker", "run", "--rm"]
+        assert cmd[3:5] == ["--user", "0:0"]
+        assert cmd[5:7] == ["--network", "none"]
+        assert cmd[7:9] == ["--entrypoint", "/bin/sh"]
+        assert "secret payload" not in " ".join(cmd)
+        assert "/dest/public/notice.txt" not in cmd[-3]
+        assert '"$1"' in cmd[-3]
+        assert cmd[-2:] == ["aptl-content-probe", "/dest/public/notice.txt"]
+        assert all(call.kwargs["timeout"] > 0 for call in run.call_args_list)
+
+    def test_missing_project_volume_is_not_created_by_probe(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.return_value = MagicMock(returncode=1, stdout="", stderr="secret")
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_args.args[0] == [
+            "docker",
+            "volume",
+            "inspect",
+            "test_fileshare_data",
+            "--format",
+            "{{json .Labels}}",
+        ]
+        assert run.call_args.kwargs["timeout"] > 0
+
+    @pytest.mark.parametrize(
+        "labels",
+        [
+            {},
+            {
+                "com.docker.compose.project": "other",
+                "com.docker.compose.volume": "fileshare_data",
+            },
+            {
+                "com.docker.compose.project": "test",
+                "com.docker.compose.volume": "other_data",
+            },
+        ],
+    )
+    def test_same_named_foreign_or_unlabelled_volume_is_not_probed(
+        self, tmp_path, labels
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(returncode=0, stdout=json.dumps(labels), stderr=""),
+                MagicMock(returncode=10, stdout="", stderr=""),
+            ]
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_count == 1
+
+    def test_malformed_volume_labels_are_not_probed(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            run.side_effect = [
+                MagicMock(returncode=0, stdout="not-json", stderr=""),
+                MagicMock(returncode=10, stdout="", stderr=""),
+            ]
+
+            assert backend.observe_content_type(self._item()) is None
+
+        assert run.call_count == 1
+
+    def test_unsafe_destination_never_runs_probe(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        item = self._item(dest_relpath="../../outside", inline_text=None)
+        with patch.object(backend, "_run") as run:
+            with pytest.raises(BackendSeedError):
+                backend.observe_content_type(item)
+        run.assert_not_called()
 
 
 class TestComposeRealizeContentStep:

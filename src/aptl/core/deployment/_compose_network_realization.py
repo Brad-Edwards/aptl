@@ -33,6 +33,14 @@ from aptl.core.lab_types import LabResult
 
 _REALIZATION_TIMEOUT = 30
 
+# Docker's fixed built-in default network. `docker run` with no `--network`
+# flag (the generic materializer's node creation, ADR-048) implicitly attaches
+# it; Compose-started containers never do. It is disconnected explicitly
+# below rather than folded into "unmanaged" cleanup, which deliberately never
+# touches a network APTL did not create (issue #581) - "bridge" is the one
+# accidental attachment, not a user's own network APTL should leave alone.
+_DEFAULT_BRIDGE_NETWORK = "bridge"
+
 
 class ComposeRealizationNetworkMixin:
     """Realize typed scenario networks through Docker Compose."""
@@ -197,7 +205,40 @@ class ComposeRealizationNetworkMixin:
                     aliases,
                 )
             )
+            failures.extend(
+                self._disconnect_default_bridge(node.container_name, info, desired)
+            )
         return failures
+
+    def _disconnect_default_bridge(
+        self,
+        container_name: str,
+        info: dict[str, Any],
+        desired: dict[str, DeploymentNetworkAttachment],
+    ) -> list[str]:
+        """Detach a node's implicit default-bridge attachment, if any.
+
+        Runs after the declared networks are connected, so a generic-
+        materializer node keeps outbound connectivity (e.g. for its own
+        package installs, which run before this reconciliation step) right
+        up until its real attachments are in place.
+        """
+
+        if (
+            _DEFAULT_BRIDGE_NETWORK not in _container_networks(info)
+            or _DEFAULT_BRIDGE_NETWORK in desired
+        ):
+            return []
+        result = self.disconnect_container_network(
+            container_name, _DEFAULT_BRIDGE_NETWORK
+        )
+        if not result.success:
+            return [
+                result.error
+                or f"Failed to disconnect {container_name} from "
+                f"{_DEFAULT_BRIDGE_NETWORK}."
+            ]
+        return []
 
     def _reconnect_static_ip_drifts(
         self,

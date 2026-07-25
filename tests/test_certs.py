@@ -2,9 +2,13 @@
 
 import os
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
+
+_COMPOSE_PATH = Path(__file__).resolve().parent.parent / "generate-indexer-certs.yml"
 
 
 @pytest.fixture(autouse=True)
@@ -31,10 +35,7 @@ def linux_native(mocker):
 
 def _successful_generator(mocker, certs_dir):
     def fake_run(cmd, **kwargs):
-        if cmd[:2] == ["docker", "run"]:
-            certs_dir.chmod(0o700)
-            for path in certs_dir.iterdir():
-                path.chmod(0o600)
+        if "down" in cmd:
             return MagicMock(returncode=0, stdout="", stderr="")
 
         certs_dir.mkdir(parents=True, exist_ok=True)
@@ -92,6 +93,49 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
         mock_run.assert_not_called()
 
+    def test_generation_uses_supplied_backend_runner(self, tmp_path, mocker):
+        """Typed realization must keep Docker mutation behind its backend."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+        subprocess_run = mocker.patch("aptl.core.certs.subprocess.run")
+        commands = []
+
+        def backend_run(cmd, *, timeout=None):
+            commands.append((cmd, timeout))
+            if "run" in cmd:
+                certs_dir.mkdir(parents=True, exist_ok=True)
+                (certs_dir / "root-ca.pem").write_text("fake-cert")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        result = ensure_ssl_certs(tmp_path, run_command=backend_run)
+
+        assert result.success is True
+        assert [command for command, _timeout in commands] == [
+            [
+                "docker",
+                "compose",
+                "-p",
+                commands[0][0][3],
+                "-f",
+                "generate-indexer-certs.yml",
+                "run",
+                "--rm",
+                "generator",
+            ],
+            [
+                "docker",
+                "compose",
+                "-p",
+                commands[0][0][3],
+                "-f",
+                "generate-indexer-certs.yml",
+                "down",
+                "--remove-orphans",
+            ],
+        ]
+        subprocess_run.assert_not_called()
+
     def test_existing_certs_are_widened_for_non_root_container_mounts(
         self, tmp_path, mocker
     ):
@@ -119,10 +163,10 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir / "root-ca-manager.pem", 0o644)
         mock_run.assert_not_called()
 
-    def test_linux_native_generator_runs_as_root_then_repairs_ownership(
+    def test_linux_native_generator_runs_as_host_user(
         self, tmp_path, mocker, linux_native
     ):
-        """Native Linux should repair root-owned generator output afterward."""
+        """Native Linux should run the generator as the host uid/gid, not root."""
         from aptl.core.certs import ensure_ssl_certs
 
         (tmp_path / "config").mkdir()
@@ -140,28 +184,30 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir, 0o700)
         assert mock_run.call_count == 2
         generator_cmd = mock_run.call_args_list[0][0][0]
-        assert generator_cmd == [
-            "docker",
-            "compose",
+        assert generator_cmd[:3] == ["docker", "compose", "-p"]
+        assert generator_cmd[3].startswith("aptl-certs-")
+        assert generator_cmd[4:] == [
             "-f",
             "generate-indexer-certs.yml",
             "run",
             "--rm",
+            "--user",
+            "1000:1000",
             "generator",
         ]
-        repair_cmd = mock_run.call_args_list[1][0][0]
-        assert repair_cmd[:6] == [
+        cleanup_cmd = mock_run.call_args_list[1][0][0]
+        assert cleanup_cmd == [
             "docker",
-            "run",
-            "--rm",
-            "--entrypoint",
-            "/bin/sh",
-            "-v",
+            "compose",
+            "-p",
+            generator_cmd[3],
+            "-f",
+            "generate-indexer-certs.yml",
+            "down",
+            "--remove-orphans",
         ]
-        assert repair_cmd[6] == f"{certs_dir.resolve()}:/certificates"
-        assert repair_cmd[7] == "wazuh/wazuh-certs-generator:0.0.2"
-        assert "chown -R 1000:1000 /certificates" in repair_cmd[-1]
-        assert "find /certificates -type f -exec chmod 644 {} +" in repair_cmd[-1]
+        for issued in mock_run.call_args_list:
+            assert issued[0][0][:2] != ["docker", "run"]
 
     def test_linux_native_precreates_output_dir(self, tmp_path, mocker, linux_native):
         """Precreating the bind mount avoids Docker making a root-owned dir."""
@@ -185,7 +231,7 @@ class TestEnsureSSLCerts:
         _assert_posix_mode(certs_dir / "root-ca.pem", 0o644)
         _assert_posix_mode(certs_dir, 0o700)
         generator_cmd = mock_run.call_args_list[0][0][0]
-        assert "--user" not in generator_cmd
+        assert "--user" in generator_cmd
 
     def test_docker_desktop_generator_does_not_request_host_uid(self, tmp_path, mocker):
         """Docker Desktop should rely on file sharing, not POSIX uid/gid."""
@@ -213,30 +259,60 @@ class TestEnsureSSLCerts:
         getuid.assert_not_called()
         getgid.assert_not_called()
 
-    def test_linux_native_reports_permission_repair_failure(
+    def test_linux_native_generator_failure_is_fail_closed(
         self, tmp_path, mocker, linux_native
     ):
-        """Native Linux must fail clearly when generated certs cannot be repaired."""
+        """A generator failure under --user must fail closed: no repair, no root retry."""
         from aptl.core.certs import ensure_ssl_certs
 
         (tmp_path / "config").mkdir()
-        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
 
         def fake_run(cmd, **kwargs):
-            if cmd[:3] == ["docker", "compose", "-f"]:
-                certs_dir.mkdir(parents=True, exist_ok=True)
-                (certs_dir / "root-ca.pem").write_text("fake-cert")
+            if "down" in cmd:
                 return MagicMock(returncode=0, stdout="", stderr="")
-            return MagicMock(returncode=1, stdout="", stderr="chown failed")
+            return MagicMock(returncode=1, stdout="generator failed", stderr="")
 
-        mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
+        mock_run = mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
 
         result = ensure_ssl_certs(tmp_path)
 
         assert result.success is False
         assert result.generated is False
-        assert "permission repair" in result.error
-        assert "chown failed" in result.error
+        assert "generator failed" in result.error
+        assert mock_run.call_count == 2
+        for issued in mock_run.call_args_list:
+            assert issued[0][0][:2] == ["docker", "compose"]
+
+    @pytest.mark.parametrize("native_linux", [True, False])
+    def test_no_command_ever_escalates_or_overrides_entrypoint(
+        self, tmp_path, mocker, native_linux
+    ):
+        """Neither platform path may escalate privileges or override the entrypoint."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        mocker.patch(
+            "aptl.core.certs.hostenv.needs_host_ownership_fix",
+            return_value=native_linux,
+        )
+        if native_linux:
+            if os.name != "posix":
+                pytest.skip("native-Linux uid/gid path is POSIX-only")
+            mocker.patch("aptl.core.certs.os.getuid", return_value=1000)
+            mocker.patch("aptl.core.certs.os.getgid", return_value=1000)
+
+        (tmp_path / "config").mkdir()
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+        mock_run = _successful_generator(mocker, certs_dir)
+
+        ensure_ssl_certs(tmp_path)
+
+        assert mock_run.call_args_list
+        for issued in mock_run.call_args_list:
+            cmd = issued[0][0]
+            assert cmd[:2] == ["docker", "compose"]
+            assert not any("sudo" in arg for arg in cmd)
+            assert not any("chown" in arg for arg in cmd)
+            assert not any("--entrypoint" in arg for arg in cmd)
 
     def test_existing_manager_root_ca_alias_is_preserved(self, tmp_path, mocker):
         """Existing CA alias should not be rewritten on repeat starts."""
@@ -295,20 +371,46 @@ class TestEnsureSSLCerts:
 
         (tmp_path / "config").mkdir()
 
-        mocker.patch(
+        mock_run = mocker.patch(
             "aptl.core.certs.subprocess.run",
-            return_value=MagicMock(
-                returncode=1,
-                stdout="",
-                stderr="Error: service 'generator' failed",
-            ),
+            side_effect=[
+                MagicMock(
+                    returncode=1,
+                    stdout="generator detail",
+                    stderr="Error: service 'generator' failed",
+                ),
+                MagicMock(returncode=0, stdout="", stderr=""),
+            ],
         )
 
         result = ensure_ssl_certs(tmp_path)
 
         assert result.success is False
         assert result.generated is False
-        assert "generator" in result.error.lower() or "failed" in result.error.lower()
+        assert "generator detail" in result.error
+        assert mock_run.call_args_list[1][0][0][-2:] == ["down", "--remove-orphans"]
+
+    def test_cleanup_failure_blocks_start(self, tmp_path, mocker):
+        """A leftover generator network would overlap TechVault and must fail."""
+        from aptl.core.certs import ensure_ssl_certs
+
+        (tmp_path / "config").mkdir()
+        certs_dir = tmp_path / "config" / "wazuh_indexer_ssl_certs"
+
+        def fake_run(cmd, **kwargs):
+            if "down" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="network is in use")
+            certs_dir.mkdir(parents=True, exist_ok=True)
+            (certs_dir / "root-ca.pem").write_text("fake-cert")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mocker.patch("aptl.core.certs.subprocess.run", side_effect=fake_run)
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is False
+        assert "cleanup failed" in result.error.lower()
+        assert "network is in use" in result.error
 
     def test_handles_subprocess_exception(self, tmp_path, mocker):
         """Should handle the generator subprocess raising an exception."""
@@ -383,3 +485,22 @@ class TestEnsureSSLCerts:
         ensure_ssl_certs(tmp_path)
 
         assert mock_run.call_args_list[0][1]["timeout"] == 300
+
+
+class TestCertGeneratorComposeFile:
+    """Static guardrails on the generator's Compose service definition."""
+
+    def test_generator_entrypoint_override_is_producer_owned(self):
+        """The entrypoint override must run the same Wazuh cert workflow
+        non-root, on the pinned image, with no chown."""
+        compose = yaml.safe_load(_COMPOSE_PATH.read_text())
+        generator = compose["services"]["generator"]
+
+        assert generator["image"] == "wazuh/wazuh-certs-generator:0.0.2"
+        assert generator["working_dir"] == "/tmp"
+        assert "entrypoint" in generator
+
+        entrypoint = generator["entrypoint"]
+        script = entrypoint[-1] if isinstance(entrypoint, list) else entrypoint
+        assert "wazuh-certs-tool.sh" in script
+        assert "chown" not in script

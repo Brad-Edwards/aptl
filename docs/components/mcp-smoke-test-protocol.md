@@ -44,12 +44,11 @@ API keys are pre-configured in `.env` and `docker-compose.yml` so no manual expo
 ### What the automated tests prove
 
 - **Precondition gate**: All 12 expected containers are running (fail fast, no skip)
-- **Detection pipeline**: Victim log -> archives, Kali red-team log -> archives, Kali SSH to victim, Wazuh agent registration
+- **Detection pipeline**: Victim log -> archives, Kali SSH to victim, Wazuh agent registration. Kali activity stays in per-session evidence under ADR-033 rather than contaminating the blue SIEM.
 - **Attack -> Detection**: SQLi (rule 302010), XSS (rule 302020), CmdInj (rule 302030) from Kali generate real Wazuh alerts
 - **SOC tools**: MISP IOC lookup, TheHive case lifecycle, Shuffle workflow execution to FINISHED
 - **Full loop**: SQLi from Kali -> Wazuh alert -> MISP lookup -> Shuffle workflow -> TheHive case (6 systems)
-- **Scenario harness**: detect-brute-force lifecycle (start -> SSH brute force from Kali -> evaluate -> stop -> verify report)
-- **MCP protocol**: JSON-RPC initialize + tools/list for all 7 servers (4 custom Node.js + 3 published binaries)
+- **MCP protocol**: JSON-RPC initialize + tools/list for the seven enabled custom Node.js servers (reverse is optional)
 - **MCP tool calls**: Real tool invocations against live services (kali_info, kali_run_command, indexer_query, soar_list_workflows)
 
 ---
@@ -60,7 +59,9 @@ This protocol is executed by an AI agent with the APTL MCP servers connected. Th
 
 ### MCP Server Architecture
 
-APTL uses 8 custom MCP servers, all Node.js, built from `mcp/`:
+APTL builds 8 custom Node.js MCP servers from `mcp/`. The default operational
+scenario configures the 7 servers whose target nodes are present; the reverse
+server remains an optional build artifact.
 
 | Server (.mcp.json name) | Type | Source |
 |---|---|---|
@@ -75,7 +76,9 @@ APTL uses 8 custom MCP servers, all Node.js, built from `mcp/`:
 
 ### Setup
 
-The agent's MCP client must have all 8 APTL servers configured (see `.mcp.json`). Environment variables required:
+For the default scenario, the agent's MCP client must have the 7 generated
+APTL servers configured in `.mcp.json`. Add `aptl-reverse` only when a selected
+scenario realizes its target node. Environment variables required:
 
 | Variable | Used by | Source |
 |---|---|---|
@@ -216,7 +219,7 @@ when neither automated tests nor agent MCP access are available.
 3. Wait for startup to complete (5-10 min for full SOC stack).
 4. Build MCP servers: `./mcp/build-all-mcps.sh`
 5. Install published MCPs (see `tools/.gitignore` for details).
-6. Configure your MCP client to load all APTL servers (see `.mcp.json`).
+6. Confirm your MCP client loaded the generated APTL servers from `.mcp.json`.
 
 ### 1. Container Health
 

@@ -120,6 +120,14 @@ def _restore_via_container(
     runs as root and chowns the bind-mounted files to the invoking user.
     Reuses the Suricata seeder image, which is already present at this step.
     """
+    # Import at point of use, not module scope: importing anything from
+    # ``aptl.core.deployment`` runs that package's __init__ (docker_compose →
+    # … → cryptography), which the lightweight ``suricata-config-source-
+    # ownership`` pre-commit hook environment does not install. This repair
+    # path only runs on a native-Linux host with the full deps present, so the
+    # heavy import is safe here while keeping module import lightweight.
+    from aptl.core.deployment._compose_seed_safety import redacted_stderr_hint
+
     rel_targets = [
         f"/project/{p.relative_to(project_dir).as_posix()}" for p in still_foreign
     ]
@@ -127,6 +135,12 @@ def _restore_via_container(
         perm_result = subprocess.run(
             [
                 "docker", "run", "--rm",
+                # Harden the throwaway repair helper: no network namespace
+                # (it only chowns local bind-mounted files — zero egress
+                # surface), and an explicit root identity so the chown works
+                # regardless of the seeder image's default user.
+                "--network", "none",
+                "--user", "0:0",
                 "--entrypoint", "chown",
                 "-v", f"{project_dir}:/project",
                 seeder_image,
@@ -147,11 +161,14 @@ def _restore_via_container(
         )
 
     if perm_result.returncode != 0:
+        # Route container stderr through the canonical seed-path redactor
+        # rather than surfacing it verbatim, so a leaked host path or secret
+        # in the tool's output never reaches the error string or logs.
         return SuricataSourceOwnershipResult(
             success=False,
             error=(
-                perm_result.stderr.strip()
-                or "Suricata config ownership restore failed"
+                "Suricata config ownership restore failed"
+                + redacted_stderr_hint(perm_result.stderr)
             ),
         )
 

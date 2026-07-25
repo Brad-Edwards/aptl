@@ -29,10 +29,14 @@ import re
 import socket
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from aptl.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("host_ports")
 
@@ -79,6 +83,91 @@ class ResolvedPort:
     protos: tuple[str, ...]
     host_ip: str | None
     remapped: bool
+
+
+PortBindingKey = tuple[str, int, str]
+
+
+def _container_identity(entry: object) -> tuple[str, str] | None:
+    """Return a Compose service and container name from one ``ps`` entry."""
+    if not isinstance(entry, dict):
+        return None
+    service = str(entry.get("Service") or "")
+    name = str(entry.get("Name") or "").lstrip("/")
+    return (service, name) if service and name else None
+
+
+def _binding_host_ports(bindings: object) -> set[int]:
+    """Return valid, non-zero host ports from an inspected port binding."""
+    host_ports: set[int] = set()
+    if not isinstance(bindings, list):
+        return host_ports
+    for binding in bindings:
+        try:
+            host_port = int(binding.get("HostPort", 0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if host_port:
+            host_ports.add(host_port)
+    return host_ports
+
+
+def _inspected_port_candidates(
+    backend: DeploymentBackend, service: str, name: str
+) -> dict[PortBindingKey, set[int]]:
+    """Return valid published-port candidates for one running container."""
+    try:
+        info = backend.container_inspect(name)
+    except Exception:
+        return {}
+    ports: dict[object, object] = {}
+    if isinstance(info, dict):
+        inspected = (info.get("NetworkSettings") or {}).get("Ports") or {}
+        if isinstance(inspected, dict):
+            ports = inspected
+
+    candidates: dict[PortBindingKey, set[int]] = {}
+    for container_port_proto, bindings in ports.items():
+        port_raw, _, proto = str(container_port_proto).partition("/")
+        try:
+            container_port = int(port_raw)
+        except ValueError:
+            continue
+        host_ports = _binding_host_ports(bindings)
+        if host_ports:
+            candidates[(service, container_port, proto or "tcp")] = host_ports
+    return candidates
+
+
+def project_port_bindings(
+    backend: DeploymentBackend,
+) -> dict[PortBindingKey, int]:
+    """Return published host ports already owned by this Compose project.
+
+    Docker exposes the same binding once for IPv4 and once for IPv6.  A key is
+    returned only when every address agrees on one host port; ambiguous runtime
+    state falls back to the normal availability probe.
+    """
+    try:
+        containers = backend.container_list(all_containers=False)
+    except Exception:
+        return {}
+
+    candidates: dict[PortBindingKey, set[int]] = {}
+    for entry in containers:
+        identity = _container_identity(entry)
+        if identity is None:
+            continue
+        service, name = identity
+        for key, host_ports in _inspected_port_candidates(
+            backend, service, name
+        ).items():
+            candidates.setdefault(key, set()).update(host_ports)
+    return {
+        key: next(iter(host_ports))
+        for key, host_ports in candidates.items()
+        if len(host_ports) == 1
+    }
 
 
 def _proto_socktype(proto: str) -> int:
@@ -183,17 +272,50 @@ def _parse_entry(service: str, entry: object) -> PortSpec | None:
     )
 
 
-def parse_published_ports(compose: dict[str, object]) -> list[PortSpec]:
-    """Return every published host port declared in a compose mapping."""
+def _service_selected(
+    cfg: object, active_profiles: set[str] | None
+) -> bool:
+    """Return whether one Compose service participates in this topology."""
+    if not isinstance(cfg, dict):
+        return False
+    service_profiles = set(cfg.get("profiles") or [])
+    return (
+        active_profiles is None
+        or not service_profiles
+        or not service_profiles.isdisjoint(active_profiles)
+    )
+
+
+def parse_published_ports(
+    compose: dict[str, object], active_profiles: set[str] | None = None
+) -> list[PortSpec]:
+    """Return published ports for services selected by *active_profiles*.
+
+    Services without a Compose profile are always active. ``None`` preserves
+    the all-services behavior used by static callers.
+    """
     specs: list[PortSpec] = []
     for service, cfg in (compose.get("services") or {}).items():
-        if not isinstance(cfg, dict):
+        if not _service_selected(cfg, active_profiles):
             continue
+        assert isinstance(cfg, dict)
         for entry in cfg.get("ports") or []:
             spec = _parse_entry(service, entry)
             if spec is not None:
                 specs.append(spec)
     return specs
+
+
+def published_port_specs(
+    project_dir: Path, active_profiles: set[str] | None = None
+) -> list[PortSpec]:
+    """Load the published-port declarations for a Compose project."""
+    compose = _load_compose(project_dir)
+    return (
+        parse_published_ports(compose, active_profiles)
+        if compose is not None
+        else []
+    )
 
 
 def _load_compose(project_dir: Path) -> dict[str, object] | None:
@@ -229,21 +351,16 @@ def _resolved_for_pinned(
     )
 
 
-def _resolve_group(
+def _resolve_available_port(
+    first: PortSpec,
     env_var: str,
-    specs: list[PortSpec],
-    reserved: set[str],
+    default_port: int,
+    protos: tuple[str, ...],
     taken: set[int],
-) -> ResolvedPort:
-    """Resolve one env-var port group and update environment overrides."""
-    first = specs[0]
-    protos = tuple(sorted({s.proto for s in specs}))
-    default_port = first.default_port
-    if env_var in reserved or env_var in os.environ:
-        return _resolved_for_pinned(first, env_var, default_port, protos)
-
+) -> int:
+    """Resolve and export an available port for an unpinned mapping."""
     if _group_available(default_port, protos, first.host_ip):
-        return _resolved(first, env_var, default_port, default_port, protos)
+        return default_port
 
     free = _find_free_port(protos, first.host_ip, taken)
     if free is None:
@@ -252,7 +369,7 @@ def _resolve_group(
             first.service,
             default_port,
         )
-        return _resolved(first, env_var, default_port, default_port, protos)
+        return default_port
 
     taken.add(free)
     os.environ[env_var] = str(free)
@@ -263,11 +380,42 @@ def _resolve_group(
         free,
         env_var,
     )
-    return _resolved(first, env_var, default_port, free, protos)
+    return free
+
+
+def _resolve_group(
+    env_var: str,
+    specs: list[PortSpec],
+    reserved: set[str],
+    taken: set[int],
+    existing_port: int | None = None,
+) -> ResolvedPort:
+    """Resolve one env-var port group and update environment overrides."""
+    first = specs[0]
+    protos = tuple(sorted({s.proto for s in specs}))
+    default_port = first.default_port
+    if env_var in reserved or env_var in os.environ:
+        return _resolved_for_pinned(first, env_var, default_port, protos)
+
+    if existing_port is None:
+        resolved_port = _resolve_available_port(
+            first, env_var, default_port, protos, taken
+        )
+    else:
+        # The ordinary socket probe cannot distinguish this project's own
+        # container from an unrelated process. Preserve its current binding.
+        taken.add(existing_port)
+        if existing_port != default_port:
+            os.environ[env_var] = str(existing_port)
+        resolved_port = existing_port
+    return _resolved(first, env_var, default_port, resolved_port, protos)
 
 
 def resolve_host_ports(
-    project_dir: Path, reserved_env: set[str] | None = None
+    project_dir: Path,
+    reserved_env: set[str] | None = None,
+    active_profiles: set[str] | None = None,
+    existing_bindings: dict[PortBindingKey, int] | None = None,
 ) -> list[ResolvedPort]:
     """Detect occupied published host ports, remap them, and export overrides.
 
@@ -279,22 +427,38 @@ def resolve_host_ports(
     real host port of each service.
     """
     reserved = set(reserved_env or set())
-    compose = _load_compose(project_dir)
-    if compose is None:
-        return []
-
     # Group entries that share an env var (e.g. DNS tcp+udp on one host port)
     # so they move together and land on a port free for every protocol.
     groups: dict[str, list[PortSpec]] = {}
-    for spec in parse_published_ports(compose):
+    for spec in published_port_specs(project_dir, active_profiles):
         if spec.env_var is None:
             continue
         groups.setdefault(spec.env_var, []).append(spec)
 
     resolved: list[ResolvedPort] = []
+    current = existing_bindings or {}
     taken: set[int] = {s.default_port for specs in groups.values() for s in specs}
+    taken.update(current.values())
     for env_var, specs in sorted(groups.items()):
-        resolved.append(_resolve_group(env_var, specs, reserved, taken))
+        current_ports = {
+            current.get((spec.service, spec.container_port, spec.proto))
+            for spec in specs
+        }
+        current_ports.discard(None)
+        complete = len(current_ports) == 1 and all(
+            (spec.service, spec.container_port, spec.proto) in current
+            for spec in specs
+        )
+        existing_port = next(iter(current_ports)) if complete else None
+        resolved.append(
+            _resolve_group(
+                env_var,
+                specs,
+                reserved,
+                taken,
+                existing_port=existing_port,
+            )
+        )
 
     return resolved
 

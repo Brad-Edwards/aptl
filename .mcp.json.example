@@ -1,69 +1,52 @@
 {
   "mcpServers": {
-    "kali-ssh": {
+    "aptl-red": {
       "command": "node",
       "args": ["./mcp/mcp-red/build/index.js"],
       "env": {
         "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
       }
     },
-    "reverse-sandbox-ssh": {
+    "aptl-indexer": {
       "command": "node",
-      "args": ["./mcp/mcp-reverse/build/index.js"],
+      "args": ["./mcp/mcp-indexer/build/index.js"],
       "env": {
         "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
       }
     },
-    "shuffle": {
+    "aptl-wazuh": {
+      "command": "node",
+      "args": ["./mcp/mcp-wazuh/build/index.js"],
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    },
+    "aptl-network": {
+      "command": "node",
+      "args": ["./mcp/mcp-network/build/index.js"],
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    },
+    "aptl-threatintel": {
+      "command": "node",
+      "args": ["./mcp/mcp-threatintel/build/index.js"],
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    },
+    "aptl-casemgmt": {
+      "command": "node",
+      "args": ["./mcp/mcp-casemgmt/build/index.js"],
+      "env": {
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    },
+    "aptl-soar": {
       "command": "node",
       "args": ["./mcp/mcp-soar/build/index.js"],
       "env": {
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
-        "SHUFFLE_API_KEY": "<run seed-shuffle.sh or check Shuffle UI>"
-      }
-    },
-    "indexer": {
-      "command": "node",
-      "args": ["./mcp/mcp-indexer/build/index.js"],
-      "env": {
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
-        "INDEXER_USERNAME": "admin",
-        "INDEXER_PASSWORD": "SecretPassword",
-        "API_USERNAME": "wazuh-wui",
-        "API_PASSWORD": "WazuhPass123!"
-      }
-    },
-    "wazuh": {
-      "command": "./tools/bin/mcp-server-wazuh",
-      "env": {
-        "WAZUH_API_HOST": "localhost",
-        "WAZUH_API_PORT": "55000",
-        "WAZUH_API_USERNAME": "wazuh-wui",
-        "WAZUH_API_PASSWORD": "WazuhPass123!",
-        "WAZUH_INDEXER_HOST": "localhost",
-        "WAZUH_INDEXER_PORT": "9200",
-        "WAZUH_INDEXER_USERNAME": "admin",
-        "WAZUH_INDEXER_PASSWORD": "SecretPassword",
-        "WAZUH_VERIFY_SSL": "false",
-        "RUST_LOG": "warn"
-      }
-    },
-    "misp": {
-      "command": "./tools/misp-mcp-server/.venv/bin/python",
-      "args": ["./tools/misp-mcp-server/misp_server.py"],
-      "env": {
-        "MISP_URL": "https://localhost:8443",
-        "MISP_API_KEY": "<check MISP UI or .env>",
-        "MISP_VERIFY_SSL": "False"
-      }
-    },
-    "thehive": {
-      "command": "./tools/bin/thehivemcp",
-      "args": ["--transport", "stdio"],
-      "env": {
-        "THEHIVE_URL": "https://localhost:9000",
-        "THEHIVE_API_KEY": "<run scripts/thehive-apikey.sh>",
-        "THEHIVE_ORGANISATION": "APTL"
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
       }
     }
   }

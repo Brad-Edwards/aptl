@@ -160,3 +160,6 @@ The victim and kali containers publish no host ports; use
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)
 - [DEP-003 Ephemeral Lifecycle Policy](dep-003-ephemeral-lifecycle-preflight.md)
 - [GRC Boundary Surface Vocabulary](grc-boundary-surface-vocabulary-preflight.md)
+- [Issue #677 Certificate Producer Ownership](issue-677-cert-producer-ownership-preflight.md)
+- [OBS-002 Correlation Identity And Clock Context](obs-002-correlation-identity-clock-preflight.md)
+- [EXP-010 Capture Admission And Evidence Acquisition](exp-010-capture-admission-evidence-preflight.md)

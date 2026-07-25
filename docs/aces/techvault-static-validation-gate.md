@@ -64,15 +64,19 @@ components mean:
 
 | Manifest component | APTL declaration |
 | --- | --- |
-| `provisioner` | Realizes `switch` and `vm` nodes across the declared OS families; `dataset`, `directory`, and `file` content; accounts and ACLs; and the listed account features through typed realization and `DeploymentBackend`. |
+| `provisioner` | Realizes `vm` nodes as Linux Docker containers, `switch` nodes as Docker networks, bounded `file` and `directory` content placements, and accounts with the listed non-secret account features through typed realization and `DeploymentBackend`. It does not claim datasets or ACLs. |
 | `orchestrator` | Drives RTE-001 workflows through `WorkflowEngine`, including decision, parallel-barrier, failure-transition, outcome-matching, condition-reference, and inject-binding surfaces. |
 | `evaluator` | Evaluates conditions and objectives and publishes result/history envelopes. It does not support scoring or the deprecated SDL scoring chain. |
 | `participant_runtime` | Supports the bounded red-participant episode, behavior-history, observation, and shared-state-change surface through `DeploymentBackend.container_exec()`. It does not claim other roles or general multi-party semantics. |
 | `observation` | Is `null`: participant observations are participant-runtime contract data, not a standalone observation component. |
 
-Realization support is constrained to declared-capability matching and the
-listed node, OS, content, and account constraint kinds, with disclosure through
-the manifest, operation-status, and runtime-snapshot contracts. The compatible
+Realization support declares exact `declared-capability-match` coverage and the
+single constrained kind APTL currently exercises non-vacuously: `os-family`.
+Node type and content type are still checked as exact realization concerns when
+authored literally; account placements are realized and verified by the typed
+account provider, but ACES 0.21.0 does not emit an `account-feature`
+runtime-realization concern for the SEM-218 gate. Disclosure flows through the
+manifest, operation-status, and runtime-snapshot contracts. The compatible
 processors, concept-authority bindings, and supported contract versions are
 separate compatibility declarations rather than additional capabilities.
 

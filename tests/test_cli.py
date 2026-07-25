@@ -165,6 +165,53 @@ class TestLabStartCommand:
         assert f"Credentials file: {tmp_path / '.env'}" in result.stdout
         assert "Grafana: http://localhost:3100" in result.stdout
 
+    def test_lab_info_omits_reverse_access_when_service_is_not_running(
+        self, runner, tmp_path, mocker
+    ):
+        """The default TechVault scenario does not realize reverse."""
+        from aptl.cli.main import app
+
+        (tmp_path / ".env").touch()
+        mocker.patch("aptl.cli.lab_render.live_services", return_value=set())
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Reverse engineering SSH" not in result.stdout
+        assert "aptl_lab_key" not in result.stdout
+
+    def test_lab_info_prints_reverse_access_when_service_is_running(
+        self, runner, tmp_path, mocker
+    ):
+        """An explicitly realized reverse service remains discoverable."""
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+
+        (tmp_path / ".env").touch()
+        mocker.patch(
+            "aptl.cli.lab.live_resolved_ports",
+            return_value=[
+                ResolvedPort(
+                    service="reverse",
+                    env_var="REVERSE_SSH_PORT",
+                    default_port=2027,
+                    resolved_port=20027,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                )
+            ],
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_services", return_value={"reverse"}
+        )
+
+        result = runner.invoke(app, ["lab", "info", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "Reverse engineering SSH" in result.stdout
+        assert "localhost -p 20027" in result.stdout
+
     def test_lab_info_fails_without_env(self, runner, tmp_path):
         """lab info should tell users to start the lab before .env exists."""
         from aptl.cli.main import app
@@ -258,6 +305,90 @@ class TestLabStartCommand:
         assert entry.resolved_port == 20015
         assert entry.remapped is True
         assert entry.host_ip == "127.0.0.1"
+
+    def test_live_resolved_ports_uses_compose_host_defaults_and_deduplicates(
+        self, tmp_path, mocker
+    ):
+        """Runtime bindings are compared with declared host, not container, ports."""
+        from aptl.cli.lab_render import live_resolved_ports
+        from aptl.core.host_ports import PortSpec
+
+        backend = mocker.MagicMock()
+        backend.container_list.return_value = [
+            {"Name": "aptl-grafana", "Service": "aptl-grafana-otel"},
+            {"Name": "aptl-dns", "Service": "dns"},
+        ]
+        backend.container_inspect.side_effect = [
+            {
+                "NetworkSettings": {
+                    "Ports": {
+                        "3000/tcp": [
+                            {"HostIp": "0.0.0.0", "HostPort": "3100"},
+                            {"HostIp": "::", "HostPort": "3100"},
+                        ]
+                    }
+                }
+            },
+            {
+                "NetworkSettings": {
+                    "Ports": {
+                        "53/tcp": [
+                            {"HostIp": "0.0.0.0", "HostPort": "20000"},
+                            {"HostIp": "::", "HostPort": "20000"},
+                        ],
+                        "53/udp": [
+                            {"HostIp": "0.0.0.0", "HostPort": "20000"},
+                            {"HostIp": "::", "HostPort": "20000"},
+                        ],
+                    }
+                }
+            },
+        ]
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(mocker.MagicMock(), tmp_path),
+        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=backend)
+        mocker.patch(
+            "aptl.cli.lab_render.published_port_specs",
+            return_value=[
+                PortSpec(
+                    service="aptl-grafana-otel",
+                    env_var="APTL_HP_GRAFANA_3000",
+                    default_port=3100,
+                    container_port=3000,
+                    proto="tcp",
+                    host_ip=None,
+                ),
+                PortSpec(
+                    service="dns",
+                    env_var="APTL_DNS_HOST_PORT",
+                    default_port=5353,
+                    container_port=53,
+                    proto="tcp",
+                    host_ip=None,
+                ),
+                PortSpec(
+                    service="dns",
+                    env_var="APTL_DNS_HOST_PORT",
+                    default_port=5353,
+                    container_port=53,
+                    proto="udp",
+                    host_ip=None,
+                ),
+            ],
+        )
+
+        result = live_resolved_ports(tmp_path)
+
+        assert len(result) == 2
+        by_service = {entry.service: entry for entry in result}
+        assert by_service["aptl-grafana-otel"].default_port == 3100
+        assert by_service["aptl-grafana-otel"].remapped is False
+        assert by_service["dns"].default_port == 5353
+        assert by_service["dns"].resolved_port == 20000
+        assert by_service["dns"].protos == ("tcp", "udp")
+        assert by_service["dns"].remapped is True
 
     def test_start_handles_failure_gracefully(self, runner, mocker):
         """start command should exit 1 and show error on failure.

@@ -86,6 +86,12 @@ class SSHComposeBackend(DockerComposeBackend):
     def docker_host(self) -> str:
         return self._docker_host
 
+    @property
+    def supports_local_artifacts(self) -> bool:
+        """Remote Docker cannot consume controller-local generated files."""
+
+        return False
+
     def _subprocess_kwargs(
         self,
         *,

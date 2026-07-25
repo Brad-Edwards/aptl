@@ -80,6 +80,7 @@ VARIANTS = (
         extra_services=frozenset(
             {
                 "webapp",
+                "webapp-proxy",
                 "db",
                 "ad",
                 "workstation",
@@ -88,7 +89,9 @@ VARIANTS = (
                 "wazuh.dashboard",
             }
         ),
-        expected_networks=frozenset({"aptl-security", "aptl-dmz", "aptl-internal"}),
+        expected_networks=frozenset(
+            {"aptl-security", "aptl-dmz", "aptl-internal", "aptl-control"}
+        ),
     ),
     _Variant(
         catalog_id="techvault-attacker-target",

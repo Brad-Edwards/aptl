@@ -45,6 +45,10 @@ except ImportError:
     BACKEND_SUPPORTED_CONTRACT_IDS = ()
 
 from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+from aptl.core.experiment.capture_registry import (
+    DEFAULT_COLLECTOR_REGISTRY,
+    OBSERVATION_EVIDENCE_CONTRACTS,
+)
 
 APTL_ACES_TARGET_NAME = "aptl"
 APTL_ACES_TARGET_VERSION = "0.1.0"
@@ -146,8 +150,8 @@ _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
 _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
     supported_node_types=frozenset({"switch", "vm"}),
-    supported_os_families=frozenset({"freebsd", "linux", "macos", "other", "windows"}),
-    supported_content_types=frozenset({"dataset", "directory", "file"}),
+    supported_os_families=frozenset({"linux"}),
+    supported_content_types=frozenset({"directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
     # non-secret fields the typed DeploymentAccountRealization carries. auth_method
@@ -157,20 +161,32 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_account_features=frozenset(
         {"disabled", "groups", "mail", "spn"}
     ),
-    supports_acls=True,
+    # The Samba AD provider realizes and read-verifies the operational
+    # scenario's domain-bound accounts and SPNs (#577). ACES 0.23 makes that
+    # domain profile an explicit admission capability rather than inferring it
+    # from account fields.
+    supported_domain_profiles=frozenset({"active_directory"}),
+    supports_acls=False,
     supports_accounts=True,
+    supports_generated_artifacts=True,
+    supports_persistent_volumes=True,
 )
 
 # What APTL realizes from a provisioning plan, and how. APTL matches declared
 # capabilities against its provisioner support and discloses the result through
-# the backend-manifest / operation-status / runtime-snapshot contracts.
+# the backend-manifest / operation-status / runtime-snapshot contracts. The
+# constrained-kind set is intentionally narrower than the provisioner vocabulary:
+# ACES 0.21.x publishes runtime concern paths for node type, OS family, and
+# content type, but only OS family is currently expressible by APTL's regression
+# scenario as a constrained (processor-derived) requirement. Node/content exact
+# requirements are covered by ``declared-capability-match``; account features are
+# realized through the account provider's typed read-after-write path but are not
+# yet an ACES runtime realization concern.
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.CONSTRAINED,
-        supported_constraint_kinds=frozenset(
-            {"account-feature", "content-type", "node-type", "os-family"}
-        ),
+        supported_constraint_kinds=frozenset({"os-family"}),
         supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
@@ -196,15 +212,37 @@ _CONCEPT_BINDINGS = (
         scope="capabilities.provisioner.supported_account_features",
         family="identities",
     ),
+    ConceptBinding(
+        scope="capabilities.provisioner.supported_domain_profiles",
+        family="identities",
+    ),
 )
 
 
 def create_aptl_manifest() -> BackendManifest:
-    """Return APTL's canonical full remote-control-plane backend manifest."""
+    """Return APTL's canonical full remote-control-plane backend manifest.
+
+    The ``observation`` capability is an aggregate projection of the code-owned
+    collector registry (EXP-010 / issue #752), NOT a hand-maintained matrix.
+    :data:`~aptl.core.experiment.capture_registry.DEFAULT_COLLECTOR_REGISTRY`
+    is empty until a capture capability is genuinely backed end-to-end, so the
+    projection is ``None`` and no observation is declared — the honest EXP-002
+    posture. When (EXP-010 PR 2) real registrations turn the projection on, the
+    ACES ``observation_capability_contract_gaps`` invariant requires the
+    capture-spec/evidence-record/derived-measure/experiment-run contracts in
+    ``supported_contract_versions``, so they are added exactly then and never
+    speculatively.
+    """
+    observation = DEFAULT_COLLECTOR_REGISTRY.observation_projection()
+    supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
+    capability_options: dict[str, object] = {}
+    if observation is not None:
+        supported_contract_versions = supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS
+        capability_options["observation"] = observation
     return BackendManifest(
         name=APTL_ACES_TARGET_NAME,
         version=APTL_ACES_TARGET_VERSION,
-        supported_contract_versions=_SUPPORTED_CONTRACT_VERSIONS,
+        supported_contract_versions=supported_contract_versions,
         compatible_processors=_COMPATIBLE_PROCESSORS,
         realization_support=_REALIZATION_SUPPORT,
         concept_bindings=_CONCEPT_BINDINGS,
@@ -212,4 +250,5 @@ def create_aptl_manifest() -> BackendManifest:
         orchestrator=_ORCHESTRATOR,
         evaluator=_EVALUATOR,
         participant_runtime=_PARTICIPANT_RUNTIME,
+        **capability_options,
     )

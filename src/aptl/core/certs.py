@@ -1,8 +1,16 @@
-"""SSL certificate generation for Wazuh Indexer."""
+"""SSL certificate generation for Wazuh Indexer.
 
+Generated certificates are producer-owned: the generator container runs as
+the invoking host UID/GID on native Linux Docker (see ``_native_linux_user``
+and ``_cert_generator_command``), rather than running as root and repairing
+ownership afterward.
+"""
+
+import hashlib
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +23,7 @@ _CERTS_SUBDIR = "config/wazuh_indexer_ssl_certs"
 _CERT_COMPOSE_FILE = "generate-indexer-certs.yml"
 _ROOT_CA = "root-ca.pem"
 _MANAGER_ROOT_CA = "root-ca-manager.pem"
+_CERT_CLEANUP_TIMEOUT = 60
 
 
 @dataclass
@@ -27,14 +36,22 @@ class CertResult:
     error: str = ""
 
 
-def ensure_ssl_certs(project_dir: Path) -> CertResult:
+CommandRunner = Callable[..., subprocess.CompletedProcess]
+
+
+def ensure_ssl_certs(
+    project_dir: Path,
+    *,
+    run_command: CommandRunner | None = None,
+) -> CertResult:
     """Ensure SSL certificates exist for the Wazuh Indexer.
 
     If the certificates directory already exists, this is a no-op. Otherwise,
-    runs the docker compose cert generator. On native Linux Docker, generated
-    certificates are repaired back to the invoking host user after generation.
-    Docker Desktop does not need that repair because its file-sharing layer maps
-    ownership back to the host user.
+    runs the docker compose cert generator. On native Linux Docker, the
+    generator process itself runs as the invoking host UID/GID (via Compose
+    ``--user``), so generated certificates are producer-owned from creation.
+    Docker Desktop does not need that identity override because its
+    file-sharing layer maps container output back to the host user.
 
     Args:
         project_dir: Root directory of the APTL project (where
@@ -64,23 +81,19 @@ def ensure_ssl_certs(project_dir: Path) -> CertResult:
             certs_dir=certs_dir,
         )
 
-    return _generate_ssl_certs(project_dir, certs_dir)
+    return _generate_ssl_certs(project_dir, certs_dir, run_command)
 
 
-def _generate_ssl_certs(project_dir: Path, certs_dir: Path) -> CertResult:
+def _generate_ssl_certs(
+    project_dir: Path,
+    certs_dir: Path,
+    run_command: CommandRunner | None,
+) -> CertResult:
     """Run certificate generation and convert the generator outcome."""
     log.info("Generating SSL certificates...")
-    error = _run_cert_generator(project_dir, certs_dir)
+    error = _run_cert_generator(project_dir, certs_dir, run_command)
     result = error
     if result is None:
-        repair_error = _repair_native_linux_cert_ownership(certs_dir)
-        if repair_error is not None:
-            return CertResult(
-                success=False,
-                generated=False,
-                certs_dir=certs_dir,
-                error=repair_error,
-            )
         alias_error = _ensure_manager_root_ca_alias(certs_dir)
         if alias_error is not None:
             return CertResult(
@@ -141,20 +154,18 @@ def _ensure_container_readable_certs(certs_dir: Path) -> None:
             log.warning("Could not make generated cert readable (%s): %s", path, exc)
 
 
-def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None:
+def _run_cert_generator(
+    project_dir: Path,
+    certs_dir: Path,
+    run_command: CommandRunner | None,
+) -> CertResult | None:
     """Run the compose cert generator, returning a failure result when needed."""
     error_msg = None
     try:
-        result = subprocess.run(
-            _cert_generator_command(certs_dir),
-            capture_output=True,
-            text=True,
-            # Decode as UTF-8 (not the host locale codec) so Docker's image
-            # pull/build glyphs don't raise UnicodeDecodeError on Windows,
-            # where `text=True` would otherwise decode as cp1252.
-            encoding="utf-8",
-            errors="replace",
-            cwd=project_dir,
+        result = _execute_command(
+            _cert_generator_command(project_dir, certs_dir),
+            run_command=run_command,
+            project_dir=project_dir,
             timeout=300,
         )
     except subprocess.TimeoutExpired:
@@ -168,8 +179,16 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
         error_msg = str(exc)
     else:
         if result.returncode != 0:
-            error_msg = result.stderr.strip() or "Certificate generation failed"
+            error_msg = _command_failure_detail(result)
             log.error("Certificate generation failed: %s", error_msg)
+
+    cleanup_error = _cleanup_cert_generator(project_dir, run_command)
+    if cleanup_error is not None:
+        log.error("Certificate generator cleanup failed: %s", cleanup_error)
+        if error_msg is None:
+            error_msg = f"Certificate generator cleanup failed: {cleanup_error}"
+        else:
+            error_msg = f"{error_msg}; cleanup failed: {cleanup_error}"
 
     failure = None
     if error_msg is not None:
@@ -182,71 +201,111 @@ def _run_cert_generator(project_dir: Path, certs_dir: Path) -> CertResult | None
     return failure
 
 
-def _cert_generator_command(certs_dir: Path) -> list[str]:
-    """Build the Docker Compose command for the certificate generator."""
-    if _native_linux_user() is not None:
+def _cert_generator_command(project_dir: Path, certs_dir: Path) -> list[str]:
+    """Build the isolated Docker Compose command for the cert generator.
+
+    On native Linux Docker, the generator runs as the invoking host UID/GID
+    (``--user``) so its output is producer-owned; the bind-mount source is
+    pre-created by the host user so Docker does not create it as root first.
+    """
+    user = _native_linux_user()
+    if user is not None:
         certs_dir.mkdir(parents=True, exist_ok=True)
     command = [
         "docker",
         "compose",
+        "-p",
+        _cert_generator_project_name(project_dir),
         "-f",
         _CERT_COMPOSE_FILE,
         "run",
         "--rm",
     ]
+    if user is not None:
+        uid, gid = user
+        command += ["--user", f"{uid}:{gid}"]
     command.append("generator")
     return command
 
 
-def _repair_native_linux_cert_ownership(certs_dir: Path) -> str | None:
-    """Repair root-owned generator output on native Linux Docker.
+def _cert_generator_project_name(project_dir: Path) -> str:
+    """Return a stable project-scoped name for temporary generator resources."""
 
-    The upstream Wazuh cert generator image must run as root because its
-    entrypoint is not executable by an arbitrary host uid. Native Linux Docker
-    then leaves bind-mounted output root-owned. Use Docker itself, not host
-    sudo, to chown the generated files back to the invoking user.
+    digest = hashlib.sha256(str(project_dir.resolve()).encode("utf-8")).hexdigest()[:12]
+    return f"aptl-certs-{digest}"
+
+
+def _cleanup_cert_generator(
+    project_dir: Path,
+    run_command: CommandRunner | None,
+) -> str | None:
+    """Remove the generator's temporary container and overlapping bridge.
+
+    ``docker compose run --rm`` removes the container but leaves its default
+    network behind. Docker commonly assigns that bridge ``172.20.0.0/16``,
+    which overlaps every TechVault network and blocks the SDL realization that
+    immediately follows certificate generation on a fresh install.
     """
-    user = _native_linux_user()
-    if user is None:
-        return None
 
-    result = subprocess.run(
-        _cert_ownership_repair_command(certs_dir, user),
+    command = [
+        "docker",
+        "compose",
+        "-p",
+        _cert_generator_project_name(project_dir),
+        "-f",
+        _CERT_COMPOSE_FILE,
+        "down",
+        "--remove-orphans",
+    ]
+    error: str | None = None
+    try:
+        result = _execute_command(
+            command,
+            run_command=run_command,
+            project_dir=project_dir,
+            timeout=_CERT_CLEANUP_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        error = f"timed out after {_CERT_CLEANUP_TIMEOUT}s"
+    except OSError as exc:
+        error = str(exc)
+    else:
+        if result.returncode != 0:
+            error = _command_failure_detail(result)
+    return error
+
+
+def _command_failure_detail(result: subprocess.CompletedProcess) -> str:
+    """Return bounded useful output from a failed Docker command."""
+
+    detail = "\n".join(
+        part.strip()
+        for part in (result.stdout or "", result.stderr or "")
+        if part.strip()
+    )
+    return detail or "Certificate generation failed"
+
+
+def _execute_command(
+    command: list[str],
+    *,
+    run_command: CommandRunner | None,
+    timeout: int,
+    project_dir: Path | None = None,
+) -> subprocess.CompletedProcess:
+    """Run through the deployment backend when supplied, else locally."""
+
+    if run_command is not None:
+        return run_command(command, timeout=timeout)
+    return subprocess.run(
+        command,
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=120,
+        cwd=project_dir,
+        timeout=timeout,
     )
-    if result.returncode == 0:
-        return None
-
-    detail = result.stderr.strip() or result.stdout.strip()
-    if not detail:
-        detail = "permission repair container failed"
-    return f"Certificate permission repair failed: {detail}"
-
-
-def _cert_ownership_repair_command(certs_dir: Path, user: tuple[int, int]) -> list[str]:
-    """Build the Docker command that restores native-Linux host ownership."""
-    uid, gid = user
-    script = (
-        f"chown -R {uid}:{gid} /certificates && "
-        "find /certificates -type d -exec chmod 700 {} + && "
-        "find /certificates -type f -exec chmod 644 {} +"
-    )
-    return [
-        "docker",
-        "run",
-        "--rm",
-        "--entrypoint",
-        "/bin/sh",
-        "-v",
-        f"{certs_dir.resolve()}:/certificates",
-        "wazuh/wazuh-certs-generator:0.0.2",
-        "-c",
-        script,
-    ]
 
 
 def _native_linux_user() -> tuple[int, int] | None:

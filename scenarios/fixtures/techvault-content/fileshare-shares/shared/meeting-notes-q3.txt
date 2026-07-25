@@ -1,0 +1,3 @@
+Q3 Planning Meeting Notes
+- Rotate the admin password on the portal
+- AWS credential rotation next sprint

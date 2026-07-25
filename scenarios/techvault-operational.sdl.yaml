@@ -149,6 +149,13 @@ nodes:
         - {manager: apt, name: python3-gunicorn, version: "*"}
         - {manager: apt, name: python3-psycopg2, version: "*"}
         - {manager: apt, name: python3-jwt, version: "*"}
+        # rsyslog forwards gunicorn's access log to the Wazuh manager's syslog
+        # port (172.20.2.30:514) so webapp SQLi/XSS/cmd-injection fire rules
+        # 302010/302020/302030. #581 parity: the v5.0.0 webapp ran an in-process
+        # Wazuh agent for this; on the generic node we forward via syslog (the
+        # manager accepts remote syslog on 514 from 172.20.0.0/16), which the
+        # web-accesslog decoder + custom rules process identically.
+        - {manager: apt, name: rsyslog, version: "*"}
       filesystem_inventory:
         - {path: /var/log/gunicorn, entry_type: directory}
       # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
@@ -167,6 +174,14 @@ nodes:
       # webapp-proxy service is the real host publication (issue #581).
       service_manager_units:
         - {unit_id: webapp, unit_name: webapp.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
+        # Custom rsyslog unit (below): the stock rsyslog.service carries systemd
+        # sandboxing (ProtectKernelTunables/RestrictNamespaces/...) that fails
+        # 226/NAMESPACE under the materializer's restricted caps, and a drop-in
+        # would need a daemon-reload the materializer does not run. A fresh unit
+        # file loads on start (like webapp.service) with no sandboxing.
+        - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
   ad:
     type: vm
     os: linux
@@ -193,14 +208,33 @@ nodes:
     runtime:
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
+        # openssh-clients (the `ssh` binary) + postgresql (the `psql` client):
+        # #581 parity for the compromised-workstation attack paths. dev-user's
+        # leaked SSH key pivots into victim (workstation -> victim lateral
+        # movement) and the leaked .pgpass reaches the DB; neither works without
+        # a client. The v5.0.0 workstation image shipped both.
+        - {manager: dnf, name: openssh-clients, version: "*"}
+        - {manager: dnf, name: postgresql, version: "*"}
         - {manager: dnf, name: sudo, version: "*"}
       local_identity:
         groups:
           - {name: labadmin}
+          - {name: dev-user}
         users:
           - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
+          # dev-user (michael.thompson): the compromised-workstation persona,
+          # #581 parity. Distinct weak-cred developer account whose home holds
+          # the planted credential loot the red-team exercise mines; separate
+          # from the labadmin admin account. Loot placed via content below.
+          - {username: dev-user, primary_group: dev-user, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
+        # Fix dev-user loot ownership + secret-file perms after the content copy
+        # (the directory copy lands as labadmin:labadmin 664; .pgpass at 664 is
+        # ignored by psql, and dev-user's home should be dev-user-owned).
+        - {unit_id: aptl-workstation-loot, unit_name: aptl-workstation-loot.service, enabled_state: enabled, active_state: active}
   fileshare:
     type: vm
     os: linux
@@ -215,6 +249,8 @@ nodes:
         add: [CAP_NET_ADMIN]
       service_manager_units:
         - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
   dns:
     type: vm
     os: linux
@@ -253,6 +289,11 @@ nodes:
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
         - {manager: dnf, name: sudo, version: "*"}
+        # rsyslog forwards the victim's syslog to the Wazuh manager
+        # (172.20.2.30:514) so host events (auth failures, the smoke
+        # log-ingestion probe) reach the SIEM. #581 parity: the v5.0.0 victim
+        # ran an in-process Wazuh agent; the generic node forwards via syslog.
+        - {manager: dnf, name: rsyslog, version: "*"}
       local_identity:
         groups:
           - {name: labadmin}
@@ -260,6 +301,9 @@ nodes:
           - {username: labadmin, primary_group: labadmin, supplemental_groups: [wheel]}
       service_manager_units:
         - {unit_id: sshd, unit_name: sshd.service, enabled_state: enabled, active_state: active}
+        - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
+        # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
+        - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
 
   kali:
     type: vm
@@ -283,6 +327,23 @@ nodes:
         - {manager: apt, name: bsdmainutils, version: "*"}
         - {manager: apt, name: python3, version: "*"}
         - {manager: apt, name: libcap2-bin, version: "*"}
+        # Offensive toolset — #581 parity with the v5.0.0 Kali image. The
+        # live tests drive curl-based web attacks (SQLi/XSS/cmd-injection) and
+        # the TechVault attack path uses these enumeration/exploitation tools.
+        # NOTE: Kali metapackages (kali-linux-core / kali-tools-top10, which
+        # carry metasploit) live in the Kali apt repo, not Debian, so restoring
+        # those on the generic Debian base needs an upstream third-party-repo
+        # materializer capability (aces#847). Here we install the
+        # Debian-available subset the scenario actually exercises.
+        - {manager: apt, name: curl, version: "*"}
+        - {manager: apt, name: wget, version: "*"}
+        - {manager: apt, name: dnsutils, version: "*"}
+        - {manager: apt, name: netcat-openbsd, version: "*"}
+        - {manager: apt, name: smbclient, version: "*"}
+        - {manager: apt, name: ldap-utils, version: "*"}
+        - {manager: apt, name: sqlmap, version: "*"}
+        - {manager: apt, name: hydra, version: "*"}
+        - {manager: apt, name: python3-impacket, version: "*"}
       local_identity:
         groups:
           - {name: kali}
@@ -381,29 +442,54 @@ infrastructure:
     links: [security-net]
     dependencies: [wazuh-manager, suricata]
 
+  # Fixed addressing for the enterprise + attacker set. #581 parity: the
+  # v5.0.0 fixed-compose lab assigned these deterministically, and the DNS
+  # zones, seeded credentials/loot, and the live tests all hardcode them.
+  # Without a pinned address the node is auto-allocated and drifts.
   webapp:
     links: [dmz-net, internal-net]
     dependencies: [db, wazuh-manager]
+    properties:
+      - {dmz-net: 172.20.1.20}
+      - {internal-net: 172.20.2.25}
   ad:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.10}
   db:
     links: [internal-net]
+    properties:
+      - {internal-net: 172.20.2.11}
   workstation:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.40}
   fileshare:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.12}
   dns:
     links: [security-net, dmz-net, internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {security-net: 172.20.0.25}
+      - {dmz-net: 172.20.1.22}
+      - {internal-net: 172.20.2.27}
   victim:
     links: [internal-net]
     dependencies: [wazuh-manager]
+    properties:
+      - {internal-net: 172.20.2.20}
 
   kali:
     links: [redteam-net, dmz-net, internal-net]
+    properties:
+      - {redteam-net: 172.20.4.30}
+      - {dmz-net: 172.20.1.30}
+      - {internal-net: 172.20.2.35}
   kali-capture:
     dependencies: [kali]
 
@@ -571,6 +657,66 @@ content:
 
       [Install]
       WantedBy=multi-user.target
+  # rsyslog forward configs (#581 Tier-2 monitoring parity). imfile reads
+  # gunicorn's access log and forwards every message to the Wazuh manager's
+  # remote-syslog port; the gunicorn-tagged access lines are what the
+  # web-accesslog decoder + rules 302010/302020/302030 match (verified live:
+  # a forwarded SQLi line fires 302010). victim forwards its host syslog so
+  # auth failures + the smoke log-ingestion probe reach the SIEM.
+  webapp-rsyslog-forward:
+    type: file
+    target: webapp
+    path: /etc/rsyslog.d/90-aptl-forward.conf
+    text: |
+      module(load="imfile")
+      # Forward gunicorn access lines RAW (no syslog program tag) so the
+      # manager's built-in web-accesslog decoder matches them and rules
+      # 302010/302020/302030 fire. A program tag (e.g. "gunicorn:") makes the
+      # manager's predecoder claim the line as that program and the
+      # web-accesslog decoder then no longer matches (verified live).
+      template(name="aptl_rawfwd" type="string" string="<134>%timestamp:::date-rfc3164% %hostname% %msg%\n")
+      input(type="imfile"
+            File="/var/log/gunicorn/access.log"
+            Tag="webapp"
+            ruleset="aptl_fwd")
+      ruleset(name="aptl_fwd") {
+        action(type="omfwd" Target="172.20.2.30" Port="514" Protocol="udp" Template="aptl_rawfwd")
+      }
+  victim-rsyslog-forward:
+    type: file
+    target: victim
+    path: /etc/rsyslog.d/90-aptl-forward.conf
+    text: |
+      *.* @172.20.2.30:514
+  # Custom rsyslog units for the generic systemd nodes (see the
+  # service_manager_units note on webapp): a fresh unit with no sandboxing so
+  # systemd can start rsyslogd under the materializer's restricted caps.
+  webapp-rsyslog-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/aptl-rsyslog.service
+    text: |
+      [Unit]
+      Description=APTL rsyslog log forwarder
+      After=network.target
+      [Service]
+      ExecStart=/usr/sbin/rsyslogd -n
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
+  victim-rsyslog-unit:
+    type: file
+    target: victim
+    path: /etc/systemd/system/aptl-rsyslog.service
+    text: |
+      [Unit]
+      Description=APTL rsyslog log forwarder
+      After=network.target
+      [Service]
+      ExecStart=/usr/sbin/rsyslogd -n
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
   dns-named-conf:
     type: file
     target: dns
@@ -595,22 +741,56 @@ content:
     path: /etc/samba/smb.conf
     source:
       name: containers/fileshare/smb.conf
-  fileshare-public-notice:
-    type: file
-    target: fileshare
-    path: /srv/shares/public/notice.txt
-    text: |
-      Welcome to TechVault Solutions file server.
-      This notice is planted by the operational ACES scenario's
-      content-placement realization (issue #689) — dynamically realized
-      from inline text authored in techvault-operational.sdl.yaml, not
-      hand-copied onto the image.
-  fileshare-onboarding-packet:
+  # Full TechVault file-share loot tree — #581 parity. smb.conf advertises
+  # Public/Engineering/Finance/HR/IT-Backups/Shared; the red-team exercise
+  # mines the planted creds (engineering/deployments/deploy.sh), PII
+  # (hr/employees/directory.csv), wifi passwords (shared/wifi-passwords.txt),
+  # and a leaked deploy key (it-backups/keys/). Realized from a checked-in
+  # fixture, not baked onto an image. Keeps the onboarding + public notice.
+  fileshare-shares:
     type: directory
     target: fileshare
-    destination: /srv/shares/onboarding
+    destination: /srv/shares
     source:
-      name: scenarios/fixtures/techvault-content/onboarding
+      name: scenarios/fixtures/techvault-content/fileshare-shares
+  # Workstation dev-user loot home — #581 parity (WS-01..WS-05). Planted
+  # credential artifacts (.bash_history, .pgpass, .config/credentials.json,
+  # projects/techvault-portal/{.env,deploy.sh}, Documents/onboarding-notes.txt,
+  # .ssh keypair) the attack path harvests off the compromised workstation.
+  workstation-dev-user-home:
+    type: directory
+    target: workstation
+    destination: /home/dev-user
+    source:
+      name: scenarios/fixtures/techvault-content/dev-user-home
+  # dev-user's leaked SSH private key (loot WS-03) is the real workstation->
+  # victim lateral-movement pivot: the standup-generated workstation pivot
+  # keypair (config/lab-ssh/workstation_pivot_key, ensure_workstation_pivot_key
+  # in src/aptl/core/ssh.py) whose public half victim already authorizes
+  # (victim-authorized-keys below). Placing its private half here as dev-user's
+  # ~/.ssh/id_rsa reproduces the v5.0.0 workstation entrypoint's throwaway
+  # dev-user keypair, so `ssh -i ~/.ssh/id_rsa labadmin@victim` from the
+  # compromised workstation works. The key is never tracked (lab-ssh is
+  # gitignored + generated per standup), so no id_rsa/PEM secret ships in-repo.
+  workstation-dev-user-privkey:
+    type: file
+    target: workstation
+    path: /home/dev-user/.ssh/id_rsa
+    source:
+      name: config/lab-ssh/workstation_pivot_key
+    sensitive: true
+  # The matching public half, so dev-user's keypair is self-consistent. This
+  # must be the pivot key's real .pub: `ssh -i id_rsa` reads id_rsa.pub (not the
+  # private key) to pick which key to offer, so a mismatched .pub makes ssh
+  # offer the wrong key and victim rejects the pivot. Sourced from the same
+  # standup-generated keypair (not the fixture, which cannot know the per-lab
+  # key) — the fixture's stale placeholder .pub was removed for this reason.
+  workstation-dev-user-pubkey:
+    type: file
+    target: workstation
+    path: /home/dev-user/.ssh/id_rsa.pub
+    source:
+      name: config/lab-ssh/workstation_pivot_key.pub
   # The stock `postgresql` package creates an empty cluster with no
   # techvault database/user and no schema — the legacy compose db service
   # got these from postgres:16-alpine's POSTGRES_DB/USER/PASSWORD
@@ -784,6 +964,137 @@ content:
       Type=oneshot
       RemainAfterExit=yes
       ExecStart=/bin/bash /opt/kali-capture-bootstrap.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------------------------------------------------------------------------
+  # CTF flag generation (#581 parity). The v5.0.0 base image and the still-image
+  # AD node generate per-boot signed flags at container start; the image-free
+  # generic nodes (victim, workstation, webapp, fileshare) reproduce it with a
+  # oneshot systemd unit running the shared aptl-flaggen.sh. flags.py (scoring)
+  # reads /home/labadmin|dev-user/user.txt, /app/user.txt,
+  # /srv/shares/shared/user-flag.txt, and /root/root.txt and verifies the
+  # aptl:v1 md5 token. One script; each node's unit supplies its Environment=.
+  # ---------------------------------------------------------------------------
+  victim-flaggen-script:
+    type: file
+    target: victim
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  workstation-flaggen-script:
+    type: file
+    target: workstation
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  webapp-flaggen-script:
+    type: file
+    target: webapp
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  fileshare-flaggen-script:
+    type: file
+    target: fileshare
+    path: /usr/local/sbin/aptl-flaggen.sh
+    source:
+      name: scenarios/fixtures/techvault-content/aptl-flaggen.sh
+  victim-flaggen-unit:
+    type: file
+    target: victim
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=victim
+      Environment=APTL_FLAG_USER_PATH=/home/labadmin/user.txt
+      Environment=APTL_FLAG_USER_OWNER=labadmin:labadmin
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  workstation-flaggen-unit:
+    type: file
+    target: workstation
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=workstation
+      Environment=APTL_FLAG_USER_PATH=/home/dev-user/user.txt
+      Environment=APTL_FLAG_USER_OWNER=dev-user:dev-user
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  webapp-flaggen-unit:
+    type: file
+    target: webapp
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=webapp
+      Environment=APTL_FLAG_USER_PATH=/app/user.txt
+      Environment=APTL_FLAG_USER_OWNER=root:root
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  fileshare-flaggen-unit:
+    type: file
+    target: fileshare
+    path: /etc/systemd/system/aptl-flaggen.service
+    text: |
+      [Unit]
+      Description=APTL CTF flag generator
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      Environment=APTL_FLAG_NODE=fileshare
+      Environment=APTL_FLAG_USER_PATH=/srv/shares/shared/user-flag.txt
+      Environment=APTL_FLAG_USER_OWNER=root:root
+      ExecStart=/bin/bash /usr/local/sbin/aptl-flaggen.sh
+
+      [Install]
+      WantedBy=multi-user.target
+  # Finalizes dev-user loot after the directory copy: the copy lands the home
+  # as labadmin:labadmin 664, but psql ignores a group/world-readable .pgpass
+  # and dev-user's home should be dev-user-owned. chown + tighten the secret
+  # files to 600 (matching the v5.0.0 setup-workstation.sh perms). Best-effort
+  # per file so a fixture reshuffle never fails the whole boot.
+  workstation-loot-unit:
+    type: file
+    target: workstation
+    path: /etc/systemd/system/aptl-workstation-loot.service
+    text: |
+      [Unit]
+      Description=APTL workstation dev-user loot ownership + perms
+      After=local-fs.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/bash -c 'chown -R dev-user:dev-user /home/dev-user 2>/dev/null; for f in /home/dev-user/.pgpass /home/dev-user/.ssh/id_rsa /home/dev-user/.bash_history /home/dev-user/.config/credentials.json /home/dev-user/projects/techvault-portal/.env; do [ -f "$f" ] && chmod 600 "$f"; done; true'
 
       [Install]
       WantedBy=multi-user.target

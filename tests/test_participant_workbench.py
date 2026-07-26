@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -93,6 +95,12 @@ def test_profiles_expose_exactly_the_allowed_mcp_servers() -> None:
         "aptl-guide",
         "soc-wazuh",
     )
+    assert profile_for(ProfileId.GUIDED_BLUE).credential_aliases == (
+        "API_PASSWORD",
+        "API_USERNAME",
+        "INDEXER_PASSWORD",
+        "INDEXER_USERNAME",
+    )
 
 
 def test_profile_renderer_keeps_credentials_out_of_client_config(
@@ -117,9 +125,14 @@ def test_profile_renderer_keeps_credentials_out_of_client_config(
         profile=ProfileId.BLUE,
         payload_root=payload_root,
         output_dir=tmp_path / "generated",
+        state_dir=tmp_path / "state",
+        node_executable=Path(sys.executable),
         run_id="a" * 32,
         credential_aliases={
+            "INDEXER_USERNAME",
             "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
             "MISP_API_KEY",
             "THEHIVE_API_KEY",
             "SHUFFLE_API_KEY",
@@ -136,9 +149,12 @@ def test_profile_renderer_keeps_credentials_out_of_client_config(
         "aptl-threatintel",
         "aptl-wazuh",
     }
+    assert set(parsed) == {"mcpServers"}
     assert all(
-        "credentialAliases" in server for server in parsed["mcpServers"].values()
+        server["env"]["APTL_MCP_DISABLE_DOTENV"] == "1"
+        for server in parsed["mcpServers"].values()
     )
+    assert "model-secret" not in rendered
     assert config_path.stat().st_mode & 0o777 == 0o600
 
 
@@ -151,18 +167,24 @@ def test_profile_renderer_rejects_missing_required_credential_alias(
         render_profile_config,
     )
 
+    arguments = {
+        "profile": ProfileId.BLUE,
+        "payload_root": tmp_path,
+        "output_dir": tmp_path / "generated",
+        "state_dir": tmp_path / "state",
+        "node_executable": Path(sys.executable),
+        "run_id": "a" * 32,
+        "credential_aliases": {
+            "INDEXER_USERNAME",
+            "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
+            "THEHIVE_API_KEY",
+            "SHUFFLE_API_KEY",
+        },
+    }
     with pytest.raises(WorkbenchConfigurationError, match="MISP_API_KEY"):
-        render_profile_config(
-            profile=ProfileId.BLUE,
-            payload_root=tmp_path,
-            output_dir=tmp_path / "generated",
-            run_id="a" * 32,
-            credential_aliases={
-                "INDEXER_PASSWORD",
-                "THEHIVE_API_KEY",
-                "SHUFFLE_API_KEY",
-            },
-        )
+        render_profile_config(**arguments)
 
 
 def test_profile_renderer_rejects_an_existing_or_symlinked_output(
@@ -182,14 +204,17 @@ def test_profile_renderer_rejects_an_existing_or_symlinked_output(
     artifact.parent.mkdir(parents=True)
     artifact.touch()
 
+    arguments = {
+        "profile": ProfileId.RED,
+        "payload_root": tmp_path,
+        "output_dir": output_dir,
+        "state_dir": tmp_path / "state",
+        "node_executable": Path(sys.executable),
+        "run_id": "a" * 32,
+        "credential_aliases": set(),
+    }
     with pytest.raises(WorkbenchConfigurationError):
-        render_profile_config(
-            profile=ProfileId.RED,
-            payload_root=tmp_path,
-            output_dir=output_dir,
-            run_id="a" * 32,
-            credential_aliases=set(),
-        )
+        render_profile_config(**arguments)
 
 
 def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace(
@@ -209,6 +234,7 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
         payload_root=payload_root,
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     red = runtime.start(ProfileId.RED)
@@ -243,10 +269,35 @@ def test_profile_runtime_fails_closed_without_an_active_scenario(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="active scenario"):
         runtime.start(ProfileId.RED)
+
+
+def test_runtime_creates_its_managed_config_parent_on_fresh_state(
+    tmp_path: Path,
+) -> None:
+    from aptl.workbench import ProfileId, WorkbenchRuntime
+
+    session_manager = ScenarioSession(tmp_path / "state")
+    session_manager.start("techvault")
+    generated = tmp_path / "state" / "workbench" / "mcp-config"
+    runtime = WorkbenchRuntime(
+        session_manager,
+        _FakeAdapter(),
+        LocalRunStore(tmp_path / "state" / "runs"),
+        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
+        generated_config_dir=generated,
+        credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
+    )
+
+    launch = runtime.start(ProfileId.RED)
+
+    assert launch.client_config_path.parent == generated
+    assert generated.parent.stat().st_mode & 0o777 == 0o700
 
 
 def test_failed_agent_start_revokes_credentials_and_removes_generated_config(
@@ -264,6 +315,7 @@ def test_failed_agent_start_revokes_credentials_and_removes_generated_config(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(RuntimeError, match="agent launch failed"):
@@ -289,6 +341,7 @@ def test_runtime_rejects_a_profile_with_an_unexpected_mcp_tool_inventory(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="MCP tool inventory"):
@@ -315,6 +368,7 @@ def test_runtime_keeps_a_rejected_agent_until_failed_cleanup_is_retried(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="cleanup remains incomplete"):
@@ -355,6 +409,7 @@ def test_runtime_validates_a_switch_target_before_closing_the_active_profile(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
     red = runtime.start(ProfileId.RED)
 
@@ -367,6 +422,46 @@ def test_runtime_validates_a_switch_target_before_closing_the_active_profile(
     assert adapter.closed_profiles == []
     assert credentials.destroyed_profiles == []
     assert red.client_config_path.exists()
+
+
+def test_profile_switch_waits_for_an_active_agent_turn(tmp_path: Path) -> None:
+    from aptl.workbench import ProfileId, WorkbenchRuntime
+
+    session_manager = ScenarioSession(tmp_path / "state")
+    session_manager.start("techvault")
+    adapter = _BlockingAdapter()
+    runtime = WorkbenchRuntime(
+        session_manager,
+        adapter,
+        LocalRunStore(tmp_path / "runs"),
+        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
+        generated_config_dir=tmp_path / "generated",
+        credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
+    )
+    runtime.start(ProfileId.RED)
+    turn = threading.Thread(target=runtime.respond, args=("inspect",))
+    switch_done = threading.Event()
+
+    def switch_profile() -> None:
+        runtime.switch(ProfileId.BLUE)
+        switch_done.set()
+
+    turn.start()
+    assert adapter.turn_started.wait(timeout=1)
+    switch = threading.Thread(target=switch_profile)
+    switch.start()
+
+    assert not switch_done.wait(timeout=0.1)
+    assert adapter.closed_profiles == []
+
+    adapter.release_turn.set()
+    turn.join(timeout=1)
+    switch.join(timeout=1)
+    assert switch_done.is_set()
+    assert adapter.closed_profiles == [ProfileId.RED]
+    assert runtime.current_launch is not None
+    assert runtime.current_launch.profile is ProfileId.BLUE
 
 
 def test_browser_workbench_is_a_separate_authenticated_profile_surface(
@@ -384,12 +479,14 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
     app = create_participant_workbench_app(
         runtime,
         lambda request: request.headers.get("X-APTL-Participant-Session") == "seat",
     )
     client = TestClient(app)
+    participant_headers = {"X-APTL-Participant-Session": "seat"}
 
     assert client.get("/workbench").status_code == 401
     assert (
@@ -399,9 +496,12 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         == 404
     )
     assert client.post("/workbench/profiles/red").status_code == 401
+    assert client.post("/workbench/messages", json={"message": "help"}).status_code == 401
+    assert client.delete("/workbench/profile").status_code == 401
+    assert client.get("/openapi.json").status_code == 404
 
     response = client.post(
-        "/workbench/profiles/red", headers={"X-APTL-Participant-Session": "seat"}
+        "/workbench/profiles/red", headers=participant_headers
     )
     assert response.status_code == 200
     assert response.json() == {
@@ -409,20 +509,65 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         "run_id": session_manager.get_active().trace_id,
     }
 
-    view = client.get("/workbench", headers={"X-APTL-Participant-Session": "seat"})
+    view = client.get("/workbench", headers=participant_headers)
     assert view.status_code == 200
     assert view.json()["mcp_servers"] == ["aptl-red"]
+    assert view.json()["bookmarks"] == [
+        {"label": "APTL guide", "href": "/guide/"},
+        {"label": "Kali desktop", "href": "/desktop/kali/"},
+    ]
     assert "docker" not in view.json()
+
+    invalid = client.post(
+        "/workbench/messages",
+        headers=participant_headers,
+        json={"message": "", "command": "id"},
+    )
+    assert invalid.status_code == 422
+    answer = client.post(
+        "/workbench/messages",
+        headers=participant_headers,
+        json={"message": "inspect the target"},
+    )
+    assert answer.status_code == 200
+    assert answer.json() == {"response": "response to inspect the target"}
+
+    page = client.get("/", headers=participant_headers)
+    assert page.status_code == 200
+    assert 'id="message"' in page.text
+    assert "/workbench/messages" in page.text
+    assert "/api/lab/start" not in page.text
+    assert page.headers["content-security-policy"].startswith("default-src 'self'")
+
+    records = (
+        tmp_path
+        / "runs"
+        / session_manager.get_active().trace_id
+        / "workbench"
+        / "events.jsonl"
+    ).read_text(encoding="utf-8")
+    parsed_records = [json.loads(line) for line in records.splitlines()]
+    assert any(record["event"] == "agent_turn" for record in parsed_records)
+    assert "inspect the target" not in records
+    assert "response to inspect the target" not in records
 
     response = client.post(
         "/workbench/profiles/guided-blue",
-        headers={"X-APTL-Participant-Session": "seat"},
+        headers=participant_headers,
     )
     assert response.status_code == 200
-    view = client.get("/workbench", headers={"X-APTL-Participant-Session": "seat"})
+    view = client.get("/workbench", headers=participant_headers)
     assert view.json()["profile"] == "guided-blue"
     assert view.json()["mcp_servers"] == ["aptl-indexer", "aptl-wazuh"]
-    assert view.json()["bookmarks"] == ["aptl-guide", "soc-wazuh"]
+    assert view.json()["bookmarks"] == [
+        {"label": "APTL guide", "href": "/guide/"},
+        {"label": "Wazuh", "href": "/soc/wazuh/"},
+    ]
+
+    closed = client.delete("/workbench/profile", headers=participant_headers)
+    assert closed.status_code == 200
+    assert closed.json() == {"status": "closed"}
+    assert client.get("/workbench", headers=participant_headers).json()["profile"] is None
 
 
 class _FakeAdapter:
@@ -430,7 +575,8 @@ class _FakeAdapter:
         self.launches: list[object] = []
         self.closed_profiles: list[object] = []
 
-    def launch(self, launch: object) -> object:
+    def launch(self, launch: object, credentials: object) -> object:
+        del credentials
         self.launches.append(launch)
         return launch
 
@@ -443,24 +589,44 @@ class _FakeAdapter:
         profile = profile_for(handle.profile)
         return {server.server_id: list(server.tool_names) for server in profile.servers}
 
+    def respond(self, handle: object, message: str) -> str:
+        del handle
+        return f"response to {message}"
+
 
 class _FakeCredentials:
     def __init__(self) -> None:
         self.prepared_profiles: list[object] = []
         self.destroyed_profiles: list[object] = []
 
-    def prepare(self, profile: object, run_id: str, aliases: tuple[str, ...]) -> None:
+    def prepare(
+        self, profile: object, run_id: str, aliases: tuple[str, ...]
+    ) -> dict[str, str]:
         del run_id, aliases
         self.prepared_profiles.append(profile)
+        return {}
 
     def destroy(self, profile: object, run_id: str) -> None:
         del run_id
         self.destroyed_profiles.append(profile)
 
 
+class _BlockingAdapter(_FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.turn_started = threading.Event()
+        self.release_turn = threading.Event()
+
+    def respond(self, handle: object, message: str) -> str:
+        del handle, message
+        self.turn_started.set()
+        assert self.release_turn.wait(timeout=1)
+        return "complete"
+
+
 class _FailingAdapter:
-    def launch(self, launch: object) -> object:
-        del launch
+    def launch(self, launch: object, credentials: object) -> object:
+        del launch, credentials
         raise RuntimeError("agent launch failed")
 
     def close(self, handle: object) -> None:

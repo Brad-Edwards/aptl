@@ -5,14 +5,14 @@ workflow:
   # The default suite is parallelized with pytest-xdist (-n auto) and excludes
   # the slow `integration`-marked tests, matching the CI coverage job
   # (.github/workflows/checks.yml: `pytest -k "not integration"`).
-  test_command: 'pytest -n auto -k "not integration"'
+  test_command: 'uv run pytest -n auto -k "not integration"'
   # The completion gate mirrors exactly what CI gates on: the fast suite plus the
   # scenario static gate (the only integration tests CI runs). Both run under
   # -n auto. Bare `pytest` would also pull in ~550 other integration tests that
   # CI never runs and that take ~80 min serially — see the scenario static-gate
   # design notes. Coverage runs serially in CI (coverage run can't measure xdist
   # workers); -n auto is only used where coverage is not collected.
-  completion_command: 'pytest -n auto -k "not integration" && pytest -n auto tests/test_techvault_static_gate.py -m integration'
+  completion_command: 'uv run pytest -n auto -k "not integration" && uv run pytest -n auto tests/test_techvault_static_gate.py -m integration'
   lint_command: pre-commit run --all-files
   format_command: pre-commit run --all-files
   review_disposition:

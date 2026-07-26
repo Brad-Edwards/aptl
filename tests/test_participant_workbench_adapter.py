@@ -70,13 +70,14 @@ def test_renderer_emits_a_standard_strict_mcp_config_with_trace_handoff(
 ) -> None:
     payload_root = _payload_with_profile(tmp_path / "payload", ProfileId.BLUE)
     state_dir = (tmp_path / "state").resolve()
+    node_executable = Path(sys.executable).resolve()
 
     config_path = render_profile_config(
         profile=ProfileId.BLUE,
         payload_root=payload_root,
         output_dir=tmp_path / "generated",
         state_dir=state_dir,
-        node_executable=Path("/usr/bin/node"),
+        node_executable=node_executable,
         run_id="a" * 32,
         credential_aliases=profile_for(ProfileId.BLUE).credential_aliases,
     )
@@ -84,7 +85,7 @@ def test_renderer_emits_a_standard_strict_mcp_config_with_trace_handoff(
     document = json.loads(config_path.read_text(encoding="utf-8"))
     assert set(document) == {"mcpServers"}
     for server_id, server in document["mcpServers"].items():
-        assert server["command"] == "/usr/bin/node"
+        assert server["command"] == str(node_executable)
         assert Path(server["args"][0]).is_absolute()
         assert Path(server["args"][0]).is_relative_to(payload_root.resolve())
         assert server["env"]["APTL_STATE_DIR"] == str(state_dir)
@@ -287,7 +288,7 @@ def test_appliance_factory_wires_the_production_workbench_without_operator_route
             payload_root=tmp_path / "payload",
             state_dir=tmp_path / "state",
             claude_executable=_executable(tmp_path / "claude"),
-            node_executable=Path("/usr/bin/node"),
+            node_executable=Path(sys.executable),
         ),
         secret_source={"ANTHROPIC_API_KEY": "model-secret"},
         authorizer=lambda request: request.headers.get("X-Seat") == "seat",

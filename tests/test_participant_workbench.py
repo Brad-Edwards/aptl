@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 from pathlib import Path
 
@@ -125,7 +126,7 @@ def test_profile_renderer_keeps_credentials_out_of_client_config(
         payload_root=payload_root,
         output_dir=tmp_path / "generated",
         state_dir=tmp_path / "state",
-        node_executable=Path("/usr/bin/node"),
+        node_executable=Path(sys.executable),
         run_id="a" * 32,
         credential_aliases={
             "INDEXER_USERNAME",
@@ -172,7 +173,7 @@ def test_profile_renderer_rejects_missing_required_credential_alias(
             payload_root=tmp_path,
             output_dir=tmp_path / "generated",
             state_dir=tmp_path / "state",
-            node_executable=Path("/usr/bin/node"),
+            node_executable=Path(sys.executable),
             run_id="a" * 32,
             credential_aliases={
                 "INDEXER_USERNAME",
@@ -208,7 +209,7 @@ def test_profile_renderer_rejects_an_existing_or_symlinked_output(
             payload_root=tmp_path,
             output_dir=output_dir,
             state_dir=tmp_path / "state",
-            node_executable=Path("/usr/bin/node"),
+            node_executable=Path(sys.executable),
             run_id="a" * 32,
             credential_aliases=set(),
         )
@@ -231,6 +232,7 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
         payload_root=payload_root,
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     red = runtime.start(ProfileId.RED)
@@ -265,6 +267,7 @@ def test_profile_runtime_fails_closed_without_an_active_scenario(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="active scenario"):
@@ -286,6 +289,7 @@ def test_runtime_creates_its_managed_config_parent_on_fresh_state(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=generated,
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
 
     launch = runtime.start(ProfileId.RED)
@@ -309,6 +313,7 @@ def test_failed_agent_start_revokes_credentials_and_removes_generated_config(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(RuntimeError, match="agent launch failed"):
@@ -334,6 +339,7 @@ def test_runtime_rejects_a_profile_with_an_unexpected_mcp_tool_inventory(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="MCP tool inventory"):
@@ -360,6 +366,7 @@ def test_runtime_keeps_a_rejected_agent_until_failed_cleanup_is_retried(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
 
     with pytest.raises(WorkbenchStateError, match="cleanup remains incomplete"):
@@ -400,6 +407,7 @@ def test_runtime_validates_a_switch_target_before_closing_the_active_profile(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
+        node_executable=Path(sys.executable),
     )
     red = runtime.start(ProfileId.RED)
 
@@ -427,6 +435,7 @@ def test_profile_switch_waits_for_an_active_agent_turn(tmp_path: Path) -> None:
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
     runtime.start(ProfileId.RED)
     turn = threading.Thread(target=runtime.respond, args=("inspect",))
@@ -468,6 +477,7 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
+        node_executable=Path(sys.executable),
     )
     app = create_participant_workbench_app(
         runtime,

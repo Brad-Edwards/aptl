@@ -18,6 +18,21 @@ import {
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-node';
 
+vi.mock('@opentelemetry/exporter-trace-otlp-proto', () => ({
+  OTLPTraceExporter: class {
+    export(
+      _spans: unknown[],
+      resultCallback: (result: { code: number }) => void,
+    ): void {
+      resultCallback({ code: 0 });
+    }
+
+    shutdown(): Promise<void> {
+      return Promise.resolve();
+    }
+  },
+}));
+
 // We need to test the module under controlled conditions
 describe('telemetry', () => {
   let tmpDir: string;

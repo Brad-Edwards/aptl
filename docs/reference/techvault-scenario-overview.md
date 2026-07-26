@@ -121,3 +121,10 @@ than the scenario name:
 Select a variant with `aptl lab start --scenario <catalog id>`. See
 [Curated ACES Variants](../sdl/techvault-curated-variants.md) for the full
 authoring and proof detail.
+
+The versioned [Guided Purple Participant Profile](participant-profile.md)
+binds `techvault-attacker-target` to one supported workshop narrative, strict
+config, participant surface, readiness suite, and qualification budget. The
+curated scenario remains general ACES content; it is not renamed or forked for
+an event. The full `techvault-operational` stack remains the broader developer
+and research path.

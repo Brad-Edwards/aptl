@@ -8,11 +8,12 @@ for the appliance's network enforcement.
 
 ## Profiles
 
-The workbench accepts only two closed profiles:
+The workbench accepts only three closed profiles:
 
 | Profile | MCP servers | Browser references |
 | --- | --- | --- |
 | `red` | `aptl-red` | APTL guide and Kali desktop |
+| `guided-blue` | `aptl-indexer`, `aptl-wazuh` | APTL guide and Wazuh |
 | `blue` | `aptl-indexer`, `aptl-wazuh`, `aptl-network`, `aptl-threatintel`, `aptl-casemgmt`, `aptl-soar` | APTL guide, Wazuh, TheHive, MISP, and Shuffle |
 
 A profile is a launch compartment, not a UI visibility toggle. A purple
@@ -25,11 +26,11 @@ The runtime verifies the exact `tools/list` inventory immediately after each
 profile launch. The red profile is limited to `kali_info`, `kali_run_command`,
 `kali_interactive_session`, `kali_background_session`, `kali_session_command`,
 `kali_list_sessions`, `kali_close_session`, `kali_get_session_output`, and
-`kali_close_all_sessions`. The blue profile's allowed tool set is the union of
-the published indexer, Wazuh, network, threat-intelligence, case-management,
-and SOAR server inventories encoded in `aptl.workbench.profiles`; an added,
-removed, or cross-profile tool fails the launch rather than being hidden from
-the user interface.
+`kali_close_all_sessions`. The guided-blue variation admits only the published
+indexer and Wazuh inventories for the bounded profile in issue #820. The full
+blue profile adds network, threat-intelligence, case-management, and SOAR. An
+added, removed, or cross-profile tool fails the launch rather than being
+hidden from the user interface.
 
 ## Launch contract
 

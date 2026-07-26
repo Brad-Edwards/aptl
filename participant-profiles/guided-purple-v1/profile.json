@@ -1,0 +1,54 @@
+{
+  "schema_version": "aptl.participant-profile/v1",
+  "profile_id": "guided-purple",
+  "version": 1,
+  "narrative": {
+    "path": "participant-profiles/guided-purple-v1/narrative.json",
+    "sha256": "a1d971348cbf22f97c3f7957ccb1387bef6de7a5f5bd9c031863a7f6959ef8af"
+  },
+  "scenario": {
+    "catalog_id": "techvault-attacker-target",
+    "path": "scenarios/techvault-attacker-target.sdl.yaml",
+    "sha256": "a85b11d98aab9b5b4cd209bade57b5869556882dab5b5f3f41e5f44292372a78"
+  },
+  "config": {
+    "path": "participant-profiles/guided-purple-v1/aptl.json",
+    "sha256": "be9e7f8bf0485085ae1903bf47c4566d101367bf2d0b7abc42e1479ac0b2bf4c"
+  },
+  "readiness": {
+    "path": "participant-profiles/guided-purple-v1/readiness.json",
+    "sha256": "a8e991a7c180225488778c8ce7491ec125be078002120eb15a73ba40dd98d57d"
+  },
+  "capabilities": {
+    "workbench_profiles": [
+      "red",
+      "guided-blue"
+    ]
+  },
+  "release_evidence": {
+    "asset_lock_schema": "aptl.participant-asset-lock/v1",
+    "qualification_report_schema": "aptl.participant-qualification/v1",
+    "asset_lock_ref": "participant-profiles/guided-purple-v1/asset-lock.json",
+    "asset_lock_sha256": "a6f0da270da1665cd7ed352ec7f72f3abcd60a0de34df7c66c732dfd9164aebc",
+    "qualification_report_ref": "release/qualification/guided-purple-v1.json"
+  },
+  "budgets": {
+    "minimum_hardware": {
+      "architecture": "x86_64",
+      "vcpus": 8,
+      "memory_bytes": 17179869184,
+      "disk_bytes": 107374182400
+    },
+    "maximums": {
+      "peak_cpu_percent": 90.0,
+      "peak_memory_bytes": 12884901888,
+      "staged_profile_assets_bytes": 53687091200,
+      "unique_image_compressed_bytes": 16106127360,
+      "unique_image_expanded_bytes": 37580963840,
+      "peak_runtime_disk_bytes": 32212254720,
+      "cold_start_seconds": 900.0,
+      "warm_start_seconds": 300.0,
+      "clean_reset_seconds": 600.0
+    }
+  }
+}

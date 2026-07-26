@@ -167,7 +167,7 @@ class ComposeBaseSubstrateMixin(object):
         for mount in spec.volume_mounts:
             source = f"{self._project_name}_{mount.source}"
             suffix = ":ro" if mount.read_only else ""
-            argv += ["-v", f"{source}:{mount.target}{suffix}"]
+            argv.extend(("-v", f"{source}:{mount.target}{suffix}"))
 
     @staticmethod
     def _append_base_ports(argv: list[str], spec: "BaseContainerSpec") -> None:
@@ -178,7 +178,9 @@ class ComposeBaseSubstrateMixin(object):
             host_port = (
                 port.host_port if port.host_port is not None else port.container_port
             )
-            argv += ["-p", f"{host}{host_port}:{port.container_port}/{port.protocol}"]
+            argv.extend(
+                ("-p", f"{host}{host_port}:{port.container_port}/{port.protocol}")
+            )
 
     def _complete_base_container_start(
         self,

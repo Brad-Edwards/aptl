@@ -80,6 +80,10 @@ def test_policy_is_platform_only_strict_and_default_deny() -> None:
     assert policy.default_deny is True
     assert policy.egress_authorities[0].authority == "api.example.test"
     assert policy.workbench_policy_version == profile_for(ProfileId.RED).policy_version
+    assert (
+        policy.workbench_policy_version
+        == profile_for(ProfileId.GUIDED_BLUE).policy_version
+    )
     assert policy.workbench_policy_version == profile_for(ProfileId.BLUE).policy_version
 
     scenario_copy = _policy()

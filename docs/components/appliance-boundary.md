@@ -56,8 +56,11 @@ Docker default-bridge or package-install egress window.
 ## Participant Workbench
 
 The [participant workbench](participant-workbench.md) remains the source of
-the closed `red` and `blue` profile launch contracts. The boundary does not
-copy that profile model or infer a profile from a scenario name.
+the closed workbench launch contracts. The boundary does not copy that
+profile model or infer a profile from a scenario name. The bounded participant
+profile introduced by #820 currently composes `red` and `guided-blue`; another
+participant profile can select a different admitted sequence without changing
+the boundary schema or enforcement implementation.
 
 The appliance payload places the participant browser gateway on the signed
 participant anchor and the installed agent and selected MCP processes on the
@@ -66,6 +69,13 @@ required participant-to-management and management-to-egress services.
 Profile-specific MCP destinations remain the typed, released server
 inventories from `aptl.workbench`; ACES remains authoritative for the
 scenario-side endpoints those servers use.
+
+The participant-profile manifest, asset lock, and qualification report are
+independent signed-payload inputs. Issue #823 binds those #820 outputs together
+with this boundary policy and its helper/proxy image identities. The boundary
+therefore validates the shared workbench policy version and observed placement,
+but it does not duplicate the participant profile's capability inventory,
+resource budgets, or readiness suite.
 
 ## Controlled Egress
 

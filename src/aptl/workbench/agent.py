@@ -174,7 +174,8 @@ class ClaudeCodeManagedAgentAdapter:
             raise AgentExecutionError("agent request failed")
         return _parse_agent_result(result.stdout)
 
-    def close(self, handle: object) -> None:
+    @staticmethod
+    def close(handle: object) -> None:
         """Invalidate the selected environment after one-shot children exit."""
         active = _require_handle(handle)
         active.environment.clear()
@@ -375,5 +376,5 @@ def _parse_agent_result(stdout: bytes) -> str:
         ):
             raise ValueError
         return result
-    except (UnicodeDecodeError, KeyError, ValueError) as exc:
+    except (KeyError, ValueError) as exc:
         raise AgentExecutionError("agent returned an invalid result") from exc

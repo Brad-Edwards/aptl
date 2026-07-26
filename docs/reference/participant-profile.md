@@ -31,7 +31,7 @@ are not part of version 1 qualification.
 
 ## Derived runtime and participant surfaces
 
-APTL derives the service and network surface from the catalog entry, ACES
+APTL derives the service and network surface from the catalog entry, RAES
 planning and dependency closure, the strict profile config, and the Compose
 profile index. The current derivation selects `kali`, `victim`, `wazuh`, and
 `otel`, producing ten steady-state services:

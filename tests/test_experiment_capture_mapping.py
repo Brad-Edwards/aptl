@@ -10,7 +10,7 @@ EMPTY, so the honest fail-closed baseline is preserved: a capture requirement
 is admitted only when a trusted registration covers it, never because a
 collector function exists.
 
-Uses the installed ACES fixture corpus as the contract test source (ADR-047).
+Uses the installed RAES fixture corpus as the contract test source (ADR-047).
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from aces_contracts.contracts import ExperimentCaptureSpecModel
-from aces_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.contracts import ExperimentCaptureSpecModel
+from raes_contracts.corpus import FIXTURES, corpus_family_root
 
 from aptl.core.collectors import collect_traces
 from aptl.core.experiment.capture_mapping import bind_capture_requirements
@@ -42,7 +42,7 @@ _LIMITS = CaptureLimits(max_bytes=1_048_576, max_artifact_count=100, max_duratio
 
 
 def _read(*parts: str) -> bytes:
-    """Read a byte payload from the installed ACES fixture corpus."""
+    """Read a byte payload from the installed RAES fixture corpus."""
     path = CORPUS_ROOT
     for part in parts:
         path = path / part
@@ -215,7 +215,7 @@ class TestCaptureDegradationAcceptance:
 
 
 # ---------------------------------------------------------------------------
-# Fuzz — every ACES-legal kind/scope still fails closed against the empty default
+# Fuzz — every RAES-legal kind/scope still fails closed against the empty default
 # ---------------------------------------------------------------------------
 
 from hypothesis import given, settings  # noqa: E402

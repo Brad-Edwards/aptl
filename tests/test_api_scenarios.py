@@ -39,7 +39,7 @@ def _write_catalog(project_dir, scenarios):
 
 _MINIMAL_SDL = """
 name: minimal
-description: A minimal ACES scenario.
+description: A minimal RAES scenario.
 nodes:
   the-net:
     type: switch
@@ -160,7 +160,7 @@ class TestScenarioListEndpoint:
 
 
 class TestScenarioDetailEndpoint:
-    """GET /api/scenarios/{id} projects the ACES SDL into a workbench detail."""
+    """GET /api/scenarios/{id} projects the RAES SDL into a workbench detail."""
 
     def _catalog_with_minimal(self, tmp_path):
         _write_scenario_file(tmp_path, "minimal.sdl.yaml")

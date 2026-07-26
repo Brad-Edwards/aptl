@@ -1,4 +1,4 @@
-"""CLI for ACES experiment admission (ADR-047 "Experiment-controller
+"""CLI for RAES experiment admission (ADR-047 "Experiment-controller
 boundary", EXP-002 / issue #438).
 
 This module exposes ONLY the admission phase — ``aptl experiment admit``
@@ -18,9 +18,9 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import typer
-from aces_contracts.diagnostics import Diagnostic
+from raes_contracts.diagnostics import Diagnostic
 
-from aptl.backends.aces_diagnostics import render_aces_diagnostics
+from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.cli._common import resolve_run_store
 from aptl.core.experiment.controller import ExperimentController
 from aptl.core.experiment.errors import EXPERIMENT_ADMISSION_STAGE_LABEL, AdmissionRejection
@@ -30,13 +30,13 @@ from aptl.utils.logging import get_logger
 
 log = get_logger("cli.experiment")
 
-app = typer.Typer(help="ACES experiment admission (EXP-002).")
+app = typer.Typer(help="RAES experiment admission (EXP-002).")
 
 
 def _print_diagnostics(diagnostics: Iterable[Diagnostic]) -> None:
     """Render already-safe diagnostics to stderr via the shared formatter."""
     typer.echo(
-        render_aces_diagnostics(list(diagnostics), stage_label=EXPERIMENT_ADMISSION_STAGE_LABEL),
+        render_raes_diagnostics(list(diagnostics), stage_label=EXPERIMENT_ADMISSION_STAGE_LABEL),
         err=True,
     )
 
@@ -74,9 +74,9 @@ def admit(
         ),
     ),
 ) -> None:
-    """Admit an ACES experiment (ADR-047) without starting the lab.
+    """Admit a RAES experiment (ADR-047) without starting the lab.
 
-    Runs ADMISSION ONLY: bounded artifact resolution, ACES validation and
+    Runs ADMISSION ONLY: bounded artifact resolution, RAES validation and
     planning, apparatus/capture capability checks, and create-once
     persistence of the resulting immutable trial plan. This command never
     hydrates ``.env``, generates credentials or certificates, pulls images,
@@ -123,7 +123,7 @@ def admit(
         if result.warnings:
             typer.echo("")
             typer.echo(
-                render_aces_diagnostics(list(result.warnings), stage_label=EXPERIMENT_ADMISSION_STAGE_LABEL)
+                render_raes_diagnostics(list(result.warnings), stage_label=EXPERIMENT_ADMISSION_STAGE_LABEL)
             )
     except typer.Exit:
         raise

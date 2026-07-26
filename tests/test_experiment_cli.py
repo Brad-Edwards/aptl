@@ -1,7 +1,7 @@
 """Tests for ``aptl experiment admit`` (ADR-047 "Experiment-controller
 boundary", Stage 6 / EXP-002 / issue #438).
 
-Builds an on-disk project bundle (task/scenario files plus an ACES
+Builds an on-disk project bundle (task/scenario files plus a RAES
 associated-artifact manifest binding them, mirroring
 ``test_experiment_controller.py``'s helper of the same shape) and drives the
 real Typer CLI through ``CliRunner`` — proving the production
@@ -25,11 +25,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from aces_contracts.associated_artifacts import (
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     associated_artifact_set_digest,
 )
-from aces_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.corpus import FIXTURES, corpus_family_root
 from typer.testing import CliRunner
 
 from aptl.cli.main import app

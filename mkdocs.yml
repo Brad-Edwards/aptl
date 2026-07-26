@@ -88,6 +88,7 @@ nav:
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
+    - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
@@ -103,16 +104,16 @@ nav:
     - Appliance Network Boundary: components/appliance-boundary.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
-    - Curated ACES Variants: sdl/techvault-curated-variants.md
-  - ACES:
-    - APP-1 Appliance Boundary Materialization Preflight: aces/app-1-appliance-boundary-materialization-preflight.md
-    - TechVault Static Validation Preflight: aces/techvault-static-validation-preflight.md
-    - TechVault Static Validation Gate: aces/techvault-static-validation-gate.md
-    - TechVault Live Validation Preflight: aces/techvault-live-validation-preflight.md
-    - TechVault Live Validation Gate: aces/techvault-live-validation-gate.md
-    - TechVault Curated Live Validation Preflight: aces/techvault-curated-live-validation-preflight.md
-    - TechVault Curated Live Validation Gate: aces/techvault-curated-live-validation-gate.md
-    - Paper Scenario Realization: aces/paper-scenario-realization.md
+    - Curated RAES Variants: sdl/techvault-curated-variants.md
+  - RAES:
+    - APP-1 Appliance Boundary Materialization Preflight: raes/app-1-appliance-boundary-materialization-preflight.md
+    - TechVault Static Validation Preflight: raes/techvault-static-validation-preflight.md
+    - TechVault Static Validation Gate: raes/techvault-static-validation-gate.md
+    - TechVault Live Validation Preflight: raes/techvault-live-validation-preflight.md
+    - TechVault Live Validation Gate: raes/techvault-live-validation-gate.md
+    - TechVault Curated Live Validation Preflight: raes/techvault-curated-live-validation-preflight.md
+    - TechVault Curated Live Validation Gate: raes/techvault-curated-live-validation-gate.md
+    - Paper Scenario Realization: raes/paper-scenario-realization.md
   - Testing:
     - Smoke Test Plan: testing/smoke-test-plan.md
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
@@ -166,7 +167,7 @@ nav:
     - ADR-032 Conversation Surface Hardening: adrs/adr-032-conversation-surface-hardening.md
     - ADR-033 Agent Reasoning Trace Boundary: adrs/adr-033-agent-reasoning-trace-boundary.md
     - ADR-034 Lab-Managed SOC TLS CA: adrs/adr-034-lab-managed-soc-tls-ca.md
-    - ADR-035 ACES SDL Adoption: adrs/adr-035-aces-sdl-adoption.md
+    - ADR-035 RAES SDL Adoption: adrs/adr-035-raes-sdl-adoption.md
     - ADR-036 Snapshot Endpoint Registry: adrs/adr-036-snapshot-endpoint-registry.md
     - ADR-037 Docker Compose Backend Cohesion: adrs/adr-037-docker-compose-backend-cohesion.md
     - ADR-038 Docs Style Lint and Published Site: adrs/adr-038-docs-style-lint-and-published-site.md
@@ -175,10 +176,10 @@ nav:
     - ADR-041 Kali Capture Sidecar Ownership Boundary: adrs/adr-041-kali-capture-sidecar-ownership-boundary.md
     - ADR-042 Sidecar-Owned PTY Master: adrs/adr-042-sidecar-owned-pty-master.md
     - ADR-043 Suricata Runtime Config Ownership Boundary: adrs/adr-043-suricata-runtime-config-ownership-boundary.md
-    - ADR-044 ACES-Aligned Run Reproducibility Record: adrs/adr-044-aces-aligned-run-reproducibility-record.md
+    - ADR-044 RAES-Aligned Run Reproducibility Record: adrs/adr-044-raes-aligned-run-reproducibility-record.md
     - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
-    - ADR-046 Dynamic ACES Scenario Realization: adrs/adr-046-dynamic-aces-scenario-realization.md
-    - ADR-047 ACES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-aces-experiment-admission-and-trial-plan-boundary.md
+    - ADR-046 Dynamic RAES Scenario Realization: adrs/adr-046-dynamic-raes-scenario-realization.md
+    - ADR-047 RAES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-raes-experiment-admission-and-trial-plan-boundary.md
     - ADR-048 APTL Image-Free, Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
     - ADR-049 Sealed Disposable Lab Appliance: adrs/adr-049-sealed-disposable-lab-appliance.md
 

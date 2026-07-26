@@ -88,8 +88,8 @@ from aptl.utils.redaction import redact
 if TYPE_CHECKING:
     from docker.client import DockerClient
 
-    from aptl.backends.aces import AcesStartOutcome
-    from aptl.backends.aces_start_model import AcesRunTarget
+    from aptl.backends.raes import AcesStartOutcome
+    from aptl.backends.raes_start_model import AcesRunTarget
     from aptl.core.deployment.backend import DeploymentBackend
 
 log = get_logger("lab")
@@ -132,7 +132,7 @@ def _lab_start_failure_error(error: str) -> str:
     return message
 
 
-def start_aces_scenario(
+def start_raes_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
@@ -142,22 +142,22 @@ def start_aces_scenario(
     parameters: Mapping[str, object] | None = None,
     before_backend_retry: Callable[[], None] | None = None,
 ) -> AcesStartOutcome | LabResult:
-    """Lazy ACES handoff import for the public lab-start path.
+    """Lazy RAES handoff import for the public lab-start path.
 
     ``run_target`` (resolved once per lab-start run, REP-001 / GAP 4) is
-    threaded into the ACES handoff so orchestration persists workflow artifacts
+    threaded into the RAES handoff so orchestration persists workflow artifacts
     under the same run directory the run record is written to.
     ``before_backend_retry`` lets the lifecycle prepare SOC dependencies while
     the backend retains and reapplies the already admitted execution plan.
     """
     try:
-        from aptl.backends.aces import start_aces_scenario as _start_aces_scenario
+        from aptl.backends.raes import start_raes_scenario as _start_raes_scenario
     except ImportError as exc:
-        error = f"ACES runtime handoff unavailable: {redact(str(exc))}"
+        error = f"RAES runtime handoff unavailable: {redact(str(exc))}"
         log.error(error)
         return LabResult(success=False, error=error)
 
-    return _start_aces_scenario(
+    return _start_raes_scenario(
         project_dir,
         config,
         backend,
@@ -182,7 +182,7 @@ def selected_profiles_for_scenario(
     On import or planning failure, return an empty set.
     """
     try:
-        from aptl.backends.aces import (
+        from aptl.backends.raes import (
             selected_profiles_for_scenario as _selected_profiles,
         )
 
@@ -192,7 +192,7 @@ def selected_profiles_for_scenario(
             )
         )
     # broad-except: resolving profiles is best-effort inspection. Any failure
-    # (import, missing/invalid SDL, ACES planning error) degrades to an empty set.
+    # (import, missing/invalid SDL, RAES planning error) degrades to an empty set.
     except Exception as exc:
         log.warning("Could not resolve selected profiles: %s", redact(str(exc)))
         return set()
@@ -249,9 +249,9 @@ def admitted_stateful_artifact_ownership(
     backend: "DeploymentBackend",
     scenario_path: Path | None = None,
 ) -> frozenset[tuple[str, str, str, str]]:
-    """Lazy ACES import for exact pre-mutation artifact ownership."""
+    """Lazy RAES import for exact pre-mutation artifact ownership."""
 
-    from aptl.backends.aces import admitted_stateful_artifact_ownership as _load
+    from aptl.backends.raes import admitted_stateful_artifact_ownership as _load
 
     return _load(project_dir, config, backend, scenario_path=scenario_path)
 
@@ -461,7 +461,7 @@ def clean_boot_lab(
             teardown removes Compose-managed volumes; the knob lets future
             cleanup variations extend this one mode.
         skip_seed: Forwarded to the start path (skip SOC tool seeding).
-        scenario_path: Optional selected ACES SDL scenario path.
+        scenario_path: Optional selected RAES SDL scenario path.
         backend: Optional pre-created deployment backend, forwarded to the
             teardown so callers that already resolved one avoid a re-create.
         progress: Optional callback for participant-facing startup updates.
@@ -732,9 +732,9 @@ class _LabStartContext(object):
     # so the access summary can report the real port each service landed on.
     resolved_ports: list[object] = field(default_factory=list)
     diagnostics: list[StartupDiagnostic] = field(default_factory=list)
-    # REP-001: ACES start outcome and range snapshot for run record writing.
+    # REP-001: RAES start outcome and range snapshot for run record writing.
     # Use object to avoid circular imports; typed at use sites.
-    aces_outcome: object = None
+    raes_outcome: object = None
     snapshot: object = None
     # REP-001 / GAP 4: one run store + run_id resolved once per lab-start run,
     # threaded through orchestration and reused by the run-record step so
@@ -1012,8 +1012,8 @@ def _configure_verified_appliance_launch(
             binding = ApplianceBoundaryBinding(
                 policy_digest=descriptor.boundary_policy_digest,
                 payload_digest=descriptor.payload_digest,
-                aces_plan_digest=descriptor.participant_routes_digest,
-                aces_boundary_required=True,
+                raes_plan_digest=descriptor.participant_routes_digest,
+                raes_boundary_required=True,
                 boundary_helper_image=descriptor.boundary_helper_image,
                 egress_proxy_image=descriptor.egress_proxy_image,
                 boot_id=boot_id,
@@ -1049,9 +1049,9 @@ def _load_stateful_artifact_ownership(
 ) -> LabResult | None:
     """Cache exact admitted artifact consumers before legacy mutation."""
 
-    from aptl.backends.aces_start_model import DEFAULT_ACES_SCENARIO
+    from aptl.backends.raes_start_model import DEFAULT_RAES_SCENARIO
 
-    scenario_path = ctx.scenario_path or DEFAULT_ACES_SCENARIO
+    scenario_path = ctx.scenario_path or DEFAULT_RAES_SCENARIO
     if not scenario_path.is_absolute():
         scenario_path = ctx.project_dir / scenario_path
     if not scenario_path.is_file():
@@ -1068,7 +1068,7 @@ def _load_stateful_artifact_ownership(
         return LabResult(
             success=False,
             error=(
-                "ACES scenario admission failed before artifact preparation: "
+                "RAES scenario admission failed before artifact preparation: "
                 f"{redact(str(exc))}"
             ),
         )
@@ -1559,7 +1559,7 @@ def _restart_wazuh_manager_if_stuck(ctx: _LabStartContext) -> None:
         log.warning("wazuh-manager restart attempt failed: %s", exc)
 
 
-def _prepare_aces_backend_retry(ctx: _LabStartContext) -> None:
+def _prepare_raes_backend_retry(ctx: _LabStartContext) -> None:
     """Wait for SOC dependencies and repair the manager before one apply retry."""
 
     log.warning(
@@ -1584,32 +1584,32 @@ def _prepare_aces_backend_retry(ctx: _LabStartContext) -> None:
     description="backend_is_initialized(ctx.backend)",
 )
 def _step_start_containers(ctx: _LabStartContext) -> LabResult | None:
-    """Start the selected lab profiles through the ACES handoff."""
+    """Start the selected lab profiles through the RAES handoff."""
     log.info("Step 8: Starting containers...")
     # Runtime guards above.
     assert ctx.config is not None and ctx.backend is not None
-    # GAP 4: resolve the single run target ONCE, before the ACES handoff, so
+    # GAP 4: resolve the single run target ONCE, before the RAES handoff, so
     # orchestration persists workflow artifacts and the later run-record step
     # write to the same run directory / run_id.
     ctx.run_store, ctx.run_id = _resolve_run_target(ctx)
-    from aptl.backends.aces_start_model import AcesRunTarget
+    from aptl.backends.raes_start_model import AcesRunTarget
 
-    outcome = start_aces_scenario(
+    outcome = start_raes_scenario(
         ctx.project_dir,
         ctx.config,
         ctx.backend,
         scenario_path=ctx.scenario_path,
         run_target=AcesRunTarget(run_store=ctx.run_store, run_id=ctx.run_id),
-        # The ACES handoff invokes this only for a retryable backend-start
+        # The RAES handoff invokes this only for a retryable backend-start
         # failure whose admitted plan actually selected SOC. Keeping that gate
         # beside the admitted plan avoids both config-flag approximation and a
         # second parse/plan pass (issues #432 and #550).
-        before_backend_retry=partial(_prepare_aces_backend_retry, ctx),
+        before_backend_retry=partial(_prepare_raes_backend_retry, ctx),
     )
     lab_result = outcome.lab_result if hasattr(outcome, "lab_result") else outcome
     if lab_result.success:
-        # Store the ACES start outcome for the run record step (REP-001).
-        ctx.aces_outcome = outcome
+        # Store the RAES start outcome for the run record step (REP-001).
+        ctx.raes_outcome = outcome
         # Scope the post-start readiness checks to the profiles this scenario
         # actually started, not the global config flags. A curated bounded
         # scenario starts a subset, so a config-flag gate would wait on (and
@@ -1901,15 +1901,15 @@ def _step_capture_snapshot(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_write_run_record(ctx: _LabStartContext) -> LabResult | None:
-    """Write an ACES-aligned reproducibility record into the run archive (REP-001).
+    """Write a RAES-aligned reproducibility record into the run archive (REP-001).
 
     Non-fatal: a failure to write the record emits a WARNING diagnostic but
     does not abort the lab start. The lab is already running at this point.
     """
     log.info("Step 11c: Writing run reproducibility record...")
-    if ctx.aces_outcome is None or ctx.snapshot is None:
+    if ctx.raes_outcome is None or ctx.snapshot is None:
         log.warning(
-            "REP-001: Skipping run record — ACES outcome or range snapshot unavailable"
+            "REP-001: Skipping run record — RAES outcome or range snapshot unavailable"
         )
         return None
     try:
@@ -1951,9 +1951,9 @@ def _resolve_run_target(ctx: _LabStartContext) -> tuple[object, str]:
     return LocalRunStore(state_dir / "runs"), run_id
 
 
-def _resolve_aces_snapshot(outcome: object) -> object:
-    """Return a valid RuntimeSnapshot from the ACES outcome, or a blank default."""
-    from aces_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
+def _resolve_raes_snapshot(outcome: object) -> object:
+    """Return a valid RuntimeSnapshot from the RAES outcome, or a blank default."""
+    from raes_contracts.runtime_state import RuntimeSnapshot as _RuntimeSnapshot
 
     final_snapshot = getattr(outcome, "final_snapshot", None)
     if final_snapshot is None or not isinstance(final_snapshot, _RuntimeSnapshot):
@@ -1980,7 +1980,7 @@ def _assemble_tool_versions(snapshot: object) -> dict[str, str]:
             ("docker", sw.docker_version),
             ("compose", sw.compose_version),
             ("aptl", sw.aptl_version),
-            ("aces_sdl", sw.aces_sdl_version),
+            ("raes", sw.raes_version),
         )
         if v
     }
@@ -2005,10 +2005,10 @@ def _write_run_record(ctx: _LabStartContext) -> None:
     """Internal helper: build and persist the reproducibility record."""
     from datetime import datetime, timezone
 
-    from aptl.backends.aces_repro import RunRecordInputs, build_reproducibility_record
+    from aptl.backends.raes_repro import RunRecordInputs, build_reproducibility_record
     from aptl.core.snapshot import RangeSnapshot, detection_content_digest
 
-    outcome = ctx.aces_outcome
+    outcome = ctx.raes_outcome
     snapshot = ctx.snapshot
     if not isinstance(snapshot, RangeSnapshot):
         log.warning("REP-001: ctx.snapshot is not a RangeSnapshot; skipping")
@@ -2025,7 +2025,7 @@ def _write_run_record(ctx: _LabStartContext) -> None:
 
     store.create_run(run_id)
 
-    final_snapshot = _resolve_aces_snapshot(outcome)
+    final_snapshot = _resolve_raes_snapshot(outcome)
     now_str = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     inputs = RunRecordInputs(
@@ -2428,7 +2428,7 @@ def orchestrate_lab_start(
     Args:
         project_dir: Root directory of the APTL project.
         skip_seed: If True, skip SOC tool seeding (Step 13).
-        scenario_path: Optional selected ACES SDL scenario path.
+        scenario_path: Optional selected RAES SDL scenario path.
         progress: Optional callback for participant-facing startup updates.
 
     Returns:

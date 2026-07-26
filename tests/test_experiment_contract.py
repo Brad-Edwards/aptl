@@ -33,16 +33,16 @@ import hashlib
 import json
 
 import yaml
-from aces_backend_protocols.backend_manifest import BackendManifest
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.experiment_spec import parse_experiment_spec
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
-from aces_sdl import parse_sdl
-from aces_sdl.canonical import canonical_instantiated_sdl_digest
-from aces_sdl.instantiate import instantiate_scenario
+from raes_backend_protocols.backend_manifest import BackendManifest
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.experiment_spec import parse_experiment_spec
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
+from raes import parse_sdl
+from raes.canonical import canonical_instantiated_sdl_digest
+from raes.instantiate import instantiate_scenario
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import MappingArtifactSource
 from aptl.core.experiment.controller import ExperimentController
 from aptl.core.experiment.policy import default_admission_policy

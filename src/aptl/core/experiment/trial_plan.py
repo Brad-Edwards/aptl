@@ -8,7 +8,7 @@ Pure, side-effect-free expansion from an admitted
 module only builds in-memory, hashable plan data; a later stage wires the
 result through ``LocalRunStore.create_json_once``.
 
-The trial plan is an APTL-internal execution journal, not a portable ACES
+The trial plan is an APTL-internal execution journal, not a portable RAES
 experiment/task/study/run/apparatus/capture/analysis contract (ADR-047). It
 carries only source identities/digests, canonical condition/factor
 assignments, resolved non-secret parameter bindings, stochastic controls,
@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import rfc8785
-from aces_contracts.experiment_spec import ExperimentSpecModel
+from raes_contracts.experiment_spec import ExperimentSpecModel
 
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 from aptl.core.experiment.policy import AdmissionPolicy, OrderingKind, resolve_allocation_ordering
@@ -64,7 +64,7 @@ _SEED_DOMAIN = b"aptl.exp.trial-seed/v1"
 _TRIAL_ID_DOMAIN = b"aptl.exp.trial-id/v1"
 
 #: ASCII unit separator (0x1F) used to join hash-input fields. Not a legal
-#: character in any authored ACES identifier, so it cannot be abused to
+#: character in any authored RAES identifier, so it cannot be abused to
 #: fabricate a cross-field collision (e.g. by embedding the separator
 #: inside a condition ID to make two distinct coordinate tuples hash the
 #: same input bytes).
@@ -89,7 +89,7 @@ _PLAN_ID_PREFIX = "plan-"
 _TRIAL_ID_PREFIX = "trial-"
 
 #: Versioned identity for the canonical plan projection shape (an APTL-internal
-#: journal format, never an ACES contract). Bumped to v2 by EXP-010 (#752): the
+#: journal format, never a RAES contract). Bumped to v2 by EXP-010 (#752): the
 #: projection now pins the admitted capture bindings, changing the shape and
 #: digest, so old v1 bytes cannot silently reinterpret under it.
 _PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v2"
@@ -215,7 +215,7 @@ def _resolve_ordering_kind(spec: ExperimentSpecModel, *, policy: AdmissionPolicy
     has_allocation = run_plan.allocation is not None
     has_flat_count = run_plan.target_run_count is not None
     if has_allocation == has_flat_count:
-        # ACES's own model validator already enforces this XOR at parse
+        # RAES's own model validator already enforces this XOR at parse
         # time; this is a defensive invariant check on an already-admitted
         # model, not a user-triggerable failure mode.
         raise AssertionError(

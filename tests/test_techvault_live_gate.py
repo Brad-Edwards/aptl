@@ -22,7 +22,7 @@ from aptl.validation import _live_gate_checks as lgc
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
-    CATEGORY_ACES_SPECIFICATION,
+    CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
@@ -134,7 +134,7 @@ def _wire_boot(
     }
     # The realization + boot probes moved to `_live_gate_probes` (lgp); their
     # leaf deps are looked up there. `select_backend_profiles` is still called
-    # directly in `check_aces_driven_boot` (lgc), so it stays patched on lgc.
+    # directly in `check_raes_driven_boot` (lgc), so it stays patched on lgc.
     monkeypatch.setattr(lgp, "get_backend", lambda config, project_dir: _Backend())
     monkeypatch.setattr(lgp, "create_aptl_runtime_target", lambda **k: object())
     monkeypatch.setattr(lgp, "RuntimeManager", _Manager)
@@ -164,7 +164,7 @@ def test_check_category_map_covers_every_check_with_valid_categories():
         {
             "static_prerequisite",
             "boot_inputs_match_public_path",
-            "aces_driven_boot",
+            "raes_driven_boot",
             "defensive_stack_readiness",
             "kali_reachability",
             "telemetry_evidence_path",
@@ -176,7 +176,7 @@ def test_check_category_map_covers_every_check_with_valid_categories():
 
 
 def test_live_gate_report_passed_failures_categories_and_render():
-    ok = LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+    ok = LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
     bad = LiveGateCheck(
         "kali_reachability", CATEGORY_KALI_REACHABILITY, False, ("unreachable",)
     )
@@ -201,7 +201,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     # run caught exactly that for `check_scenario_variation(state=...)`).
     def static(scenario_path, *, project_dir, config, options):
         return object(), LiveGateCheck(
-            "static_prerequisite", CATEGORY_ACES_SPECIFICATION, True
+            "static_prerequisite", CATEGORY_RAES_SPECIFICATION, True
         )
 
     def inputs(scenario_path, *, project_dir, options):
@@ -211,7 +211,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
 
     def boot(scenario, *, project_dir, config, options, state, scenario_path):
         assert scenario_path == SCENARIO
-        return LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+        return LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
 
     def readiness(*, state):
         return LiveGateCheck(
@@ -236,7 +236,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
 
     monkeypatch.setattr(lgc, "check_static_prerequisite", static)
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
-    monkeypatch.setattr(lgc, "check_aces_driven_boot", boot)
+    monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
     monkeypatch.setattr(lgc, "check_kali_reachability", reachability)
     monkeypatch.setattr(lgc, "check_telemetry_evidence_path", telemetry)
@@ -250,7 +250,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
         "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
-        "aces_driven_boot",
+        "raes_driven_boot",
         "defensive_stack_readiness",
         "kali_reachability",
         "telemetry_evidence_path",
@@ -271,7 +271,7 @@ def test_validate_live_deployment_short_circuits_on_static_failure(monkeypatch):
         lambda *a, **k: (
             None,
             LiveGateCheck(
-                "static_prerequisite", CATEGORY_ACES_SPECIFICATION, False, ("bad",)
+                "static_prerequisite", CATEGORY_RAES_SPECIFICATION, False, ("bad",)
             ),
         ),
     )
@@ -288,14 +288,14 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
         "check_static_prerequisite",
         lambda *a, **k: (
             object(),
-            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+            LiveGateCheck("static_prerequisite", CATEGORY_RAES_SPECIFICATION, True),
         ),
     )
     monkeypatch.setattr(
         lgc,
-        "check_aces_driven_boot",
+        "check_raes_driven_boot",
         lambda *a, **k: LiveGateCheck(
-            "aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)
+            "raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, False, ("boom",)
         ),
     )
     archive_calls = []
@@ -315,7 +315,7 @@ def test_validate_live_deployment_records_archive_on_boot_failure(monkeypatch):
         "run_id_input",
         "static_prerequisite",
         "boot_inputs_match_public_path",
-        "aces_driven_boot",
+        "raes_driven_boot",
         "run_archive_manifest",
     ]
     assert archive_calls == [1]
@@ -334,7 +334,7 @@ def test_check_static_prerequisite_passes_and_parses(monkeypatch):
         SCENARIO, project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions()
     )
     assert scenario == "SCENARIO-OBJ"
-    assert check.passed and check.category == CATEGORY_ACES_SPECIFICATION
+    assert check.passed and check.category == CATEGORY_RAES_SPECIFICATION
 
 
 def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
@@ -349,14 +349,14 @@ def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# 2. ACES-driven boot.
+# 2. RAES-driven boot.
 # --------------------------------------------------------------------------- #
 
 
-def test_check_aces_driven_boot_happy_populates_state(monkeypatch):
+def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
     _wire_boot(monkeypatch)
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -369,13 +369,13 @@ def test_check_aces_driven_boot_happy_populates_state(monkeypatch):
     assert state.snapshot["containers"]
 
 
-def test_check_aces_driven_boot_fails_on_interpretation_error(monkeypatch):
+def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):
     bad = _Realization(
         [_node("webapp", ["dmz"])], ["dmz"], diagnostics=(_Diag("error"),)
     )
     _wire_boot(monkeypatch, realization=bad)
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -385,10 +385,10 @@ def test_check_aces_driven_boot_fails_on_interpretation_error(monkeypatch):
     assert not check.passed and check.category == CATEGORY_BACKEND_INTERPRETATION
 
 
-def test_check_aces_driven_boot_fails_on_empty_realization(monkeypatch):
+def test_check_raes_driven_boot_fails_on_empty_realization(monkeypatch):
     _wire_boot(monkeypatch, realization=_Realization([], []))
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -396,13 +396,13 @@ def test_check_aces_driven_boot_fails_on_empty_realization(monkeypatch):
         state=state,
     )
     assert not check.passed
-    assert any("no ACES nodes" in d for d in check.diagnostics)
+    assert any("no RAES nodes" in d for d in check.diagnostics)
 
 
-def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
+def test_check_raes_driven_boot_fails_on_boot_failed(monkeypatch):
     _wire_boot(monkeypatch, outcome=StartupOutcome.FAILED)
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -413,7 +413,7 @@ def test_check_aces_driven_boot_fails_on_boot_failed(monkeypatch):
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
-def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
+def test_check_raes_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypatch):
     boots = []
     _wire_boot(monkeypatch)
     monkeypatch.setattr(
@@ -424,7 +424,7 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
         ),
     )
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -437,7 +437,7 @@ def test_check_aces_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     assert check.passed and state.snapshot["containers"]
 
 
-def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
+def test_check_raes_driven_boot_fails_when_clean_boot_fails(monkeypatch):
     """A failed clean boot (e.g. fatal cleanup) fails the gate, no snapshot."""
     _wire_boot(monkeypatch)
     monkeypatch.setattr(
@@ -450,7 +450,7 @@ def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
         ),
     )
     state = LiveGateState()
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -461,7 +461,7 @@ def test_check_aces_driven_boot_fails_when_clean_boot_fails(monkeypatch):
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
-def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
+def test_check_raes_driven_boot_passes_selected_scenario_to_public_start(monkeypatch):
     _wire_boot(monkeypatch)
     boots = []
     monkeypatch.setattr(
@@ -475,7 +475,7 @@ def test_check_aces_driven_boot_passes_selected_scenario_to_public_start(monkeyp
     state = LiveGateState()
     selected = PROJECT_ROOT / "scenarios" / "custom.sdl.yaml"
 
-    check = lgc.check_aces_driven_boot(
+    check = lgc.check_raes_driven_boot(
         object(),
         project_dir=PROJECT_ROOT,
         config=_config(),
@@ -526,16 +526,16 @@ def test_validate_live_deployment_short_circuits_on_profile_mismatch(monkeypatch
         "check_static_prerequisite",
         lambda *a, **k: (
             object(),
-            LiveGateCheck("static_prerequisite", CATEGORY_ACES_SPECIFICATION, True),
+            LiveGateCheck("static_prerequisite", CATEGORY_RAES_SPECIFICATION, True),
         ),
     )
     booted = []
     monkeypatch.setattr(
         lgc,
-        "check_aces_driven_boot",
+        "check_raes_driven_boot",
         lambda *a, **k: (
             booted.append(1)
-            or LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
+            or LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True)
         ),
     )
     report = validate_live_deployment(
@@ -655,8 +655,8 @@ def test_readiness_passes_when_declared_health_met():
 
 
 def test_readiness_fails_when_one_node_reports_unhealthy_alongside_a_healthy_node():
-    # Health is observed, never declared (aces-sdl 0.21.0 removed authored
-    # `runtime.health`, ACES #761), so there is no declared expectation left to
+    # Health is observed, never declared (raes 0.21.0 removed authored
+    # `runtime.health`, RAES #761), so there is no declared expectation left to
     # mismatch against. The container's own healthcheck is the expectation
     # instead: once it reports a health state at all, that state must be
     # "healthy". A sibling node with no healthcheck (tolerated on its own, see
@@ -993,7 +993,7 @@ def _archive_state():
 
 def test_run_archive_writes_manifest_through_redacting_boundary():
     store = _RecordingStore()
-    prior = (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),)
+    prior = (LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),)
     check = lgc.check_run_archive_manifest(
         SCENARIO,
         project_dir=PROJECT_ROOT,
@@ -1009,12 +1009,12 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
     assert len(store.json_writes) == 1
     _, path, manifest = store.json_writes[0]
     assert path == "live-gate/manifest.json"
-    assert manifest["aces_provenance"]["realization"]["nodes"]
-    assert manifest["aces_provenance"]["selected_profiles"] == ["dmz", "soc"]
+    assert manifest["raes_provenance"]["realization"]["nodes"]
+    assert manifest["raes_provenance"]["selected_profiles"] == ["dmz", "soc"]
     assert manifest["evaluator_surfaces"]["profile"] == "full-remote-control-plane"
     assert (
         manifest["evaluator_surfaces"]["execution_state_integration"]
-        == "aptl.backends.aces_evaluator.AptlEvaluator"
+        == "aptl.backends.raes_evaluator.AptlEvaluator"
     )
     assert manifest["participant_runtime_surfaces"]["contracts"] == [
         "participant-episode-state-envelope-v1",
@@ -1038,7 +1038,7 @@ def test_run_archive_roundtrips_to_local_store(tmp_path):
     assert check.passed
     manifest_path = tmp_path / "rid" / "live-gate" / "manifest.json"
     written = manifest_path.read_text()
-    assert "aces_provenance" in written and "realization" in written
+    assert "raes_provenance" in written and "realization" in written
     # Regression guard: the validation outcome key must survive the run-archive
     # redaction boundary (a `passed` key would be masked as [REDACTED]).
     reloaded = json.loads(written)
@@ -1053,7 +1053,7 @@ def test_run_archive_records_failing_final_check_as_not_ok():
     # cannot disagree with the returned report.
     store = _RecordingStore()
     prior = (
-        LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),
+        LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, True),
         LiveGateCheck(
             "scenario_variation",
             CATEGORY_BACKEND_INTERPRETATION,
@@ -1125,7 +1125,7 @@ def _variation_state(nodes):
 def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
     """Write a minimal compose file mapping service names to profiles.
 
-    Mirrors the helper in ``test_aces_backend.py``; lets variation tests drive
+    Mirrors the helper in ``test_raes_backend.py``; lets variation tests drive
     the real ``interpret_provisioning_plan`` compose-profile resolution against a
     hermetic ``tmp_path`` instead of the repo's live ``docker-compose.yml``.
     """
@@ -1242,7 +1242,7 @@ def _patch_cli(mocker, *, passed=True):
         "scn",
         "full-remote-control-plane",
         "rid",
-        (LiveGateCheck("aces_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
+        (LiveGateCheck("raes_driven_boot", CATEGORY_BACKEND_INSTANTIATION, passed),),
     )
     mocker.patch(
         "aptl.cli._common.resolve_config_for_cli",

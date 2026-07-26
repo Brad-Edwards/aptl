@@ -6,5 +6,5 @@
 4. Report any suspicious email to security@techvault.local.
 
 This file is checked-in fixture content realized onto the file share via
-the ACES content-placement path (issue #689); it is not runtime-observed
+the RAES content-placement path (issue #689); it is not runtime-observed
 or generated state.

@@ -138,7 +138,7 @@ the workflow platform.
   workflow platform behavior.
 - Treating the audited phase override used for issue #623 as the normal success
   path after the vocabulary fix.
-- Changing application code, Docker topology, API/web auth, ACES SDL, MCP
+- Changing application code, Docker topology, API/web auth, RAES SDL, MCP
   server behavior, or runtime lab lifecycle as part of this metadata fix.
 
 ## Non-Goals
@@ -147,7 +147,7 @@ the workflow platform.
 - Do not change `.ground-control.yaml` here.
 - Do not define new workflow platform adapter vocabulary or fix the upstream
   workflow-platform adapter issue in APTL.
-- Do not redesign APTL's trust boundaries, Docker Compose topology, ACES
+- Do not redesign APTL's trust boundaries, Docker Compose topology, RAES
   inventory model, web/API/MCP control planes, secret-handling rules, or
   workflow commands.
 - Do not make unsupported `config` or `network` concerns appear covered unless

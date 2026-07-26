@@ -27,12 +27,12 @@ delivery model needs:
   secret handling, and TLS trust.
 - ADR-033, ADR-041, ADR-042, ADR-044, and the evidence package own capture,
   tamper boundaries, reproducibility, and persistence.
-- ADR-035 through ADR-048 make ACES contracts and APTL's image-free,
+- ADR-035 through ADR-048 make RAES contracts and APTL's image-free,
   Docker-based realization pipeline authoritative.
 - ADR-039 and the BFF/session implementation protect a trusted operator web
   control plane, but that API still grants guest-Docker authority and is not a
   participant authorization surface.
-- `AptlParticipantRuntime` already implements the ACES participant episode and
+- `AptlParticipantRuntime` already implements the RAES participant episode and
   action contracts. It is a runtime contract, not an agent installer or a
   participant-facing shell API.
 
@@ -46,7 +46,7 @@ This ADR uses **appliance payload** for the signed, versioned guest system that
 contains APTL. This is distinct from the forbidden per-node **appliance image**
 in ADR-048. The outer guest may be a VM while APTL nodes inside it remain
 Docker-based, generic-base, placement-realized nodes. The VM is a delivery and
-containment envelope, not an ACES node-realization backend.
+containment envelope, not a RAES node-realization backend.
 
 ## Decision
 
@@ -82,7 +82,7 @@ flowchart TB
         end
 
         subgraph MZ["Management zone"]
-            PR[ACES ParticipantRuntime]
+            PR[RAES ParticipantRuntime]
             AG[Agent runtime]
             MCP[MCP servers and common library]
             CP[Python control plane and operator API]
@@ -144,7 +144,7 @@ ADR-006's four networks remain historical topology input, but they do not meet
 the participant appliance contract. In particular, `aptl-security` currently
 conflates blue, management, observability, and egress authority, while
 multi-homed Kali, DNS, Wazuh, and Suricata instances blur routing policy. The
-participant form must separate those concerns without changing ACES-authored
+participant form must separate those concerns without changing RAES-authored
 scenario identity or inventing a second scenario schema.
 
 ### Data flow
@@ -153,7 +153,7 @@ scenario identity or inventing a second scenario schema.
 sequenceDiagram
     participant U as Participant
     participant G as Participant gateway
-    participant R as ACES ParticipantRuntime
+    participant R as RAES ParticipantRuntime
     participant A as Agent runtime
     participant M as MCP servers
     participant L as Red/blue/target services
@@ -208,7 +208,7 @@ policy and deployment metadata, never by a source fork or event profile.
 The extensibility seam is one versioned appliance-envelope contract containing
 only payload identity, delivery form, participant ingress, health/recovery
 adapter, secret-bootstrap channel, egress policy reference, resource limits,
-and evidence-export sink. It composes the existing `AptlConfig`, ACES, MCP,
+and evidence-export sink. It composes the existing `AptlConfig`, RAES, MCP,
 API, and runstore contracts; it does not replace or mirror them.
 
 ## Explicit contracts
@@ -241,7 +241,7 @@ generic file API, service-port tunnel, secret viewer, or raw-log endpoint.
 | Runtime placement | Docker/Compose, the Python control plane, web services, agent runtime, and every MCP server run inside the guest |
 | Agent separation | Agent and MCP processes run in the management zone and never inside Kali or another scenario workload |
 | Zone isolation | Participant, management, red, blue, target, and egress networks are distinct and live tests prove the allowed-flow matrix and denied paths |
-| Participant API | Participant ingress mounts only participant routes backed by ACES participant/runtime and narrow read projections; operator lifecycle, Docker, kill, config mutation, arbitrary terminal, and raw evidence routes are absent |
+| Participant API | Participant ingress mounts only participant routes backed by RAES participant/runtime and narrow read projections; operator lifecycle, Docker, kill, config mutation, arbitrary terminal, and raw evidence routes are absent |
 | Operator API | The ADR-039 API remains management-only, keeps BFF/session/CSRF/Host/WebSocket controls, and is not reachable from participant, red, blue, target, egress, or venue networks |
 | Docker authority | No participant-reachable or scenario workload receives raw `/var/run/docker.sock`; guest-Docker authority stays with the smallest management owner and existing typed `DeploymentBackend` operations |
 | Secret placement | Model and operator credentials exist only in management-zone secret state, are short-lived where supported, and are absent from Kali, target, blue, images, snapshots, argv, URLs, logs, and evidence |
@@ -312,7 +312,7 @@ remains binding.
 ### Evidence and capture
 
 - `RunStorageBackend`, `LocalRunStore`, the evidence coordinator/content store,
-  ACES evidence contracts, `RangeSnapshot.to_dict()`, and ADR-044 remain the
+  RAES evidence contracts, `RangeSnapshot.to_dict()`, and ADR-044 remain the
   canonical persistence and reproducibility surfaces.
 - MCP tool records, MCP-side PTY, Kali sidecar capture, OTel data, SOC evidence,
   and scenario evidence retain their distinct meanings and existing
@@ -331,7 +331,7 @@ remains binding.
 
 - A guest replacement is the only operation that re-establishes the supported
   participant trust boundary after compromise.
-- `aptl lab stop -v`, ACES episode reset/restart, and scenario reprovisioning
+- `aptl lab stop -v`, RAES episode reset/restart, and scenario reprovisioning
   remain useful inner lifecycle operations but do not claim to remove guest
   persistence, guest-root compromise, or hypervisor-facing state.
 - Releases are immutable and versioned. Upgrade creates a replacement guest
@@ -349,14 +349,14 @@ fork or replace them.
 
 | Existing contract | Appliance treatment |
 | --- | --- |
-| ACES parse/compile/plan/admission and ADR-046/048 realization | Unchanged inside the guest. The outer VM is not an ACES node provider or an appliance-image escape hatch. |
-| `docker-compose.yml` and dynamic realization | Continue as guest-Docker mechanics. Participant topology must come from admitted ACES realization, while retained Compose remains reference/runtime support per ADR-048. |
+| RAES parse/compile/plan/admission and ADR-046/048 realization | Unchanged inside the guest. The outer VM is not a RAES node provider or an appliance-image escape hatch. |
+| `docker-compose.yml` and dynamic realization | Continue as guest-Docker mechanics. Participant topology must come from admitted RAES realization, while retained Compose remains reference/runtime support per ADR-048. |
 | `DeploymentBackend` | Remains the only lifecycle, inventory, and container-interaction boundary. In participant mode it targets the guest daemon only. Do not add a "VM deployment backend" for inner lab nodes. |
 | Python CLI/core | Runs in the management zone. Thin CLI/API adapters continue to call core services and existing result envelopes. |
 | Operator web UI/API | Reuses FastAPI assembly, Pydantic projections, BFF/session/CSRF/Host/auth, terminal allow-list, and known-host verification, but is management-only. |
-| Participant UX | Reuses the Svelte component system and wire projections where semantically identical. Participant mutations bind to ACES `ParticipantRuntime`; they do not expose operator routes under a role flag. |
+| Participant UX | Reuses the Svelte component system and wire projections where semantically identical. Participant mutations bind to RAES `ParticipantRuntime`; they do not expose operator routes under a role flag. |
 | MCP servers | All run inside management, reuse `aptl-mcp-common`, JSON Schema handlers, endpoint/TLS validation, SSH sessions, telemetry, capture, and redaction. MCP config points to guest-internal endpoints, not physical-host loopback. |
-| Scenario and participant contracts | Use ACES contracts directly. No appliance-specific scenario, participant, action, episode, or evidence DTO mirrors. |
+| Scenario and participant contracts | Use RAES contracts directly. No appliance-specific scenario, participant, action, episode, or evidence DTO mirrors. |
 | Run storage and export | Stay behind `RunStorageBackend` and evidence contracts on a management-owned guest volume. Appliance export packages already-safe/classified artifacts. |
 | Lifecycle policy | ADR-045 may request inner teardown, but seat TTL and security reset are outer guest-replacement policy and must not be reported as equivalent. |
 
@@ -369,21 +369,21 @@ boundary.
 
 | Layer | Required passage and canonical owner |
 | --- | --- |
-| Appliance identity | A narrow signed payload manifest validates version, digest, compatible envelope version, policy version, and build provenance before boot is accepted. It must not mirror `AptlConfig`, ACES SDL, backend manifests, or run manifests. |
-| ACES validation | Scenario and participant inputs continue through ACES parsing, semantic validation, planning/admission, `RuntimeTarget`, backend-manifest conformance, operation receipt/status, `RuntimeSnapshot`, and `AptlParticipantRuntime`. |
+| Appliance identity | A narrow signed payload manifest validates version, digest, compatible envelope version, policy version, and build provenance before boot is accepted. It must not mirror `AptlConfig`, RAES SDL, backend manifests, or run manifests. |
+| RAES validation | Scenario and participant inputs continue through RAES parsing, semantic validation, planning/admission, `RuntimeTarget`, backend-manifest conformance, operation receipt/status, `RuntimeSnapshot`, and `AptlParticipantRuntime`. |
 | First-party config | `src/aptl/core/config.py`, `AptlConfig`, and ADR-025 remain strict with `extra="forbid"`. Delivery metadata does not become a pass-through `aptl.json` dictionary. |
 | Environment binding | `src/aptl/core/env.py`, `contains_placeholder()`, `WebAuthSettings.from_env()`, and service-local parse-then-validate settings are the patterns. Missing, empty, malformed, or placeholder secrets fail closed without echoing values. |
 | Generated artifacts | ADR-028/034 containment, no-follow/symlink rejection, atomic writes, restrictive modes, source/generated ownership, and read-only mounts apply inside the guest. |
 | API authentication | `src/aptl/api/main.py`, `deps.py`, `session.py`, `middleware/bff.py`, terminal routing, and ADR-039/040 own Host, CSRF, session, bearer, origin, WebSocket, allow-list, and SSH host-key gates. Participant route assembly adds no bypass. |
 | MCP ingress and transport | `mcp/aptl-mcp-common` owns config env substitution, tool JSON Schemas, handler assertions, endpoint URL validation, TLS/CA policy, SSH session lifecycle, error envelopes, telemetry, capture, and TypeScript redaction. |
 | Deployment authority | `DeploymentBackend`, `DockerComposeBackend`, typed methods, project-label scoping, argv-list subprocesses, and bounded timeouts remain canonical. Any service-specific Docker mediation must expose fixed, typed operations, never generic argv or Docker API passthrough. |
-| Network policy | Admitted ACES realization and the existing network-realization models supply scenario topology; generated/runtime Compose mechanics enforce it and are never parsed as an authority. One signed platform policy owns participant, management, and egress placement plus the default-deny flow matrix without mirroring red/blue/target scenario topology. |
+| Network policy | Admitted RAES realization and the existing network-realization models supply scenario topology; generated/runtime Compose mechanics enforce it and are never parsed as an authority. One signed platform policy owns participant, management, and egress placement plus the default-deny flow matrix without mirroring red/blue/target scenario topology. |
 | Secret handling and OS exposure | ADR-029, `redact()` parity, `curl_safe`, ignored generated state, and restrictive file modes apply. Secrets do not enter argv, URLs, shell strings, Compose healthchecks, static assets, exception text, or raw support logs. |
 | Persistence and capture | `RunStorageBackend`, `LocalRunStore`, evidence coordinator/content store, `RangeSnapshot.to_dict()`, ADR-033/041/042/044, and exporter packaging remain canonical. No second appliance evidence database or archive schema. |
 | Logging and observability | `get_logger()`, ADR-012 OTel, common MCP telemetry, diagnostic codes, counts, safe identities, and digests only. Participant and host health never expose raw tool results, credentials, command lines, or evidence bytes. |
-| Error envelopes | Reuse `LabResult`, `LabStatus`, `StartupOutcome`, `StartupDiagnostic`, `BackendTimeoutError`, FastAPI's narrow HTTP errors/Pydantic responses, WebSocket errors, MCP `SSHError`/tool results, ACES `Diagnostic` and operation status. Do not add an appliance-wide exception hierarchy. |
+| Error envelopes | Reuse `LabResult`, `LabStatus`, `StartupOutcome`, `StartupDiagnostic`, `BackendTimeoutError`, FastAPI's narrow HTTP errors/Pydantic responses, WebSocket errors, MCP `SSHError`/tool results, RAES `Diagnostic` and operation status. Do not add an appliance-wide exception hierarchy. |
 | Lifecycle | `core.lab` keeps its flat `_step_*` orchestration and ADR-030 readiness classification. ADR-045 owns inner policy ticks. The outer envelope reports separate seat lifecycle and trust/taint state. |
-| Repository gates | `.ground-control.yaml`, `.gc/plan-rules.md`, Compose/static security tests, Python pytest, MCP vitest, web vitest, pre-commit, clean-lab validation, and ACES static/live gates remain the completion authorities. |
+| Repository gates | `.ground-control.yaml`, `.gc/plan-rules.md`, Compose/static security tests, Python pytest, MCP vitest, web vitest, pre-commit, clean-lab validation, and RAES static/live gates remain the completion authorities. |
 
 ### Whole-repository scope
 
@@ -419,7 +419,7 @@ supported participant appliance:
 | APP-007 Venue and egress containment | Local loopback-only ingress, hosted authenticated TLS ingress, no bridged lab NIC, default-deny egress, destination policy, DNS policy, and resource/rate limits |
 | APP-008 Evidence and capture boundary | Management-owned storage, ADR-041/042 Kali-root isolation, classified export, redaction parity, checksums, quota handling, and no normal host synchronization |
 | APP-009 Reset, upgrade, and recovery | Cold replacement destroys mutable seat state; signed replacement upgrade; coarse health; audited break-glass taint; recovery drills prove no manual in-guest repair is required |
-| APP-010 Form parity | Local and hosted conformance reports name the same payload digest, UI build, route contract, ACES/backend manifests, scenarios, MCP tools, and participant workflow |
+| APP-010 Form parity | Local and hosted conformance reports name the same payload digest, UI build, route contract, RAES/backend manifests, scenarios, MCP tools, and participant workflow |
 
 An implementation issue is reconciled only when it names the APP controls it
 changes or proves, identifies the canonical incumbents it reuses, and states
@@ -458,7 +458,7 @@ being called safe because the socket is inside the guest.
 | Existing work | Reconciliation |
 | --- | --- |
 | Issue #819 | This ADR is the authoritative delivery decision and APP control set. |
-| Issue #557 / DSL-010 participant runtime | Keep the published ACES participant contracts and `AptlParticipantRuntime`. Remove the installed physical-host agent assumption: participant runtime, agent, and MCP processes belong in guest management. Episode reset remains distinct from appliance reset. |
+| Issue #557 / DSL-010 participant runtime | Keep the published RAES participant contracts and `AptlParticipantRuntime`. Remove the installed physical-host agent assumption: participant runtime, agent, and MCP processes belong in guest management. Episode reset remains distinct from appliance reset. |
 | Issue #541 / trusted local operator web UI | Reuse the UI component system, API projections, BFF/session/auth, and control-plane services. Do not expose the operator route assembly to participants or treat the existing single operator token as participant authorization. |
 | ADR-001 | Superseded only for supported participant delivery. Trusted developer-local Compose may remain; participant forms put that same Docker-based runtime inside the appliance. |
 | ADR-006 | Superseded for the participant trust topology. Its red/DMZ/internal semantics remain useful inputs, but management, blue, participant, and egress must be distinct enforced zones. |
@@ -466,7 +466,7 @@ being called safe because the socket is inside the guest.
 | ADR-039/040 | Remain authoritative for the management-only operator web/terminal surface and supply reusable browser/security controls. They do not authorize participant access. |
 | ADR-041/042 | Remain authoritative for Kali-root capture isolation and sidecar-owned PTY evidence. Appliance isolation does not weaken them. |
 | ADR-045 | Remains authoritative for inner lab TTL/idle scheduling. Outer seat expiry and cold replacement are separate envelope policy. |
-| ADR-048 | Remains authoritative. A delivery VM does not permit pre-baked ACES node appliance images or a libvirt node backend. |
+| ADR-048 | Remains authoritative. A delivery VM does not permit pre-baked RAES node appliance images or a libvirt node backend. |
 | Workshop playbook and emergency hosted runbook | Transitional developer-host/fleet procedures are not appliance conformance evidence. They must be replaced or clearly marked legacy before participant delivery is advertised as supported. |
 
 All Black Hat/Arsenal follow-on issues must be reconciled against this table
@@ -491,7 +491,7 @@ issues default to no authority to weaken the boundary.
   a disposable guest rather than the participant's physical host.
 - Local and hosted delivery share one payload, UX, scenario contract, and
   conformance surface.
-- Existing Compose, ACES, MCP, web, lifecycle, evidence, and error contracts
+- Existing Compose, RAES, MCP, web, lifecycle, evidence, and error contracts
   remain reusable inside a clearer outer boundary.
 - Cold replacement gives reset and recovery a testable security meaning.
 - Black Hat is a milestone for the product delivery model, not a source fork.
@@ -530,7 +530,7 @@ issues default to no authority to weaken the boundary.
 - Do not implement the appliance, build pipeline, launcher, hosted fleet, or
   milestone controls in this ADR.
 - Do not migrate APTL nodes from Docker to libvirt, Kubernetes, or per-node VMs.
-- Do not replace ACES SDL, backend manifests, participant contracts,
+- Do not replace RAES SDL, backend manifests, participant contracts,
   `AptlConfig`, MCP config, API DTOs, run manifests, or evidence schemas.
 - Do not turn `AptlParticipantRuntime` into an agent orchestrator or add an
   in-repo model loop merely to relocate a supported external agent runtime.
@@ -559,7 +559,7 @@ issues default to no authority to weaken the boundary.
 - Creating a generic Docker API/argv proxy and calling it least privilege.
 - Treating multi-homing as firewall policy or making DNS, Suricata, Wazuh, or
   Kali an implicit inter-zone router.
-- Duplicating ACES participant/action/evidence DTOs, API response types, MCP
+- Duplicating RAES participant/action/evidence DTOs, API response types, MCP
   config schemas, redaction policies, ID validators, run layouts, readiness
   taxonomies, exception hierarchies, or workflow state machines.
 - Putting secrets in images, cloud-init/user-data logs, process argv, URLs,
@@ -588,7 +588,7 @@ issues default to no authority to weaken the boundary.
 - [ADR-039](adr-039-web-control-plane-authentication.md)
 - [ADR-041](adr-041-kali-capture-sidecar-ownership-boundary.md)
 - [ADR-042](adr-042-sidecar-owned-pty-master.md)
-- [ADR-044](adr-044-aces-aligned-run-reproducibility-record.md)
+- [ADR-044](adr-044-raes-aligned-run-reproducibility-record.md)
 - [ADR-045](adr-045-ephemeral-lifecycle-policy-enforcement.md)
-- [ADR-047](adr-047-aces-experiment-admission-and-trial-plan-boundary.md)
+- [ADR-047](adr-047-raes-experiment-admission-and-trial-plan-boundary.md)
 - [ADR-048](adr-048-image-free-placement-realization.md)

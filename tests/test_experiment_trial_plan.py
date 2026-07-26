@@ -9,8 +9,8 @@ byte-identical ``TrialPlan.canonical_bytes`` (ADR-047 "Gotchas": no
 ``hash()``, UUIDs, timestamps, ambient RNG, or set/dict traversal leaking
 into the result).
 
-Uses the installed ACES fixture corpus
-(``aces_contracts.corpus.corpus_family_root(FIXTURES)``) for a realistic
+Uses the installed RAES fixture corpus
+(``raes_contracts.corpus.corpus_family_root(FIXTURES)``) for a realistic
 condition allocation, plus hand-built minimal specs for flat allocation and
 for map-order-independence at the factor-level granularity (the corpus
 fixture's conditions each carry only one factor level, which is not enough
@@ -28,8 +28,8 @@ import sys
 import textwrap
 
 import pytest
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.experiment_spec import ExperimentSpecModel
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.experiment_spec import ExperimentSpecModel
 
 from aptl.core.experiment.errors import EXPERIMENT_ADMISSION_DOMAIN, AdmissionRejection
 from aptl.core.experiment.policy import (
@@ -495,7 +495,7 @@ class TestDeterminism:
         seeds and confirm the digest still matches."""
         script = textwrap.dedent(
             """
-            from aces_contracts.experiment_spec import ExperimentSpecModel
+            from raes_contracts.experiment_spec import ExperimentSpecModel
             from aptl.core.experiment.policy import default_admission_policy
             from aptl.core.experiment.trial_plan import expand_trial_plan
 

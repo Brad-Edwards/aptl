@@ -126,7 +126,7 @@ second ownership implementation target.
 - **Persistence and evidence:** no repository/database transaction is involved.
   Stateful realization may persist only its existing non-secret public-root
   fingerprint and validation booleans; ownership metadata and private material
-  do not belong in run records or ACES evidence.
+  do not belong in run records or RAES evidence.
 
 ## Extensibility Seam
 
@@ -185,7 +185,7 @@ reference into Python, deployment DTOs, docs, or a repair command.
   best-effort fallback. Generation failure must stop startup.
 - Do not remove isolated-project cleanup while changing command ordering; a
   leaked generator network can overlap the TechVault networks.
-- Do not update only the legacy `_step_generate_certs()` path. Typed ACES
+- Do not update only the legacy `_step_generate_certs()` path. Typed RAES
   realization calls the same generator with an injected backend runner and
   then applies stronger output validation.
 - Do not leave documentation telling operators to regenerate with raw
@@ -202,7 +202,7 @@ reference into Python, deployment DTOs, docs, or a repair command.
 
 This issue does not change certificate subjects/SANs, Wazuh TLS topology,
 private-key distribution, Wazuh service runtime users, SOC CA generation,
-Compose profiles, remote generated-artifact support, ACES schemas, durable
+Compose profiles, remote generated-artifact support, RAES schemas, durable
 configuration, environment variables, API/web contracts, startup readiness
 taxonomy, run-record schemas, or certificate rotation. It does not upgrade the
 generator image, introduce a custom image, or add a generic ownership manager

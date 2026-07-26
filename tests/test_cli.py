@@ -469,7 +469,7 @@ class TestLabStartCommand:
         )
 
     def test_start_accepts_explicit_scenario_path(self, runner, mocker, tmp_path):
-        """--scenario-path should resolve and pass an explicit ACES SDL path."""
+        """--scenario-path should resolve and pass an explicit RAES SDL path."""
         from aptl.cli.main import app
         from aptl.core.lab import LabResult
 

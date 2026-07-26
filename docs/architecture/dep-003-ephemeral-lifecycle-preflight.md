@@ -10,13 +10,13 @@ Existing ADRs remain binding: ADR-013 and ADR-023 own deployment backends,
 ADR-025 owns first-party config shape, ADR-028 owns runtime-rendered config,
 ADR-029 owns secret handling, ADR-030 owns lab-result envelopes, ADR-031 owns
 orchestration contract guards, ADR-037 owns Docker Compose backend cohesion,
-ADR-039 owns web API auth, and ADR-044 owns ACES/run reproducibility records.
+ADR-039 owns web API auth, and ADR-044 owns RAES/run reproducibility records.
 
 ## Architecture Decisions
 
 - Treat lifecycle policy as a control-plane decision layer above lab lifecycle.
   TTL expiry, idle detection, and schedules decide when to invoke existing
-  lifecycle operations; they do not become new Docker, Compose, ACES, or web
+  lifecycle operations; they do not become new Docker, Compose, RAES, or web
   lifecycle implementations.
 - Provisioning must reuse the public lab start path:
   `orchestrate_lab_start()` for normal starts and `clean_boot_lab()` when the
@@ -54,8 +54,8 @@ ADR-039 owns web API auth, and ADR-044 owns ACES/run reproducibility records.
   `ContainerSettings.enabled_profiles()`, `RunStorageConfig`, `load_config()`,
   `load_dotenv()`, `EnvVars`, `env_vars_from_dict()`, and
   `find_placeholder_env_values()`.
-- Scenario selection and ACES handoff: `resolve_scenario_selection()`,
-  `start_aces_scenario()`, `selected_profiles_for_scenario()`, ACES parser /
+- Scenario selection and RAES handoff: `resolve_scenario_selection()`,
+  `start_raes_scenario()`, `selected_profiles_for_scenario()`, RAES parser /
   runtime manager gates, and the REP-001 run-record threading already in
   lab start.
 - API and web surfaces: `verify_token`, `WebAuthSettings`,
@@ -149,7 +149,7 @@ config parsing, API schemas, or run-record assembly.
 - `src/aptl/core/lab.py`, `src/aptl/core/lab_types.py`,
   `src/aptl/core/deployment/`, `src/aptl/core/config.py`,
   `src/aptl/core/env.py`, `src/aptl/core/runstore.py`,
-  `src/aptl/core/snapshot.py`, and `src/aptl/backends/aces*.py`.
+  `src/aptl/core/snapshot.py`, and `src/aptl/backends/raes*.py`.
 - `src/aptl/cli/lab.py`, `src/aptl/api/routers/lab.py`,
   `src/aptl/api/schemas.py`, `src/aptl/api/deps.py`,
   `web/src/lib/api.ts`, and `web/src/lib/types.ts`.
@@ -170,9 +170,9 @@ config parsing, API schemas, or run-record assembly.
   volumes, SOC databases, generated rule volumes, stale API-key sync state, or
   in-container credentials.
 - Inferring instance identity from container names, `aptl-*` prefixes,
-  scenario names, folder names, `lab.name`, GitHub issue ids, or ACES metadata.
+  scenario names, folder names, `lab.name`, GitHub issue ids, or RAES metadata.
 - Deleting `.env`, `.mcp.json`, `keys/`, checked-in `config/`, run archives,
-  or ACES inventory evidence as part of the default teardown guarantee.
+  or RAES inventory evidence as part of the default teardown guarantee.
 - Running timers in web clients, SSE loops, or request-local `asyncio` tasks and
   calling that reliable automated teardown.
 - Scraping logs, terminal transcripts, Docker stats, packet captures, or SOC
@@ -185,7 +185,7 @@ config parsing, API schemas, or run-record assembly.
 ## Non-Goals
 
 - Do not implement DEP-003 in this preflight.
-- Do not redesign Docker Compose, ACES SDL, deployment backends, run archive
+- Do not redesign Docker Compose, RAES SDL, deployment backends, run archive
   layout, SOC seeding, Suricata rule semantics, terminal capture, web auth, or
   startup readiness classification.
 - Do not add Kubernetes, Podman, Nomad, cloud account provisioning, quota

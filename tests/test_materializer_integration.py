@@ -15,18 +15,18 @@ import shutil
 import subprocess
 
 import pytest
-from aces_sdl.runtime_configuration import (
+from raes.runtime_configuration import (
     RuntimeConfiguration,
     RuntimeLocalGroup,
     RuntimeLocalIdentityInventory,
     RuntimeLocalUser,
     RuntimePackage,
 )
-from aces_sdl.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesystemEntryType
+from raes.runtime_filesystem import RuntimeFilesystemEntry, RuntimeFilesystemEntryType
 
-from aptl.backends.aces_base_substrate import plan_node
-from aptl.backends.aces_docker_materializer import DockerMaterializationExecutor
-from aptl.backends.aces_materializer_engine import materialize_node
+from aptl.backends.raes_base_substrate import plan_node
+from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
+from aptl.backends.raes_materializer_engine import materialize_node
 
 pytestmark = pytest.mark.integration
 

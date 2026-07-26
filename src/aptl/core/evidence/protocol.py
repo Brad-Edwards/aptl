@@ -5,12 +5,12 @@ A collector receives ONLY an immutable :class:`CollectorContext` — the
 planned-trial / run / attempt IDs, its pinned :class:`~aptl.core.experiment.
 capture_registry.CaptureBinding` and window, a deadline and limits, and a
 :class:`~aptl.core.correlation.clock.ClockProvider`. It NEVER receives the
-``ExperimentController``, the ACES runtime target, ``LocalRunStore``, raw
+``ExperimentController``, the RAES runtime target, ``LocalRunStore``, raw
 filesystem paths, ``EnvVars``, the full application config, or a generic
 command/HTTP client. It reports source bytes/chunks and typed counters or a
 typed :class:`~aptl.core.evidence.outcomes.CollectorStatus` failure through
 :class:`CollectorOutcome`; it cannot choose an archive path, hash, redact, or
-construct a portable ACES evidence record — the coordinator owns all of that.
+construct a portable RAES evidence record — the coordinator owns all of that.
 
 The source-specific work (a `DeploymentBackend.container_logs_capture`, a SOC
 `curl_safe` call, an MCP result envelope, the Kali sidecar) is wrapped by a

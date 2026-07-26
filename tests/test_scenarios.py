@@ -44,7 +44,7 @@ def test_local_sdl_package_is_removed():
         importlib.import_module("aptl.core.sdl.parser")
 
 
-def test_startup_catalog_contains_only_aces_sdl_paths():
+def test_startup_catalog_contains_only_raes_sdl_paths():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     catalog = load_scenario_catalog(PROJECT_ROOT)

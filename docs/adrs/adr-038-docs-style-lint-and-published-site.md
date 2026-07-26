@@ -12,7 +12,7 @@ accepted
 
 Issue #407 (requirement DOC-001) found the documentation corpus in poor
 shape: `mkdocs.yml` referenced 12 pages that did not exist, listed only
-12 of 38 ADRs, and omitted entire sections (`sdl/`, `aces/`, `testing/`,
+12 of 38 ADRs, and omitted entire sections (`sdl/`, `raes/`, `testing/`,
 most of `components/`); no prose linting existed anywhere in the repo;
 and the docs were not published, despite a fully configured
 mkdocs-material theme. Prose quality drifted unchecked because nothing
@@ -38,7 +38,7 @@ Pages, gated by a strict mkdocs build.
   `tools/vale-lint-all.sh` lints the full corpus in CI.
 - **Reasoned exclusions, not blanket ones.** Generated artifacts
   (`CHANGELOG.md`, `changelog.d/`), agent-facing contracts (`.claude/`,
-  `.gc/`, `.github/`, `AGENTS.md`, `CLAUDE.md`), ACES inventory
+  `.gc/`, `.github/`, `AGENTS.md`, `CLAUDE.md`), RAES inventory
   evidence bundles, and dated point-in-time records (`docs/history/`,
   `docs/known-issues/`, smoke-test results) carry empty
   `BasedOnStyles` blocks in `.vale.ini`: the record value of those

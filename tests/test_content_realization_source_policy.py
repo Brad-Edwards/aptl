@@ -14,11 +14,11 @@ restricted to the exact filenames src/aptl/core/ssh.py generates.
 from __future__ import annotations
 
 import pytest
-from aces_contracts.planning import PlannedResource, RuntimeDomain
+from raes_contracts.planning import PlannedResource, RuntimeDomain
 
-from aptl.backends.aces_content_realization import resolve_content_placement
-from aptl.backends.aces_content_source_policy import forbidden_source_reason
-from aptl.backends.aces_image_free_content_realization import (
+from aptl.backends.raes_content_realization import resolve_content_placement
+from aptl.backends.raes_content_source_policy import forbidden_source_reason
+from aptl.backends.raes_image_free_content_realization import (
     resolve_image_free_content_placement,
 )
 

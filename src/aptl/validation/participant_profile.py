@@ -1,8 +1,8 @@
 """Strict versioned participant-profile binding and resolution (APP-2).
 
-The profile is release/conformance data.  It references the canonical ACES
+The profile is release/conformance data.  It references the canonical RAES
 scenario, first-party config, narrative, and readiness suite by contained path
-and digest, then derives the expected runtime surface through the same ACES and
+and digest, then derives the expected runtime surface through the same RAES and
 Compose authorities used by the public start path.
 """
 
@@ -114,7 +114,7 @@ def _validate_profile_links(
         raise ParticipantProfileError("participant scenario catalog reference mismatch")
     scenario_path = project_root / manifest.scenario.path
     # Keep the exact no-follow bytes alive through the catalog check above.  The
-    # planner reopens the canonical contained path through the ACES authority.
+    # planner reopens the canonical contained path through the RAES authority.
     if not scenario_bytes:
         raise ParticipantProfileError("participant scenario is empty")
     if (

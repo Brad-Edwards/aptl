@@ -12,14 +12,14 @@ trial body:
 3. STOP collectors in REVERSE order from a ``finally`` boundary, even when the
    trial body or another collector fails.
 4. Bound / redact / hash / persist each captured outcome content-addressably
-   and construct ACES evidence records + explicit references.
+   and construct RAES evidence records + explicit references.
 5. Compute the overall :class:`~aptl.core.evidence.outcomes.
    AcquisitionDisposition`; only ``SEALED_READY`` is ready for the #444 seal.
 
 The coordinator owns deadlines, quotas, clock, path allocation, hashing,
 redaction, media checks, persistence, diagnostics, and record construction; a
 collector only reports typed bytes/counters/failures. Collector failures are
-typed outcome DATA projected into safe ACES diagnostics — no second exception
+typed outcome DATA projected into safe RAES diagnostics — no second exception
 hierarchy, and no overloading of ``LabResult`` startup readiness.
 """
 
@@ -28,8 +28,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from aces_contracts.contracts import ExperimentEvidenceRecordModel
-from aces_contracts.diagnostics import Diagnostic
+from raes_contracts.contracts import ExperimentEvidenceRecordModel
+from raes_contracts.diagnostics import Diagnostic
 
 from aptl.core.correlation.clock import ClockProvider
 from aptl.core.evidence._persist import EvidenceRef, media_type_supported, persist_success_outcome

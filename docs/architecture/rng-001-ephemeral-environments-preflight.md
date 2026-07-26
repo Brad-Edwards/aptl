@@ -12,19 +12,19 @@ ADR-037 owns Docker Compose backend cohesion.
 - Treat "ephemeral environment" as a destructive lab lifecycle mode:
   stop the selected lab deployment with volume removal, then boot through the
   public start path. The behavior under test is the same core lifecycle used by
-  `aptl lab start`, `aptl lab stop -v`, and the ACES live gate, not a new
+  `aptl lab start`, `aptl lab stop -v`, and the RAES live gate, not a new
   Docker script.
 - Clean state means removing runtime contamination from containers, processes,
   Compose-managed volumes, service databases, service logs, and generated
   in-container credentials. It does not mean deleting source inputs, `.env`,
-  run archives, ACES inventory evidence, local SSH keys, or checked-in config
+  run archives, RAES inventory evidence, local SSH keys, or checked-in config
   unless a future requirement explicitly adds a separate purge surface.
 - Keep clean boot project-scoped. Cleanup must target the configured
   `deployment.project_name` and selected profiles through `DeploymentBackend`;
   it must not enumerate or remove unrelated Docker containers, networks, or
   volumes on a shared daemon.
 - Reuse the existing startup pipeline after cleanup:
-  `orchestrate_lab_start()`, `_LAB_START_STEPS`, the ACES handoff in
+  `orchestrate_lab_start()`, `_LAB_START_STEPS`, the RAES handoff in
   `_step_start_containers()`, generated config renderers, Suricata volume
   seeding, bind-mount checks, SOC seeding, MCP config sync, and snapshot
   capture.
@@ -132,7 +132,7 @@ rather than re-editing validation, CLI, API, and test code independently.
 - Adding a `clean_state` section to `aptl.json` for behavior that is really an
   invocation-time choice.
 - Inferring destructive behavior from scenario names, folders, issue IDs,
-  config `lab.name`, or ACES metadata.
+  config `lab.name`, or RAES metadata.
 - Adding a new readiness taxonomy, exception hierarchy, Docker row DTO, or web
   response model when existing lifecycle and API envelopes already cover it.
 - Logging raw Docker stderr, raw exception payloads, rendered config, or `.env`
@@ -143,7 +143,7 @@ rather than re-editing validation, CLI, API, and test code independently.
 ## Non-Goals
 
 - Do not implement RNG-001 in this preflight.
-- Do not redesign Docker Compose, deployment backends, ACES realization,
+- Do not redesign Docker Compose, deployment backends, RAES realization,
   run archive layout, SOC seeding, Suricata rule semantics, or web
   authentication.
 - Do not add Kubernetes, Podman, Nomad, or cloud cleanup semantics here.

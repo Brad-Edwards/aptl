@@ -211,7 +211,7 @@ Symptom on a machine that has run an older aptl-labs release before the
 `org.aptl.realization.network=true` label was introduced:
 
 ```
-Lab start failed: ACES runtime handoff failed: ...
+Lab start failed: RAES runtime handoff failed: ...
   Existing network aptl_aptl-dmz does not match realized network dmz-net:
   label org.aptl.realization.network expected 'true', found ''.
 ```

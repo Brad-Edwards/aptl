@@ -92,7 +92,7 @@ cannot express the required shape and is extended first.
   `src/aptl/utils/redaction.py`; MCP/TypeScript artifacts use
   `mcp/aptl-mcp-common/src/redaction.ts`. The helpers must stay shape-aligned,
   especially for command-line credential forms.
-- **ACES evidence capture:** the strongest control for an operator/control-plane
+- **RAES evidence capture:** the strongest control for an operator/control-plane
   key is to exclude it at the Compose mount layer so it never reaches a target
   container or a capture. SEC #417 applies this directly: the targets mount only
   public keys plus a dedicated scenario pivot key, and the operator control-plane
@@ -147,7 +147,7 @@ deploy keys, host keys, and flags.
 
 - Do not remove intentional vulnerable target credentials from the lab.
 - Do not remove intentional target fixture evidence, host-key evidence, or
-  participant-visible weak credentials from ACES inventory bundles merely
+  participant-visible weak credentials from RAES inventory bundles merely
   because they are secret-shaped.
 - Do not make run artifacts complete forensic vaults for plaintext secrets.
 - Do not redact every target username, host, port, file path, rule ID, or
@@ -160,8 +160,8 @@ deploy keys, host keys, and flags.
 ## Anti-Patterns
 
 - Adding a new `sanitize_*` helper beside `redact()` for one artifact path.
-- Weakening the global `redact()` helper with ACES-specific fixture allowlists;
-  path-sensitive fixture classification belongs at the ACES evidence writer.
+- Weakening the global `redact()` helper with RAES-specific fixture allowlists;
+  path-sensitive fixture classification belongs at the RAES evidence writer.
 - Exempting committed evidence paths from private-key scanning without a
   compensating test that fails on operator/control-plane private key bytes.
 - Redacting inside one CLI command while leaving the same DTO unsafe elsewhere.

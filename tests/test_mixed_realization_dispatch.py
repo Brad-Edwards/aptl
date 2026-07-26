@@ -10,7 +10,7 @@ test_mixed_realization_integration.py for the real-Docker proof.
 
 from __future__ import annotations
 
-from aces_sdl.runtime_configuration import RuntimeConfiguration, ServiceManagerUnit
+from raes.runtime_configuration import RuntimeConfiguration, ServiceManagerUnit
 
 from aptl.core.deployment._compose_realization import (
     _image_free_node_addresses,

@@ -71,7 +71,7 @@ class ComposeRealizationImageMixin:
             return None
         return LabResult(
             success=False,
-            error=f"Staged image missing for ACES node {image.address}.",
+            error=f"Staged image missing for RAES node {image.address}.",
         )
 
     def _realize_image(
@@ -86,7 +86,7 @@ class ComposeRealizationImageMixin:
             return self._build_realization_image(image)
         return LabResult(
             success=False,
-            error=f"Unsupported image realization mode for ACES node {image.address}.",
+            error=f"Unsupported image realization mode for RAES node {image.address}.",
         )
 
     def _pull_realization_image(
@@ -100,7 +100,7 @@ class ComposeRealizationImageMixin:
             timeout=_IMAGE_REALIZATION_TIMEOUT,
         )
         error = (
-            f"Image pull failed for ACES node {image.address}."
+            f"Image pull failed for RAES node {image.address}."
             if result.returncode != 0
             else None
         )
@@ -127,7 +127,7 @@ class ComposeRealizationImageMixin:
                 timeout=_IMAGE_REALIZATION_TIMEOUT,
             )
             error = (
-                f"Image build failed for ACES node {image.address}."
+                f"Image build failed for RAES node {image.address}."
                 if result.returncode != 0
                 else None
             )
@@ -140,7 +140,7 @@ class ComposeRealizationImageMixin:
         """Return an image-build input error message, if any."""
 
         return (
-            f"Image build input missing for ACES node {image.address}."
+            f"Image build input missing for RAES node {image.address}."
             if not image.dockerfile_path or not image.context_path
             else None
         )

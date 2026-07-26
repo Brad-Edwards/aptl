@@ -42,5 +42,5 @@ hand-edited. There is no manual bootstrap step.
 
 pypi.org → Account → Publishing → add pending publisher: project `aptl-labs`, owner
 `Brad-Edwards`, repo `aptl`, workflow `release-please.yml`, environment `pypi`.
-`aces-sdl` must be on PyPI first (aptl depends on it). The distribution is named
+`raes` must be on PyPI first (aptl depends on it). The distribution is named
 `aptl-labs` because `aptl` is reserved on PyPI; the import package and CLI stay `aptl`.

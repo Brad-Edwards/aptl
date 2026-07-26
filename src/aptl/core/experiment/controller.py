@@ -28,12 +28,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from aces_backend_protocols.manifest import BackendManifest
-from aces_contracts.experiment_spec import ExperimentSpecModel
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
+from raes_backend_protocols.manifest import BackendManifest
+from raes_contracts.experiment_spec import ExperimentSpecModel
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import (
     AdmissionResult,
     ResolvedArtifact,

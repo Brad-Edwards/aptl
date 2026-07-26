@@ -69,8 +69,8 @@ def _binding() -> ApplianceBoundaryBinding:
     return ApplianceBoundaryBinding(
         policy_digest="sha256:" + "a" * 64,
         payload_digest="sha256:" + "b" * 64,
-        aces_plan_digest="sha256:" + "c" * 64,
-        aces_boundary_required=False,
+        raes_plan_digest="sha256:" + "c" * 64,
+        raes_boundary_required=False,
         boundary_helper_image="example.test/aptl-boundary@sha256:" + "d" * 64,
         egress_proxy_image="example.test/aptl-egress@sha256:" + "e" * 64,
         boot_id="boot-1",
@@ -186,16 +186,16 @@ def test_ambiguous_platform_anchor_fails_before_mutation(tmp_path) -> None:
     backend.realize_boundary.assert_not_called()
 
 
-def test_scenario_without_acls_removes_stale_aces_authority(tmp_path) -> None:
+def test_scenario_without_acls_removes_stale_raes_authority(tmp_path) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="seat")
-    backend._boundary_receipts["aces"] = {"observed": True}
+    backend._boundary_receipts["raes"] = {"observed": True}
     backend.realize_boundary = MagicMock(return_value=LabResult(success=True))
 
-    result = backend._realize_aces_boundary(
+    result = backend._realize_raes_boundary(
         DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
     )
 
     assert result is None
     cleanup = backend.realize_boundary.call_args.args[0]
-    assert cleanup.authority == "aces"
+    assert cleanup.authority == "raes"
     assert cleanup.rules == ()

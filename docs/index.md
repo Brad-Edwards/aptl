@@ -60,10 +60,10 @@ run from source instead, use a virtualenv editable install
 - [ADR Index](adrs/README.md) -- Why we built it this way
 
 ### Scenario Authoring
-- [Authoring Boundary](sdl/index.md): Current ACES-owned scenario handoff
-- [Curated ACES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
-- [TechVault Static Validation Gate](aces/techvault-static-validation-gate.md): Current static scenario gate
-- [TechVault Live Validation Gate](aces/techvault-live-validation-gate.md): Current runtime realization gate
+- [Authoring Boundary](sdl/index.md): Current RAES-owned scenario handoff
+- [Curated RAES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
+- [TechVault Static Validation Gate](raes/techvault-static-validation-gate.md): Current static scenario gate
+- [TechVault Live Validation Gate](raes/techvault-live-validation-gate.md): Current runtime realization gate
 
 ### Scenarios & Runs
 - [SOC Architecture Spec](specs/soc-feature-spec.md): Historical pre-SDL runtime spec retained for context

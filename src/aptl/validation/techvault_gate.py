@@ -1,6 +1,6 @@
-"""Static validation gate for ACES scenarios (SCN-010E / issue #322).
+"""Static validation gate for RAES scenarios (SCN-010E / issue #322).
 
-Composes the ACES authorities — the reference parser, import-lock verification,
+Composes the RAES authorities — the reference parser, import-lock verification,
 the runtime compiler/semantic validator, and canonical ``backend-manifest-v2``
 conformance — together with APTL's provisioning realization into a single,
 scenario-generic gate. It is parameterized by scenario path, backend profile,
@@ -13,7 +13,7 @@ interprets the provisioning plan, but never starts Docker or touches the lab.
 Every failure is a structured, redacted diagnostic; the gate never emits the
 full SDL object or a raw exception payload (ADR-029).
 
-A missing ACES contract corpus, profile artifact, or conformance CLI is a gate
+A missing RAES contract corpus, profile artifact, or conformance CLI is a gate
 *failure* with an actionable diagnostic — never silently downgraded to a
 warning, and never a reason to accept an APTL-local manifest approximation.
 
@@ -62,7 +62,7 @@ class GateReport(object):
     def render(self) -> str:
         """Render a redacted, human/CI-readable summary."""
         lines = [
-            f"ACES static validation gate — scenario={self.scenario} "
+            f"RAES static validation gate — scenario={self.scenario} "
             f"profile={self.profile}: "
             f"{'PASS' if self.passed else 'FAIL'}"
         ]
@@ -78,9 +78,9 @@ class GateReport(object):
 class GateOptions(object):
     """Tunable inputs for the static validation gate.
 
-    ``fixtures_root`` / ``profiles_root`` override the ACES corpus roots
-    (default: the roots bundled with the installed ``aces-sdl`` wheel).
-    ``check_imports`` controls the ``aces sdl verify-imports`` step, whose cost
+    ``fixtures_root`` / ``profiles_root`` override the RAES corpus roots
+    (default: the roots bundled with the installed ``raes`` wheel).
+    ``check_imports`` controls the ``raes sdl verify-imports`` step, whose cost
     scales with the scenario's imported module tree; the fast inner-loop test
     suite sets it False and lets the dedicated CI job / pre-push hook own lock
     verification. A scenario that declares no ``imports:`` passes the step
@@ -107,7 +107,7 @@ def validate_scenario(
     opts = options or GateOptions()
     results: list[GateCheck] = []
 
-    # 1. Parse — ACES reference parser must accept the scenario.
+    # 1. Parse — RAES reference parser must accept the scenario.
     scenario, parse_check = checks.check_parse(scenario_path)
     results.append(parse_check)
     if scenario is None:

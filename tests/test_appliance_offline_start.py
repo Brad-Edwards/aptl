@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aptl.appliance.manifest import ApplianceManifestError
-from aptl.backends.aces_base_substrate import BaseContainerSpec
+from aptl.backends.raes_base_substrate import BaseContainerSpec
 from aptl.core.deployment._compose_boundary import _helper_command
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
@@ -93,7 +93,7 @@ def test_offline_staged_realization_fails_before_start_when_image_is_missing(
         result = backend.realize(_spec())
 
     assert result.success is False
-    assert result.error == "Staged image missing for ACES node provision.node.db."
+    assert result.error == "Staged image missing for RAES node provision.node.db."
     assert not any("up" in command for command in commands)
 
 

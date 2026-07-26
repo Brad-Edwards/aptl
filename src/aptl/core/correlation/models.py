@@ -2,7 +2,7 @@
 
 Implements the "Extensibility Seam" from
 ``docs/architecture/obs-002-correlation-identity-clock-preflight.md``: a
-small versioned correlation projection whose nodes are existing ACES or
+small versioned correlation projection whose nodes are existing RAES or
 ``LocalRunStore`` references and whose edges carry only ``source_ref``,
 ``target_ref``, ``association_method``, ``rule_id``, ``clock_context_ref``,
 ``confidence_or_status``, and ``disclosure_refs``. Timestamp proximity is
@@ -47,12 +47,12 @@ from aptl.core.runstore import _validate_id as _runstore_validate_id
 from aptl.utils.redaction import is_secret_shaped_value, is_sensitive_key
 
 #: Versioned identity for the canonical projection shape itself (distinct
-#: from any ACES ``schema_version`` literal — this is an APTL-internal
-#: archive projection, never an ACES contract).
+#: from any RAES ``schema_version`` literal — this is an APTL-internal
+#: archive projection, never a RAES contract).
 _PROJECTION_SCHEMA_VERSION = "aptl-correlation/v1"
 
 #: Controlled vocabulary for :attr:`CorrelationNode.ref_kind`. Every entry
-#: names an existing ACES or ``LocalRunStore`` identity kind (preflight
+#: names an existing RAES or ``LocalRunStore`` identity kind (preflight
 #: "Represent correlation as a graph of typed associations over existing
 #: refs") — this package must never invent a new local tracing vocabulary.
 _REF_KINDS: frozenset[str] = frozenset(
@@ -151,7 +151,7 @@ def _validate_optional_ref(value: str | None, *, field_name: str) -> None:
 class ClockContext:
     """APTL archive-local projection of one source's clock context.
 
-    ACES's own ``ExperimentClockContextModel`` carries only ``clock_id``,
+    RAES's own ``ExperimentClockContextModel`` carries only ``clock_id``,
     ``authority``, ``time_domain``, and an optional free-text
     ``synchronization`` string — no structured offset or uncertainty.
     This type fills that gap: a per-source, per-timestamp-domain clock
@@ -183,9 +183,9 @@ class ClockContext:
 
 @dataclass(frozen=True)
 class CorrelationNode:
-    """One ACES/``LocalRunStore`` reference in the correlation graph.
+    """One RAES/``LocalRunStore`` reference in the correlation graph.
 
-    ``ref`` is an existing ACES or run-store identity — never a new
+    ``ref`` is an existing RAES or run-store identity — never a new
     APTL-local tracing concept; ``ref_kind`` names which controlled
     vocabulary entry (:data:`_REF_KINDS`) it is.
     """

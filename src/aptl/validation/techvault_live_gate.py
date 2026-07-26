@@ -1,11 +1,11 @@
-"""Live validation gate for ACES scenarios (SCN-010F / issue #323).
+"""Live validation gate for RAES scenarios (SCN-010F / issue #323).
 
 The operational counterpart to the static gate in
 ``aptl.validation.techvault_gate``. Where the static gate parses, locks,
 compiles, conformance-checks, and *interprets* a scenario without ever
 starting Docker, this gate boots the full lab through APTL's **public** start
 path (``aptl lab stop -v`` cleanup followed by ``orchestrate_lab_start``) and
-proves the running range is realized from the interpreted ACES model — not from
+proves the running range is realized from the interpreted RAES model — not from
 a TechVault preset — then captures operational and provenance evidence in a run
 archive.
 
@@ -22,7 +22,7 @@ and its cleanup is **data-destroying** and must run only against an isolated,
 project-scoped lab.
 
 Every failure is a structured, redacted diagnostic tagged with a stable failure
-*category* (ACES specification, backend interpretation, backend instantiation,
+*category* (RAES specification, backend interpretation, backend instantiation,
 defensive-stack readiness, Kali reachability, evidence/run-archive capture) so
 an operator can tell *which* layer broke (ADR-029 / ADR-030). The gate never
 emits the full SDL object, a raw exception payload, or control-plane secrets.
@@ -38,10 +38,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING
 
-from aptl.backends.aces import DEFAULT_ACES_SCENARIO
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO
 
 if TYPE_CHECKING:
-    from aces_sdl.scenario import Scenario
+    from raes.scenario import Scenario
 
     from aptl.core.config import AptlConfig
     from aptl.core.runstore import RunStorageBackend
@@ -49,9 +49,9 @@ if TYPE_CHECKING:
 DEFAULT_PROFILE = "full-remote-control-plane"
 
 # Stable failure categories (issue #323 acceptance: a failure must identify the
-# layer that broke). These map onto existing ACES diagnostics and APTL startup
+# layer that broke). These map onto existing RAES diagnostics and APTL startup
 # diagnostics — they are labels for triage, NOT a parallel exception hierarchy.
-CATEGORY_ACES_SPECIFICATION = "aces_specification"
+CATEGORY_RAES_SPECIFICATION = "raes_specification"
 CATEGORY_BACKEND_INTERPRETATION = "backend_interpretation"
 CATEGORY_BACKEND_INSTANTIATION = "backend_instantiation"
 CATEGORY_DEFENSIVE_STACK_READINESS = "defensive_stack_readiness"
@@ -59,7 +59,7 @@ CATEGORY_KALI_REACHABILITY = "kali_reachability"
 CATEGORY_EVIDENCE_CAPTURE = "evidence_capture"
 
 FAILURE_CATEGORIES: tuple[str, ...] = (
-    CATEGORY_ACES_SPECIFICATION,
+    CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
@@ -70,9 +70,9 @@ FAILURE_CATEGORIES: tuple[str, ...] = (
 # Each live check's stable failure category. A check name absent from this map
 # is a programming error surfaced by ``LiveGateReport.failure_categories``.
 CHECK_CATEGORY: dict[str, str] = {
-    "static_prerequisite": CATEGORY_ACES_SPECIFICATION,
+    "static_prerequisite": CATEGORY_RAES_SPECIFICATION,
     "boot_inputs_match_public_path": CATEGORY_BACKEND_INSTANTIATION,
-    "aces_driven_boot": CATEGORY_BACKEND_INSTANTIATION,
+    "raes_driven_boot": CATEGORY_BACKEND_INSTANTIATION,
     "defensive_stack_readiness": CATEGORY_DEFENSIVE_STACK_READINESS,
     "kali_reachability": CATEGORY_KALI_REACHABILITY,
     "telemetry_evidence_path": CATEGORY_EVIDENCE_CAPTURE,
@@ -122,7 +122,7 @@ class LiveGateReport(object):
     def render(self) -> str:
         """Render a redacted, human/CI-readable summary."""
         lines = [
-            f"ACES live validation gate — scenario={self.scenario} "
+            f"RAES live validation gate — scenario={self.scenario} "
             f"profile={self.profile} run_id={self.run_id}: "
             f"{'PASS' if self.passed else 'FAIL'}"
         ]
@@ -145,7 +145,7 @@ class LiveGateOptions(object):
     boot; ``skip_clean_boot`` validates against an already-running lab without
     the destructive cleanup (operator opt-in for a non-destructive check). The
     static prerequisite runs the fast static stages by default
-    (``static_check_imports=False``); the slow ``aces sdl verify-imports`` step
+    (``static_check_imports=False``); the slow ``raes sdl verify-imports`` step
     has its own dedicated gate. ``event_window_seconds`` bounds the
     telemetry-evidence collection window.
     """
@@ -203,8 +203,8 @@ def validate_live_deployment(
 ) -> LiveGateReport:
     """Run the full live validation gate for ``scenario_path``.
 
-    Boots the lab through the public ACES start path, validates operational
-    readiness / reachability / telemetry, and records ACES provenance plus
+    Boots the lab through the public RAES start path, validates operational
+    readiness / reachability / telemetry, and records RAES provenance plus
     validation evidence into the run archive. Returns a structured
     :class:`LiveGateReport`; never raises for an expected failure mode (a
     failed check is reported, not raised).
@@ -212,7 +212,7 @@ def validate_live_deployment(
     from aptl.validation import _live_gate_checks as checks
 
     opts = options or LiveGateOptions()
-    scenario_path = scenario_path or (project_dir / DEFAULT_ACES_SCENARIO)
+    scenario_path = scenario_path or (project_dir / DEFAULT_RAES_SCENARIO)
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []
@@ -241,7 +241,7 @@ def validate_live_deployment(
         results.append(inputs_check)
         inputs_passed = inputs_check.passed
 
-    # 2b–7. ACES-driven boot through run-archive manifest. Each early failure
+    # 2b–7. RAES-driven boot through run-archive manifest. Each early failure
     #       short-circuits the *remaining* checks but always falls through to the
     #       single return below, so the report is composed in one place.
     if inputs_passed:
@@ -272,9 +272,9 @@ def _run_live_checks(
     the readiness/reachability/telemetry/variation checks (which cannot be
     trusted on a partial boot) but still records the provenance manifest.
     """
-    # 2b. ACES-driven boot — clean up, boot via orchestrate_lab_start, and tie
-    #    the realization matrix to ACES resource addresses (anti-preset).
-    boot_check = checks.check_aces_driven_boot(
+    # 2b. RAES-driven boot — clean up, boot via orchestrate_lab_start, and tie
+    #    the realization matrix to RAES resource addresses (anti-preset).
+    boot_check = checks.check_raes_driven_boot(
         scenario,
         project_dir=ctx.project_dir,
         config=ctx.config,
@@ -289,7 +289,7 @@ def _run_live_checks(
         results.append(_archive_manifest(checks, ctx, state, results))
         return
 
-    # 3. Defensive-stack readiness — every ACES-realized node live + healthy,
+    # 3. Defensive-stack readiness — every RAES-realized node live + healthy,
     #    plus the SOC readiness probes the issue enumerates.
     results.append(checks.check_defensive_stack_readiness(state=state))
 
@@ -323,7 +323,7 @@ def _run_live_checks(
         )
     )
 
-    # 7. Run-archive manifest — scenario identity + ACES provenance +
+    # 7. Run-archive manifest — scenario identity + RAES provenance +
     #    validation evidence (all prior checks) + snapshot, written through the
     #    redacting boundary as the final step.
     results.append(_archive_manifest(checks, ctx, state, results))

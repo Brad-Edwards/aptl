@@ -1,5 +1,5 @@
 """Cross-artifact identity joins, per-condition planning-only feasibility,
-and source-set projection for ACES experiment admission (ADR-047
+and source-set projection for RAES experiment admission (ADR-047
 "Experiment-controller boundary", Stage 5 / EXP-002 / issue #438).
 
 Split out of :mod:`aptl.core.experiment.admission` to keep that module
@@ -16,17 +16,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from aces_backend_protocols.manifest import BackendManifest
-from aces_contracts.contracts import ExperimentCaptureSpecModel, ExperimentReferenceModel, ExperimentTaskModel
-from aces_contracts.experiment_spec import ExperimentSpecModel
-from aces_sdl import SDLInstantiationError
-from aces_sdl.canonical import SDLCanonicalDigest, canonical_instantiated_sdl_digest
-from aces_sdl.instantiate import instantiate_scenario
-from aces_sdl.scenario import InstantiatedScenario, Scenario
+from raes_backend_protocols.manifest import BackendManifest
+from raes_contracts.contracts import ExperimentCaptureSpecModel, ExperimentReferenceModel, ExperimentTaskModel
+from raes_contracts.experiment_spec import ExperimentSpecModel
+from raes import SDLInstantiationError
+from raes.canonical import SDLCanonicalDigest, canonical_instantiated_sdl_digest
+from raes.instantiate import instantiate_scenario
+from raes.scenario import InstantiatedScenario, Scenario
 
 from aptl.core.experiment.admission_artifacts import ResolvedArtifactSource
 from aptl.core.experiment.apparatus import plan_condition_feasibility, require_feasible_plan
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
 from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.core.experiment.resolver import ResolvedArtifact
 from aptl.core.experiment.spec_loading import load_capture_spec
@@ -223,14 +223,14 @@ def _instantiate_for_digest(
         return instantiate_scenario(scenario, parameters)
     except SDLInstantiationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=address, code=_CODE_CONDITION_INSTANTIATION_FAILED)
+            normalize_raes_failure(exc, address=address, code=_CODE_CONDITION_INSTANTIATION_FAILED)
         ) from exc
 
 
 def _plan_conditions(
     spec: ExperimentSpecModel, scenario: Scenario, *, backend_manifest: BackendManifest
 ) -> tuple[dict[str, str], str | None]:
-    """Run the planning-only ACES reference processor over every unique
+    """Run the planning-only RAES reference processor over every unique
     condition binding (flat allocation: one empty binding) and derive each
     binding's canonical instantiated-scenario digest.
 

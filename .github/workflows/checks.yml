@@ -120,17 +120,17 @@ jobs:
       - name: Lab init smoke
         run: aptl lab init ci-lab
 
-  aces-scenario-gate:
-    name: ACES scenario validation gate (advisory, Phase A)
+  raes-scenario-gate:
+    name: RAES scenario validation gate (advisory, Phase A)
     runs-on: ubuntu-latest
     # SCN-010E / #322. The static validation gate parses the authoritative
-    # techvault-operational SDL and spawns the `aces conformance backend` CLI,
+    # techvault-operational SDL and spawns the `raes conformance backend` CLI,
     # so it is integration-marked and runs here rather than in the fast
     # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
     # failures on the PR without blocking merge; the Phase B cutover PR removes
     # `continue-on-error` to make the gate blocking. The gate needs only the
-    # installed aces-sdl wheel (which bundles the contract corpus) and the
-    # `aces` CLI — no separate corpus checkout.
+    # installed raes wheel (which bundles the contract corpus) and the
+    # `raes` CLI — no separate corpus checkout.
     continue-on-error: true
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -161,7 +161,7 @@ jobs:
           assert ensure_pivot_key(pivot_dir=pivot_dir).success
           assert ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir).success
           "
-      - name: ACES static validation gate (techvault-operational)
+      - name: RAES static validation gate (techvault-operational)
         # -n auto runs the parse / compile / conformance-CLI checks in parallel
         # via pytest-xdist. No coverage is collected here, so xdist worker
         # measurement is not a concern.

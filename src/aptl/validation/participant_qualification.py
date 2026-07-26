@@ -23,7 +23,7 @@ from aptl.validation.participant_qualification_evidence import (
     verify_participant_qualification_attestation,
 )
 from aptl.validation.techvault_live_gate import (
-    CATEGORY_ACES_SPECIFICATION,
+    CATEGORY_RAES_SPECIFICATION,
     CATEGORY_BACKEND_INSTANTIATION,
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
@@ -105,7 +105,7 @@ def _identity_check(
         == f"sha256:{profile.manifest.release_evidence.asset_lock_sha256}"
     )
     diagnostics = [] if matches else ["profile identity or digest does not match"]
-    return _check("profile_identity", CATEGORY_ACES_SPECIFICATION, diagnostics)
+    return _check("profile_identity", CATEGORY_RAES_SPECIFICATION, diagnostics)
 
 
 def _hardware_check(

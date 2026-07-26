@@ -202,7 +202,7 @@ The guest's idempotent systemd first-boot service creates unique owner-only
 identity and credentials on the overlay, loads the staged OCI archive once,
 and invokes `aptl lab start --offline-staged` with the descriptor and both trust
 anchors. Startup reverifies the release, qualification, and descriptor, then
-puts the manifest payload digest into `ApplianceBoundaryBinding` before ACES
+puts the manifest payload digest into `ApplianceBoundaryBinding` before RAES
 network-policy enforcement or service realization. Ordinary reboots reuse the
 overlay identity while repeating release admission.
 

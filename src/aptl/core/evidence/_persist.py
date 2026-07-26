@@ -4,7 +4,7 @@ Split out of :mod:`aptl.core.evidence.coordinator` to keep that module within
 the 500-line budget and its orchestration readable. This module owns the
 coordinator-side work for ONE successfully-captured collector outcome: the
 media-type check, structured redaction, content-addressed persistence (with
-the byte quota + truncation), and ACES evidence-record + reference assembly.
+the byte quota + truncation), and RAES evidence-record + reference assembly.
 A collector never does any of this itself (preflight "Narrow collector
 boundary").
 """
@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 
-from aces_contracts.contracts import ExperimentEvidenceRecordModel
+from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
 from aptl.core.evidence import content_store
 from aptl.core.evidence.content_store import ContentInsertion
@@ -133,7 +133,7 @@ def persist_success_outcome(
     planned_trial_id: str,
     captured_at: str,
 ) -> ProcessedOutcome:
-    """Persist one captured outcome content-addressably and build its ACES record.
+    """Persist one captured outcome content-addressably and build its RAES record.
 
     Enforces the binding's byte quota during streaming (truncation flips the
     effective status and adds a mandatory loss disclosure), redacts structured
@@ -189,7 +189,7 @@ def persist_success_outcome(
     return ProcessedOutcome(record=record, ref=ref, effective_status=effective_status)
 
 
-#: Fixed disclosure text per non-``none`` redaction state (ACES requires a
+#: Fixed disclosure text per non-``none`` redaction state (RAES requires a
 #: disclosure whenever the record is redacted or withheld).
 _REDACTION_DISCLOSURES = {
     "withheld": "content withheld from participant projection (evaluator-only/apparatus-only visibility)",

@@ -1,7 +1,7 @@
 """Shared scenario/session exception types.
 
 APTL no longer exposes an in-tree scenario YAML loader. Public startup scenario
-selection flows through ``aptl.core.scenario_catalog`` and the ACES parser.
+selection flows through ``aptl.core.scenario_catalog`` and the RAES parser.
 This module stays as the compatibility home for exceptions used by session and
 continuity code.
 """

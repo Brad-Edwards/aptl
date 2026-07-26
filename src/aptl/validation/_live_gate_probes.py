@@ -1,4 +1,4 @@
-"""Private probe / helper functions for the ACES live validation gate.
+"""Private probe / helper functions for the RAES live validation gate.
 
 These support the check implementations in ``_live_gate_checks`` (SCN-010F /
 #323); the split keeps each module under the file-size budget. This module is
@@ -19,18 +19,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aces_contracts.planning import (
+from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
     ProvisioningPlan,
     ProvisionOp,
     RuntimeDomain,
 )
-from aces_runtime.manager import RuntimeManager
-from aces_sdl.scenario import Scenario
+from raes_runtime.manager import RuntimeManager
+from raes.scenario import Scenario
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
 from aptl.core.lab import clean_boot_lab
@@ -42,9 +42,9 @@ from aptl.utils.redaction import redact
 from aptl.validation.techvault_live_gate import LiveGateCheck
 
 if TYPE_CHECKING:
-    from aces_contracts.diagnostics import Diagnostic
+    from raes_contracts.diagnostics import Diagnostic
 
-    from aptl.backends.aces_realization_model import AptlRealization
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.lab_types import LabResult
@@ -103,7 +103,7 @@ def _compute_realization(
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning, project_dir=project_dir, config=config
         )
-    # broad-except: ACES planning/interpretation surfaces diverse error types.
+    # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:
         return None, [redact(f"realization interpretation raised: {exc}")]
 
@@ -113,7 +113,7 @@ def _compute_realization(
         if _severity(d) == "error"
     ]
     if not realization.nodes:
-        errors.append("realization produced no ACES nodes (no model to instantiate)")
+        errors.append("realization produced no RAES nodes (no model to instantiate)")
     return realization, errors
 
 
@@ -364,14 +364,14 @@ def _wazuh_correlation_summary(alert: dict[str, Any]) -> dict[str, str]:
 def _missing_manifest_keys(manifest: Mapping[str, Any]) -> list[str]:
     """Confirm the manifest carries the audit-required surfaces."""
     diagnostics: list[str] = []
-    provenance = manifest.get("aces_provenance", {})
+    provenance = manifest.get("raes_provenance", {})
     realization = provenance.get("realization") or {}
     if not realization.get("nodes"):
         diagnostics.append(
-            "manifest carries no ACES realization nodes (cannot audit interpretation)"
+            "manifest carries no RAES realization nodes (cannot audit interpretation)"
         )
     if not provenance.get("selected_profiles"):
-        diagnostics.append("manifest carries no ACES-selected profiles")
+        diagnostics.append("manifest carries no RAES-selected profiles")
     if not manifest.get("validation", {}).get("checks"):
         diagnostics.append("manifest carries no validation evidence")
     if not manifest.get("snapshot"):
@@ -448,7 +448,7 @@ def _variation_diagnostics(
 
 
 def _single_node_plan(node_name: str) -> ProvisioningPlan:
-    """Build a single-node ACES provisioning plan for ``node_name``."""
+    """Build a single-node RAES provisioning plan for ``node_name``."""
     address = f"provision.node.{node_name}"
     resource = PlannedResource(
         address=address,

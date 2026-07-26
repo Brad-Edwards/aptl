@@ -17,7 +17,7 @@ owners, mutability, integrity, and reset semantics.
   a narrow launcher adapter. The hosted fallback consumes the exact same signed
   guest payload and exposes the same participant routes and workbench flow.
   A host adapter is an outer delivery concern, not an APTL
-  `DeploymentBackend`, an ACES node provider, or a reason to select another
+  `DeploymentBackend`, a RAES node provider, or a reason to select another
   Compose file, scenario, MCP set, frontend build, or credential meaning.
 - The release unit is a signed, versioned appliance envelope. Its narrow,
   strict payload manifest binds the tagged source revision and APTL version to
@@ -25,7 +25,7 @@ owners, mutability, integrity, and reset semantics.
   participant-profile manifest and asset-lock digests, accepted qualification
   report, appliance-boundary policy/binding, helper-image digests, and declared
   host prerequisites. It contains references and digests, not a second copy of
-  ACES topology, `AptlConfig`, MCP configuration, readiness checks, or egress
+  RAES topology, `AptlConfig`, MCP configuration, readiness checks, or egress
   rules.
 - Manifest validation occurs before launch and produces the existing
   `ApplianceBoundaryBinding` payload digest for
@@ -99,11 +99,11 @@ owners, mutability, integrity, and reset semantics.
 | Outer boundary | ADR-049 and its versioned appliance-envelope seam own payload identity, delivery form, host recovery, secret bootstrap, egress-policy reference, resource limits, and evidence export. `ApplianceBoundaryBinding`, `run_appliance_boundary_gate()`, and the fatal boundary inventory consume the payload identity. |
 | Bounded workload | `ParticipantProfileManifest`, `ParticipantAssetLock`, `ParticipantReadinessSuite`, `load_participant_profile()`, and `evaluate_participant_qualification()` own the inner profile, exact surfaces, offline counters, resource ceilings, and authenticated qualification evidence. |
 | Smoke workflow | `run_participant_mcp_smoke()` and the profile readiness suite own the real red-to-blue semantic workflow. A process start, a container health check, or a copied status flag is not a smoke result. |
-| Scenario and realization | ACES parsing/planning, `AptlRealization`, `DeploymentRealizationSpec`, `DeploymentBackend`, and the APP-1 boundary policy retain their existing ownership. The outer VM must not create a VM node backend, a second ACL model, or an appliance-specific scenario. |
+| Scenario and realization | RAES parsing/planning, `AptlRealization`, `DeploymentRealizationSpec`, `DeploymentBackend`, and the APP-1 boundary policy retain their existing ownership. The outer VM must not create a VM node backend, a second ACL model, or an appliance-specific scenario. |
 | Buildable source assets | `hatch_build.py`, `aptl._asset_manifest`, and `aptl.core.assets` own tracked-source selection and exclusion of generated state. Build/package tests already protect against shipping `.aptl`, keys, certificates, or local `.env` state. |
 | Durable configuration | `AptlConfig`, `load_config()`, and ADR-025 remain the strict non-secret configuration contract. Envelope policy, release identity, and bootstrap material are not an `aptl.json` dictionary or environment-variable bag. |
 | Secrets and generated files | `load_dotenv()`, `EnvVars`, placeholder checks, ADR-028 containment/atomic writes, ADR-029 redaction, `curl_safe`, and owner-only ignored generated state remain mandatory. Use the ADR-049 narrow bootstrap parser for new seat secrets. |
-| Lifecycle and errors | `core.lab`'s flat `_LAB_START_STEPS`, `LabResult`, `StartupOutcome`, `StartupDiagnostic`, deployment timeouts, and ACES `Diagnostic` remain the inner lifecycle vocabulary. Outer seat lifecycle and taint are distinct envelope state; do not create an appliance-wide exception hierarchy. |
+| Lifecycle and errors | `core.lab`'s flat `_LAB_START_STEPS`, `LabResult`, `StartupOutcome`, `StartupDiagnostic`, deployment timeouts, and RAES `Diagnostic` remain the inner lifecycle vocabulary. Outer seat lifecycle and taint are distinct envelope state; do not create an appliance-wide exception hierarchy. |
 | Persistence and observability | `RunStorageBackend`, `LocalRunStore`, `RangeSnapshot.to_dict()`, evidence/capture contracts, `get_logger()`, OTel, and the Python/TypeScript `redact()` helpers remain the only persistence and logging boundaries. |
 | Version and release provenance | `aptl.__version__`, `pyproject.toml`, `tests/test_version_consistency.py`, release-please, and the existing Ed25519 qualification-attestation pattern are the canonical version, release, and signature precedents. The payload signer must use an independently configured release trust anchor, never a key supplied by the artifact being verified. |
 
@@ -146,7 +146,7 @@ builder:
   helper/proxy images, guest/host observations, and their static/live tests;
 - `src/aptl/core/{assets,config,env,lab,lab_types,runstore,telemetry}.py`,
   deployment backend behavior, generated-state writers, host-port and endpoint
-  projections, and the ACES realization pipeline;
+  projections, and the RAES realization pipeline;
 - `docker-compose.yml`, profile-derived runtime, Docker image/mount/capability
   policy, MCP build artifacts/configuration, participant workbench, container
   Dockerfiles, and guest Docker daemon state;
@@ -196,7 +196,7 @@ builder:
 - Do not bake `.env`, generated certificates/keys, machine IDs, host keys,
   session tokens, model credentials, Docker volumes, `.aptl`, run archives, or
   a copied participant overlay into the golden payload.
-- Do not use snapshot rollback, `aptl lab stop -v`, ACES episode reset, or a
+- Do not use snapshot rollback, `aptl lab stop -v`, RAES episode reset, or a
   container restart as the appliance reset/rollback contract. Do not repair a
   participant guest in place and then return it to a seat.
 - Do not put an appliance policy, host prerequisite, or manifest field in
@@ -215,7 +215,7 @@ builder:
 
 - This preflight does not implement the guest image builder, signer, KVM
   launcher, hosted fleet, secret-bootstrap transport, kiosk, or rollback tool.
-- It does not change ACES SDL, scenario meaning, node-realization semantics,
+- It does not change RAES SDL, scenario meaning, node-realization semantics,
   `DeploymentBackend`, `AptlConfig`, participant/runtime DTOs, existing MCP
   tool schemas, run/evidence schemas, or the operator control plane.
 - It does not add a second package manager, image registry, Docker authority

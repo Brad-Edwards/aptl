@@ -1,7 +1,7 @@
 # Issue #550: SOC selected-profile scoping preflight
 
 This note records architecture guardrails for scoping SOC startup recovery and
-prime seeding to the ACES scenario's realized Compose profiles. It is design
+prime seeding to the RAES scenario's realized Compose profiles. It is design
 guidance, not an implementation plan. No new ADR is needed: the change applies
 ADR-005, ADR-030, ADR-031, ADR-044, and ADR-046 to a remaining lab-start path.
 
@@ -14,13 +14,13 @@ Keep these two profile concepts distinct:
 - `AcesStartOutcome.selected_profiles` and its orchestration cache,
   `_LabStartContext.selected_profiles`, are the scenario-realized runtime
   surface after `select_backend_profiles()` intersects that ceiling with the
-  ACES realization (plus core profiles).
+  RAES realization (plus core profiles).
 
 Scenario-dependent work and recovery must use the realized runtime surface.
 Consequently:
 
 - A failed first container start receives the attempt's selected profiles before
-  deciding whether the SOC-specific wait/restart/retry path applies. The ACES
+  deciding whether the SOC-specific wait/restart/retry path applies. The RAES
   handoff computes `AcesStartOutcome.selected_profiles` before backend apply, so
   a Compose/apply failure can still carry the authoritative set. A literal
   `"soc" in ctx.selected_profiles` replacement while the context is populated
@@ -48,7 +48,7 @@ Consequently:
 
 The full `techvault-operational` scenario selects the complete prime profile
 set under the default config and therefore retains its existing SOC retry and
-seed behavior. Reduced scenarios inherit no scenario-name branches: their ACES
+seed behavior. Reduced scenarios inherit no scenario-name branches: their RAES
 content and the existing profile selector determine behavior.
 
 ## Canonical incumbents
@@ -59,7 +59,7 @@ content and the existing profile selector determine behavior.
   for runtime secrets, and `scripts/seed-prime.sh` for the existing seed action.
   None receives a new shape in this issue.
 - Scenario selection and containment: `resolve_scenario_selection()`, the
-  strict `ScenarioCatalog` models, `_resolve_project_file()`, and the ACES SDL
+  strict `ScenarioCatalog` models, `_resolve_project_file()`, and the RAES SDL
   parser.
 - Planning and profile authority: `RuntimeManager.plan()`,
   `interpret_provisioning_plan()`, `select_backend_profiles()`,
@@ -80,21 +80,21 @@ content and the existing profile selector determine behavior.
   content-driven selected-profile contract. Do not create a parallel startup
   harness.
 
-Do not add a profile DTO, a second ACES parser/realizer, a scenario-name table,
+Do not add a profile DTO, a second RAES parser/realizer, a scenario-name table,
 a seed service/repository, a new exception hierarchy, or a parallel diagnostic
 shape for this change.
 
 ## Cross-cutting and security layers
 
 - **CLI/catalog/path validation:** `--scenario` continues through the strict
-  catalog, project-root containment, and ACES parse validation. Profile gates
+  catalog, project-root containment, and RAES parse validation. Profile gates
   consume the validated/planned result, never raw CLI strings or catalog data.
 - **Config validation:** `aptl.json` continues through strict Pydantic
   `AptlConfig` / `ContainerSettings`; `select_backend_profiles()` continues to
   enforce the configured upper bound. This change adds no config key and does
   not weaken `extra="forbid"`.
-- **ACES validation:** parse, planning diagnostics, provisioning realization,
-  dependency closure, and backend conformance remain ACES/APTL adapter-owned.
+- **RAES validation:** parse, planning diagnostics, provisioning realization,
+  dependency closure, and backend conformance remain RAES/APTL adapter-owned.
   Do not locally shape-check `selected_profiles` beyond normalizing the outcome's
   existing list into the context set.
 - **Environment and secret binding:** `.env` remains owned by
@@ -111,7 +111,7 @@ shape for this change.
   CLI path remains a local operator action.
 - **Errors and diagnostics:** preserve `LabResult` and ADR-030 diagnostics.
   Intentional omission of `soc` is neither a warning nor degraded readiness.
-  Missing prime profiles are a narrow capability diagnostic, while fatal ACES
+  Missing prime profiles are a narrow capability diagnostic, while fatal RAES
   or backend failures retain the existing redacted error envelopes.
 - **Logging and OS exposure:** log selected profile names or counts only; never
   env values, argv with credentials, or raw seed output. In particular,
@@ -126,7 +126,7 @@ shape for this change.
 
 ## Extensibility seam
 
-The seam is the selected-profile collection carried by the ACES start outcome
+The seam is the selected-profile collection carried by the RAES start outcome
 and cached on the startup context, plus the parameterized
 `_PRIME_REQUIRED_PROFILES` set. A future scenario or another scenario-scoped
 post-start capability should consume that same collection rather than add a
@@ -156,7 +156,7 @@ pre-start refactor is not required for issue #550.
 
 ## Non-goals and anti-patterns
 
-- Do not redesign Compose profiles, ACES realization, startup ordering as a
+- Do not redesign Compose profiles, RAES realization, startup ordering as a
   whole, the seed script, SOC TLS, generated credentials, MCP config sync,
   deployment backends, run records, API/web contracts, or readiness taxonomy.
 - Do not scope unrelated pre-start preparation steps in this issue.

@@ -27,7 +27,7 @@ EOF
 echo "Installing Falco..."
 apt-get update
 # falco is version-pinned (SEC #417): unpinned `falco` pulls a newer build on
-# rebuild, churning the captured falco config digest in the ACES inventory.
+# rebuild, churning the captured falco config digest in the RAES inventory.
 apt-get install -y falco=0.44.1
 
 echo "Enabling and starting Falco service..."

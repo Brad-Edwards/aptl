@@ -1,15 +1,15 @@
-"""Tests for ACES evidence-record construction (EXP-010 / issue #752 PR 2).
+"""Tests for RAES evidence-record construction (EXP-010 / issue #752 PR 2).
 
 The emitted record is a public ``ExperimentEvidenceRecordModel`` (validated at
-construction and round-trippable through the ACES model), its identity is
+construction and round-trippable through the RAES model), its identity is
 derived from stable inputs only (never ``captured_at`` / ingestion order), and
 a truncated/redacted/withheld record always carries the mandatory loss
-disclosure the ACES model requires.
+disclosure the RAES model requires.
 """
 
 from __future__ import annotations
 
-from aces_contracts.contracts import ExperimentEvidenceRecordModel
+from raes_contracts.contracts import ExperimentEvidenceRecordModel
 
 from aptl.core.evidence.protocol import CollectorOutcome
 from aptl.core.evidence.outcomes import CollectorStatus
@@ -72,9 +72,9 @@ class TestIdentity:
 
 
 class TestConformance:
-    def test_record_round_trips_through_the_aces_model(self):
+    def test_record_round_trips_through_the_raes_model(self):
         record = _record()
-        # exclude_none: ACES reference models distinguish an absent optional
+        # exclude_none: RAES reference models distinguish an absent optional
         # field from one explicitly present as null (a capture-spec ref must
         # not CARRY ref_digest/ref_path), so canonical serialization drops
         # None-valued optionals.

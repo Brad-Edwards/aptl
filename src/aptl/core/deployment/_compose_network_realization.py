@@ -170,7 +170,7 @@ class ComposeRealizationNetworkMixin:
             )
             if missing:
                 failures.append(
-                    "No managed Docker network matched ACES network(s) "
+                    "No managed Docker network matched RAES network(s) "
                     f"{', '.join(missing)} for node {node.name}."
                 )
                 continue

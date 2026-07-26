@@ -1,10 +1,10 @@
 # EXP-010 Capture Admission And Evidence Acquisition Preflight
 
 This note is the architecture preflight for EXP-010 / issue #752. It is
-guidance, not an implementation plan. No new ADR is needed: ADR-047 owns ACES
+guidance, not an implementation plan. No new ADR is needed: ADR-047 owns RAES
 experiment admission and deterministic trial planning, OBS-002 owns correlation
 identity and clock context, ADR-029 owns secret handling, ADR-041 and ADR-042
-own Kali capture and PTY boundaries, and ADR-044 owns the ACES-aligned run
+own Kali capture and PTY boundaries, and ADR-044 owns the RAES-aligned run
 record. This note fixes how EXP-010 crosses those boundaries without creating a
 parallel workflow, evidence schema, persistence system, or plugin loader.
 
@@ -19,7 +19,7 @@ parallel workflow, evidence schema, persistence system, or plugin loader.
   wiring, and a conformance fixture. The ID is not an import path, class name,
   command, URL, host path, credential selector, or arbitrary configuration key.
 - The registry is the sole detailed source of truth for capture support. Its
-  declarations cover the ACES contract version, channel identity and version,
+  declarations cover the RAES contract version, channel identity and version,
   capture kind, scope, window semantics, media types, required artifact roles,
   sensitivity and redaction support, integrity and sealing support, retention
   policy IDs, loss disclosure, visibility class, and size/count/time limits.
@@ -43,7 +43,7 @@ parallel workflow, evidence schema, persistence system, or plugin loader.
   trace IDs, sidecar session IDs, evidence-record IDs, and run-record IDs remain
   distinct concepts.
 
-ACES capture-spec v1 has no general `required` flag. Treat authored capture
+RAES capture-spec v1 has no general `required` flag. Treat authored capture
 requirements as required by default. A trusted admission policy may explicitly
 accept a stable limitation code and comparability disclosure for a supported
 degradation; the acceptance must be persisted in the plan and default to
@@ -55,7 +55,7 @@ collector's historical best-effort behavior.
 - A collector receives only an immutable admitted context: planned-trial and
   run/attempt IDs, its pinned binding and window, a deadline and limits, a
   `ClockProvider`, and the narrow source adapter it needs. It does not receive
-  `ExperimentController`, the full ACES runtime target, `LocalRunStore`, raw
+  `ExperimentController`, the full RAES runtime target, `LocalRunStore`, raw
   filesystem paths, `EnvVars`, the complete application config, or generic
   command/HTTP clients.
 - Built-ins remain behind their existing authority boundaries:
@@ -66,7 +66,7 @@ collector's historical best-effort behavior.
   chooses their executable implementation or secret-bearing configuration.
 - The coordinator owns deadlines, cancellation, quotas, clock observations,
   path allocation, hashing, redaction, media checks, persistence, diagnostics,
-  and ACES record construction. A collector can report source bytes/chunks and
+  and RAES record construction. A collector can report source bytes/chunks and
   typed counters or failures; it cannot choose archive paths or directly
   create portable evidence records.
 - `src/aptl/core/collectors.py`, red MCP logs, and sidecar harvesters are useful
@@ -87,22 +87,22 @@ authorization and sandboxing design and are outside this boundary.
 
 The ordering is a correctness contract:
 
-1. Load ACES artifacts, validate all cross-artifact refs, match every capture
+1. Load RAES artifacts, validate all cross-artifact refs, match every capture
    requirement, compile the immutable plan, and persist it before any range
    mutation.
-2. Provision through the existing ACES/deployment lifecycle. Start admitted
+2. Provision through the existing RAES/deployment lifecycle. Start admitted
    collectors after their sources are ready but before participant actions or
    orchestrator workflows can begin.
 3. Stop collectors in reverse order from a `finally` boundary, even when the
    trial or another collector fails.
 4. Bound, classify, redact where required, media-check, hash, and persist the
-   captured bytes; then construct ACES evidence records and explicit evidence
+   captured bytes; then construct RAES evidence records and explicit evidence
    references.
 5. Only a successfully finalized result is ready for the sealing work owned by
    issue #444. Capture authorization and artifact presence are not proof of a
    successful seal.
 
-`RuntimeManager.apply` in `src/aptl/backends/aces.py` currently drives
+`RuntimeManager.apply` in `src/aptl/backends/raes.py` currently drives
 orchestrator workflows before returning. The execution design therefore needs
 a narrow seam between successful provisioning/registration and
 `_drive_orchestrator_workflows`; wrapping capture around the return from
@@ -118,10 +118,10 @@ invalidated/inconclusive result. An explicitly accepted optional degradation
 may produce a completed/partial result only with loss, limitation, and
 comparability disclosures. Stable diagnostic/reason codes must distinguish
 missing source, startup failure, loss, truncation, clock skew, timeout, and
-finalization failure even where ACES terminal statuses coincide.
+finalization failure even where RAES terminal statuses coincide.
 
 Use `ExperimentRunModel` status/outcome, its deviations and disclosures, and
-safe ACES diagnostics for experiment outcomes. Do not create a second
+safe RAES diagnostics for experiment outcomes. Do not create a second
 controller state machine or overload `LabResult` startup readiness to describe
 capture success. Collector failures are typed outcome data projected into those
 diagnostics; normalize internal exceptions instead of exposing a second public
@@ -129,7 +129,7 @@ exception hierarchy.
 
 ### Evidence ownership and persistence
 
-- Use public models from `aces_contracts.contracts` as the portable schema:
+- Use public models from `raes_contracts.contracts` as the portable schema:
   `ExperimentEvidenceRecordModel`, `ExperimentArtifactRefModel`,
   `ParticipantObservationEnvelopeModel`, `SourcePipelineModel`,
   `RawDataIntegrityModel`, experiment clock context, and run
@@ -145,7 +145,7 @@ exception hierarchy.
   byte/count/time limits while streaming, and recompute size, digest, and media
   type from the stored object. A repeated digest is idempotent only when the
   existing bytes agree; a conflict fails closed.
-- Checksums in ACES artifact/evidence references identify the bytes actually
+- Checksums in RAES artifact/evidence references identify the bytes actually
   retained. When policy permits redaction or truncation, retain safe original
   digest/size observations separately where available and record the stored
   digest/size, redaction state, and mandatory loss disclosure. Never fabricate
@@ -173,7 +173,7 @@ exception hierarchy.
 
 Participant visibility is a separate projection from capture authorization.
 Reuse the participant-visible/disclosed/evaluator-only partition in
-`src/aptl/backends/aces_participant_actions.py` and ACES participant observation
+`src/aptl/backends/raes_participant_actions.py` and RAES participant observation
 envelopes. Hidden or evaluator-only evidence remains absent from participant
 responses, logs, and future API projections even when the collector is
 authorized to retain it.
@@ -182,17 +182,17 @@ authorized to retain it.
 
 | Concern | Canonical incumbent and required use |
 |---|---|
-| ACES schema and conformance | Public `aces_contracts.contracts` loaders/models, the installed fixture corpus, and `aces_conformance` observability diagnostics. Do not copy schemas or fixture payloads into APTL. |
+| RAES schema and conformance | Public `raes_contracts.contracts` loaders/models, the installed fixture corpus, and `raes_conformance` observability diagnostics. Do not copy schemas or fixture payloads into APTL. |
 | Admission and planning | `src/aptl/core/experiment/{resolver,spec_loading,admission,admission_artifacts,capture_mapping,trial_plan,policy,errors}.py` for bounded loading, public contract parsing, deterministic projection, policy, canonical hashing, persistence-before-mutation, and safe `AdmissionRejection`. |
-| Backend capability manifest | `src/aptl/backends/aces_manifest.py` and ACES `ObservationCapabilities`. Generate observation claims from conformant registry declarations. |
-| Runtime seams | `src/aptl/backends/aces.py`, `aces_orchestrator.py`, `aces_participant_runtime.py`, `aces_participant_actions.py`, `aces_observation.py`, and `aces_repro.py` for provisioning, workflow/action boundaries, visibility, and run projection. |
+| Backend capability manifest | `src/aptl/backends/raes_manifest.py` and RAES `ObservationCapabilities`. Generate observation claims from conformant registry declarations. |
+| Runtime seams | `src/aptl/backends/raes.py`, `raes_orchestrator.py`, `raes_participant_runtime.py`, `raes_participant_actions.py`, `raes_observation.py`, and `raes_repro.py` for provisioning, workflow/action boundaries, visibility, and run projection. |
 | Source ownership | `DeploymentBackend`, `src/aptl/core/collectors.py`, established SOC clients/`curl_safe`, `mcp/aptl-mcp-common`, `mcp/mcp-red`, and `containers/kali-capture/writer.py`. Adapt; do not bypass their safety boundaries with Docker/shell/HTTP duplicates. |
 | Persistence and path safety | `RunStorageBackend`/`LocalRunStore`, RFC 8785 canonical JSON, `src/aptl/utils/pathsafe.py`, run/session ID validators, restrictive creation, and `src/aptl/core/exporter.py`. Export remains packaging, not validation or sanitation. |
-| Secrets and logs | ADR-029, `src/aptl/utils/redaction.py`, TypeScript redaction parity, `src/aptl/utils/logging.py`, bounded ACES diagnostics, `LabResult` diagnostics, and MCP `harvest_warning`. Log stable IDs, stages, codes, counts, and durations only. |
-| Identity and clocks | `src/aptl/core/correlation`, its `ClockProvider`, `TrialPlan` identities, ACES run/participant/source identities, and OBS-002 association and clock rules. |
+| Secrets and logs | ADR-029, `src/aptl/utils/redaction.py`, TypeScript redaction parity, `src/aptl/utils/logging.py`, bounded RAES diagnostics, `LabResult` diagnostics, and MCP `harvest_warning`. Log stable IDs, stages, codes, counts, and durations only. |
+| Identity and clocks | `src/aptl/core/correlation`, its `ClockProvider`, `TrialPlan` identities, RAES run/participant/source identities, and OBS-002 association and clock rules. |
 | Configuration | Strict `src/aptl/core/config.py`, `src/aptl/core/env.py`, ADR-025 first-party config, and shared MCP config/environment binding. Durable operator knobs require a typed field and a real consumer; experiment documents do not become config. |
 | Auth and projection | `src/aptl/api/deps.py`, BFF host/CSRF/session middleware, existing local MCP stdio authority, sidecar peer checks, and participant visibility filtering. EXP-010 adds no auth bypass or endpoint. |
-| Workflow and tests | `.ground-control.yaml`, `.gc/plan-rules.md`, pytest, pre-commit, MCP package tests/builds, injected clocks/runners, and ACES corpus/conformance fixtures. Compose/container/config changes retain the clean-lab validation gate. |
+| Workflow and tests | `.ground-control.yaml`, `.gc/plan-rules.md`, pytest, pre-commit, MCP package tests/builds, injected clocks/runners, and RAES corpus/conformance fixtures. Compose/container/config changes retain the clean-lab validation gate. |
 
 ## Security And Validation Passage
 
@@ -202,7 +202,7 @@ collector's local input checks is insufficient.
 | Layer | Required passage |
 |---|---|
 | Authentication/authority | No new network endpoint. Future API access inherits bearer verification plus BFF host/CSRF/session gates. MCP remains local stdio; the sidecar remains a peer-checked local socket. A capture grant identifies allowed sources and visibility, not general controller authority. |
-| ACES shape validation | Parse capture specs and emit evidence/run artifacts only through public ACES models. Preserve bounded diagnostics without pydantic `input`, arbitrary metadata, or source payloads. |
+| RAES shape validation | Parse capture specs and emit evidence/run artifacts only through public RAES models. Preserve bounded diagnostics without pydantic `input`, arbitrary metadata, or source payloads. |
 | Cross-artifact admission | Existing resolver/spec-loading and ADR-047 validate project containment, artifact kinds/versions, references, task joins, and apparatus compatibility before mutation. Capture matching then checks every requirement axis and policy vocabulary. |
 | Registry/policy validation | Enforce unique stable registration IDs, supported contract/channel versions, deterministic selection, public-config digest, explicit limits, visibility, and accepted limitation codes. No dynamic import, fallback collector, or notes-driven policy. |
 | Config/environment binding | `AptlConfig` remains strict and `EnvVars` remains the environment authority. Secret-bearing clients are injected after admission; their values are excluded from config digests, plans, manifests, logs, and evidence metadata. No experiment-provided env keys. |
@@ -212,9 +212,9 @@ collector's local input checks is insufficient.
 | Secret/media boundary | Classify before structured persistence, redact with shared helpers, reject prohibited secrets and media mismatches, and disclose every allowed redaction/truncation/loss. Never make global redaction weaker for a fixture. |
 | Visibility boundary | Project participant-visible, disclosed, hidden, and evaluator-only observations server-side using existing partitioning. Storage or evaluator authorization never implies participant visibility. |
 | Error/log envelope | Convert untrusted/backend exceptions to stage-specific safe diagnostics. Do not return or log raw exception strings, backend stderr, host paths, URLs, headers, queries, hostile metadata, captured bytes, credentials, or full commands. |
-| Seal/export boundary | Validate ACES records and conformance, explicit references, retained digests, required capture outcomes, clock/observer disclosures, and finalization state before declaring ready to seal. Export does not repair or sanitize an invalid archive. |
+| Seal/export boundary | Validate RAES records and conformance, explicit references, retained digests, required capture outcomes, clock/observer disclosures, and finalization state before declaring ready to seal. Export does not repair or sanitize an invalid archive. |
 
-An important manifest guardrail follows from the ACES contract: declaring
+An important manifest guardrail follows from the RAES contract: declaring
 `ObservationCapabilities` requires the backend's top-level supported contract
 versions to cover the capture spec, evidence record, derived measure, and
 experiment run contracts. Do not turn on `create_aptl_manifest().observation`
@@ -231,7 +231,7 @@ attestation or complete chain of custody.
 - Give every registration a shared conformance fixture for start, stop,
   deadlines, empty success, source unavailable, startup failure, mid-run
   drop/loss, truncation, clock uncertainty, and finalization failure. Validate
-  the emitted record with the installed ACES corpus/conformance APIs.
+  the emitted record with the installed RAES corpus/conformance APIs.
 - Exercise traversal, absolute paths, symlinks and replacement races, hostile
   filenames/metadata/media types, oversized streams and artifact counts,
   stuck collectors, partial writes, digest collisions/conflicts, and concurrent
@@ -241,7 +241,7 @@ attestation or complete chain of custody.
   not enter plan bytes, argv, logs, records, CAS objects, or exports.
 - The representative integration must bind red action, container, network, and
   defensive sources to one planned trial/run with explicit clock context and
-  ACES-valid evidence references. Tests must prove participant-hidden and
+  RAES-valid evidence references. Tests must prove participant-hidden and
   evaluator-only material never enters the participant projection.
 - Follow `.gc/plan-rules.md`: Python behavior gets pytest coverage; MCP common
   changes rebuild and test every dependent MCP; web changes get web tests; and
@@ -252,7 +252,7 @@ attestation or complete chain of custody.
 
 - Do not turn `capture_owner` into `importlib`, `getattr`, a command dispatcher,
   or a plugin-supplied factory locator.
-- Do not duplicate ACES capture/evidence/run DTOs, validators, diagnostics,
+- Do not duplicate RAES capture/evidence/run DTOs, validators, diagnostics,
   retention/redaction vocabularies, or terminal-state workflows.
 - Do not discard admitted mapping output, re-select collectors at runtime, or
   let a mutable registry/config silently change a persisted plan.
@@ -261,7 +261,7 @@ attestation or complete chain of custody.
 - Do not treat best-effort empty results, file presence, successful `docker cp`,
   telemetry spans, or a path scan as proof of evidence fidelity.
 - Do not let collectors write archive paths, follow symlinks, buffer unbounded
-  streams, decide redaction, construct ACES records, or receive the full
+  streams, decide redaction, construct RAES records, or receive the full
   controller/backend/runtime target.
 - Do not use free-text notes as executable failure, retention, redaction, or
   comparability policy; do not silently downgrade an authored requirement.
@@ -275,7 +275,7 @@ attestation or complete chain of custody.
 ## Non-Goals And Boundaries
 
 - This preflight does not implement EXP-010 or prescribe task sequencing.
-- It does not change ACES schemas, add a local capture DSL, or make APTL the
+- It does not change RAES schemas, add a local capture DSL, or make APTL the
   authority for portable experiment/evidence contracts.
 - It does not design arbitrary third-party discovery, dynamic plugin loading,
   untrusted code sandboxing, remote collector installation, or arbitrary URI
@@ -293,12 +293,12 @@ attestation or complete chain of custody.
 ## Whole-Repository Surface
 
 The design crosses the experiment modules and tests under
-`src/aptl/core/experiment/` and `tests/test_experiment_*`; ACES manifest/runtime
+`src/aptl/core/experiment/` and `tests/test_experiment_*`; RAES manifest/runtime
 adapters under `src/aptl/backends/`; `src/aptl/core/{lab,lab_types,runstore,
 collectors,config,env}.py`; `src/aptl/core/correlation/`; path, logging, and
 redaction utilities under `src/aptl/utils/`; MCP common and red-team packages;
 the Kali capture sidecar; SOC client boundaries; API/BFF auth if evidence is
-later exposed; exporter/run archives; ACES fixture/conformance packages; and
+later exposed; exporter/run archives; RAES fixture/conformance packages; and
 the repo workflow gates in `.ground-control.yaml` and `.gc/plan-rules.md`.
 
 At runtime, the affected host/OS surfaces are container engines reached only

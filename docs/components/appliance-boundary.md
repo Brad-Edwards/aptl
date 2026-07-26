@@ -5,7 +5,7 @@ The appliance boundary is the reusable materialization surface for
 TechVault topology and it does not assign scenario roles. It consumes two
 authorities without merging them:
 
-- The admitted ACES provisioning plan owns scenario networks, node
+- The admitted RAES provisioning plan owns scenario networks, node
   attachments, ACL owners, rule order, direction, endpoints, protocol, ports,
   and action.
 - The signed appliance policy owns the participant, management, and egress
@@ -18,15 +18,15 @@ wins through implicit precedence.
 
 ## Materialization
 
-ACES ACLs pass through `AptlRealization`, `DeploymentRealizationSpec`, and the
-typed `DeploymentBackend` boundary. The Docker backend binds each ACES
+RAES ACLs pass through `AptlRealization`, `DeploymentRealizationSpec`, and the
+typed `DeploymentBackend` boundary. The Docker backend binds each RAES
 network and ACL owner to an observed bridge and address. It then installs a
-project-owned nftables table for the ACES authority. Node and network owners,
+project-owned nftables table for the RAES authority. Node and network owners,
 authored order, `in`, `out`, `inout`, `allow`, `deny`, TCP, UDP, ICMP, and
 protocol-independent rules remain distinct.
 
 The supported ACL subset resolves named endpoints to exact IPv4 networks and
-preserves an authored omitted endpoint as ACES `any`, still scoped by the ACL
+preserves an authored omitted endpoint as RAES `any`, still scoped by the ACL
 owner. Unresolved networks, IPv6 endpoints, invalid port combinations,
 ambiguous owners, and malformed direct plans fail before native mutation.
 IPv6 remains default denied at the platform floor until dual-stack crossing
@@ -49,7 +49,7 @@ transaction. Readback checks table ownership, policy digest, chain hooks,
 priority, default policy, and every expected rule identity. A missing,
 changed, or extra owned rule is fatal.
 
-Image-free nodes are created on their first declared ACES network and attached
+Image-free nodes are created on their first declared RAES network and attached
 to all remaining declared networks before they start. There is no temporary
 Docker default-bridge or package-install egress window.
 
@@ -67,7 +67,7 @@ participant anchor and the installed agent and selected MCP processes on the
 signed management anchor. Fixed platform crossings authorize only the
 required participant-to-management and management-to-egress services.
 Profile-specific MCP destinations remain the typed, released server
-inventories from `aptl.workbench`; ACES remains authoritative for the
+inventories from `aptl.workbench`; RAES remains authoritative for the
 scenario-side endpoints those servers use.
 
 The participant-profile manifest, asset lock, and qualification report are
@@ -108,10 +108,10 @@ version rather than a port-only exception.
 Image qualification and every appliance start call the same boundary gate
 with a different phase value. The gate requires:
 
-- the exact signed policy, payload, and ACES plan digests;
+- the exact signed policy, payload, and RAES plan digests;
 - the current boot identity and selected guest Docker daemon identity;
 - a fresh authenticated outer-host observation supplied by the launcher;
-- separate ACES and platform enforcement observations;
+- separate RAES and platform enforcement observations;
 - at least one successful allowed-flow probe and one successful denied-flow
   probe;
 - an exact Docker authority-holder inventory with no privileged, host PID,
@@ -125,7 +125,7 @@ The participant surface receives only coarse readiness.
 
 Appliance mode also binds the helper and egress-proxy images by full
 `name@sha256` references. A missing signed helper fails readiness; the backend
-does not build or substitute a mutable local tag. Developer-local ACES runs
+does not build or substitute a mutable local tag. Developer-local RAES runs
 may build the checked-in helper, but that path is not appliance evidence.
 
 Issue #823 supplies the signed payload, policy file, packaged helper images,

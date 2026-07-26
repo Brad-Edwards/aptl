@@ -23,10 +23,10 @@ from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
 if TYPE_CHECKING:
-    from aptl.backends.aces_base_substrate import BaseContainerSpec, InitRequirements
+    from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
 
 # Every OS-family/service-manager combination `base_image_for_os`
-# (src/aptl/backends/aces_materializer.py) can select for a runs_services
+# (src/aptl/backends/raes_materializer.py) can select for a runs_services
 # node, mapped to the checked-in Dockerfile that builds it. These are the
 # ONLY generic base images that need a local build: the non-service images
 # (debian:12-slim, rockylinux:9) are real registry images `docker run`
@@ -112,7 +112,7 @@ class ComposeBaseSubstrateMixin(object):
         service units runs the base with a keepalive so the materializer can exec
         into it. Idempotent: any stale container of the same name is removed
         first. Raises on failure so the materialization engine translates it into
-        the ACES `LabResult` envelope.
+        the RAES `LabResult` envelope.
         """
 
         self._run(["docker", "rm", "-f", spec.container_name])
@@ -233,7 +233,7 @@ class ComposeBaseSubstrateMixin(object):
 
         For a directory, the source's contents are placed at ``dest_path``;
         for a file, ``dest_path`` is the file. Raises on failure so the
-        materialization engine translates it into the ACES envelope.
+        materialization engine translates it into the RAES envelope.
         """
 
         source = f"{source_path}/." if is_directory else source_path
@@ -289,7 +289,7 @@ class ComposeBaseSubstrateMixin(object):
 
         strict = getattr(
             self, "_appliance_boundary", None
-        ) is not None or "aces" in getattr(self, "_boundary_receipts", {})
+        ) is not None or "raes" in getattr(self, "_boundary_receipts", {})
         if not strict:
             self._base_networks_by_address = {}
             return

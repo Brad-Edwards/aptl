@@ -30,9 +30,9 @@ def _network(name: str, bridge: str, cidr: str) -> dict[str, object]:
     }
 
 
-def _aces_policy() -> dict[str, object]:
+def _raes_policy() -> dict[str, object]:
     return {
-        "authority": "aces",
+        "authority": "raes",
         "owner": "seat-17",
         "networks": [
             _network("orchard", "br-orchard", "10.44.1.0/24"),
@@ -125,10 +125,10 @@ def _platform_policy() -> dict[str, object]:
     }
 
 
-def test_aces_rules_remain_owner_anchored_and_separate(helper) -> None:
-    rendered = helper.render_ruleset(_aces_policy(), existing_families=())
+def test_raes_rules_remain_owner_anchored_and_separate(helper) -> None:
+    rendered = helper.render_ruleset(_raes_policy(), existing_families=())
 
-    assert "authority=aces" in rendered
+    assert "authority=raes" in rendered
     assert "policy-digest=" not in rendered
     assert "hook forward priority -200" in rendered
     assert 'iifname "br-orchard" oifname "br-quartz"' in rendered
@@ -162,20 +162,20 @@ def test_platform_floor_covers_forward_and_guest_host_paths(helper) -> None:
 
 
 def test_authorities_get_distinct_owned_tables(helper) -> None:
-    aces = helper.render_ruleset(_aces_policy(), existing_families=())
+    raes = helper.render_ruleset(_raes_policy(), existing_families=())
     platform = helper.render_ruleset(_platform_policy(), existing_families=())
 
-    aces_table = next(
-        line for line in aces.splitlines() if line.startswith("table inet")
+    raes_table = next(
+        line for line in raes.splitlines() if line.startswith("table inet")
     )
     platform_table = next(
         line for line in platform.splitlines() if line.startswith("table inet")
     )
-    assert aces_table != platform_table
+    assert raes_table != platform_table
 
 
 def test_helper_rejects_cross_authority_fields(helper) -> None:
-    policy = _aces_policy()
+    policy = _raes_policy()
     policy["default_deny"] = True
 
     with pytest.raises(ValueError):
@@ -183,7 +183,7 @@ def test_helper_rejects_cross_authority_fields(helper) -> None:
 
 
 def test_multiple_acl_owners_remain_independent_intersecting_chains(helper) -> None:
-    policy = _aces_policy()
+    policy = _raes_policy()
     policy["owner_bindings"].append(
         {
             "owner_address": "provision.node.gateway",
@@ -221,7 +221,7 @@ def test_multiple_acl_owners_remain_independent_intersecting_chains(helper) -> N
 
 
 def test_helper_rejects_malformed_direct_acl_without_native_mutation(helper) -> None:
-    policy = _aces_policy()
+    policy = _raes_policy()
     policy["rules"][0]["from_network"] = ["orchard"]
 
     with pytest.raises(ValueError, match="endpoint"):
@@ -229,7 +229,7 @@ def test_helper_rejects_malformed_direct_acl_without_native_mutation(helper) -> 
 
 
 def test_authored_wildcard_endpoint_is_scoped_by_acl_owner(helper) -> None:
-    policy = _aces_policy()
+    policy = _raes_policy()
     policy["rules"][0]["from_network"] = None
 
     rendered = helper.render_ruleset(policy, existing_families=())
@@ -251,7 +251,7 @@ def test_supported_acl_direction_and_protocol_subset_is_rendered_exactly(
     protocol: str,
     needle: str,
 ) -> None:
-    policy = _aces_policy()
+    policy = _raes_policy()
     rule = policy["rules"][0]
     policy["owner_bindings"][0]["ipv4_by_network"].append(["orchard", "10.44.1.20"])
     rule["direction"] = direction
@@ -267,7 +267,7 @@ def test_supported_acl_direction_and_protocol_subset_is_rendered_exactly(
 
 def test_ruleset_replacement_is_one_atomic_native_transaction(helper) -> None:
     rendered = helper.render_ruleset(
-        _aces_policy(),
+        _raes_policy(),
         existing_families=("bridge", "inet"),
     )
 

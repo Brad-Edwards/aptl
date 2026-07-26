@@ -2,7 +2,7 @@
 
 These exercise the scenario-generic gate composed in
 ``aptl.validation.techvault_gate``: the authoritative operational scenario
-gate, fail-loud on a missing ACES corpus, and the anti-collapse / anti-preset
+gate, fail-loud on a missing RAES corpus, and the anti-collapse / anti-preset
 proofs that the realization is driven by declared content, not by the
 scenario id.
 
@@ -15,9 +15,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
-from aces_contracts.planning import (
+from raes import parse_sdl_file
+from raes.module_registry import LOCKFILE_NAME
+from raes_runtime.manager import RuntimeManager
+from raes_contracts.planning import (
     ChangeAction,
     PlannedResource,
     ProvisioningPlan,
@@ -25,14 +26,14 @@ from aces_contracts.planning import (
     RuntimeDomain,
 )
 
-from aptl.backends.aces_profiles import (
+from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     public_start_profiles,
     select_backend_profiles,
     steady_state_service_aliases_for_profiles,
 )
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.validation import _account_parity
@@ -68,7 +69,7 @@ PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
 # --------------------------------------------------------------------------- #
 # Authoritative operational scenario gate (integration: backend_conformance
-# spawns the `aces conformance backend` CLI). This is the driving-SDL completion
+# spawns the `raes conformance backend` CLI). This is the driving-SDL completion
 # gate — it validates that techvault-operational passes the composed gate.
 #
 # It calls `validate_scenario()` with default options, exactly as the CI job and
@@ -104,14 +105,16 @@ def test_operational_gate_passes():
 
 @pytest.mark.xfail(
     reason=(
-        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata are blocked on "
-        "genuine ACES SDL expressivity gaps, not local workarounds: "
-        "Brad-Edwards/aces#845 (no compiled placement for domain-controller "
-        "bootstrap), #847 (RuntimePackage has no documented way to declare a "
-        "third-party package repository - needed for the Wazuh agent), #849 "
-        "(no SDL concept for a node sharing another node's network namespace). "
-        "Remove this marker once all four are authored; strict=True fails the "
-        "build the moment that happens without the marker being removed."
+        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata still have no "
+        "declared realization in the SDL. Upstream Brad-Edwards/aces#845 (no "
+        "compiled placement for domain-controller bootstrap) is RESOLVED as of "
+        "RAES 1.1.0, which ships the domain-controller-placement resource type, "
+        "so ad is now authorable and blocks only on that authoring. The remaining "
+        "upstream expressivity gaps are #847 (RuntimePackage has no documented way "
+        "to declare a third-party package repository - needed for the Wazuh agent) "
+        "and #849 (no SDL concept for a node sharing another node's network "
+        "namespace). Remove this marker once all four are authored; strict=True "
+        "fails the build the moment that happens without the marker being removed."
     ),
     strict=True,
 )
@@ -263,15 +266,15 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
 # --------------------------------------------------------------------------- #
 # Fail-loud: a missing corpus/profile is a gate failure, never a warning.
 # The in-process path (run_target_conformance) stays in the fast suite; the full
-# check additionally spawns the `aces conformance backend` CLI, so its test is
+# check additionally spawns the `raes conformance backend` CLI, so its test is
 # integration-marked (the repo classifies subprocess-spawning tests that way).
 # --------------------------------------------------------------------------- #
 
 
 def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
-    from aces_conformance.conformance import run_target_conformance
+    from raes_conformance.conformance import run_target_conformance
 
-    from aptl.backends.aces import create_aptl_runtime_target
+    from aptl.backends.raes import create_aptl_runtime_target
     from aptl.validation._gate_checks import _NoStartBackend
 
     config = AptlConfig(lab={"name": "techvault"})
@@ -340,7 +343,7 @@ def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec(
     with an AttributeError the moment a scenario used image-free content
     (caught only by a real live-gate boot, not by any prior unit test).
     """
-    from aptl.backends._aces_observation_helpers import observed_content_type
+    from aptl.backends._raes_observation_helpers import observed_content_type
     from aptl.core.deployment.realization import (
         DeploymentContentRealization,
         DeploymentRealizationSpec,
@@ -387,7 +390,7 @@ def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec(
 
 @pytest.mark.integration
 def test_backend_conformance_fails_loudly_on_missing_corpus(tmp_path):
-    # Spawns the `aces conformance backend` CLI subprocess via
+    # Spawns the `raes conformance backend` CLI subprocess via
     # check_backend_conformance, so it is integration-marked.
     config = AptlConfig(lab={"name": "techvault"})
     check = check_backend_conformance(
@@ -518,10 +521,10 @@ def test_cross_profile_dependency_gaps_detects_excluded_dependency(tmp_path):
 
 
 def test_local_manifest_shim_is_removed():
-    from aptl.backends import aces_manifest
+    from aptl.backends import raes_manifest
 
-    assert not hasattr(aces_manifest, "AptlBackendManifest")
-    assert not hasattr(aces_manifest, "AptlProvisionerCapabilities")
+    assert not hasattr(raes_manifest, "AptlBackendManifest")
+    assert not hasattr(raes_manifest, "AptlProvisionerCapabilities")
 
 
 # --------------------------------------------------------------------------- #
@@ -532,7 +535,7 @@ def test_local_manifest_shim_is_removed():
 
 
 def _proc(returncode, stdout="", stderr=""):
-    return subprocess.CompletedProcess(["aces"], returncode, stdout, stderr)
+    return subprocess.CompletedProcess(["raes"], returncode, stdout, stderr)
 
 
 def test_gate_report_passed_failures_and_render():
@@ -591,11 +594,11 @@ def test_target_conformance_diagnostics():
 
 
 def test_conformance_cli_diagnostics(monkeypatch):
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
+    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
     assert _conformance_cli_diagnostics("provisioning-only", None, None)
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: _proc(1, stderr="x"))
+    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(1, stderr="x"))
     assert _conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: _proc(0))
+    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(0))
     assert _conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
@@ -612,7 +615,7 @@ def test_check_parse_rejects_missing_file(tmp_path):
 
 
 def _scenario_with_imports(*imports: object) -> SimpleNamespace:
-    """Stand in for a parsed ACES ``Scenario`` carrying (or not) an import set."""
+    """Stand in for a parsed RAES ``Scenario`` carrying (or not) an import set."""
     return SimpleNamespace(imports=list(imports))
 
 
@@ -626,8 +629,8 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
         "missing import lockfile" in d for d in check.diagnostics
     )
 
-    (tmp_path / "aces.lock.json").write_text("{}")
-    monkeypatch.setattr(gc, "_run_aces", lambda *a, **k: None)
+    (tmp_path / LOCKFILE_NAME).write_text("{}")
+    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
     assert not check.passed and any("not found on PATH" in d for d in check.diagnostics)
 
@@ -640,7 +643,7 @@ def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
     check = check_import_lock(path, _scenario_with_imports())
 
     assert check.passed
-    assert not (tmp_path / "aces.lock.json").exists()
+    assert not (tmp_path / LOCKFILE_NAME).exists()
 
 
 def test_operational_scenario_declares_no_imports():
@@ -672,7 +675,7 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
     from textwrap import dedent
 
-    from aces_sdl.parser import parse_sdl
+    from raes.parser import parse_sdl
 
     _write_compose(tmp_path, {"kali": ["kali"], "victim": ["victim"]})
     scenario = parse_sdl(
@@ -755,7 +758,7 @@ def test_operational_scenario_content_and_accounts_are_honest():
 def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):
     from textwrap import dedent
 
-    from aces_sdl.parser import parse_sdl
+    from raes.parser import parse_sdl
 
     _write_compose(tmp_path, {"fileshare": ["fileshare"]})
     scenario = parse_sdl(
@@ -815,7 +818,7 @@ def test_account_provisioner_parity_passes_for_operational_scenario():
 
 
 def test_account_provisioner_parity_fails_on_phantom_account():
-    from aces_sdl.accounts import Account, PasswordStrength
+    from raes.accounts import Account, PasswordStrength
 
     scenario, parse_check = check_parse(OPERATIONAL_SCENARIO)
     assert parse_check.passed

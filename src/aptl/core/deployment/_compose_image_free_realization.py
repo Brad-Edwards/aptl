@@ -85,9 +85,9 @@ def _realize_node_subset(
     per node, verified by read-after-write.
     """
 
-    from aptl.backends.aces_base_substrate import base_container_spec
-    from aptl.backends.aces_materializer import PlaceFileOp, PlaceProjectContentOp
-    from aptl.backends.aces_node_materialization import realize_nodes
+    from aptl.backends.raes_base_substrate import base_container_spec
+    from aptl.backends.raes_materializer import PlaceFileOp, PlaceProjectContentOp
+    from aptl.backends.raes_node_materialization import realize_nodes
 
     # A fresh machine has none of the locally-built generic base images in
     # its Docker cache (issue #581 - a developer's existing cache had

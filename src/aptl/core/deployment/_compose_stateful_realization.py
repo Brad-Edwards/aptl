@@ -1,4 +1,4 @@
-"""Docker Compose bindings for ACES stateful realization resources."""
+"""Docker Compose bindings for RAES stateful realization resources."""
 
 from __future__ import annotations
 

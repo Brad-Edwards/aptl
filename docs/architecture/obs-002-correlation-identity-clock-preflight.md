@@ -5,23 +5,23 @@ guidance, not an implementation plan. No new ADR is needed: ADR-012 owns
 OpenTelemetry integration, ADR-027 owns red-team structured logging, ADR-029
 owns secret handling and redaction, ADR-033 owns the reasoning trace boundary,
 ADR-041 and ADR-042 own Kali capture and PTY ownership, ADR-044 owns the
-ACES-aligned run record, ADR-046 owns dynamic ACES realization, and ADR-047
+RAES-aligned run record, ADR-046 owns dynamic RAES realization, and ADR-047
 owns experiment admission and trial-plan determinism.
 
 OBS-002 adds one cross-cutting rule: action-to-observation linkage must be
 auditable without treating timestamp proximity as causality. Stable identity,
 clock context, evidence source limits, and observer effects must travel through
-the existing ACES, control-plane, capture, and archive contracts rather than a
+the existing RAES, control-plane, capture, and archive contracts rather than a
 new local tracing vocabulary.
 
 ## Architecture Decisions
 
-- Reuse ACES experiment and runtime identities as the portable identities:
+- Reuse RAES experiment and runtime identities as the portable identities:
   `ExperimentSpecModel.spec_id/spec_version`, task refs and task
   `task_id/task_version`, run-plan condition/allocation identifiers,
   `TrialPlan.plan_id`, `TrialPlan.plan_digest`,
   `TrialPlan.source_set_digest`, `PlannedTrial.planned_trial_id`,
-  ACES participant addresses and episode IDs, participant runtime event/action
+  RAES participant addresses and episode IDs, participant runtime event/action
   refs, capture spec/requirement/window refs, evidence record refs, derived
   measure/evaluation refs, and `ExperimentRunModel.run_id`.
 - Treat APTL `trace_id`, MCP `session_id`, and sidecar capture session IDs as
@@ -30,7 +30,7 @@ new local tracing vocabulary.
   evaluator identities. They may appear as related metadata only when validated
   and redacted according to the existing runstore/MCP policies.
 - Preserve the deterministic admission boundary. Planned identities must be
-  derived from ACES inputs through `TrialPlan` and canonical JSON hashing, not
+  derived from RAES inputs through `TrialPlan` and canonical JSON hashing, not
   from wall clock, filesystem order, UUIDs, process-global randomness, or
   runtime ingestion order. Per-attempt identities are allowed only where the
   surface is explicitly a run/attempt/episode result, and they must not be
@@ -40,7 +40,7 @@ new local tracing vocabulary.
   `time_window_candidate`, and `gap_or_unknown`. Timestamp proximity alone is
   never a causal link. `SourcePipelineModel.correlation_uid` is a source fact;
   it is not automatically an APTL causal edge.
-- Record clock context per evidence source and timestamp domain. ACES already
+- Record clock context per evidence source and timestamp domain. RAES already
   provides `ExperimentClockContextModel`, run-plan `clock_intent`,
   participant runtime `occurred_at`/`recorded_at`/`ingested_at` plus
   `clock_authority`, source pipeline timestamp fields, participant
@@ -62,9 +62,9 @@ new local tracing vocabulary.
 
 | Layer | Canonical incumbent and required behavior |
 |---|---|
-| ACES experiment contracts | Use `aces_contracts.contracts` models for experiment specs, tasks, run plans, clock contexts, capture specs, evidence records, derived measures, run traceability, realized-form disclosures, augmentation disclosures, and participant runtime envelopes. Do not mirror these schemas in APTL DTOs. |
-| Admission and planning | `src/aptl/core/experiment/spec_loading.py`, `resolver.py`, `admission.py`, `admission_steps.py`, `trial_plan.py`, `capture_mapping.py`, `apparatus.py`, and `errors.py` own bounded loading, project-contained resolution, ACES validation, deterministic planned-trial IDs, fail-closed capture support, and safe diagnostics. |
-| Runtime adapters | `src/aptl/backends/aces.py`, `aces_orchestrator.py`, `aces_evaluator.py`, `aces_participant_runtime.py`, `aces_participant_actions.py`, `aces_participant_support.py`, `aces_participant_bindings.py`, `aces_observation.py`, and `aces_repro.py` are the owners of ACES workflow, evaluation, participant, observation, and run-record projections. |
+| RAES experiment contracts | Use `raes_contracts.contracts` models for experiment specs, tasks, run plans, clock contexts, capture specs, evidence records, derived measures, run traceability, realized-form disclosures, augmentation disclosures, and participant runtime envelopes. Do not mirror these schemas in APTL DTOs. |
+| Admission and planning | `src/aptl/core/experiment/spec_loading.py`, `resolver.py`, `admission.py`, `admission_steps.py`, `trial_plan.py`, `capture_mapping.py`, `apparatus.py`, and `errors.py` own bounded loading, project-contained resolution, RAES validation, deterministic planned-trial IDs, fail-closed capture support, and safe diagnostics. |
+| Runtime adapters | `src/aptl/backends/raes.py`, `raes_orchestrator.py`, `raes_evaluator.py`, `raes_participant_runtime.py`, `raes_participant_actions.py`, `raes_participant_support.py`, `raes_participant_bindings.py`, `raes_observation.py`, and `raes_repro.py` are the owners of RAES workflow, evaluation, participant, observation, and run-record projections. |
 | Run archive and persistence | `src/aptl/core/runstore.py` owns run/session ID validation, active trace lookup, `.aptl/runs/<run_id>` layout, `create_json_once`, JSON/JSONL persistence, and redacted structured writes. `src/aptl/core/exporter.py` packages archives; it is not a sanitizer or correlation builder. |
 | Telemetry and red logs | `src/aptl/core/telemetry.py`, `mcp/aptl-mcp-common/src/telemetry.ts`, `mcp/mcp-red/src/capture.ts`, and `mcp/mcp-red/src/logger.ts` own trace context, OTel attributes, MCP tool-call capture, OCSF-shaped red activity logs, and best-effort local sinks. Extend those envelopes through existing redaction/truncation paths. |
 | Capture sidecar | `containers/kali-capture/writer.py`, `mcp/aptl-mcp-common/src/runs.ts`, `captures.ts`, and `tools/handlers.ts` own ID checks, run-path resolution, PTY tee files, bounded sidecar RPC, Docker-copy harvest, and MCP result envelopes. Do not add path, command, chmod, truncate, delete, or shell execution to the sidecar for correlation. |
@@ -85,7 +85,7 @@ new local tracing vocabulary.
   secret-bearing config, full commands, transcripts, or captured payload bytes
   as correlation metadata. Use existing Python and TypeScript `redact()`
   policies and `curl_safe`.
-- **Schema and shape validation:** ACES Pydantic models remain the portable
+- **Schema and shape validation:** RAES Pydantic models remain the portable
   schema authority. APTL archive projections must validate incoming and
   outgoing IDs with `LocalRunStore`/MCP/sidecar ID rules and must preserve
   pydantic diagnostics without leaking `input`. TypeScript MCP arguments must
@@ -103,7 +103,7 @@ new local tracing vocabulary.
 - **Error envelopes:** admission, lab startup, API, MCP, and sidecar failures
   must continue through existing diagnostic/result envelopes. Errors may name a
   missing ref, unsupported capture capability, unknown clock context, duplicate
-  event, or unresolved evidence rule, but must not include raw ACES payloads,
+  event, or unresolved evidence rule, but must not include raw RAES payloads,
   pydantic `input`, backend stderr, command bodies, evidence bytes, or tokens.
 - **Persistence and export:** `LocalRunStore` is the archive owner. Use
   create-once writes for identity-bearing canonical records and append-only
@@ -112,15 +112,15 @@ new local tracing vocabulary.
 - **Observability:** OTel and red-team logs may carry bounded, redacted IDs and
   association refs. They must not capture LLM reasoning, secrets, raw evidence,
   or blue-detection conclusions as unqualified causal claims.
-- **Backend/runtime validation:** deployment and ACES adapters must continue to
-  use `DeploymentBackend`, ACES runtime snapshot contracts, manifest
+- **Backend/runtime validation:** deployment and RAES adapters must continue to
+  use `DeploymentBackend`, RAES runtime snapshot contracts, manifest
   capability checks, and stateful observation helpers. OBS-002 must not call
   Docker directly or infer support from container names.
 
 ## Extensibility Seam
 
 The seam is a small versioned correlation projection in the run archive whose
-nodes are existing ACES references or `LocalRunStore` evidence refs, and whose
+nodes are existing RAES references or `LocalRunStore` evidence refs, and whose
 edges carry only:
 
 `source_ref`, `target_ref`, `association_method`, `rule_id`, `clock_context_ref`,
@@ -141,11 +141,11 @@ through business logic as identity or causality sources.
 
 ## Whole-Repository Surface
 
-- ACES contract consumption: `aces_contracts`, `aces_sdl`, and
-  `src/aptl/backends/aces_manifest.py`.
+- RAES contract consumption: `raes_contracts`, `raes`, and
+  `src/aptl/backends/raes_manifest.py`.
 - Experiment admission and planning: `src/aptl/core/experiment/**`.
 - Runtime realization, participant histories, observation, evaluation, and run
-  record projection: `src/aptl/backends/aces*.py`.
+  record projection: `src/aptl/backends/raes*.py`.
 - Local control-plane state and archives: `src/aptl/core/session.py`,
   `telemetry.py`, `runstore.py`, `lab.py`, `collectors.py`, `snapshot.py`, and
   `exporter.py`.
@@ -176,7 +176,7 @@ through business logic as identity or causality sources.
 - Do not collapse duplicate events, restarts, missing source timestamps, or
   reordered ingestion into one "best" event by timestamp. Preserve the source
   sequence/status, gap disclosure, and association method.
-- Do not create an APTL-local replacement for ACES capture, evidence,
+- Do not create an APTL-local replacement for RAES capture, evidence,
   derived-measure, clock, run traceability, participant runtime, or apparatus
   context schemas.
 - Do not duplicate ID validation separately in Python, TypeScript, and the
@@ -191,17 +191,17 @@ through business logic as identity or causality sources.
   domain. Record domains and uncertainty before comparing them.
 - Do not make exporter, dashboard, or evaluator code infer missing links from
   filenames or timestamps. Correlation belongs in the run archive projection
-  and ACES traceability/disclosure records.
+  and RAES traceability/disclosure records.
 - Do not bypass capture capability admission by accepting every capture spec
   and later writing loss notes. Unsupported capabilities must fail or be
-  explicitly disclosed at the admission/capture boundary required by ACES.
+  explicitly disclosed at the admission/capture boundary required by RAES.
 - Do not broaden OBS-002 into a global tracing backend, database migration,
   remote telemetry service, generic event bus, or new workflow engine.
 
 ## Non-Goals And Boundaries
 
 - Do not implement OBS-002 in this preflight.
-- Do not change ACES contract models, invent portable APTL identity schemas, or
+- Do not change RAES contract models, invent portable APTL identity schemas, or
   redesign experiment admission.
 - Do not redesign lab lifecycle, Docker topology, MCP transport, web/API auth,
   sidecar RPC ownership, OTel deployment, exporter packaging, or runstore

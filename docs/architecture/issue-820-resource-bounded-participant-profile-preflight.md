@@ -25,7 +25,7 @@ report is an input to #823's broader appliance qualification.
 It references immutable inputs by contained path and SHA-256 digest:
 
 - the required, optional, and facilitator-only narrative;
-- the existing `techvault-attacker-target` ACES scenario;
+- the existing `techvault-attacker-target` RAES scenario;
 - the non-secret `AptlConfig`;
 - the readiness suite;
 - the staged profile asset lock;
@@ -33,7 +33,7 @@ It references immutable inputs by contained path and SHA-256 digest:
 - minimum hardware plus resource and lifecycle ceilings.
 
 The profile is not another topology. APTL continues to derive services and
-networks from the scenario catalog, ACES planning and dependency closure,
+networks from the scenario catalog, RAES planning and dependency closure,
 `AptlConfig`, and the Compose profile index. Both missing and unexpected
 steady-state services fail qualification.
 
@@ -145,6 +145,6 @@ report producer.
 
 This issue does not implement the disposable appliance, host kiosk, seat
 replacement, outer signed payload, network zones, physical-host publication,
-or a general role system. It does not change ACES scenario meaning, add a
+or a general role system. It does not change RAES scenario meaning, add a
 second start path, or turn the full blue workbench into a workshop-specific
 profile.

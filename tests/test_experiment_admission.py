@@ -33,17 +33,17 @@ import sys
 
 import pytest
 import yaml
-from aces_backend_protocols.backend_manifest import BackendManifest
-from aces_contracts.associated_artifacts import (
+from raes_backend_protocols.backend_manifest import BackendManifest
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     associated_artifact_set_digest,
 )
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.diagnostics import Severity
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.diagnostics import Severity
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import (
     AdmissionResult,
     MappingArtifactSource,
@@ -323,7 +323,7 @@ def _install_mutation_spies(monkeypatch) -> None:
     monkeypatch.setattr(collectors_module, "_run_cmd", _boom)
     monkeypatch.setattr(docker_compose_module.subprocess, "run", _boom)
 
-    for leftover in ("aptl.core.deployment.ssh_compose", "aces_runtime.manager"):
+    for leftover in ("aptl.core.deployment.ssh_compose", "raes_runtime.manager"):
         monkeypatch.delitem(sys.modules, leftover, raising=False)
 
 
@@ -334,7 +334,7 @@ def _install_mutation_spies(monkeypatch) -> None:
 
 class TestAdmissionResult:
     def test_rejected_never_carries_a_plan(self):
-        from aces_contracts.diagnostics import Diagnostic
+        from raes_contracts.diagnostics import Diagnostic
 
         d = Diagnostic(code="c", domain="experiment-admission", address="a", message="m")
         result = AdmissionResult.rejected((d,))
@@ -658,7 +658,7 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
         assert result.admitted is False
         assert store.calls == {}
         assert "aptl.core.deployment.ssh_compose" not in sys.modules
-        assert "aces_runtime.manager" not in sys.modules
+        assert "raes_runtime.manager" not in sys.modules
 
     def test_cross_artifact_identity_mismatch_rejection_makes_no_mutating_or_write_calls(
         self, tmp_path, monkeypatch
@@ -954,7 +954,7 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
         # version branch. ref_kind must be "scenario-snapshot": a
         # ("scenario", id-only) ref rejects a ref_version/ref_digest at the
         # pydantic layer before admission's own cross-artifact join ever
-        # runs (ACES: "generic scenario references are id-only").
+        # runs (RAES: "generic scenario references are id-only").
         bundle, backend, processor = _capability_only_bundle()
         spec_payload = _flat_spec_payload()
         spec_payload["intended_scenario_ref"] = {

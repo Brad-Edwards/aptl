@@ -101,14 +101,14 @@ def _write_run_archive(
     manifest = {
         "schema_version": "aptl.run-record/v1",
         "run_id": run_id,
-        "aces": {"runtime_snapshot": runtime_snapshot, "realization": {}},
+        "raes": {"runtime_snapshot": runtime_snapshot, "realization": {}},
         "backend_evidence": {"evidence_references": evidence_references or []},
     }
     store.write_json(run_id, "manifest.json", manifest)
 
     if write_orchestration:
         result = {
-            "state_schema_version": "aces-workflow-state/v1",
+            "state_schema_version": "raes-workflow-state/v1",
             "workflow_status": "succeeded",
             "run_id": "workflow-internal-deadbeefdeadbeefdeadbeefdeadbeef",
             "started_at": "2026-01-01T00:00:00Z",

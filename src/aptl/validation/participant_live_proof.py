@@ -1,4 +1,4 @@
-"""Live proof that an ACES participant action works through APTL."""
+"""Live proof that a RAES participant action works through APTL."""
 
 from __future__ import annotations
 
@@ -7,34 +7,34 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from aces_contracts.participant_behavior import (
+from raes_contracts.participant_behavior import (
     iter_participant_behavior_snapshot_violations,
 )
-from aces_contracts.participant_episode import (
+from raes_contracts.participant_episode import (
     iter_participant_episode_snapshot_violations,
 )
-from aces_contracts.runtime_state import OperationState, RuntimeSnapshot
-from aces_runtime.control_plane import RuntimeControlPlane
-from aces_runtime.registry import RuntimeTarget
+from raes_contracts.runtime_state import OperationState, RuntimeSnapshot
+from raes_runtime.control_plane import RuntimeControlPlane
+from raes_runtime.registry import RuntimeTarget
 
 try:
-    from aces_contracts.participant_concurrency import (
+    from raes_contracts.participant_concurrency import (
         iter_participant_concurrency_snapshot_violations,
     )
 except ImportError:
-    # Older ACES locks predate the participant concurrency snapshot contract.
+    # Older RAES locks predate the participant concurrency snapshot contract.
     iter_participant_concurrency_snapshot_violations = None
 
 try:
-    from aces_contracts.participant_shared_state import (
+    from raes_contracts.participant_shared_state import (
         iter_participant_shared_state_snapshot_violations,
     )
 except ImportError:
-    # Older ACES locks predate the participant shared-state snapshot contract.
+    # Older RAES locks predate the participant shared-state snapshot contract.
     iter_participant_shared_state_snapshot_violations = None
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_participant_actions import PARTICIPANT_ACTION_ADDRESS
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_participant_actions import PARTICIPANT_ACTION_ADDRESS
 from aptl.core.config import AptlConfig
 from aptl.core.deployment import get_backend
 from aptl.core.snapshot import capture_snapshot
@@ -51,7 +51,7 @@ SnapshotViolation = tuple[str, str]
 
 @dataclass(frozen=True)
 class ParticipantSnapshotExtensions:
-    """Optional participant snapshot extensions emitted by current ACES."""
+    """Optional participant snapshot extensions emitted by current RAES."""
 
     shared_state_records: dict[str, dict[str, object]]
     shared_state_history: dict[str, list[dict[str, object]]]
@@ -113,7 +113,7 @@ def run_participant_action_proof(
     backend_factory: BackendFactory = get_backend,
     snapshot_capture: SnapshotCapture = capture_snapshot,
 ) -> dict[str, object]:
-    """Drive a participant action through the ACES control plane.
+    """Drive a participant action through the RAES control plane.
 
     The lab must already be realized by the public start path. This proof uses
     the configured deployment backend, calls
@@ -151,7 +151,7 @@ def _participant_control_plane(
     config: AptlConfig,
     backend_factory: BackendFactory,
 ) -> tuple[RuntimeControlPlane, RuntimeTarget, "DeploymentBackend"]:
-    """Create the ACES control plane backed by the configured APTL backend."""
+    """Create the RAES control plane backed by the configured APTL backend."""
 
     backend = backend_factory(config, project_dir)
     target = create_aptl_runtime_target(project_dir=project_dir, config=config, backend=backend)
@@ -176,7 +176,7 @@ def _validate_participant_snapshot(
     snapshot: RuntimeSnapshot,
     extensions: ParticipantSnapshotExtensions,
 ) -> ParticipantSnapshotValidation:
-    """Run every available ACES participant snapshot validator."""
+    """Run every available RAES participant snapshot validator."""
 
     return ParticipantSnapshotValidation(
         episode_violations=list(
@@ -202,7 +202,7 @@ def _shared_state_violations(
     snapshot: RuntimeSnapshot,
     extensions: ParticipantSnapshotExtensions,
 ) -> list[SnapshotViolation]:
-    """Return shared-state violations when the current ACES contract exists."""
+    """Return shared-state violations when the current RAES contract exists."""
 
     if iter_participant_shared_state_snapshot_violations is None:
         return []
@@ -220,7 +220,7 @@ def _concurrency_violations(
     snapshot: RuntimeSnapshot,
     extensions: ParticipantSnapshotExtensions,
 ) -> list[SnapshotViolation]:
-    """Return concurrency violations when the current ACES contract exists."""
+    """Return concurrency violations when the current RAES contract exists."""
 
     if iter_participant_concurrency_snapshot_violations is None:
         return []
@@ -305,7 +305,7 @@ def _proof_passed(context: ParticipantProofContext) -> bool:
 
 
 def _operation_succeeded(status: object | None) -> bool:
-    """Return whether an ACES operation status succeeded."""
+    """Return whether a RAES operation status succeeded."""
 
     return status is not None and getattr(status, "state", None) == OperationState.SUCCEEDED
 
@@ -368,7 +368,7 @@ def _participant_snapshot_entries(
 
 
 def _diagnostics_to_dicts(diagnostics: Sequence[object]) -> list[dict[str, object]]:
-    """Return ACES diagnostics as JSON-serializable redacted dictionaries."""
+    """Return RAES diagnostics as JSON-serializable redacted dictionaries."""
 
     result: list[dict[str, object]] = []
     for diagnostic in diagnostics:

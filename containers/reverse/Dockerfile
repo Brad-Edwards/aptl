@@ -61,7 +61,7 @@ RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 # for scripts, COPY --chmod=644 for configs) instead of relying on `chmod +x`
 # or the build context's file modes: COPY preserves source mode bits, so a
 # builder umask of 0002 would otherwise bake group-writable files and churn the
-# ACES inventory's captured modes between environments (SEC #417).
+# RAES inventory's captured modes between environments (SEC #417).
 COPY base/scripts/entrypoint-base.sh /opt/purple-team/scripts/
 RUN chmod 755 /opt/purple-team/scripts/entrypoint-base.sh
 

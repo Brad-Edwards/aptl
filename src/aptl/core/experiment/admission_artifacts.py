@@ -1,4 +1,4 @@
-"""Artifact-source implementations for ACES experiment admission (ADR-047
+"""Artifact-source implementations for RAES experiment admission (ADR-047
 "Experiment-controller boundary", Stage 5 / EXP-002 / issue #438).
 
 Split out of :mod:`aptl.core.experiment.admission` to keep that module
@@ -14,7 +14,7 @@ through:
 
 * :class:`MappingArtifactSource` — a simple in-memory mapping, for tests.
 * :func:`build_associated_artifact_source` — the production binding, via an
-  ACES associated-artifact manifest anchored to the authoring-input spec.
+  RAES associated-artifact manifest anchored to the authoring-input spec.
 """
 
 from __future__ import annotations
@@ -25,16 +25,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from aces_contracts.associated_artifacts import (
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
     load_associated_artifact_manifest_json,
     validate_associated_artifact_manifest,
 )
-from aces_contracts.contracts import ExperimentReferenceModel
-from aces_contracts.experiment_spec import ExperimentSpecModel
+from raes_contracts.contracts import ExperimentReferenceModel
+from raes_contracts.experiment_spec import ExperimentSpecModel
 
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
 from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.core.experiment.resolver import (
     ProjectContainedResolver,
@@ -74,7 +74,7 @@ def _unresolved(ref: ExperimentReferenceModel) -> AdmissionRejection:
 @dataclass(frozen=True)
 class MappingArtifactSource:
     """A simple in-memory :class:`ResolvedArtifactSource` (``ref_id ->
-    ResolvedArtifact``) for tests — no filesystem, no ACES associated-
+    ResolvedArtifact``) for tests — no filesystem, no RAES associated-
     artifact manifest. Production admission uses
     :func:`build_associated_artifact_source` instead.
     """
@@ -97,11 +97,11 @@ def build_associated_artifact_source(
 ) -> ResolvedArtifactSource:
     """Build the production :class:`ResolvedArtifactSource`.
 
-    The ADR-blessed binding: an ACES associated-artifact manifest anchored
+    The ADR-blessed binding: a RAES associated-artifact manifest anchored
     to the authoring-input ``spec`` (``parent_ref.ref_kind ==
     "authoring-input"``) binds each artifact's ``artifact_id`` -> a
     project-relative ``uri`` plus declared ``size_bytes``/``checksum`` — by
-    APTL convention, ``artifact_id`` IS the ACES reference's ``ref_id`` it
+    APTL convention, ``artifact_id`` IS the RAES reference's ``ref_id`` it
     binds (``spec.task_ref.ref_id``, ``spec.intended_scenario_ref.ref_id``
     or ``task.scenario_ref.ref_id``, each ``capture_spec_refs[].ref_id``).
     Every declared artifact is resolved via :class:`ProjectContainedResolver`
@@ -111,7 +111,7 @@ def build_associated_artifact_source(
     handed back — a validation failure anywhere rejects the whole source,
     never a partial binding.
 
-    ``spec`` must already be the ACES-validated authoring-input model (the
+    ``spec`` must already be the RAES-validated authoring-input model (the
     controller parses ``experiment_root.data`` once to build this source,
     before ``admit_experiment`` parses the same bytes again as its own step
     1 — a harmless repeat of one pure, deterministic public loader call,
@@ -131,7 +131,7 @@ def build_associated_artifact_source(
         )
     except (ValueError, TypeError) as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(
+            normalize_raes_failure(
                 exc,
                 address="associated_artifact_manifest",
                 code=_CODE_ASSOCIATED_ARTIFACT_MANIFEST_INVALID,
@@ -141,8 +141,8 @@ def build_associated_artifact_source(
     resolved_by_artifact_id: dict[str, ResolvedArtifact] = {}
     readers: dict[str, io.BytesIO] = {}
     for artifact_id, artifact_ref in manifest.artifacts.items():
-        # ACES requires `uri` to be an absolute URI (a scheme is mandatory —
-        # see `aces_contracts.contracts._validate_associated_artifact_uri`),
+        # RAES requires `uri` to be an absolute URI (a scheme is mandatory —
+        # see `raes_contracts.contracts._validate_associated_artifact_uri`),
         # so a project-relative binding is authored as `file:<relative
         # path>`. `parse_locator` extracts and re-validates the relative
         # path (scheme/traversal/NUL-byte checks); the declared

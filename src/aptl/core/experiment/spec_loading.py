@@ -1,11 +1,11 @@
-"""Bounded, hardened loading of ACES artifacts from resolver bytes.
+"""Bounded, hardened loading of RAES artifacts from resolver bytes.
 
-ADR-047 "ACES contracts remain authoritative": the root enters through
+ADR-047 "RAES contracts remain authoritative": the root enters through
 ``parse_experiment_spec``; task/capture-spec payloads validate through the
 exported ``ExperimentTaskModel``/``ExperimentCaptureSpecModel`` surfaces;
 import-free scenario material is parsed from resolver-owned bytes with
-``aces_sdl.parse_sdl``. APTL does not define a local authoring-input, task,
-capture, or scenario model — every function here returns the ACES object
+``raes.parse_sdl``. APTL does not define a local authoring-input, task,
+capture, or scenario model — every function here returns the RAES object
 directly.
 
 Every loader here takes ``data: bytes`` (never a path) — the caller is
@@ -13,7 +13,7 @@ expected to have already produced those bytes through
 ``aptl.core.experiment.resolver`` (one-open, no-follow, digest-verified).
 Nothing in this module reopens a path.
 
-Two parser-hardening gaps are closed before ANY ACES/pydantic model ever
+Two parser-hardening gaps are closed before ANY RAES/pydantic model ever
 sees the payload (ADR-047 "Input shape" / "Gotchas"):
 
 * ``parse_experiment_spec`` uses ``yaml.safe_load``, which silently keeps
@@ -23,9 +23,9 @@ sees the payload (ADR-047 "Input shape" / "Gotchas"):
   loaders here use JSON; a duplicate JSON object member is rejected the
   same way ``load_associated_artifact_manifest_json`` already does.
 
-Every failure — parser preflight, YAML/JSON decode, or the underlying ACES
+Every failure — parser preflight, YAML/JSON decode, or the underlying RAES
 validator — is normalized through
-:func:`aptl.core.experiment.errors.normalize_aces_failure` and raised as
+:func:`aptl.core.experiment.errors.normalize_raes_failure` and raised as
 :class:`aptl.core.experiment.errors.AdmissionRejection`. In particular,
 ``ExperimentSpecValidationError``'s ``str()`` (which embeds pydantic's
 ``input_value``) is never read.
@@ -38,23 +38,23 @@ from collections.abc import Mapping
 from typing import BinaryIO
 
 import yaml
-from aces_contracts.associated_artifacts import (
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
     validate_associated_artifact_manifest,
 )
-from aces_contracts.contracts import ExperimentCaptureSpecModel, ExperimentTaskModel
-from aces_contracts.experiment_spec import (
+from raes_contracts.contracts import ExperimentCaptureSpecModel, ExperimentTaskModel
+from raes_contracts.experiment_spec import (
     ExperimentSpecModel,
     ExperimentSpecValidationError,
     parse_experiment_spec,
 )
-from aces_sdl import SDLParseError, SDLValidationError, parse_sdl
-from aces_sdl.canonical import SDLCanonicalDigest, canonical_sdl_digest
-from aces_sdl.scenario import Scenario
+from raes import SDLParseError, SDLValidationError, parse_sdl
+from raes.canonical import SDLCanonicalDigest, canonical_sdl_digest
+from raes.scenario import Scenario
 from pydantic import ValidationError as PydanticValidationError
 
-from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_aces_failure
+from aptl.core.experiment.errors import AdmissionRejection, diagnostic, normalize_raes_failure
 from aptl.core.experiment.policy import AdmissionPolicy
 
 _ADDRESS_ROOT = "root"
@@ -133,7 +133,7 @@ def _yaml_duplicate_key_preflight(text: str, *, address: str, code: str) -> None
     raises ``ComposerError`` for a multi-document stream, since it calls
     the loader's ``get_single_data()``. The result is intentionally
     discarded: this is a preflight, not a second parse path — the public
-    ACES loader remains the sole model authority.
+    RAES loader remains the sole model authority.
     """
     try:
         yaml.load(text, Loader=_DuplicateKeyRejectingLoader)
@@ -182,7 +182,7 @@ def load_experiment_root(data: bytes, *, policy: AdmissionPolicy) -> ExperimentS
         return parse_experiment_spec(text)
     except ExperimentSpecValidationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=_ADDRESS_ROOT, code=_CODE_ROOT_INVALID)
+            normalize_raes_failure(exc, address=_ADDRESS_ROOT, code=_CODE_ROOT_INVALID)
         ) from exc
 
 
@@ -195,7 +195,7 @@ def load_task(data: bytes, *, policy: AdmissionPolicy) -> ExperimentTaskModel:
         return ExperimentTaskModel.model_validate(payload)
     except PydanticValidationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=_ADDRESS_TASK, code=_CODE_TASK_INVALID)
+            normalize_raes_failure(exc, address=_ADDRESS_TASK, code=_CODE_TASK_INVALID)
         ) from exc
 
 
@@ -208,7 +208,7 @@ def load_capture_spec(data: bytes, *, policy: AdmissionPolicy) -> ExperimentCapt
         return ExperimentCaptureSpecModel.model_validate(payload)
     except PydanticValidationError as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=_ADDRESS_CAPTURE_SPEC, code=_CODE_CAPTURE_SPEC_INVALID)
+            normalize_raes_failure(exc, address=_ADDRESS_CAPTURE_SPEC, code=_CODE_CAPTURE_SPEC_INVALID)
         ) from exc
 
 
@@ -217,11 +217,11 @@ def parse_scenario_bytes(
 ) -> tuple[Scenario, SDLCanonicalDigest]:
     """Bounded parse of import-free SDL scenario bytes plus its canonical digest.
 
-    ``aces_sdl.parse_sdl`` is called with ``path=None`` ALWAYS — never the
+    ``raes.parse_sdl`` is called with ``path=None`` ALWAYS — never the
     resolver's original path — so a symlink swap after the resolver's
     single open cannot change what gets parsed (ADR-047 "never hand the
     original untrusted path to ``parse_sdl_file``"). This has a load-
-    bearing side effect: at the locked ACES version, ``parse_sdl(text,
+    bearing side effect: at the locked RAES version, ``parse_sdl(text,
     path=None)`` itself raises ``SDLParseError`` before returning when the
     document declares a non-empty ``imports:`` list, because import
     resolution requires file-backed parsing. The explicit
@@ -236,7 +236,7 @@ def parse_scenario_bytes(
         scenario = parse_sdl(text)
     except (SDLParseError, SDLValidationError) as exc:
         raise AdmissionRejection(
-            normalize_aces_failure(exc, address=_ADDRESS_SCENARIO, code=_CODE_SCENARIO_INVALID)
+            normalize_raes_failure(exc, address=_ADDRESS_SCENARIO, code=_CODE_SCENARIO_INVALID)
         ) from exc
 
     if scenario.imports:

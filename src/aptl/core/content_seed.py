@@ -1,6 +1,6 @@
-"""Content named-volume seeding for typed ACES content-placement realization.
+"""Content named-volume seeding for typed RAES content-placement realization.
 
-Issue #689 / ADR-046's TechVault addendum: `content-placement` ACES
+Issue #689 / ADR-046's TechVault addendum: `content-placement` RAES
 resources must lower into typed backend realization or fail closed before
 `aptl lab start` side effects, reusing the ADR-043 named-volume seed seam
 (``NamedVolumeSeed`` / ``SeedFile`` / ``seed_named_volumes``) rather than a
@@ -8,7 +8,7 @@ second Docker-copy mechanism. This module is the content-specific sibling of
 :mod:`aptl.core.suricata_seed`: it turns typed
 :class:`~aptl.core.deployment.realization.DeploymentContentRealization`
 records (already validated for containment and realizability by
-:mod:`aptl.backends.aces_content_realization`) into the seed specs the
+:mod:`aptl.backends.raes_content_realization`) into the seed specs the
 deployment backend materializes.
 
 Inline text is rendered into the ignored ``.aptl/content/`` state tree

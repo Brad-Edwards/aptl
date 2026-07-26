@@ -38,7 +38,7 @@ class SoftwareVersions(object):
     wazuh_manager_version: str = ""
     wazuh_indexer_version: str = ""
     aptl_version: str = ""
-    aces_sdl_version: str = ""
+    raes_version: str = ""
 
 
 @dataclass
@@ -186,13 +186,13 @@ def _get_software_versions(backend: "DeploymentBackend") -> SoftwareVersions:
     except PackageNotFoundError:
         versions.aptl_version = "dev"
 
-    # ACES SDL version from package metadata
+    # RAES SDL version from package metadata
     try:
         from importlib.metadata import PackageNotFoundError, version
 
-        versions.aces_sdl_version = version("aces-sdl")
+        versions.raes_version = version("raes")
     except PackageNotFoundError:
-        versions.aces_sdl_version = ""
+        versions.raes_version = ""
 
     return versions
 

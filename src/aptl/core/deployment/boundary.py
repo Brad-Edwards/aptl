@@ -49,7 +49,7 @@ class BoundaryNetwork:
 
 @dataclass(frozen=True)
 class AcesAclOwnerBinding:
-    """Observed addresses that scope one ACES ACL owner."""
+    """Observed addresses that scope one RAES ACL owner."""
 
     owner_address: str
     owner_resource_type: Literal["node", "network"]
@@ -105,14 +105,14 @@ class BoundaryWorkload:
 
 @dataclass(frozen=True)
 class AcesBoundarySpec:
-    """Concrete enforcement input for the admitted ACES authority only."""
+    """Concrete enforcement input for the admitted RAES authority only."""
 
     owner: str
     networks: tuple[BoundaryNetwork, ...]
     owner_bindings: tuple[AcesAclOwnerBinding, ...]
     rules: tuple[DeploymentAclRealization, ...]
 
-    authority: Literal["aces"] = "aces"
+    authority: Literal["raes"] = "raes"
 
     def __post_init__(self) -> None:
         _validate_owner(self.owner)
@@ -121,7 +121,7 @@ class AcesBoundarySpec:
         if len(bindings) != len(self.owner_bindings):
             raise ValueError("ACL owner bindings must be unique")
         known = {network.name for network in self.networks}
-        _validate_aces_rules(self.rules, bindings, known)
+        _validate_raes_rules(self.rules, bindings, known)
 
     @classmethod
     def empty(cls, owner: str) -> AcesBoundarySpec:
@@ -258,7 +258,7 @@ def _digest(payload: str) -> str:
     return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _validate_aces_rules(
+def _validate_raes_rules(
     rules: tuple[DeploymentAclRealization, ...],
     bindings: dict[str, AcesAclOwnerBinding],
     known_networks: set[str],

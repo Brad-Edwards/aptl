@@ -7,7 +7,7 @@ realization ADR-046's runtime addendum forbids: a resource counts as realized
 only once the backend has started it *and* observed it.
 
 Health here is observed, never declared. aces-sdl 0.21.0 removed
-``runtime.health`` from the authored SDL contract (ACES #761) precisely because
+``runtime.health`` from the authored SDL contract (RAES #761) precisely because
 observed health is evidence, not an author declaration — so there is no declared
 status to compare against and nothing to fabricate one from. The container
 carries its own expectation instead: it reports a health state only when its

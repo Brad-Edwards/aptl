@@ -199,8 +199,8 @@ class ApplianceBoundaryBinding(_StrictModel):
 
     policy_digest: Digest
     payload_digest: Digest
-    aces_plan_digest: Digest
-    aces_boundary_required: bool
+    raes_plan_digest: Digest
+    raes_boundary_required: bool
     boundary_helper_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     egress_proxy_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     boot_id: str = Field(min_length=1, max_length=128)

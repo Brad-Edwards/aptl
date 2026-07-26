@@ -139,11 +139,11 @@ ScenarioDifficultyLiteral = Literal["beginner", "intermediate", "advanced", "exp
 
 
 class ScenarioValidationState(BaseModel):
-    """Whether a catalog entry resolved and its ACES SDL projected cleanly.
+    """Whether a catalog entry resolved and its RAES SDL projected cleanly.
 
     Distinct from lab readiness, container health, objective completion, and
     scoring (UI-008d guardrail): ``valid`` means only that the catalog entry
-    and its ACES projection loaded/validated. ``detail`` carries a redacted,
+    and its RAES projection loaded/validated. ``detail`` carries a redacted,
     user-facing reason when ``valid`` is ``False`` — never a raw stack trace,
     parser exception, or filesystem path.
     """
@@ -159,7 +159,7 @@ class ScenarioSummaryResponse(BaseModel):
     name, and description come from the curated catalog; mode, difficulty,
     estimated time, and tags come from the narrow validated catalog metadata
     extension (:class:`ScenarioCatalogMetadata`); required containers and the
-    validation summary are projected from the ACES SDL. The catalog ``path``
+    validation summary are projected from the RAES SDL. The catalog ``path``
     locator stays internal and is never modelled here. Workbench detail,
     scoring, SIEM query execution, and terminal session state belong to the
     scenario-detail projection, not the summary contract.
@@ -182,7 +182,7 @@ class ScenarioSummaryResponse(BaseModel):
 # discriminated union. The union — NOT the removed legacy in-tree
 # ``ScenarioDefinition`` / web ``buildBlockSequence`` shape — is the contract;
 # ``web/src/lib/types.ts`` mirrors these wire shapes. Each block family is
-# projected from whatever the ACES SDL actually owns and is omitted when its
+# projected from whatever the RAES SDL actually owns and is omitted when its
 # source section is empty (no fabricated content). Blocks are display/action
 # *descriptors*, not authorities: a terminal block only names a requested
 # container (the WebSocket still enforces the ADR-039/040 gates) and a SIEM
@@ -206,7 +206,7 @@ class SectionDividerBlock(BaseModel):
 
 
 class ContainerStatusBlock(BaseModel):
-    """Required-container names for the scenario (ACES VM nodes).
+    """Required-container names for the scenario (RAES VM nodes).
 
     Live container state is read from the lab-status stream by the UI; this
     block only names the required containers so the workbench can render
@@ -219,7 +219,7 @@ class ContainerStatusBlock(BaseModel):
 
 
 class ObjectiveBlock(BaseModel):
-    """A declarative ACES experiment objective (name/description/success)."""
+    """A declarative RAES experiment objective (name/description/success)."""
 
     type: Literal["objective"] = "objective"
     key: str
@@ -229,7 +229,7 @@ class ObjectiveBlock(BaseModel):
 
 
 class StepBlock(BaseModel):
-    """One ordered step projected from an ACES workflow."""
+    """One ordered step projected from a RAES workflow."""
 
     type: Literal["step"] = "step"
     key: str
@@ -245,7 +245,7 @@ class SiemQueryBlock(BaseModel):
     Carries display copy and a curated query payload. Execution belongs to the
     SIEM API owner (#421) with backend validation, time-range/row caps, and
     redacted errors — this block never ships raw OpenSearch passthrough. Not
-    emitted from the current scenario corpus (no ACES SIEM-query source yet);
+    emitted from the current scenario corpus (no RAES SIEM-query source yet);
     defined so the frontend block interface can coordinate with #421.
     """
 

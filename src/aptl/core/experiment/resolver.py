@@ -24,7 +24,7 @@ Two layers, tested independently:
 SDL import graphs are explicitly OUT of scope for this resolver: ADR-047
 "Authorized artifact resolution" requires a future staged-import resolver
 to materialize a digest-pinned, size-bounded transitive graph into private
-staging before ACES ever parses an import-declaring scenario. This module
+staging before RAES ever parses an import-declaring scenario. This module
 does not attempt that; ``spec_loading.parse_scenario_bytes`` rejects any
 scenario that declares imports instead. A remote/staged-import resolver
 implementing the same :class:`ArtifactResolver` protocol is the documented
@@ -49,10 +49,10 @@ from aptl.core.experiment.policy import AdmissionPolicy
 from aptl.utils.pathsafe import PathContainmentError, open_contained_nofollow
 from aptl.utils.redaction import is_secret_shaped_value, is_sensitive_key
 
-# Same four algorithms as the ACES `PrefixedDigestString` pattern
+# Same four algorithms as the RAES `PrefixedDigestString` pattern
 # (`^(?:sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|sha512:[A-Fa-f0-9]{128}|
 # blake3:[A-Fa-f0-9]{64})$`) — kept in lockstep so a locator this resolver
-# accepts is always a digest ACES itself would also accept.
+# accepts is always a digest RAES itself would also accept.
 _DIGEST_PATTERN = re.compile(
     r"^(?:sha256:[A-Fa-f0-9]{64}|sha384:[A-Fa-f0-9]{96}|"
     r"sha512:[A-Fa-f0-9]{128}|blake3:[A-Fa-f0-9]{64})$"

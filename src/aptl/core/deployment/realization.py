@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from aces_sdl.runtime_configuration import RuntimeConfiguration
+    from raes.runtime_configuration import RuntimeConfiguration
 
 
 ImageRealizationMode = Literal["pull", "build"]
@@ -81,7 +81,7 @@ class DeploymentNetworkAttachment(object):
 
 @dataclass(frozen=True)
 class DeploymentAclRealization(object):
-    """One admitted ACES infrastructure ACL lowered for backend enforcement."""
+    """One admitted RAES infrastructure ACL lowered for backend enforcement."""
 
     owner_address: str
     owner_resource_type: Literal["node", "network"]
@@ -113,9 +113,9 @@ class DeploymentAclRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentServicePort(object):
-    """One node-local transport binding declared on an ACES node.
+    """One node-local transport binding declared on a RAES node.
 
-    Mirrors ACES ``ServicePort``: a container-facing service identity. It does
+    Mirrors RAES ``ServicePort``: a container-facing service identity. It does
     not publish a host port and does not authorize traffic — host exposure is
     :class:`DeploymentPublishedPort`, a deliberately separate surface (ADR-025).
     """
@@ -132,7 +132,7 @@ class DeploymentServicePort(object):
 class DeploymentPublishedPort(object):
     """One host-published port binding declared on a node's runtime network.
 
-    Mirrors ACES ``RuntimePublishedPort``. ``host_ip`` is the host-facing
+    Mirrors RAES ``RuntimePublishedPort``. ``host_ip`` is the host-facing
     exposure boundary: an author who omits it gets loopback, never all
     interfaces (ADR-034 Host Exposure Amendment). ``host_port`` is ``None`` when
     the author declared a container port with no fixed host binding.
@@ -179,7 +179,7 @@ ContentSourceKind = Literal[
 
 @dataclass(frozen=True)
 class DeploymentContentRealization(object):
-    """One content-placement operation lowered from an ACES content resource.
+    """One content-placement operation lowered from a RAES content resource.
 
     ``source_kind`` records how the content is materialized: ``inline-text``
     (bounded text carried on the placement itself), ``project-file`` /
@@ -215,7 +215,7 @@ class DeploymentContentRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentAccountRealization(object):
-    """One account-placement identity lowered from an ACES account resource.
+    """One account-placement identity lowered from a RAES account resource.
 
     Carries non-secret identity only (ADR-046 addendum): no password material
     crosses this record. The concrete credential is generated inside the target
@@ -289,7 +289,7 @@ class DeploymentGeneratedArtifactOutput(object):
 
 @dataclass(frozen=True)
 class DeploymentGeneratedArtifactRealization(object):
-    """One ACES generated-artifact operation admitted for deployment."""
+    """One RAES generated-artifact operation admitted for deployment."""
 
     address: str
     name: str
@@ -317,7 +317,7 @@ class DeploymentGeneratedArtifactRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentPersistentVolumeRealization(object):
-    """One ACES persistent-volume operation admitted for deployment."""
+    """One RAES persistent-volume operation admitted for deployment."""
 
     address: str
     name: str

@@ -9,7 +9,7 @@ never through docker-compose.yml alone with no SDL-declared realization.
 from __future__ import annotations
 
 import pytest
-from aces_sdl.runtime_configuration import (
+from raes.runtime_configuration import (
     RuntimeConfiguration,
     RuntimePackage,
     ServiceManagerUnit,

@@ -108,8 +108,8 @@ class TestComposeConsistency:
         is a separate, not-yet-built secrets-injection concern for
         image-free nodes (tracked alongside #809) and is not asserted here.
         """
-        from aces_sdl import parse_sdl_file
-        from aces_sdl.runtime_mounts import RuntimeMountSourceKind
+        from raes import parse_sdl_file
+        from raes.runtime_mounts import RuntimeMountSourceKind
 
         services = compose_config["services"]
         suricata_volumes = services["suricata"]["volumes"]
@@ -241,7 +241,7 @@ class TestKaliContainerLifecycle:
 
     @staticmethod
     def _kali_node():
-        from aces_sdl import parse_sdl_file
+        from raes import parse_sdl_file
 
         scenario = parse_sdl_file(
             PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
@@ -251,7 +251,7 @@ class TestKaliContainerLifecycle:
     def test_kali_runs_under_systemd_reaper(self):
         """kali must declare service_manager_units so the generic
         materializer boots it on the init-capable systemd base image
-        (`base_image_for_os`, src/aptl/backends/aces_materializer.py) —
+        (`base_image_for_os`, src/aptl/backends/raes_materializer.py) —
         systemd is PID 1 there and reaps orphaned children natively.
         Without any service unit declared, kali would get the bare
         non-service base image instead, with no reaper (the zombie defect

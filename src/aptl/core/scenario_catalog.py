@@ -1,4 +1,4 @@
-"""Curated ACES startup scenario catalog resolution."""
+"""Curated RAES startup scenario catalog resolution."""
 
 from __future__ import annotations
 
@@ -43,10 +43,10 @@ _SCENARIO_ID = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 class ScenarioCatalogMetadata(BaseModel):
-    """Narrow validated card/detail metadata ACES does not own uniformly.
+    """Narrow validated card/detail metadata RAES does not own uniformly.
 
     UI-008d needs card facts (mode, difficulty, estimated duration, tags) that
-    the ACES SDL does not carry per-scenario today. Rather than infer them in
+    the RAES SDL does not carry per-scenario today. Rather than infer them in
     Svelte or revive the deleted in-tree scenario schema, the curated catalog
     owns them as this strict optional extension. All fields are optional so a
     catalog entry may omit the block entirely.
@@ -131,7 +131,7 @@ class ScenarioCatalog(BaseModel):
 
 
 def load_scenario_catalog(project_dir: Path) -> ScenarioCatalog:
-    """Load the curated ACES startup scenario catalog for ``project_dir``."""
+    """Load the curated RAES startup scenario catalog for ``project_dir``."""
     catalog_path = project_dir / CATALOG_RELATIVE_PATH
     if not catalog_path.is_file():
         raise ValueError(f"Scenario catalog does not exist: {catalog_path}")
@@ -155,7 +155,7 @@ def resolve_scenario_selection(
     scenario_id: str | None = None,
     scenario_path: Path | None = None,
 ) -> Path | None:
-    """Resolve an optional catalog id or explicit path into an ACES SDL file."""
+    """Resolve an optional catalog id or explicit path into a RAES SDL file."""
     if scenario_id and scenario_path is not None:
         raise ValueError("scenario selectors are mutually exclusive")
     if not scenario_id and scenario_path is None:
@@ -173,7 +173,7 @@ def resolve_scenario_selection(
         assert scenario_path is not None
         selected = scenario_path
     resolved = _resolve_project_file(project_dir, selected)
-    _validate_aces_sdl(resolved)
+    _validate_raes_sdl(resolved)
     return resolved
 
 
@@ -218,9 +218,9 @@ def _resolve_project_file(project_dir: Path, candidate: Path) -> Path:
 def resolve_and_parse_scenario(
     project_dir: Path, scenario_id: str
 ) -> tuple[ScenarioCatalogEntry, object]:
-    """Resolve a catalog id and parse its ACES SDL into a ``Scenario``.
+    """Resolve a catalog id and parse its RAES SDL into a ``Scenario``.
 
-    Returns the matched catalog entry and its parsed ACES ``Scenario`` object
+    Returns the matched catalog entry and its parsed RAES ``Scenario`` object
     (the authority the scenario-detail projection reads from). Raises
     :class:`~aptl.core.scenarios.ScenarioNotFoundError` when no catalog exists
     or the id is unknown, and :class:`~aptl.core.scenarios.ScenarioValidationError`
@@ -241,38 +241,38 @@ def resolve_and_parse_scenario(
         raise ScenarioNotFoundError(scenario_id)
     try:
         resolved = _resolve_project_file(project_dir, Path(entry.path))
-        scenario = _parse_aces_sdl(resolved)
+        scenario = _parse_raes_sdl(resolved)
     except ValueError as exc:
         raise ScenarioValidationError(redact(str(exc))) from exc
     return entry, scenario
 
 
-def _validate_aces_sdl(path: Path) -> None:
-    """Validate selected SDL through the ACES parser authority."""
-    _parse_aces_sdl(path)
+def _validate_raes_sdl(path: Path) -> None:
+    """Validate selected SDL through the RAES parser authority."""
+    _parse_raes_sdl(path)
 
 
-def _parse_aces_sdl(path: Path) -> object:
-    """Parse selected SDL through the ACES parser authority.
+def _parse_raes_sdl(path: Path) -> object:
+    """Parse selected SDL through the RAES parser authority.
 
     Returns the parsed ``Scenario`` object. Raises a redacted ``ValueError``
     on any parser failure so the internal SDL contents never surface.
     """
-    sdl_error, parse_sdl_file = _load_aces_sdl_parser()
+    sdl_error, parse_sdl_file = _load_raes_sdl_parser()
     try:
         return parse_sdl_file(path)
     except (FileNotFoundError, sdl_error, TypeError, ValueError) as exc:
         raise ValueError(
-            f"Selected ACES SDL scenario is invalid: {redact(str(exc))}"
+            f"Selected RAES SDL scenario is invalid: {redact(str(exc))}"
         ) from exc
 
 
-def _load_aces_sdl_parser() -> tuple[type[Exception], Callable[[Path], object]]:
-    """Load the optional ACES SDL parser at validation time."""
+def _load_raes_sdl_parser() -> tuple[type[Exception], Callable[[Path], object]]:
+    """Load the optional RAES SDL parser at validation time."""
     try:
-        from aces_sdl import SDLError, parse_sdl_file
+        from raes import SDLError, parse_sdl_file
     except ImportError as exc:
         raise ValueError(
-            f"ACES runtime handoff unavailable: {redact(str(exc))}"
+            f"RAES runtime handoff unavailable: {redact(str(exc))}"
         ) from exc
     return SDLError, parse_sdl_file

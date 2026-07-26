@@ -1,8 +1,8 @@
-"""Tests for ``aptl.core.experiment.spec_loading`` (ADR-047 "ACES contracts
+"""Tests for ``aptl.core.experiment.spec_loading`` (ADR-047 "RAES contracts
 remain authoritative" + "Input shape").
 
-Uses the installed ACES fixture corpus
-(``aces_contracts.corpus.corpus_family_root(FIXTURES)``) as the contract
+Uses the installed RAES fixture corpus
+(``raes_contracts.corpus.corpus_family_root(FIXTURES)``) as the contract
 test source rather than a copied-in schema, per ADR-047's testing contract.
 """
 
@@ -13,19 +13,19 @@ import io
 import json
 
 import pytest
-from aces_contracts.associated_artifacts import (
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
     associated_artifact_set_digest,
 )
-from aces_contracts.contracts import (
+from raes_contracts.contracts import (
     ExperimentCaptureSpecModel,
     ExperimentTaskModel,
 )
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.experiment_spec import ExperimentSpecModel
-from aces_sdl.canonical import canonical_sdl_digest
-from aces_sdl.scenario import Scenario
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.experiment_spec import ExperimentSpecModel
+from raes.canonical import canonical_sdl_digest
+from raes.scenario import Scenario
 
 from aptl.core.experiment.errors import EXPERIMENT_ADMISSION_DOMAIN, AdmissionRejection
 from aptl.core.experiment.policy import AdmissionPolicy, default_admission_policy
@@ -110,8 +110,8 @@ class TestLoadExperimentRootDuplicateKeyPreflight:
         with pytest.raises(AdmissionRejection):
             load_experiment_root(data, policy=policy)
 
-    def test_a_document_without_duplicate_keys_reaches_aces_validation(self):
-        # No duplicate key, but otherwise incomplete -> ACES itself rejects
+    def test_a_document_without_duplicate_keys_reaches_raes_validation(self):
+        # No duplicate key, but otherwise incomplete -> RAES itself rejects
         # it (a real ValidationError normalized), proving the preflight
         # does not itself reject well-formed-but-incomplete documents.
         text = "schema_version: experiment-authoring-input/v1\n"
@@ -296,7 +296,7 @@ class TestParseScenarioBytesHappyPath:
         assert digest1 == digest2
         assert digest1.value == digest2.value
 
-    def test_matches_the_aces_canonical_digest_api_directly(self):
+    def test_matches_the_raes_canonical_digest_api_directly(self):
         data = _read("sdl", "sdl-yaml-v1", "valid", "minimal.yaml")
 
         scenario, digest = parse_scenario_bytes(data, policy=default_admission_policy())

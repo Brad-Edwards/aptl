@@ -2,19 +2,19 @@
 
 from textwrap import dedent
 
-from aces_contracts.workflow import (
+from raes_contracts.workflow import (
     WorkflowExecutionState,
     WorkflowHistoryEventType,
     WorkflowStatus,
     WorkflowStepLifecycle,
     WorkflowStepOutcome,
 )
-from aces_runtime.workflow_result_contracts import workflow_result_contract_diagnostics
-from aces_processor.compiler import compile_runtime_model
-from aces_processor.planner import plan
-from aces_sdl.parser import parse_sdl
+from raes_runtime.workflow_result_contracts import workflow_result_contract_diagnostics
+from raes_processor.compiler import compile_runtime_model
+from raes_processor.planner import plan
+from raes.parser import parse_sdl
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.runtime.workflow_engine import WorkflowEngine, WorkflowRunRecord
 
 
@@ -142,8 +142,8 @@ def test_driven_state_is_workflow_contract_clean():
         objective_outcomes={"evaluation.objective.validate": WorkflowStepOutcome.SUCCEEDED},
     )
 
-    from aces_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
-    from aces_contracts.planning import RuntimeDomain
+    from raes_contracts.runtime_state import RuntimeSnapshot, SnapshotEntry
+    from raes_contracts.planning import RuntimeDomain
 
     snapshot = RuntimeSnapshot(
         entries={

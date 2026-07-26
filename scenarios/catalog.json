@@ -4,7 +4,7 @@
     {
       "id": "techvault-operational",
       "name": "TechVault Operational",
-      "description": "Default public APTL startup scenario backed by ACES SDL.",
+      "description": "Default public APTL startup scenario backed by RAES SDL.",
       "path": "scenarios/techvault-operational.sdl.yaml",
       "metadata": {
         "mode": "purple",
@@ -64,7 +64,7 @@
     {
       "id": "paper-agent-loop",
       "name": "Paper Agent Loop",
-      "description": "APTL realization of the ACES paper participant/portal/DB/Wazuh evidence loop.",
+      "description": "APTL realization of the RAES paper participant/portal/DB/Wazuh evidence loop.",
       "path": "scenarios/paper-agent-loop.sdl.yaml",
       "metadata": {
         "mode": "purple",

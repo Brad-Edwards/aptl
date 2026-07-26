@@ -97,12 +97,12 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     scenario: Optional[str] = typer.Option(
         None,
         "--scenario",
-        help="Curated ACES startup scenario id from the catalog.",
+        help="Curated RAES startup scenario id from the catalog.",
     ),
     scenario_path: Optional[Path] = typer.Option(
         None,
         "--scenario-path",
-        help="Explicit ACES SDL scenario path under the project directory.",
+        help="Explicit RAES SDL scenario path under the project directory.",
     ),
     clean: bool = typer.Option(
         False,
@@ -236,7 +236,7 @@ def scenarios(
         help="Path to the APTL project directory.",
     ),
 ) -> None:
-    """List curated ACES startup scenarios."""
+    """List curated RAES startup scenarios."""
     try:
         catalog = load_scenario_catalog(project_dir)
     except ValueError as exc:
@@ -364,7 +364,7 @@ def status(
 
 _LIVE_GATE_WARNING = (
     "\n  WARNING: the live validation gate runs `aptl lab stop -v` and then\n"
-    "  re-boots the lab through the ACES start path. This DESTROYS all lab\n"
+    "  re-boots the lab through the RAES start path. This DESTROYS all lab\n"
     "  data (Wazuh/MISP/TheHive/Shuffle volumes). Pass --skip-clean-boot to\n"
     "  validate the already-running lab without destroying it.\n"
 )
@@ -381,12 +381,12 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="ACES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
+        help="RAES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",
         "--profile",
-        help="ACES backend capability profile to validate against.",
+        help="RAES backend capability profile to validate against.",
     ),
     run_id: Optional[str] = typer.Option(
         None,
@@ -405,9 +405,9 @@ def validate_live(
         help="Skip the data-destruction confirmation prompt.",
     ),
 ) -> None:
-    """Run the live ACES validation gate (boots the lab end-to-end; DESTRUCTIVE).
+    """Run the live RAES validation gate (boots the lab end-to-end; DESTRUCTIVE).
 
-    Proves a fresh TechVault lab is realized from the interpreted ACES model
+    Proves a fresh TechVault lab is realized from the interpreted RAES model
     through the public start path and captures operational + provenance evidence
     in the run archive. Intended for maintainers / a documented CI runner — not
     fast CI: it needs Docker, the SOC stack's resources, and minutes of startup.

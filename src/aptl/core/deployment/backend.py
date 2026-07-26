@@ -74,7 +74,7 @@ class DeploymentBackend(Protocol):
         topology authority for any follow-on side effects.
 
         Args:
-            realization: Typed deployment realization emitted from ACES plan
+            realization: Typed deployment realization emitted from RAES plan
                 resources.
             build: If True, rebuild images before starting.
 
@@ -212,7 +212,7 @@ class DeploymentBackend(Protocol):
         *,
         seeder_image: str,
     ) -> None:
-        """Materialize typed ACES content placements (issue #689).
+        """Materialize typed RAES content placements (issue #689).
 
         Mirrors :meth:`seed_named_volumes`: each realized content item is
         lowered into a project-scoped named-volume seed (inline text is
@@ -242,7 +242,7 @@ class DeploymentBackend(Protocol):
         """Read back the realized filesystem kind for one content placement.
 
         Implementations inspect the project-scoped realized destination and
-        return only the governed ACES kind (``file`` or ``directory``). Missing,
+        return only the governed RAES kind (``file`` or ``directory``). Missing,
         ambiguous, or failed observations return ``None``. Content bytes and raw
         probe output must never cross this boundary.
         """
@@ -255,7 +255,7 @@ class DeploymentBackend(Protocol):
         *,
         timeout: int | None = None,
     ) -> LabResult | None:
-        """Realize typed ACES account placements onto their target nodes (#577).
+        """Realize typed RAES account placements onto their target nodes (#577).
 
         Ensures declared groups, creates or reconciles each declared user via
         the resolved backend account provider (Samba AD on the ``ad`` node),

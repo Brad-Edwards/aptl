@@ -1,9 +1,9 @@
-"""Static realization proof for the curated TechVault ACES SDL variants (#534).
+"""Static realization proof for the curated TechVault RAES SDL variants (#534).
 
 These exercise the small single-file scenarios registered in
 ``scenarios/catalog.json`` alongside the default
 ``scenarios/techvault-operational.sdl.yaml``. Each variant must parse through the
-ACES parser, compile through the processor/runtime planner, and realize through
+RAES parser, compile through the processor/runtime planner, and realize through
 APTL's ``interpret_provisioning_plan`` with no error-severity ``aptl.provisioner.*``
 diagnostics, selecting exactly the bounded Compose profile set implied by its
 declared node content.
@@ -23,10 +23,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from aces_sdl.parser import parse_sdl
+from raes.parser import parse_sdl
 
-from aptl.backends.aces import DEFAULT_ACES_SCENARIO
-from aptl.backends.aces_profiles import (
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO
+from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     public_start_profiles,
     select_backend_profiles,
@@ -157,7 +157,7 @@ def test_selected_profiles_for_scenario_matches_variant(variant: _Variant):
     This is the source of truth the post-start readiness checks scope to, so it
     must equal the variant's expected (content-derived) profile set.
     """
-    from aptl.backends.aces import selected_profiles_for_scenario
+    from aptl.backends.raes import selected_profiles_for_scenario
     from aptl.validation._gate_checks import _NoStartBackend
 
     selected = selected_profiles_for_scenario(
@@ -218,4 +218,4 @@ def test_catalog_default_and_operational_scenario_unchanged():
     ids = [entry.id for entry in catalog.scenarios]
     assert ids[0] == "techvault-operational"
     assert set(VARIANTS_BY_ID).issubset(set(ids))
-    assert DEFAULT_ACES_SCENARIO == Path("scenarios") / "techvault-operational.sdl.yaml"
+    assert DEFAULT_RAES_SCENARIO == Path("scenarios") / "techvault-operational.sdl.yaml"

@@ -139,9 +139,9 @@ repos:
         # Prefer the repo's .venv (so contributors don't need to activate it
         # before committing). Fall back to PATH for contributors using a
         # different venv layout that they've already activated. Scenario SDL
-        # is included so an edit to it runs the fast ACES validation-gate
+        # is included so an edit to it runs the fast RAES validation-gate
         # logic tests (the slow full-scenario gate is the manual
-        # `aces-scenario-gate` hook below).
+        # `raes-scenario-gate` hook below).
         # -n auto parallelizes across cores via pytest-xdist (no coverage here,
         # so xdist worker measurement is not a concern — that constraint only
         # applies to the CI `coverage run` job).
@@ -150,19 +150,19 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|scenarios/.*\.ya?ml)$
 
-      - id: aces-scenario-gate
-        name: ACES scenario validation gate (manual; techvault-operational)
+      - id: raes-scenario-gate
+        name: RAES scenario validation gate (manual; techvault-operational)
         # SCN-010E / #322. The static gate validates the authoritative
-        # techvault-operational SDL and spawns the `aces conformance backend`
+        # techvault-operational SDL and spawns the `raes conformance backend`
         # CLI, so it is a manual-stage hook rather than part of the per-commit
         # path. Run it before pushing a scenario/manifest change:
-        #   pre-commit run aces-scenario-gate --hook-stage manual
-        # The advisory CI job `aces-scenario-gate` runs the same tests on PRs.
+        #   pre-commit run raes-scenario-gate --hook-stage manual
+        # The advisory CI job `raes-scenario-gate` runs the same tests on PRs.
         entry: bash -c 'if [ -x .venv/bin/pytest ]; then exec .venv/bin/pytest tests/test_techvault_static_gate.py -q -m integration; else exec pytest tests/test_techvault_static_gate.py -q -m integration; fi'
         language: system
         pass_filenames: false
         stages: [manual]
-        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/aces.*\.py)$
+        files: ^(scenarios/.*\.ya?ml|src/aptl/validation/.*\.py|src/aptl/backends/raes.*\.py)$
 
       - id: vitest-mcp-common
         name: MCP TypeScript tests (aptl-mcp-common vitest)

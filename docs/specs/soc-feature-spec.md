@@ -117,8 +117,8 @@ runs/<uuid>/
 
 ## 3. Scenario Schema
 
-Historical note: this section documents the retired pre-ACES APTL-local
-scenario schema. Supported startup now uses ACES SDL via the curated catalog;
+Historical note: this section documents the retired pre-RAES APTL-local
+scenario schema. Supported startup now uses RAES SDL via the curated catalog;
 archived legacy YAML files are reference-only.
 
 ### 3.1 ScenarioDefinition

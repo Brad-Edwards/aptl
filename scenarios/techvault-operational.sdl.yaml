@@ -1,6 +1,6 @@
 name: techvault
 description: >
-  Operational ACES projection for the TechVault range. This SDL is the public
+  Operational RAES projection for the TechVault range. This SDL is the public
   startup contract: it names the steady-state Compose services and networks
   that `aptl lab start` realizes. There is no separate captured deep
   per-asset inventory behind it (ADR-046).
@@ -501,7 +501,7 @@ infrastructure:
     links: [security-net]
     dependencies: [aptl-tempo]
 
-# Stateful Wazuh prerequisites are authored ACES resources. The deployment
+# Stateful Wazuh prerequisites are authored RAES resources. The deployment
 # backend materializes and verifies these before either consumer starts; the
 # checked-in Compose service definitions are provider bindings, not the source
 # of artifact, volume, or dependency intent.

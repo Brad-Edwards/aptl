@@ -1,6 +1,6 @@
 """Full-stack real-Docker test: admit an image-free SDL and realize it (ADR-048).
 
-Exercises the entire path through the real ACES compiler:
+Exercises the entire path through the real RAES compiler:
 parse -> plan -> interpret -> deployment_spec (image_free derived) ->
 backend.realize -> generic materializer -> real container, verified by
 read-after-write. Zero product code; proves an arbitrary image-free scenario
@@ -15,11 +15,11 @@ import shutil
 import subprocess
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
+from raes_runtime.manager import RuntimeManager
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 
@@ -62,7 +62,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     cfg = AptlConfig(lab={"name": "smoke"}, containers={})
     backend = DockerComposeBackend(project_dir=tmp_path, project_name="aptl-imagefree-admit")
 
-    # Admit through the real ACES compiler/planner/interpreter.
+    # Admit through the real RAES compiler/planner/interpreter.
     scenario = parse_sdl_file(sdl)
     target = create_aptl_runtime_target(project_dir=tmp_path, config=cfg, backend=backend)
     plan = RuntimeManager(target).plan(scenario)

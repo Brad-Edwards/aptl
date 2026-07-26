@@ -24,6 +24,13 @@ from aptl.core.deployment._compose_seed_safety import (
     redacted_stderr_hint,
 )
 from aptl.core.deployment._compose_stop import stop_compose_lab
+from aptl.core.deployment._compose_boundary import (
+    DEFAULT_BOUNDARY_HELPER_IMAGE,
+)
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.core.seed_spec import NamedVolumeSeed
@@ -64,6 +71,15 @@ class DockerComposeBackend(
     ) -> None:
         self._project_dir = project_dir
         self._project_name = project_name
+        self._appliance_boundary: (
+            tuple[
+                ApplianceBoundaryPolicy,
+                ApplianceBoundaryBinding,
+            ]
+            | None
+        ) = None
+        self._boundary_receipts: dict[str, dict[str, object]] = {}
+        self._boundary_helper_image = DEFAULT_BOUNDARY_HELPER_IMAGE
 
     @property
     def project_dir(self) -> Path:
@@ -187,6 +203,24 @@ class DockerComposeBackend(
         kwargs = self._subprocess_kwargs(streaming=True, timeout=timeout)
         try:
             return subprocess.run(cmd, **kwargs).returncode
+        except subprocess.TimeoutExpired as exc:
+            raise BackendTimeoutError(
+                f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
+            ) from exc
+
+    def _run_with_input(
+        self,
+        cmd: list[str],
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Run one fixed command with non-secret structured stdin."""
+
+        kwargs = self._subprocess_kwargs(streaming=False, timeout=timeout)
+        kwargs["input"] = payload
+        try:
+            return subprocess.run(cmd, **kwargs)
         except subprocess.TimeoutExpired as exc:
             raise BackendTimeoutError(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"

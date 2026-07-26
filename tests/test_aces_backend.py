@@ -503,7 +503,10 @@ def _drive_plan_through_target(
         if not result.success:
             return result
         working = result.snapshot
-    if execution_plan.orchestration.actionable_operations and target.orchestrator is not None:
+    if (
+        execution_plan.orchestration.actionable_operations
+        and target.orchestrator is not None
+    ):
         result = target.orchestrator.start(execution_plan.orchestration, working)
         if not result.success:
             return result
@@ -595,7 +598,7 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
         {"disabled", "groups", "mail", "spn"}
     )
     assert provisioner.supports_accounts is True
-    assert provisioner.supports_acls is False
+    assert provisioner.supports_acls is True
 
 
 def test_manifest_realization_support_matches_exercised_concerns():
@@ -1637,7 +1640,9 @@ def test_start_aces_scenario_threads_resolved_run_target(mocker, tmp_path):
         selected_profiles=["victim"],
         scenario_path=None,
     )
-    run_plan = mocker.patch("aptl.backends.aces._run_execution_plan", return_value=outcome)
+    run_plan = mocker.patch(
+        "aptl.backends.aces._run_execution_plan", return_value=outcome
+    )
     store = object()
     run_target = AcesRunTarget(run_store=store, run_id="run-1")
 
@@ -2270,15 +2275,11 @@ def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
 
     assert result.success is False
     captured = provisioner.last_failure_diagnostics
-    assert [item.code for item in captured] == [
-        "aptl.provisioner.backend-start-failed"
-    ]
+    assert [item.code for item in captured] == ["aptl.provisioner.backend-start-failed"]
     assert "172.20.0.0/16" in captured[0].message
 
     backend.realize.return_value = LabResult(success=True, message="ok")
-    recovered = provisioner.apply(
-        _plan_for_nodes("scenario-a.kali"), RuntimeSnapshot()
-    )
+    recovered = provisioner.apply(_plan_for_nodes("scenario-a.kali"), RuntimeSnapshot())
     assert recovered.success is True
     assert provisioner.last_failure_diagnostics == ()
 
@@ -2319,9 +2320,7 @@ def test_apply_failure_reattaches_backend_diagnostics_after_gate_flood(
     target = MagicMock()
     target.provisioner.last_failure_diagnostics = (backend_diag,)
 
-    failure, _snapshot, retryable = aces._apply_execution_plan(
-        target, MagicMock()
-    )
+    failure, _snapshot, retryable = aces._apply_execution_plan(target, MagicMock())
 
     assert failure is not None
     assert failure.success is False
@@ -3347,9 +3346,7 @@ def test_manifest_account_features_match_realized_dto_fields():
         "mail",
         "spn",
     }
-    assert set(manifest.provisioner.supported_domain_profiles) == {
-        "active_directory"
-    }
+    assert set(manifest.provisioner.supported_domain_profiles) == {"active_directory"}
 
 
 def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:
@@ -3740,9 +3737,9 @@ def _apply_content_disclosure_scenario(tmp_path, observed_content_type):
         config=AptlConfig(lab={"name": "test"}),
         backend=backend,
     )
-    return RuntimeManager(
-        target, initial_snapshot=execution_plan.base_snapshot
-    ).apply(execution_plan)
+    return RuntimeManager(target, initial_snapshot=execution_plan.base_snapshot).apply(
+        execution_plan
+    )
 
 
 def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
@@ -3841,9 +3838,7 @@ def test_apply_provisioning_records_realization_provenance_when_honored(tmp_path
     result = _apply_disclosure_scenario(tmp_path, backend)
 
     assert result.success is True, [d.message for d in result.diagnostics]
-    kinds = {
-        entry.requirement_kind for entry in result.snapshot.realization_provenance
-    }
+    kinds = {entry.requirement_kind for entry in result.snapshot.realization_provenance}
     assert {"node-type", "os-family"} <= kinds
 
 
@@ -3862,9 +3857,7 @@ def test_apply_provisioning_discloses_author_declared_provenance(tmp_path):
     result = _apply_disclosure_scenario(tmp_path, backend)
 
     assert result.success is True, [d.message for d in result.diagnostics]
-    provenances = {
-        entry.provenance for entry in result.snapshot.realization_provenance
-    }
+    provenances = {entry.provenance for entry in result.snapshot.realization_provenance}
     assert provenances == {ExplicitnessProvenance.AUTHOR_DECLARED}
 
 

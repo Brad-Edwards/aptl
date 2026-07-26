@@ -14,6 +14,9 @@ from aptl.core.deployment._compose_content_realization import (
     CONTENT_SEEDER_IMAGE,
     ComposeRealizationContentMixin,
 )
+from aptl.core.deployment._compose_boundary_realization import (
+    ComposeBoundaryRealizationMixin,
+)
 from aptl.core.deployment._compose_port_realization import (
     published_port_conflicts,
     write_port_override,
@@ -59,6 +62,7 @@ _COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
 
 
 class ComposeRealizationMixin(
+    ComposeBoundaryRealizationMixin,
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
@@ -104,7 +108,9 @@ class ComposeRealizationMixin(
             )
             if node_result is not None:
                 return node_result
-            excluded_services = _image_free_service_names(realization, image_free_addresses)
+            excluded_services = _image_free_service_names(
+                realization, image_free_addresses
+            )
             legacy_content = tuple(
                 item
                 for item in realization.content
@@ -113,7 +119,9 @@ class ComposeRealizationMixin(
             realization = cast(
                 DeploymentRealizationSpec, replace(realization, content=legacy_content)
             )
-            realization = _strip_image_free_published_ports(realization, image_free_addresses)
+            realization = _strip_image_free_published_ports(
+                realization, image_free_addresses
+            )
         else:
             excluded_services = ()
 
@@ -133,14 +141,16 @@ class ComposeRealizationMixin(
             network_failures = self._ensure_realization_networks(realization)
             if network_failures:
                 return LabResult(success=False, error="; ".join(network_failures[:5]))
-            return None
+            return self._realize_authority_boundaries(realization)
 
         def _compose_model() -> LabResult | None:
             """Render and validate the generated Compose model."""
 
             nonlocal compose_files
             compose_files = self._realization_compose_files(compose_files, realization)
-            return self._validate_realization_compose_model(profiles, compose_files, realization)
+            return self._validate_realization_compose_model(
+                profiles, compose_files, realization
+            )
 
         def _start() -> LabResult:
             """Start the realized services and return the final realization result."""
@@ -189,6 +199,9 @@ class ComposeRealizationMixin(
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
+        boundary_result = self._realize_authority_boundaries(realization)
+        if boundary_result is not None:
+            return boundary_result
         nodes = tuple(n for n in realization.nodes if n.address in addresses)
         content = tuple(
             item for item in realization.content if item.target_address in addresses
@@ -211,6 +224,9 @@ class ComposeRealizationMixin(
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
+        boundary_result = self._realize_authority_boundaries(realization)
+        if boundary_result is not None:
+            return boundary_result
         node_result = _realize_node_subset(self, realization.nodes, realization.content)
         return node_result if node_result is not None else LabResult(success=True)
 

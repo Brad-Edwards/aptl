@@ -24,6 +24,7 @@ from aptl.core.deployment.backend import DeploymentBackend
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
+    DeploymentAclRealization,
     DeploymentContentRealization,
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
@@ -44,6 +45,7 @@ __all__ = [
     "DeploymentBackend",
     "DockerComposeBackend",
     "DeploymentAccountRealization",
+    "DeploymentAclRealization",
     "DeploymentContentRealization",
     "DeploymentGeneratedArtifactOutput",
     "DeploymentGeneratedArtifactRealization",

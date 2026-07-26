@@ -16,6 +16,9 @@ GeneratedArtifactLifecycle = Literal["regenerate_on_change", "reuse_valid"]
 ResourceSensitivity = Literal["public", "restricted", "secret"]
 VolumeLifecycle = Literal["retain", "ephemeral"]
 VolumeAccessMode = Literal["read_write_once", "read_write_many", "read_only_many"]
+AclDirection = Literal["in", "out", "inout"]
+AclAction = Literal["allow", "deny"]
+AclProtocol = Literal["any", "tcp", "udp", "icmp"]
 
 # An SDL-declared host publish with no author-supplied host address binds
 # loopback. Defaulting to all interfaces would silently put a scenario-declared
@@ -74,6 +77,38 @@ class DeploymentNetworkAttachment(object):
 
     network: str
     ipv4_address: str | None = None
+
+
+@dataclass(frozen=True)
+class DeploymentAclRealization(object):
+    """One admitted ACES infrastructure ACL lowered for backend enforcement."""
+
+    owner_address: str
+    owner_resource_type: Literal["node", "network"]
+    owner_name: str
+    name: str
+    order: int
+    direction: AclDirection
+    from_network: str | None
+    to_network: str | None
+    protocol: AclProtocol
+    ports: tuple[int, ...]
+    action: AclAction
+
+    def details(self) -> dict[str, object]:
+        return {
+            "owner_address": self.owner_address,
+            "owner_resource_type": self.owner_resource_type,
+            "owner_name": self.owner_name,
+            "name": self.name,
+            "order": self.order,
+            "direction": self.direction,
+            "from_network": self.from_network,
+            "to_network": self.to_network,
+            "protocol": self.protocol,
+            "ports": list(self.ports),
+            "action": self.action,
+        }
 
 
 @dataclass(frozen=True)
@@ -311,6 +346,7 @@ class DeploymentRealizationSpec(object):
     profiles: tuple[str, ...]
     nodes: tuple[DeploymentNodeRealization, ...]
     networks: tuple[DeploymentNetworkRealization, ...]
+    acls: tuple[DeploymentAclRealization, ...] = ()
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()

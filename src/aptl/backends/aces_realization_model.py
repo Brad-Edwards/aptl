@@ -9,6 +9,7 @@ from aces_sdl.runtime_configuration import RuntimeConfiguration
 
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
+    DeploymentAclRealization,
     DeploymentContentRealization,
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
@@ -146,6 +147,7 @@ class AptlRealization(object):
     networks: tuple[NetworkRealization, ...]
     placements: tuple[PlacementRealization, ...]
     diagnostics: tuple[Diagnostic, ...]
+    acls: tuple[DeploymentAclRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
 
@@ -169,6 +171,7 @@ class AptlRealization(object):
                 )
                 for network in self.networks
             ),
+            acls=self.acls,
             images=tuple(node.image for node in self.nodes if node.image is not None),
             content=tuple(
                 placement.content
@@ -210,6 +213,7 @@ class AptlRealization(object):
             },
             "nodes": [node.details() for node in self.nodes],
             "networks": [network.details() for network in self.networks],
+            "acls": [acl.details() for acl in self.acls],
             "placements": [placement.details() for placement in self.placements],
             "generated_artifacts": [
                 artifact.details() for artifact in self.generated_artifacts

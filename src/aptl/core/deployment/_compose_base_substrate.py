@@ -13,9 +13,14 @@ declared init requirements, and copy checked-in project content into it.
 
 from __future__ import annotations
 
+import subprocess
 from typing import TYPE_CHECKING
 
+from aptl.core.deployment._compose_realization_networks import (
+    _match_managed_network,
+)
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
 if TYPE_CHECKING:
     from aptl.backends.aces_base_substrate import BaseContainerSpec, InitRequirements
@@ -74,7 +79,9 @@ class ComposeBaseSubstrateMixin(object):
         build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
         if build_context is None:
             return []
-        inspect_result = self._run(["docker", "image", "inspect", image_ref], timeout=30)
+        inspect_result = self._run(
+            ["docker", "image", "inspect", image_ref], timeout=30
+        )
         if inspect_result.returncode == 0:
             return []
         build_result = self._run(
@@ -106,10 +113,23 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         self._run(["docker", "rm", "-f", spec.container_name])
+        network_bindings = getattr(self, "_base_networks_by_address", {}).get(
+            spec.node_address
+        )
+        argv = self._base_container_create_command(spec, network_bindings)
+        result = self._run(argv, timeout=180)
+        self._complete_base_container_start(spec, network_bindings, result)
+
+    def _base_container_create_command(
+        self,
+        spec: "BaseContainerSpec",
+        network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
+    ) -> list[str]:
+        """Build a create/run command with exact declared network identity."""
+
         argv = [
             "docker",
-            "run",
-            "-d",
+            "create" if network_bindings is not None else "run",
             "--name",
             spec.container_name,
             "--label",
@@ -124,13 +144,22 @@ class ComposeBaseSubstrateMixin(object):
             "--label",
             f"com.docker.compose.project={self._project_name}",
         ]
+        if network_bindings is None:
+            argv.insert(2, "-d")
+        if network_bindings is not None:
+            first_network, first_attachment = network_bindings[0]
+            argv += ["--network", first_network]
+            if first_attachment.ipv4_address:
+                argv += ["--ip", first_attachment.ipv4_address]
         for mount in spec.volume_mounts:
             source = f"{self._project_name}_{mount.source}"
             suffix = ":ro" if mount.read_only else ""
             argv += ["-v", f"{source}:{mount.target}{suffix}"]
         for port in spec.published_ports:
             host = f"{port.host_ip}:" if port.host_ip else ""
-            host_port = port.host_port if port.host_port is not None else port.container_port
+            host_port = (
+                port.host_port if port.host_port is not None else port.container_port
+            )
             argv += ["-p", f"{host}{host_port}:{port.container_port}/{port.protocol}"]
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
@@ -138,11 +167,47 @@ class ComposeBaseSubstrateMixin(object):
             argv.append(spec.image_ref)
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
-        result = self._run(argv, timeout=180)
+        return argv
+
+    def _complete_base_container_start(
+        self,
+        spec: "BaseContainerSpec",
+        network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
+        result: subprocess.CompletedProcess,
+    ) -> None:
+        """Attach remaining admitted networks, start, and clean failed creates."""
+
+        if result.returncode == 0 and network_bindings is not None:
+            result = self._attach_and_start_base_container(
+                spec.container_name,
+                network_bindings[1:],
+            )
         if result.returncode != 0:
+            if network_bindings is not None:
+                self._run(["docker", "rm", "-f", spec.container_name], timeout=30)
             raise BackendSeedError(
                 f"failed to start base container for node {spec.node_address}"
             )
+
+    def _attach_and_start_base_container(
+        self,
+        container_name: str,
+        bindings: tuple[tuple[str, DeploymentNetworkAttachment], ...],
+    ) -> subprocess.CompletedProcess:
+        """Attach only admitted networks to a stopped node, then start it."""
+
+        for concrete, attachment in bindings:
+            connected = self.connect_container_network(
+                container_name,
+                concrete,
+                ipv4_address=attachment.ipv4_address,
+            )
+            if not connected.success:
+                return subprocess.CompletedProcess(
+                    args=["docker", "network", "connect"],
+                    returncode=1,
+                )
+        return self._run(["docker", "start", container_name], timeout=60)
 
     def copy_into_container(
         self, container: str, source_path: str, dest_path: str, is_directory: bool
@@ -155,7 +220,9 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         source = f"{source_path}/." if is_directory else source_path
-        result = self._run(["docker", "cp", source, f"{container}:{dest_path}"], timeout=120)
+        result = self._run(
+            ["docker", "cp", source, f"{container}:{dest_path}"], timeout=120
+        )
         if result.returncode != 0:
             raise BackendSeedError(
                 f"failed to copy project content into container {container}"
@@ -195,5 +262,40 @@ class ComposeBaseSubstrateMixin(object):
         return (
             []
             if result.returncode == 0
-            else [f"failed to remove generic-materializer containers: {result.stderr.strip()}"]
+            else [
+                f"failed to remove generic-materializer containers: {result.stderr.strip()}"
+            ]
         )
+
+    def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:
+        """Bind image-free nodes to admitted networks before they are created."""
+
+        strict = getattr(
+            self, "_appliance_boundary", None
+        ) is not None or "aces" in getattr(self, "_boundary_receipts", {})
+        if not strict:
+            self._base_networks_by_address = {}
+            return
+        managed = set(self.host_list_lab_networks(self._project_name))
+        bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
+        for node in nodes:
+            attachments = getattr(node, "network_attachments", ())
+            resolved: list[tuple[str, DeploymentNetworkAttachment]] = []
+            for attachment in attachments:
+                concrete = _match_managed_network(
+                    attachment.network,
+                    managed,
+                    self._project_name,
+                )
+                if concrete is None:
+                    raise BackendSeedError(
+                        "image-free node network binding was not observed"
+                    )
+                resolved.append((concrete, attachment))
+            if resolved:
+                bindings[getattr(node, "address")] = tuple(resolved)
+            elif getattr(self, "_appliance_boundary", None) is not None:
+                raise BackendSeedError(
+                    "appliance image-free node has no admitted network"
+                )
+        self._base_networks_by_address = bindings

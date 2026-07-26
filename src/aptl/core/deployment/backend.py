@@ -25,6 +25,11 @@ from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
+from aptl.core.deployment.boundary import BoundaryEnforcementSpec
+from aptl.core.appliance_boundary import (
+    ApplianceBoundaryBinding,
+    ApplianceBoundaryPolicy,
+)
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
@@ -78,9 +83,21 @@ class DeploymentBackend(Protocol):
         """
         ...
 
-    def stop(
-        self, profiles: list[str], *, remove_volumes: bool = False
-    ) -> LabResult:
+    def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
+        """Apply and read back one project-owned appliance boundary policy."""
+
+        ...
+
+    def configure_appliance_boundary(
+        self,
+        policy: ApplianceBoundaryPolicy,
+        binding: ApplianceBoundaryBinding,
+    ) -> None:
+        """Bind trusted appliance policy inputs to the next realization."""
+
+        ...
+
+    def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services.
 
         Args:
@@ -268,9 +285,7 @@ class DeploymentBackend(Protocol):
 
     # Container interaction (CLI-004) -------------------------------------
 
-    def container_list(
-        self, *, all_containers: bool = True
-    ) -> list[dict[str, Any]]:
+    def container_list(self, *, all_containers: bool = True) -> list[dict[str, Any]]:
         """List containers managed by this deployment.
 
         Args:
@@ -324,9 +339,7 @@ class DeploymentBackend(Protocol):
         """
         ...
 
-    def container_shell(
-        self, name: str, *, shell: str | None = None
-    ) -> int:
+    def container_shell(self, name: str, *, shell: str | None = None) -> int:
         """Open an interactive shell inside a running container.
 
         Inherits the parent terminal's stdin/stdout/stderr so the user

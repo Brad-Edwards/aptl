@@ -79,6 +79,7 @@ run from source instead, use a virtualenv editable install
 
 ### Reference
 - [Guided Purple Participant Profile](reference/participant-profile.md): Versioned bounded workshop surface, readiness contract, and qualification ceilings
+- [Disposable Appliance Release](reference/appliance-release.md): Signed golden image, offline payload, local KVM overlays, qualification, and rollback
 - [TechVault Scenario Overview](reference/techvault-scenario-overview.md): What the default range contains—topology, targets, SOC stack, planted vulnerabilities, and curated variants
 - [TechVault Company Profile](reference/techvault-company-profile.md)
 - [TechVault OSINT Readiness](reference/techvault-osint-readiness.md)

@@ -82,8 +82,8 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
 
 
 @app.command()
-def start(
-    project_dir: Path = typer.Option(
+def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
+    project_dir: Path = typer.Option(  # NOSONAR - required Typer option surface.
         Path("."),
         "--project-dir",
         "-d",
@@ -120,6 +120,29 @@ def start(
         "-y",
         help="Skip the confirmation prompt for --clean.",
     ),
+    offline_staged: bool = typer.Option(
+        False,
+        "--offline-staged",
+        help=(
+            "Use only pre-staged appliance images and MCP artifacts; "
+            "forbid pulls and builds."
+        ),
+    ),
+    appliance_launch_descriptor: Optional[Path] = typer.Option(
+        None,
+        "--appliance-launch-descriptor",
+        help="Create-once descriptor for a verified appliance release.",
+    ),
+    appliance_release_public_key: Optional[Path] = typer.Option(
+        None,
+        "--appliance-release-public-key",
+        help="Release trust anchor used to reverify the launch descriptor.",
+    ),
+    appliance_qualification_public_key: Optional[Path] = typer.Option(
+        None,
+        "--appliance-qualification-public-key",
+        help="Independent APP-2 qualification trust anchor.",
+    ),
 ) -> None:
     """Start the APTL lab environment."""
     log.info("Starting lab from %s (clean=%s)", project_dir, clean)
@@ -134,6 +157,27 @@ def start(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2)
 
+    launch_values = (
+        appliance_launch_descriptor,
+        appliance_release_public_key,
+        appliance_qualification_public_key,
+    )
+    if any(launch_values) and (not all(launch_values) or not offline_staged):
+        typer.echo(
+            "error: appliance launch requires both trust anchors and --offline-staged",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    from aptl.core.lab import ApplianceStartOptions
+
+    appliance_kwargs = {}
+    if offline_staged or appliance_launch_descriptor is not None:
+        appliance_kwargs["appliance"] = ApplianceStartOptions(
+            offline_staged=offline_staged,
+            launch_descriptor=appliance_launch_descriptor,
+            release_public_key=appliance_release_public_key,
+            qualification_public_key=appliance_qualification_public_key,
+        )
     if clean:
         if not _confirm_destructive(yes):
             raise typer.Exit(code=0)
@@ -143,6 +187,7 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            **appliance_kwargs,
         )
     else:
         result = orchestrate_lab_start(
@@ -150,6 +195,7 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            **appliance_kwargs,
         )
 
     render_start_result(result)

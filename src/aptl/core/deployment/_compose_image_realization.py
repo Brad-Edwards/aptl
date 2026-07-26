@@ -47,11 +47,32 @@ class ComposeRealizationImageMixin:
         if not realization.images:
             return None, None
         for image in realization.images:
-            result = self._realize_image(image)
+            result = (
+                self._verify_staged_image(image)
+                if self._offline_staged
+                else self._realize_image(image)
+            )
             if result is not None:
                 return result, None
         override_path = self._write_image_override(realization.images)
         return None, (self._project_dir / "docker-compose.yml", override_path)
+
+    def _verify_staged_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Fail closed when an offline appliance did not stage an exact image."""
+
+        result = self._run(
+            ["docker", "image", "inspect", image.image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if result.returncode == 0:
+            return None
+        return LabResult(
+            success=False,
+            error=f"Staged image missing for ACES node {image.address}.",
+        )
 
     def _realize_image(
         self,
@@ -158,8 +179,11 @@ class ComposeRealizationImageMixin:
         """Start lab services using a generated realization override."""
 
         cmd = self._build_command("up", profiles, compose_files=compose_files)
+        build = build and not self._offline_staged
         if build:
             cmd.append("--build")
+        if self._offline_staged:
+            cmd.extend(["--pull", "never"])
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]

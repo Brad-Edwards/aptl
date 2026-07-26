@@ -157,7 +157,7 @@ class ComposeRealizationMixin(
 
             start_result = self._start_realized_services(
                 profiles,
-                build=build,
+                build=build and not self._offline_staged,
                 compose_files=compose_files,
                 exclude_services=excluded_services,
             )

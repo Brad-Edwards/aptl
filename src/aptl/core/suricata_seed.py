@@ -75,7 +75,8 @@ class SuricataSourceOwnershipResult:
 def _suricata_config_source_files(project_dir: Path) -> tuple[Path, ...]:
     """Return the checked-in Suricata config seed sources (containment-checked)."""
     config_src = _resolve_within_project(
-        project_dir, _SURICATA_CONFIG_SOURCE_RELPATH,
+        project_dir,
+        _SURICATA_CONFIG_SOURCE_RELPATH,
     )
     paths: list[Path] = []
     for src_rel, _dest_rel in _SURICATA_CONFIG_SEED_FILES:
@@ -86,9 +87,7 @@ def _suricata_config_source_files(project_dir: Path) -> tuple[Path, ...]:
 def _foreign_owned_sources(source_files: tuple[Path, ...], uid: int) -> list[Path]:
     """Return the existing *source_files* not owned by *uid*."""
     return [
-        path
-        for path in source_files
-        if path.is_file() and path.stat().st_uid != uid
+        path for path in source_files if path.is_file() and path.stat().st_uid != uid
     ]
 
 
@@ -113,6 +112,8 @@ def _restore_via_container(
     gid: int,
     project_dir: Path,
     seeder_image: str,
+    *,
+    pull_never: bool,
 ) -> SuricataSourceOwnershipResult:
     """Chown the still-foreign sources from inside a root container.
 
@@ -134,17 +135,25 @@ def _restore_via_container(
     try:
         perm_result = subprocess.run(
             [
-                "docker", "run", "--rm",
+                "docker",
+                "run",
+                *(["--pull=never"] if pull_never else []),
+                "--rm",
                 # Harden the throwaway repair helper: no network namespace
                 # (it only chowns local bind-mounted files — zero egress
                 # surface), and an explicit root identity so the chown works
                 # regardless of the seeder image's default user.
-                "--network", "none",
-                "--user", "0:0",
-                "--entrypoint", "chown",
-                "-v", f"{project_dir}:/project",
+                "--network",
+                "none",
+                "--user",
+                "0:0",
+                "--entrypoint",
+                "chown",
+                "-v",
+                f"{project_dir}:/project",
                 seeder_image,
-                f"{uid}:{gid}", *rel_targets,
+                f"{uid}:{gid}",
+                *rel_targets,
             ],
             capture_output=True,
             text=True,
@@ -183,6 +192,8 @@ def _restore_via_container(
 def ensure_suricata_config_source_ownership(
     project_dir: Path,
     seeder_image: str = _SURICATA_SEEDER_IMAGE,
+    *,
+    pull_never: bool = False,
 ) -> SuricataSourceOwnershipResult:
     """Return checked-in Suricata seed sources to the invoking operator's uid/gid.
 
@@ -202,11 +213,18 @@ def ensure_suricata_config_source_ownership(
     if not hostenv.needs_host_ownership_fix():
         return SuricataSourceOwnershipResult(success=True)
 
-    return _ensure_suricata_config_source_ownership_linux(project_dir, seeder_image)
+    return _ensure_suricata_config_source_ownership_linux(
+        project_dir,
+        seeder_image,
+        pull_never=pull_never,
+    )
 
 
 def _ensure_suricata_config_source_ownership_linux(
-    project_dir: Path, seeder_image: str,
+    project_dir: Path,
+    seeder_image: str,
+    *,
+    pull_never: bool,
 ) -> SuricataSourceOwnershipResult:
     """Repair legacy Suricata source ownership on native Linux Docker hosts."""
     uid = os.getuid()
@@ -218,7 +236,12 @@ def _ensure_suricata_config_source_ownership_linux(
         result = SuricataSourceOwnershipResult(success=False, error=str(exc))
     else:
         result = _repair_foreign_sources(
-            source_files, uid, gid, project_dir, seeder_image
+            source_files,
+            uid,
+            gid,
+            project_dir,
+            seeder_image,
+            pull_never=pull_never,
         )
     return result
 
@@ -229,13 +252,20 @@ def _repair_foreign_sources(
     gid: int,
     project_dir: Path,
     seeder_image: str,
+    *,
+    pull_never: bool,
 ) -> SuricataSourceOwnershipResult:
     """Repair any Suricata seed source files not owned by the invoking user."""
     foreign = _foreign_owned_sources(source_files, uid)
     still_foreign = _chown_direct(foreign, uid, gid) if foreign else []
     if still_foreign:
         result = _restore_via_container(
-            still_foreign, uid, gid, project_dir, seeder_image
+            still_foreign,
+            uid,
+            gid,
+            project_dir,
+            seeder_image,
+            pull_never=pull_never,
         )
     else:
         repaired = tuple(str(p.relative_to(project_dir)) for p in foreign)
@@ -279,13 +309,9 @@ def build_suricata_volume_seeds(project_dir: Path) -> tuple[NamedVolumeSeed, ...
         FileNotFoundError: if a required source file is missing.
         NotADirectoryError: if a source directory is missing or not a dir.
     """
-    config_src = _resolve_within_project(
-        project_dir, _SURICATA_CONFIG_SOURCE_RELPATH
-    )
+    config_src = _resolve_within_project(project_dir, _SURICATA_CONFIG_SOURCE_RELPATH)
     if not config_src.is_dir():
-        raise NotADirectoryError(
-            f"Suricata config source dir not found: {config_src}"
-        )
+        raise NotADirectoryError(f"Suricata config source dir not found: {config_src}")
     config_files: list[SeedFile] = []
     for src_rel, dest_rel in _SURICATA_CONFIG_SEED_FILES:
         source_file = config_src / src_rel
@@ -295,9 +321,7 @@ def build_suricata_volume_seeds(project_dir: Path) -> tuple[NamedVolumeSeed, ...
             )
         config_files.append(SeedFile(src=src_rel, dest=dest_rel))
 
-    misp_src = _resolve_within_project(
-        project_dir, _SURICATA_MISP_RULES_SOURCE_RELPATH
-    )
+    misp_src = _resolve_within_project(project_dir, _SURICATA_MISP_RULES_SOURCE_RELPATH)
     if not misp_src.is_dir():
         raise NotADirectoryError(
             f"Suricata MISP rule baseline dir not found: {misp_src}"
@@ -314,9 +338,7 @@ def build_suricata_volume_seeds(project_dir: Path) -> tuple[NamedVolumeSeed, ...
     # Canonicalize the legacy bind dir for containment (rejecting a
     # symlinked chain) even though we only retire it when it exists — a
     # fresh checkout has nothing to clean up.
-    legacy = _canonical_generated_path(
-        project_dir, _SURICATA_LEGACY_MISP_RELPATH
-    )
+    legacy = _canonical_generated_path(project_dir, _SURICATA_LEGACY_MISP_RELPATH)
     legacy_retire = legacy if legacy.exists() else None
 
     config_seed = NamedVolumeSeed(

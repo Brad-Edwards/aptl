@@ -128,7 +128,7 @@ The scenario environment is whatever the SDL scenario defines. The default `tech
 
 ## Scenarios
 
-Scenarios are [Reproducible Agentic Environments (ACES) SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
+Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
 
 The catalog ships the operational default plus four curated slices:
 

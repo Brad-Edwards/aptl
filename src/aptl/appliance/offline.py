@@ -153,14 +153,24 @@ def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
         with tarfile.open(candidate, "w", format=tarfile.USTAR_FORMAT) as archive:
             for path in paths:
                 relative = path.relative_to(staging).as_posix()
-                info = _tar_info(path, relative)
-                if path.is_dir():
-                    archive.addfile(info)
-                else:
-                    with _open_nofollow(path) as handle:
-                        archive.addfile(info, handle)
+                _add_tar_member(archive, path, relative)
     except (OSError, tarfile.TarError) as exc:
         raise OfflinePayloadError("offline payload could not be assembled") from exc
+
+
+def _add_tar_member(
+    archive: tarfile.TarFile,
+    path: Path,
+    relative: str,
+) -> None:
+    """Add one validated directory or regular file to the payload archive."""
+
+    info = _tar_info(path, relative)
+    if path.is_dir():
+        archive.addfile(info)
+    else:
+        with _open_nofollow(path) as handle:
+            archive.addfile(info, handle)
 
 
 def _hash_file(path: Path) -> tuple[str, int]:

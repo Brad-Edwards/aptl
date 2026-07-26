@@ -83,7 +83,7 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
 
 @app.command()
 def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
-    project_dir: Path = typer.Option(
+    project_dir: Path = typer.Option(  # NOSONAR - required Typer option surface.
         Path("."),
         "--project-dir",
         "-d",

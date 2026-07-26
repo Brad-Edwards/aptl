@@ -9,12 +9,8 @@ import typer
 
 from aptl.cli._common import resolve_run_store
 from aptl.core.runstore import _validate_id
-from aptl.validation.participant_profile import (
-    ParticipantProfileError,
-    load_participant_profile,
-)
+from aptl.validation.participant_profile import load_participant_profile
 from aptl.validation.participant_qualification import (
-    ParticipantQualificationError,
     evaluate_participant_qualification,
     load_participant_qualification_report,
     persist_participant_qualification,
@@ -65,12 +61,7 @@ def qualify_profile(
             report,
             public_key,
         )
-    except (
-        OSError,
-        ParticipantProfileError,
-        ParticipantQualificationError,
-        ValueError,
-    ) as exc:
+    except (OSError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
 

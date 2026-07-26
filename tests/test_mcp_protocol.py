@@ -84,13 +84,15 @@ def test_call_mcp_tool_can_require_the_exact_profile_inventory(
     tmp_path: Path,
 ) -> None:
     side_effect = tmp_path / "side-effect"
+    command = [sys.executable, "-c", _SIDE_EFFECT_SERVER]
+    environment = {**os.environ, "SIDE_EFFECT": str(side_effect)}
     with pytest.raises(McpProtocolError, match="inventory does not match"):
         call_mcp_tool(
-            [sys.executable, "-c", _SIDE_EFFECT_SERVER],
+            command,
             "kali_run_command",
             {"command": "id"},
             cwd=tmp_path,
-            env={**os.environ, "SIDE_EFFECT": str(side_effect)},
+            env=environment,
             timeout_seconds=5,
             expected_tool_names=("kali_run_command", "kali_info"),
         )

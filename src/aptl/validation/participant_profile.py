@@ -10,12 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError
 
 from aptl.core.config import AptlConfig, load_config
 from aptl.core.scenario_catalog import load_scenario_catalog
@@ -24,292 +21,28 @@ from aptl.validation.curated_live_proof import (
     ExpectedMatrix,
     expected_reduced_matrix,
 )
+from aptl.validation.participant_profile_models import (
+    ArtifactReference,
+    ParticipantAssetLock,
+    ParticipantNarrative,
+    ParticipantProfileManifest,
+    ParticipantReadinessSuite,
+    ResolvedParticipantProfile,
+)
 from aptl.workbench.profiles import (
-    ProfileId,
     WorkbenchConfigurationError,
     WorkbenchProfile,
     profile_for,
 )
-
-_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
-_IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 
 
 class ParticipantProfileError(ValueError):
     """A participant profile cannot be validated or safely resolved."""
 
 
-class _StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-_ModelT = TypeVar("_ModelT", bound=BaseModel)
-
-
-class ArtifactReference(_StrictModel):
-    """One project-contained immutable profile input."""
-
-    path: str
-    sha256: str
-
-    @field_validator("path")
-    @classmethod
-    def validate_path(cls, value: str) -> str:
-        if not value or Path(value).is_absolute():
-            raise ValueError("artifact path must be project-relative")
-        return value
-
-    @field_validator("sha256")
-    @classmethod
-    def validate_digest(cls, value: str) -> str:
-        if not _SHA256_RE.fullmatch(value):
-            raise ValueError("sha256 must be lowercase hexadecimal")
-        return value
-
-
-class ScenarioReference(ArtifactReference):
-    """Catalog identity plus the exact SDL bytes admitted for the profile."""
-
-    catalog_id: str
-
-    @field_validator("catalog_id")
-    @classmethod
-    def validate_catalog_id(cls, value: str) -> str:
-        if not _IDENTIFIER_RE.fullmatch(value):
-            raise ValueError("invalid scenario catalog id")
-        return value
-
-
-class ParticipantCapabilities(_StrictModel):
-    """Workbench compartments admitted in sequence by the guided workflow."""
-
-    workbench_profiles: tuple[ProfileId, ...]
-
-    @field_validator("workbench_profiles")
-    @classmethod
-    def validate_unique_identifiers(
-        cls, values: tuple[ProfileId, ...]
-    ) -> tuple[ProfileId, ...]:
-        if not values or len(set(values)) != len(values):
-            raise ValueError("capability ids must be non-empty and unique")
-        return values
-
-
-class MinimumHardware(_StrictModel):
-    architecture: Literal["x86_64", "aarch64"]
-    vcpus: int = Field(ge=1)
-    memory_bytes: int = Field(gt=0)
-    disk_bytes: int = Field(gt=0)
-
-
-class ProfileMaximums(_StrictModel):
-    peak_cpu_percent: float = Field(gt=0, le=100)
-    peak_memory_bytes: int = Field(gt=0)
-    staged_profile_assets_bytes: int = Field(gt=0)
-    unique_image_compressed_bytes: int = Field(gt=0)
-    unique_image_expanded_bytes: int = Field(gt=0)
-    peak_runtime_disk_bytes: int = Field(gt=0)
-    cold_start_seconds: float = Field(gt=0)
-    warm_start_seconds: float = Field(gt=0)
-    clean_reset_seconds: float = Field(gt=0)
-
-
-class ProfileBudgets(_StrictModel):
-    minimum_hardware: MinimumHardware
-    maximums: ProfileMaximums
-
-
-class ReleaseEvidenceContract(_StrictModel):
-    """Profile evidence that the appliance release in issue 823 consumes."""
-
-    asset_lock_schema: Literal["aptl.participant-asset-lock/v1"]
-    qualification_report_schema: Literal["aptl.participant-qualification/v1"]
-    asset_lock_ref: str
-    asset_lock_sha256: str
-    qualification_report_ref: str
-
-    @field_validator("asset_lock_ref", "qualification_report_ref")
-    @classmethod
-    def validate_release_ref(cls, value: str) -> str:
-        path = Path(value)
-        if not value or path.is_absolute() or "." in path.parts or ".." in path.parts:
-            raise ValueError("release evidence ref must be a safe relative path")
-        return value
-
-    @field_validator("asset_lock_sha256")
-    @classmethod
-    def validate_asset_lock_digest(cls, value: str) -> str:
-        if not _SHA256_RE.fullmatch(value):
-            raise ValueError("asset lock sha256 must be lowercase hexadecimal")
-        return value
-
-
-class AssetLockEntry(_StrictModel):
-    """One staged input identity required by the participant profile."""
-
-    asset_id: str
-    kind: Literal["project-file", "mcp-artifact", "oci-image"]
-    source: str = Field(min_length=1)
-    sha256: str
-    services: tuple[str, ...] = ()
-
-    @field_validator("asset_id")
-    @classmethod
-    def validate_asset_id(cls, value: str) -> str:
-        if not _IDENTIFIER_RE.fullmatch(value):
-            raise ValueError("invalid asset id")
-        return value
-
-    @field_validator("sha256")
-    @classmethod
-    def validate_sha256(cls, value: str) -> str:
-        if not _SHA256_RE.fullmatch(value):
-            raise ValueError("asset sha256 must be lowercase hexadecimal")
-        return value
-
-    @field_validator("services")
-    @classmethod
-    def validate_unique_services(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        if len(values) != len(set(values)):
-            raise ValueError("asset service ids must be unique")
-        return values
-
-
-class ParticipantAssetLock(_StrictModel):
-    """Content-addressed closure staged before participant delivery."""
-
-    schema_version: Literal["aptl.participant-asset-lock/v1"]
-    profile_id: str
-    profile_version: int = Field(ge=1)
-    assets: tuple[AssetLockEntry, ...]
-
-    @field_validator("assets")
-    @classmethod
-    def validate_unique_assets(
-        cls, assets: tuple[AssetLockEntry, ...]
-    ) -> tuple[AssetLockEntry, ...]:
-        ids = [asset.asset_id for asset in assets]
-        if not ids or len(ids) != len(set(ids)):
-            raise ValueError("asset lock ids must be non-empty and unique")
-        return assets
-
-
-class ParticipantProfileManifest(_StrictModel):
-    """The immutable release-level profile binding."""
-
-    schema_version: Literal["aptl.participant-profile/v1"]
-    profile_id: str
-    version: int = Field(ge=1)
-    narrative: ArtifactReference
-    scenario: ScenarioReference
-    config: ArtifactReference
-    readiness: ArtifactReference
-    capabilities: ParticipantCapabilities
-    release_evidence: ReleaseEvidenceContract
-    budgets: ProfileBudgets
-
-    @field_validator("profile_id")
-    @classmethod
-    def validate_profile_id(cls, value: str) -> str:
-        if not _IDENTIFIER_RE.fullmatch(value):
-            raise ValueError("invalid profile id")
-        return value
-
-
-class NarrativeOperation(_StrictModel):
-    operation_id: str
-    classification: Literal["required", "optional", "facilitator-only"]
-    capability_id: str
-    channel: Literal["mcp", "browser", "workflow"]
-    expected_result: str = Field(min_length=1)
-
-
-class ParticipantNarrative(_StrictModel):
-    schema_version: Literal["aptl.participant-narrative/v1"]
-    narrative_id: str
-    version: int = Field(ge=1)
-    operations: tuple[NarrativeOperation, ...]
-
-    @field_validator("operations")
-    @classmethod
-    def validate_unique_operations(
-        cls, operations: tuple[NarrativeOperation, ...]
-    ) -> tuple[NarrativeOperation, ...]:
-        operation_ids = [operation.operation_id for operation in operations]
-        if not operation_ids or len(operation_ids) != len(set(operation_ids)):
-            raise ValueError("narrative operation ids must be non-empty and unique")
-        return operations
-
-
-class ReadinessCheck(_StrictModel):
-    check_id: str
-    capability_id: str
-    kind: Literal[
-        "runtime-surface",
-        "mcp-tool",
-        "browser-operation",
-        "evidence",
-        "offline-assets",
-        "resource-budget",
-    ]
-    subject_id: str
-    operation_id: str
-    timeout_seconds: int = Field(gt=0, le=3600)
-
-
-class ParticipantReadinessSuite(_StrictModel):
-    schema_version: Literal["aptl.participant-readiness/v1"]
-    suite_id: str
-    version: int = Field(ge=1)
-    checks: tuple[ReadinessCheck, ...]
-
-    @field_validator("checks")
-    @classmethod
-    def validate_unique_checks(
-        cls, checks: tuple[ReadinessCheck, ...]
-    ) -> tuple[ReadinessCheck, ...]:
-        check_ids = [check.check_id for check in checks]
-        if not check_ids or len(check_ids) != len(set(check_ids)):
-            raise ValueError("readiness check ids must be non-empty and unique")
-        return checks
-
-
-@dataclass(frozen=True)
-class ResolvedParticipantProfile:
-    """Validated profile plus its canonical resolved runtime inputs."""
-
-    manifest: ParticipantProfileManifest
-    manifest_sha256: str
-    config: AptlConfig
-    scenario_path: Path
-    narrative: ParticipantNarrative
-    readiness: ParticipantReadinessSuite
-    asset_lock: ParticipantAssetLock
-    workbench_profiles: tuple[WorkbenchProfile, ...]
-    expected_matrix: ExpectedMatrix
-
-    @property
-    def mcp_server_ids(self) -> tuple[str, ...]:
-        return tuple(
-            dict.fromkeys(
-                server_id
-                for workbench in self.workbench_profiles
-                for server_id in workbench.server_ids
-            )
-        )
-
-    @property
-    def browser_refs(self) -> tuple[str, ...]:
-        return tuple(
-            dict.fromkeys(
-                bookmark
-                for workbench in self.workbench_profiles
-                for bookmark in workbench.bookmark_refs
-            )
-        )
-
-
 def _relative_path(project_root: Path, path: Path) -> Path:
+    """Return a contained project-relative path or reject the candidate."""
+
     try:
         return path.relative_to(project_root)
     except ValueError as exc:
@@ -320,6 +53,8 @@ def _read_reference(
     project_root: Path,
     reference: ArtifactReference,
 ) -> bytes:
+    """Read one contained no-follow reference and verify its exact digest."""
+
     try:
         payload = read_contained_nofollow(project_root, reference.path)
     except PathContainmentError as exc:
@@ -332,11 +67,13 @@ def _read_reference(
 
 
 def _load_model(
-    model_type: type[_ModelT],
+    model_type: type[BaseModel],
     payload: bytes,
     *,
     label: str,
-) -> _ModelT:
+) -> BaseModel:
+    """Decode strict JSON into the requested participant profile model."""
+
     try:
         value = json.loads(payload)
         return model_type.model_validate(value)
@@ -348,6 +85,8 @@ def _validate_profile_links(
     project_root: Path,
     manifest: ParticipantProfileManifest,
 ) -> tuple[AptlConfig, Path, ParticipantNarrative, ParticipantReadinessSuite]:
+    """Resolve and cross-bind all immutable profile input references."""
+
     narrative = _load_model(
         ParticipantNarrative,
         _read_reference(project_root, manifest.narrative),
@@ -358,6 +97,8 @@ def _validate_profile_links(
         _read_reference(project_root, manifest.readiness),
         label="readiness suite",
     )
+    assert isinstance(narrative, ParticipantNarrative)
+    assert isinstance(readiness, ParticipantReadinessSuite)
     _read_reference(project_root, manifest.config)
     scenario_bytes = _read_reference(project_root, manifest.scenario)
 
@@ -395,6 +136,8 @@ def _validate_narrative_readiness(
     narrative: ParticipantNarrative,
     readiness: ParticipantReadinessSuite,
 ) -> None:
+    """Require each mandatory narrative capability to have a readiness check."""
+
     required = {
         operation.capability_id
         for operation in narrative.operations
@@ -411,6 +154,8 @@ def _load_asset_lock(
     project_root: Path,
     manifest: ParticipantProfileManifest,
 ) -> ParticipantAssetLock:
+    """Load and byte-verify the staged asset closure."""
+
     reference = ArtifactReference(
         path=manifest.release_evidence.asset_lock_ref,
         sha256=manifest.release_evidence.asset_lock_sha256,
@@ -420,18 +165,14 @@ def _load_asset_lock(
         _read_reference(project_root, reference),
         label="asset lock",
     )
+    assert isinstance(lock, ParticipantAssetLock)
     if (
         lock.profile_id != manifest.profile_id
         or lock.profile_version != manifest.version
     ):
         raise ParticipantProfileError("participant asset lock identity mismatch")
     for asset in lock.assets:
-        if asset.kind == "project-file":
-            _read_reference(
-                project_root,
-                ArtifactReference(path=asset.source, sha256=asset.sha256),
-            )
-        elif asset.kind == "mcp-artifact":
+        if asset.kind in {"project-file", "mcp-artifact"}:
             _read_reference(
                 project_root,
                 ArtifactReference(path=asset.source, sha256=asset.sha256),
@@ -447,6 +188,8 @@ def _validate_asset_lock_coverage(
     workbench_profiles: tuple[WorkbenchProfile, ...],
     expected_matrix: ExpectedMatrix,
 ) -> None:
+    """Require the asset lock to cover every derived release input exactly."""
+
     locked_files = {
         asset.source: asset.sha256
         for asset in lock.assets
@@ -479,9 +222,8 @@ def _validate_asset_lock_coverage(
         if asset.kind == "oci-image"
         for service in asset.services
     ]
-    if (
-        len(image_services) != len(set(image_services))
-        or set(image_services) != set(expected_matrix.expected_services)
+    if len(image_services) != len(set(image_services)) or set(image_services) != set(
+        expected_matrix.expected_services
     ):
         raise ParticipantProfileError(
             "participant asset lock does not match the derived service surface"
@@ -496,6 +238,8 @@ def _validate_workbench_readiness(
     readiness: ParticipantReadinessSuite,
     workbench_profiles: tuple[WorkbenchProfile, ...],
 ) -> None:
+    """Require browser readiness checks to equal the workbench bookmarks."""
+
     expected_browser = {
         bookmark
         for workbench in workbench_profiles
@@ -543,7 +287,9 @@ def load_participant_profile(
             for profile_id in manifest.capabilities.workbench_profiles
         )
     except WorkbenchConfigurationError as exc:
-        raise ParticipantProfileError("participant workbench profile is invalid") from exc
+        raise ParticipantProfileError(
+            "participant workbench profile is invalid"
+        ) from exc
     _validate_workbench_readiness(readiness, workbench_profiles)
     asset_lock = _load_asset_lock(project_root, manifest)
     try:

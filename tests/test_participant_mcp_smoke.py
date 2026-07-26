@@ -144,12 +144,13 @@ def test_profile_smoke_rejects_missing_or_extra_registration(
     registrations = _registrations(tmp_path)
     registrations.pop("aptl-wazuh")
     registrations["aptl-casemgmt"] = next(iter(registrations.values()))
+    profile = _profile()
 
     with pytest.raises(
         ParticipantMcpSmokeError,
         match="registration surface does not match",
     ):
-        run_participant_mcp_smoke(_profile(), registrations)
+        run_participant_mcp_smoke(profile, registrations)
 
 
 def test_profile_smoke_records_semantic_failure_without_child_output(
@@ -188,11 +189,7 @@ def test_profile_smoke_rejects_empty_alert_results(tmp_path: Path) -> None:
         _registrations(tmp_path, empty_alerts=True),
     )
 
-    assert {
-        item.check_id
-        for item in evidence
-        if item.status == "failed"
-    } == {
+    assert {item.check_id for item in evidence if item.status == "failed"} == {
         "mcp.blue.indexer-investigation",
         "mcp.blue.wazuh-investigation",
     }

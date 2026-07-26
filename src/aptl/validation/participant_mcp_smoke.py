@@ -27,6 +27,8 @@ class McpRegistration:
 
 @dataclass(frozen=True)
 class _SmokeOperation:
+    """One readiness check bound to one released MCP tool call."""
+
     check_id: str
     server_id: str
     tool_name: str
@@ -60,7 +62,7 @@ _OPERATIONS = (
             "command": (
                 "for u in aptl-a aptl-b aptl-c aptl-d aptl-e aptl-f; do "
                 "ssh -o BatchMode=yes -o StrictHostKeyChecking=no "
-                "-o ConnectTimeout=5 \"$u\"@172.20.2.20 true 2>/dev/null "
+                '-o ConnectTimeout=5 "$u"@172.20.2.20 true 2>/dev/null '
                 "|| true; done; echo done"
             )
         },
@@ -84,6 +86,8 @@ _OPERATIONS = (
 
 
 def _text_content(result: Mapping[str, object]) -> list[str]:
+    """Return only text blocks from an MCP tool result."""
+
     content = result.get("content")
     if not isinstance(content, Sequence) or isinstance(content, str | bytes):
         return []
@@ -98,49 +102,64 @@ def _text_content(result: Mapping[str, object]) -> list[str]:
 
 
 def _has_alert_hit(value: object) -> bool:
+    """Return whether a nested indexer response contains at least one hit."""
+
+    found = False
     if isinstance(value, Mapping):
         hits = value.get("hits")
         if isinstance(hits, Mapping):
             rows = hits.get("hits")
             if isinstance(rows, list) and rows:
-                return True
-        return any(_has_alert_hit(item) for item in value.values())
-    if isinstance(value, list):
-        return any(_has_alert_hit(item) for item in value)
-    return False
+                found = True
+        if not found:
+            found = any(_has_alert_hit(item) for item in value.values())
+    elif isinstance(value, list):
+        found = any(_has_alert_hit(item) for item in value)
+    return found
+
+
+def _decoded_text_payloads(texts: Sequence[str]) -> list[object]:
+    """Decode the JSON text blocks emitted by the released MCP servers."""
+
+    payloads: list[object] = []
+    for text in texts:
+        try:
+            payloads.append(json.loads(text))
+        except json.JSONDecodeError:
+            continue
+    return payloads
+
+
+def _attack_completed(payload: object) -> bool:
+    """Validate the bounded failed-authentication attack completion marker."""
+
+    if not isinstance(payload, Mapping) or payload.get("success") is not True:
+        return False
+    output = payload.get("output")
+    stdout = output.get("stdout") if isinstance(output, Mapping) else None
+    return isinstance(stdout, str) and stdout.rstrip().endswith("done")
 
 
 def _semantic_passed(kind: str, result: Mapping[str, object]) -> bool:
-    if result.get("isError") is True:
-        return False
-    texts = _text_content(result)
-    if kind == "kali-user":
-        return any("uid=1000(kali)" in text for text in texts)
-    if kind == "attack-complete":
-        for text in texts:
-            try:
-                payload = json.loads(text)
-            except json.JSONDecodeError:
-                continue
-            output = payload.get("output") if isinstance(payload, Mapping) else None
-            stdout = output.get("stdout") if isinstance(output, Mapping) else None
-            if payload.get("success") is True and isinstance(stdout, str):
-                if stdout.rstrip().endswith("done"):
-                    return True
-        return False
-    if kind == "alert-hit":
-        for text in texts:
-            try:
-                payload = json.loads(text)
-            except json.JSONDecodeError:
-                continue
-            if _has_alert_hit(payload):
-                return True
-        return False
-    return False
+    """Validate semantic evidence without accepting result text as a verdict."""
+
+    passed = False
+    if result.get("isError") is not True:
+        texts = _text_content(result)
+        if kind == "kali-user":
+            passed = any("uid=1000(kali)" in text for text in texts)
+        else:
+            payloads = _decoded_text_payloads(texts)
+            if kind == "attack-complete":
+                passed = any(_attack_completed(payload) for payload in payloads)
+            elif kind == "alert-hit":
+                passed = any(_has_alert_hit(payload) for payload in payloads)
+    return passed
 
 
 def _validate_profile_binding(profile: ResolvedParticipantProfile) -> None:
+    """Require the smoke registry to equal the admitted MCP readiness surface."""
+
     allowed = set(profile.mcp_server_ids)
     operation_servers = {operation.server_id for operation in _OPERATIONS}
     if operation_servers != allowed:

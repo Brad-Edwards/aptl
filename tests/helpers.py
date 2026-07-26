@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from aptl.core.env import load_dotenv
-from aptl.validation.mcp_protocol import McpProtocolError, exchange_jsonrpc
+from aptl.validation.mcp_protocol import exchange_jsonrpc
 
 # ---------------------------------------------------------------------------
 # Live-lab shared constants
@@ -244,18 +244,13 @@ def mcp_jsonrpc(
     cmd, extra_env = mcp_server_cmd(server_name)
     env = {**os.environ, **extra_env}
 
-    try:
-        return exchange_jsonrpc(
-            cmd,
-            messages,
-            cwd=Path(PROJECT_ROOT),
-            env=env,
-            timeout_seconds=timeout,
-        )
-    except McpProtocolError as exc:
-        pytest.fail(
-            f"MCP server '{server_name}' protocol exchange failed: {exc}"
-        )
+    return exchange_jsonrpc(
+        cmd,
+        messages,
+        cwd=Path(PROJECT_ROOT),
+        env=env,
+        timeout_seconds=timeout,
+    )
 
 
 _INIT_MSG = {

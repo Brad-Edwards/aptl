@@ -37,7 +37,6 @@ from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
-
 # Timeout for Docker Compose subprocess calls during kill operations.
 # Generous enough for a large stack, short enough that a hung daemon
 # won't block the kill switch indefinitely.

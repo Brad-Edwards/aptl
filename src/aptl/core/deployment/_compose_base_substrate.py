@@ -151,16 +151,8 @@ class ComposeBaseSubstrateMixin(object):
             argv += ["--network", first_network]
             if first_attachment.ipv4_address:
                 argv += ["--ip", first_attachment.ipv4_address]
-        for mount in spec.volume_mounts:
-            source = f"{self._project_name}_{mount.source}"
-            suffix = ":ro" if mount.read_only else ""
-            argv += ["-v", f"{source}:{mount.target}{suffix}"]
-        for port in spec.published_ports:
-            host = f"{port.host_ip}:" if port.host_ip else ""
-            host_port = (
-                port.host_port if port.host_port is not None else port.container_port
-            )
-            argv += ["-p", f"{host}{host_port}:{port.container_port}/{port.protocol}"]
+        self._append_base_mounts(argv, spec)
+        self._append_base_ports(argv, spec)
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
@@ -168,6 +160,27 @@ class ComposeBaseSubstrateMixin(object):
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
         return argv
+
+    def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
+        """Append declared named-volume mounts to a base-container command."""
+
+        for mount in spec.volume_mounts:
+            source = f"{self._project_name}_{mount.source}"
+            suffix = ":ro" if mount.read_only else ""
+            argv.extend(("-v", f"{source}:{mount.target}{suffix}"))
+
+    @staticmethod
+    def _append_base_ports(argv: list[str], spec: "BaseContainerSpec") -> None:
+        """Append exact declared host publications to a base-container command."""
+
+        for port in spec.published_ports:
+            host = f"{port.host_ip}:" if port.host_ip else ""
+            host_port = (
+                port.host_port if port.host_port is not None else port.container_port
+            )
+            argv.extend(
+                ("-p", f"{host}{host_port}:{port.container_port}/{port.protocol}")
+            )
 
     def _complete_base_container_start(
         self,

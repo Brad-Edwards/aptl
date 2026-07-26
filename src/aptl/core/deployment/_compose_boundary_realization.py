@@ -9,7 +9,6 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
 )
 from aptl.core.deployment._compose_boundary import (
-    DEFAULT_BOUNDARY_HELPER_IMAGE,
     realize_boundary as _realize_boundary,
 )
 from aptl.core.deployment._compose_realization_networks import (
@@ -139,11 +138,11 @@ class ComposeBoundaryRealizationMixin:
             if self._appliance_boundary is not None
             else None
         )
-        source_digest = (
-            policy.policy_digest
-            if policy.authority == "platform"
-            else (binding.aces_plan_digest if binding is not None else "")
-        )
+        source_digest = ""
+        if policy.authority == "platform":
+            source_digest = policy.policy_digest
+        elif binding is not None:
+            source_digest = binding.aces_plan_digest
         self._boundary_receipts[policy.authority] = {
             "source_digest": source_digest,
             "enforcement_digest": policy.digest(),

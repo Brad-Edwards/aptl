@@ -194,11 +194,7 @@ def _ports(
     """Validate transport ports and return an immutable ordered sequence."""
 
     result: tuple[int, ...] = ()
-    if not isinstance(raw, list | tuple):
-        diagnostics.append(
-            _acl_diagnostic(resource, "ports-invalid", "ACES ACL ports are invalid.")
-        )
-    elif any(
+    if not isinstance(raw, list | tuple) or any(
         not isinstance(port, int) or isinstance(port, bool) or not 0 < port <= 65535
         for port in raw
     ):

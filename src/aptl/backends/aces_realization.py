@@ -41,7 +41,6 @@ from aptl.backends.aces_realization_model import (
     AptlRealization,
     NetworkRealization,
     NodeRealization,
-    PlacementRealization,
     _single_or_none,
 )
 from aptl.backends.aces_realization_values import (

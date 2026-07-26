@@ -13,7 +13,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { context, trace, Tracer, Context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
@@ -35,17 +35,18 @@ export function initTracing(serverName: string): void {
 
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
 
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: serverName,
   });
-
-  provider = new NodeTracerProvider({ resource });
 
   const exporter = new OTLPTraceExporter({
     url: `${endpoint}/v1/traces`,
   });
 
-  provider.addSpanProcessor(new BatchSpanProcessor(exporter));
+  provider = new NodeTracerProvider({
+    resource,
+    spanProcessors: [new BatchSpanProcessor(exporter)],
+  });
   provider.register();
 
   console.error(`[OTel] Tracing initialized: service=${serverName} endpoint=${endpoint}`);

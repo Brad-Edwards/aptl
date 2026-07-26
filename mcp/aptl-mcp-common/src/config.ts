@@ -137,7 +137,13 @@ export function parseDotEnv(content: string): Record<string, string> {
  * Find and load .env from the config file's directory or ancestors.
  * Returns merged env: .env values as defaults, process.env as overrides.
  */
-function loadEnvForConfig(configPath: string): Record<string, string | undefined> {
+export function environmentForConfig(
+  configPath: string,
+  processEnv: Record<string, string | undefined> = process.env,
+): Record<string, string | undefined> {
+  if (processEnv.APTL_MCP_DISABLE_DOTENV === '1') {
+    return processEnv;
+  }
   let dir = dirname(resolve(configPath));
   // Walk up at most 5 levels looking for .env
   for (let i = 0; i < 5; i++) {
@@ -147,7 +153,7 @@ function loadEnvForConfig(configPath: string): Record<string, string | undefined
         const dotEnv = parseDotEnv(readFileSync(envPath, 'utf8'));
         console.error(`[MCP] Loaded .env from: ${envPath}`);
         // process.env overrides .env (explicit env vars take priority)
-        return { ...dotEnv, ...process.env };
+        return { ...dotEnv, ...processEnv };
       } catch {
         break;
       }
@@ -156,7 +162,7 @@ function loadEnvForConfig(configPath: string): Record<string, string | undefined
     if (parent === dir) break; // reached filesystem root
     dir = parent;
   }
-  return process.env;
+  return processEnv;
 }
 
 /**
@@ -172,7 +178,7 @@ async function loadDockerLabConfig(configPath: string): Promise<LabConfig> {
   const fs = await import('fs/promises');
   const rawContent = await fs.readFile(configPath, 'utf8');
 
-  const env = loadEnvForConfig(configPath);
+  const env = environmentForConfig(configPath);
   const { result: configContent, missing } = substituteEnvVars(rawContent, env);
   if (missing.length > 0) {
     console.error(`[MCP] Warning: unresolved environment variables: ${missing.join(', ')}`);

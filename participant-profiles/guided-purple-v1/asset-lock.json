@@ -37,7 +37,7 @@
       "asset_id": "workbench-registry",
       "kind": "project-file",
       "source": "src/aptl/workbench/profiles.py",
-      "sha256": "41bb57a742b11edd73bceb443df7f0cae88a77f9d3a4f971235d8a687631d67a"
+      "sha256": "c52c5ab26d211b42e584a7c890400afdda8a0338622ec40449b4d8e0c60d0734"
     },
     {
       "asset_id": "compose-model",
@@ -55,7 +55,7 @@
       "asset_id": "mcp-red-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-red/package-lock.json",
-      "sha256": "ce95c1e458935f8176ce6fe640b3b05db63166a1e5154ae26ae5dab1099369fb"
+      "sha256": "544ba25c97adbe922cb77e7808252bb49c47862f59e7ded3d3aae2d5c24eded4"
     },
     {
       "asset_id": "mcp-red-config",
@@ -73,7 +73,7 @@
       "asset_id": "mcp-indexer-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-indexer/package-lock.json",
-      "sha256": "da5cb48180685bc4619e36900e4b3664e390b307ad799f2a3842c109eaedc3e0"
+      "sha256": "3a5a1fdec52e079e0a5ecb1e9a90e1b94a898f1feb6fe567006bb8a390a460ef"
     },
     {
       "asset_id": "mcp-indexer-config",
@@ -91,7 +91,7 @@
       "asset_id": "mcp-wazuh-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-wazuh/package-lock.json",
-      "sha256": "57ceab20ebb66d7279bf033cc848fa7936ecf0d6f6a2748085da115ecdb0ed69"
+      "sha256": "a7b68fb470c00e1b64bea66719a68fc0532ff6982cc79f1c4c231c21cab5b03b"
     },
     {
       "asset_id": "mcp-wazuh-config",

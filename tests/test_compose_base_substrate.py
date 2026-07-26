@@ -208,6 +208,8 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
     )
     assert "--network" in create.args[0]
     assert "test-proj_aptl-security" in create.args[0]
+    assert "--ip" in create.args[0]
+    assert "172.31.8.10" in create.args[0]
     assert "none" not in create.args[0]
     assert ["docker", "start", "aptl-kali"] in [
         call.args[0] for call in mock_run.call_args_list

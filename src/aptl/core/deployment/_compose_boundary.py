@@ -18,6 +18,8 @@ _BOUNDARY_TIMEOUT = 30
 
 
 class _BoundaryRunner(Protocol):
+    """Narrow selected-daemon operation surface used by the fixed helper."""
+
     @property
     def project_dir(self) -> Path: ...
 
@@ -41,6 +43,8 @@ def _helper_command(
     action: str,
     image: str = DEFAULT_BOUNDARY_HELPER_IMAGE,
 ) -> list[str]:
+    """Build the fixed, capability-minimal helper invocation."""
+
     return [
         "docker",
         "run",
@@ -83,21 +87,34 @@ def realize_boundary(
     )
     if mutation.returncode != 0:
         return LabResult(success=False, error="Boundary policy mutation failed.")
-    observation = mutation
-    if action == "apply":
-        observation = backend._run_with_input(
+    observation = (
+        backend._run_with_input(
             _helper_command("observe", helper_image),
             payload,
             timeout=_BOUNDARY_TIMEOUT,
         )
+        if action == "apply"
+        else mutation
+    )
+    return _boundary_observation_result(policy, action, observation)
+
+
+def _boundary_observation_result(
+    policy: BoundaryEnforcementSpec,
+    action: str,
+    observation: subprocess.CompletedProcess,
+) -> LabResult:
+    """Validate the helper's exact normalized kernel-readback receipt."""
+
+    error: str | None = None
+    receipt: object = None
     if observation.returncode != 0:
-        return LabResult(success=False, error="Boundary policy observation failed.")
+        error = "Boundary policy observation failed."
     try:
-        receipt = json.loads(observation.stdout)
+        if error is None:
+            receipt = json.loads(observation.stdout)
     except (TypeError, ValueError):
-        return LabResult(
-            success=False, error="Boundary policy observation was invalid."
-        )
+        error = "Boundary policy observation was invalid."
     expected_families = [] if action == "cleanup" else ["bridge", "inet"]
     expected = {
         "authority": policy.authority,
@@ -106,45 +123,50 @@ def realize_boundary(
         "families": expected_families,
         "default_deny": policy.authority == "platform",
     }
-    if receipt != expected:
-        return LabResult(
-            success=False,
-            error="Boundary policy readback did not match desired state.",
-        )
-    return LabResult(success=True, message="Boundary policy enforced and observed.")
+    if error is None and receipt != expected:
+        error = "Boundary policy readback did not match desired state."
+    return (
+        LabResult(success=False, error=error)
+        if error is not None
+        else LabResult(success=True, message="Boundary policy enforced and observed.")
+    )
 
 
 def _ensure_helper(
     backend: _BoundaryRunner,
     helper_image: str,
 ) -> LabResult | None:
+    """Require the selected helper image, building only the developer tag."""
+
     inspection = backend._run(
         ["docker", "image", "inspect", helper_image],
         timeout=_BOUNDARY_TIMEOUT,
     )
-    if inspection.returncode == 0:
-        return None
-    if helper_image != DEFAULT_BOUNDARY_HELPER_IMAGE:
-        return LabResult(
+    result: LabResult | None = None
+    if inspection.returncode != 0 and helper_image != DEFAULT_BOUNDARY_HELPER_IMAGE:
+        result = LabResult(
             success=False,
             error="Signed boundary enforcement helper was unavailable.",
         )
-    dockerfile = backend.project_dir / "containers/network-boundary-helper/Dockerfile"
-    build = backend._run(
-        [
-            "docker",
-            "build",
-            "-t",
-            helper_image,
-            "-f",
-            str(dockerfile),
-            str(backend.project_dir),
-        ],
-        timeout=600,
-    )
-    if build.returncode != 0:
-        return LabResult(
-            success=False,
-            error="Boundary enforcement helper was unavailable.",
+    elif inspection.returncode != 0:
+        dockerfile = (
+            backend.project_dir / "containers/network-boundary-helper/Dockerfile"
         )
-    return None
+        build = backend._run(
+            [
+                "docker",
+                "build",
+                "-t",
+                helper_image,
+                "-f",
+                str(dockerfile),
+                str(backend.project_dir),
+            ],
+            timeout=600,
+        )
+        if build.returncode != 0:
+            result = LabResult(
+                success=False,
+                error="Boundary enforcement helper was unavailable.",
+            )
+    return result

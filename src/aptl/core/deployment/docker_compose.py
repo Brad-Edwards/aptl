@@ -26,9 +26,7 @@ from aptl.core.deployment._compose_seed_safety import (
 from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment._compose_boundary import (
     DEFAULT_BOUNDARY_HELPER_IMAGE,
-    realize_boundary as _realize_boundary,
 )
-from aptl.core.deployment.boundary import BoundaryEnforcementSpec
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
@@ -96,16 +94,6 @@ class DockerComposeBackend(
         """Return whether bind sources are visible to the Docker daemon."""
 
         return True
-
-    def configure_appliance_boundary(
-        self,
-        policy: ApplianceBoundaryPolicy,
-        binding: ApplianceBoundaryBinding,
-    ) -> None:
-        """Install trusted release/launcher projections for realization."""
-
-        self._appliance_boundary = (policy, binding)
-        self._boundary_helper_image = binding.boundary_helper_image
 
     def _build_command(
         self,
@@ -237,35 +225,6 @@ class DockerComposeBackend(
             raise BackendTimeoutError(
                 f"command timed out after {timeout}s: {' '.join(cmd[:3])}"
             ) from exc
-
-    def realize_boundary(self, policy: BoundaryEnforcementSpec) -> LabResult:
-        """Apply and observe policy on the selected Docker daemon host."""
-
-        result = _realize_boundary(
-            self,
-            policy,
-            helper_image=self._boundary_helper_image,
-        )
-        if result.success:
-            if policy.authority == "aces" and not policy.rules:
-                self._boundary_receipts.pop("aces", None)
-            else:
-                binding = (
-                    self._appliance_boundary[1]
-                    if self._appliance_boundary is not None
-                    else None
-                )
-                self._boundary_receipts[policy.authority] = {
-                    "source_digest": (
-                        policy.policy_digest
-                        if policy.authority == "platform"
-                        else (binding.aces_plan_digest if binding is not None else "")
-                    ),
-                    "enforcement_digest": policy.digest(),
-                    "families": ("bridge", "inet"),
-                    "default_deny": policy.authority == "platform",
-                }
-        return result
 
     def start(
         self,

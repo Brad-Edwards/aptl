@@ -54,17 +54,19 @@ def realize_acls(
 
 
 def _raw_acls(resource: PlannedResource) -> Sequence[object]:
+    """Return an ACL sequence only from the canonical infrastructure field."""
+
     payload = resource.payload
-    if not isinstance(payload, Mapping):
-        return ()
-    spec = payload.get("spec")
-    if not isinstance(spec, Mapping):
-        return ()
-    infrastructure = spec.get("infrastructure")
-    if not isinstance(infrastructure, Mapping):
-        return ()
-    raw = infrastructure.get("acls", ())
-    return raw if isinstance(raw, list | tuple) else ()
+    result: Sequence[object] = ()
+    if isinstance(payload, Mapping):
+        spec = payload.get("spec")
+        if isinstance(spec, Mapping):
+            infrastructure = spec.get("infrastructure")
+            if isinstance(infrastructure, Mapping):
+                raw = infrastructure.get("acls", ())
+                if isinstance(raw, list | tuple):
+                    result = raw
+    return result
 
 
 def _realize_acl(
@@ -75,6 +77,8 @@ def _realize_acl(
     network_names: Mapping[str, str],
     diagnostics: list[Diagnostic],
 ) -> DeploymentAclRealization | None:
+    """Validate and lower one admitted ACL rule."""
+
     if not isinstance(raw, Mapping):
         diagnostics.append(
             _acl_diagnostic(resource, "shape-invalid", "ACL entry is not a mapping.")
@@ -114,11 +118,15 @@ def _realize_acl(
 
 
 def _token(raw: Mapping[object, object], key: str) -> str:
+    """Normalize a string token without coercing other input types."""
+
     value = raw.get(key)
     return value.strip().lower() if isinstance(value, str) else ""
 
 
 def _payload_name(resource: PlannedResource) -> str:
+    """Read a node name from the admitted resource payload."""
+
     payload = resource.payload
     name = payload.get("name") if isinstance(payload, Mapping) else None
     return name if isinstance(name, str) else ""
@@ -131,6 +139,8 @@ def _validate_token(
     allowed: frozenset[str],
     diagnostics: list[Diagnostic],
 ) -> None:
+    """Record a stable diagnostic for an unsupported ACL token."""
+
     if value not in allowed:
         diagnostics.append(
             _acl_diagnostic(
@@ -147,6 +157,8 @@ def _validate_endpoint(
     network_lookup: Mapping[str, NetworkRealization],
     diagnostics: list[Diagnostic],
 ) -> None:
+    """Require an ACL endpoint to resolve to an admitted IPv4 network."""
+
     if not value:
         return
     if value not in network_lookup:
@@ -179,20 +191,21 @@ def _ports(
     protocol: str,
     diagnostics: list[Diagnostic],
 ) -> tuple[int, ...]:
+    """Validate transport ports and return an immutable ordered sequence."""
+
+    result: tuple[int, ...] = ()
     if not isinstance(raw, list | tuple):
         diagnostics.append(
             _acl_diagnostic(resource, "ports-invalid", "ACES ACL ports are invalid.")
         )
-        return ()
-    if any(
+    elif any(
         not isinstance(port, int) or isinstance(port, bool) or not 0 < port <= 65535
         for port in raw
     ):
         diagnostics.append(
             _acl_diagnostic(resource, "ports-invalid", "ACES ACL ports are invalid.")
         )
-        return ()
-    if raw and protocol in _PROTOCOLS and protocol not in {"tcp", "udp"}:
+    elif raw and protocol in _PROTOCOLS and protocol not in {"tcp", "udp"}:
         diagnostics.append(
             _acl_diagnostic(
                 resource,
@@ -200,8 +213,9 @@ def _ports(
                 "ACES ACL ports require TCP or UDP.",
             )
         )
-        return ()
-    return tuple(cast(int, port) for port in raw)
+    else:
+        result = tuple(cast(int, port) for port in raw)
+    return result
 
 
 def _acl_diagnostic(
@@ -209,6 +223,8 @@ def _acl_diagnostic(
     suffix: str,
     message: str,
 ) -> Diagnostic:
+    """Build one resource-scoped ACL admission diagnostic."""
+
     return diagnostic(
         f"aptl.provisioner.acl-{suffix}",
         resource.address,

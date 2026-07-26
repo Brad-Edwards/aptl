@@ -167,3 +167,21 @@ def test_proxy_policy_is_a_narrow_projection_of_signed_authorities() -> None:
             "idle_timeout_seconds": 60,
         },
     }
+
+
+def test_guest_publication_must_remain_loopback_only() -> None:
+    payload = _policy()
+    publication = payload["guest_publications"][0]
+    publication["address"] = "0.0.0.0"
+
+    with pytest.raises(ValidationError, match="loopback"):
+        ApplianceBoundaryPolicy.model_validate(payload)
+
+
+def test_proxy_policy_rejects_an_empty_authority_projection() -> None:
+    payload = _policy()
+    payload["egress_authorities"] = []
+    policy = ApplianceBoundaryPolicy.model_validate(payload)
+
+    with pytest.raises(ValueError, match="at least one"):
+        render_egress_proxy_policy(policy)

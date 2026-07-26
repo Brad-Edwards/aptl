@@ -122,12 +122,27 @@ def test_aces_binding_keeps_owner_address_and_platform_data_out() -> None:
 
     assert spec.authority == "aces"
     assert spec.owner_bindings[0].ipv4_by_network == (("quartz", "10.44.2.10"),)
-    assert "policy_digest" not in spec.details()
+    assert spec.rules[0].details() == {
+        "owner_address": "provision.node.sentinel",
+        "owner_resource_type": "node",
+        "owner_name": "sentinel",
+        "name": "allow-web",
+        "order": 0,
+        "direction": "in",
+        "from_network": "orchard",
+        "to_network": "quartz",
+        "protocol": "tcp",
+        "ports": [443],
+        "action": "allow",
+    }
 
 
 def test_aces_binding_refuses_to_widen_an_unaddressed_owner() -> None:
+    realization = _realization(owner_ip=None)
+    networks = _networks()
+
     with pytest.raises(BoundaryCompileError, match="exact admitted addresses"):
-        compile_aces_boundary(_realization(owner_ip=None), _networks(), owner="seat-17")
+        compile_aces_boundary(realization, networks, owner="seat-17")
 
 
 def test_aces_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> None:
@@ -140,9 +155,10 @@ def test_aces_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> Non
             ipv6_cidr="2001:db8:44::/64",
         ),
     )
+    realization = _realization()
 
     with pytest.raises(BoundaryCompileError, match="IPv4-only"):
-        compile_aces_boundary(_realization(), dual_stack, owner="seat-17")
+        compile_aces_boundary(realization, dual_stack, owner="seat-17")
 
 
 def test_platform_binding_uses_only_exact_labels() -> None:
@@ -196,7 +212,14 @@ def test_platform_binding_uses_only_exact_labels() -> None:
         ("management", "10.50.2.10"),
         ("egress", "10.50.3.10"),
     )
-    assert "rules" not in spec.details()
+    assert spec.crossings[0].details() == {
+        "source": "management",
+        "destination": "egress",
+        "protocol": "tcp",
+        "ports": [3128],
+        "purpose": "model-proxy",
+    }
+    assert spec.egress_ports == ()
 
 
 def test_platform_binding_rejects_ambiguous_anchor() -> None:
@@ -226,27 +249,30 @@ def test_platform_binding_rejects_ambiguous_anchor() -> None:
         ),
     )
 
+    policy = _policy()
+    networks = (
+        BoundaryNetwork(
+            name="participant",
+            bridge="br-part",
+            labels=(("org.aptl.network", "participant"),),
+        ),
+        BoundaryNetwork(
+            name="management",
+            bridge="br-mgmt",
+            labels=(("org.aptl.network", "management"),),
+        ),
+        BoundaryNetwork(
+            name="egress",
+            bridge="br-egress",
+            labels=(("org.aptl.network", "egress"),),
+        ),
+    )
+
     with pytest.raises(BoundaryCompileError, match="exactly once"):
         compile_platform_boundary(
-            _policy(),
+            policy,
             policy_digest="sha256:" + "a" * 64,
-            networks=(
-                BoundaryNetwork(
-                    name="participant",
-                    bridge="br-part",
-                    labels=(("org.aptl.network", "participant"),),
-                ),
-                BoundaryNetwork(
-                    name="management",
-                    bridge="br-mgmt",
-                    labels=(("org.aptl.network", "management"),),
-                ),
-                BoundaryNetwork(
-                    name="egress",
-                    bridge="br-egress",
-                    labels=(("org.aptl.network", "egress"),),
-                ),
-            ),
+            networks=networks,
             workloads=duplicate,
             owner="seat-17",
         )
@@ -271,10 +297,11 @@ def test_platform_binding_rejects_ipv6_until_crossings_are_dual_stack() -> None:
             labels=(("org.aptl.network", "egress"),),
         ),
     )
+    policy = _policy()
 
     with pytest.raises(BoundaryCompileError, match="IPv6"):
         compile_platform_boundary(
-            _policy(),
+            policy,
             policy_digest="sha256:" + "a" * 64,
             networks=networks,
             workloads=(),

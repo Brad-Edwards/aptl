@@ -121,22 +121,7 @@ class AcesBoundarySpec:
         if len(bindings) != len(self.owner_bindings):
             raise ValueError("ACL owner bindings must be unique")
         known = {network.name for network in self.networks}
-        prior: tuple[str, int, str] | None = None
-        for rule in self.rules:
-            binding = bindings.get(rule.owner_address)
-            if (
-                binding is None
-                or binding.owner_resource_type != rule.owner_resource_type
-            ):
-                raise ValueError("ACL rule has no exact owner binding")
-            if (rule.from_network is not None and rule.from_network not in known) or (
-                rule.to_network is not None and rule.to_network not in known
-            ):
-                raise ValueError("ACL rule references an unknown network")
-            current = (rule.owner_address, rule.order, rule.name)
-            if prior is not None and current < prior:
-                raise ValueError("ACL rules must have deterministic owner order")
-            prior = current
+        _validate_aces_rules(self.rules, bindings, known)
 
     @classmethod
     def empty(cls, owner: str) -> AcesBoundarySpec:
@@ -160,6 +145,8 @@ class AcesBoundarySpec:
 
 @dataclass(frozen=True)
 class PlatformCrossing:
+    """One compiled transport crossing between platform policy anchors."""
+
     source: Literal["participant", "management", "egress"]
     destination: Literal["participant", "management", "egress"]
     protocol: Literal["tcp", "udp"]
@@ -209,44 +196,10 @@ class PlatformBoundarySpec:
         _validate_owner(self.owner)
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.policy_digest):
             raise ValueError("invalid platform policy digest")
-        zones = [zone for zone, _network in self.anchors]
-        if set(zones) != _PLATFORM_ZONES or len(zones) != 3:
-            raise ValueError("platform anchors must cover each policy zone")
-        _validate_networks(self.networks)
-        if len(self.networks) != 3 or any(
-            network.ipv6_cidr is not None for network in self.networks
-        ):
-            raise ValueError("platform networks must be three IPv4 policy domains")
-        known = {network.name for network in self.networks}
-        zone_networks = dict(self.zone_networks)
-        if (
-            set(zone_networks) != _PLATFORM_ZONES
-            or len(self.zone_networks) != 3
-            or set(zone_networks.values()) != known
-        ):
-            raise ValueError("platform zone networks must be exact and distinct")
-        for zone, workload in self.anchors:
-            if any(
-                network not in known
-                for network, _address in (
-                    *workload.ipv4_by_network,
-                    *workload.ipv6_by_network,
-                )
-            ):
-                raise ValueError("platform workload references an unknown network")
-            if (
-                not workload.ipv4_by_network
-                or workload.ipv6_by_network
-                or zone_networks[zone]
-                not in {network for network, _address in workload.ipv4_by_network}
-            ):
-                raise ValueError(
-                    "platform workload requires its IPv4 policy attachment"
-                )
-        if len(self.egress_ports) != len(set(self.egress_ports)) or any(
-            not 0 < port <= 65535 for port in self.egress_ports
-        ):
-            raise ValueError("invalid platform egress ports")
+        known = _validate_platform_networks(self.networks)
+        zone_networks = _validate_zone_networks(self.zone_networks, known)
+        _validate_platform_anchors(self.anchors, known, zone_networks)
+        _validate_egress_ports(self.egress_ports)
 
     def details(self) -> dict[str, object]:
         return {
@@ -278,11 +231,15 @@ BoundaryEnforcementSpec = AcesBoundarySpec | PlatformBoundarySpec
 
 
 def _validate_owner(owner: str) -> None:
+    """Require a bounded project/seat ownership token."""
+
     if not _OWNER.fullmatch(owner):
         raise ValueError("invalid boundary owner")
 
 
 def _validate_networks(networks: tuple[BoundaryNetwork, ...]) -> None:
+    """Require unique concrete network and bridge identities."""
+
     names = [network.name for network in networks]
     bridges = [network.bridge for network in networks]
     if len(names) != len(set(names)) or len(bridges) != len(set(bridges)):
@@ -290,8 +247,96 @@ def _validate_networks(networks: tuple[BoundaryNetwork, ...]) -> None:
 
 
 def _canonical(details: dict[str, object]) -> str:
+    """Serialize enforcement input deterministically for hashing and transport."""
+
     return json.dumps(details, sort_keys=True, separators=(",", ":"))
 
 
 def _digest(payload: str) -> str:
+    """Return the lowercase SHA-256 identity of canonical policy text."""
+
     return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _validate_aces_rules(
+    rules: tuple[DeploymentAclRealization, ...],
+    bindings: dict[str, AcesAclOwnerBinding],
+    known_networks: set[str],
+) -> None:
+    """Require exact owner bindings, known endpoints, and deterministic order."""
+
+    prior: tuple[str, int, str] | None = None
+    for rule in rules:
+        binding = bindings.get(rule.owner_address)
+        if binding is None or binding.owner_resource_type != rule.owner_resource_type:
+            raise ValueError("ACL rule has no exact owner binding")
+        endpoints = (rule.from_network, rule.to_network)
+        if any(item is not None and item not in known_networks for item in endpoints):
+            raise ValueError("ACL rule references an unknown network")
+        current = (rule.owner_address, rule.order, rule.name)
+        if prior is not None and current < prior:
+            raise ValueError("ACL rules must have deterministic owner order")
+        prior = current
+
+
+def _validate_platform_networks(
+    networks: tuple[BoundaryNetwork, ...],
+) -> set[str]:
+    """Require exactly three distinct IPv4-only platform policy domains."""
+
+    _validate_networks(networks)
+    if len(networks) != 3 or any(network.ipv6_cidr is not None for network in networks):
+        raise ValueError("platform networks must be three IPv4 policy domains")
+    return {network.name for network in networks}
+
+
+def _validate_zone_networks(
+    entries: tuple[
+        tuple[Literal["participant", "management", "egress"], str],
+        ...,
+    ],
+    known_networks: set[str],
+) -> dict[str, str]:
+    """Require an exact one-to-one mapping from zones to platform networks."""
+
+    zone_networks = dict(entries)
+    if (
+        set(zone_networks) != _PLATFORM_ZONES
+        or len(entries) != 3
+        or set(zone_networks.values()) != known_networks
+    ):
+        raise ValueError("platform zone networks must be exact and distinct")
+    return zone_networks
+
+
+def _validate_platform_anchors(
+    anchors: tuple[
+        tuple[Literal["participant", "management", "egress"], BoundaryWorkload],
+        ...,
+    ],
+    known_networks: set[str],
+    zone_networks: dict[str, str],
+) -> None:
+    """Require one IPv4 anchor per zone on only signed platform networks."""
+
+    zones = [zone for zone, _workload in anchors]
+    if set(zones) != _PLATFORM_ZONES or len(zones) != 3:
+        raise ValueError("platform anchors must cover each policy zone")
+    for zone, workload in anchors:
+        attached = (*workload.ipv4_by_network, *workload.ipv6_by_network)
+        if any(network not in known_networks for network, _address in attached):
+            raise ValueError("platform workload references an unknown network")
+        ipv4_networks = {network for network, _address in workload.ipv4_by_network}
+        if (
+            not ipv4_networks
+            or workload.ipv6_by_network
+            or zone_networks[zone] not in ipv4_networks
+        ):
+            raise ValueError("platform workload requires its IPv4 policy attachment")
+
+
+def _validate_egress_ports(ports: tuple[int, ...]) -> None:
+    """Require unique, valid external TCP port numbers."""
+
+    if len(ports) != len(set(ports)) or any(not 0 < port <= 65535 for port in ports):
+        raise ValueError("invalid platform egress ports")

@@ -175,6 +175,45 @@ def test_acl_lowering_rejects_unsupported_semantics_before_backend(tmp_path) -> 
     assert realization.deployment_spec(["victim"]).acls == ()
 
 
+def test_acl_lowering_rejects_out_of_range_ports(tmp_path) -> None:
+    _project(tmp_path)
+    orchard = _resource(
+        "orchard",
+        "network",
+        {"properties": {"cidr": "10.44.1.0/24"}},
+    )
+    sentinel = _resource(
+        "sentinel",
+        "node",
+        {
+            "links": ["orchard"],
+            "properties": [{"orchard": "10.44.1.10"}],
+            "acls": [
+                {
+                    "name": "invalid-port",
+                    "direction": "in",
+                    "from_net": "orchard",
+                    "to_net": "orchard",
+                    "protocol": "tcp",
+                    "ports": [70000],
+                    "action": "allow",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(orchard, sentinel),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+    )
+
+    assert "aptl.provisioner.acl-ports-invalid" in {
+        item.code for item in realization.diagnostics
+    }
+    assert realization.deployment_spec(["victim"]).acls == ()
+
+
 @pytest.mark.parametrize(
     ("from_net", "cidr", "code"),
     [
@@ -301,6 +340,16 @@ def test_network_owned_acl_is_preserved_as_network_policy(tmp_path) -> None:
         if item.code.startswith("aptl.provisioner.acl-")
     ]
     acl = realization.deployment_spec(["victim"]).acls[0]
-    assert acl.owner_resource_type == "network"
-    assert acl.owner_address == "provision.network.orchard"
-    assert acl.owner_name == "orchard"
+    assert acl.details() == {
+        "owner_address": "provision.network.orchard",
+        "owner_resource_type": "network",
+        "owner_name": "orchard",
+        "name": "deny-outbound",
+        "order": 0,
+        "direction": "out",
+        "from_network": "orchard",
+        "to_network": "quartz",
+        "protocol": "any",
+        "ports": [],
+        "action": "deny",
+    }

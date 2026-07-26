@@ -1,9 +1,11 @@
 """Exact-authority CONNECT broker used by the controlled egress crossing."""
 
+import asyncio
 import importlib.util
 import ipaddress
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -121,3 +123,35 @@ def test_out_of_range_proxy_limit_fails_closed(proxy, tmp_path) -> None:
 
     with pytest.raises(ValueError, match="limits"):
         proxy._load_policy(path)
+
+
+def test_handle_returns_403_for_disallowed_connect(proxy) -> None:
+    reader = MagicMock()
+    reader.readuntil = AsyncMock(
+        return_value=b"CONNECT blocked.example.test:443 HTTP/1.1\r\n\r\n"
+    )
+    writer = MagicMock()
+    writer.is_closing.return_value = False
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    limits = proxy.ProxyLimits(
+        max_connections=1,
+        max_header_bytes=4096,
+        header_timeout_seconds=1,
+        connect_timeout_seconds=1,
+        idle_timeout_seconds=5,
+    )
+
+    asyncio.run(
+        proxy._handle(
+            reader,
+            writer,
+            {("api.example.test", 443)},
+            limits,
+        )
+    )
+
+    writer.write.assert_called_once_with(
+        b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"
+    )
+    writer.close.assert_called_once_with()

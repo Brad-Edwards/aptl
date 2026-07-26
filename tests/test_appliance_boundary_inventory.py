@@ -204,6 +204,23 @@ def test_unknown_listener_and_stale_identity_fail_closed() -> None:
     )
 
 
+def test_forbidden_host_reachability_and_policy_digest_mismatch_are_fatal() -> None:
+    host = _host().model_copy(
+        update={
+            "policy_digest": "sha256:" + "9" * 64,
+            "forbidden_reachability_passed": False,
+        }
+    )
+
+    result = qualify_appliance_boundary(_policy(), _binding(), host, _guest())
+
+    assert result.passed is False
+    assert result.findings == (
+        "boundary.host-policy-digest-mismatch",
+        "boundary.host-forbidden-reachability",
+    )
+
+
 def test_docker_authority_must_be_guest_scoped_and_least_privileged() -> None:
     holder = DockerAuthorityHolder(
         identity="deployment-owner",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import ipaddress
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -14,6 +13,9 @@ from aptl.core.deployment._compose_account_realization import (
 from aptl.core.deployment._compose_content_realization import (
     CONTENT_SEEDER_IMAGE,
     ComposeRealizationContentMixin,
+)
+from aptl.core.deployment._compose_boundary_realization import (
+    ComposeBoundaryRealizationMixin,
 )
 from aptl.core.deployment._compose_port_realization import (
     published_port_conflicts,
@@ -38,21 +40,10 @@ from aptl.core.deployment._compose_image_free_realization import (
 )
 from aptl.core.deployment._compose_realization_networks import (
     _container_networks,
-    _match_managed_network,
     _network_name_candidates,
     _resolve_realization_networks,
 )
 from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
-from aptl.core.deployment.boundary import (
-    AcesBoundarySpec,
-    BoundaryNetwork,
-    BoundaryWorkload,
-)
-from aptl.core.deployment.boundary_compiler import (
-    BoundaryCompileError,
-    compile_aces_boundary,
-    compile_platform_boundary,
-)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
@@ -70,34 +61,8 @@ __all__ = [
 _COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
 
 
-def _boundary_ip_families(
-    subnets: list[object],
-) -> tuple[str | None, str | None]:
-    """Return the first observed IPv4/IPv6 subnet without guessing."""
-
-    ipv4: str | None = None
-    ipv6: str | None = None
-    for value in subnets:
-        if not isinstance(value, str) or not value:
-            continue
-        try:
-            version = ipaddress.ip_network(value, strict=False).version
-        except ValueError as exc:
-            raise BoundaryCompileError("boundary network subnet was invalid") from exc
-        if version == 4 and ipv4 is None:
-            ipv4 = value
-        elif version == 6 and ipv6 is None:
-            ipv6 = value
-    return ipv4, ipv6
-
-
-def _sorted_labels(raw: object) -> tuple[tuple[str, str], ...]:
-    if not isinstance(raw, dict):
-        return ()
-    return tuple(sorted((str(key), str(value)) for key, value in raw.items()))
-
-
 class ComposeRealizationMixin(
+    ComposeBoundaryRealizationMixin,
     ComposeRealizationImageMixin,
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
@@ -264,198 +229,6 @@ class ComposeRealizationMixin(
             return boundary_result
         node_result = _realize_node_subset(self, realization.nodes, realization.content)
         return node_result if node_result is not None else LabResult(success=True)
-
-    def _realize_authority_boundaries(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult | None:
-        """Apply platform policy first, then the independent ACES authority."""
-
-        platform = self._realize_platform_boundary()
-        if platform is not None:
-            return platform
-        return self._realize_aces_boundary(realization)
-
-    def _realize_platform_boundary(self) -> LabResult | None:
-        configured = getattr(self, "_appliance_boundary", None)
-        if configured is None:
-            return None
-        policy, binding = configured
-        try:
-            networks = self._project_boundary_network_observations()
-            workloads = self._platform_workload_observations(networks)
-            enforcement = compile_platform_boundary(
-                policy,
-                policy_digest=binding.policy_digest,
-                networks=networks,
-                workloads=workloads,
-                owner=self._project_name,
-            )
-        except BoundaryCompileError:
-            return LabResult(
-                success=False,
-                error="Platform boundary anchors were not observed exactly.",
-            )
-        result = self.realize_boundary(enforcement)
-        return None if result.success else result
-
-    def _realize_aces_boundary(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult | None:
-        """Apply admitted ACES ACLs before a scenario workload can start."""
-
-        if not realization.acls:
-            configured = getattr(self, "_appliance_boundary", None)
-            receipts = getattr(self, "_boundary_receipts", {})
-            if configured is None and "aces" not in receipts:
-                return None
-            cleanup = self.realize_boundary(AcesBoundarySpec.empty(self._project_name))
-            return None if cleanup.success else cleanup
-        try:
-            networks = self._boundary_network_observations(realization)
-            policy = compile_aces_boundary(
-                realization,
-                networks,
-                owner=self._project_name,
-            )
-        except BoundaryCompileError:
-            return LabResult(
-                success=False,
-                error="ACES boundary could not be bound without widening policy.",
-            )
-        result = self.realize_boundary(policy)
-        return None if result.success else result
-
-    def _boundary_network_observations(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> tuple[BoundaryNetwork, ...]:
-        """Return concrete bridge identities for scenario-declared networks."""
-
-        if not realization.acls:
-            return ()
-        managed = set(self.host_list_lab_networks(self._project_name))
-        observed: list[BoundaryNetwork] = []
-        for desired in realization.networks:
-            concrete = _match_managed_network(
-                desired.name,
-                managed,
-                self._project_name,
-            )
-            details = self.host_inspect_network(concrete) if concrete else {}
-            bridge = details.get("bridge")
-            if not isinstance(bridge, str) or not bridge:
-                raise BoundaryCompileError("realized network bridge was not observable")
-            subnets = details.get("subnets")
-            if not isinstance(subnets, list):
-                subnets = [details.get("subnet", "")]
-            ipv4 = next(
-                (
-                    value
-                    for value in subnets
-                    if isinstance(value, str)
-                    and value
-                    and ipaddress.ip_network(value, strict=False).version == 4
-                ),
-                None,
-            )
-            ipv6 = next(
-                (
-                    value
-                    for value in subnets
-                    if isinstance(value, str)
-                    and value
-                    and ipaddress.ip_network(value, strict=False).version == 6
-                ),
-                None,
-            )
-            labels = details.get("labels")
-            observed.append(
-                BoundaryNetwork(
-                    name=desired.name,
-                    bridge=bridge,
-                    ipv4_cidr=ipv4,
-                    ipv6_cidr=ipv6,
-                    labels=tuple(
-                        sorted(
-                            (str(key), str(value))
-                            for key, value in (
-                                labels.items() if isinstance(labels, dict) else ()
-                            )
-                        )
-                    ),
-                )
-            )
-        return tuple(observed)
-
-    def _project_boundary_network_observations(
-        self,
-    ) -> tuple[BoundaryNetwork, ...]:
-        """Observe all project-scoped platform networks."""
-
-        observed: list[BoundaryNetwork] = []
-        for concrete in sorted(self.host_list_lab_networks(self._project_name)):
-            details = self.host_inspect_network(concrete)
-            bridge = details.get("bridge")
-            if not isinstance(bridge, str) or not bridge:
-                raise BoundaryCompileError("platform network bridge was not observable")
-            subnets = details.get("subnets")
-            if not isinstance(subnets, list):
-                subnets = [details.get("subnet", "")]
-            ipv4, ipv6 = _boundary_ip_families(subnets)
-            labels = details.get("labels")
-            observed.append(
-                BoundaryNetwork(
-                    name=concrete,
-                    bridge=bridge,
-                    ipv4_cidr=ipv4,
-                    ipv6_cidr=ipv6,
-                    labels=_sorted_labels(labels),
-                )
-            )
-        if not observed:
-            raise BoundaryCompileError("platform networks were not observed")
-        return tuple(observed)
-
-    def _platform_workload_observations(
-        self,
-        networks: tuple[BoundaryNetwork, ...],
-    ) -> tuple[BoundaryWorkload, ...]:
-        """Normalize exact labeled workload addresses without raw inspect output."""
-
-        known = {network.name for network in networks}
-        workloads: list[BoundaryWorkload] = []
-        for row in self.host_list_lab_containers():
-            name = row.get("name")
-            labels = row.get("labels")
-            if not isinstance(name, str) or not isinstance(labels, dict):
-                continue
-            details = self.container_inspect(name)
-            attached = details.get("NetworkSettings", {}).get("Networks", {})
-            if not isinstance(attached, dict):
-                continue
-            ipv4: list[tuple[str, str]] = []
-            ipv6: list[tuple[str, str]] = []
-            for network_name, network in attached.items():
-                if network_name not in known or not isinstance(network, dict):
-                    continue
-                address = network.get("IPAddress")
-                if isinstance(address, str) and address:
-                    ipv4.append((network_name, address))
-                address = network.get("GlobalIPv6Address")
-                if isinstance(address, str) and address:
-                    ipv6.append((network_name, address))
-            if ipv4 or ipv6:
-                workloads.append(
-                    BoundaryWorkload(
-                        identity=name,
-                        labels=_sorted_labels(labels),
-                        ipv4_by_network=tuple(sorted(ipv4)),
-                        ipv6_by_network=tuple(sorted(ipv6)),
-                    )
-                )
-        return tuple(sorted(workloads, key=lambda item: item.identity))
 
     def _realize_published_ports(
         self,

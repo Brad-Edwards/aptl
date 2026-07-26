@@ -57,11 +57,6 @@ from aptl.backends.aces_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
-from aptl.core.deployment.realization import (
-    DeploymentAclRealization,
-    DeploymentGeneratedArtifactRealization,
-    DeploymentPersistentVolumeRealization,
-)
 from aptl.utils.redaction import redact
 
 
@@ -113,15 +108,19 @@ def interpret_provisioning_plan(
     if not _all_nodes_image_free(nodes):
         _append_profile_diagnostics(profiles, config, diagnostics)
 
-    return _realization_from_parts(
-        nodes,
-        networks,
-        placements,
-        generated_artifacts,
-        persistent_volumes,
-        profiles,
-        diagnostics,
-        acls,
+    return AptlRealization(
+        profiles=frozenset(profiles),
+        nodes=tuple(sorted(nodes, key=lambda item: item.address)),
+        networks=tuple(sorted(networks, key=lambda item: item.address)),
+        placements=tuple(sorted(placements, key=lambda item: item.address)),
+        diagnostics=tuple(diagnostics),
+        acls=tuple(acls),
+        generated_artifacts=tuple(
+            sorted(generated_artifacts, key=lambda item: item.address)
+        ),
+        persistent_volumes=tuple(
+            sorted(persistent_volumes, key=lambda item: item.address)
+        ),
     )
 
 
@@ -261,34 +260,6 @@ def _append_profile_diagnostics(
                 ),
             )
         )
-
-
-def _realization_from_parts(
-    nodes: list[NodeRealization],
-    networks: list[NetworkRealization],
-    placements: list[PlacementRealization],
-    generated_artifacts: list[DeploymentGeneratedArtifactRealization],
-    persistent_volumes: list[DeploymentPersistentVolumeRealization],
-    profiles: set[str],
-    diagnostics: list[Diagnostic],
-    acls: list[DeploymentAclRealization],
-) -> AptlRealization:
-    """Build the stable realization value from collected resource parts."""
-
-    return AptlRealization(
-        profiles=frozenset(profiles),
-        nodes=tuple(sorted(nodes, key=lambda item: item.address)),
-        networks=tuple(sorted(networks, key=lambda item: item.address)),
-        placements=tuple(sorted(placements, key=lambda item: item.address)),
-        diagnostics=tuple(diagnostics),
-        acls=tuple(acls),
-        generated_artifacts=tuple(
-            sorted(generated_artifacts, key=lambda item: item.address)
-        ),
-        persistent_volumes=tuple(
-            sorted(persistent_volumes, key=lambda item: item.address)
-        ),
-    )
 
 
 def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:

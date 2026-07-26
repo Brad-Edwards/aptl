@@ -116,6 +116,17 @@ class ComposeBaseSubstrateMixin(object):
         network_bindings = getattr(self, "_base_networks_by_address", {}).get(
             spec.node_address
         )
+        argv = self._base_container_create_command(spec, network_bindings)
+        result = self._run(argv, timeout=180)
+        self._complete_base_container_start(spec, network_bindings, result)
+
+    def _base_container_create_command(
+        self,
+        spec: "BaseContainerSpec",
+        network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
+    ) -> list[str]:
+        """Build a create/run command with exact declared network identity."""
+
         argv = [
             "docker",
             "create" if network_bindings is not None else "run",
@@ -156,7 +167,16 @@ class ComposeBaseSubstrateMixin(object):
             argv.append(spec.image_ref)
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
-        result = self._run(argv, timeout=180)
+        return argv
+
+    def _complete_base_container_start(
+        self,
+        spec: "BaseContainerSpec",
+        network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
+        result: subprocess.CompletedProcess,
+    ) -> None:
+        """Attach remaining admitted networks, start, and clean failed creates."""
+
         if result.returncode == 0 and network_bindings is not None:
             result = self._attach_and_start_base_container(
                 spec.container_name,

@@ -83,6 +83,38 @@ def _decode_first_object(stdout: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _string_mapping(raw: object) -> dict[str, str]:
+    """Normalize an observed mapping without accepting other JSON shapes."""
+
+    if not isinstance(raw, dict):
+        return {}
+    return {str(key): str(value) for key, value in raw.items()}
+
+
+def _network_ipam_configs(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return valid Docker IPAM configuration records or one empty record."""
+
+    ipam = payload.get("IPAM")
+    raw = ipam.get("Config") if isinstance(ipam, dict) else None
+    if not isinstance(raw, list):
+        return [{}]
+    configs = [item for item in raw if isinstance(item, dict)]
+    return configs or [{}]
+
+
+def _network_bridge(
+    payload: dict[str, Any],
+    options: dict[str, str],
+    network_id: str,
+) -> str:
+    """Return the explicit or deterministic default bridge interface name."""
+
+    bridge = options.get("com.docker.network.bridge.name", "")
+    if not bridge and payload.get("Driver") == "bridge" and network_id:
+        return f"br-{network_id[:12]}"
+    return bridge
+
+
 def _decode_compose_ps(stdout: str) -> list[dict[str, Any]]:
     """Parse ``docker compose ps --format json`` output (NDJSON or array)."""
     stripped = stdout.strip()
@@ -136,10 +168,15 @@ class ComposeQueryMixin(object):
         fmt = "{{.Names}}\t{{.Image}}\t{{.ID}}\t{{.Status}}\t{{.Labels}}\t{{.Ports}}"
         result = self._run(
             [
-                "docker", "ps", "-a",
-                "--filter", f"label=com.docker.compose.project={self._project_name}",
-                "--filter", "name=aptl-",
-                "--format", fmt,
+                "docker",
+                "ps",
+                "-a",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--filter",
+                "name=aptl-",
+                "--format",
+                fmt,
             ],
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
@@ -157,20 +194,21 @@ class ComposeQueryMixin(object):
         # tenants' aptl-* networks on a shared SSH daemon.
         result = self._run(
             [
-                "docker", "network", "ls",
-                "--filter", f"label=com.docker.compose.project={self._project_name}",
-                "--filter", f"name={name_prefix}",
-                "--format", "{{.Name}}",
+                "docker",
+                "network",
+                "ls",
+                "--filter",
+                f"label=com.docker.compose.project={self._project_name}",
+                "--filter",
+                f"name={name_prefix}",
+                "--format",
+                "{{.Name}}",
             ],
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
         if result.returncode != 0:
             return []
-        return [
-            line.strip()
-            for line in result.stdout.splitlines()
-            if line.strip()
-        ]
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def host_list_networks(self) -> list[str]:
         """List every Docker network visible to the backend daemon."""
@@ -181,13 +219,11 @@ class ComposeQueryMixin(object):
         )
         if result.returncode != 0:
             return []
-        return [
-            line.strip()
-            for line in result.stdout.splitlines()
-            if line.strip()
-        ]
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def host_inspect_network(self, name: str) -> dict[str, Any]:
+        """Return bounded network identity, labels, addresses, and membership."""
+
         result = self._run(
             ["docker", "network", "inspect", name],
             timeout=_HOST_INVENTORY_TIMEOUT,
@@ -199,19 +235,13 @@ class ComposeQueryMixin(object):
         )
         if not payload:
             return {}
-        ipam_configs = payload.get("IPAM", {}).get("Config") or [{}]
+        ipam_configs = _network_ipam_configs(payload)
         ipam = ipam_configs[0]
         containers_map = payload.get("Containers", {})
-        labels = payload.get("Labels")
-        options = payload.get("Options")
-        if not isinstance(labels, dict):
-            labels = {}
-        if not isinstance(options, dict):
-            options = {}
+        labels = _string_mapping(payload.get("Labels"))
+        options = _string_mapping(payload.get("Options"))
         network_id = str(payload.get("Id", ""))
-        bridge = str(options.get("com.docker.network.bridge.name", ""))
-        if not bridge and payload.get("Driver") == "bridge" and network_id:
-            bridge = f"br-{network_id[:12]}"
+        bridge = _network_bridge(payload, options, network_id)
         subnets = [
             str(config.get("Subnet", ""))
             for config in ipam_configs
@@ -226,16 +256,14 @@ class ComposeQueryMixin(object):
             "subnet": ipam.get("Subnet", ""),
             "subnets": subnets,
             "gateway": ipam.get("Gateway", ""),
-            "labels": {str(key): str(value) for key, value in labels.items()},
-            "options": {str(key): str(value) for key, value in options.items()},
+            "labels": labels,
+            "options": options,
             "containers": sorted(c.get("Name", "") for c in containers_map.values()),
         }
 
     # Container interaction (CLI-004, ADR-023) ----------------------------
 
-    def container_list(
-        self, *, all_containers: bool = True
-    ) -> list[dict[str, Any]]:
+    def container_list(self, *, all_containers: bool = True) -> list[dict[str, Any]]:
         cmd = ["docker", "compose", "-p", self._project_name, "ps"]
         if all_containers:
             cmd.append("-a")
@@ -277,9 +305,7 @@ class ComposeQueryMixin(object):
         cmd.append(name)
         return self._run(cmd, timeout=timeout)
 
-    def container_shell(
-        self, name: str, *, shell: str | None = None
-    ) -> int:
+    def container_shell(self, name: str, *, shell: str | None = None) -> int:
         if shell is not None:
             return self._run_streaming(["docker", "exec", "-it", name, shell])
         # Probe non-interactively for bash before launching the TTY,
@@ -289,7 +315,9 @@ class ComposeQueryMixin(object):
         if not should_run:
             log.warning(
                 "container_shell probe of %s failed (exit %d): %s",
-                name, probe.returncode, probe.stderr.strip(),
+                name,
+                probe.returncode,
+                probe.stderr.strip(),
             )
             return probe.returncode
         if chosen == "/bin/sh":
@@ -341,6 +369,8 @@ class ComposeQueryMixin(object):
             timeout=_HOST_INVENTORY_TIMEOUT,
         )
         if result.returncode != 0:
-            log.debug("container_inspect failed for %s: %s", name, result.stderr.strip())
+            log.debug(
+                "container_inspect failed for %s: %s", name, result.stderr.strip()
+            )
             return {}
         return _decode_first_object(result.stdout)

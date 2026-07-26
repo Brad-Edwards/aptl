@@ -31,10 +31,14 @@ Transport = Literal["tcp", "udp"]
 
 
 class _StrictModel(BaseModel):
+    """Base for closed appliance-boundary policy records."""
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class PlatformAnchors(_StrictModel):
+    """Exact workload selectors for the three platform trust anchors."""
+
     participant: str
     management: str
     egress: str
@@ -63,6 +67,8 @@ class PlatformNetworks(_StrictModel):
 
 
 class FixedCrossing(_StrictModel):
+    """One narrow transport crossing between platform-owned zones."""
+
     source: PlatformZone
     destination: PlatformZone
     protocol: Transport
@@ -80,6 +86,8 @@ class FixedCrossing(_StrictModel):
 
 
 class EgressAuthority(_StrictModel):
+    """One exact externally reachable authority admitted through the broker."""
+
     source: Literal["egress"]
     authority: str
     protocol: Literal["tcp"]
@@ -108,6 +116,8 @@ class EgressAuthority(_StrictModel):
 
 
 class GuestPublication(_StrictModel):
+    """One loopback-only guest endpoint projected to the physical host."""
+
     audience: Literal["participant", "recovery"]
     address: str
     port: int = Field(ge=1, le=65535)
@@ -123,6 +133,8 @@ class GuestPublication(_StrictModel):
 
 
 class DockerAuthorityPolicy(_StrictModel):
+    """Constraints on workloads allowed to control the guest Docker daemon."""
+
     allowed_holder_labels: list[str] = Field(default_factory=list)
     require_guest_daemon: Literal[True] = True
 
@@ -137,6 +149,8 @@ class DockerAuthorityPolicy(_StrictModel):
 
 
 class EgressProxyLimits(_StrictModel):
+    """Signed resource and timeout bounds for the egress broker."""
+
     max_connections: int = Field(ge=1, le=256)
     max_header_bytes: int = Field(ge=1024, le=16384)
     header_timeout_seconds: int = Field(ge=1, le=30)

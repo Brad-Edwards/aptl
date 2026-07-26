@@ -16,10 +16,14 @@ from aptl.utils.redaction import redact
 
 
 class _StrictObservation(BaseModel):
+    """Base for immutable, closed boundary-observation records."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class BoundaryEndpoint(_StrictObservation):
+    """One physical-host endpoint attributed to an approved audience."""
+
     audience: Literal["participant", "recovery"]
     address: str
     port: int = Field(ge=1, le=65535)
@@ -39,6 +43,8 @@ class HostBoundaryObservation(_StrictObservation):
 
 
 class BoundaryEnforcementObservation(_StrictObservation):
+    """Kernel readback evidence for one independent policy authority."""
+
     authority: Literal["aces", "platform"]
     source_digest: Digest
     enforcement_digest: Digest
@@ -47,6 +53,8 @@ class BoundaryEnforcementObservation(_StrictObservation):
 
 
 class BoundaryProbeObservation(_StrictObservation):
+    """One positive or negative reachability proof."""
+
     identity: str = Field(min_length=1, max_length=128)
     authority: Literal["aces", "platform"]
     source: str = Field(min_length=1, max_length=160)
@@ -64,6 +72,8 @@ class BoundaryProbeObservation(_StrictObservation):
 
 
 class DockerAuthorityHolder(_StrictObservation):
+    """Observed guest-daemon authority held by one workload."""
+
     identity: str = Field(min_length=1, max_length=128)
     label_selector: str = Field(min_length=1, max_length=160)
     daemon_id: str = Field(min_length=1, max_length=128)
@@ -90,6 +100,8 @@ class GuestBoundaryObservation(_StrictObservation):
 
 @dataclass(frozen=True)
 class BoundaryQualificationResult:
+    """Fatal boundary verdict plus its redacted evidence inventory."""
+
     passed: bool
     findings: tuple[str, ...]
     inventory: dict[str, object]
@@ -125,6 +137,8 @@ def _append_host_findings(
     host: HostBoundaryObservation,
     findings: list[str],
 ) -> None:
+    """Compare fresh outer-host evidence with the signed binding."""
+
     if host.observation_id != binding.host_observation_id:
         findings.append("boundary.host-observation-identity-mismatch")
     if host.policy_digest != binding.policy_digest:
@@ -157,6 +171,8 @@ def _append_guest_findings(
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
+    """Compare guest policy, daemon, enforcement, and authority evidence."""
+
     comparisons = (
         (
             guest.policy_digest != binding.policy_digest,
@@ -210,6 +226,8 @@ def _append_enforcement_findings(
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
+    """Require complete, digest-bound readback for every active authority."""
+
     by_authority = {item.authority: item for item in guest.enforcements}
     if len(by_authority) != len(guest.enforcements) or "platform" not in by_authority:
         findings.append("boundary.guest-enforcement-incomplete")
@@ -233,6 +251,8 @@ def _append_probe_findings(
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
+    """Require passing positive and negative probes for each authority."""
+
     required_authorities = {"platform"}
     if binding.aces_boundary_required:
         required_authorities.add("aces")
@@ -254,6 +274,8 @@ def _inventory(
     findings: list[str],
     phase: Literal["image-qualification", "start"],
 ) -> dict[str, object]:
+    """Render bounded machine evidence without raw policy or probe output."""
+
     return {
         "schema_version": "aptl.appliance-boundary-inventory/v1",
         "phase": phase,

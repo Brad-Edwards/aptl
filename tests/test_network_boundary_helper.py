@@ -150,7 +150,15 @@ def test_platform_floor_covers_forward_and_guest_host_paths(helper) -> None:
     assert "tcp dport 443 accept" in rendered
     assert "ct state established,related accept" in rendered
     assert "ip daddr 10.50.3.20 ct state established,related accept" in rendered
-    assert rendered.count("drop") >= 9
+    for bridge in ("br-part", "br-mgmt", "br-egress"):
+        assert f'iifname "{bridge}" drop comment' in rendered
+        assert f'oifname "{bridge}" drop comment' in rendered
+    assert (
+        "ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, "
+        "127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, "
+        "192.0.0.0/24, 192.168.0.0/16, 198.18.0.0/15, "
+        "224.0.0.0/4, 240.0.0.0/4 } drop"
+    ) in rendered
 
 
 def test_authorities_get_distinct_owned_tables(helper) -> None:

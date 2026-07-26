@@ -14,7 +14,8 @@ from typing import Literal, Protocol
 import rfc8785
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from aptl.appliance.models import ApplianceLaunchDescriptor, GoldenImageInventory
+from aptl.appliance.models import GoldenImageInventory
+from aptl.appliance.release_models import ApplianceLaunchDescriptor
 
 _SHA256_PATTERN = r"^sha256:[a-f0-9]{64}$"
 

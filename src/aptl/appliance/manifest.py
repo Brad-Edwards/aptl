@@ -23,11 +23,11 @@ from aptl.appliance.models import (
     ApplianceDrillReport,
     ApplianceManifestSignature,
     ApplianceReleaseManifest,
-    ApplianceReleaseTemplate,
     ArtifactKind,
     ArtifactReference,
     ParticipantReleaseBinding,
 )
+from aptl.appliance.release_models import ApplianceReleaseTemplate
 from aptl.appliance.release_validation import (
     compute_payload_digest,
     read_release_artifact as _read_release_artifact,
@@ -35,7 +35,6 @@ from aptl.appliance.release_validation import (
     verify_offline_aptl_version as _verify_offline_aptl_version,
     verify_release_evidence as _verify_release_evidence,
 )
-from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.validation.participant_qualification_evidence import (
     ParticipantQualificationReport,
     verify_participant_qualification_attestation,

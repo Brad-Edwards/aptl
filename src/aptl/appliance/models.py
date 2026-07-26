@@ -14,10 +14,11 @@ from pydantic import (
     model_validator,
 )
 
+from aptl.appliance.versioning import is_appliance_version
+
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _IMAGE_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._/:~-]{0,254}@sha256:[a-f0-9]{64}$")
 _COMMIT_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
-_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+[a-z0-9.+-]*$")
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 
 ArtifactKind = Literal[
@@ -120,7 +121,7 @@ class ReleaseSource(_StrictModel):
     @field_validator("aptl_version")
     @classmethod
     def validate_version(cls, value: str) -> str:
-        if not _VERSION_RE.fullmatch(value):
+        if not is_appliance_version(value):
             raise ValueError("invalid APTL release version")
         return value
 
@@ -425,12 +426,3 @@ class ApplianceManifestSignature(_StrictModel):
     @classmethod
     def validate_digests(cls, value: str) -> str:
         return _validate_digest(value)
-
-
-from aptl.appliance.release_models import (  # noqa: E402
-    ApplianceLaunchDescriptor as ApplianceLaunchDescriptor,
-    ApplianceReleaseTemplate as ApplianceReleaseTemplate,
-    BoundaryTemplateBinding as BoundaryTemplateBinding,
-    ParticipantTemplateBinding as ParticipantTemplateBinding,
-    StagedArtifact as StagedArtifact,
-)

@@ -96,6 +96,17 @@ log = get_logger("lab")
 
 ProgressCallback = Callable[[str], None]
 
+
+@dataclass(frozen=True)
+class ApplianceStartOptions:
+    """Offline and trust inputs for an optional verified appliance launch."""
+
+    offline_staged: bool = False
+    launch_descriptor: Path | None = None
+    release_public_key: Path | None = None
+    qualification_public_key: Path | None = None
+
+
 _STALE_NETWORK_RECOVERY_HINT = (
     "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
@@ -422,10 +433,7 @@ def clean_boot_lab(
     scenario_path: Optional[Path] = None,
     backend: Optional["DeploymentBackend"] = None,
     progress: ProgressCallback | None = None,
-    offline_staged: bool = False,
-    appliance_launch_descriptor: Path | None = None,
-    appliance_release_public_key: Path | None = None,
-    appliance_qualification_public_key: Path | None = None,
+    appliance: ApplianceStartOptions | None = None,
 ) -> LabResult:
     """Boot the lab into a guaranteed clean state (RNG-001).
 
@@ -479,22 +487,12 @@ def clean_boot_lab(
             outcome=StartupOutcome.FAILED,
         )
 
-    offline_kwargs = {"offline_staged": True} if offline_staged else {}
-    appliance_kwargs = (
-        {
-            "appliance_launch_descriptor": appliance_launch_descriptor,
-            "appliance_release_public_key": appliance_release_public_key,
-            "appliance_qualification_public_key": (appliance_qualification_public_key),
-        }
-        if appliance_launch_descriptor is not None
-        else {}
-    )
+    appliance_kwargs = {"appliance": appliance} if appliance is not None else {}
     return orchestrate_lab_start(
         project_dir,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
         progress=progress,
-        **offline_kwargs,
         **appliance_kwargs,
     )
 
@@ -947,26 +945,29 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
     """Load aptl.json and initialize the configured deployment backend."""
     log.info("Step 2: Loading configuration...")
     config_path = find_config(ctx.project_dir)
+    result: LabResult | None = None
     if config_path is None:
         log.error("No aptl.json found in %s", ctx.project_dir)
-        return LabResult(
+        result = LabResult(
             success=False,
             error=f"Config file aptl.json not found in {ctx.project_dir}",
         )
-    try:
-        ctx.config = load_config(config_path)
-    except (FileNotFoundError, ValueError) as exc:
-        log.exception("Failed to load config")
-        return LabResult(success=False, error=f"Failed to load config: {exc}")
-    ctx.backend = _get_backend(
-        ctx.project_dir,
-        ctx.config,
-        offline_staged=ctx.offline_staged,
-    )
-    launch_error = _configure_verified_appliance_launch(ctx)
-    if launch_error is not None:
-        return launch_error
-    return _load_stateful_artifact_ownership(ctx)
+    else:
+        try:
+            ctx.config = load_config(config_path)
+        except (FileNotFoundError, ValueError) as exc:
+            log.exception("Failed to load config")
+            result = LabResult(success=False, error=f"Failed to load config: {exc}")
+        if result is None:
+            ctx.backend = _get_backend(
+                ctx.project_dir,
+                ctx.config,
+                offline_staged=ctx.offline_staged,
+            )
+            result = _configure_verified_appliance_launch(ctx)
+        if result is None:
+            result = _load_stateful_artifact_ownership(ctx)
+    return result
 
 
 def _configure_verified_appliance_launch(
@@ -1315,45 +1316,46 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     pull_warnings = list(ctx.backend.pull_images([SURICATA_IMAGE]))
     for pull_warning in pull_warnings:
         log.warning(pull_warning)
+    result: LabResult | None = None
     if ctx.offline_staged and pull_warnings:
-        return LabResult(
+        result = LabResult(
             success=False,
             error="Offline staged Suricata image verification failed.",
         )
-    ownership = ensure_suricata_config_source_ownership(
-        ctx.project_dir,
-        SURICATA_IMAGE,
-        pull_never=ctx.offline_staged,
-    )
-    if not ownership.success:
-        log.error(
-            "Suricata config source ownership restore failed: %s",
-            ownership.error,
+    if result is None:
+        ownership = ensure_suricata_config_source_ownership(
+            ctx.project_dir,
+            SURICATA_IMAGE,
+            pull_never=ctx.offline_staged,
         )
-        return LabResult(
-            success=False,
-            error=(
-                f"Suricata config source ownership restore failed: {ownership.error}"
-            ),
-        )
-    try:
-        seeds = build_suricata_volume_seeds(ctx.project_dir)
-        ctx.backend.seed_named_volumes(seeds, seeder_image=SURICATA_IMAGE)
-    except (
-        PathContainmentError,
-        BackendSeedError,
-        BackendTimeoutError,
-        # ``OSError`` subsumes ``FileNotFoundError`` / ``NotADirectoryError``.
-        OSError,
-    ) as exc:
-        # Narrow, redacted failure (ADR-043): name the artifact/exception
-        # type, not raw Docker stderr.
-        log.exception("Suricata volume seed failed: %s", type(exc).__name__)
-        return LabResult(
-            success=False,
-            error=f"Suricata runtime volume seeding failed: {exc}",
-        )
-    return None
+        if not ownership.success:
+            log.error(
+                "Suricata config source ownership restore failed: %s",
+                ownership.error,
+            )
+            result = LabResult(
+                success=False,
+                error=(
+                    "Suricata config source ownership restore failed: "
+                    f"{ownership.error}"
+                ),
+            )
+    if result is None:
+        try:
+            seeds = build_suricata_volume_seeds(ctx.project_dir)
+            ctx.backend.seed_named_volumes(seeds, seeder_image=SURICATA_IMAGE)
+        except (
+            PathContainmentError,
+            BackendSeedError,
+            BackendTimeoutError,
+            OSError,
+        ) as exc:
+            log.exception("Suricata volume seed failed: %s", type(exc).__name__)
+            result = LabResult(
+                success=False,
+                error=f"Suricata runtime volume seeding failed: {exc}",
+            )
+    return result
 
 
 def _step_generate_certs(ctx: _LabStartContext) -> LabResult | None:
@@ -2413,10 +2415,7 @@ def orchestrate_lab_start(
     skip_seed: bool = False,
     scenario_path: Path | None = None,
     progress: ProgressCallback | None = None,
-    offline_staged: bool = False,
-    appliance_launch_descriptor: Path | None = None,
-    appliance_release_public_key: Path | None = None,
-    appliance_qualification_public_key: Path | None = None,
+    appliance: ApplianceStartOptions | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -2436,13 +2435,14 @@ def orchestrate_lab_start(
         LabResult indicating overall success or failure.
     """
     log.info("Starting APTL lab from %s", project_dir)
+    appliance = appliance or ApplianceStartOptions()
     ctx = _LabStartContext(
         project_dir=project_dir,
         skip_seed=skip_seed,
-        offline_staged=offline_staged,
-        appliance_launch_descriptor=appliance_launch_descriptor,
-        appliance_release_public_key=appliance_release_public_key,
-        appliance_qualification_public_key=appliance_qualification_public_key,
+        offline_staged=appliance.offline_staged,
+        appliance_launch_descriptor=appliance.launch_descriptor,
+        appliance_release_public_key=appliance.release_public_key,
+        appliance_qualification_public_key=appliance.qualification_public_key,
         scenario_path=scenario_path,
         progress=progress,
     )

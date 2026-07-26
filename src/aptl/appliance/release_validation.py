@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import io
-import re
 import tarfile
 from pathlib import Path
 
@@ -18,6 +17,7 @@ from aptl.appliance.models import (
     ArtifactReference,
     GoldenImageInventory,
 )
+from aptl.appliance.versioning import aptl_wheel_version
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
 from aptl.validation.participant_profile_models import (
@@ -39,9 +39,6 @@ _PAYLOAD_KINDS = frozenset(
         "participant-qualification",
         "boundary-policy",
     }
-)
-_APTL_WHEEL_RE = re.compile(
-    r"^wheelhouse/aptl_labs-(\d+\.\d+\.\d+[a-z0-9.+_]*)-[^/]+\.whl$"
 )
 
 
@@ -131,7 +128,6 @@ def _participant_binding_matches(
     manifest: ApplianceReleaseManifest,
     payloads: dict[ArtifactKind, bytes],
     profile: ParticipantProfileManifest,
-    readiness: ParticipantReadinessSuite,
     asset_lock: ParticipantAssetLock,
     qualification: ParticipantQualificationReport,
 ) -> bool:
@@ -241,7 +237,6 @@ def verify_release_evidence(
             manifest,
             payloads,
             profile,
-            readiness,
             asset_lock,
             qualification,
         )
@@ -262,9 +257,9 @@ def verify_offline_aptl_version(payload: bytes, expected_version: str) -> None:
     try:
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
             wheels = [
-                match.group(1).replace("_", "-")
+                version
                 for member in archive.getmembers()
-                if (match := _APTL_WHEEL_RE.fullmatch(member.name)) is not None
+                if (version := aptl_wheel_version(member.name)) is not None
                 and member.isfile()
             ]
             env_member = archive.getmember("appliance-release.env")

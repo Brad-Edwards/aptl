@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
+from aptl.appliance.versioning import aptl_wheel_version, is_appliance_version
+
 _ALLOWED_TOP_LEVEL = frozenset(
     {
         "wheelhouse",
@@ -23,7 +25,7 @@ _ALLOWED_TOP_LEVEL = frozenset(
     }
 )
 _SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
-_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+[a-z0-9.+-]*$")
+_INVALID_RELEASE_ENV = "invalid non-secret appliance release environment"
 
 
 class OfflinePayloadError(RuntimeError):
@@ -63,13 +65,7 @@ def _validate_staged_paths(staging: Path) -> list[Path]:
 def _wheel_version(path: Path) -> str | None:
     """Extract the normalized APTL version from one wheel filename."""
 
-    prefix = "aptl_labs-"
-    if not path.name.startswith(prefix) or path.suffix != ".whl":
-        return None
-    version, separator, _tags = path.name[len(prefix) :].partition("-")
-    if not separator or not version:
-        return None
-    return version.replace("_", "-")
+    return aptl_wheel_version(path.name)
 
 
 def _release_environment(staging: Path) -> tuple[str, str]:
@@ -78,17 +74,17 @@ def _release_environment(staging: Path) -> tuple[str, str]:
     env_text = (staging / "appliance-release.env").read_text(encoding="utf-8")
     lines = env_text.splitlines()
     if len(lines) != 2 or not env_text.endswith("\n"):
-        raise OfflinePayloadError("invalid non-secret appliance release environment")
+        raise OfflinePayloadError(_INVALID_RELEASE_ENV)
     scenario_prefix = "APTL_APPLIANCE_SCENARIO="
     version_prefix = "APTL_APPLIANCE_VERSION="
     if not lines[0].startswith(scenario_prefix) or not lines[1].startswith(
         version_prefix
     ):
-        raise OfflinePayloadError("invalid non-secret appliance release environment")
+        raise OfflinePayloadError(_INVALID_RELEASE_ENV)
     scenario = lines[0][len(scenario_prefix) :]
     version = lines[1][len(version_prefix) :]
-    if not _SCENARIO_RE.fullmatch(scenario) or not _VERSION_RE.fullmatch(version):
-        raise OfflinePayloadError("invalid non-secret appliance release environment")
+    if not _SCENARIO_RE.fullmatch(scenario) or not is_appliance_version(version):
+        raise OfflinePayloadError(_INVALID_RELEASE_ENV)
     return scenario, version
 
 
@@ -179,6 +175,15 @@ def _hash_file(path: Path) -> tuple[str, int]:
     return f"sha256:{digest.hexdigest()}", size
 
 
+def _remove_candidate(path: Path) -> None:
+    """Best-effort remove an unpublished payload candidate."""
+
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def build_offline_payload(
     staging_dir: Path,
     output_path: Path,
@@ -202,7 +207,4 @@ def build_offline_payload(
         digest, size = _hash_file(output)
         return OfflinePayloadResult(output, digest, size)
     finally:
-        try:
-            candidate.unlink(missing_ok=True)
-        except OSError:
-            pass
+        _remove_candidate(candidate)

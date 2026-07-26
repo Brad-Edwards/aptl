@@ -34,7 +34,6 @@ from aptl.appliance.models import (
     ApplianceDrillReport,
     ApplianceGuest,
     ApplianceReleaseManifest,
-    ApplianceReleaseTemplate,
     ArtifactReference,
     DeliveryAdapter,
     DeliveryParity,
@@ -42,10 +41,13 @@ from aptl.appliance.models import (
     GoldenImageInventory,
     MachineDrill,
     ParticipantReleaseBinding,
-    ParticipantTemplateBinding,
     ReleaseSource,
-    StagedArtifact,
+)
+from aptl.appliance.release_models import (
+    ApplianceReleaseTemplate,
     BoundaryTemplateBinding,
+    ParticipantTemplateBinding,
+    StagedArtifact,
 )
 from aptl.validation.participant_qualification_evidence import (
     ParticipantQualificationReport,

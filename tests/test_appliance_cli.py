@@ -128,9 +128,7 @@ def test_appliance_build_reports_bounded_failure_without_tool_stderr(
     fake_tools.mkdir()
     qemu_img = fake_tools / "qemu-img"
     qemu_img.write_text(
-        "#!/bin/sh\n"
-        "echo 'unsafe raw detail from qemu-img' >&2\n"
-        "exit 1\n"
+        "#!/bin/sh\necho 'unsafe raw detail from qemu-img' >&2\nexit 1\n"
     )
     qemu_img.chmod(0o755)
     monkeypatch.setenv("PATH", f"{fake_tools}:{os.environ['PATH']}")
@@ -211,7 +209,7 @@ def test_lab_start_forwards_offline_staged_mode(tmp_path: Path, monkeypatch) -> 
     )
 
     assert result.exit_code == 0, result.output
-    assert calls[0]["offline_staged"] is True
+    assert calls[0]["appliance"].offline_staged is True
 
 
 @pytest.mark.parametrize(

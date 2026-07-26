@@ -18,10 +18,8 @@ from aptl.appliance.manifest import (
     _write_create_once,
     verify_release_directory,
 )
-from aptl.appliance.models import (
-    ApplianceLaunchDescriptor,
-    ApplianceReleaseManifest,
-)
+from aptl.appliance.models import ApplianceReleaseManifest
+from aptl.appliance.release_models import ApplianceLaunchDescriptor
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 
 

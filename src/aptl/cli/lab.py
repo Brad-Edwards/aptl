@@ -82,7 +82,7 @@ def _confirm_destructive(skip_prompt: bool) -> bool:
 
 
 @app.command()
-def start(
+def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     project_dir: Path = typer.Option(
         Path("."),
         "--project-dir",
@@ -168,16 +168,16 @@ def start(
             err=True,
         )
         raise typer.Exit(code=2)
-    appliance_kwargs = (
-        {
-            "appliance_launch_descriptor": appliance_launch_descriptor,
-            "appliance_release_public_key": appliance_release_public_key,
-            "appliance_qualification_public_key": (appliance_qualification_public_key),
-        }
-        if appliance_launch_descriptor is not None
-        else {}
-    )
-    offline_kwargs = {"offline_staged": True} if offline_staged else {}
+    from aptl.core.lab import ApplianceStartOptions
+
+    appliance_kwargs = {}
+    if offline_staged or appliance_launch_descriptor is not None:
+        appliance_kwargs["appliance"] = ApplianceStartOptions(
+            offline_staged=offline_staged,
+            launch_descriptor=appliance_launch_descriptor,
+            release_public_key=appliance_release_public_key,
+            qualification_public_key=appliance_qualification_public_key,
+        )
     if clean:
         if not _confirm_destructive(yes):
             raise typer.Exit(code=0)
@@ -187,7 +187,6 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
-            **offline_kwargs,
             **appliance_kwargs,
         )
     else:
@@ -196,7 +195,6 @@ def start(
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
-            **offline_kwargs,
             **appliance_kwargs,
         )
 

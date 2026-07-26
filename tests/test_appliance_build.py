@@ -21,8 +21,8 @@ from aptl.appliance.build import (
     create_disposable_overlay,
 )
 from aptl.appliance.launch import canonical_launch_bytes
-from aptl.appliance.models import ApplianceLaunchDescriptor
 from aptl.appliance.models import GoldenImageInventory
+from aptl.appliance.release_models import ApplianceLaunchDescriptor
 
 
 class RecordingRunner:

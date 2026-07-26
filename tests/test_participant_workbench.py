@@ -167,23 +167,24 @@ def test_profile_renderer_rejects_missing_required_credential_alias(
         render_profile_config,
     )
 
+    arguments = {
+        "profile": ProfileId.BLUE,
+        "payload_root": tmp_path,
+        "output_dir": tmp_path / "generated",
+        "state_dir": tmp_path / "state",
+        "node_executable": Path(sys.executable),
+        "run_id": "a" * 32,
+        "credential_aliases": {
+            "INDEXER_USERNAME",
+            "INDEXER_PASSWORD",
+            "API_USERNAME",
+            "API_PASSWORD",
+            "THEHIVE_API_KEY",
+            "SHUFFLE_API_KEY",
+        },
+    }
     with pytest.raises(WorkbenchConfigurationError, match="MISP_API_KEY"):
-        render_profile_config(
-            profile=ProfileId.BLUE,
-            payload_root=tmp_path,
-            output_dir=tmp_path / "generated",
-            state_dir=tmp_path / "state",
-            node_executable=Path(sys.executable),
-            run_id="a" * 32,
-            credential_aliases={
-                "INDEXER_USERNAME",
-                "INDEXER_PASSWORD",
-                "API_USERNAME",
-                "API_PASSWORD",
-                "THEHIVE_API_KEY",
-                "SHUFFLE_API_KEY",
-            },
-        )
+        render_profile_config(**arguments)
 
 
 def test_profile_renderer_rejects_an_existing_or_symlinked_output(
@@ -203,16 +204,17 @@ def test_profile_renderer_rejects_an_existing_or_symlinked_output(
     artifact.parent.mkdir(parents=True)
     artifact.touch()
 
+    arguments = {
+        "profile": ProfileId.RED,
+        "payload_root": tmp_path,
+        "output_dir": output_dir,
+        "state_dir": tmp_path / "state",
+        "node_executable": Path(sys.executable),
+        "run_id": "a" * 32,
+        "credential_aliases": set(),
+    }
     with pytest.raises(WorkbenchConfigurationError):
-        render_profile_config(
-            profile=ProfileId.RED,
-            payload_root=tmp_path,
-            output_dir=output_dir,
-            state_dir=tmp_path / "state",
-            node_executable=Path(sys.executable),
-            run_id="a" * 32,
-            credential_aliases=set(),
-        )
+        render_profile_config(**arguments)
 
 
 def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace(

@@ -7,22 +7,32 @@ import hashlib
 import hmac
 import json
 import os
-import signal
 import stat
-import subprocess
-import threading
-import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
-from typing import Protocol
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from aptl.utils.placeholders import contains_placeholder
+from aptl.workbench.process import (
+    AgentExecutionError,
+    BoundedProcessRunner,
+    ProcessResult,
+    ProcessRunner,
+)
 from aptl.workbench.runtime import ProfileLaunch
+
+__all__ = [
+    "AgentExecutionError",
+    "BoundedProcessRunner",
+    "ClaudeCodeManagedAgentAdapter",
+    "ProcessResult",
+    "ProcessRunner",
+    "probe_mcp_server",
+]
 
 _BASE_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -34,39 +44,13 @@ _MCP_INVENTORY_TIMEOUT_SECONDS = 10
 _MAX_CONFIG_BYTES = 1_000_000
 
 
-class AgentExecutionError(RuntimeError):
-    """The installed agent or one of its selected MCP servers failed safely."""
-
-
-@dataclass(frozen=True)
-class ProcessResult:
-    """Bounded child result returned by the process runner."""
-
-    returncode: int
-    stdout: bytes
-    stderr: bytes
-
-
-class ProcessRunner(Protocol):
-    """Execute one fixed agent request without a shell."""
-
-    def run(
-        self,
-        argv: tuple[str, ...],
-        *,
-        env: dict[str, str],
-        cwd: Path,
-        stdin: bytes,
-        timeout_seconds: float,
-        max_output_bytes: int,
-    ) -> ProcessResult: ...
-
-
 InventoryProbe = Callable[[str, str, list[str], dict[str, str]], tuple[str, ...]]
 
 
 @dataclass
 class _ClaudeHandle:
+    """Mutable state for one admitted managed-agent launch."""
+
     launch: ProfileLaunch
     servers: dict[str, dict[str, object]]
     environment: dict[str, str]
@@ -75,128 +59,10 @@ class _ClaudeHandle:
     closed: bool = False
 
 
-class BoundedProcessRunner:
-    """Run a child process with bounded combined output and group teardown."""
-
-    def run(
-        self,
-        argv: tuple[str, ...],
-        *,
-        env: dict[str, str],
-        cwd: Path,
-        stdin: bytes,
-        timeout_seconds: float,
-        max_output_bytes: int,
-    ) -> ProcessResult:
-        if timeout_seconds <= 0 or max_output_bytes <= 0:
-            raise AgentExecutionError("agent process limits are invalid")
-        process = subprocess.Popen(
-            argv,
-            cwd=cwd,
-            env=env,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-        stdout = bytearray()
-        stderr = bytearray()
-        overflow = threading.Event()
-        budget = _OutputBudget(max_output_bytes)
-        readers = [
-            threading.Thread(
-                target=_drain_bounded,
-                args=(process.stdout, stdout, budget, overflow),
-                daemon=True,
-            ),
-            threading.Thread(
-                target=_drain_bounded,
-                args=(process.stderr, stderr, budget, overflow),
-                daemon=True,
-            ),
-        ]
-        for reader in readers:
-            reader.start()
-        _write_stdin(process, stdin)
-        reason = _wait_for_process(process, timeout_seconds, overflow)
-        if reason is not None:
-            _terminate_process_group(process)
-        for reader in readers:
-            reader.join(timeout=1)
-        if reason is not None:
-            raise AgentExecutionError(reason)
-        return ProcessResult(process.returncode, bytes(stdout), bytes(stderr))
-
-
-class _OutputBudget:
-    """Serialize a strict combined stdout/stderr byte budget."""
-
-    def __init__(self, limit: int) -> None:
-        self._remaining = limit
-        self._lock = threading.Lock()
-
-    def admit(self, chunk: bytes) -> tuple[bytes, bool]:
-        with self._lock:
-            admitted = chunk[: self._remaining]
-            self._remaining -= len(admitted)
-            return admitted, len(admitted) != len(chunk)
-
-
-def _drain_bounded(
-    pipe: object,
-    target: bytearray,
-    budget: _OutputBudget,
-    overflow: threading.Event,
-) -> None:
-    if pipe is None:
-        return
-    while chunk := pipe.read(8192):
-        admitted, exceeded = budget.admit(chunk)
-        target.extend(admitted)
-        if exceeded:
-            overflow.set()
-            return
-
-
-def _write_stdin(process: subprocess.Popen[bytes], data: bytes) -> None:
-    if process.stdin is None:
-        return
-    try:
-        process.stdin.write(data)
-        process.stdin.close()
-    except BrokenPipeError:
-        pass
-
-
-def _wait_for_process(
-    process: subprocess.Popen[bytes],
-    timeout_seconds: float,
-    overflow: threading.Event,
-) -> str | None:
-    deadline = time.monotonic() + timeout_seconds
-    while process.poll() is None:
-        if overflow.wait(0.02):
-            return "agent output exceeded the configured limit"
-        if time.monotonic() >= deadline:
-            return "agent request exceeded the configured timeout"
-    return None
-
-
-def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-        process.wait(timeout=1)
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.wait()
-
-
 async def _probe(
     command: str, args: list[str], environment: dict[str, str]
 ) -> tuple[str, ...]:
+    """Probe one MCP stdio server and return its advertised tool names."""
     parameters = StdioServerParameters(command=command, args=args, env=environment)
     async with stdio_client(parameters) as (read_stream, write_stream):
         async with ClientSession(
@@ -254,8 +120,9 @@ class ClaudeCodeManagedAgentAdapter:
         self._max_output_bytes = max_output_bytes
         self._max_prompt_chars = max_prompt_chars
 
+    @staticmethod
     def launch(
-        self, launch: ProfileLaunch, credentials: Mapping[str, str]
+        launch: ProfileLaunch, credentials: Mapping[str, str]
     ) -> object:
         """Admit a generated strict config and create a minimal secret lease."""
         servers, config_sha256 = _load_server_config(launch.client_config_path)
@@ -296,7 +163,7 @@ class ClaudeCodeManagedAgentAdapter:
         if not message or len(message) > self._max_prompt_chars:
             raise AgentExecutionError("participant message exceeds the configured limit")
         result = self._runner.run(
-            self._argv(active),
+            self._argv(self._executable, active),
             env=dict(active.environment),
             cwd=self._work_dir,
             stdin=message.encode(),
@@ -314,14 +181,15 @@ class ClaudeCodeManagedAgentAdapter:
         active.inventory.clear()
         active.closed = True
 
-    def _argv(self, handle: _ClaudeHandle) -> tuple[str, ...]:
+    @staticmethod
+    def _argv(executable: Path, handle: _ClaudeHandle) -> tuple[str, ...]:
         allowed = ",".join(
             f"mcp__{server_id}__{tool}"
             for server_id, tools in handle.inventory.items()
             for tool in tools
         )
         return (
-            str(self._executable),
+            str(executable),
             "--print",
             "--bare",
             "--disable-slash-commands",
@@ -344,6 +212,7 @@ class ClaudeCodeManagedAgentAdapter:
 
 
 def _admitted_executable(path: Path) -> Path:
+    """Resolve and validate a trusted installed-agent executable."""
     if not path.is_absolute():
         raise AgentExecutionError("agent executable must be absolute")
     resolved = path.resolve(strict=True)
@@ -359,6 +228,7 @@ def _admitted_executable(path: Path) -> Path:
 
 
 def _prepare_work_dir(path: Path) -> Path:
+    """Create and validate the private managed-agent work directory."""
     parent = path.parent
     try:
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -375,6 +245,7 @@ def _prepare_work_dir(path: Path) -> Path:
 
 
 def _require_private_directory(path: Path) -> None:
+    """Reject a directory that is not private and owned by this process."""
     stat = path.stat()
     if (
         path.is_symlink()
@@ -389,6 +260,7 @@ def _require_private_directory(path: Path) -> None:
 def _load_server_config(
     path: Path,
 ) -> tuple[dict[str, dict[str, object]], str]:
+    """Load and validate a private generated MCP client configuration."""
     raw = _read_private_config(path)
     try:
         document = json.loads(raw)
@@ -408,6 +280,7 @@ def _load_server_config(
 
 
 def _read_private_config(path: Path) -> bytes:
+    """Read a bounded private file without following symbolic links."""
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except OSError as exc:
@@ -433,6 +306,7 @@ def _read_private_config(path: Path) -> bytes:
 
 
 def _assert_config_unchanged(handle: _ClaudeHandle) -> None:
+    """Reject a generated configuration changed after initial admission."""
     current = hashlib.sha256(
         _read_private_config(handle.launch.client_config_path)
     ).hexdigest()
@@ -441,6 +315,7 @@ def _assert_config_unchanged(handle: _ClaudeHandle) -> None:
 
 
 def _valid_server_entry(server: object) -> bool:
+    """Return whether an MCP server entry has the required strict shape."""
     return (
         isinstance(server, dict)
         and set(server) == {"command", "args", "env"}
@@ -457,6 +332,7 @@ def _valid_server_entry(server: object) -> bool:
 
 
 def _credential_aliases(servers: dict[str, dict[str, object]]) -> set[str]:
+    """Collect credential aliases referenced by selected server environments."""
     aliases: set[str] = set()
     for server in servers.values():
         for value in server["env"].values():
@@ -468,6 +344,7 @@ def _credential_aliases(servers: dict[str, dict[str, object]]) -> set[str]:
 def _server_environment(
     server: dict[str, object], credentials: Mapping[str, str]
 ) -> dict[str, str]:
+    """Resolve one MCP server's environment from its credential lease."""
     environment = {"PATH": _BASE_ENVIRONMENT["PATH"]}
     for name, value in server["env"].items():
         if value.startswith("${") and value.endswith("}"):
@@ -479,12 +356,14 @@ def _server_environment(
 
 
 def _require_handle(handle: object) -> _ClaudeHandle:
+    """Validate and narrow an opaque managed-agent handle."""
     if not isinstance(handle, _ClaudeHandle):
         raise AgentExecutionError("unknown agent handle")
     return handle
 
 
 def _parse_agent_result(stdout: bytes) -> str:
+    """Parse the installed agent's strict JSON result envelope."""
     try:
         payload = json.loads(stdout.decode("utf-8"))
         result = payload["result"]
@@ -496,5 +375,5 @@ def _parse_agent_result(stdout: bytes) -> str:
         ):
             raise ValueError
         return result
-    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, ValueError) as exc:
+    except (UnicodeDecodeError, KeyError, ValueError) as exc:
         raise AgentExecutionError("agent returned an invalid result") from exc

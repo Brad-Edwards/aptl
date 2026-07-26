@@ -300,4 +300,5 @@ class WorkbenchRuntime:
 
 
 def _sha256_text(value: str) -> str:
+    """Return the hexadecimal SHA-256 digest of UTF-8 text."""
     return hashlib.sha256(value.encode()).hexdigest()

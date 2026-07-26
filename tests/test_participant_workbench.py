@@ -16,6 +16,10 @@ def test_profiles_expose_exactly_the_allowed_mcp_servers() -> None:
     from aptl.workbench import ProfileId, profile_for
 
     assert profile_for(ProfileId.RED).server_ids == ("aptl-red",)
+    assert profile_for(ProfileId.GUIDED_BLUE).server_ids == (
+        "aptl-indexer",
+        "aptl-wazuh",
+    )
     assert profile_for(ProfileId.BLUE).server_ids == (
         "aptl-casemgmt",
         "aptl-indexer",
@@ -77,6 +81,18 @@ def test_profiles_expose_exactly_the_allowed_mcp_servers() -> None:
             "wazuh_create_detection_rule",
         ),
     }
+    assert {
+        server.server_id: server.tool_names
+        for server in profile_for(ProfileId.GUIDED_BLUE).servers
+    } == {
+        server.server_id: server.tool_names
+        for server in profile_for(ProfileId.BLUE).servers
+        if server.server_id in {"aptl-indexer", "aptl-wazuh"}
+    }
+    assert profile_for(ProfileId.GUIDED_BLUE).bookmark_refs == (
+        "aptl-guide",
+        "soc-wazuh",
+    )
 
 
 def test_profile_renderer_keeps_credentials_out_of_client_config(
@@ -104,7 +120,6 @@ def test_profile_renderer_keeps_credentials_out_of_client_config(
         run_id="a" * 32,
         credential_aliases={
             "INDEXER_PASSWORD",
-            "WAZUH_PASSWORD",
             "MISP_API_KEY",
             "THEHIVE_API_KEY",
             "SHUFFLE_API_KEY",
@@ -144,7 +159,6 @@ def test_profile_renderer_rejects_missing_required_credential_alias(
             run_id="a" * 32,
             credential_aliases={
                 "INDEXER_PASSWORD",
-                "WAZUH_PASSWORD",
                 "THEHIVE_API_KEY",
                 "SHUFFLE_API_KEY",
             },
@@ -198,16 +212,16 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
     )
 
     red = runtime.start(ProfileId.RED)
-    blue = runtime.switch(ProfileId.BLUE)
+    blue = runtime.switch(ProfileId.GUIDED_BLUE)
 
     assert red.run_id == active_session.trace_id
     assert blue.run_id == active_session.trace_id
     assert adapter.closed_profiles == [ProfileId.RED]
     assert [launch.profile for launch in adapter.launches] == [
         ProfileId.RED,
-        ProfileId.BLUE,
+        ProfileId.GUIDED_BLUE,
     ]
-    assert credentials.prepared_profiles == [ProfileId.RED, ProfileId.BLUE]
+    assert credentials.prepared_profiles == [ProfileId.RED, ProfileId.GUIDED_BLUE]
     assert credentials.destroyed_profiles == [ProfileId.RED]
     records = (
         tmp_path / "runs" / active_session.trace_id / "workbench" / "events.jsonl"
@@ -399,6 +413,16 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
     assert view.status_code == 200
     assert view.json()["mcp_servers"] == ["aptl-red"]
     assert "docker" not in view.json()
+
+    response = client.post(
+        "/workbench/profiles/guided-blue",
+        headers={"X-APTL-Participant-Session": "seat"},
+    )
+    assert response.status_code == 200
+    view = client.get("/workbench", headers={"X-APTL-Participant-Session": "seat"})
+    assert view.json()["profile"] == "guided-blue"
+    assert view.json()["mcp_servers"] == ["aptl-indexer", "aptl-wazuh"]
+    assert view.json()["bookmarks"] == ["aptl-guide", "soc-wazuh"]
 
 
 class _FakeAdapter:

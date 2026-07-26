@@ -7,6 +7,7 @@ from typing import Optional
 import typer
 
 from aptl.cli import lab_init, lifecycle
+from aptl.cli.participant_profile import qualify_profile
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
@@ -43,6 +44,7 @@ lab_init.register(app)
 # this module stays focused; register them under `lab` (no UX change:
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
+app.command("qualify-profile")(qualify_profile)
 
 
 # Shared destructive-data warning. Both `stop --volumes` and

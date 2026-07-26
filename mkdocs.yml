@@ -117,6 +117,7 @@ nav:
     - Property-Based Parser Tests: testing/property-based-parser-tests.md
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
+    - Guided Purple Participant Profile: reference/participant-profile.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md

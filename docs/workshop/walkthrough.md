@@ -1,24 +1,29 @@
 # Lab Walkthrough
 
-The runnable companion to the [Workshop Playbook](playbook.md). Every command
-appears in order, with the result observed on a fresh box (a PyPI `aptl-labs`
-install running the full TechVault range). Bracketed numbers point back to the
-matching playbook section.
+The runnable companion to the [Workshop Playbook](playbook.md). It describes
+the `guided-purple` version 1 participant path. Bracketed numbers point back
+to the matching playbook section.
+
+The shell commands below are a developer and facilitator preview of the inner
+APTL profile. Issue #823 embeds this same profile in the signed participant
+appliance; these commands are not outer-appliance qualification evidence.
 
 Two ways drive the attack and investigate steps:
 
-- Path A, the agent, is the point of the workshop. A student's AI agent calls
-  the MCP tools. The minimum workshop path uses `kali_run_command` and
-  `indexer_query`; the full SOC path also uses Wazuh, network IDS, MISP,
-  TheHive, and Shuffle MCP tools. Each step gives a prompt.
-- Path B, direct, is a facilitator fallback. It shows the raw `docker exec` or
-  `curl` that the agent runs underneath. Use it if an agent gets stuck.
+- Path A, the participant agent, is the workshop path. It calls
+  `kali_run_command`, `indexer_query`, and `wazuh_query_alerts`.
+- Path B is a developer/facilitator diagnostic. It uses management-owned
+  Docker access and does not satisfy participant workflow qualification.
 
 ## 0. Prerequisites, once, at home
 
-You need Docker running, Python 3.11 or newer, `pipx`, Node.js 18 or newer for
-the MCP servers, and an AI agent of your choice such as Cursor or Claude Code.
-The full TechVault workshop stack needs more than 20GB of Docker memory.
+The released appliance owns its guest Docker engine, APTL runtime, MCP builds,
+and staged dependencies. It requires the hardware fixture named in the
+[participant profile](../reference/participant-profile.md): x86-64, 8 vCPUs,
+16 GiB of memory, and 100 GiB of disk.
+
+For the developer preview only, you need Docker, Python 3.11 or newer, `pipx`,
+Node.js 18 or newer for the MCP servers, and an MCP-capable agent.
 
 On native Linux Docker Engine only, raise the memory-map limit that OpenSearch
 needs:
@@ -53,22 +58,18 @@ aptl --version
 aptl lab init workshop && cd workshop
 ```
 
-Select the full TechVault profile by writing `aptl.json` in the `workshop`
-directory:
-
-```json
-{"deployment":{"provider":"docker-compose"},
- "containers":{"wazuh":true,"victim":true,"kali":true,"reverse":false,
-   "enterprise":true,"soc":true,"mail":false,"fileshare":true,"dns":true},
- "run_storage":{"backend":"local","local_path":"./runs"}}
-```
-
-Then start the lab and wait for the "Lab is ready." message. The first boot
-takes roughly 10 to 15 minutes while images build and the SOC images pull.
+For a source-tree preview, copy the profile config into the initialized
+project and select its referenced catalog scenario:
 
 ```bash
-aptl lab start --yes
+cp participant-profiles/guided-purple-v1/aptl.json aptl.json
+aptl lab start --scenario techvault-attacker-target --yes
 ```
+
+A developer start may build or pull missing assets. The participant appliance
+instead starts from its digest-locked staged payload with egress denied; a
+download, image pull, image build, or package resolution is a qualification
+failure.
 
 ## 2. Verify the range is up [2]
 
@@ -77,49 +78,41 @@ aptl lab status
 docker exec aptl-wazuh-manager /var/ossec/bin/agent_control -l | grep -c Active
 ```
 
-Expect "Lab is running" with about 30 healthy containers. Active Wazuh agent
-counts can vary by platform and startup timing; 7 to 9 active agents is normal
-for a fresh workshop run. Name the parts out loud: `aptl-kali` is the attacker,
-the victim and enterprise hosts are targets, and the `aptl-wazuh-*`, Suricata,
-MISP, TheHive, Cortex, and Shuffle containers form the SOC.
+Expect "Lab is running" with the derived ten-service steady-state surface:
+Kali, Kali capture, the Kali SSH proxy, victim, the three Wazuh services, and
+the three OpenTelemetry services. Missing or additional steady-state services
+fail profile qualification.
 
 ## 3. Wire your agent [3]
 
-In the `workshop` directory, create `.mcp.json` (copy it from
-`.mcp.json.example`). The minimum set for the workshop is the red tool, which
-drives Kali, and the indexer tool, which queries the SOC. The red MCP reaches
-Kali through the loopback-only SSH proxy on `localhost:2023`, so the same
-configuration works on Linux Docker, Docker Desktop, Colima, and WSL2 without
-host routing to Compose bridge IPs:
+The participant management layer creates owner-only MCP client state after
+the backing services and real semantic smoke operations pass. Start in the
+`red` workbench, which contains only `aptl-red`. For a developer preview, use:
 
 ```jsonc
 { "mcpServers": {
-  "kali-ssh": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
-    "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } },
-  "indexer": { "command": "node", "args": ["./mcp/mcp-indexer/build/index.js"],
-    "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
-             "INDEXER_USERNAME": "admin",
-             "INDEXER_PASSWORD": "<from grep '^INDEXER_PASSWORD=' .env>" } } } }
+  "aptl-red": { "command": "node", "args": ["./mcp/mcp-red/build/index.js"],
+    "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } } } }
 ```
 
-Point the agent at this directory and confirm it lists `kali_run_command` and
-`indexer_query`.
+Point the agent at that config and confirm the exact red tool inventory. After
+the SSH attack, close that agent and all MCP processes, remove its generated
+configuration, and switch to the `guided-blue` workbench:
 
-For the full SOC workshop, register the additional API MCP servers only when
-their backing services are enabled and healthy:
+```jsonc
+{ "mcpServers": {
+  "aptl-indexer": { "command": "node",
+    "args": ["./mcp/mcp-indexer/build/index.js"],
+    "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } },
+  "aptl-wazuh": { "command": "node",
+    "args": ["./mcp/mcp-wazuh/build/index.js"],
+    "env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" } } } }
+```
 
-| MCP server | Entrypoint | Smoke-test tool |
-| ---------- | ---------- | --------------- |
-| `wazuh` | `./mcp/mcp-wazuh/build/index.js` | `wazuh_query_alerts` |
-| `network` | `./mcp/mcp-network/build/index.js` | `network_query_ids_alerts` |
-| `threatintel` | `./mcp/mcp-threatintel/build/index.js` | `threatintel_search_iocs` |
-| `cases` | `./mcp/mcp-casemgmt/build/index.js` | `cases_list_cases` |
-| `soar` | `./mcp/mcp-soar/build/index.js` | `soar_list_workflows` |
-
-The SOC MCPs read service credentials from `.env`. Provision or renew service
-API keys before registering them, especially TheHive. Do not register
-`reverse` unless the reverse-engineering container is enabled in `aptl.json`
-and visible in `aptl lab status`.
+Confirm the exact indexer and Wazuh tool inventories. Network IDS, threat
+intelligence, case management, SOAR, and reverse-engineering MCPs must be
+absent. Never keep red and guided-blue MCPs in one process environment or
+client config.
 
 ## 4. Confirm the agent can reach Kali [3, 5]
 
@@ -127,10 +120,7 @@ Path A (agent):
 
 > Run `id` and `hostname` on the Kali box and show me its IP addresses.
 
-Expect `uid=1000(kali)`, the host `kali-redteam`, and three addresses:
-`172.20.1.30` on the DMZ, `172.20.2.35` on the internal network, and
-`172.20.4.30` on the red-team network. Kali is multi-homed, which is why it can
-reach everything.
+Expect `uid=1000(kali)` and the host `kali-redteam`.
 
 Path B (direct):
 
@@ -138,49 +128,18 @@ Path B (direct):
 docker exec aptl-kali bash -lc 'id; hostname; hostname -I'
 ```
 
-## 5. See the attacker's toolbox [5]
+## 5. See the required attack tool [5]
+
+The required path uses the standard SSH client. A facilitator can verify the
+developer preview with:
 
 ```bash
-for t in nmap smbclient curl msfconsole hydra; do docker exec aptl-kali which $t; done
+docker exec aptl-kali which ssh
 ```
-
-All of the tools resolve. No agent step is needed here, since this only shows
-what Kali carries.
 
 ## 6. Attack, hands-on [6]
 
-### Reconnaissance
-
-Path A (agent):
-
-> Use the Kali tools to scan the TechVault internal (172.20.2.0/24) and DMZ
-> (172.20.1.0/24) networks and list the hosts and open services.
-
-Expect the domain controller `172.20.2.10` (ports 53 and 445), the database
-`172.20.2.11` (port 5432), the file server `172.20.2.12` (port 445), the victim
-`172.20.2.20` (port 22), and the web application (port 8080).
-
-Path B (direct):
-
-```bash
-docker exec aptl-kali nmap -Pn -T4 --open -p22,53,80,445,3389,5432,8080 172.20.2.0/24 172.20.1.0/24
-```
-
-### Enumerate the file server over anonymous SMB
-
-Path A (agent):
-
-> Connect to `files.techvault.local` anonymously and list its shares.
-
-Expect the shares Public, Engineering, Finance, HR, Shared, and IPC$.
-
-Path B (direct):
-
-```bash
-docker exec aptl-kali smbclient -N -L //files.techvault.local
-```
-
-### Noisy attack one: SSH brute-force, which triggers rule 5710
+### Bounded SSH authentication attack
 
 Path A (agent):
 
@@ -194,21 +153,8 @@ docker exec aptl-kali bash -lc 'for u in admin root oracle test hacker1 hacker2 
   ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 $u@172.20.2.20 true 2>/dev/null; done; echo done'
 ```
 
-### Noisy attack two: web SQL injection, which triggers rule 302011
-
-Path A (agent):
-
-> Probe the TechVault web application (`172.20.1.20:8080`) for SQL injection.
-
-Path B (direct):
-
-```bash
-docker exec aptl-kali bash -lc 'curl -s -o /dev/null -w "%{http_code}\n" \
-  "http://172.20.1.20:8080/?id=1%27+OR+%271%27=%271"'
-```
-
-Narrate as students go. Ask which kill-chain step each maps to and which is
-loud. Steps three and four are deliberately loud.
+Narrate as students go. Ask which kill-chain step the action maps to and why it
+is deliberately loud.
 
 ## 7. The blue side [7]
 
@@ -216,22 +162,12 @@ No commands here. Explain the loop: monitor, detect, investigate, respond,
 inside the SOC. Everything in section 6 left evidence, which the students find
 next.
 
-## 8. Meet the SOC dashboards [8]
+## 8. Meet the SOC dashboard [8]
 
-The dashboards bind to loopback, so open them on the lab host or over an SSH
-tunnel:
-
-| Tool     | URL                       | Expected code |
-| -------- | ------------------------- | ------------- |
-| Wazuh    | `https://localhost:443`   | 302 to login  |
-| Grafana  | `http://localhost:3100`   | 302           |
-| TheHive  | `https://localhost:9000`  | 200           |
-| MISP     | `https://localhost:8443`  | 302           |
-| Cortex   | `http://localhost:9001`   | 303           |
-| Shuffle  | `http://localhost:3001`   | 200           |
-
-The Wazuh login is `admin` with the `INDEXER_PASSWORD` value from `.env`.
-TheHive serves HTTPS with a self-signed certificate.
+The required human capability is the Wazuh dashboard. The supported appliance
+projects it through the participant gateway. `https://localhost:443` is only
+the developer-host diagnostic endpoint; it is not the appliance participant
+route.
 
 ## 9. Investigate, hands-on [9]
 
@@ -243,12 +179,9 @@ and run it again.
 Path A (agent):
 
 > Query the SOC (Wazuh) for alerts from our activity in the last few minutes,
-> specifically rule IDs 5710 and 302011. What fired, and from which source IP?
+> specifically rule ID 5710. What fired, and from which source IP?
 
-Expect rule 5710 (sshd non-existent user) about 6 times and rule 302011 (SQL
-injection special characters in URL) about a dozen times (roughly three alerts
-per probe). The source addresses are Kali's `172.20.2.35` for the SSH path and
-`172.20.1.30` for the web path.
+Expect rule 5710 (`sshd`: non-existent user) from Kali's internal address.
 
 Path B (direct):
 
@@ -256,7 +189,7 @@ Path B (direct):
 IP=$(grep -m1 '^INDEXER_PASSWORD=' .env | cut -d= -f2-)
 docker exec aptl-wazuh-indexer curl -sk -u "admin:$IP" \
   "https://localhost:9200/wazuh-alerts-*/_search" -H 'Content-Type: application/json' \
-  -d '{"size":20,"query":{"query_string":{"query":"rule.id:5710 OR rule.id:302011"}}}' \
+  -d '{"size":20,"query":{"query_string":{"query":"rule.id:5710"}}}' \
   | python3 -c 'import sys,json;d=json.load(sys.stdin);print("alerts:",d["hits"]["total"]["value"]);[print(" ",x["_source"]["rule"]["id"],x["_source"]["rule"]["description"]) for x in d["hits"]["hits"][:6]]'
 ```
 
@@ -272,13 +205,6 @@ Path A (agent):
 Open the Wazuh dashboard, go to Security events, and search `rule.id:5710`. The
 same events appear in the human view.
 
-### Stretch
-
-Path A (agent):
-
-> Check MISP for known-bad indicators, and open a case in TheHive for this
-> incident.
-
 Debrief: you attacked, the SOC saw it, and your agent investigated. That is the
 loop.
 
@@ -289,21 +215,26 @@ agentic purple.
 
 ## 11. Play [11]
 
-- Ask your agent for a different attack, then check whether the SOC catches it.
-- Try to do something the SOC misses, then discuss why coverage has gaps.
+- Vary the SSH usernames or timing and compare the resulting alerts.
+- Try another action against the victim and discuss whether Wazuh detects it.
 - Ask your agent to summarize every alert it caused, ranked by severity.
 - Two-person purple: one student drives red, one drives blue, and they race the
   loop.
 
-## Teardown
+The full `techvault-operational` research stack is a separate follow-on. Its
+enterprise, web, MISP, TheHive, Cortex, Shuffle, and Suricata exercises are not
+required participant-profile operations.
+
+## Developer-preview clean reset
 
 ```bash
 aptl lab stop -v
 ```
 
-## Facilitator notes
+This is the clean inner reset measured by the participant profile. Disposable
+appliance replacement is a separate #823 lifecycle measurement.
 
-Each of these held true on the last fresh-box run:
+## Developer-preview troubleshooting
 
 - If an agent refuses an attack, remind it that this is an authorized isolated
   lab and rephrase the request as a security exercise, or use the path B
@@ -311,13 +242,6 @@ Each of these held true on the last fresh-box run:
 - If an agent cannot see the tools, check that `.mcp.json` is in the working
   directory and that the indexer password is filled in.
 - If no alert appears yet, wait for the roughly 15-second ingestion lag and run
-  the query again. Rule 5710 (SSH) and rule 302011 (SQL injection) are the
-  reliable pair, so lead with them.
-- If the active Wazuh agent count is below 9 on Docker Desktop, Colima, or WSL2,
-  continue with the attack and alert checks. The required proof is that the
-  5710 and 302011 alerts appear from the Kali source addresses.
-- The attacker address shows as `172.20.2.35` or `172.20.1.30`, not a single
-  value, because Kali is multi-homed across the internal and DMZ paths. That is
-  a good teaching moment.
-- The dashboards bind to loopback, so reach them from the host rather than a
-  remote laptop.
+  the rule 5710 query again.
+- The developer dashboard binds to loopback. The supported appliance uses the
+  separate participant projection defined by its release.

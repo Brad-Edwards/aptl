@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -101,7 +102,12 @@ _BLUE = WorkbenchProfile(
         ServerProfile(
             "aptl-indexer",
             "mcp/mcp-indexer/build/index.js",
-            ("INDEXER_PASSWORD",),
+            (
+                "INDEXER_USERNAME",
+                "INDEXER_PASSWORD",
+                "API_USERNAME",
+                "API_PASSWORD",
+            ),
             (
                 "indexer_query",
                 "indexer_create_rule",
@@ -112,7 +118,7 @@ _BLUE = WorkbenchProfile(
         ServerProfile(
             "aptl-network",
             "mcp/mcp-network/build/index.js",
-            ("INDEXER_PASSWORD",),
+            ("INDEXER_USERNAME", "INDEXER_PASSWORD"),
             (
                 "network_query_ids_alerts",
                 "network_query_dns_events",
@@ -146,7 +152,12 @@ _BLUE = WorkbenchProfile(
         ServerProfile(
             "aptl-wazuh",
             "mcp/mcp-wazuh/build/index.js",
-            ("WAZUH_PASSWORD",),
+            (
+                "INDEXER_USERNAME",
+                "INDEXER_PASSWORD",
+                "API_USERNAME",
+                "API_PASSWORD",
+            ),
             (
                 "wazuh_query_alerts",
                 "wazuh_query_logs",
@@ -222,29 +233,43 @@ def render_profile_config(
     profile: ProfileId | str,
     payload_root: Path,
     output_dir: Path,
+    state_dir: Path,
+    node_executable: Path,
     run_id: str,
     credential_aliases: Collection[str],
 ) -> Path:
-    """Render one private, credential-free client config for an active run.
+    """Render one private, standard Claude Code MCP config for an active run.
 
-    Only credential aliases are admitted here; values stay with the
-    management-owned credential broker while it starts the MCP processes.
+    Secret values stay with the management-owned credential broker. The
+    client expands only the selected aliases into the stdio server processes.
     """
     selected = profile_for(profile)
     active_run_id = _validate_run_id(run_id)
     _validate_aliases(selected, credential_aliases)
     _validate_artifacts(selected, payload_root)
+    node = node_executable.resolve(strict=True)
+    if (
+        not node_executable.is_absolute()
+        or not node.is_file()
+        or not os.access(node, os.X_OK)
+    ):
+        raise WorkbenchConfigurationError("node executable is not admissible")
+    canonical_state_dir = state_dir.resolve()
+    payload = payload_root.resolve()
 
     document = {
-        "schemaVersion": "aptl-participant-mcp-client/v1",
-        "profile": selected.profile_id.value,
-        "runId": active_run_id,
-        "policyVersion": selected.policy_version,
         "mcpServers": {
             server.server_id: {
-                "transport": "management-owned",
-                "artifactRef": server.artifact_ref,
-                "credentialAliases": list(server.credential_aliases),
+                "command": str(node),
+                "args": [str((payload / server.artifact_ref).resolve())],
+                "env": {
+                    "APTL_MCP_DISABLE_DOTENV": "1",
+                    "APTL_STATE_DIR": str(canonical_state_dir),
+                    **{
+                        alias: f"${{{alias}}}"
+                        for alias in server.credential_aliases
+                    },
+                },
             }
             for server in selected.servers
         },

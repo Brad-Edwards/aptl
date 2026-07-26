@@ -60,12 +60,13 @@ wheels = [
 
 [[package]]
 name = "aptl-labs"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aces-sdl" },
     { name = "cryptography" },
     { name = "icontract" },
+    { name = "mcp" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -112,6 +113,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "icontract", specifier = ">=2.6.0,<3.0" },
+    { name = "mcp", specifier = ">=1.27.0,<2.0.0" },
     { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "opentelemetry-api", specifier = ">=1.33.0" },

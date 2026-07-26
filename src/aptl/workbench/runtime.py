@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Collection, Mapping
+from threading import RLock
 from typing import Protocol
 
 from aptl.core.runstore import RunStorageBackend
@@ -35,11 +37,15 @@ class ProfileLaunch:
 class ManagedAgentAdapter(Protocol):
     """Owns installed-agent and MCP process start/stop inside management."""
 
-    def launch(self, launch: ProfileLaunch) -> object: ...
+    def launch(
+        self, launch: ProfileLaunch, credentials: Mapping[str, str]
+    ) -> object: ...
 
     def close(self, handle: object) -> None: ...
 
     def list_tools(self, handle: object) -> Mapping[str, Collection[str]]: ...
+
+    def respond(self, handle: object, message: str) -> str: ...
 
 
 class SessionCredentialBroker(Protocol):
@@ -47,7 +53,7 @@ class SessionCredentialBroker(Protocol):
 
     def prepare(
         self, profile: ProfileId, run_id: str, aliases: tuple[str, ...]
-    ) -> None: ...
+    ) -> Mapping[str, str]: ...
 
     def destroy(self, profile: ProfileId, run_id: str) -> None: ...
 
@@ -75,27 +81,57 @@ class WorkbenchRuntime:
         payload_root: Path,
         generated_config_dir: Path,
         credential_broker: SessionCredentialBroker,
+        node_executable: Path = Path("/usr/bin/node"),
     ) -> None:
         self._session_manager = session_manager
         self._adapter = adapter
         self._run_store = run_store
         self._payload_root = payload_root
         self._generated_config_dir = generated_config_dir
+        self._prepare_generated_config_parent()
         self._credential_broker = credential_broker
+        self._node_executable = node_executable
         self._current: _ActiveProfile | None = None
+        self._lock = RLock()
+
+    def _prepare_generated_config_parent(self) -> None:
+        """Establish the trusted base used by no-follow config creation."""
+        parent = self._generated_config_dir.parent
+        try:
+            parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        except OSError as exc:
+            raise WorkbenchStateError(
+                "managed configuration directory is unavailable"
+            ) from exc
+        stat = parent.stat()
+        if (
+            parent.is_symlink()
+            or not parent.is_dir()
+            or stat.st_uid not in {0, os.getuid()}
+            or stat.st_mode & 0o022
+            or not os.access(parent, os.W_OK | os.X_OK)
+        ):
+            raise WorkbenchStateError(
+                "managed configuration directory is unavailable"
+            )
 
     @property
     def current_launch(self) -> ProfileLaunch | None:
         """Expose only non-secret state for the participant browser projection."""
-        return self._current.launch if self._current is not None else None
+        with self._lock:
+            return self._current.launch if self._current is not None else None
 
     def start(self, profile: ProfileId | str) -> ProfileLaunch:
         """Launch the selected compartment for the active scenario trace."""
+        with self._lock:
+            return self._start(profile)
+
+    def _start(self, profile: ProfileId | str) -> ProfileLaunch:
         if self._current is not None:
             raise WorkbenchStateError("a participant profile is already running")
         selected = profile_for(profile)
         run_id = self._active_trace_id()
-        self._credential_broker.prepare(
+        credentials = self._credential_broker.prepare(
             selected.profile_id, run_id, selected.credential_aliases
         )
         try:
@@ -103,6 +139,8 @@ class WorkbenchRuntime:
                 profile=selected.profile_id,
                 payload_root=self._payload_root,
                 output_dir=self._generated_config_dir,
+                state_dir=self._session_manager.state_dir,
+                node_executable=self._node_executable,
                 run_id=run_id,
                 credential_aliases=selected.credential_aliases,
             )
@@ -116,7 +154,7 @@ class WorkbenchRuntime:
             policy_version=selected.policy_version,
         )
         try:
-            handle = self._adapter.launch(launch)
+            handle = self._adapter.launch(launch, credentials)
         except Exception:
             try:
                 self._credential_broker.destroy(selected.profile_id, run_id)
@@ -132,7 +170,7 @@ class WorkbenchRuntime:
         except Exception as exc:
             self._record("inventory_failed", launch)
             try:
-                self.close()
+                self._close()
             except WorkbenchStateError as cleanup_error:
                 raise WorkbenchStateError(
                     "MCP tool inventory verification failed and cleanup remains incomplete"
@@ -141,15 +179,50 @@ class WorkbenchRuntime:
         self._record("started", launch)
         return launch
 
+    def respond(self, message: str) -> str:
+        """Run one participant message through the selected managed adapter."""
+        with self._lock:
+            return self._respond(message)
+
+    def _respond(self, message: str) -> str:
+        if self._current is None:
+            raise WorkbenchStateError("no participant profile is running")
+        active = self._current
+        try:
+            response = self._adapter.respond(active.handle, message)
+        except Exception as exc:
+            self._record(
+                "agent_turn_failed",
+                active.launch,
+                {"request_sha256": _sha256_text(message)},
+            )
+            raise WorkbenchStateError("participant agent request failed") from exc
+        self._record(
+            "agent_turn",
+            active.launch,
+            {
+                "request_sha256": _sha256_text(message),
+                "response_sha256": _sha256_text(response),
+                "request_chars": len(message),
+                "response_chars": len(response),
+            },
+        )
+        return response
+
     def switch(self, profile: ProfileId | str) -> ProfileLaunch:
         """Perform a purple transition by closing before starting another profile."""
-        selected = profile_for(profile)
-        if self._current is not None:
-            self.close()
-        return self.start(selected.profile_id)
+        with self._lock:
+            selected = profile_for(profile)
+            if self._current is not None:
+                self._close()
+            return self._start(selected.profile_id)
 
     def close(self) -> None:
         """Close the current profile; a failed cleanup blocks any replacement."""
+        with self._lock:
+            self._close()
+
+    def _close(self) -> None:
         if self._current is None:
             raise WorkbenchStateError("no participant profile is running")
         active = self._current
@@ -187,18 +260,24 @@ class WorkbenchRuntime:
             raise WorkbenchStateError("an active scenario with a trace id is required")
         return session.trace_id
 
-    def _record(self, event: str, launch: ProfileLaunch) -> None:
+    def _record(
+        self,
+        event: str,
+        launch: ProfileLaunch,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        record: dict[str, object] = {
+            "event": event,
+            "profile": launch.profile.value,
+            "policy_version": launch.policy_version,
+            "run_id": launch.run_id,
+        }
+        if details is not None:
+            record.update(details)
         self._run_store.append_jsonl(
             launch.run_id,
             "workbench/events.jsonl",
-            [
-                {
-                    "event": event,
-                    "profile": launch.profile.value,
-                    "policy_version": launch.policy_version,
-                    "run_id": launch.run_id,
-                }
-            ],
+            [record],
         )
 
     def _remove_generated_config(self, launch: ProfileLaunch) -> None:
@@ -218,3 +297,7 @@ class WorkbenchRuntime:
             return exc
         active.config_removed = True
         return None
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()

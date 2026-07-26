@@ -1,5 +1,12 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { describe, it, expect } from 'vitest';
-import { substituteEnvVars, parseDotEnv } from '../src/config.js';
+import {
+  environmentForConfig,
+  substituteEnvVars,
+  parseDotEnv,
+} from '../src/config.js';
 
 describe('substituteEnvVars', () => {
   it('substitutes a single variable', () => {
@@ -183,5 +190,47 @@ describe('parseDotEnv', () => {
       API_USERNAME: 'wazuh-wui',
       API_PASSWORD: 'WazuhPass123!',
     });
+  });
+});
+
+describe('environmentForConfig', () => {
+  it('does not read an ancestor .env for an appliance-managed process', () => {
+    const root = mkdtempSync(join(tmpdir(), 'aptl-mcp-config-'));
+    try {
+      const configDir = join(root, 'mcp', 'server');
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(join(root, '.env'), 'BLUE_SECRET=from-dotenv\n');
+
+      const env = environmentForConfig(
+        join(configDir, 'docker-lab-config.json'),
+        {
+          APTL_MCP_DISABLE_DOTENV: '1',
+          EXPLICIT_SECRET: 'from-process',
+        },
+      );
+
+      expect(env.BLUE_SECRET).toBeUndefined();
+      expect(env.EXPLICIT_SECRET).toBe('from-process');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('retains ancestor .env defaults for existing developer launches', () => {
+    const root = mkdtempSync(join(tmpdir(), 'aptl-mcp-config-'));
+    try {
+      const configDir = join(root, 'mcp', 'server');
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(join(root, '.env'), 'SERVICE_SECRET=from-dotenv\n');
+
+      const env = environmentForConfig(
+        join(configDir, 'docker-lab-config.json'),
+        { SERVICE_SECRET: 'explicit-wins' },
+      );
+
+      expect(env.SERVICE_SECRET).toBe('explicit-wins');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

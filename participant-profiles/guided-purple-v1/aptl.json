@@ -1,0 +1,20 @@
+{
+  "deployment": {
+    "provider": "docker-compose"
+  },
+  "containers": {
+    "wazuh": true,
+    "victim": true,
+    "kali": true,
+    "reverse": false,
+    "enterprise": false,
+    "soc": false,
+    "mail": false,
+    "fileshare": false,
+    "dns": false
+  },
+  "run_storage": {
+    "backend": "local",
+    "local_path": "./runs"
+  }
+}

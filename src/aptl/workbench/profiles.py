@@ -23,6 +23,7 @@ class ProfileId(str, Enum):
     """The only participant capability compartments admitted by this release."""
 
     RED = "red"
+    GUIDED_BLUE = "guided-blue"
     BLUE = "blue"
 
 
@@ -82,6 +83,44 @@ _RED = WorkbenchProfile(
         ),
     ),
     bookmark_refs=("aptl-guide", "kali-desktop"),
+)
+
+_GUIDED_BLUE = WorkbenchProfile(
+    profile_id=ProfileId.GUIDED_BLUE,
+    servers=(
+        ServerProfile(
+            "aptl-indexer",
+            "mcp/mcp-indexer/build/index.js",
+            (
+                "INDEXER_USERNAME",
+                "INDEXER_PASSWORD",
+                "API_USERNAME",
+                "API_PASSWORD",
+            ),
+            (
+                "indexer_query",
+                "indexer_create_rule",
+                "indexer_restart_manager",
+                "indexer_get_rule_file",
+            ),
+        ),
+        ServerProfile(
+            "aptl-wazuh",
+            "mcp/mcp-wazuh/build/index.js",
+            (
+                "INDEXER_USERNAME",
+                "INDEXER_PASSWORD",
+                "API_USERNAME",
+                "API_PASSWORD",
+            ),
+            (
+                "wazuh_query_alerts",
+                "wazuh_query_logs",
+                "wazuh_create_detection_rule",
+            ),
+        ),
+    ),
+    bookmark_refs=("aptl-guide", "soc-wazuh"),
 )
 
 _BLUE = WorkbenchProfile(
@@ -168,7 +207,9 @@ _BLUE = WorkbenchProfile(
     bookmark_refs=("aptl-guide", "soc-wazuh", "soc-thehive", "soc-misp", "soc-shuffle"),
 )
 
-_PROFILES = {profile.profile_id: profile for profile in (_RED, _BLUE)}
+_PROFILES = {
+    profile.profile_id: profile for profile in (_RED, _GUIDED_BLUE, _BLUE)
+}
 
 
 def profile_for(profile: ProfileId | str) -> WorkbenchProfile:

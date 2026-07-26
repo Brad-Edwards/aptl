@@ -77,32 +77,31 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
+        failures: list[str] = []
         if build_context is None and not self._offline_staged:
-            return []
+            return failures
         inspect_result = self._run(
             ["docker", "image", "inspect", image_ref], timeout=30
         )
-        if inspect_result.returncode == 0:
-            return []
-        if self._offline_staged:
-            return [f"required staged generic base image is missing: {image_ref}"]
-        if build_context is None:
-            return []
-        build_result = self._run(
-            [
-                "docker",
-                "build",
-                "-t",
-                image_ref,
-                str(self._project_dir / build_context),
-            ],
-            timeout=600,
-        )
-        return (
-            []
-            if build_result.returncode == 0
-            else [f"failed to build generic base image {image_ref}"]
-        )
+        if inspect_result.returncode != 0:
+            if self._offline_staged:
+                failures.append(
+                    f"required staged generic base image is missing: {image_ref}"
+                )
+            elif build_context is not None:
+                build_result = self._run(
+                    [
+                        "docker",
+                        "build",
+                        "-t",
+                        image_ref,
+                        str(self._project_dir / build_context),
+                    ],
+                    timeout=600,
+                )
+                if build_result.returncode != 0:
+                    failures.append(f"failed to build generic base image {image_ref}")
+        return failures
 
     def start_base_container(self, spec: "BaseContainerSpec") -> None:
         """Start a node's generic base container (ADR-048).

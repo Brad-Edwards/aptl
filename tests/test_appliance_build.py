@@ -239,14 +239,16 @@ def test_disposable_overlay_rejects_writable_or_tampered_golden(
         overlay_path="overlay.qcow2",
     )
 
+    runner = RecordingRunner()
     with pytest.raises(ApplianceBuildError, match="read-only"):
-        create_disposable_overlay(tmp_path, request, runner=RecordingRunner())
+        create_disposable_overlay(tmp_path, request, runner=runner)
 
     golden.chmod(0o644)
     golden.write_bytes(b"tampered")
     golden.chmod(0o444)
+    runner = RecordingRunner()
     with pytest.raises(ApplianceBuildError, match="digest"):
-        create_disposable_overlay(tmp_path, request, runner=RecordingRunner())
+        create_disposable_overlay(tmp_path, request, runner=runner)
 
 
 def test_disposable_overlay_never_replaces_existing_output(tmp_path: Path) -> None:
@@ -262,8 +264,9 @@ def test_disposable_overlay_never_replaces_existing_output(tmp_path: Path) -> No
         overlay_path="overlay.qcow2",
     )
 
+    runner = RecordingRunner()
     with pytest.raises(ApplianceBuildError, match="already exists"):
-        create_disposable_overlay(tmp_path, request, runner=RecordingRunner())
+        create_disposable_overlay(tmp_path, request, runner=runner)
 
     assert overlay.read_bytes() == b"active state"
 

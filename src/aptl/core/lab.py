@@ -983,58 +983,64 @@ def _configure_verified_appliance_launch(
         or ctx.appliance_qualification_public_key is None
         or ctx.backend is None
     ):
-        return LabResult(
+        result = LabResult(
             success=False,
             error="Appliance launch inputs are incomplete.",
         )
-    from aptl.appliance.launch import verify_launch_descriptor
-    from aptl.appliance.manifest import ApplianceManifestError
-    from aptl.core.appliance_boundary import ApplianceBoundaryBinding
+    else:
+        from aptl.appliance.launch import verify_launch_descriptor
+        from aptl.core.appliance_boundary import ApplianceBoundaryBinding
 
-    try:
-        launch = verify_launch_descriptor(
-            descriptor_path,
-            ctx.appliance_release_public_key,
-            ctx.appliance_qualification_public_key,
-        )
-        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        daemon = subprocess.run(
-            ["docker", "info", "--format", "{{.ID}}"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        ).stdout.strip()
-        if not boot_id or not daemon:
-            raise ValueError("runtime identity is unavailable")
-        descriptor = launch.descriptor
-        binding = ApplianceBoundaryBinding(
-            policy_digest=descriptor.boundary_policy_digest,
-            payload_digest=descriptor.payload_digest,
-            aces_plan_digest=descriptor.participant_routes_digest,
-            aces_boundary_required=True,
-            boundary_helper_image=descriptor.boundary_helper_image,
-            egress_proxy_image=descriptor.egress_proxy_image,
-            boot_id=boot_id,
-            guest_daemon_id=daemon,
-            host_observation_id=descriptor.host_observation_id,
-        )
-        ctx.backend.configure_appliance_boundary(
-            launch.boundary_policy,
-            binding,
-        )
-    except (
-        ApplianceManifestError,
-        OSError,
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        ValueError,
-    ):
-        return LabResult(
-            success=False,
-            error="Verified appliance launch binding failed.",
-        )
-    return None
+        try:
+            launch = verify_launch_descriptor(
+                descriptor_path,
+                ctx.appliance_release_public_key,
+                ctx.appliance_qualification_public_key,
+            )
+            boot_id = _read_appliance_boot_id()
+            daemon = subprocess.run(
+                ["docker", "info", "--format", "{{.ID}}"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            ).stdout.strip()
+            if not boot_id or not daemon:
+                raise ValueError("runtime identity is unavailable")
+            descriptor = launch.descriptor
+            binding = ApplianceBoundaryBinding(
+                policy_digest=descriptor.boundary_policy_digest,
+                payload_digest=descriptor.payload_digest,
+                aces_plan_digest=descriptor.participant_routes_digest,
+                aces_boundary_required=True,
+                boundary_helper_image=descriptor.boundary_helper_image,
+                egress_proxy_image=descriptor.egress_proxy_image,
+                boot_id=boot_id,
+                guest_daemon_id=daemon,
+                host_observation_id=descriptor.host_observation_id,
+            )
+            ctx.backend.configure_appliance_boundary(
+                launch.boundary_policy,
+                binding,
+            )
+            result = None
+        except (
+            OSError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            ValueError,
+        ):
+            result = LabResult(
+                success=False,
+                error="Verified appliance launch binding failed.",
+            )
+    return result
+
+
+def _read_appliance_boot_id() -> str:
+    """Read the Linux guest boot identity used by boundary enforcement."""
+
+    return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
 
 
 def _load_stateful_artifact_ownership(

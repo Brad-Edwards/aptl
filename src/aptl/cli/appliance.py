@@ -34,10 +34,14 @@ app = typer.Typer(help="Build and verify signed disposable appliance releases.")
 
 
 def _emit(payload: dict[str, object]) -> None:
+    """Emit one stable machine-readable success record."""
+
     typer.echo(json.dumps(payload, separators=(",", ":"), sort_keys=True))
 
 
 def _fail(message: str, exc: Exception) -> None:
+    """Emit one bounded error and terminate the command."""
+
     typer.echo(f"error: {message}", err=True)
     raise typer.Exit(code=2) from exc
 
@@ -240,6 +244,8 @@ def _verified_inspection(
     public_key: Path,
     qualification_public_key: Path,
 ) -> ApplianceReleaseInspection:
+    """Verify a release or translate its bounded error to the CLI."""
+
     try:
         return verify_release_directory(
             release_dir,

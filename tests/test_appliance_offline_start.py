@@ -226,6 +226,10 @@ def test_verified_launch_payload_is_bound_before_scenario_realization(
         appliance_qualification_public_key=tmp_path / "qualification-public.pem",
         backend=backend,
     )
+    monkeypatch.setattr(
+        "aptl.core.lab._read_appliance_boot_id",
+        lambda: "guest-boot",
+    )
 
     with patch("aptl.core.lab.subprocess.run") as run:
         run.return_value = subprocess.CompletedProcess(

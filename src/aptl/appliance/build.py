@@ -16,12 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aptl.appliance.models import ApplianceLaunchDescriptor, GoldenImageInventory
 
+_SHA256_PATTERN = r"^sha256:[a-f0-9]{64}$"
+
 
 class ApplianceBuildError(RuntimeError):
     """A golden image could not be built without weakening its contract."""
 
 
 def _safe_relative_path(value: str) -> str:
+    """Validate a contained, normalized POSIX request path."""
+
     path = PurePosixPath(value)
     if (
         not value
@@ -43,13 +47,13 @@ class GoldenImageBuildRequest(BaseModel):
 
     schema_version: Literal["aptl.golden-image-build/v1"]
     base_image_path: str
-    base_image_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    base_image_digest: str = Field(pattern=_SHA256_PATTERN)
     offline_payload_path: str
-    offline_payload_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    offline_payload_digest: str = Field(pattern=_SHA256_PATTERN)
     provisioner_path: str
-    provisioner_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    provisioner_digest: str = Field(pattern=_SHA256_PATTERN)
     scanner_path: str
-    scanner_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    scanner_digest: str = Field(pattern=_SHA256_PATTERN)
     output_image_path: str
     inventory_output_path: str
     virtual_size_bytes: int = Field(ge=100 * 1024**3)
@@ -81,9 +85,9 @@ class OverlayCreateRequest(BaseModel):
 
     schema_version: Literal["aptl.overlay-create/v1"]
     golden_image_path: str
-    golden_image_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    golden_image_digest: str = Field(pattern=_SHA256_PATTERN)
     launch_descriptor_path: str
-    launch_descriptor_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    launch_descriptor_digest: str = Field(pattern=_SHA256_PATTERN)
     overlay_path: str
 
     @field_validator("golden_image_path", "launch_descriptor_path", "overlay_path")
@@ -117,6 +121,8 @@ class CommandRunner(Protocol):
 
 
 def _run_command(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run one fixed-argument image tool command with bounded capture."""
+
     return subprocess.run(
         argv,
         check=True,
@@ -133,6 +139,8 @@ def _verified_input(
     *,
     label: str,
 ) -> Path:
+    """Resolve and digest-check a regular contained build input."""
+
     try:
         path = root / relative_path
         parent = path.parent.resolve(strict=True)
@@ -148,6 +156,8 @@ def _verified_input(
 
 
 def _output_path(root: Path, relative_path: str) -> Path:
+    """Resolve an output beneath a create-once owner-only parent."""
+
     output = root / relative_path
     parent = output.parent
     parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -168,6 +178,8 @@ def _build_commands(
     candidate: Path,
     virtual_size_bytes: int,
 ) -> tuple[list[str], ...]:
+    """Return the complete fixed-argument offline image build sequence."""
+
     return (
         [
             "qemu-img",
@@ -218,6 +230,8 @@ def _build_commands(
 
 
 def _file_identity(path: Path, *, nofollow: bool = False) -> tuple[str, int]:
+    """Stream one regular file into its SHA-256 identity and size."""
+
     digest = hashlib.sha256()
     size = 0
     flags = os.O_RDONLY | os.O_CLOEXEC
@@ -234,6 +248,50 @@ def _file_identity(path: Path, *, nofollow: bool = False) -> tuple[str, int]:
     return f"sha256:{digest.hexdigest()}", size
 
 
+def _build_inputs(
+    root: Path,
+    request: GoldenImageBuildRequest,
+) -> tuple[Path, Path, Path, Path]:
+    """Resolve and verify every checksum-pinned build input."""
+
+    return (
+        _verified_input(
+            root,
+            request.base_image_path,
+            request.base_image_digest,
+            label="base image",
+        ),
+        _verified_input(
+            root,
+            request.offline_payload_path,
+            request.offline_payload_digest,
+            label="offline payload",
+        ),
+        _verified_input(
+            root,
+            request.provisioner_path,
+            request.provisioner_digest,
+            label="provisioner",
+        ),
+        _verified_input(
+            root,
+            request.scanner_path,
+            request.scanner_digest,
+            label="golden image scanner",
+        ),
+    )
+
+
+def _remove_candidates(paths: tuple[Path, ...]) -> None:
+    """Best-effort remove build candidates without masking the build result."""
+
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def build_golden_image(
     build_root: Path,
     request: GoldenImageBuildRequest,
@@ -243,30 +301,7 @@ def build_golden_image(
     """Create a new read-only image; never edit or replace an existing release."""
 
     root = build_root.resolve()
-    base = _verified_input(
-        root,
-        request.base_image_path,
-        request.base_image_digest,
-        label="base image",
-    )
-    payload = _verified_input(
-        root,
-        request.offline_payload_path,
-        request.offline_payload_digest,
-        label="offline payload",
-    )
-    provisioner = _verified_input(
-        root,
-        request.provisioner_path,
-        request.provisioner_digest,
-        label="provisioner",
-    )
-    scanner = _verified_input(
-        root,
-        request.scanner_path,
-        request.scanner_digest,
-        label="golden image scanner",
-    )
+    base, payload, provisioner, scanner = _build_inputs(root, request)
     output = _output_path(root, request.output_image_path)
     inventory_output = _output_path(root, request.inventory_output_path)
     if (
@@ -322,11 +357,7 @@ def build_golden_image(
                 pass
         raise ApplianceBuildError("golden image build failed") from exc
     finally:
-        for path in (candidate, inventory_candidate):
-            try:
-                path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        _remove_candidates((candidate, inventory_candidate))
 
 
 def create_disposable_overlay(

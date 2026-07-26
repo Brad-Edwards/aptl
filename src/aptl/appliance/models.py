@@ -17,7 +17,7 @@ from pydantic import (
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _IMAGE_DIGEST_RE = re.compile(r"^[a-z0-9][a-z0-9._/:~-]{0,254}@sha256:[a-f0-9]{64}$")
 _COMMIT_RE = re.compile(r"^[a-f0-9]{40}(?:[a-f0-9]{24})?$")
-_VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+){2}(?:[a-z0-9.+-]*)?$")
+_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+[a-z0-9.+-]*$")
 _IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 
 ArtifactKind = Literal[
@@ -53,18 +53,24 @@ class _StrictModel(BaseModel):
 
 
 def _validate_digest(value: str) -> str:
+    """Validate a canonical lowercase SHA-256 identity."""
+
     if not _DIGEST_RE.fullmatch(value):
         raise ValueError("digest must be sha256 followed by lowercase hexadecimal")
     return value
 
 
 def _validate_identifier(value: str) -> str:
+    """Validate a bounded lowercase release identifier."""
+
     if not _IDENTIFIER_RE.fullmatch(value):
         raise ValueError("invalid release identifier")
     return value
 
 
 def _validate_relative_path(value: str) -> str:
+    """Validate a normalized relative POSIX path."""
+
     path = PurePosixPath(value)
     if (
         not value
@@ -421,122 +427,10 @@ class ApplianceManifestSignature(_StrictModel):
         return _validate_digest(value)
 
 
-class StagedArtifact(_StrictModel):
-    """One release input whose digest and size are derived during preparation."""
-
-    artifact_id: str
-    kind: ArtifactKind
-    path: str
-
-    @field_validator("artifact_id")
-    @classmethod
-    def validate_artifact_id(cls, value: str) -> str:
-        return _validate_identifier(value)
-
-    @field_validator("path")
-    @classmethod
-    def validate_path(cls, value: str) -> str:
-        return _validate_relative_path(value)
-
-
-class ParticipantTemplateBinding(_StrictModel):
-    """APP-2 identity; preparation derives all content digests."""
-
-    profile_id: str
-    profile_version: int = Field(ge=1)
-
-    @field_validator("profile_id")
-    @classmethod
-    def validate_profile_id(cls, value: str) -> str:
-        return _validate_identifier(value)
-
-
-class BoundaryTemplateBinding(_StrictModel):
-    """APP-1 helper identities; preparation derives the policy digest."""
-
-    boundary_helper_image: str
-    egress_proxy_image: str
-
-    @field_validator("boundary_helper_image", "egress_proxy_image")
-    @classmethod
-    def validate_image_digest(cls, value: str) -> str:
-        if not _IMAGE_DIGEST_RE.fullmatch(value):
-            raise ValueError("release helper images must use immutable digests")
-        return value
-
-
-class ApplianceReleaseTemplate(_StrictModel):
-    """Human-authored release metadata separated from derived identities."""
-
-    schema_version: Literal["aptl.appliance-release-template/v1"]
-    release_id: str
-    source: ReleaseSource
-    guest: ApplianceGuest
-    artifacts: tuple[StagedArtifact, ...]
-    participant: ParticipantTemplateBinding
-    boundary: BoundaryTemplateBinding
-    host_prerequisites: HostPrerequisites
-    delivery: DeliveryParity
-    upgrade_strategy: Literal["replace-golden-create-overlay"]
-
-    @field_validator("release_id")
-    @classmethod
-    def validate_release_id(cls, value: str) -> str:
-        return _validate_identifier(value)
-
-    @model_validator(mode="after")
-    def validate_template(self) -> ApplianceReleaseTemplate:
-        ids = [artifact.artifact_id for artifact in self.artifacts]
-        paths = [artifact.path for artifact in self.artifacts]
-        kinds = [artifact.kind for artifact in self.artifacts]
-        if len(ids) != len(set(ids)) or len(paths) != len(set(paths)):
-            raise ValueError("staged artifact ids and paths must be unique")
-        if set(kinds) != _REQUIRED_ARTIFACT_KINDS or len(kinds) != len(
-            _REQUIRED_ARTIFACT_KINDS
-        ):
-            raise ValueError("template does not contain the required artifact kinds")
-        if self.guest.architecture != self.host_prerequisites.architecture:
-            raise ValueError("guest and host architecture must match")
-        return self
-
-
-class ApplianceLaunchDescriptor(_StrictModel):
-    """Create-once projection that carries a verified release into first boot."""
-
-    schema_version: Literal["aptl.appliance-launch/v1"]
-    release_dir: str
-    release_id: str
-    aptl_version: str
-    manifest_digest: str
-    payload_digest: str
-    golden_image_digest: str
-    boundary_policy_path: str
-    boundary_policy_digest: str
-    boundary_helper_image: str
-    egress_proxy_image: str
-    participant_routes_digest: str
-    host_observation_id: str
-
-    @field_validator("release_dir", "boundary_policy_path")
-    @classmethod
-    def validate_paths(cls, value: str) -> str:
-        return _validate_relative_path(value)
-
-    @field_validator(
-        "manifest_digest",
-        "payload_digest",
-        "golden_image_digest",
-        "boundary_policy_digest",
-        "participant_routes_digest",
-        "host_observation_id",
-    )
-    @classmethod
-    def validate_launch_digests(cls, value: str) -> str:
-        return _validate_digest(value)
-
-    @field_validator("boundary_helper_image", "egress_proxy_image")
-    @classmethod
-    def validate_launch_images(cls, value: str) -> str:
-        if not _IMAGE_DIGEST_RE.fullmatch(value):
-            raise ValueError("launch helper images must use immutable digests")
-        return value
+from aptl.appliance.release_models import (  # noqa: E402
+    ApplianceLaunchDescriptor as ApplianceLaunchDescriptor,
+    ApplianceReleaseTemplate as ApplianceReleaseTemplate,
+    BoundaryTemplateBinding as BoundaryTemplateBinding,
+    ParticipantTemplateBinding as ParticipantTemplateBinding,
+    StagedArtifact as StagedArtifact,
+)

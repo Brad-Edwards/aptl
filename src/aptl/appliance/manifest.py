@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import io
 import os
-import re
 import secrets
-import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PublicKey,
 )
 
+from aptl.appliance.errors import ApplianceManifestError
 from aptl.appliance.models import (
     ApplianceBoundaryReleaseBinding,
     ApplianceDrillReport,
@@ -28,25 +26,24 @@ from aptl.appliance.models import (
     ApplianceReleaseTemplate,
     ArtifactKind,
     ArtifactReference,
-    GoldenImageInventory,
     ParticipantReleaseBinding,
 )
-from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
-from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
-from aptl.validation.participant_profile_models import (
-    ParticipantAssetLock,
-    ParticipantProfileManifest,
-    ParticipantReadinessSuite,
+from aptl.appliance.release_validation import (
+    compute_payload_digest,
+    read_release_artifact as _read_release_artifact,
+    verify_artifacts as _verify_artifacts,
+    verify_offline_aptl_version as _verify_offline_aptl_version,
+    verify_release_evidence as _verify_release_evidence,
 )
+from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.validation.participant_qualification_evidence import (
-    ParticipantQualificationError,
     ParticipantQualificationReport,
     verify_participant_qualification_attestation,
 )
 
-
-class ApplianceManifestError(ValueError):
-    """The appliance manifest or its release signature is invalid."""
+_MANIFEST_NAME = "manifest.json"
+_SIGNATURE_NAME = "manifest.sig.json"
+_MISSING_RELEASE = "appliance release directory is missing"
 
 
 @dataclass(frozen=True)
@@ -71,47 +68,6 @@ def canonical_manifest_bytes(manifest: ApplianceReleaseManifest) -> bytes:
     return rfc8785.dumps(manifest.model_dump(mode="json"))
 
 
-_PAYLOAD_KINDS = frozenset(
-    {
-        "golden-disk",
-        "offline-payload",
-        "participant-profile",
-        "participant-readiness",
-        "participant-asset-lock",
-        "participant-qualification",
-        "boundary-policy",
-    }
-)
-
-
-def compute_payload_digest(artifacts: tuple[ArtifactReference, ...]) -> str:
-    """Bind guest bytes and reused APP-1/APP-2 identities into one digest."""
-
-    projection = [
-        {
-            "artifact_id": artifact.artifact_id,
-            "kind": artifact.kind,
-            "path": artifact.path,
-            "sha256": artifact.sha256,
-            "size_bytes": artifact.size_bytes,
-        }
-        for artifact in sorted(artifacts, key=lambda item: item.artifact_id)
-        if artifact.kind in _PAYLOAD_KINDS
-    ]
-    if {item["kind"] for item in projection} != _PAYLOAD_KINDS:
-        raise ApplianceManifestError("payload artifact set is incomplete")
-    return f"sha256:{hashlib.sha256(rfc8785.dumps(projection)).hexdigest()}"
-
-
-def _read_release_artifact(root: Path, relative_path: str) -> bytes:
-    try:
-        return read_contained_nofollow(root, relative_path)
-    except (OSError, PathContainmentError, ValueError) as exc:
-        raise ApplianceManifestError(
-            f"unsafe release artifact: {relative_path}"
-        ) from exc
-
-
 def describe_artifact(
     root: Path,
     *,
@@ -134,6 +90,8 @@ def describe_artifact(
 
 
 def _read_external_file(path: Path, *, label: str) -> bytes:
+    """Read an external trust input without following its final symlink."""
+
     try:
         flags = os.O_RDONLY | os.O_CLOEXEC
         if hasattr(os, "O_NOFOLLOW"):
@@ -146,6 +104,8 @@ def _read_external_file(path: Path, *, label: str) -> bytes:
 
 
 def _public_key_id(key: Ed25519PublicKey) -> str:
+    """Return the stable SHA-256 identity of an Ed25519 public key."""
+
     der = key.public_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -206,146 +166,16 @@ def verify_manifest_signature(
 def _load_release_documents(
     release_root: Path,
 ) -> tuple[ApplianceReleaseManifest, ApplianceManifestSignature]:
-    manifest_bytes = _read_release_artifact(release_root, "manifest.json")
-    signature_bytes = _read_release_artifact(release_root, "manifest.sig.json")
+    """Parse the canonical manifest and detached signature documents."""
+
+    manifest_bytes = _read_release_artifact(release_root, _MANIFEST_NAME)
+    signature_bytes = _read_release_artifact(release_root, _SIGNATURE_NAME)
     try:
         manifest = ApplianceReleaseManifest.model_validate_json(manifest_bytes)
         signature = ApplianceManifestSignature.model_validate_json(signature_bytes)
     except ValueError as exc:
         raise ApplianceManifestError("invalid appliance release document") from exc
     return manifest, signature
-
-
-def _verify_artifacts(
-    release_root: Path,
-    manifest: ApplianceReleaseManifest,
-) -> dict[ArtifactKind, bytes]:
-    payloads: dict[ArtifactKind, bytes] = {}
-    for artifact in manifest.artifacts:
-        payload = _read_release_artifact(release_root, artifact.path)
-        actual_digest = f"sha256:{hashlib.sha256(payload).hexdigest()}"
-        if actual_digest != artifact.sha256 or len(payload) != artifact.size_bytes:
-            raise ApplianceManifestError(
-                f"release artifact digest mismatch: {artifact.artifact_id}"
-            )
-        payloads[artifact.kind] = payload
-    if compute_payload_digest(manifest.artifacts) != manifest.payload_digest:
-        raise ApplianceManifestError("release payload digest mismatch")
-    return payloads
-
-
-def _verify_release_evidence(
-    manifest: ApplianceReleaseManifest,
-    payloads: dict[ArtifactKind, bytes],
-) -> None:
-    try:
-        profile = ParticipantProfileManifest.model_validate_json(
-            payloads["participant-profile"]
-        )
-        readiness = ParticipantReadinessSuite.model_validate_json(
-            payloads["participant-readiness"]
-        )
-        asset_lock = ParticipantAssetLock.model_validate_json(
-            payloads["participant-asset-lock"]
-        )
-        qualification = ParticipantQualificationReport.model_validate_json(
-            payloads["participant-qualification"]
-        )
-        ApplianceBoundaryPolicy.model_validate_json(payloads["boundary-policy"])
-        GoldenImageInventory.model_validate_json(payloads["golden-inventory"])
-        drill = ApplianceDrillReport.model_validate_json(payloads["machine-drill"])
-    except ValueError as exc:
-        raise ApplianceManifestError("invalid appliance release evidence") from exc
-    profile_digest = hashlib.sha256(payloads["participant-profile"]).hexdigest()
-    readiness_digest = hashlib.sha256(payloads["participant-readiness"]).hexdigest()
-    asset_lock_digest = hashlib.sha256(payloads["participant-asset-lock"]).hexdigest()
-    participant_matches = (
-        profile.profile_id == manifest.participant.profile_id
-        and profile.version == manifest.participant.profile_version
-        and profile.readiness.sha256 == readiness_digest
-        and manifest.participant.readiness_suite_digest == f"sha256:{readiness_digest}"
-        and asset_lock.profile_id == profile.profile_id
-        and asset_lock.profile_version == profile.version
-        and profile.release_evidence.asset_lock_sha256 == asset_lock_digest
-        and qualification.profile_id == profile.profile_id
-        and qualification.profile_version == profile.version
-        and qualification.profile_sha256 == profile_digest
-        and qualification.asset_lock_digest == f"sha256:{asset_lock_digest}"
-    )
-    offline = qualification.offline
-    required_checks = {check.check_id for check in readiness.checks}
-    observed_checks = {check.check_id for check in qualification.checks}
-    expected_workbenches = {
-        profile_id.value for profile_id in profile.capabilities.workbench_profiles
-    }
-    expected_mcp = {
-        check.subject_id for check in readiness.checks if check.kind == "mcp-tool"
-    }
-    expected_browser = {
-        check.subject_id
-        for check in readiness.checks
-        if check.kind == "browser-operation"
-    }
-    surface = qualification.surface
-    qualification_passed = (
-        participant_matches
-        and observed_checks == required_checks
-        and all(check.status == "passed" for check in qualification.checks)
-        and set(surface.actual_workbench_profiles) == expected_workbenches
-        and set(surface.actual_mcp_servers) == expected_mcp
-        and set(surface.actual_browser_capabilities) == expected_browser
-        and set(surface.actual_services) == set(surface.expected_services)
-        and set(surface.actual_networks) == set(surface.expected_networks)
-        and offline.egress_denied
-        and offline.download_attempts == 0
-        and offline.image_pulls == 0
-        and offline.image_builds == 0
-        and offline.package_resolutions == 0
-    )
-    if not qualification_passed:
-        raise ApplianceManifestError(
-            "participant qualification evidence does not match the release"
-        )
-    if drill != manifest.qualification:
-        raise ApplianceManifestError("machine drill evidence does not match manifest")
-
-
-_APTL_WHEEL_RE = re.compile(
-    r"^wheelhouse/aptl_labs-([0-9]+(?:\.[0-9]+){2}(?:[a-z0-9.+_]*)?)"
-    r"-[^/]+\.whl$"
-)
-
-
-def _verify_offline_aptl_version(
-    payload: bytes,
-    expected_version: str,
-) -> None:
-    """Bind the one staged APTL wheel and release env to the signed version."""
-
-    try:
-        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:") as archive:
-            wheels = [
-                match.group(1).replace("_", "-")
-                for member in archive.getmembers()
-                if (match := _APTL_WHEEL_RE.fullmatch(member.name)) is not None
-                and member.isfile()
-            ]
-            env_member = archive.getmember("appliance-release.env")
-            env_file = archive.extractfile(env_member)
-            if env_file is None:
-                raise KeyError("appliance-release.env")
-            env_text = env_file.read().decode("utf-8")
-    except (KeyError, OSError, UnicodeDecodeError, tarfile.TarError) as exc:
-        raise ApplianceManifestError(
-            "offline payload release identity is invalid"
-        ) from exc
-    version_line = f"APTL_APPLIANCE_VERSION={expected_version}\n"
-    if wheels != [expected_version] or version_line not in env_text.splitlines(
-        keepends=True
-    ):
-        raise ApplianceManifestError(
-            "offline payload APTL version does not match the release"
-        )
 
 
 def prepare_release_manifest(
@@ -356,7 +186,7 @@ def prepare_release_manifest(
 
     release_root = release_dir.resolve()
     if not release_root.is_dir():
-        raise ApplianceManifestError("appliance release directory is missing")
+        raise ApplianceManifestError(_MISSING_RELEASE)
     try:
         resolved_template = template_path.resolve(strict=True)
     except OSError as exc:
@@ -422,15 +252,15 @@ def prepare_release_manifest(
     )
     _verify_release_evidence(manifest, payloads)
     manifest_bytes = canonical_manifest_bytes(manifest)
-    manifest_path = release_root / "manifest.json"
+    manifest_path = release_root / _MANIFEST_NAME
     if manifest_path.exists() or manifest_path.is_symlink():
-        existing = _read_release_artifact(release_root, "manifest.json")
-        if existing == manifest_bytes:
-            return manifest
-        raise ApplianceManifestError(
-            "release manifest already exists with different content"
-        )
-    _write_create_once(manifest_path, manifest_bytes, mode=0o644)
+        existing = _read_release_artifact(release_root, _MANIFEST_NAME)
+        if existing != manifest_bytes:
+            raise ApplianceManifestError(
+                "release manifest already exists with different content"
+            )
+    else:
+        _write_create_once(manifest_path, manifest_bytes, mode=0o644)
     return manifest
 
 
@@ -440,12 +270,14 @@ def _release_checksum_payload(
     *,
     signature_bytes: bytes | None = None,
 ) -> bytes:
-    paths = ["manifest.json", "manifest.sig.json"] + [
+    """Render the deterministic checksum file, optionally before sealing."""
+
+    paths = [_MANIFEST_NAME, _SIGNATURE_NAME] + [
         artifact.path for artifact in manifest.artifacts
     ]
     lines: list[str] = []
     for relative_path in sorted(paths):
-        if relative_path == "manifest.sig.json" and signature_bytes is not None:
+        if relative_path == _SIGNATURE_NAME and signature_bytes is not None:
             payload = signature_bytes
         else:
             payload = _read_release_artifact(release_root, relative_path)
@@ -454,6 +286,8 @@ def _release_checksum_payload(
 
 
 def _write_create_once(path: Path, payload: bytes, *, mode: int) -> None:
+    """Persist immutable release bytes without replacing an existing path."""
+
     temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
@@ -485,6 +319,8 @@ def _write_create_once(path: Path, payload: bytes, *, mode: int) -> None:
 
 
 def _inspection(manifest: ApplianceReleaseManifest) -> ApplianceReleaseInspection:
+    """Project a verified manifest into its safe operator-facing identity."""
+
     canonical = canonical_manifest_bytes(manifest)
     prerequisites = manifest.host_prerequisites
     return ApplianceReleaseInspection(
@@ -511,7 +347,7 @@ def seal_release_directory(
 
     release_root = release_dir.resolve()
     if not release_root.is_dir():
-        raise ApplianceManifestError("appliance release directory is missing")
+        raise ApplianceManifestError(_MISSING_RELEASE)
     try:
         key_path = private_key_path.resolve(strict=True)
     except OSError as exc:
@@ -530,10 +366,10 @@ def seal_release_directory(
         raise ApplianceManifestError(
             "participant qualification trust anchor must remain outside the release"
         )
-    signature_path = release_root / "manifest.sig.json"
+    signature_path = release_root / _SIGNATURE_NAME
     if signature_path.exists() or signature_path.is_symlink():
         raise ApplianceManifestError("appliance release is already sealed")
-    manifest_bytes = _read_release_artifact(release_root, "manifest.json")
+    manifest_bytes = _read_release_artifact(release_root, _MANIFEST_NAME)
     try:
         manifest = ApplianceReleaseManifest.model_validate_json(manifest_bytes)
     except ValueError as exc:
@@ -557,18 +393,11 @@ def seal_release_directory(
                 label="participant qualification trust anchor",
             ),
         )
-    except (
-        OSError,
-        ParticipantQualificationError,
-        ValueError,
-    ) as exc:
+    except (OSError, ValueError) as exc:
         raise ApplianceManifestError(
             "participant qualification attestation is invalid"
         ) from exc
-    try:
-        private_key_pem = _read_external_file(key_path, label="release signing key")
-    except ApplianceManifestError:
-        raise
+    private_key_pem = _read_external_file(key_path, label="release signing key")
     signature = sign_manifest(manifest, private_key_pem)
     signature_bytes = rfc8785.dumps(signature.model_dump(mode="json"))
     checksums = _release_checksum_payload(
@@ -585,6 +414,8 @@ def _verify_checksum_file(
     release_root: Path,
     manifest: ApplianceReleaseManifest,
 ) -> None:
+    """Require SHA256SUMS to match the exact sealed release bytes."""
+
     actual = _read_release_artifact(release_root, "SHA256SUMS")
     expected = _release_checksum_payload(release_root, manifest)
     if actual != expected:
@@ -601,14 +432,11 @@ def verify_release_directory(
 
     release_root = release_dir.resolve()
     if not release_root.is_dir():
-        raise ApplianceManifestError("appliance release directory is missing")
-    try:
-        public_key_pem = _read_external_file(
-            public_key_path,
-            label="release trust anchor",
-        )
-    except ApplianceManifestError:
-        raise
+        raise ApplianceManifestError(_MISSING_RELEASE)
+    public_key_pem = _read_external_file(
+        public_key_path,
+        label="release trust anchor",
+    )
     manifest, signature = _load_release_documents(release_root)
     verify_manifest_signature(manifest, signature, public_key_pem)
     payloads = _verify_artifacts(release_root, manifest)
@@ -628,7 +456,7 @@ def verify_release_directory(
                 label="participant qualification trust anchor",
             ),
         )
-    except (ParticipantQualificationError, ValueError) as exc:
+    except ValueError as exc:
         raise ApplianceManifestError(
             "participant qualification attestation is invalid"
         ) from exc

@@ -10,6 +10,7 @@ import stat
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 _ALLOWED_TOP_LEVEL = frozenset(
     {
@@ -21,13 +22,8 @@ _ALLOWED_TOP_LEVEL = frozenset(
         "aptl-appliance-first-boot.service",
     }
 )
-_RELEASE_ENV = re.compile(
-    r"^APTL_APPLIANCE_SCENARIO=[a-z0-9][a-z0-9.-]*\n"
-    r"APTL_APPLIANCE_VERSION=[0-9]+(?:\.[0-9]+){2}(?:[a-z0-9.+-]*)?\n$"
-)
-_APTL_WHEEL = re.compile(
-    r"^aptl_labs-([0-9]+(?:\.[0-9]+){2}(?:[a-z0-9.+_]*)?)-[^/]+\.whl$"
-)
+_SCENARIO_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
+_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+[a-z0-9.+-]*$")
 
 
 class OfflinePayloadError(RuntimeError):
@@ -43,14 +39,16 @@ class OfflinePayloadResult:
     size_bytes: int
 
 
-def _validate_staging(staging: Path) -> list[Path]:
+def _validate_staged_paths(staging: Path) -> list[Path]:
+    """Return a deterministic list after rejecting special files and links."""
+
     if staging.is_symlink() or not staging.is_dir():
         raise OfflinePayloadError("offline payload staging directory is invalid")
     entries = {path.name for path in staging.iterdir()}
     if entries != _ALLOWED_TOP_LEVEL:
         raise OfflinePayloadError("offline payload contains unexpected top-level files")
     paths = sorted(
-        (path for path in staging.rglob("*")),
+        staging.rglob("*"),
         key=lambda path: path.relative_to(staging).as_posix(),
     )
     for path in paths:
@@ -59,30 +57,72 @@ def _validate_staging(staging: Path) -> list[Path]:
             raise OfflinePayloadError("offline payload must not contain a symlink")
         if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
             raise OfflinePayloadError("offline payload contains an unsupported file")
+    return paths
+
+
+def _wheel_version(path: Path) -> str | None:
+    """Extract the normalized APTL version from one wheel filename."""
+
+    prefix = "aptl_labs-"
+    if not path.name.startswith(prefix) or path.suffix != ".whl":
+        return None
+    version, separator, _tags = path.name[len(prefix) :].partition("-")
+    if not separator or not version:
+        return None
+    return version.replace("_", "-")
+
+
+def _release_environment(staging: Path) -> tuple[str, str]:
+    """Read the two-field non-secret release environment."""
+
+    env_text = (staging / "appliance-release.env").read_text(encoding="utf-8")
+    lines = env_text.splitlines()
+    if len(lines) != 2 or not env_text.endswith("\n"):
+        raise OfflinePayloadError("invalid non-secret appliance release environment")
+    scenario_prefix = "APTL_APPLIANCE_SCENARIO="
+    version_prefix = "APTL_APPLIANCE_VERSION="
+    if not lines[0].startswith(scenario_prefix) or not lines[1].startswith(
+        version_prefix
+    ):
+        raise OfflinePayloadError("invalid non-secret appliance release environment")
+    scenario = lines[0][len(scenario_prefix) :]
+    version = lines[1][len(version_prefix) :]
+    if not _SCENARIO_RE.fullmatch(scenario) or not _VERSION_RE.fullmatch(version):
+        raise OfflinePayloadError("invalid non-secret appliance release environment")
+    return scenario, version
+
+
+def _validate_wheelhouse(staging: Path, expected_version: str) -> None:
+    """Require a closed wheelhouse with exactly one matching APTL wheel."""
+
     wheelhouse = staging / "wheelhouse"
     wheels = [path for path in wheelhouse.iterdir() if path.is_file()]
-    aptl_wheels = [
-        (path, match.group(1).replace("_", "-"))
-        for path in wheels
-        if (match := _APTL_WHEEL.fullmatch(path.name)) is not None
-    ]
     if not wheels or any(path.suffix != ".whl" for path in wheels):
         raise OfflinePayloadError("offline payload wheelhouse is incomplete")
-    for required in ("project.tar", "oci-images.tar"):
-        if (staging / required).stat().st_size <= 0:
-            raise OfflinePayloadError(f"offline payload {required} is empty")
-    env_text = (staging / "appliance-release.env").read_text(encoding="utf-8")
-    if not _RELEASE_ENV.fullmatch(env_text):
-        raise OfflinePayloadError("invalid non-secret appliance release environment")
-    env_version = env_text.split("APTL_APPLIANCE_VERSION=", 1)[1].strip()
-    if len(aptl_wheels) != 1 or aptl_wheels[0][1] != env_version:
+    aptl_versions = [
+        version for path in wheels if (version := _wheel_version(path)) is not None
+    ]
+    if aptl_versions != [expected_version]:
         raise OfflinePayloadError(
             "offline payload must contain exactly one matching APTL wheel"
         )
+
+
+def _validate_staging(staging: Path) -> list[Path]:
+    """Validate the closed staging shape and return its deterministic paths."""
+
+    paths = _validate_staged_paths(staging)
+    for required in ("project.tar", "oci-images.tar"):
+        if (staging / required).stat().st_size <= 0:
+            raise OfflinePayloadError(f"offline payload {required} is empty")
+    _scenario, version = _release_environment(staging)
+    _validate_wheelhouse(staging, version)
     return paths
 
 
 def _tar_info(path: Path, relative: str) -> tarfile.TarInfo:
+    """Create reproducible metadata for one staged tar member."""
+
     info = tarfile.TarInfo(relative)
     path_info = path.stat(follow_symlinks=False)
     info.uid = 0
@@ -101,7 +141,9 @@ def _tar_info(path: Path, relative: str) -> tarfile.TarInfo:
     return info
 
 
-def _open_nofollow(path: Path):
+def _open_nofollow(path: Path) -> BinaryIO:
+    """Open one regular payload path without following its final symlink."""
+
     flags = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -109,6 +151,8 @@ def _open_nofollow(path: Path):
 
 
 def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
+    """Write a deterministic USTAR archive from already-validated paths."""
+
     try:
         with tarfile.open(candidate, "w", format=tarfile.USTAR_FORMAT) as archive:
             for path in paths:
@@ -124,6 +168,8 @@ def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
 
 
 def _hash_file(path: Path) -> tuple[str, int]:
+    """Return the streaming SHA-256 identity and byte count for a file."""
+
     digest = hashlib.sha256()
     size = 0
     with _open_nofollow(path) as handle:

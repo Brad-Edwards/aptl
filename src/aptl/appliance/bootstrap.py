@@ -30,6 +30,8 @@ class OverlayIdentity(BaseModel):
 
 
 def _ensure_state_directory(path: Path) -> None:
+    """Create or validate an owner-only overlay state directory."""
+
     if path.is_symlink():
         raise ApplianceBootstrapError("overlay state directory must not be a symlink")
     try:
@@ -44,6 +46,8 @@ def _ensure_state_directory(path: Path) -> None:
 
 
 def _read_existing(path: Path) -> OverlayIdentity:
+    """Load an existing owner-only identity without following symlinks."""
+
     try:
         info = path.stat(follow_symlinks=False)
         if stat.S_ISLNK(info.st_mode):
@@ -64,6 +68,8 @@ def _read_existing(path: Path) -> OverlayIdentity:
 
 
 def _new_identity(entropy: Callable[[int], bytes]) -> OverlayIdentity:
+    """Derive a fresh identity and credential from an injected entropy source."""
+
     identity_bytes = entropy(32)
     credential_bytes = entropy(32)
     if len(identity_bytes) != 32 or len(credential_bytes) != 32:
@@ -78,6 +84,8 @@ def _new_identity(entropy: Callable[[int], bytes]) -> OverlayIdentity:
 
 
 def _persist_create_once(path: Path, identity: OverlayIdentity) -> bool:
+    """Atomically publish an identity unless another initializer won the race."""
+
     temporary = path.with_name(f".identity.{os.getpid()}-{secrets.token_hex(8)}")
     payload = rfc8785.dumps(identity.model_dump(mode="json"))
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC

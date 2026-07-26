@@ -47,6 +47,8 @@ def _derive_descriptor(
     release_dir: str,
     host_observation_id: str,
 ) -> ApplianceLaunchDescriptor:
+    """Project signed release and host identities into a launch descriptor."""
+
     by_kind = {artifact.kind: artifact for artifact in manifest.artifacts}
     return ApplianceLaunchDescriptor(
         schema_version="aptl.appliance-launch/v1",

@@ -297,18 +297,16 @@ def test_artifact_reference_rejects_unsafe_paths(path: str) -> None:
 def test_manifest_rejects_duplicate_and_missing_release_artifacts() -> None:
     manifest = _manifest()
     duplicate = manifest.artifacts + (manifest.artifacts[0],)
+    duplicate_payload = {**manifest.model_dump(), "artifacts": duplicate}
     with pytest.raises(ValidationError, match="artifact ids"):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "artifacts": duplicate}
-        )
+        ApplianceReleaseManifest.model_validate(duplicate_payload)
 
     missing = tuple(
         item for item in manifest.artifacts if item.kind != "golden-inventory"
     )
+    missing_payload = {**manifest.model_dump(), "artifacts": missing}
     with pytest.raises(ValidationError, match="required artifact kinds"):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "artifacts": missing}
-        )
+        ApplianceReleaseManifest.model_validate(missing_payload)
 
 
 def test_manifest_requires_two_distinct_successful_machine_drills() -> None:
@@ -316,18 +314,16 @@ def test_manifest_requires_two_distinct_successful_machine_drills() -> None:
     one_machine = manifest.qualification.model_copy(
         update={"machines": (_machine("host-a"),)}
     )
+    one_machine_payload = {**manifest.model_dump(), "qualification": one_machine}
     with pytest.raises(ValidationError, match="two independent"):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "qualification": one_machine}
-        )
+        ApplianceReleaseManifest.model_validate(one_machine_payload)
 
     duplicate = manifest.qualification.model_copy(
         update={"machines": (_machine("host-a"), _machine("host-a"))}
     )
+    duplicate_payload = {**manifest.model_dump(), "qualification": duplicate}
     with pytest.raises(ValidationError, match="unique"):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "qualification": duplicate}
-        )
+        ApplianceReleaseManifest.model_validate(duplicate_payload)
 
 
 def test_manifest_requires_payload_parity_and_immutable_upgrade() -> None:
@@ -342,15 +338,13 @@ def test_manifest_requires_payload_parity_and_immutable_upgrade() -> None:
             )
         }
     )
+    mismatched_payload = {**manifest.model_dump(), "delivery": mismatched}
     with pytest.raises(ValidationError, match="same payload"):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "delivery": mismatched}
-        )
+        ApplianceReleaseManifest.model_validate(mismatched_payload)
 
+    in_place_payload = {**manifest.model_dump(), "upgrade_strategy": "in-place"}
     with pytest.raises(ValidationError):
-        ApplianceReleaseManifest.model_validate(
-            {**manifest.model_dump(), "upgrade_strategy": "in-place"}
-        )
+        ApplianceReleaseManifest.model_validate(in_place_payload)
 
 
 def _write_signed_release(root: Path) -> tuple[ApplianceReleaseManifest, bytes]:
@@ -904,10 +898,9 @@ def test_release_manifest_is_prepared_from_staged_artifacts_not_handwritten(
     assert (release / "manifest.json").read_bytes() == canonical_manifest_bytes(
         prepared
     )
+    changed_template = template.model_copy(update={"release_id": "different"})
+    template_path.write_text(changed_template.model_dump_json())
     with pytest.raises(ApplianceManifestError, match="already exists"):
-        template_path.write_text(
-            template.model_copy(update={"release_id": "different"}).model_dump_json()
-        )
         prepare_release_manifest(release, template_path)
 
 

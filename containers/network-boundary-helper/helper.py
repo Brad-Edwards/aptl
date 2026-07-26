@@ -38,6 +38,10 @@ def _owner_marker(owner: str) -> str:
     return hashlib.sha256(owner.encode()).hexdigest()[:16]
 
 
+def _rule_marker(identity: str) -> str:
+    return "aptl-rule=" + hashlib.sha256(identity.encode()).hexdigest()[:24]
+
+
 def _quoted(value: str) -> str:
     return json.dumps(value)
 
@@ -78,13 +82,30 @@ def _validate_network(network: object) -> dict[str, object]:
         or not isinstance(labels, list)
     ):
         raise ValueError("network identity is invalid")
-    for key in ("ipv4_cidr", "ipv6_cidr"):
+    for key, version in (("ipv4_cidr", 4), ("ipv6_cidr", 6)):
         value = network[key]
         if value is not None:
             if not isinstance(value, str):
                 raise ValueError("network CIDR is invalid")
-            ipaddress.ip_network(value, strict=False)
+            if ipaddress.ip_network(value, strict=False).version != version:
+                raise ValueError("network CIDR family is invalid")
+    _validate_labels(labels)
     return network
+
+
+def _validate_labels(labels: object) -> None:
+    if (
+        not isinstance(labels, list)
+        or any(
+            not isinstance(item, list)
+            or len(item) != 2
+            or not all(isinstance(value, str) for value in item)
+            for item in labels
+        )
+        or labels != sorted(labels)
+        or len({item[0] for item in labels}) != len(labels)
+    ):
+        raise ValueError("network labels are invalid")
 
 
 def _validate_aces(policy: dict[str, object]) -> dict[str, object]:
@@ -97,89 +118,184 @@ def _validate_aces(policy: dict[str, object]) -> dict[str, object]:
     rules = policy["rules"]
     if not all(isinstance(value, list) for value in (networks, bindings, rules)):
         raise ValueError("ACES policy collections must be lists")
-    network_index = {
-        network["name"]: _validate_network(network)
-        for network in networks
-        if isinstance(network, dict)
-    }
-    if len(network_index) != len(networks):
-        raise ValueError("ACES network identities must be unique")
+    network_index = _validated_network_index(networks, authority="ACES")
+    if any(network["ipv6_cidr"] is not None for network in network_index.values()):
+        raise ValueError("ACES ACL networks must remain IPv4-only")
     binding_index: dict[str, dict[str, object]] = {}
     for binding in bindings:
-        if not isinstance(binding, dict) or set(binding) != {
-            "owner_address",
-            "owner_resource_type",
-            "ipv4_by_network",
-            "ipv6_by_network",
-        }:
-            raise ValueError("ACES owner binding is invalid")
-        address = binding["owner_address"]
-        kind = binding["owner_resource_type"]
-        if (
-            not isinstance(address, str)
-            or not _TOKEN.fullmatch(address)
-            or kind not in {"node", "network"}
-            or address in binding_index
-        ):
-            raise ValueError("ACES owner identity is invalid")
-        for family_key in ("ipv4_by_network", "ipv6_by_network"):
-            pairs = binding[family_key]
-            if not isinstance(pairs, list):
-                raise ValueError("ACES owner addresses are invalid")
-            for pair in pairs:
-                if (
-                    not isinstance(pair, list)
-                    or len(pair) != 2
-                    or pair[0] not in network_index
-                    or not isinstance(pair[1], str)
-                ):
-                    raise ValueError("ACES owner address is invalid")
-                ipaddress.ip_address(pair[1])
-        binding_index[address] = binding
+        _validate_aces_binding(binding, network_index, binding_index)
     prior: tuple[str, int, str] | None = None
+    seen_orders: set[tuple[str, int]] = set()
+    seen_names: set[tuple[str, str]] = set()
     for rule in rules:
-        if not isinstance(rule, dict) or set(rule) != {
-            "owner_address",
-            "owner_resource_type",
-            "owner_name",
-            "name",
-            "order",
-            "direction",
-            "from_network",
-            "to_network",
-            "protocol",
-            "ports",
-            "action",
-        }:
-            raise ValueError("ACES rule is invalid")
-        address = rule["owner_address"]
-        binding = binding_index.get(address) if isinstance(address, str) else None
-        if binding is None or binding["owner_resource_type"] != rule["owner_resource_type"]:
-            raise ValueError("ACES rule owner is invalid")
-        if rule["direction"] not in _DIRECTIONS:
-            raise ValueError("ACES rule direction is invalid")
-        if rule["protocol"] not in _PROTOCOLS or rule["action"] not in _ACTIONS:
-            raise ValueError("ACES rule semantics are invalid")
-        for endpoint in ("from_network", "to_network"):
-            value = rule[endpoint]
-            if value is not None and value not in network_index:
-                raise ValueError("ACES rule endpoint is invalid")
-        _validate_ports(rule["ports"], str(rule["protocol"]))
-        identity = rule["name"]
-        order = rule["order"]
-        if (
-            not isinstance(identity, str)
-            or not _TOKEN.fullmatch(identity)
-            or not isinstance(order, int)
-            or isinstance(order, bool)
-            or order < 0
-        ):
-            raise ValueError("ACES rule ordering is invalid")
-        current = (str(address), order, identity)
+        current = _validate_aces_rule(
+            rule,
+            binding_index,
+            network_index,
+            seen_orders,
+            seen_names,
+        )
         if prior is not None and current < prior:
             raise ValueError("ACES rules are not deterministically ordered")
         prior = current
     return policy
+
+
+def _validated_network_index(
+    networks: Sequence[object],
+    *,
+    authority: str,
+) -> dict[str, dict[str, object]]:
+    index: dict[str, dict[str, object]] = {}
+    for network in networks:
+        validated = _validate_network(network)
+        name = str(validated["name"])
+        if name in index:
+            raise ValueError(f"{authority} network identities must be unique")
+        index[name] = validated
+    return index
+
+
+def _validate_address_pairs(
+    pairs: object,
+    family_key: str,
+    version: int,
+    networks: Mapping[str, Mapping[str, object]],
+) -> None:
+    if not isinstance(pairs, list):
+        raise ValueError("boundary owner addresses are invalid")
+    seen_networks: set[str] = set()
+    for pair in pairs:
+        if (
+            not isinstance(pair, list)
+            or len(pair) != 2
+            or not isinstance(pair[0], str)
+            or pair[0] not in networks
+            or not isinstance(pair[1], str)
+            or pair[0] in seen_networks
+        ):
+            raise ValueError("boundary owner address is invalid")
+        parsed = ipaddress.ip_address(pair[1])
+        cidr = networks[pair[0]][family_key.replace("_by_network", "_cidr")]
+        if (
+            parsed.version != version
+            or not isinstance(cidr, str)
+            or parsed not in ipaddress.ip_network(cidr, strict=False)
+        ):
+            raise ValueError("boundary owner address is outside its network")
+        seen_networks.add(pair[0])
+
+
+def _validate_aces_binding(
+    binding: object,
+    networks: Mapping[str, Mapping[str, object]],
+    index: dict[str, dict[str, object]],
+) -> None:
+    if not isinstance(binding, dict) or set(binding) != {
+        "owner_address",
+        "owner_resource_type",
+        "ipv4_by_network",
+        "ipv6_by_network",
+    }:
+        raise ValueError("ACES owner binding is invalid")
+    owner = binding["owner_address"]
+    kind = binding["owner_resource_type"]
+    if (
+        not isinstance(owner, str)
+        or not _TOKEN.fullmatch(owner)
+        or not isinstance(kind, str)
+        or kind not in {"node", "network"}
+        or owner in index
+    ):
+        raise ValueError("ACES owner identity is invalid")
+    _validate_address_pairs(binding["ipv4_by_network"], "ipv4_by_network", 4, networks)
+    _validate_address_pairs(binding["ipv6_by_network"], "ipv6_by_network", 6, networks)
+    if binding["ipv6_by_network"]:
+        raise ValueError("ACES ACL owner addresses must remain IPv4-only")
+    if kind == "node" and not (
+        binding["ipv4_by_network"] or binding["ipv6_by_network"]
+    ):
+        raise ValueError("ACES node owner has no exact address")
+    index[owner] = binding
+
+
+def _validate_aces_rule(
+    rule: object,
+    bindings: Mapping[str, Mapping[str, object]],
+    networks: Mapping[str, Mapping[str, object]],
+    seen_orders: set[tuple[str, int]],
+    seen_names: set[tuple[str, str]],
+) -> tuple[str, int, str]:
+    fields = {
+        "owner_address",
+        "owner_resource_type",
+        "owner_name",
+        "name",
+        "order",
+        "direction",
+        "from_network",
+        "to_network",
+        "protocol",
+        "ports",
+        "action",
+    }
+    if not isinstance(rule, dict) or set(rule) != fields:
+        raise ValueError("ACES rule is invalid")
+    owner = rule["owner_address"]
+    binding = bindings.get(owner) if isinstance(owner, str) else None
+    if binding is None or binding["owner_resource_type"] != rule["owner_resource_type"]:
+        raise ValueError("ACES rule owner is invalid")
+    _validate_aces_rule_semantics(rule, binding, networks)
+    identity = str(rule["name"])
+    order = int(rule["order"])
+    order_key = (owner, order)
+    name_key = (owner, identity)
+    if order_key in seen_orders or name_key in seen_names:
+        raise ValueError("ACES rule identity is not unique")
+    seen_orders.add(order_key)
+    seen_names.add(name_key)
+    return owner, order, identity
+
+
+def _validate_aces_rule_semantics(
+    rule: Mapping[str, object],
+    binding: Mapping[str, object],
+    networks: Mapping[str, Mapping[str, object]],
+) -> None:
+    direction = rule["direction"]
+    protocol = rule["protocol"]
+    action = rule["action"]
+    owner_name = rule["owner_name"]
+    identity = rule["name"]
+    order = rule["order"]
+    if not isinstance(direction, str) or direction not in _DIRECTIONS:
+        raise ValueError("ACES rule direction is invalid")
+    if (
+        not isinstance(protocol, str)
+        or protocol not in _PROTOCOLS
+        or not isinstance(action, str)
+        or action not in _ACTIONS
+    ):
+        raise ValueError("ACES rule semantics are invalid")
+    if any(
+        rule[endpoint] is not None
+        and (not isinstance(rule[endpoint], str) or rule[endpoint] not in networks)
+        for endpoint in ("from_network", "to_network")
+    ):
+        raise ValueError("ACES rule endpoint is invalid")
+    _validate_ports(rule["ports"], protocol)
+    if (
+        not isinstance(identity, str)
+        or not _TOKEN.fullmatch(identity)
+        or not isinstance(owner_name, str)
+        or not _TOKEN.fullmatch(owner_name)
+        or not isinstance(order, int)
+        or isinstance(order, bool)
+        or order < 0
+    ):
+        raise ValueError("ACES rule ordering is invalid")
+    if binding["owner_resource_type"] == "network" and owner_name not in networks:
+        raise ValueError("ACES network owner is unresolved")
 
 
 def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
@@ -190,6 +306,7 @@ def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
             "owner",
             "policy_digest",
             "networks",
+            "zone_networks",
             "anchors",
             "crossings",
             "egress_ports",
@@ -203,77 +320,128 @@ def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
     if policy["default_deny"] is not True:
         raise ValueError("platform policy must be default deny")
     anchors = policy["anchors"]
+    zone_networks = policy["zone_networks"]
     crossings = policy["crossings"]
     networks = policy["networks"]
     egress_ports = policy["egress_ports"]
     if (
         not isinstance(anchors, list)
+        or not isinstance(zone_networks, list)
         or not isinstance(crossings, list)
         or not isinstance(networks, list)
     ):
         raise ValueError("platform policy collections must be lists")
-    network_index = {
-        network["name"]: _validate_network(network)
-        for network in networks
-        if isinstance(network, dict)
-    }
-    if len(network_index) != len(networks):
-        raise ValueError("platform network identities must be unique")
+    network_index = _validated_platform_networks(networks)
     _validate_ports(egress_ports, "tcp")
+    zone_network_index = _validated_zone_networks(zone_networks, network_index)
     zones: set[str] = set()
     for anchor in anchors:
-        if (
-            not isinstance(anchor, dict)
-            or set(anchor) != {"zone", "workload"}
-            or anchor["zone"] not in _ZONES
-            or anchor["zone"] in zones
-        ):
-            raise ValueError("platform anchor is invalid")
-        zones.add(str(anchor["zone"]))
-        workload = anchor["workload"]
-        if not isinstance(workload, dict) or set(workload) != {
-            "identity",
-            "labels",
-            "ipv4_by_network",
-            "ipv6_by_network",
-        }:
-            raise ValueError("platform workload is invalid")
-        if not isinstance(workload["identity"], str) or not _TOKEN.fullmatch(
-            workload["identity"]
-        ):
-            raise ValueError("platform workload identity is invalid")
-        for family_key in ("ipv4_by_network", "ipv6_by_network"):
-            pairs = workload[family_key]
-            if not isinstance(pairs, list):
-                raise ValueError("platform workload addresses are invalid")
-            for pair in pairs:
-                if (
-                    not isinstance(pair, list)
-                    or len(pair) != 2
-                    or pair[0] not in network_index
-                    or not isinstance(pair[1], str)
-                ):
-                    raise ValueError("platform workload address is invalid")
-                ipaddress.ip_address(pair[1])
+        zones.add(
+            _validate_platform_anchor(
+                anchor,
+                networks=network_index,
+                zone_networks=zone_network_index,
+                seen=zones,
+            )
+        )
+    if zones != _ZONES:
+        raise ValueError("platform zones are incomplete")
     for crossing in crossings:
-        if not isinstance(crossing, dict) or set(crossing) != {
-            "source",
-            "destination",
-            "protocol",
-            "ports",
-            "purpose",
-        }:
-            raise ValueError("platform crossing is invalid")
-        if (
-            crossing["source"] not in zones
-            or crossing["destination"] not in zones
-            or crossing["protocol"] not in {"tcp", "udp"}
-            or not isinstance(crossing["purpose"], str)
-            or not crossing["purpose"]
-        ):
-            raise ValueError("platform crossing semantics are invalid")
-        _validate_ports(crossing["ports"], str(crossing["protocol"]), required=True)
+        _validate_platform_crossing(crossing, zones)
     return policy
+
+
+def _validated_platform_networks(
+    networks: Sequence[object],
+) -> dict[str, dict[str, object]]:
+    index = _validated_network_index(networks, authority="platform")
+    if len(index) != 3 or any(
+        network["ipv6_cidr"] is not None for network in index.values()
+    ):
+        raise ValueError("platform requires three IPv4-only networks")
+    return index
+
+
+def _validated_zone_networks(
+    values: Sequence[object],
+    networks: Mapping[str, object],
+) -> dict[str, str]:
+    index: dict[str, str] = {}
+    for item in values:
+        if not isinstance(item, dict) or set(item) != {"zone", "network"}:
+            raise ValueError("platform zone network is invalid")
+        zone = item["zone"]
+        network = item["network"]
+        if (
+            not isinstance(zone, str)
+            or not isinstance(network, str)
+            or zone not in _ZONES
+            or zone in index
+            or network not in networks
+        ):
+            raise ValueError("platform zone network is invalid")
+        index[zone] = network
+    if set(index) != _ZONES or set(index.values()) != set(networks):
+        raise ValueError("platform zone networks must be exact and distinct")
+    return index
+
+
+def _validate_platform_anchor(
+    anchor: object,
+    *,
+    networks: Mapping[str, Mapping[str, object]],
+    zone_networks: Mapping[str, str],
+    seen: set[str],
+) -> str:
+    if not isinstance(anchor, dict) or set(anchor) != {"zone", "workload"}:
+        raise ValueError("platform anchor is invalid")
+    zone = anchor["zone"]
+    if not isinstance(zone, str) or zone not in _ZONES or zone in seen:
+        raise ValueError("platform anchor is invalid")
+    workload = anchor["workload"]
+    fields = {"identity", "labels", "ipv4_by_network", "ipv6_by_network"}
+    if not isinstance(workload, dict) or set(workload) != fields:
+        raise ValueError("platform workload is invalid")
+    _validate_labels(workload["labels"])
+    identity = workload["identity"]
+    if not isinstance(identity, str) or not _TOKEN.fullmatch(identity):
+        raise ValueError("platform workload identity is invalid")
+    ipv4 = workload["ipv4_by_network"]
+    if not isinstance(ipv4, list) or not ipv4 or workload["ipv6_by_network"] != []:
+        raise ValueError("platform workload must have an IPv4 attachment")
+    _validate_address_pairs(ipv4, "ipv4_by_network", 4, networks)
+    _validate_address_pairs(workload["ipv6_by_network"], "ipv6_by_network", 6, networks)
+    attached = {
+        str(pair[0]) for pair in ipv4 if isinstance(pair, list) and len(pair) == 2
+    }
+    if zone_networks[zone] not in attached:
+        raise ValueError("platform anchor is absent from its policy network")
+    return zone
+
+
+def _validate_platform_crossing(
+    crossing: object,
+    zones: set[str],
+) -> None:
+    fields = {"source", "destination", "protocol", "ports", "purpose"}
+    if not isinstance(crossing, dict) or set(crossing) != fields:
+        raise ValueError("platform crossing is invalid")
+    source = crossing["source"]
+    destination = crossing["destination"]
+    protocol = crossing["protocol"]
+    purpose = crossing["purpose"]
+    if (
+        not isinstance(source, str)
+        or not isinstance(destination, str)
+        or not isinstance(protocol, str)
+        or source not in zones
+        or destination not in zones
+        or protocol not in {"tcp", "udp"}
+        or not isinstance(purpose, str)
+        or not purpose
+    ):
+        raise ValueError("platform crossing semantics are invalid")
+    _validate_ports(crossing["ports"], protocol, required=True)
 
 
 def _validate_ports(value: object, protocol: str, *, required: bool = False) -> None:
@@ -281,9 +449,7 @@ def _validate_ports(value: object, protocol: str, *, required: bool = False) -> 
         not isinstance(value, list)
         or (required and not value)
         or any(
-            not isinstance(port, int)
-            or isinstance(port, bool)
-            or not 0 < port <= 65535
+            not isinstance(port, int) or isinstance(port, bool) or not 0 < port <= 65535
             for port in value
         )
         or (value and protocol not in {"tcp", "udp"})
@@ -315,7 +481,7 @@ def _transport(rule: Mapping[str, object]) -> str:
             suffix = f" dport {rendered}"
         return f"{protocol}{suffix}"
     if protocol == "icmp":
-        return "meta l4proto { icmp, ipv6-icmp }"
+        return "meta l4proto icmp"
     return ""
 
 
@@ -352,9 +518,7 @@ def _address_expression(
     return parts
 
 
-def _binding_addresses(
-    binding: Mapping[str, object], network: str | None
-) -> list[str]:
+def _binding_addresses(binding: Mapping[str, object], network: str | None) -> list[str]:
     pairs = binding["ipv4_by_network"]
     assert isinstance(pairs, list)
     return [
@@ -379,9 +543,7 @@ def _aces_rule_expressions(
         if isinstance(item, dict) and item["owner_address"] == rule["owner_address"]
     )
     directions = (
-        ("in", "out")
-        if rule["direction"] == "inout"
-        else (str(rule["direction"]),)
+        ("in", "out") if rule["direction"] == "inout" else (str(rule["direction"]),)
     )
     expressions: list[str] = []
     for direction in directions:
@@ -393,9 +555,7 @@ def _aces_rule_expressions(
             source_ref, destination_ref, networks, family=family
         )
         if family == "inet":
-            parts.extend(
-                _address_expression(source_ref, destination_ref, networks)
-            )
+            parts.extend(_address_expression(source_ref, destination_ref, networks))
         if binding["owner_resource_type"] == "network":
             owner_name = str(rule["owner_name"])
             if direction == "in":
@@ -421,10 +581,8 @@ def _aces_rule_expressions(
         if transport:
             parts.append(transport)
         parts.append("return" if rule["action"] == "allow" else "drop")
-        identity = (
-            f"{rule['owner_address']}/{rule['name']}/{direction}"
-        )
-        parts.extend(["comment", _quoted(identity)])
+        identity = f"{rule['owner_address']}/{rule['name']}/{direction}"
+        parts.extend(["comment", _quoted(_rule_marker(identity))])
         expressions.append("    " + " ".join(parts))
     return expressions
 
@@ -443,8 +601,7 @@ def _aces_table(
         (
             "  comment "
             + _quoted(
-                f"aptl-owner={_owner_marker(owner)},"
-                f"authority=aces,digest={digest}"
+                f"aptl-owner={_owner_marker(owner)},authority=aces,digest={digest}"
             )
         ),
     ]
@@ -457,14 +614,17 @@ def _aces_table(
         chain_by_owner[owner_address] = chain
         lines.append(f"  chain {chain} {{")
         for rule in rules:
-            if (
-                isinstance(rule, Mapping)
-                and rule["owner_address"] == owner_address
-            ):
-                lines.extend(
-                    _aces_rule_expressions(policy, rule, family=family)
-                )
-        lines.extend(["    return", "  }"])
+            if isinstance(rule, Mapping) and rule["owner_address"] == owner_address:
+                lines.extend(_aces_rule_expressions(policy, rule, family=family))
+        lines.extend(
+            [
+                (
+                    "    return comment "
+                    + _quoted(_rule_marker(f"{owner_address}/default"))
+                ),
+                "  }",
+            ]
+        )
     lines.extend(
         [
             "  chain forward {",
@@ -484,27 +644,32 @@ def _aces_table(
                 if len(addresses) == 1
                 else "{ " + ", ".join(addresses) + " }"
             )
-            lines.append(f"    ip daddr {rendered} jump {chain}")
-            lines.append(f"    ip saddr {rendered} jump {chain}")
+            lines.append(
+                f"    ip daddr {rendered} jump {chain} comment "
+                + _quoted(_rule_marker(f"{owner_address}/dispatch/in"))
+            )
+            lines.append(
+                f"    ip saddr {rendered} jump {chain} comment "
+                + _quoted(_rule_marker(f"{owner_address}/dispatch/out"))
+            )
         else:
             owner_rules = [
                 rule
                 for rule in rules
-                if isinstance(rule, Mapping)
-                and rule["owner_address"] == owner_address
+                if isinstance(rule, Mapping) and rule["owner_address"] == owner_address
             ]
-            owner_names = {
-                str(rule["owner_name"]) for rule in owner_rules
-            }
+            owner_names = {str(rule["owner_name"]) for rule in owner_rules}
             for owner_name in sorted(owner_names):
                 bridge = str(networks[owner_name]["bridge"])
                 ingress = "ibrname" if family == "bridge" else "iifname"
                 egress = "obrname" if family == "bridge" else "oifname"
                 lines.append(
-                    f"    {egress} {_quoted(bridge)} jump {chain}"
+                    f"    {egress} {_quoted(bridge)} jump {chain} comment "
+                    + _quoted(_rule_marker(f"{owner_address}/dispatch/in"))
                 )
                 lines.append(
-                    f"    {ingress} {_quoted(bridge)} jump {chain}"
+                    f"    {ingress} {_quoted(bridge)} jump {chain} comment "
+                    + _quoted(_rule_marker(f"{owner_address}/dispatch/out"))
                 )
     lines.extend(["  }", "}"])
     return lines
@@ -544,8 +709,7 @@ def _platform_table(
         (
             "  comment "
             + _quoted(
-                f"aptl-owner={_owner_marker(owner)},"
-                f"authority=platform,digest={digest}"
+                f"aptl-owner={_owner_marker(owner)},authority=platform,digest={digest}"
             )
         ),
         "  chain forward {",
@@ -560,21 +724,19 @@ def _platform_table(
             # depends on a stale neighbor cache and fails after a clean boot.
             lines.append(
                 f"    ibrname {_quoted(bridge)} obrname {_quoted(bridge)} "
-                "ether type arp accept comment \"platform/arp\""
+                'ether type arp accept comment "platform/arp"'
             )
             lines.append(
                 f"    ibrname {_quoted(bridge)} obrname {_quoted(bridge)} "
                 "ether type ip6 meta l4proto ipv6-icmp "
                 "icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert } "
-                "accept comment \"platform/nd\""
+                'accept comment "platform/nd"'
             )
     for crossing in crossings:
         if not isinstance(crossing, Mapping):
             continue
         source_addresses = _workload_ipv4(anchors[str(crossing["source"])])
-        destination_addresses = _workload_ipv4(
-            anchors[str(crossing["destination"])]
-        )
+        destination_addresses = _workload_ipv4(anchors[str(crossing["destination"])])
         ingress = "ibrname" if family == "bridge" else "iifname"
         egress = "obrname" if family == "bridge" else "oifname"
         ports = crossing["ports"]
@@ -585,9 +747,7 @@ def _platform_table(
             else "{ " + ", ".join(str(port) for port in ports) + " }"
         )
         identity = f"platform/{crossing['purpose']}"
-        for network_name in sorted(
-            set(source_addresses) & set(destination_addresses)
-        ):
+        for network_name in sorted(set(source_addresses) & set(destination_addresses)):
             bridge = str(networks[network_name]["bridge"])
             source = source_addresses[network_name]
             destination = destination_addresses[network_name]
@@ -595,13 +755,13 @@ def _platform_table(
                 f"    {ingress} {_quoted(bridge)} {egress} {_quoted(bridge)} "
                 f"ip saddr {source} ip daddr {destination} "
                 f"{crossing['protocol']} dport {rendered_ports} accept "
-                f"comment {_quoted(identity)}"
+                f"comment {_quoted(_rule_marker(identity))}"
             )
             lines.append(
                 f"    {ingress} {_quoted(bridge)} {egress} {_quoted(bridge)} "
                 f"ip saddr {destination} ip daddr {source} "
                 f"ct state established,related accept "
-                f"comment {_quoted(identity + '/reply')}"
+                f"comment {_quoted(_rule_marker(identity + '/reply'))}"
             )
     if family == "inet":
         egress_anchor = anchors.get("egress")
@@ -619,25 +779,46 @@ def _platform_table(
                 "192.0.0.0/24, 192.168.0.0/16, 198.18.0.0/15, "
                 "224.0.0.0/4, 240.0.0.0/4 }"
             )
-            for network_name, source in sorted(
-                _workload_ipv4(egress_anchor).items()
-            ):
+            zone_networks = policy["zone_networks"]
+            assert isinstance(zone_networks, list)
+            egress_network = next(
+                str(item["network"])
+                for item in zone_networks
+                if isinstance(item, Mapping) and item["zone"] == "egress"
+            )
+            egress_sources = _workload_ipv4(egress_anchor)
+            for network_name, source in sorted(egress_sources.items()):
+                if network_name != egress_network:
+                    continue
                 bridge = str(networks[network_name]["bridge"])
+                lines.append(
+                    f"    oifname {_quoted(bridge)} ip daddr {source} "
+                    "ct state established,related accept comment "
+                    + _quoted(
+                        _rule_marker("platform/egress-broker-reply/" + network_name)
+                    )
+                )
                 lines.append(
                     f"    iifname {_quoted(bridge)} ip saddr {source} "
                     f"ip daddr {denied_ipv4} drop "
-                    f"comment {_quoted('platform/egress-denied-range')}"
+                    f"comment {_quoted(_rule_marker('platform/egress-denied-range/' + network_name))}"
                 )
                 lines.append(
                     f"    iifname {_quoted(bridge)} ip saddr {source} "
                     f"tcp dport {rendered_ports} accept "
-                    f"comment {_quoted('platform/egress-broker')}"
+                    f"comment {_quoted(_rule_marker('platform/egress-broker/' + network_name))}"
                 )
     for bridge in sorted(str(item["bridge"]) for item in networks.values()):
         ingress = "ibrname" if family == "bridge" else "iifname"
         egress = "obrname" if family == "bridge" else "oifname"
-        lines.append(f"    {ingress} {_quoted(bridge)} drop")
-        lines.append(f"    {egress} {_quoted(bridge)} drop")
+        lines.append(
+            f"    {ingress} {_quoted(bridge)} drop comment "
+            + _quoted(_rule_marker(f"platform/default-ingress/{bridge}"))
+        )
+        lines.append(
+            f"    {egress} {_quoted(bridge)} drop comment "
+            + _quoted(_rule_marker(f"platform/default-egress/{bridge}"))
+        )
     lines.extend(["  }"])
     if family == "inet":
         for chain, hook, interface in (
@@ -651,7 +832,10 @@ def _platform_table(
                 ]
             )
             for bridge in sorted(str(item["bridge"]) for item in networks.values()):
-                lines.append(f"    {interface} {_quoted(bridge)} drop")
+                lines.append(
+                    f"    {interface} {_quoted(bridge)} drop comment "
+                    + _quoted(_rule_marker(f"platform/{chain}/{bridge}"))
+                )
             lines.append("  }")
     lines.append("}")
     return lines
@@ -713,6 +897,87 @@ def _table_comment(family: str, table_name: str) -> str | None:
     return None
 
 
+def _table_payload(family: str, table_name: str) -> dict[str, object]:
+    try:
+        return _nft_json("list", "table", family, table_name)
+    except RuntimeError:
+        return {}
+
+
+def _expected_chains(
+    policy: Mapping[str, object],
+    family: str,
+) -> dict[str, tuple[str | None, int | None, str | None]]:
+    if policy["authority"] == "platform":
+        expected = {"forward": ("forward", -300, "accept")}
+        if family == "inet":
+            expected.update(
+                {
+                    "host_input": ("input", -300, "accept"),
+                    "host_output": ("output", -300, "accept"),
+                }
+            )
+        return expected
+    bindings = policy["owner_bindings"]
+    assert isinstance(bindings, list)
+    expected = {"forward": ("forward", -200, "accept")}
+    for binding in bindings:
+        if isinstance(binding, Mapping):
+            address = str(binding["owner_address"])
+            chain = "owner_" + hashlib.sha256(address.encode()).hexdigest()[:12]
+            expected[chain] = (None, None, None)
+    return expected
+
+
+def _expected_rule_comments(
+    policy: Mapping[str, object],
+    family: str,
+    table_name: str,
+) -> list[str]:
+    renderer = _aces_table if policy["authority"] == "aces" else _platform_table
+    comments: list[str] = []
+    for line in renderer(policy, family, table_name):
+        if not line.startswith("    ") or " comment " not in line:
+            continue
+        raw = line.rsplit(" comment ", 1)[1]
+        value = json.loads(raw)
+        if not isinstance(value, str):
+            raise RuntimeError("boundary expected rule identity was invalid")
+        comments.append(value)
+    return sorted(comments)
+
+
+def _verify_observed_family(
+    policy: Mapping[str, object],
+    family: str,
+) -> bool:
+    table_name = _table_name(str(policy["owner"]), str(policy["authority"]))
+    payload = _table_payload(family, table_name)
+    nftables = payload.get("nftables", [])
+    if not isinstance(nftables, list):
+        return False
+    chains: dict[str, tuple[str | None, int | None, str | None]] = {}
+    comments: list[str] = []
+    for item in nftables:
+        if not isinstance(item, dict):
+            continue
+        chain = item.get("chain")
+        if isinstance(chain, dict) and isinstance(chain.get("name"), str):
+            chains[str(chain["name"])] = (
+                chain.get("hook") if isinstance(chain.get("hook"), str) else None,
+                chain.get("prio") if isinstance(chain.get("prio"), int) else None,
+                chain.get("policy") if isinstance(chain.get("policy"), str) else None,
+            )
+        rule = item.get("rule")
+        if isinstance(rule, dict) and isinstance(rule.get("comment"), str):
+            comments.append(str(rule["comment"]))
+        elif isinstance(rule, dict):
+            return False
+    return chains == _expected_chains(policy, family) and sorted(
+        comments
+    ) == _expected_rule_comments(policy, family, table_name)
+
+
 def _owned_families(policy: Mapping[str, object]) -> tuple[str, ...]:
     owner = str(policy["owner"])
     authority = str(policy["authority"])
@@ -749,6 +1014,8 @@ def _apply(policy: dict[str, object]) -> dict[str, object]:
     observed = _owned_families(policy)
     if observed != ("bridge", "inet"):
         raise RuntimeError("boundary tables were not observed")
+    if not all(_verify_observed_family(policy, family) for family in observed):
+        raise RuntimeError("boundary rule readback did not match")
     return _receipt(policy, observed)
 
 
@@ -773,6 +1040,8 @@ def _observe(policy: dict[str, object]) -> dict[str, object]:
         comment = _table_comment(family, table_name) or ""
         if f"digest={digest}" not in comment:
             raise RuntimeError("boundary policy digest mismatch")
+        if not _verify_observed_family(policy, family):
+            raise RuntimeError("boundary rule readback did not match")
     return _receipt(policy, families)
 
 
@@ -791,6 +1060,8 @@ def main() -> int:
     except (
         ValueError,
         RuntimeError,
+        KeyError,
+        TypeError,
         OSError,
         subprocess.SubprocessError,
         json.JSONDecodeError,

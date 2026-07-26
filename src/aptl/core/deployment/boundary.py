@@ -13,6 +13,7 @@ from aptl.core.deployment.realization import DeploymentAclRealization
 
 _OWNER = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$")
 _BRIDGE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,14}$")
+_PLATFORM_ZONES = {"participant", "management", "egress"}
 
 
 @dataclass(frozen=True)
@@ -128,9 +129,9 @@ class AcesBoundarySpec:
                 or binding.owner_resource_type != rule.owner_resource_type
             ):
                 raise ValueError("ACL rule has no exact owner binding")
-            if (
-                rule.from_network is not None and rule.from_network not in known
-            ) or (rule.to_network is not None and rule.to_network not in known):
+            if (rule.from_network is not None and rule.from_network not in known) or (
+                rule.to_network is not None and rule.to_network not in known
+            ):
                 raise ValueError("ACL rule references an unknown network")
             current = (rule.owner_address, rule.order, rule.name)
             if prior is not None and current < prior:
@@ -191,6 +192,10 @@ class PlatformBoundarySpec:
     owner: str
     policy_digest: str
     networks: tuple[BoundaryNetwork, ...]
+    zone_networks: tuple[
+        tuple[Literal["participant", "management", "egress"], str],
+        ...,
+    ]
     anchors: tuple[
         tuple[Literal["participant", "management", "egress"], BoundaryWorkload],
         ...,
@@ -205,11 +210,22 @@ class PlatformBoundarySpec:
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.policy_digest):
             raise ValueError("invalid platform policy digest")
         zones = [zone for zone, _network in self.anchors]
-        if len(zones) != len(set(zones)):
-            raise ValueError("platform anchors must be unique")
+        if set(zones) != _PLATFORM_ZONES or len(zones) != 3:
+            raise ValueError("platform anchors must cover each policy zone")
         _validate_networks(self.networks)
+        if len(self.networks) != 3 or any(
+            network.ipv6_cidr is not None for network in self.networks
+        ):
+            raise ValueError("platform networks must be three IPv4 policy domains")
         known = {network.name for network in self.networks}
-        for _zone, workload in self.anchors:
+        zone_networks = dict(self.zone_networks)
+        if (
+            set(zone_networks) != _PLATFORM_ZONES
+            or len(self.zone_networks) != 3
+            or set(zone_networks.values()) != known
+        ):
+            raise ValueError("platform zone networks must be exact and distinct")
+        for zone, workload in self.anchors:
             if any(
                 network not in known
                 for network, _address in (
@@ -218,6 +234,15 @@ class PlatformBoundarySpec:
                 )
             ):
                 raise ValueError("platform workload references an unknown network")
+            if (
+                not workload.ipv4_by_network
+                or workload.ipv6_by_network
+                or zone_networks[zone]
+                not in {network for network, _address in workload.ipv4_by_network}
+            ):
+                raise ValueError(
+                    "platform workload requires its IPv4 policy attachment"
+                )
         if len(self.egress_ports) != len(set(self.egress_ports)) or any(
             not 0 < port <= 65535 for port in self.egress_ports
         ):
@@ -229,6 +254,10 @@ class PlatformBoundarySpec:
             "owner": self.owner,
             "policy_digest": self.policy_digest,
             "networks": [network.details() for network in self.networks],
+            "zone_networks": [
+                {"zone": zone, "network": network}
+                for zone, network in self.zone_networks
+            ],
             "anchors": [
                 {"zone": zone, "workload": workload.details()}
                 for zone, workload in self.anchors

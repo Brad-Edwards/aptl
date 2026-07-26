@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
@@ -16,7 +16,7 @@ from aptl.utils.redaction import redact
 
 
 class _StrictObservation(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class BoundaryEndpoint(_StrictObservation):
@@ -48,8 +48,19 @@ class BoundaryEnforcementObservation(_StrictObservation):
 
 class BoundaryProbeObservation(_StrictObservation):
     identity: str = Field(min_length=1, max_length=128)
+    authority: Literal["aces", "platform"]
+    source: str = Field(min_length=1, max_length=160)
+    destination: str = Field(min_length=1, max_length=160)
+    protocol: Literal["any", "tcp", "udp", "icmp"]
+    port: int | None = Field(default=None, ge=1, le=65535)
     expectation: Literal["reachable", "blocked"]
     passed: bool
+
+    @model_validator(mode="after")
+    def validate_transport_port(self) -> BoundaryProbeObservation:
+        if (self.protocol in {"tcp", "udp"}) != (self.port is not None):
+            raise ValueError("probe port must match its transport")
+        return self
 
 
 class DockerAuthorityHolder(_StrictObservation):
@@ -70,6 +81,7 @@ class GuestBoundaryObservation(_StrictObservation):
     aces_plan_digest: Digest
     boot_id: str = Field(min_length=1, max_length=128)
     guest_daemon_id: str = Field(min_length=1, max_length=128)
+    workbench_policy_version: str = Field(min_length=1, max_length=128)
     enforcements: tuple[BoundaryEnforcementObservation, ...]
     observation_complete: bool
     probes: tuple[BoundaryProbeObservation, ...]
@@ -163,17 +175,19 @@ def _append_guest_findings(
             "boundary.guest-daemon-identity-mismatch",
         ),
         (
+            guest.workbench_policy_version != policy.workbench_policy_version,
+            "boundary.guest-workbench-policy-mismatch",
+        ),
+        (
             not guest.observation_complete,
             "boundary.guest-observation-incomplete",
         ),
     )
     findings.extend(code for failed, code in comparisons if failed)
     _append_enforcement_findings(policy, binding, guest, findings)
-    _append_probe_findings(guest, findings)
+    _append_probe_findings(binding, guest, findings)
     allowed = set(policy.docker_authority.allowed_holder_labels)
-    if {
-        holder.label_selector for holder in guest.docker_authority_holders
-    } - allowed:
+    if {holder.label_selector for holder in guest.docker_authority_holders} - allowed:
         findings.append("boundary.guest-docker-authority-unapproved")
     if any(
         holder.daemon_id != binding.guest_daemon_id
@@ -208,22 +222,28 @@ def _append_enforcement_findings(
     if policy.default_deny and not platform.default_deny_observed:
         findings.append("boundary.guest-default-deny-missing")
     aces = by_authority.get("aces")
-    if aces is not None and aces.source_digest != binding.aces_plan_digest:
+    if binding.aces_boundary_required and aces is None:
+        findings.append("boundary.guest-aces-enforcement-missing")
+    elif aces is not None and aces.source_digest != binding.aces_plan_digest:
         findings.append("boundary.guest-aces-source-mismatch")
 
 
 def _append_probe_findings(
+    binding: ApplianceBoundaryBinding,
     guest: GuestBoundaryObservation,
     findings: list[str],
 ) -> None:
-    positive = [
-        item for item in guest.probes if item.expectation == "reachable"
-    ]
-    negative = [item for item in guest.probes if item.expectation == "blocked"]
-    if not positive or any(not item.passed for item in positive):
-        findings.append("boundary.guest-positive-probe-failed")
-    if not negative or any(not item.passed for item in negative):
-        findings.append("boundary.guest-negative-probe-failed")
+    required_authorities = {"platform"}
+    if binding.aces_boundary_required:
+        required_authorities.add("aces")
+    for authority in sorted(required_authorities):
+        scoped = [item for item in guest.probes if item.authority == authority]
+        positive = [item for item in scoped if item.expectation == "reachable"]
+        negative = [item for item in scoped if item.expectation == "blocked"]
+        if not positive or any(not item.passed for item in positive):
+            findings.append(f"boundary.guest-{authority}-positive-probe-failed")
+        if not negative or any(not item.passed for item in negative):
+            findings.append(f"boundary.guest-{authority}-negative-probe-failed")
 
 
 def _inventory(
@@ -244,6 +264,11 @@ def _inventory(
         },
         "payload_digest": binding.payload_digest,
         "aces_plan_digest": binding.aces_plan_digest,
+        "aces_boundary_required": binding.aces_boundary_required,
+        "images": {
+            "boundary_helper": binding.boundary_helper_image,
+            "egress_proxy": binding.egress_proxy_image,
+        },
         "boot_id": binding.boot_id,
         "host": (
             {"observation_id": host.observation_id, "complete": host.complete}
@@ -252,6 +277,7 @@ def _inventory(
         ),
         "guest": {
             "guest_daemon_id": guest.guest_daemon_id,
+            "workbench_policy_version": guest.workbench_policy_version,
             "enforcements": [
                 {
                     "authority": item.authority,
@@ -265,6 +291,11 @@ def _inventory(
             "probes": [
                 {
                     "identity": item.identity,
+                    "authority": item.authority,
+                    "source": item.source,
+                    "destination": item.destination,
+                    "protocol": item.protocol,
+                    "port": item.port,
                     "expectation": item.expectation,
                     "passed": item.passed,
                 }

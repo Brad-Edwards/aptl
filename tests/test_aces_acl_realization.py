@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from aces_contracts.planning import PlannedResource, ProvisioningPlan, RuntimeDomain
 
 from aptl.backends.aces_realization import interpret_provisioning_plan
@@ -172,3 +173,134 @@ def test_acl_lowering_rejects_unsupported_semantics_before_backend(tmp_path) -> 
         "aptl.provisioner.acl-protocol-unsupported",
     }
     assert realization.deployment_spec(["victim"]).acls == ()
+
+
+@pytest.mark.parametrize(
+    ("from_net", "cidr", "code"),
+    [
+        (
+            "orchard",
+            "2001:db8:44::/64",
+            "aptl.provisioner.acl-endpoint-family-unsupported",
+        ),
+    ],
+)
+def test_acl_lowering_rejects_unenforceable_endpoint_forms(
+    tmp_path,
+    from_net: str | None,
+    cidr: str,
+    code: str,
+) -> None:
+    _project(tmp_path)
+    orchard = _resource(
+        "orchard",
+        "network",
+        {"properties": {"cidr": cidr}},
+    )
+    sentinel = _resource(
+        "sentinel",
+        "node",
+        {
+            "links": ["orchard"],
+            "properties": [],
+            "acls": [
+                {
+                    "name": "bounded",
+                    "direction": "in",
+                    "from_net": from_net,
+                    "to_net": "orchard",
+                    "protocol": "tcp",
+                    "ports": [443],
+                    "action": "allow",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(orchard, sentinel),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+    )
+
+    assert code in {item.code for item in realization.diagnostics}
+    assert realization.deployment_spec(["victim"]).acls == ()
+
+
+def test_acl_lowering_preserves_an_authored_wildcard_endpoint(tmp_path) -> None:
+    _project(tmp_path)
+    orchard = _resource(
+        "orchard",
+        "network",
+        {"properties": {"cidr": "10.44.1.0/24"}},
+    )
+    sentinel = _resource(
+        "sentinel",
+        "node",
+        {
+            "links": ["orchard"],
+            "properties": [{"orchard": "10.44.1.10"}],
+            "acls": [
+                {
+                    "name": "allow-any-source",
+                    "direction": "in",
+                    "to_net": "orchard",
+                    "protocol": "tcp",
+                    "ports": [443],
+                    "action": "allow",
+                }
+            ],
+        },
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(orchard, sentinel),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+    )
+
+    assert [item.code for item in realization.diagnostics] == []
+    assert realization.deployment_spec(["victim"]).acls[0].from_network is None
+
+
+def test_network_owned_acl_is_preserved_as_network_policy(tmp_path) -> None:
+    _project(tmp_path)
+    orchard = _resource(
+        "orchard",
+        "network",
+        {
+            "properties": {"cidr": "10.44.1.0/24"},
+            "acls": [
+                {
+                    "name": "deny-outbound",
+                    "direction": "out",
+                    "from_net": "orchard",
+                    "to_net": "quartz",
+                    "protocol": "any",
+                    "ports": [],
+                    "action": "deny",
+                }
+            ],
+        },
+    )
+    quartz = _resource(
+        "quartz",
+        "network",
+        {"properties": {"cidr": "10.44.2.0/24"}},
+    )
+
+    realization = interpret_provisioning_plan(
+        plan=_plan(orchard, quartz),
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+    )
+
+    assert not [
+        item.code
+        for item in realization.diagnostics
+        if item.code.startswith("aptl.provisioner.acl-")
+    ]
+    acl = realization.deployment_spec(["victim"]).acls[0]
+    assert acl.owner_resource_type == "network"
+    assert acl.owner_address == "provision.network.orchard"
+    assert acl.owner_name == "orchard"

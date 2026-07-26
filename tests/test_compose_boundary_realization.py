@@ -18,7 +18,13 @@ def _spec() -> PlatformBoundarySpec:
         policy_digest="sha256:" + "a" * 64,
         networks=(
             BoundaryNetwork(name="participant-net", bridge="br-part"),
-            BoundaryNetwork(name="transit", bridge="br-transit"),
+            BoundaryNetwork(name="management-net", bridge="br-mgmt"),
+            BoundaryNetwork(name="egress-net", bridge="br-egress"),
+        ),
+        zone_networks=(
+            ("participant", "participant-net"),
+            ("management", "management-net"),
+            ("egress", "egress-net"),
         ),
         anchors=(
             (
@@ -34,7 +40,7 @@ def _spec() -> PlatformBoundarySpec:
                 BoundaryWorkload(
                     identity="management-agent",
                     labels=(("org.aptl.zone", "management"),),
-                    ipv4_by_network=(("transit", "10.50.2.10"),),
+                    ipv4_by_network=(("management-net", "10.50.2.10"),),
                 ),
             ),
             (
@@ -42,7 +48,10 @@ def _spec() -> PlatformBoundarySpec:
                 BoundaryWorkload(
                     identity="egress-proxy",
                     labels=(("org.aptl.zone", "egress"),),
-                    ipv4_by_network=(("transit", "10.50.2.20"),),
+                    ipv4_by_network=(
+                        ("management-net", "10.50.2.20"),
+                        ("egress-net", "10.50.3.20"),
+                    ),
                 ),
             ),
         ),
@@ -118,3 +127,17 @@ def test_boundary_readback_mismatch_fails_closed(tmp_path) -> None:
 
     assert receipt.success is False
     assert receipt.error == "Boundary policy readback did not match desired state."
+
+
+def test_missing_signed_helper_never_falls_back_to_a_local_build(tmp_path) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="seat-17")
+    backend._boundary_helper_image = "example.test/aptl-boundary@sha256:" + "f" * 64
+    backend._run = MagicMock(return_value=MagicMock(returncode=1))
+    backend._run_with_input = MagicMock()
+
+    receipt = backend.realize_boundary(_spec())
+
+    assert receipt.success is False
+    assert receipt.error == "Signed boundary enforcement helper was unavailable."
+    backend._run_with_input.assert_not_called()
+    assert backend._run.call_count == 1

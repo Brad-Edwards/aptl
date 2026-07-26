@@ -96,9 +96,7 @@ def _realize_acl(
         return None
     return DeploymentAclRealization(
         owner_address=resource.address,
-        owner_resource_type=cast(
-            Literal["node", "network"], resource.resource_type
-        ),
+        owner_resource_type=cast(Literal["node", "network"], resource.resource_type),
         owner_name=(
             network_names.get(resource.address, "")
             if resource.resource_type == "network"
@@ -150,14 +148,8 @@ def _validate_endpoint(
     diagnostics: list[Diagnostic],
 ) -> None:
     if not value:
-        diagnostics.append(
-            _acl_diagnostic(
-                resource,
-                "endpoint-wildcard-unsupported",
-                "ACES ACL wildcard endpoints are unsupported by this backend.",
-            )
-        )
-    elif value not in network_lookup:
+        return
+    if value not in network_lookup:
         diagnostics.append(
             _acl_diagnostic(
                 resource,
@@ -165,20 +157,20 @@ def _validate_endpoint(
                 "ACES ACL endpoint does not resolve to an admitted network.",
             )
         )
-    else:
-        cidr = network_lookup[value].cidr
-        try:
-            supported = bool(cidr) and ip_network(cidr, strict=False).version == 4
-        except ValueError:
-            supported = False
-        if not supported:
-            diagnostics.append(
-                _acl_diagnostic(
-                    resource,
-                    "endpoint-family-unsupported",
-                    "ACES ACL endpoint requires an observed IPv4 network.",
-                )
+        return
+    cidr = network_lookup[value].cidr
+    try:
+        supported = bool(cidr) and ip_network(cidr, strict=False).version == 4
+    except ValueError:
+        supported = False
+    if not supported:
+        diagnostics.append(
+            _acl_diagnostic(
+                resource,
+                "endpoint-family-unsupported",
+                "ACES ACL endpoint requires an observed IPv4 network.",
             )
+        )
 
 
 def _ports(
@@ -193,9 +185,7 @@ def _ports(
         )
         return ()
     if any(
-        not isinstance(port, int)
-        or isinstance(port, bool)
-        or not 0 < port <= 65535
+        not isinstance(port, int) or isinstance(port, bool) or not 0 < port <= 65535
         for port in raw
     ):
         diagnostics.append(

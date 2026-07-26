@@ -2,17 +2,13 @@
 
 import importlib.util
 import ipaddress
+import json
 from pathlib import Path
 
 import pytest
 
 
-PROXY = (
-    Path(__file__).parents[1]
-    / "containers"
-    / "appliance-egress-proxy"
-    / "proxy.py"
-)
+PROXY = Path(__file__).parents[1] / "containers" / "appliance-egress-proxy" / "proxy.py"
 
 
 @pytest.fixture(scope="module")
@@ -78,3 +74,50 @@ def test_any_unsafe_dns_answer_fails_the_whole_resolution(proxy) -> None:
 
     with pytest.raises(ValueError, match="unsafe"):
         proxy.validate_resolved_addresses(answers)
+
+
+def test_signed_resource_limits_are_loaded_with_authorities(proxy, tmp_path) -> None:
+    path = tmp_path / "egress.json"
+    path.write_text(
+        json.dumps(
+            {
+                "authorities": [{"authority": "api.example.test", "port": 443}],
+                "limits": {
+                    "max_connections": 32,
+                    "max_header_bytes": 4096,
+                    "header_timeout_seconds": 5,
+                    "connect_timeout_seconds": 10,
+                    "idle_timeout_seconds": 60,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    allowed, limits = proxy._load_policy(path)
+
+    assert allowed == {("api.example.test", 443)}
+    assert limits.max_connections == 32
+    assert limits.idle_timeout_seconds == 60
+
+
+def test_out_of_range_proxy_limit_fails_closed(proxy, tmp_path) -> None:
+    path = tmp_path / "egress.json"
+    path.write_text(
+        json.dumps(
+            {
+                "authorities": [{"authority": "api.example.test", "port": 443}],
+                "limits": {
+                    "max_connections": 0,
+                    "max_header_bytes": 4096,
+                    "header_timeout_seconds": 5,
+                    "connect_timeout_seconds": 10,
+                    "idle_timeout_seconds": 60,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="limits"):
+        proxy._load_policy(path)

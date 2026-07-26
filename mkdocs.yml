@@ -99,6 +99,7 @@ nav:
     - MCP Integration: components/mcp-integration.md
     - MCP Smoke-Test Protocol: components/mcp-smoke-test-protocol.md
     - Participant Workbench: components/participant-workbench.md
+    - Appliance Network Boundary: components/appliance-boundary.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
     - Curated ACES Variants: sdl/techvault-curated-variants.md

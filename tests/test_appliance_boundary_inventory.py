@@ -24,6 +24,9 @@ def _binding() -> ApplianceBoundaryBinding:
         policy_digest=POLICY_DIGEST,
         payload_digest=PAYLOAD_DIGEST,
         aces_plan_digest="sha256:" + "4" * 64,
+        aces_boundary_required=False,
+        boundary_helper_image="example.test/aptl-boundary@sha256:" + "5" * 64,
+        egress_proxy_image="example.test/aptl-egress@sha256:" + "6" * 64,
         boot_id="boot-42",
         guest_daemon_id="daemon-42",
         host_observation_id="host-42",
@@ -36,7 +39,13 @@ def _policy() -> ApplianceBoundaryPolicy:
             "schema_version": "aptl.appliance-boundary/v1",
             "policy_id": "default",
             "generation": 1,
+            "workbench_policy_version": "participant-workbench-profile/v1",
             "default_deny": True,
+            "platform_networks": {
+                "participant": "org.aptl.network=participant",
+                "management": "org.aptl.network=management",
+                "egress": "org.aptl.network=egress",
+            },
             "platform_anchors": {
                 "participant": "org.aptl.appliance.zone=participant",
                 "management": "org.aptl.appliance.zone=management",
@@ -44,6 +53,13 @@ def _policy() -> ApplianceBoundaryPolicy:
             },
             "fixed_crossings": [],
             "egress_authorities": [],
+            "egress_proxy_limits": {
+                "max_connections": 32,
+                "max_header_bytes": 4096,
+                "header_timeout_seconds": 5,
+                "connect_timeout_seconds": 10,
+                "idle_timeout_seconds": 60,
+            },
             "guest_publications": [
                 {
                     "audience": "participant",
@@ -97,6 +113,7 @@ def _guest() -> GuestBoundaryObservation:
         aces_plan_digest="sha256:" + "4" * 64,
         boot_id="boot-42",
         guest_daemon_id="daemon-42",
+        workbench_policy_version="participant-workbench-profile/v1",
         enforcements=(
             BoundaryEnforcementObservation(
                 authority="platform",
@@ -110,11 +127,21 @@ def _guest() -> GuestBoundaryObservation:
         probes=(
             BoundaryProbeObservation(
                 identity="management-to-egress",
+                authority="platform",
+                source="management",
+                destination="egress",
+                protocol="tcp",
+                port=3128,
                 expectation="reachable",
                 passed=True,
             ),
             BoundaryProbeObservation(
                 identity="kali-to-metadata",
+                authority="platform",
+                source="provision.node.kali",
+                destination="metadata",
+                protocol="tcp",
+                port=80,
                 expectation="blocked",
                 passed=True,
             ),
@@ -137,6 +164,19 @@ def test_missing_physical_host_observation_is_fatal() -> None:
 
     assert result.passed is False
     assert result.findings == ("boundary.host-observation-missing",)
+
+
+def test_required_aces_authority_cannot_be_omitted() -> None:
+    binding = _binding().model_copy(update={"aces_boundary_required": True})
+
+    result = qualify_appliance_boundary(_policy(), binding, _host(), _guest())
+
+    assert result.passed is False
+    assert result.findings == (
+        "boundary.guest-aces-enforcement-missing",
+        "boundary.guest-aces-positive-probe-failed",
+        "boundary.guest-aces-negative-probe-failed",
+    )
 
 
 def test_unknown_listener_and_stale_identity_fail_closed() -> None:

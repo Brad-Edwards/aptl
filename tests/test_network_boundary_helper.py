@@ -7,10 +7,7 @@ import pytest
 
 
 HELPER = (
-    Path(__file__).parents[1]
-    / "containers"
-    / "network-boundary-helper"
-    / "helper.py"
+    Path(__file__).parents[1] / "containers" / "network-boundary-helper" / "helper.py"
 )
 
 
@@ -74,7 +71,13 @@ def _platform_policy() -> dict[str, object]:
         "policy_digest": "sha256:" + "a" * 64,
         "networks": [
             _network("participant-net", "br-part", "10.50.1.0/24"),
-            _network("transit", "br-transit", "10.50.2.0/24"),
+            _network("management-net", "br-mgmt", "10.50.2.0/24"),
+            _network("egress-net", "br-egress", "10.50.3.0/24"),
+        ],
+        "zone_networks": [
+            {"zone": "participant", "network": "participant-net"},
+            {"zone": "management", "network": "management-net"},
+            {"zone": "egress", "network": "egress-net"},
         ],
         "anchors": [
             {
@@ -91,7 +94,7 @@ def _platform_policy() -> dict[str, object]:
                 "workload": {
                     "identity": "management-agent",
                     "labels": [["org.aptl.zone", "management"]],
-                    "ipv4_by_network": [["transit", "10.50.2.10"]],
+                    "ipv4_by_network": [["management-net", "10.50.2.10"]],
                     "ipv6_by_network": [],
                 },
             },
@@ -100,7 +103,10 @@ def _platform_policy() -> dict[str, object]:
                 "workload": {
                     "identity": "egress-proxy",
                     "labels": [["org.aptl.zone", "egress"]],
-                    "ipv4_by_network": [["transit", "10.50.2.20"]],
+                    "ipv4_by_network": [
+                        ["management-net", "10.50.2.20"],
+                        ["egress-net", "10.50.3.20"],
+                    ],
                     "ipv6_by_network": [],
                 },
             },
@@ -138,11 +144,12 @@ def test_platform_floor_covers_forward_and_guest_host_paths(helper) -> None:
     assert "hook forward priority -300" in rendered
     assert "hook input priority -300" in rendered
     assert "hook output priority -300" in rendered
-    assert 'iifname "br-transit" oifname "br-transit"' in rendered
+    assert 'iifname "br-mgmt" oifname "br-mgmt"' in rendered
     assert "ip saddr 10.50.2.10 ip daddr 10.50.2.20" in rendered
     assert "tcp dport 3128 accept" in rendered
     assert "tcp dport 443 accept" in rendered
     assert "ct state established,related accept" in rendered
+    assert "ip daddr 10.50.3.20 ct state established,related accept" in rendered
     assert rendered.count("drop") >= 9
 
 
@@ -150,7 +157,9 @@ def test_authorities_get_distinct_owned_tables(helper) -> None:
     aces = helper.render_ruleset(_aces_policy(), existing_families=())
     platform = helper.render_ruleset(_platform_policy(), existing_families=())
 
-    aces_table = next(line for line in aces.splitlines() if line.startswith("table inet"))
+    aces_table = next(
+        line for line in aces.splitlines() if line.startswith("table inet")
+    )
     platform_table = next(
         line for line in platform.splitlines() if line.startswith("table inet")
     )
@@ -163,3 +172,98 @@ def test_helper_rejects_cross_authority_fields(helper) -> None:
 
     with pytest.raises(ValueError):
         helper.validate_policy(policy)
+
+
+def test_multiple_acl_owners_remain_independent_intersecting_chains(helper) -> None:
+    policy = _aces_policy()
+    policy["owner_bindings"].append(
+        {
+            "owner_address": "provision.node.gateway",
+            "owner_resource_type": "node",
+            "ipv4_by_network": [["orchard", "10.44.1.10"]],
+            "ipv6_by_network": [],
+        }
+    )
+    policy["rules"].append(
+        {
+            "owner_address": "provision.node.gateway",
+            "owner_resource_type": "node",
+            "owner_name": "gateway",
+            "name": "deny-other",
+            "order": 0,
+            "direction": "out",
+            "from_network": "orchard",
+            "to_network": "quartz",
+            "protocol": "any",
+            "ports": [],
+            "action": "deny",
+        }
+    )
+    policy["owner_bindings"].sort(key=lambda item: item["owner_address"])
+    policy["rules"].sort(
+        key=lambda item: (item["owner_address"], item["order"], item["name"])
+    )
+
+    rendered = helper.render_ruleset(policy, existing_families=())
+
+    assert rendered.count("chain owner_") == 4
+    assert "ip daddr 10.44.2.10 jump owner_" in rendered
+    assert "ip saddr 10.44.1.10 jump owner_" in rendered
+    assert "drop comment" in rendered
+
+
+def test_helper_rejects_malformed_direct_acl_without_native_mutation(helper) -> None:
+    policy = _aces_policy()
+    policy["rules"][0]["from_network"] = ["orchard"]
+
+    with pytest.raises(ValueError, match="endpoint"):
+        helper.validate_policy(policy)
+
+
+def test_authored_wildcard_endpoint_is_scoped_by_acl_owner(helper) -> None:
+    policy = _aces_policy()
+    policy["rules"][0]["from_network"] = None
+
+    rendered = helper.render_ruleset(policy, existing_families=())
+
+    assert "ip daddr 10.44.2.10 tcp dport 443 return" in rendered
+
+
+@pytest.mark.parametrize(
+    ("direction", "protocol", "needle"),
+    [
+        ("out", "udp", "udp dport 443 return"),
+        ("inout", "icmp", "meta l4proto icmp return"),
+        ("in", "any", "ip daddr 10.44.2.10 return"),
+    ],
+)
+def test_supported_acl_direction_and_protocol_subset_is_rendered_exactly(
+    helper,
+    direction: str,
+    protocol: str,
+    needle: str,
+) -> None:
+    policy = _aces_policy()
+    rule = policy["rules"][0]
+    policy["owner_bindings"][0]["ipv4_by_network"].append(["orchard", "10.44.1.20"])
+    rule["direction"] = direction
+    rule["protocol"] = protocol
+    rule["ports"] = [443] if protocol in {"tcp", "udp"} else []
+
+    rendered = helper.render_ruleset(policy, existing_families=())
+
+    assert needle in rendered
+    if direction == "inout":
+        assert rendered.count("meta l4proto icmp return") == 4
+
+
+def test_ruleset_replacement_is_one_atomic_native_transaction(helper) -> None:
+    rendered = helper.render_ruleset(
+        _aces_policy(),
+        existing_families=("bridge", "inet"),
+    )
+
+    assert rendered.startswith("delete table inet ")
+    assert "\ndelete table bridge " in rendered
+    assert rendered.count("table inet ") == 2
+    assert rendered.count("table bridge ") == 2

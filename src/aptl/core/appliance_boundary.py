@@ -23,6 +23,7 @@ _AUTHORITY = re.compile(
     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
 )
 _LABEL_SELECTOR = re.compile(r"^[a-z0-9][a-z0-9._/-]*=[a-z0-9][a-z0-9._-]*$")
+_IMAGE_DIGEST = re.compile(r"^[a-z0-9][a-z0-9._/:~-]{0,254}@sha256:[a-f0-9]{64}$")
 
 Digest = Annotated[str, Field(pattern=_DIGEST.pattern)]
 PlatformZone = Literal["participant", "management", "egress"]
@@ -30,7 +31,7 @@ Transport = Literal["tcp", "udp"]
 
 
 class _StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class PlatformAnchors(_StrictModel):
@@ -43,6 +44,21 @@ class PlatformAnchors(_StrictModel):
     def validate_label_selector(cls, value: str) -> str:
         if not _LABEL_SELECTOR.fullmatch(value):
             raise ValueError("platform anchors must be exact label selectors")
+        return value
+
+
+class PlatformNetworks(_StrictModel):
+    """Exact signed selectors for platform-owned policy domains."""
+
+    participant: str
+    management: str
+    egress: str
+
+    @field_validator("participant", "management", "egress")
+    @classmethod
+    def validate_label_selector(cls, value: str) -> str:
+        if not _LABEL_SELECTOR.fullmatch(value):
+            raise ValueError("platform networks must be exact label selectors")
         return value
 
 
@@ -64,9 +80,13 @@ class FixedCrossing(_StrictModel):
 
 
 class EgressAuthority(_StrictModel):
+    source: Literal["egress"]
     authority: str
+    protocol: Literal["tcp"]
     port: int = Field(ge=1, le=65535)
     purpose: str = Field(min_length=1, max_length=80)
+    resolution: Literal["proxy-resolved-all-global"]
+    failure_disposition: Literal["deny"]
 
     @field_validator("authority")
     @classmethod
@@ -78,8 +98,10 @@ class EgressAuthority(_StrictModel):
             pass
         else:
             raise ValueError("egress authority must not be an IP literal")
-        if "*" in normalized or "://" in normalized or not _AUTHORITY.fullmatch(
-            normalized
+        if (
+            "*" in normalized
+            or "://" in normalized
+            or not _AUTHORITY.fullmatch(normalized)
         ):
             raise ValueError("egress authority must be one exact DNS authority")
         return normalized
@@ -114,16 +136,27 @@ class DockerAuthorityPolicy(_StrictModel):
         return values
 
 
+class EgressProxyLimits(_StrictModel):
+    max_connections: int = Field(ge=1, le=256)
+    max_header_bytes: int = Field(ge=1024, le=16384)
+    header_timeout_seconds: int = Field(ge=1, le=30)
+    connect_timeout_seconds: int = Field(ge=1, le=60)
+    idle_timeout_seconds: int = Field(ge=5, le=600)
+
+
 class ApplianceBoundaryPolicy(_StrictModel):
     """Platform policy that deliberately cannot contain scenario topology."""
 
     schema_version: Literal["aptl.appliance-boundary/v1"]
     policy_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,79}$")
     generation: int = Field(ge=1)
+    workbench_policy_version: str = Field(pattern=r"^[a-z0-9][a-z0-9._/-]{0,127}$")
     default_deny: Literal[True]
+    platform_networks: PlatformNetworks
     platform_anchors: PlatformAnchors
     fixed_crossings: list[FixedCrossing] = Field(default_factory=list)
     egress_authorities: list[EgressAuthority] = Field(default_factory=list)
+    egress_proxy_limits: EgressProxyLimits
     guest_publications: list[GuestPublication] = Field(default_factory=list)
     docker_authority: DockerAuthorityPolicy
 
@@ -133,9 +166,7 @@ class ApplianceBoundaryPolicy(_StrictModel):
             (item.source, item.destination, item.protocol, tuple(item.ports))
             for item in self.fixed_crossings
         ]
-        authorities = [
-            (item.authority, item.port) for item in self.egress_authorities
-        ]
+        authorities = [(item.authority, item.port) for item in self.egress_authorities]
         publications = [
             (item.audience, item.address, item.port, item.protocol)
             for item in self.guest_publications
@@ -155,6 +186,9 @@ class ApplianceBoundaryBinding(_StrictModel):
     policy_digest: Digest
     payload_digest: Digest
     aces_plan_digest: Digest
+    aces_boundary_required: bool
+    boundary_helper_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
+    egress_proxy_image: str = Field(pattern=_IMAGE_DIGEST.pattern)
     boot_id: str = Field(min_length=1, max_length=128)
     guest_daemon_id: str = Field(min_length=1, max_length=128)
     host_observation_id: str = Field(min_length=1, max_length=128)
@@ -174,3 +208,20 @@ def load_boundary_policy(
     if not isinstance(parsed, dict):
         raise ValueError("appliance boundary policy must be a JSON object")
     return ApplianceBoundaryPolicy.model_validate(parsed)
+
+
+def render_egress_proxy_policy(policy: ApplianceBoundaryPolicy) -> bytes:
+    """Project only exact signed authorities into the closed CONNECT broker."""
+
+    authorities = sorted(
+        {(item.authority, item.port) for item in policy.egress_authorities}
+    )
+    if not authorities:
+        raise ValueError("egress proxy requires at least one admitted authority")
+    payload = {
+        "authorities": [
+            {"authority": authority, "port": port} for authority, port in authorities
+        ],
+        "limits": policy.egress_proxy_limits.model_dump(),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()

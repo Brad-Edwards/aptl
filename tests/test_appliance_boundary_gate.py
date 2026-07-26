@@ -22,7 +22,13 @@ def _payload() -> bytes:
             "schema_version": "aptl.appliance-boundary/v1",
             "policy_id": "default",
             "generation": 1,
+            "workbench_policy_version": "participant-workbench-profile/v1",
             "default_deny": True,
+            "platform_networks": {
+                "participant": "org.aptl.network=participant",
+                "management": "org.aptl.network=management",
+                "egress": "org.aptl.network=egress",
+            },
             "platform_anchors": {
                 "participant": "org.aptl.zone=participant",
                 "management": "org.aptl.zone=management",
@@ -30,6 +36,13 @@ def _payload() -> bytes:
             },
             "fixed_crossings": [],
             "egress_authorities": [],
+            "egress_proxy_limits": {
+                "max_connections": 32,
+                "max_header_bytes": 4096,
+                "header_timeout_seconds": 5,
+                "connect_timeout_seconds": 10,
+                "idle_timeout_seconds": 60,
+            },
             "guest_publications": [
                 {
                     "audience": "participant",
@@ -53,6 +66,9 @@ def _binding(payload: bytes) -> ApplianceBoundaryBinding:
         policy_digest="sha256:" + hashlib.sha256(payload).hexdigest(),
         payload_digest="sha256:" + "b" * 64,
         aces_plan_digest="sha256:" + "d" * 64,
+        aces_boundary_required=False,
+        boundary_helper_image="example.test/aptl-boundary@sha256:" + "e" * 64,
+        egress_proxy_image="example.test/aptl-egress@sha256:" + "f" * 64,
         boot_id="boot-1",
         guest_daemon_id="daemon-1",
         host_observation_id="host-1",
@@ -92,6 +108,7 @@ class _Adapter:
             aces_plan_digest=binding.aces_plan_digest,
             boot_id=binding.boot_id,
             guest_daemon_id=binding.guest_daemon_id,
+            workbench_policy_version="participant-workbench-profile/v1",
             enforcements=(
                 BoundaryEnforcementObservation(
                     authority="platform",
@@ -105,11 +122,21 @@ class _Adapter:
             probes=(
                 BoundaryProbeObservation(
                     identity="declared-crossing",
+                    authority="platform",
+                    source="management",
+                    destination="egress",
+                    protocol="tcp",
+                    port=3128,
                     expectation="reachable",
                     passed=True,
                 ),
                 BoundaryProbeObservation(
                     identity="forbidden-crossing",
+                    authority="platform",
+                    source="participant",
+                    destination="management",
+                    protocol="tcp",
+                    port=443,
                     expectation="blocked",
                     passed=True,
                 ),

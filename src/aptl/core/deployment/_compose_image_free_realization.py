@@ -13,6 +13,7 @@ from dataclasses import replace
 from typing import cast
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.lab_types import LabResult
 
 
@@ -33,16 +34,22 @@ def _strip_image_free_published_ports(
     """
 
     legacy_nodes = tuple(
-        replace(node, published_ports=()) if node.address in image_free_addresses else node
+        replace(node, published_ports=())
+        if node.address in image_free_addresses
+        else node
         for node in realization.nodes
     )
     return cast(DeploymentRealizationSpec, replace(realization, nodes=legacy_nodes))
 
 
-def _image_free_node_addresses(realization: DeploymentRealizationSpec) -> frozenset[str]:
+def _image_free_node_addresses(
+    realization: DeploymentRealizationSpec,
+) -> frozenset[str]:
     """Return the addresses of every node declaring runtime desired state."""
 
-    return frozenset(node.address for node in realization.nodes if node.runtime is not None)
+    return frozenset(
+        node.address for node in realization.nodes if node.runtime is not None
+    )
 
 
 def _image_free_service_names(
@@ -91,7 +98,10 @@ def _realize_node_subset(
     for image_ref in sorted(
         {
             base_container_spec(
-                node.address, os=node.os, os_version=node.os_version, runtime=node.runtime
+                node.address,
+                os=node.os,
+                os_version=node.os_version,
+                runtime=node.runtime,
             ).image_ref
             for node in nodes
         }
@@ -99,13 +109,25 @@ def _realize_node_subset(
         image_build_failures.extend(backend.ensure_generic_base_image(image_ref))
     if image_build_failures:
         return LabResult(success=False, error="; ".join(image_build_failures[:5]))
+    configure_networks = getattr(backend, "configure_base_container_networks", None)
+    if callable(configure_networks):
+        try:
+            configure_networks(nodes)
+        except BackendSeedError:
+            return LabResult(
+                success=False,
+                error="Image-free network binding failed.",
+            )
 
     content_by_node: dict[str, list[object]] = {}
     for item in content:
         dest = "/" + item.dest_relpath.lstrip("/")
         if item.source_kind == "inline-text" and item.inline_text is not None:
             op: object = PlaceFileOp(path=dest, content=item.inline_text)
-        elif item.source_kind in ("project-file", "project-directory") and item.source_relpath:
+        elif (
+            item.source_kind in ("project-file", "project-directory")
+            and item.source_relpath
+        ):
             op = PlaceProjectContentOp(
                 dest_path=dest,
                 source_relpath=item.source_relpath,

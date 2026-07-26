@@ -16,19 +16,43 @@ _AUTHORITY = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
 )
-_MAX_HEADER_BYTES = 4096
-_HEADER_TIMEOUT_SECONDS = 5
-_CONNECT_TIMEOUT_SECONDS = 10
 _NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
+
+
+class ProxyLimits:
+    __slots__ = (
+        "max_connections",
+        "max_header_bytes",
+        "header_timeout_seconds",
+        "connect_timeout_seconds",
+        "idle_timeout_seconds",
+    )
+
+    def __init__(
+        self,
+        *,
+        max_connections: int,
+        max_header_bytes: int,
+        header_timeout_seconds: int,
+        connect_timeout_seconds: int,
+        idle_timeout_seconds: int,
+    ) -> None:
+        self.max_connections = max_connections
+        self.max_header_bytes = max_header_bytes
+        self.header_timeout_seconds = header_timeout_seconds
+        self.connect_timeout_seconds = connect_timeout_seconds
+        self.idle_timeout_seconds = idle_timeout_seconds
 
 
 def parse_connect(
     request: bytes,
     allowed: set[tuple[str, int]],
+    *,
+    max_header_bytes: int = 4096,
 ) -> tuple[str, int]:
     """Return an exact admitted CONNECT target or reject the request."""
 
-    if len(request) > _MAX_HEADER_BYTES or b"\r\n\r\n" not in request:
+    if len(request) > max_header_bytes or b"\r\n\r\n" not in request:
         raise ValueError("CONNECT header is incomplete")
     try:
         first_line = request.split(b"\r\n", 1)[0].decode("ascii")
@@ -105,9 +129,14 @@ async def _resolve(host: str, port: int) -> tuple[tuple[str, int], ...]:
 async def _pipe(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
+    *,
+    idle_timeout_seconds: int,
 ) -> None:
     try:
-        while data := await reader.read(65536):
+        while data := await asyncio.wait_for(
+            reader.read(65536),
+            timeout=idle_timeout_seconds,
+        ):
             writer.write(data)
             await writer.drain()
     finally:
@@ -119,14 +148,19 @@ async def _handle(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
     allowed: set[tuple[str, int]],
+    limits: ProxyLimits,
 ) -> None:
     upstream_writer: asyncio.StreamWriter | None = None
     try:
         request = await asyncio.wait_for(
             reader.readuntil(b"\r\n\r\n"),
-            timeout=_HEADER_TIMEOUT_SECONDS,
+            timeout=limits.header_timeout_seconds,
         )
-        host, port = parse_connect(request, allowed)
+        host, port = parse_connect(
+            request,
+            allowed,
+            max_header_bytes=limits.max_header_bytes,
+        )
         answers = await _resolve(host, port)
         last_error: OSError | None = None
         upstream_reader: asyncio.StreamReader | None = None
@@ -134,7 +168,7 @@ async def _handle(
             try:
                 upstream_reader, upstream_writer = await asyncio.wait_for(
                     asyncio.open_connection(address, resolved_port),
-                    timeout=_CONNECT_TIMEOUT_SECONDS,
+                    timeout=limits.connect_timeout_seconds,
                 )
                 break
             except OSError as exc:
@@ -144,8 +178,16 @@ async def _handle(
         writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await writer.drain()
         await asyncio.gather(
-            _pipe(reader, upstream_writer),
-            _pipe(upstream_reader, writer),
+            _pipe(
+                reader,
+                upstream_writer,
+                idle_timeout_seconds=limits.idle_timeout_seconds,
+            ),
+            _pipe(
+                upstream_reader,
+                writer,
+                idle_timeout_seconds=limits.idle_timeout_seconds,
+            ),
         )
     except (
         asyncio.IncompleteReadError,
@@ -164,9 +206,34 @@ async def _handle(
             await upstream_writer.wait_closed()
 
 
-def _load_policy(path: Path) -> set[tuple[str, int]]:
+async def _bounded_handle(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    allowed: set[tuple[str, int]],
+    limits: ProxyLimits,
+    capacity: asyncio.Semaphore,
+) -> None:
+    acquired = False
+    try:
+        await asyncio.wait_for(capacity.acquire(), timeout=0.1)
+        acquired = True
+        await _handle(reader, writer, allowed, limits)
+    except asyncio.TimeoutError:
+        writer.write(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n")
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+    finally:
+        if acquired:
+            capacity.release()
+
+
+def _load_policy(path: Path) -> tuple[set[tuple[str, int]], ProxyLimits]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, Mapping) or set(payload) != {"authorities"}:
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "authorities",
+        "limits",
+    }:
         raise ValueError("egress proxy policy is invalid")
     authorities = payload["authorities"]
     if not isinstance(authorities, list):
@@ -192,16 +259,47 @@ def _load_policy(path: Path) -> set[tuple[str, int]]:
         allowed.add((authority, port))
     if not allowed:
         raise ValueError("egress proxy policy must admit at least one authority")
-    return allowed
+    return allowed, _parse_limits(payload["limits"])
+
+
+def _parse_limits(raw: object) -> ProxyLimits:
+    fields = {
+        "max_connections": (1, 256),
+        "max_header_bytes": (1024, 16384),
+        "header_timeout_seconds": (1, 30),
+        "connect_timeout_seconds": (1, 60),
+        "idle_timeout_seconds": (5, 600),
+    }
+    if not isinstance(raw, Mapping) or set(raw) != set(fields):
+        raise ValueError("egress proxy limits are invalid")
+    values: dict[str, int] = {}
+    for name, (minimum, maximum) in fields.items():
+        value = raw[name]
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not minimum <= value <= maximum
+        ):
+            raise ValueError("egress proxy limits are invalid")
+        values[name] = value
+    return ProxyLimits(**values)
 
 
 async def _serve(policy_path: Path, host: str, port: int) -> None:
-    allowed = _load_policy(policy_path)
+    allowed, limits = _load_policy(policy_path)
+    capacity = asyncio.Semaphore(limits.max_connections)
     server = await asyncio.start_server(
-        lambda reader, writer: _handle(reader, writer, allowed),
+        lambda reader, writer: _bounded_handle(
+            reader,
+            writer,
+            allowed,
+            limits,
+            capacity,
+        ),
         host,
         port,
-        limit=_MAX_HEADER_BYTES,
+        limit=limits.max_header_bytes,
+        backlog=limits.max_connections,
     )
     async with server:
         await server.serve_forever()

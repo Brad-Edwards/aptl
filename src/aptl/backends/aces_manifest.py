@@ -90,8 +90,7 @@ _CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
 )
 
 _SUPPORTED_CONTRACT_VERSIONS = _BASE_SUPPORTED_CONTRACT_VERSIONS | (
-    _CURRENT_PARTICIPANT_CONTRACT_VERSIONS
-    & frozenset(BACKEND_SUPPORTED_CONTRACT_IDS)
+    _CURRENT_PARTICIPANT_CONTRACT_VERSIONS & frozenset(BACKEND_SUPPORTED_CONTRACT_IDS)
 )
 
 # Orchestrator capability declaration. APTL's RTE-001 runtime engine drives
@@ -158,15 +157,17 @@ _PROVISIONER = ProvisionerCapabilities(
     # / home / shell are neither carried nor realized, so they are not claimed;
     # an account placement that exercises one is a blocking ACES diagnostic, not
     # a silently dropped field. No scenario declares those terms today.
-    supported_account_features=frozenset(
-        {"disabled", "groups", "mail", "spn"}
-    ),
+    supported_account_features=frozenset({"disabled", "groups", "mail", "spn"}),
     # The Samba AD provider realizes and read-verifies the operational
     # scenario's domain-bound accounts and SPNs (#577). ACES 0.23 makes that
     # domain profile an explicit admission capability rather than inferring it
     # from account fields.
     supported_domain_profiles=frozenset({"active_directory"}),
-    supports_acls=False,
+    # ACES ACLs pass through the typed realization surface to separate,
+    # owner-scoped nftables tables. The backend rejects unsupported dual-stack
+    # inputs, applies replacements atomically, and reads back every rule before
+    # reporting success.
+    supports_acls=True,
     supports_accounts=True,
     supports_generated_artifacts=True,
     supports_persistent_volumes=True,
@@ -237,7 +238,9 @@ def create_aptl_manifest() -> BackendManifest:
     supported_contract_versions = _SUPPORTED_CONTRACT_VERSIONS
     capability_options: dict[str, object] = {}
     if observation is not None:
-        supported_contract_versions = supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS
+        supported_contract_versions = (
+            supported_contract_versions | OBSERVATION_EVIDENCE_CONTRACTS
+        )
         capability_options["observation"] = observation
     return BackendManifest(
         name=APTL_ACES_TARGET_NAME,

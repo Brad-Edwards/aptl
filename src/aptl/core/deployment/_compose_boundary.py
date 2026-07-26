@@ -13,7 +13,7 @@ from aptl.core.deployment.boundary import (
 )
 from aptl.core.lab_types import LabResult
 
-_HELPER_IMAGE = "aptl-network-boundary-helper:1"
+DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:1"
 _BOUNDARY_TIMEOUT = 30
 
 
@@ -37,7 +37,10 @@ class _BoundaryRunner(Protocol):
     ) -> subprocess.CompletedProcess: ...
 
 
-def _helper_command(action: str) -> list[str]:
+def _helper_command(
+    action: str,
+    image: str = DEFAULT_BOUNDARY_HELPER_IMAGE,
+) -> list[str]:
     return [
         "docker",
         "run",
@@ -50,7 +53,7 @@ def _helper_command(action: str) -> list[str]:
         "--read-only",
         "--tmpfs=/run:rw,noexec,nosuid,nodev,size=1m",
         "-i",
-        _HELPER_IMAGE,
+        image,
         action,
         "--stdin",
     ]
@@ -59,10 +62,12 @@ def _helper_command(action: str) -> list[str]:
 def realize_boundary(
     backend: _BoundaryRunner,
     policy: BoundaryEnforcementSpec,
+    *,
+    helper_image: str = DEFAULT_BOUNDARY_HELPER_IMAGE,
 ) -> LabResult:
     """Atomically apply/clean one owned policy and verify effective readback."""
 
-    helper = _ensure_helper(backend)
+    helper = _ensure_helper(backend, helper_image)
     if helper is not None:
         return helper
     payload = policy.canonical_json()
@@ -72,7 +77,7 @@ def realize_boundary(
         else "apply"
     )
     mutation = backend._run_with_input(
-        _helper_command(action),
+        _helper_command(action, helper_image),
         payload,
         timeout=_BOUNDARY_TIMEOUT,
     )
@@ -81,7 +86,7 @@ def realize_boundary(
     observation = mutation
     if action == "apply":
         observation = backend._run_with_input(
-            _helper_command("observe"),
+            _helper_command("observe", helper_image),
             payload,
             timeout=_BOUNDARY_TIMEOUT,
         )
@@ -90,7 +95,9 @@ def realize_boundary(
     try:
         receipt = json.loads(observation.stdout)
     except (TypeError, ValueError):
-        return LabResult(success=False, error="Boundary policy observation was invalid.")
+        return LabResult(
+            success=False, error="Boundary policy observation was invalid."
+        )
     expected_families = [] if action == "cleanup" else ["bridge", "inet"]
     expected = {
         "authority": policy.authority,
@@ -107,20 +114,28 @@ def realize_boundary(
     return LabResult(success=True, message="Boundary policy enforced and observed.")
 
 
-def _ensure_helper(backend: _BoundaryRunner) -> LabResult | None:
+def _ensure_helper(
+    backend: _BoundaryRunner,
+    helper_image: str,
+) -> LabResult | None:
     inspection = backend._run(
-        ["docker", "image", "inspect", _HELPER_IMAGE],
+        ["docker", "image", "inspect", helper_image],
         timeout=_BOUNDARY_TIMEOUT,
     )
     if inspection.returncode == 0:
         return None
+    if helper_image != DEFAULT_BOUNDARY_HELPER_IMAGE:
+        return LabResult(
+            success=False,
+            error="Signed boundary enforcement helper was unavailable.",
+        )
     dockerfile = backend.project_dir / "containers/network-boundary-helper/Dockerfile"
     build = backend._run(
         [
             "docker",
             "build",
             "-t",
-            _HELPER_IMAGE,
+            helper_image,
             "-f",
             str(dockerfile),
             str(backend.project_dir),

@@ -79,7 +79,13 @@ def _policy() -> ApplianceBoundaryPolicy:
             "schema_version": "aptl.appliance-boundary/v1",
             "policy_id": "default",
             "generation": 1,
+            "workbench_policy_version": "participant-workbench-profile/v1",
             "default_deny": True,
+            "platform_networks": {
+                "participant": "org.aptl.network=participant",
+                "management": "org.aptl.network=management",
+                "egress": "org.aptl.network=egress",
+            },
             "platform_anchors": {
                 "participant": "org.aptl.zone=participant",
                 "management": "org.aptl.zone=management",
@@ -95,6 +101,13 @@ def _policy() -> ApplianceBoundaryPolicy:
                 }
             ],
             "egress_authorities": [],
+            "egress_proxy_limits": {
+                "max_connections": 32,
+                "max_header_bytes": 4096,
+                "header_timeout_seconds": 5,
+                "connect_timeout_seconds": 10,
+                "idle_timeout_seconds": 60,
+            },
             "guest_publications": [],
             "docker_authority": {
                 "allowed_holder_labels": [],
@@ -108,9 +121,7 @@ def test_aces_binding_keeps_owner_address_and_platform_data_out() -> None:
     spec = compile_aces_boundary(_realization(), _networks(), owner="seat-17")
 
     assert spec.authority == "aces"
-    assert spec.owner_bindings[0].ipv4_by_network == (
-        ("quartz", "10.44.2.10"),
-    )
+    assert spec.owner_bindings[0].ipv4_by_network == (("quartz", "10.44.2.10"),)
     assert "policy_digest" not in spec.details()
 
 
@@ -119,11 +130,27 @@ def test_aces_binding_refuses_to_widen_an_unaddressed_owner() -> None:
         compile_aces_boundary(_realization(owner_ip=None), _networks(), owner="seat-17")
 
 
+def test_aces_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> None:
+    dual_stack = (
+        _networks()[0],
+        BoundaryNetwork(
+            name="quartz",
+            bridge="br-quartz",
+            ipv4_cidr="10.44.2.0/24",
+            ipv6_cidr="2001:db8:44::/64",
+        ),
+    )
+
+    with pytest.raises(BoundaryCompileError, match="IPv4-only"):
+        compile_aces_boundary(_realization(), dual_stack, owner="seat-17")
+
+
 def test_platform_binding_uses_only_exact_labels() -> None:
     networks = tuple(
         BoundaryNetwork(
             name=zone,
             bridge=f"br-{zone[:7]}",
+            labels=(("org.aptl.network", zone),),
         )
         for zone in ("participant", "management", "egress")
     )
@@ -144,7 +171,10 @@ def test_platform_binding_uses_only_exact_labels() -> None:
         BoundaryWorkload(
             identity="egress-proxy",
             labels=(("org.aptl.zone", "egress"),),
-            ipv4_by_network=(("egress", "10.50.3.20"),),
+            ipv4_by_network=(
+                ("management", "10.50.2.20"),
+                ("egress", "10.50.3.20"),
+            ),
         ),
     )
 
@@ -162,6 +192,10 @@ def test_platform_binding_uses_only_exact_labels() -> None:
         "management",
         "egress",
     ]
+    assert dict(spec.anchors)["management"].ipv4_by_network == (
+        ("management", "10.50.2.10"),
+        ("egress", "10.50.3.10"),
+    )
     assert "rules" not in spec.details()
 
 
@@ -185,7 +219,10 @@ def test_platform_binding_rejects_ambiguous_anchor() -> None:
         BoundaryWorkload(
             identity="egress",
             labels=(("org.aptl.zone", "egress"),),
-            ipv4_by_network=(("management", "10.50.2.20"),),
+            ipv4_by_network=(
+                ("management", "10.50.2.20"),
+                ("egress", "10.50.3.20"),
+            ),
         ),
     )
 
@@ -194,9 +231,52 @@ def test_platform_binding_rejects_ambiguous_anchor() -> None:
             _policy(),
             policy_digest="sha256:" + "a" * 64,
             networks=(
-                BoundaryNetwork(name="participant", bridge="br-part"),
-                BoundaryNetwork(name="management", bridge="br-mgmt"),
+                BoundaryNetwork(
+                    name="participant",
+                    bridge="br-part",
+                    labels=(("org.aptl.network", "participant"),),
+                ),
+                BoundaryNetwork(
+                    name="management",
+                    bridge="br-mgmt",
+                    labels=(("org.aptl.network", "management"),),
+                ),
+                BoundaryNetwork(
+                    name="egress",
+                    bridge="br-egress",
+                    labels=(("org.aptl.network", "egress"),),
+                ),
             ),
             workloads=duplicate,
+            owner="seat-17",
+        )
+
+
+def test_platform_binding_rejects_ipv6_until_crossings_are_dual_stack() -> None:
+    networks = (
+        BoundaryNetwork(
+            name="participant",
+            bridge="br-part",
+            ipv6_cidr="2001:db8:1::/64",
+            labels=(("org.aptl.network", "participant"),),
+        ),
+        BoundaryNetwork(
+            name="management",
+            bridge="br-mgmt",
+            labels=(("org.aptl.network", "management"),),
+        ),
+        BoundaryNetwork(
+            name="egress",
+            bridge="br-egress",
+            labels=(("org.aptl.network", "egress"),),
+        ),
+    )
+
+    with pytest.raises(BoundaryCompileError, match="IPv6"):
+        compile_platform_boundary(
+            _policy(),
+            policy_digest="sha256:" + "a" * 64,
+            networks=networks,
+            workloads=(),
             owner="seat-17",
         )

@@ -166,3 +166,4 @@ The victim and kali containers publish no host ports; use
 - [EXP-010 Capture Admission And Evidence Acquisition](exp-010-capture-admission-evidence-preflight.md)
 - [Issue #589 Scenario-Pack Capture Workflow Ownership](issue-589-scenario-pack-capture-ownership-preflight.md)
 - [Issue #821 In-Appliance Participant Workbench](issue-821-participant-workbench-preflight.md)
+- [Issue #823 Versioned Disposable Lab Appliance](issue-823-versioned-disposable-appliance-preflight.md)

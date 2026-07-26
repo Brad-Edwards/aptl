@@ -281,6 +281,8 @@ def docker_client() -> "DockerClient":
 def _get_backend(
     project_dir: Path,
     config: AptlConfig | None = None,
+    *,
+    offline_staged: bool = False,
 ) -> "DeploymentBackend":
     """Create a deployment backend from config or defaults.
 
@@ -295,8 +297,15 @@ def _get_backend(
     from aptl.core.deployment.docker_compose import DockerComposeBackend
 
     if config is not None:
-        return get_backend(config, project_dir)
-    return DockerComposeBackend(project_dir=project_dir)
+        return get_backend(
+            config,
+            project_dir,
+            offline_staged=offline_staged,
+        )
+    return DockerComposeBackend(
+        project_dir=project_dir,
+        offline_staged=offline_staged,
+    )
 
 
 def build_compose_command(
@@ -413,6 +422,10 @@ def clean_boot_lab(
     scenario_path: Optional[Path] = None,
     backend: Optional["DeploymentBackend"] = None,
     progress: ProgressCallback | None = None,
+    offline_staged: bool = False,
+    appliance_launch_descriptor: Path | None = None,
+    appliance_release_public_key: Path | None = None,
+    appliance_qualification_public_key: Path | None = None,
 ) -> LabResult:
     """Boot the lab into a guaranteed clean state (RNG-001).
 
@@ -444,6 +457,7 @@ def clean_boot_lab(
         backend: Optional pre-created deployment backend, forwarded to the
             teardown so callers that already resolved one avoid a re-create.
         progress: Optional callback for participant-facing startup updates.
+        offline_staged: Require already-staged images and MCP artifacts.
 
     Returns:
         LabResult — the boot outcome on success, or a fatal ``FAILED``
@@ -465,11 +479,23 @@ def clean_boot_lab(
             outcome=StartupOutcome.FAILED,
         )
 
+    offline_kwargs = {"offline_staged": True} if offline_staged else {}
+    appliance_kwargs = (
+        {
+            "appliance_launch_descriptor": appliance_launch_descriptor,
+            "appliance_release_public_key": appliance_release_public_key,
+            "appliance_qualification_public_key": (appliance_qualification_public_key),
+        }
+        if appliance_launch_descriptor is not None
+        else {}
+    )
     return orchestrate_lab_start(
         project_dir,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
         progress=progress,
+        **offline_kwargs,
+        **appliance_kwargs,
     )
 
 
@@ -608,9 +634,12 @@ def _bind_mount_error(
     parts = vol.split(":")
     src = parts[0]
     destination = parts[1] if len(parts) > 1 else ""
-    exempt_or_present = _stateful_realization_owns_mount(
-        svc_name, destination, src, stateful_owned_mounts
-    ) or (project_dir / src).resolve().exists()
+    exempt_or_present = (
+        _stateful_realization_owns_mount(
+            svc_name, destination, src, stateful_owned_mounts
+        )
+        or (project_dir / src).resolve().exists()
+    )
     if exempt_or_present:
         return None
     return (
@@ -689,6 +718,10 @@ class _LabStartContext(object):
 
     project_dir: Path
     skip_seed: bool
+    offline_staged: bool = False
+    appliance_launch_descriptor: Path | None = None
+    appliance_release_public_key: Path | None = None
+    appliance_qualification_public_key: Path | None = None
     scenario_path: Path | None = None
     progress: ProgressCallback | None = None
     raw_env: dict[str, str] = field(default_factory=dict)
@@ -710,9 +743,7 @@ class _LabStartContext(object):
     # workflow artifacts and the record share a single run directory.
     run_store: object = None
     run_id: str | None = None
-    stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]] = (
-        frozenset()
-    )
+    stateful_artifact_ownership: frozenset[tuple[str, str, str, str, str]] = frozenset()
 
 
 # Ownership tuples are (address, generator, service_name, mount_destination,
@@ -927,8 +958,83 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
     except (FileNotFoundError, ValueError) as exc:
         log.exception("Failed to load config")
         return LabResult(success=False, error=f"Failed to load config: {exc}")
-    ctx.backend = _get_backend(ctx.project_dir, ctx.config)
+    ctx.backend = _get_backend(
+        ctx.project_dir,
+        ctx.config,
+        offline_staged=ctx.offline_staged,
+    )
+    launch_error = _configure_verified_appliance_launch(ctx)
+    if launch_error is not None:
+        return launch_error
     return _load_stateful_artifact_ownership(ctx)
+
+
+def _configure_verified_appliance_launch(
+    ctx: _LabStartContext,
+) -> LabResult | None:
+    """Reverify release identity and bind it to enforcement before startup."""
+
+    descriptor_path = ctx.appliance_launch_descriptor
+    if descriptor_path is None:
+        return None
+    if (
+        not ctx.offline_staged
+        or ctx.appliance_release_public_key is None
+        or ctx.appliance_qualification_public_key is None
+        or ctx.backend is None
+    ):
+        return LabResult(
+            success=False,
+            error="Appliance launch inputs are incomplete.",
+        )
+    from aptl.appliance.launch import verify_launch_descriptor
+    from aptl.appliance.manifest import ApplianceManifestError
+    from aptl.core.appliance_boundary import ApplianceBoundaryBinding
+
+    try:
+        launch = verify_launch_descriptor(
+            descriptor_path,
+            ctx.appliance_release_public_key,
+            ctx.appliance_qualification_public_key,
+        )
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        daemon = subprocess.run(
+            ["docker", "info", "--format", "{{.ID}}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        ).stdout.strip()
+        if not boot_id or not daemon:
+            raise ValueError("runtime identity is unavailable")
+        descriptor = launch.descriptor
+        binding = ApplianceBoundaryBinding(
+            policy_digest=descriptor.boundary_policy_digest,
+            payload_digest=descriptor.payload_digest,
+            aces_plan_digest=descriptor.participant_routes_digest,
+            aces_boundary_required=True,
+            boundary_helper_image=descriptor.boundary_helper_image,
+            egress_proxy_image=descriptor.egress_proxy_image,
+            boot_id=boot_id,
+            guest_daemon_id=daemon,
+            host_observation_id=descriptor.host_observation_id,
+        )
+        ctx.backend.configure_appliance_boundary(
+            launch.boundary_policy,
+            binding,
+        )
+    except (
+        ApplianceManifestError,
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        ValueError,
+    ):
+        return LabResult(
+            success=False,
+            error="Verified appliance launch binding failed.",
+        )
+    return None
 
 
 def _load_stateful_artifact_ownership(
@@ -996,7 +1102,9 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         ("Pivot key generation", lambda: ensure_pivot_key(pivot_dir=pivot_dir)),
         (
             "Target authorized_keys generation",
-            lambda: ensure_target_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+            lambda: ensure_target_authorized_keys(
+                keys_dir=keys_dir, pivot_dir=pivot_dir
+            ),
         ),
         (
             "Workstation pivot key generation",
@@ -1004,7 +1112,9 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         ),
         (
             "Victim authorized_keys generation",
-            lambda: ensure_victim_authorized_keys(keys_dir=keys_dir, pivot_dir=pivot_dir),
+            lambda: ensure_victim_authorized_keys(
+                keys_dir=keys_dir, pivot_dir=pivot_dir
+            ),
         ),
     )
     for what, step in remaining_steps:
@@ -1196,9 +1306,19 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     # seeder with no docker stderr in the redacted log path — pulling here
     # keeps registry failures at a stage the user can reason about (a
     # `Failed to pull ...` warning) instead of a bare seed-exit code.
-    for pull_warning in ctx.backend.pull_images([SURICATA_IMAGE]):
+    pull_warnings = list(ctx.backend.pull_images([SURICATA_IMAGE]))
+    for pull_warning in pull_warnings:
         log.warning(pull_warning)
-    ownership = ensure_suricata_config_source_ownership(ctx.project_dir, SURICATA_IMAGE)
+    if ctx.offline_staged and pull_warnings:
+        return LabResult(
+            success=False,
+            error="Offline staged Suricata image verification failed.",
+        )
+    ownership = ensure_suricata_config_source_ownership(
+        ctx.project_dir,
+        SURICATA_IMAGE,
+        pull_never=ctx.offline_staged,
+    )
     if not ownership.success:
         log.error(
             "Suricata config source ownership restore failed: %s",
@@ -1347,6 +1467,11 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
         # log-redaction boundary owns scrubbing it.
         log.warning(warning)
     if warnings:
+        if ctx.offline_staged:
+            return LabResult(
+                success=False,
+                error="Offline staged image verification failed.",
+            )
         # Pre-pull is a latency optimization — Compose pulls on demand
         # when containers start. Surface as a cosmetic info diagnostic
         # so automation sees the count without scraping the log.
@@ -2000,6 +2125,9 @@ def _step_pin_terminal_host_keys(ctx: _LabStartContext) -> LabResult | None:
 
 def _step_build_mcps(ctx: _LabStartContext) -> LabResult | None:
     """Build local MCP server artifacts after the lab is running."""
+    if ctx.offline_staged:
+        log.info("Using pre-staged MCP server artifacts")
+        return None
     log.info("Step 12: Building MCP servers...")
     mcp_script = ctx.project_dir / "mcp" / "build-all-mcps.sh"
     if not mcp_script.exists():
@@ -2279,6 +2407,10 @@ def orchestrate_lab_start(
     skip_seed: bool = False,
     scenario_path: Path | None = None,
     progress: ProgressCallback | None = None,
+    offline_staged: bool = False,
+    appliance_launch_descriptor: Path | None = None,
+    appliance_release_public_key: Path | None = None,
+    appliance_qualification_public_key: Path | None = None,
 ) -> LabResult:
     """Orchestrate the complete lab startup process.
 
@@ -2301,6 +2433,10 @@ def orchestrate_lab_start(
     ctx = _LabStartContext(
         project_dir=project_dir,
         skip_seed=skip_seed,
+        offline_staged=offline_staged,
+        appliance_launch_descriptor=appliance_launch_descriptor,
+        appliance_release_public_key=appliance_release_public_key,
+        appliance_qualification_public_key=appliance_qualification_public_key,
         scenario_path=scenario_path,
         progress=progress,
     )

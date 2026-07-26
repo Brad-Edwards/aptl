@@ -87,6 +87,7 @@ nav:
     - DEP-003 Ephemeral Lifecycle Policy Preflight: architecture/dep-003-ephemeral-lifecycle-preflight.md
     - GRC Boundary Surface Vocabulary Preflight: architecture/grc-boundary-surface-vocabulary-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
+    - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md
@@ -118,6 +119,7 @@ nav:
   - Reference:
     - Red Team Taxonomy: red-team-taxonomy.md
     - Guided Purple Participant Profile: reference/participant-profile.md
+    - Disposable Appliance Release: reference/appliance-release.md
     - TechVault Scenario Overview: reference/techvault-scenario-overview.md
     - TechVault Company Profile: reference/techvault-company-profile.md
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md

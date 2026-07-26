@@ -30,7 +30,6 @@ routing:
   # high->opus) instead of always running on the parent session model.
   enabled: true
   default_provider: claude
-  default_fallback: parent
 rules:
   plan_rules: .gc/plan-rules.md
 # Canonical boundary model declarations (GC-GRC-004 / GC-GRC-023). These are the

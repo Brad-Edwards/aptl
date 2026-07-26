@@ -85,6 +85,7 @@ class ComposeRealizationContentMixin:
             [
                 "docker",
                 "run",
+                *(["--pull=never"] if self._offline_staged else []),
                 "--rm",
                 "--user",
                 "0:0",

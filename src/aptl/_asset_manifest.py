@@ -43,6 +43,7 @@ ASSET_ROOTS: tuple[str, ...] = (
     "src",
     "scenarios",
     "participant-profiles",
+    "appliance",
     "config",
     "containers",
     "web",

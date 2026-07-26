@@ -77,12 +77,16 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
-        if build_context is None:
+        if build_context is None and not self._offline_staged:
             return []
         inspect_result = self._run(
             ["docker", "image", "inspect", image_ref], timeout=30
         )
         if inspect_result.returncode == 0:
+            return []
+        if self._offline_staged:
+            return [f"required staged generic base image is missing: {image_ref}"]
+        if build_context is None:
             return []
         build_result = self._run(
             [
@@ -130,6 +134,7 @@ class ComposeBaseSubstrateMixin(object):
         argv = [
             "docker",
             "create" if network_bindings is not None else "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--name",
             spec.container_name,
             "--label",

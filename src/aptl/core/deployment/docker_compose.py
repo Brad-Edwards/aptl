@@ -68,9 +68,12 @@ class DockerComposeBackend(
         self,
         project_dir: Path,
         project_name: str = "aptl",
+        *,
+        offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
         self._project_name = project_name
+        self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,
@@ -246,10 +249,13 @@ class DockerComposeBackend(
         Returns:
             LabResult indicating success or failure.
         """
+        build = build and not self._offline_staged
         compose_files = self._start_compose_files(build=build)
         cmd = self._build_command("up", profiles, compose_files=compose_files)
         if build:
             cmd.append("--build")
+        if self._offline_staged:
+            cmd.extend(["--pull", "never"])
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
@@ -355,15 +361,32 @@ class DockerComposeBackend(
         warnings: list[str] = []
         for image in images:
             try:
-                result = self._run(["docker", "pull", image])
+                action = (
+                    ["docker", "image", "inspect", image]
+                    if self._offline_staged
+                    else ["docker", "pull", image]
+                )
+                result = self._run(action)
                 if result.returncode != 0:
-                    msg = f"Failed to pull {image}: {result.stderr.strip()}"
+                    msg = (
+                        f"Required staged image is missing: {image}"
+                        if self._offline_staged
+                        else f"Failed to pull {image}: {result.stderr.strip()}"
+                    )
                     log.warning(msg)
                     warnings.append(msg)
                 else:
-                    log.info("Pulled %s", image)
+                    log.info(
+                        "%s %s",
+                        "Verified staged image" if self._offline_staged else "Pulled",
+                        image,
+                    )
             except OSError as exc:
-                msg = f"Failed to pull {image}: {exc}"
+                msg = (
+                    f"Required staged image could not be inspected: {image}"
+                    if self._offline_staged
+                    else f"Failed to pull {image}: {exc}"
+                )
                 log.warning(msg)
                 warnings.append(msg)
         return warnings
@@ -400,6 +423,7 @@ class DockerComposeBackend(
         cmd = [
             "docker",
             "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--rm",
             "--user",
             "0:0",
@@ -475,6 +499,7 @@ class DockerComposeBackend(
         cmd = [
             "docker",
             "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--rm",
             "--user",
             "0:0",

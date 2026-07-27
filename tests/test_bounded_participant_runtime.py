@@ -435,12 +435,13 @@ def test_invalid_compact_selection_fails_before_admission_or_realization(
         episode_id="invalid-compact-selection",
     )
     provider, _ = _managed_provider('{"candidate":201}')
+    apparatus = _apparatus(participant)
 
     with pytest.raises(ValueError, match="participant selection operation failed"):
         run_participant_turn(
             control,
             behavior_specification_address=behavior,
-            apparatus=_apparatus(participant),
+            apparatus=apparatus,
             provider=provider,
         )
 

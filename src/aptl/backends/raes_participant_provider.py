@@ -181,7 +181,7 @@ def _parse_compact_selection(raw: str, *, candidate_count: int) -> int:
         raise ValueError("compact participant selection envelope is invalid")
     try:
         payload = json.loads(raw, object_pairs_hook=_unique_json_object)
-    except (json.JSONDecodeError, ValueError) as exc:
+    except ValueError as exc:
         raise ValueError("compact participant selection is not valid JSON") from exc
     if not isinstance(payload, Mapping) or set(payload) != {"candidate"}:
         raise ValueError("compact participant selection must contain one candidate")

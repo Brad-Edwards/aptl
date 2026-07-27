@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 
 import aptl
-from aptl.cli import appliance, config, container, experiment, kill, lab, runs, web
+from aptl.cli import appliance, config, container, experiment, kill, lab, runs, seat, web
 
 app = typer.Typer(
     name="aptl",
@@ -21,6 +21,7 @@ app.add_typer(web.app, name="web")
 app.add_typer(kill.app, name="kill")
 app.add_typer(experiment.app, name="experiment")
 app.add_typer(appliance.app, name="appliance")
+app.add_typer(seat.app, name="seat")
 
 
 def _version_callback(value: bool) -> None:

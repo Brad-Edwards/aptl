@@ -6,7 +6,8 @@ a disposable qcow2 overlay. Destroying that overlay destroys its credentials,
 Docker state, and run evidence; the golden disk is never opened for writing.
 
 This is a release-engineering interface. The participant launcher, reset
-controls, and recovery UI are tracked separately in issue #824.
+controls, and recovery UI are implemented by [`aptl seat`](appliance-seat-launcher.md)
+(issue #824).
 
 ## Trust and lifecycle model
 

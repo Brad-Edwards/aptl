@@ -29,6 +29,20 @@ class HostExposureReport:
     findings: tuple[str, ...]
 
 
+def _fsdev_options(argv: tuple[str, ...]) -> tuple[str, ...]:
+    """Return QEMU -fsdev option strings from a fixed argv list."""
+
+    options: list[str] = []
+    index = 0
+    while index < len(argv):
+        if argv[index] == "-fsdev" and index + 1 < len(argv):
+            options.append(argv[index + 1])
+            index += 2
+            continue
+        index += 1
+    return tuple(options)
+
+
 def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     """Reject VM launch arguments that widen the physical-host boundary."""
 
@@ -37,8 +51,9 @@ def audit_vm_argv(argv: tuple[str, ...]) -> HostExposureReport:
     for flag in FORBIDDEN_VM_FLAGS:
         if flag in joined:
             findings.append(f"host.exposure.forbidden-vm-flag:{flag}")
+    fsdev_joined = " ".join(_fsdev_options(argv))
     for flag in FORBIDDEN_VM_WRITABLE_SHARE_FLAGS:
-        if flag in joined:
+        if flag in fsdev_joined:
             findings.append(f"host.exposure.forbidden-vm-share:{flag}")
     return HostExposureReport(passed=not findings, findings=tuple(findings))
 

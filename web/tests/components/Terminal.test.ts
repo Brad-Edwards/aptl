@@ -14,7 +14,8 @@ import Terminal from '../../src/lib/components/Terminal.svelte';
 
 // Stub heavy DOM-canvas dependencies that jsdom cannot handle.
 vi.mock('@xterm/xterm', () => ({
-	Terminal: vi.fn(() => ({
+	Terminal: vi.fn(function () {
+		return {
 		loadAddon: vi.fn(),
 		open: vi.fn(),
 		onData: vi.fn(),
@@ -23,15 +24,20 @@ vi.mock('@xterm/xterm', () => ({
 		dispose: vi.fn(),
 		cols: 80,
 		rows: 24
-	}))
+	};
+	})
 }));
 
 vi.mock('@xterm/addon-fit', () => ({
-	FitAddon: vi.fn(() => ({ fit: vi.fn(), dispose: vi.fn() }))
+	FitAddon: vi.fn(function () {
+		return { fit: vi.fn(), dispose: vi.fn() };
+	})
 }));
 
 vi.mock('@xterm/addon-web-links', () => ({
-	WebLinksAddon: vi.fn(() => ({ dispose: vi.fn() }))
+	WebLinksAddon: vi.fn(function () {
+		return { dispose: vi.fn() };
+	})
 }));
 
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
@@ -56,7 +62,9 @@ describe('Terminal', () => {
 		});
 		Object.assign(WSSpy, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
 		vi.stubGlobal('WebSocket', WSSpy);
-		vi.stubGlobal('ResizeObserver', vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })));
+		vi.stubGlobal('ResizeObserver', vi.fn(function () {
+		return { observe: vi.fn(), disconnect: vi.fn() };
+	}));
 
 		// Default: ticket fetch succeeds.
 		fetchMock = vi.fn().mockResolvedValue({

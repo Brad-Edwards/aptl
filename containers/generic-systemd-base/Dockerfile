@@ -8,7 +8,7 @@
 # Validated locally against Docker with the run flags APTL already uses for its
 # systemd nodes (cgroupns=host, /sys/fs/cgroup:rw, tmpfs /run+/tmp,
 # cap SYS_ADMIN/SYS_NICE/SYS_RESOURCE, seccomp:unconfined, /usr/sbin/init).
-FROM rockylinux:9
+FROM rockylinux:9@sha256:d7be1c094cc5845ee815d4632fe377514ee6ebcf8efaed6892889657e5ddaaa6
 
 RUN dnf -y install systemd systemd-sysv && dnf clean all && \
     (cd /lib/systemd/system/sysinit.target.wants/; \

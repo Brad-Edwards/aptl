@@ -4,7 +4,7 @@
 # rules file, and triggers Suricata rule reload via its unix-command
 # socket.
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates git \
@@ -21,7 +21,15 @@ COPY README.md /app/
 COPY hatch_build.py /app/
 COPY src /app/src
 
-RUN pip install --no-cache-dir . \
+# Third-party dependencies come from the hash-verified export generated from
+# uv.lock, so this image cannot resolve a different artifact than the one the
+# lock pins. The project itself then installs with --no-deps and pulls nothing
+# from a registry; `-e` links to the /app/src tree already COPYed above rather
+# than duplicating it under site-packages (issue #847).
+COPY requirements/runtime.txt /app/requirements/runtime.txt
+
+RUN pip install --no-cache-dir --require-hashes -r requirements/runtime.txt \
+    && pip install --no-cache-dir -e . --no-deps --no-build-isolation \
     && apt-get purge -y git \
     && apt-get autoremove -y \
     && apt-get clean \

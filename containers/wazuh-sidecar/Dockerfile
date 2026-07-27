@@ -17,7 +17,7 @@
 #   AGENT_NAME     - logical agent name registered with the manager
 #   LOG_PATHS      - comma-separated paths under /logs to monitor
 
-FROM debian:12-slim
+FROM debian:12-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
 ENV DEBIAN_FRONTEND=noninteractive
 

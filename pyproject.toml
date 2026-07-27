@@ -72,6 +72,35 @@ docs = [
     "mkdocs-git-revision-date-localized-plugin>=1.2.0",
 ]
 
+# CI-only tooling. These are not part of any install a user performs, so they are
+# a dependency group rather than an optional-dependency extra. They live here so
+# `uv.lock` stays the single source of truth for every Python artifact CI
+# installs — which is what lets `requirements/ci.txt` be generated with hashes
+# instead of CI running an unpinned `pip install pre-commit` (issue #847).
+[dependency-groups]
+ci = [
+    "pre-commit>=4.0.0",
+    "pip-audit>=2.7.0",
+    "build>=1.2.0",
+    "cyclonedx-bom>=6.0.0",
+]
+
+# The PEP 517 build backend, locked like everything else. `--require-hashes`
+# only covers what pip *resolves*; a source install (`pip install -e .`) or
+# `python -m build` otherwise spins up an isolated build environment and fetches
+# `[build-system].requires` from PyPI with no hash checking at all — an unpinned
+# hole straight through the middle of the hashed-install contract. Exporting
+# this group into every requirements file lets those commands run with
+# `--no-build-isolation` / `--no-isolation` against a hash-verified backend.
+build = [
+    "hatchling>=1.27.0",
+    # hatchling imports `editables` to build an editable wheel. Under build
+    # isolation it would fetch this itself; with isolation off it has to be
+    # present (and hashed) up front, or every `pip install -e .` fails at
+    # metadata generation.
+    "editables>=0.5",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl"]
 

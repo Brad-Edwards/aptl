@@ -21,3 +21,38 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "build"
+
+  # Container base images are pinned by digest (issue #847), which is what makes
+  # a build reproducible — but a digest never moves, so an unattended pin is a
+  # base image frozen at its original patch level. These entries are the other
+  # half of that contract: Dependabot re-resolves each tag weekly and opens a PR
+  # carrying the new digest. Removing them would leave the pins to rot.
+  #
+  # Every directory holding a Dockerfile needs its own entry; the `docker` group
+  # collapses the resulting bumps into a single PR per week instead of one per
+  # image. `tests/test_supply_chain_pinning.py` fails if a Dockerfile is added
+  # without a matching entry here.
+  - package-ecosystem: "docker"
+    directories:
+      - "/containers/ad"
+      - "/containers/appliance-egress-proxy"
+      - "/containers/base"
+      - "/containers/generic-systemd-base"
+      - "/containers/generic-systemd-base-debian"
+      - "/containers/kali-capture"
+      - "/containers/kali-ssh-proxy"
+      - "/containers/misp-suricata-sync"
+      - "/containers/network-boundary-helper"
+      - "/containers/reverse"
+      - "/containers/wazuh-sidecar"
+      - "/web"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+    groups:
+      container-base-images:
+        patterns:
+          - "*"

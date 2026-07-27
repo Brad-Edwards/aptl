@@ -37,16 +37,7 @@ from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
-
-# Timeout for Docker Compose subprocess calls during kill operations.
-# Generous enough for a large stack, short enough that a hung daemon
-# won't block the kill switch indefinitely.
 _DOCKER_TIMEOUT = 30
-
-# Timeout for a single volume-seed / legacy-retire container (ADR-043).
-# The copy itself is a handful of small files, but the first seed on a
-# fresh host may pull the seeder image (already in the lab's supply
-# chain), so the margin is deliberately generous.
 _SEED_TIMEOUT = 600
 
 
@@ -68,9 +59,12 @@ class DockerComposeBackend(
         self,
         project_dir: Path,
         project_name: str = "aptl",
+        *,
+        offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
         self._project_name = project_name
+        self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,
@@ -114,13 +108,6 @@ class DockerComposeBackend(
         Returns:
             Command as a list of strings suitable for subprocess.run().
         """
-        # Pin the compose project name. Without `-p`, docker compose derives the
-        # project from the working-directory basename, which diverges from
-        # `self._project_name` in any worktree not literally named after the
-        # project (e.g. a `aptl3` git worktree). That divergence makes `start`
-        # / `stop` (this builder) act on a different project than `status` and
-        # the orphan-cleanup filters, so a lab started here cannot be stopped or
-        # inspected and its networks collide with the real project's subnets.
         cmd = ["docker", "compose", "-p", self._project_name]
         for compose_file in compose_files or ():
             cmd.extend(["-f", str(compose_file)])
@@ -152,14 +139,6 @@ class DockerComposeBackend(
         else:
             kwargs["capture_output"] = True
             kwargs["text"] = True
-            # Decode captured docker/compose output as UTF-8 explicitly.
-            # Without this, `text=True` decodes with the host's locale
-            # codec, which on Windows is cp1252 and cannot decode the
-            # non-ASCII bytes BuildKit emits (progress glyphs, box-drawing) —
-            # the reader thread raises UnicodeDecodeError mid-build, the
-            # compose call is seen as failed, and the 60s retry then
-            # collides with the containers the first attempt already started.
-            # `errors="replace"` keeps a stray byte from ever aborting a read.
             kwargs["encoding"] = "utf-8"
             kwargs["errors"] = "replace"
         if timeout is not None:
@@ -246,10 +225,13 @@ class DockerComposeBackend(
         Returns:
             LabResult indicating success or failure.
         """
+        build = build and not self._offline_staged
         compose_files = self._start_compose_files(build=build)
         cmd = self._build_command("up", profiles, compose_files=compose_files)
         if build:
             cmd.append("--build")
+        if self._offline_staged:
+            cmd.extend(["--pull", "never"])
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
@@ -355,18 +337,45 @@ class DockerComposeBackend(
         warnings: list[str] = []
         for image in images:
             try:
-                result = self._run(["docker", "pull", image])
+                action = self._image_fetch_action(image)
+                result = self._run(action)
                 if result.returncode != 0:
-                    msg = f"Failed to pull {image}: {result.stderr.strip()}"
-                    log.warning(msg)
-                    warnings.append(msg)
+                    warnings.append(self._image_fetch_failure(image, result.stderr))
                 else:
-                    log.info("Pulled %s", image)
+                    log.info(
+                        "%s %s",
+                        "Verified staged image" if self._offline_staged else "Pulled",
+                        image,
+                    )
             except OSError as exc:
-                msg = f"Failed to pull {image}: {exc}"
+                msg = self._image_fetch_exception(image, exc)
                 log.warning(msg)
                 warnings.append(msg)
         return warnings
+
+    def _image_fetch_action(self, image: str) -> list[str]:
+        """Return the staged inspection or online pull command for one image."""
+
+        if self._offline_staged:
+            return ["docker", "image", "inspect", image]
+        return ["docker", "pull", image]
+
+    def _image_fetch_failure(self, image: str, stderr: str) -> str:
+        """Return and log one bounded image verification failure."""
+
+        if self._offline_staged:
+            message = f"Required staged image is missing: {image}"
+        else:
+            message = f"Failed to pull {image}: {stderr.strip()}"
+        log.warning(message)
+        return message
+
+    def _image_fetch_exception(self, image: str, exc: OSError) -> str:
+        """Return one image operation failure caused by a local tool error."""
+
+        if self._offline_staged:
+            return f"Required staged image could not be inspected: {image}"
+        return f"Failed to pull {image}: {exc}"
 
     def seed_named_volumes(
         self,
@@ -400,6 +409,7 @@ class DockerComposeBackend(
         cmd = [
             "docker",
             "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--rm",
             "--user",
             "0:0",
@@ -415,11 +425,6 @@ class DockerComposeBackend(
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
-            # Name only the artifact in the raised message — raw Docker
-            # stderr never reaches the exception (test_nonzero_exit_raises_
-            # without_leaking_stderr). The operator-facing log line carries
-            # a redacted stderr tail so a seed failure is diagnosable
-            # without rerunning the docker command by hand (issue #716).
             log.error(
                 "Seed of volume %s failed (exit %s)%s",
                 seed.volume_suffix,
@@ -433,12 +438,7 @@ class DockerComposeBackend(
     def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
         """Build the fixed-path copy script for one seed.
 
-        Only the fixed container paths ``/src`` and ``/dest`` plus
-        validated, code-defined relpaths appear in the returned string;
-        the host source dir and the volume name travel through argv ``-v``
-        flags, never the shell text (ADR-043 §Security Layers). Root
-        ``cp`` overwrites prior content, so the seed is idempotent
-        regardless of the existing owner.
+        Only fixed container paths and validated relpaths enter shell text.
         """
         parts = ["set -e"]
         for seed_file in seed.files:
@@ -461,11 +461,7 @@ class DockerComposeBackend(
     ) -> None:
         """Remove a seed's pre-ADR-043 legacy host bind dir, if present.
 
-        The directory may be owned by the in-container ``suricata`` UID
-        (991), so the host operator cannot delete it. A root container
-        mounts the host-owned *parent* and removes the single canonical
-        child by name — a narrow, path-contained cleanup (ADR-043), in
-        argv form against fixed container paths.
+        A root container mounts the parent and removes one validated child.
         """
         legacy = seed.legacy_retire_path
         if legacy is None:
@@ -475,6 +471,7 @@ class DockerComposeBackend(
         cmd = [
             "docker",
             "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--rm",
             "--user",
             "0:0",
@@ -488,9 +485,6 @@ class DockerComposeBackend(
         ]
         result = self._run(cmd, timeout=_SEED_TIMEOUT)
         if result.returncode != 0:
-            # Same redacted-hint contract as the seed path (issue #716): the
-            # raised message names only the artifact; the log line carries a
-            # redacted stderr tail for diagnosis.
             log.error(
                 "Retire of legacy seed path %s failed (exit %s)%s",
                 legacy,

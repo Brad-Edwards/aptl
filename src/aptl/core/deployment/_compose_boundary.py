@@ -13,7 +13,13 @@ from aptl.core.deployment.boundary import (
 )
 from aptl.core.lab_types import LabResult
 
-DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:1"
+#: The tag is the helper's wire-contract version, not a build counter. The
+#: helper is rebuilt only when ``docker image inspect`` misses it, so any change
+#: to the policy JSON it consumes - notably the ``authority`` value, renamed
+#: ``raes`` -> ``raes`` with the RAES migration - MUST bump this tag. Leaving it
+#: pinned would pair a cached older helper with newer APTL code and fail every
+#: boundary mutation closed on hosts that already built the previous image.
+DEFAULT_BOUNDARY_HELPER_IMAGE = "aptl-network-boundary-helper:2"
 _BOUNDARY_TIMEOUT = 30
 
 
@@ -42,12 +48,15 @@ class _BoundaryRunner(Protocol):
 def _helper_command(
     action: str,
     image: str = DEFAULT_BOUNDARY_HELPER_IMAGE,
+    *,
+    pull_never: bool = False,
 ) -> list[str]:
     """Build the fixed, capability-minimal helper invocation."""
 
     return [
         "docker",
         "run",
+        *(["--pull=never"] if pull_never else []),
         "--rm",
         "--network",
         "host",
@@ -75,13 +84,14 @@ def realize_boundary(
     if helper is not None:
         return helper
     payload = policy.canonical_json()
+    pull_never = bool(getattr(backend, "_offline_staged", False))
     action = (
         "cleanup"
         if isinstance(policy, AcesBoundarySpec) and not policy.rules
         else "apply"
     )
     mutation = backend._run_with_input(
-        _helper_command(action, helper_image),
+        _helper_command(action, helper_image, pull_never=pull_never),
         payload,
         timeout=_BOUNDARY_TIMEOUT,
     )
@@ -89,7 +99,7 @@ def realize_boundary(
         return LabResult(success=False, error="Boundary policy mutation failed.")
     observation = (
         backend._run_with_input(
-            _helper_command("observe", helper_image),
+            _helper_command("observe", helper_image, pull_never=pull_never),
             payload,
             timeout=_BOUNDARY_TIMEOUT,
         )
@@ -143,7 +153,10 @@ def _ensure_helper(
         timeout=_BOUNDARY_TIMEOUT,
     )
     result: LabResult | None = None
-    if inspection.returncode != 0 and helper_image != DEFAULT_BOUNDARY_HELPER_IMAGE:
+    offline_staged = bool(getattr(backend, "_offline_staged", False))
+    if inspection.returncode != 0 and (
+        offline_staged or helper_image != DEFAULT_BOUNDARY_HELPER_IMAGE
+    ):
         result = LabResult(
             success=False,
             error="Signed boundary enforcement helper was unavailable.",

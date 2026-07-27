@@ -15,12 +15,16 @@ workflow:
   completion_command: 'uv run pytest -n auto -k "not integration" && uv run pytest -n auto tests/test_techvault_static_gate.py -m integration'
   lint_command: pre-commit run --all-files
   format_command: pre-commit run --all-files
+  codex_review:
+    pre_push_cap: 1
+  test_quality_review:
+    pre_push_cap: 1
   review_disposition:
-    enabled: true
+    enabled: false
     mode: shadow
-    max_auto_overrides: 1
+    max_auto_overrides: 0
     judge:
-      enabled: true
+      enabled: false
 sonarcloud:
   project_key: Brad-Edwards_aptl
   organization: brad-edwards
@@ -30,7 +34,6 @@ routing:
   # high->opus) instead of always running on the parent session model.
   enabled: true
   default_provider: claude
-  default_fallback: parent
 rules:
   plan_rules: .gc/plan-rules.md
 # Canonical boundary model declarations (GC-GRC-004 / GC-GRC-023). These are the

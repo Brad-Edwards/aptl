@@ -81,7 +81,7 @@ def test_guided_profile_resolves_existing_content_derived_surface() -> None:
     assert "shuffle-backend" not in profile.expected_matrix.expected_services
     locked_ids = {asset.asset_id for asset in profile.asset_lock.assets}
     assert {
-        "aces-scenario",
+        "raes-scenario",
         "compose-model",
         "mcp-red-build",
         "mcp-indexer-build",

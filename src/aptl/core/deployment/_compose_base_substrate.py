@@ -23,10 +23,10 @@ from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
 if TYPE_CHECKING:
-    from aptl.backends.aces_base_substrate import BaseContainerSpec, InitRequirements
+    from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
 
 # Every OS-family/service-manager combination `base_image_for_os`
-# (src/aptl/backends/aces_materializer.py) can select for a runs_services
+# (src/aptl/backends/raes_materializer.py) can select for a runs_services
 # node, mapped to the checked-in Dockerfile that builds it. These are the
 # ONLY generic base images that need a local build: the non-service images
 # (debian:12-slim, rockylinux:9) are real registry images `docker run`
@@ -77,28 +77,31 @@ class ComposeBaseSubstrateMixin(object):
         """
 
         build_context = _GENERIC_BASE_IMAGE_BUILD_CONTEXTS.get(image_ref)
-        if build_context is None:
-            return []
+        failures: list[str] = []
+        if build_context is None and not self._offline_staged:
+            return failures
         inspect_result = self._run(
             ["docker", "image", "inspect", image_ref], timeout=30
         )
-        if inspect_result.returncode == 0:
-            return []
-        build_result = self._run(
-            [
-                "docker",
-                "build",
-                "-t",
-                image_ref,
-                str(self._project_dir / build_context),
-            ],
-            timeout=600,
-        )
-        return (
-            []
-            if build_result.returncode == 0
-            else [f"failed to build generic base image {image_ref}"]
-        )
+        if inspect_result.returncode != 0:
+            if self._offline_staged:
+                failures.append(
+                    f"required staged generic base image is missing: {image_ref}"
+                )
+            elif build_context is not None:
+                build_result = self._run(
+                    [
+                        "docker",
+                        "build",
+                        "-t",
+                        image_ref,
+                        str(self._project_dir / build_context),
+                    ],
+                    timeout=600,
+                )
+                if build_result.returncode != 0:
+                    failures.append(f"failed to build generic base image {image_ref}")
+        return failures
 
     def start_base_container(self, spec: "BaseContainerSpec") -> None:
         """Start a node's generic base container (ADR-048).
@@ -109,7 +112,7 @@ class ComposeBaseSubstrateMixin(object):
         service units runs the base with a keepalive so the materializer can exec
         into it. Idempotent: any stale container of the same name is removed
         first. Raises on failure so the materialization engine translates it into
-        the ACES `LabResult` envelope.
+        the RAES `LabResult` envelope.
         """
 
         self._run(["docker", "rm", "-f", spec.container_name])
@@ -130,6 +133,7 @@ class ComposeBaseSubstrateMixin(object):
         argv = [
             "docker",
             "create" if network_bindings is not None else "run",
+            *(["--pull=never"] if self._offline_staged else []),
             "--name",
             spec.container_name,
             "--label",
@@ -151,16 +155,8 @@ class ComposeBaseSubstrateMixin(object):
             argv += ["--network", first_network]
             if first_attachment.ipv4_address:
                 argv += ["--ip", first_attachment.ipv4_address]
-        for mount in spec.volume_mounts:
-            source = f"{self._project_name}_{mount.source}"
-            suffix = ":ro" if mount.read_only else ""
-            argv += ["-v", f"{source}:{mount.target}{suffix}"]
-        for port in spec.published_ports:
-            host = f"{port.host_ip}:" if port.host_ip else ""
-            host_port = (
-                port.host_port if port.host_port is not None else port.container_port
-            )
-            argv += ["-p", f"{host}{host_port}:{port.container_port}/{port.protocol}"]
+        self._append_base_mounts(argv, spec)
+        self._append_base_ports(argv, spec)
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
@@ -168,6 +164,27 @@ class ComposeBaseSubstrateMixin(object):
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
         return argv
+
+    def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
+        """Append declared named-volume mounts to a base-container command."""
+
+        for mount in spec.volume_mounts:
+            source = f"{self._project_name}_{mount.source}"
+            suffix = ":ro" if mount.read_only else ""
+            argv.extend(("-v", f"{source}:{mount.target}{suffix}"))
+
+    @staticmethod
+    def _append_base_ports(argv: list[str], spec: "BaseContainerSpec") -> None:
+        """Append exact declared host publications to a base-container command."""
+
+        for port in spec.published_ports:
+            host = f"{port.host_ip}:" if port.host_ip else ""
+            host_port = (
+                port.host_port if port.host_port is not None else port.container_port
+            )
+            argv.extend(
+                ("-p", f"{host}{host_port}:{port.container_port}/{port.protocol}")
+            )
 
     def _complete_base_container_start(
         self,
@@ -216,7 +233,7 @@ class ComposeBaseSubstrateMixin(object):
 
         For a directory, the source's contents are placed at ``dest_path``;
         for a file, ``dest_path`` is the file. Raises on failure so the
-        materialization engine translates it into the ACES envelope.
+        materialization engine translates it into the RAES envelope.
         """
 
         source = f"{source_path}/." if is_directory else source_path
@@ -272,7 +289,7 @@ class ComposeBaseSubstrateMixin(object):
 
         strict = getattr(
             self, "_appliance_boundary", None
-        ) is not None or "aces" in getattr(self, "_boundary_receipts", {})
+        ) is not None or "raes" in getattr(self, "_boundary_receipts", {})
         if not strict:
             self._base_networks_by_address = {}
             return

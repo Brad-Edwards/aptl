@@ -4,7 +4,7 @@ This note sets the design guardrails for the in-appliance participant
 workbench. It is guidance, not an implementation plan. [ADR-049](../adrs/adr-049-sealed-disposable-lab-appliance.md)
 is the delivery-boundary decision; ADR-029, ADR-033, ADR-034, ADR-039 through
 ADR-042, and DSL-010 remain authoritative for secrets, evidence, TLS,
-browser/operator controls, Kali capture, and ACES participant runtime.
+browser/operator controls, Kali capture, and RAES participant runtime.
 
 No new ADR is needed. The remaining ambiguity is profile isolation: a client
 that merely hides a tool, while its process can read another profile's config
@@ -46,7 +46,7 @@ or credentials, does not satisfy this issue.
   agent has a shell or file-access tool.
 - Purple work is a sequential, explicit profile transition. It records the
   selected profile and transition outcome against the current run identity,
-  but does not create a second ACES scenario/episode/evidence schema or make a
+  but does not create a second RAES scenario/episode/evidence schema or make a
   profile switch an alias for participant-episode reset, scenario reset,
   Compose teardown, or guest security reset.
 - Session-local model authentication is guest-management-only mutable state.
@@ -67,15 +67,15 @@ or credentials, does not satisfy this issue.
 
 | Concern | Canonical owner and required reuse |
 |---|---|
-| Appliance boundary and zones | ADR-049, especially APP-003 through APP-009, owns per-seat guest containment, default-deny flows, management placement, secrets, evidence, and replacement. The VM is not an ACES node provider or a reason to fork Compose/scenario contracts. |
-| Participant/runtime semantics | `AptlParticipantRuntime`, published ACES participant contracts, `RuntimeControlPlane`, and DSL-010 own episodes, actions, receipts, status, snapshots, and behavior history. A profile is not another participant DTO or workflow state machine. |
+| Appliance boundary and zones | ADR-049, especially APP-003 through APP-009, owns per-seat guest containment, default-deny flows, management placement, secrets, evidence, and replacement. The VM is not a RAES node provider or a reason to fork Compose/scenario contracts. |
+| Participant/runtime semantics | `AptlParticipantRuntime`, published RAES participant contracts, `RuntimeControlPlane`, and DSL-010 own episodes, actions, receipts, status, snapshots, and behavior history. A profile is not another participant DTO or workflow state machine. |
 | MCP build and server behavior | `mcp/build-all-mcps.sh`, `.mcp.json.example`, `LabConfig`, `loadLabConfig()`, `createMCPServer()`, JSON Schema tool definitions, handler assertions, `HTTPClient`, endpoint-origin checks, SSH lifecycle, TLS/CA support, and `aptl-mcp-common` remain the server contracts. A selected profile must use built artifacts and guest-internal generated configuration, not host-relative source execution. |
 | Existing config limitation | `aptl.core.lab._sync_mcp_config_keys()` and `.mcp.json` are developer-local conveniences: they preserve arbitrary entries and inject all current blue keys into one client config. They are not reusable as the participant profile authority or secret store. `loadLabConfig()` validates basic shape, but its unresolved-env warning is not credential-completeness validation. |
 | Secrets and generated state | ADR-028/029, `load_dotenv()`, placeholder detection, `EnvVars`, `WebAuthSettings`, `redact()` parity, `curl_safe`, atomic/no-symlink generated writes, ignored state, and restrictive modes own this boundary. Keep the ADR-049 appliance bootstrap parser narrow; do not enlarge `AptlConfig` or `EnvVars` into a workbench secret bag. |
 | Browser/API controls | `src/aptl/api/main.py`, `deps.py`, `session.py`, `middleware/bff.py`, the Pydantic response models, and ADR-039/040 own the operator control plane. Reuse their proven Host/origin/session ideas only behind a separate participant gateway; never expose their operator routes. |
 | Deployment and Docker authority | `DeploymentBackend`, `DockerComposeBackend`, typed operations, project scoping, bounded argv-list subprocesses, and ADR-013/023/037 own guest Docker. The workbench and profile MCP processes cannot receive a raw socket, Docker CLI authority, generic Docker RPC, or generic command broker. |
 | Capture, run association, and evidence | `ScenarioSession`, `trace-context.json`, `RunStorageBackend`, `LocalRunStore`, evidence coordinator/content store, `RangeSnapshot.to_dict()`, ADR-033/041/042/044, MCP `runs.ts`, telemetry, and the capture registry own correlation and storage. Keep MCP-side PTY, Kali-side raw capture, OTel, and SOC evidence distinct. |
-| Errors, logging, and readiness | `LabResult`, `StartupOutcome`, `StartupDiagnostic`, deployment errors, ACES `Diagnostic`/operation status, MCP `SSHError` and tool envelopes, `get_logger()`, and OTel telemetry remain the error/observability vocabulary. The workbench adds no appliance-wide exception hierarchy or readiness taxonomy. |
+| Errors, logging, and readiness | `LabResult`, `StartupOutcome`, `StartupDiagnostic`, deployment errors, RAES `Diagnostic`/operation status, MCP `SSHError` and tool envelopes, `get_logger()`, and OTel telemetry remain the error/observability vocabulary. The workbench adds no appliance-wide exception hierarchy or readiness taxonomy. |
 
 `mcp/aptl-mcp-common/src/captures.ts` is a deliberate incompatibility to
 resolve at the existing management/evidence boundary: its current direct
@@ -145,7 +145,7 @@ The one seam is a narrow, versioned profile-launch contract:
 bookmark_refs, run_id, policy_version)`.
 
 It contains aliases and immutable references, never raw secret values,
-arbitrary URLs, Docker targets, ACES topology, or copied MCP `LabConfig`
+arbitrary URLs, Docker targets, RAES topology, or copied MCP `LabConfig`
 objects. The launcher resolves it against the signed payload, the admitted
 scenario, existing server configuration, and appliance flow policy. The next
 reasonable variation, an optional red capability or a read-only defensive
@@ -162,7 +162,7 @@ assembly, or copy of the MCP/server contracts.
   appliance payload/launch assets.
 - `src/aptl/core/{config,env,credentials,lab,session,runstore,telemetry,
   endpoints,lifecycle_policy,kill}.py`, `core/deployment/`, `core/evidence/`,
-  and `backends/aces_participant_runtime.py`.
+  and `backends/raes_participant_runtime.py`.
 - `src/aptl/api/`, the Svelte UI and route assemblies, API/web tests, and the
   participant-vs-operator gateway boundary.
 - `.mcp.json.example`, `mcp/build-all-mcps.sh`, `mcp/aptl-mcp-common/`, every
@@ -209,7 +209,7 @@ assembly, or copy of the MCP/server contracts.
   the agent as a workaround for evidence association.
 - Do not treat an MCP tool name list, DNS name, Docker network membership,
   loopback bind, CORS, TLS, or a VM as the enforcement boundary by itself.
-- Do not create participant/profile copies of ACES DTOs, API types, endpoint
+- Do not create participant/profile copies of RAES DTOs, API types, endpoint
   catalogs, redactors, ID validators, run layouts, tool schemas, error
   classes, readiness states, or workflow engines.
 
@@ -218,7 +218,7 @@ assembly, or copy of the MCP/server contracts.
 - This preflight does not implement the appliance, desktop/browser runtime,
   agent adapter, MCP launcher, profile renderer, gateway, browser bookmarks,
   secret bootstrap, capture mediation, or hosted fleet.
-- It does not change the ACES scenario/participant schema, dynamic realization,
+- It does not change the RAES scenario/participant schema, dynamic realization,
   `DeploymentBackend`, existing MCP tool semantics, SOC product configuration,
   operator web control plane, or run/evidence schema.
 - It does not grant a participant generic terminal, appliance management,

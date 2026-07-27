@@ -4,7 +4,7 @@
 Unlike ``test_experiment_admission.py`` (which drives ``admit_experiment``
 directly through an in-memory ``MappingArtifactSource``), these tests
 exercise the controller's default composition end-to-end: an on-disk
-project bundle (task/scenario files plus an ACES associated-artifact
+project bundle (task/scenario files plus a RAES associated-artifact
 manifest binding them), resolved through the REAL
 ``build_associated_artifact_source`` -> ``ProjectContainedResolver`` path —
 proving the production artifact-source wiring, not just the pure admission
@@ -22,16 +22,16 @@ import json
 
 import pytest
 import yaml
-from aces_backend_protocols.backend_manifest import BackendManifest
-from aces_contracts.associated_artifacts import (
+from raes_backend_protocols.backend_manifest import BackendManifest
+from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     associated_artifact_set_digest,
 )
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import MappingArtifactSource
 from aptl.core.experiment.controller import ExperimentController
 from aptl.core.experiment.policy import default_admission_policy

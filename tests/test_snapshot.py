@@ -543,20 +543,20 @@ class TestCaptureSnapshot:
         cs = ContainerSnapshot(image_digest="sha256:abc123")
         assert cs.image_digest == "sha256:abc123"
 
-    def test_software_versions_has_aces_sdl_version(self):
+    def test_software_versions_has_raes_version(self):
         sv = SoftwareVersions()
-        assert hasattr(sv, "aces_sdl_version")
-        assert sv.aces_sdl_version == ""
+        assert hasattr(sv, "raes_version")
+        assert sv.raes_version == ""
 
-    def test_get_software_versions_populates_aces_sdl_version(self):
+    def test_get_software_versions_populates_raes_version(self):
         backend = MagicMock()
         backend.host_versions.return_value = {}
         backend.container_inspect.return_value = {}
         backend.container_exec.return_value = MagicMock(returncode=1, stdout="", stderr="")
         versions = _get_software_versions(backend)
-        # aces-sdl is installed in the test environment
-        assert isinstance(versions.aces_sdl_version, str)
-        assert len(versions.aces_sdl_version) > 0
+        # raes is installed in the test environment
+        assert isinstance(versions.raes_version, str)
+        assert len(versions.raes_version) > 0
 
 
 class TestDetectionContentDigest:

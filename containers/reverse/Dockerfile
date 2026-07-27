@@ -1,6 +1,6 @@
 # Reverse engineering container built on shared Ubuntu 22.04 base
 # Build context must be ./containers/ so both base/ and reverse/ are accessible
-FROM ubuntu:22.04
+FROM ubuntu:22.04@sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -61,7 +61,7 @@ RUN mkdir -p /opt/purple-team/scripts /etc/rsyslog.d
 # for scripts, COPY --chmod=644 for configs) instead of relying on `chmod +x`
 # or the build context's file modes: COPY preserves source mode bits, so a
 # builder umask of 0002 would otherwise bake group-writable files and churn the
-# ACES inventory's captured modes between environments (SEC #417).
+# RAES inventory's captured modes between environments (SEC #417).
 COPY base/scripts/entrypoint-base.sh /opt/purple-team/scripts/
 RUN chmod 755 /opt/purple-team/scripts/entrypoint-base.sh
 

@@ -45,7 +45,7 @@ class HostBoundaryObservation(_StrictObservation):
 class BoundaryEnforcementObservation(_StrictObservation):
     """Kernel readback evidence for one independent policy authority."""
 
-    authority: Literal["aces", "platform"]
+    authority: Literal["raes", "platform"]
     source_digest: Digest
     enforcement_digest: Digest
     families: tuple[Literal["bridge", "inet"], ...]
@@ -56,7 +56,7 @@ class BoundaryProbeObservation(_StrictObservation):
     """One positive or negative reachability proof."""
 
     identity: str = Field(min_length=1, max_length=128)
-    authority: Literal["aces", "platform"]
+    authority: Literal["raes", "platform"]
     source: str = Field(min_length=1, max_length=160)
     destination: str = Field(min_length=1, max_length=160)
     protocol: Literal["any", "tcp", "udp", "icmp"]
@@ -88,7 +88,7 @@ class GuestBoundaryObservation(_StrictObservation):
     """Normalized selected-daemon and kernel observation."""
 
     policy_digest: Digest
-    aces_plan_digest: Digest
+    raes_plan_digest: Digest
     boot_id: str = Field(min_length=1, max_length=128)
     guest_daemon_id: str = Field(min_length=1, max_length=128)
     workbench_policy_version: str = Field(min_length=1, max_length=128)
@@ -179,8 +179,8 @@ def _append_guest_findings(
             "boundary.guest-policy-digest-mismatch",
         ),
         (
-            guest.aces_plan_digest != binding.aces_plan_digest,
-            "boundary.guest-aces-plan-digest-mismatch",
+            guest.raes_plan_digest != binding.raes_plan_digest,
+            "boundary.guest-raes-plan-digest-mismatch",
         ),
         (
             guest.boot_id != binding.boot_id,
@@ -239,11 +239,11 @@ def _append_enforcement_findings(
         findings.append("boundary.guest-enforcement-incomplete")
     if policy.default_deny and not platform.default_deny_observed:
         findings.append("boundary.guest-default-deny-missing")
-    aces = by_authority.get("aces")
-    if binding.aces_boundary_required and aces is None:
-        findings.append("boundary.guest-aces-enforcement-missing")
-    elif aces is not None and aces.source_digest != binding.aces_plan_digest:
-        findings.append("boundary.guest-aces-source-mismatch")
+    raes = by_authority.get("raes")
+    if binding.raes_boundary_required and raes is None:
+        findings.append("boundary.guest-raes-enforcement-missing")
+    elif raes is not None and raes.source_digest != binding.raes_plan_digest:
+        findings.append("boundary.guest-raes-source-mismatch")
 
 
 def _append_probe_findings(
@@ -254,8 +254,8 @@ def _append_probe_findings(
     """Require passing positive and negative probes for each authority."""
 
     required_authorities = {"platform"}
-    if binding.aces_boundary_required:
-        required_authorities.add("aces")
+    if binding.raes_boundary_required:
+        required_authorities.add("raes")
     for authority in sorted(required_authorities):
         scoped = [item for item in guest.probes if item.authority == authority]
         positive = [item for item in scoped if item.expectation == "reachable"]
@@ -277,7 +277,7 @@ def _inventory(
     """Render bounded machine evidence without raw policy or probe output."""
 
     return {
-        "schema_version": "aptl.appliance-boundary-inventory/v1",
+        "schema_version": "aptl.appliance-boundary-inventory/v2",
         "phase": phase,
         "policy": {
             "id": policy.policy_id,
@@ -285,8 +285,8 @@ def _inventory(
             "digest": binding.policy_digest,
         },
         "payload_digest": binding.payload_digest,
-        "aces_plan_digest": binding.aces_plan_digest,
-        "aces_boundary_required": binding.aces_boundary_required,
+        "raes_plan_digest": binding.raes_plan_digest,
+        "raes_boundary_required": binding.raes_boundary_required,
         "images": {
             "boundary_helper": binding.boundary_helper_image,
             "egress_proxy": binding.egress_proxy_image,

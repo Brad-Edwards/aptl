@@ -47,11 +47,32 @@ class ComposeRealizationImageMixin:
         if not realization.images:
             return None, None
         for image in realization.images:
-            result = self._realize_image(image)
+            result = (
+                self._verify_staged_image(image)
+                if self._offline_staged
+                else self._realize_image(image)
+            )
             if result is not None:
                 return result, None
         override_path = self._write_image_override(realization.images)
         return None, (self._project_dir / "docker-compose.yml", override_path)
+
+    def _verify_staged_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Fail closed when an offline appliance did not stage an exact image."""
+
+        result = self._run(
+            ["docker", "image", "inspect", image.image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if result.returncode == 0:
+            return None
+        return LabResult(
+            success=False,
+            error=f"Staged image missing for RAES node {image.address}.",
+        )
 
     def _realize_image(
         self,
@@ -65,7 +86,7 @@ class ComposeRealizationImageMixin:
             return self._build_realization_image(image)
         return LabResult(
             success=False,
-            error=f"Unsupported image realization mode for ACES node {image.address}.",
+            error=f"Unsupported image realization mode for RAES node {image.address}.",
         )
 
     def _pull_realization_image(
@@ -79,7 +100,7 @@ class ComposeRealizationImageMixin:
             timeout=_IMAGE_REALIZATION_TIMEOUT,
         )
         error = (
-            f"Image pull failed for ACES node {image.address}."
+            f"Image pull failed for RAES node {image.address}."
             if result.returncode != 0
             else None
         )
@@ -106,7 +127,7 @@ class ComposeRealizationImageMixin:
                 timeout=_IMAGE_REALIZATION_TIMEOUT,
             )
             error = (
-                f"Image build failed for ACES node {image.address}."
+                f"Image build failed for RAES node {image.address}."
                 if result.returncode != 0
                 else None
             )
@@ -119,7 +140,7 @@ class ComposeRealizationImageMixin:
         """Return an image-build input error message, if any."""
 
         return (
-            f"Image build input missing for ACES node {image.address}."
+            f"Image build input missing for RAES node {image.address}."
             if not image.dockerfile_path or not image.context_path
             else None
         )
@@ -158,8 +179,11 @@ class ComposeRealizationImageMixin:
         """Start lab services using a generated realization override."""
 
         cmd = self._build_command("up", profiles, compose_files=compose_files)
+        build = build and not self._offline_staged
         if build:
             cmd.append("--build")
+        if self._offline_staged:
+            cmd.extend(["--pull", "never"])
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]

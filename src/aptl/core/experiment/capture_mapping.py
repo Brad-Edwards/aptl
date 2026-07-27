@@ -1,4 +1,4 @@
-"""ACES capture-requirement admission via the collector registry (ADR-047
+"""RAES capture-requirement admission via the collector registry (ADR-047
 "Apparatus and capture capability admission"; EXP-010 / issue #752).
 
 EXP-002 shipped an empty ``SUPPORTED_CAPTURE_CAPABILITIES`` table here. EXP-010
@@ -32,7 +32,7 @@ import dataclasses
 from collections.abc import Iterable
 from typing import cast
 
-from aces_contracts.contracts import ExperimentCaptureSpecModel
+from raes_contracts.contracts import ExperimentCaptureSpecModel
 
 from aptl.core.experiment.capture_registry import (
     DEFAULT_COLLECTOR_REGISTRY,
@@ -81,7 +81,7 @@ def bind_capture_requirements(
     """Bind every capture requirement in ``capture_specs`` to an immutable binding.
 
     Returns the tuple of :class:`CaptureBinding` values, sorted by stable
-    identity ``(capture_spec_id, requirement_id)`` so the ACES
+    identity ``(capture_spec_id, requirement_id)`` so the RAES
     ``capture_requirements`` dict's iteration order (a semantically unordered
     map) never leaks into the pinned plan digest (ADR-047 "sort semantically
     unordered maps/sets"). They are pinned in the canonical trial-plan bytes

@@ -1,7 +1,7 @@
 """Tests for ``aptl.core.experiment.errors`` (ADR-047 "Error envelope").
 
-``normalize_aces_failure`` is the one place admission is allowed to turn an
-ACES/pydantic exception into a :class:`Diagnostic`. It must handle exactly
+``normalize_raes_failure`` is the one place admission is allowed to turn an
+RAES/pydantic exception into a :class:`Diagnostic`. It must handle exactly
 the three documented failure shapes and must never let a raw
 ``str(exc))`` — which for pydantic ``ValidationError`` embeds the rejected
 ``input_value`` — leak into the produced diagnostics.
@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import pydantic
 import pytest
-from aces_contracts.diagnostics import Diagnostic, Severity
-from aces_contracts.experiment_spec import (
+from raes_contracts.diagnostics import Diagnostic, Severity
+from raes_contracts.experiment_spec import (
     ExperimentSpecValidationError,
     parse_experiment_spec,
 )
-from aces_sdl import SDLInstantiationError, SDLParseError, SDLValidationError, parse_sdl
+from raes import SDLInstantiationError, SDLParseError, SDLValidationError, parse_sdl
 
 from aptl.core.experiment.errors import (
     EXPERIMENT_ADMISSION_DOMAIN,
     EXPERIMENT_ADMISSION_STAGE_LABEL,
     AdmissionRejection,
     diagnostic,
-    normalize_aces_failure,
+    normalize_raes_failure,
 )
 
 SECRET = "sk-super-secret-injected-token-12345"
@@ -68,13 +68,13 @@ class TestDiagnosticHelper:
         assert "hunter2hunter2" not in d.message
 
 
-class TestNormalizeAcesFailurePassthrough:
+class TestNormalizeRaesFailurePassthrough:
     def test_passes_a_single_diagnostic_through_unchanged(self):
         original = Diagnostic(
             code="c", domain="d", address="a", message="m", severity=Severity.ERROR
         )
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             original, address="root", code="aptl.experiment-admission.x"
         )
 
@@ -84,21 +84,21 @@ class TestNormalizeAcesFailurePassthrough:
         d1 = Diagnostic(code="c1", domain="d", address="a1", message="m1")
         d2 = Diagnostic(code="c2", domain="d", address="a2", message="m2")
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             (d1, d2), address="root", code="aptl.experiment-admission.x"
         )
 
         assert result == (d1, d2)
 
     def test_passes_an_empty_diagnostic_tuple_through_unchanged(self):
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             (), address="root", code="aptl.experiment-admission.x"
         )
 
         assert result == ()
 
 
-class TestNormalizeAcesFailurePydanticValidationError:
+class TestNormalizeRaesFailurePydanticValidationError:
     def _validation_error(self) -> pydantic.ValidationError:
         class Model(pydantic.BaseModel):
             x: int
@@ -112,7 +112,7 @@ class TestNormalizeAcesFailurePydanticValidationError:
     def test_extracts_one_diagnostic_per_pydantic_error(self):
         exc = self._validation_error()
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="root", code="aptl.experiment-admission.root-invalid"
         )
 
@@ -123,7 +123,7 @@ class TestNormalizeAcesFailurePydanticValidationError:
         exc = self._validation_error()
         assert SECRET in str(exc)  # sanity: pydantic's own str() DOES leak it
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="root", code="aptl.experiment-admission.root-invalid"
         )
 
@@ -135,7 +135,7 @@ class TestNormalizeAcesFailurePydanticValidationError:
     def test_diagnostic_carries_loc_derived_address_and_safe_code(self):
         exc = self._validation_error()
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="root", code="aptl.experiment-admission.root-invalid"
         )
 
@@ -146,7 +146,7 @@ class TestNormalizeAcesFailurePydanticValidationError:
         assert item.domain == EXPERIMENT_ADMISSION_DOMAIN
 
 
-class TestNormalizeAcesFailureExperimentSpecValidationError:
+class TestNormalizeRaesFailureExperimentSpecValidationError:
     """``ExperimentSpecValidationError`` wraps a pydantic ``ValidationError``
     via ``str()`` (ADR-047 gotcha) — the normalizer must reach through
     ``__cause__`` rather than ever calling ``str(exc)`` on it.
@@ -169,7 +169,7 @@ run_plan: {{}}
         except ExperimentSpecValidationError as exc:
             assert SECRET in str(exc)  # sanity: the wrapped str() DOES leak it
 
-            result = normalize_aces_failure(
+            result = normalize_raes_failure(
                 exc, address="root", code="aptl.experiment-admission.root-invalid"
             )
         else:
@@ -190,7 +190,7 @@ run_plan: {{}}
         except ExperimentSpecValidationError as exc:
             assert exc.__cause__ is None
 
-            result = normalize_aces_failure(
+            result = normalize_raes_failure(
                 exc, address="root", code="aptl.experiment-admission.root-invalid"
             )
         else:
@@ -201,12 +201,12 @@ run_plan: {{}}
         assert result[0].domain == EXPERIMENT_ADMISSION_DOMAIN
 
 
-class TestNormalizeAcesFailureSdlParseError:
+class TestNormalizeRaesFailureSdlParseError:
     def test_uses_structured_parse_diagnostics_when_present(self):
         try:
             parse_sdl(f"name: x\nimports:\n  - path: {SECRET}.yaml\n")
         except SDLParseError as exc:
-            result = normalize_aces_failure(
+            result = normalize_raes_failure(
                 exc, address="scenario", code="aptl.experiment-admission.scenario-invalid"
             )
         else:
@@ -216,7 +216,7 @@ class TestNormalizeAcesFailureSdlParseError:
         assert all(isinstance(item, Diagnostic) for item in result)
         # The SECRET was embedded in the SDL import path this exception was
         # raised for; matching the adjacent secret-absence pattern
-        # (TestNormalizeAcesFailureExperimentSpecValidationError above), the
+        # (TestNormalizeRaesFailureExperimentSpecValidationError above), the
         # secret must never surface in any produced diagnostic field.
         for item in result:
             assert SECRET not in item.message
@@ -225,10 +225,10 @@ class TestNormalizeAcesFailureSdlParseError:
 
     def test_scrubs_an_absolute_path_embedded_in_the_message(self):
         # Constructed directly: exercise the scrub without depending on a
-        # real ACES code path happening to embed a path today.
+        # real RAES code path happening to embed a path today.
         exc = SDLParseError("failed near /home/attacker/secret-project/scenario.yaml")
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="scenario", code="aptl.experiment-admission.scenario-invalid"
         )
 
@@ -236,11 +236,11 @@ class TestNormalizeAcesFailureSdlParseError:
         assert "/home/attacker/secret-project/scenario.yaml" not in result[0].message
 
 
-class TestNormalizeAcesFailureSdlValidationError:
+class TestNormalizeRaesFailureSdlValidationError:
     def test_one_diagnostic_per_error_string(self):
         exc = SDLValidationError(["first problem", "second problem"])
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="scenario", code="aptl.experiment-admission.scenario-invalid"
         )
 
@@ -251,15 +251,15 @@ class TestNormalizeAcesFailureSdlValidationError:
     def test_scrubs_an_absolute_path_embedded_in_an_error_string(self):
         exc = SDLValidationError(["bad reference at /etc/aptl/secret-config.yaml"])
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="scenario", code="aptl.experiment-admission.scenario-invalid"
         )
 
         assert "/etc/aptl/secret-config.yaml" not in result[0].message
 
 
-class TestNormalizeAcesFailureSdlInstantiationError:
-    """``run_reference_processor`` raises this (not documented in the ACES
+class TestNormalizeRaesFailureSdlInstantiationError:
+    """``run_reference_processor`` raises this (not documented in the RAES
     API reference consulted for Stage 1) when a condition's parameter
     binding is structurally broken — verified live in Stage 3. It shares
     ``SDLValidationError``'s safe ``errors: list[str]`` shape.
@@ -268,7 +268,7 @@ class TestNormalizeAcesFailureSdlInstantiationError:
     def test_one_diagnostic_per_error_string(self):
         exc = SDLInstantiationError(["first problem", "second problem"])
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="condition.parameters", code="aptl.experiment-admission.condition-parameters-invalid"
         )
 
@@ -279,7 +279,7 @@ class TestNormalizeAcesFailureSdlInstantiationError:
     def test_scrubs_an_absolute_path_embedded_in_an_error_string(self):
         exc = SDLInstantiationError(["bad target at /etc/aptl/secret-config.yaml"])
 
-        result = normalize_aces_failure(
+        result = normalize_raes_failure(
             exc, address="condition.parameters", code="aptl.experiment-admission.condition-parameters-invalid"
         )
 
@@ -289,10 +289,10 @@ class TestNormalizeAcesFailureSdlInstantiationError:
         # Mirrors the real Stage 3 call shape: run_reference_processor
         # raises SDLInstantiationError naming the undeclared parameter
         # *name*; the *value* bound to it must never appear anywhere.
-        from aces_processor.reference import run_reference_processor
-        from aces_sdl import parse_sdl
+        from raes_processor.reference import run_reference_processor
+        from raes import parse_sdl
 
-        from aptl.backends.aces_manifest import create_aptl_manifest
+        from aptl.backends.raes_manifest import create_aptl_manifest
 
         scenario = parse_sdl("name: canonical-minimal\n")
         try:
@@ -302,7 +302,7 @@ class TestNormalizeAcesFailureSdlInstantiationError:
                 parameters={"undeclared_target": SECRET},
             )
         except SDLInstantiationError as exc:
-            result = normalize_aces_failure(
+            result = normalize_raes_failure(
                 exc,
                 address="condition.parameters",
                 code="aptl.experiment-admission.condition-parameters-invalid",
@@ -316,5 +316,5 @@ class TestNormalizeAcesFailureSdlInstantiationError:
 
 
 def test_stage_label_is_not_the_misleading_default():
-    assert EXPERIMENT_ADMISSION_STAGE_LABEL != "ACES runtime handoff failed"
+    assert EXPERIMENT_ADMISSION_STAGE_LABEL != "RAES runtime handoff failed"
     assert "admission" in EXPERIMENT_ADMISSION_STAGE_LABEL.lower()

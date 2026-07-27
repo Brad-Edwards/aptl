@@ -4,9 +4,14 @@
 
 Do not report suspected vulnerabilities through public GitHub issues.
 
-Use GitHub private vulnerability reporting for this repository if it is
-available. If private reporting is not available, contact the maintainer
-privately through the contact path listed on Brad Edwards' GitHub profile.
+Report privately through GitHub private vulnerability reporting:
+
+- Open a report: https://github.com/Brad-Edwards/aptl/security/advisories/new
+- Published advisories: https://github.com/Brad-Edwards/aptl/security/advisories
+
+If private reporting is unavailable to you, contact the maintainer privately
+through the contact path listed on Brad Edwards' GitHub profile:
+https://github.com/Brad-Edwards
 
 Include enough detail to reproduce and assess the issue:
 

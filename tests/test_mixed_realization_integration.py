@@ -8,7 +8,7 @@ the runtime: subset directly and start the source: subset via Compose, in
 one `aptl lab start`, without either side conflicting with or silently
 skipping the other.
 
-Constructs the realization spec directly rather than through the ACES
+Constructs the realization spec directly rather than through the RAES
 compiler (already proven separately, e.g. test_imagefree_admission_
 integration.py) so this test isolates `realize()`'s own dispatch.
 
@@ -22,7 +22,7 @@ import subprocess
 import time
 
 import pytest
-from aces_sdl.runtime_configuration import RuntimeConfiguration, RuntimePackage
+from raes.runtime_configuration import RuntimeConfiguration, RuntimePackage
 
 from aptl.core.deployment import (
     DeploymentImageRealization,

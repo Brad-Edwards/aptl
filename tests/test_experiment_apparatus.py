@@ -6,18 +6,18 @@ Two things are exercised here:
 * ``check_apparatus_admission`` — conjunctive identity/manifest-ref/
   capability/mutual-compat admission over ``ExperimentTaskModel.
   apparatus_constraints`` and the authoring input's optional
-  ``apparatus_intent``. At the locked ACES 0.23.1 surface the published
+  ``apparatus_intent``. At the locked RAES 0.23.1 surface the published
   reference-processor manifest names only ``stub`` as a compatible backend
   while APTL names ``aces-reference-processor`` as compatible — a
   one-directional mismatch — so ANY admission using the real default
   manifests is expected to fail closed at the mutual-compatibility gate.
   This is documented, ADR-mandated behavior, not a bug.
 * ``plan_condition_feasibility``/``require_feasible_plan`` — planning-only
-  feasibility over a real parsed SDL ``Scenario``, using ACES's reference
+  feasibility over a real parsed SDL ``Scenario``, using RAES's reference
   processor directly (no ``AptlConfig``/``DeploymentBackend``/Docker).
 
-Uses the installed ACES fixture corpus
-(``aces_contracts.corpus.corpus_family_root(FIXTURES)``) as the contract
+Uses the installed RAES fixture corpus
+(``raes_contracts.corpus.corpus_family_root(FIXTURES)``) as the contract
 test source rather than a copied-in schema, per ADR-047's testing contract.
 """
 
@@ -28,14 +28,14 @@ import json
 import sys
 
 import pytest
-from aces_contracts.contracts import ExperimentApparatusConstraintModel, ExperimentTaskModel
-from aces_contracts.corpus import FIXTURES, corpus_family_root
-from aces_contracts.diagnostics import Severity
-from aces_processor.manifest import create_reference_processor_manifest
-from aces_processor.reference import ReferenceProcessorResult, run_reference_processor
-from aces_sdl import parse_sdl
+from raes_contracts.contracts import ExperimentApparatusConstraintModel, ExperimentTaskModel
+from raes_contracts.corpus import FIXTURES, corpus_family_root
+from raes_contracts.diagnostics import Severity
+from raes_processor.manifest import create_reference_processor_manifest
+from raes_processor.reference import ReferenceProcessorResult, run_reference_processor
+from raes import parse_sdl
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.apparatus import (
     check_apparatus_admission,
     plan_condition_feasibility,
@@ -84,7 +84,7 @@ def _minimal_scenario_bytes() -> bytes:
 
 
 class TestCheckApparatusAdmissionMutualCompatGotcha:
-    def test_the_realistic_corpus_task_requiring_aces_reference_processor_is_rejected(self):
+    def test_the_realistic_corpus_task_requiring_raes_reference_processor_is_rejected(self):
         task = _load_reference_task()
         policy = default_admission_policy()
 
@@ -243,8 +243,8 @@ def _synthetic_mutually_compatible_manifests():
     can isolate ONE apparatus gate at a time without the unconditional
     mutual-compatibility gate also firing alongside it.
     """
-    from aces_backend_protocols.backend_manifest import BackendManifest
-    from aces_processor.capabilities import ProcessorManifest
+    from raes_backend_protocols.backend_manifest import BackendManifest
+    from raes_processor.capabilities import ProcessorManifest
 
     real_backend = create_aptl_manifest()
     real_processor = create_reference_processor_manifest()
@@ -464,8 +464,8 @@ class TestCheckApparatusAdmissionUncertifiedApparatusOverride:
         # "never fabricates compatibility" test above forbids).
         real_backend = create_aptl_manifest()
         real_processor = create_reference_processor_manifest()
-        from aces_backend_protocols.backend_manifest import BackendManifest
-        from aces_processor.capabilities import ProcessorManifest
+        from raes_backend_protocols.backend_manifest import BackendManifest
+        from raes_processor.capabilities import ProcessorManifest
 
         test_backend = BackendManifest(
             name="test-backend",
@@ -751,13 +751,13 @@ class TestPlanConditionFeasibilityHappyPath:
 
 
 class TestPlanConditionFeasibilityBrokenParameterBinding:
-    """At the locked ACES 0.23.1 surface, ``run_reference_processor`` itself
+    """At the locked RAES 0.23.1 surface, ``run_reference_processor`` itself
     *raises* ``SDLInstantiationError`` for a structurally broken parameter
     binding (verified live) rather than returning an invalid
     ``ReferenceProcessorResult`` — a delta from what a naive reading of the
     planning API might suggest. ``plan_condition_feasibility`` normalizes
     that raise into the same fail-closed ``AdmissionRejection`` surface as
-    every other admission rejection, rather than letting a raw ACES
+    every other admission rejection, rather than letting a raw RAES
     exception escape or fabricating a fake successful plan.
     """
 
@@ -783,11 +783,11 @@ class TestPlanConditionFeasibilityBrokenParameterBinding:
 
 class TestRequireFeasiblePlanRejectsAnInvalidResult:
     def test_raises_when_the_result_carries_an_error_diagnostic(self):
-        from aces_contracts.diagnostics import Diagnostic, Severity
+        from raes_contracts.diagnostics import Diagnostic, Severity
 
         bad_diagnostic = Diagnostic(
-            code="aces.some-planning-error",
-            domain="aces-processor",
+            code="raes.some-planning-error",
+            domain="raes-processor",
             address="scenario.nodes",
             message=f"unresolvable reference; rejected value was {SECRET}",
             severity=Severity.ERROR,
@@ -833,7 +833,7 @@ class TestPlanConditionFeasibilityNeverTouchesDocker:
         for leftover in (
             "aptl.core.deployment.docker_compose",
             "aptl.core.deployment.ssh_compose",
-            "aces_runtime.manager",
+            "raes_runtime.manager",
         ):
             monkeypatch.delitem(sys.modules, leftover, raising=False)
 
@@ -851,9 +851,9 @@ class TestPlanConditionFeasibilityNeverTouchesDocker:
 
         assert result.is_valid is True
         assert "aptl.core.deployment.ssh_compose" not in sys.modules
-        # aces_runtime.manager (RuntimeManager, the execution-side
+        # raes_runtime.manager (RuntimeManager, the execution-side
         # incumbent) must never be pulled in by planning-only admission.
-        assert "aces_runtime.manager" not in sys.modules
+        assert "raes_runtime.manager" not in sys.modules
 
 
 # ---------------------------------------------------------------------------

@@ -328,12 +328,12 @@ Set `"mail": true` in `aptl.json`, restart.
 | CFG-02 | All new profiles listed | enterprise, soc in list | Check output includes `enterprise`, `soc` |
 | CFG-03 | Unknown profile rejected | Validation error | `python -c "from aptl.core.config import ContainerSettings; ContainerSettings(bogus=True)"` should raise |
 
-### 6c. ACES Scenario Selection
+### 6c. RAES Scenario Selection
 
 | ID | Test | Expected | How |
 |----|------|----------|-----|
-| SCEN-01 | Curated catalog lists ACES SDL inputs | Catalog rows resolve under the project and end in `.sdl.yaml` | `aptl lab scenarios` |
-| SCEN-02 | Default TechVault startup input parses through ACES | No ACES parser errors | `python -c "from aces_sdl import parse_sdl_file; from pathlib import Path; parse_sdl_file(Path('scenarios/techvault-operational.sdl.yaml'))"` |
+| SCEN-01 | Curated catalog lists RAES SDL inputs | Catalog rows resolve under the project and end in `.sdl.yaml` | `aptl lab scenarios` |
+| SCEN-02 | Default TechVault startup input parses through RAES | No RAES parser errors | `python -c "from raes import parse_sdl_file; from pathlib import Path; parse_sdl_file(Path('scenarios/techvault-operational.sdl.yaml'))"` |
 | SCEN-03 | Archived legacy YAML is reference-only | Archived files are not catalog rows | `python -c "from aptl.core.scenario_catalog import load_scenario_catalog; from pathlib import Path; c = load_scenario_catalog(Path('.')); assert all('/archive/' not in e.path for e in c.scenarios)"` |
 
 ---

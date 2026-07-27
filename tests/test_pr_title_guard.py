@@ -72,3 +72,26 @@ def test_rejects_uppercase_subject() -> None:
 def test_rejects_empty() -> None:
     assert any(v.rule_id == check_pr_title.RULE_EMPTY for v in validate_pr_title(""))
     assert any(v.rule_id == check_pr_title.RULE_EMPTY for v in validate_pr_title("   "))
+
+
+@pytest.mark.parametrize(
+    ("title", "origin"),
+    [
+        ("chore(main): promote dev", "make devmain, the dev -> main promotion"),
+        ("chore(main): release 5.1.1", "the release-please release PR"),
+        ("chore: back-merge v5.1.1 into dev", "the automated main -> dev back-merge"),
+    ],
+)
+def test_accepts_every_title_the_release_path_emits(title: str, origin: str) -> None:
+    """Titles produced by automation, not by a human who can react to a rejection.
+
+    Since issue #852 this guard runs on `main` as well as `dev`, so all three of
+    these now pass through it. None has an author watching for a red check: a
+    rejection here would stall the release path rather than prompt a reword.
+
+    This is why the cases are pinned explicitly rather than left to the generic
+    "valid titles" coverage above. Narrowing ``CONVENTIONAL_TYPES``, tightening
+    the optional-scope group, or changing the subject pattern would break the
+    release path, and it should break here first.
+    """
+    assert validate_pr_title(title) == [], f"would block {origin}"

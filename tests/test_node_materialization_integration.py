@@ -14,7 +14,7 @@ import shutil
 import subprocess
 
 import pytest
-from aces_sdl.runtime_configuration import (
+from raes.runtime_configuration import (
     RuntimeConfiguration,
     RuntimeLocalGroup,
     RuntimeLocalIdentityInventory,
@@ -22,8 +22,8 @@ from aces_sdl.runtime_configuration import (
     RuntimePackage,
 )
 
-from aptl.backends.aces_node_materialization import realize_node
-from aptl.backends.aces_realization_model import NodeRealization
+from aptl.backends.raes_node_materialization import realize_node
+from aptl.backends.raes_realization_model import NodeRealization
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 
 pytestmark = pytest.mark.integration

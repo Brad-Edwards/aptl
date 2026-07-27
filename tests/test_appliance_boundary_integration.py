@@ -295,7 +295,7 @@ def test_platform_floor_allows_declared_crossing_and_blocks_other_source() -> No
                 "--security-opt=no-new-privileges",
                 "--entrypoint",
                 "nft",
-                "aptl-network-boundary-helper:1",
+                "aptl-network-boundary-helper:2",
                 "flush",
                 "chain",
                 "inet",
@@ -315,7 +315,7 @@ def test_platform_floor_allows_declared_crossing_and_blocks_other_source() -> No
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_aces_owner_acl_allows_declared_port_and_denies_remainder() -> None:
+def test_raes_owner_acl_allows_declared_port_and_denies_remainder() -> None:
     project_dir = Path(__file__).parents[1]
     backend = DockerComposeBackend(project_dir, project_name="aptl-822-acl-proof")
     network_name = "aptl-822-acl-proof"

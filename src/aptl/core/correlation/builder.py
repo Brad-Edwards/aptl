@@ -3,7 +3,7 @@
 Builds a :class:`~aptl.core.correlation.models.CorrelationProjection` from
 already-parsed APTL run-archive inputs — the ``aptl.run-record/v1`` manifest
 (whose embedded ``RuntimeSnapshot`` carries participant episode/behavior
-history and evaluator results) and the ACES orchestrator's
+history and evaluator results) and the RAES orchestrator's
 ``orchestration/<addr>/{result.json,history.jsonl}`` files. Pure: no I/O,
 no wall clock, no UUIDs, no process-random ordering dependence — see
 :mod:`aptl.core.correlation.persistence` for the archive-reading/writing
@@ -13,15 +13,15 @@ private :mod:`aptl.core.correlation._assemble` module and the named
 to keep each module within the repo's per-file line budget).
 
 Reality this module is built against (verified live against
-``aces-sdl==0.23.1`` and the APTL adapters, not the aspirational ACES
+``aces-sdl==0.23.1`` and the APTL adapters, not the aspirational RAES
 archival contracts EXP-002/REP-001 do not yet wire in):
 
 - Participant events are the *lightweight*
   ``ParticipantBehaviorHistoryEventModel`` (a single ``timestamp``, no
   ``occurred_at``/``recorded_at``/``ingested_at``/``clock_authority`` to
-  read) — see :mod:`aptl.backends.aces_participant_actions`.
-- ``run_id`` is threaded only into the ACES orchestrator adapter
-  (:mod:`aptl.backends.aces_orchestrator`); its persisted
+  read) — see :mod:`aptl.backends.raes_participant_actions`.
+- ``run_id`` is threaded only into the RAES orchestrator adapter
+  (:mod:`aptl.backends.raes_orchestrator`); its persisted
   ``WorkflowExecutionState.run_id`` is the *workflow's own* internal
   execution id (an opaque ``uuid4().hex`` minted by
   :class:`aptl.core.runtime.workflow_engine.WorkflowEngine`), never the
@@ -33,7 +33,7 @@ archival contracts EXP-002/REP-001 do not yet wire in):
   ``manifest.json`` document, which does carry an explicit top-level
   ``run_id`` field equal to the run identity — bind via
   ``EXPLICIT_IDENTIFIER``.
-- No ACES archival contract (``ExperimentEvidenceRecordModel``,
+- No RAES archival contract (``ExperimentEvidenceRecordModel``,
   ``ParticipantAttributionEdgeModel``, ``ExperimentAugmentationDisclosureModel``,
   ...) is wired into APTL yet. A ``planned_trial_id``/plan ref and
   augmentation-disclosure refs are read from ``run_record`` on a

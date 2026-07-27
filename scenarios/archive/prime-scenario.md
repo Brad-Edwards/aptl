@@ -3,14 +3,14 @@
 > Historical reference only: this document describes the retired APTL-local
 > scenario YAML era. It is not current authoring guidance, not a startup input,
 > and not a runtime schema authority. Current TechVault scenario authority lives
-> in ACES SDL files referenced by `scenarios/catalog.json`.
+> in RAES SDL files referenced by `scenarios/catalog.json`.
 
 ## Purpose
 
 This is the **prime scenario** for APTL research. It defines a single, fixed enterprise environment with known vulnerabilities, intended to be run hundreds of times by different agents, models, tool configurations, and guidance levels. The goal is to collect behavioral data about how AI agents navigate multi-step enterprise attack chains, with enough structure for statistical analysis across runs.
 
 This document is retained for historical context. Current environment,
-vulnerability, and attack-surface facts must come from ACES SDL and the ACES
+vulnerability, and attack-surface facts must come from RAES SDL and the RAES
 inventory evidence.
 
 ## Why This Scenario

@@ -45,11 +45,11 @@ class ContainerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Defaults match the full DEFAULT_ACES_SCENARIO (techvault-operational) that
+    # Defaults match the full DEFAULT_RAES_SCENARIO (techvault-operational) that
     # `aptl lab start` provisions when no scenario is given, so a plain
     # `aptl lab init` + `aptl lab start` brings up the complete lab the
     # walkthrough documents. With soc/enterprise/dns/fileshare off, Compose only
-    # created the wazuh/victim/kali subset while the ACES handoff still tried to
+    # created the wazuh/victim/kali subset while the RAES handoff still tried to
     # wire the scenario's ad/dns/cortex/db nodes, so start failed with
     # "No such container". `reverse` and `mail` stay off — they are not part of
     # that scenario.
@@ -130,7 +130,7 @@ class LifecycleScheduleEntry(BaseModel):
     (the platform stamps lifecycle timestamps as timezone-aware UTC, so
     the schedule shares that frame). ``days`` is an optional weekday
     filter (empty means every day). ``scenario`` optionally names a
-    curated ACES startup scenario id to boot with.
+    curated RAES startup scenario id to boot with.
     """
 
     model_config = ConfigDict(extra="forbid")

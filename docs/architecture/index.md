@@ -156,6 +156,8 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #852 Dev-To-Main Promotion](issue-852-devmain-promotion-preflight.md)
+- [Issue #847 OpenSSF Scorecard](issue-847-openssf-scorecard-preflight.md)
 - [Issue #820 Resource-Bounded Participant Profile](issue-820-resource-bounded-participant-profile-preflight.md)
 - [DEP-008 Self-Contained Lab Assets](dep-008-self-contained-lab-assets-preflight.md)
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)
@@ -166,3 +168,4 @@ The victim and kali containers publish no host ports; use
 - [EXP-010 Capture Admission And Evidence Acquisition](exp-010-capture-admission-evidence-preflight.md)
 - [Issue #589 Scenario-Pack Capture Workflow Ownership](issue-589-scenario-pack-capture-ownership-preflight.md)
 - [Issue #821 In-Appliance Participant Workbench](issue-821-participant-workbench-preflight.md)
+- [Issue #823 Versioned Disposable Lab Appliance](issue-823-versioned-disposable-appliance-preflight.md)

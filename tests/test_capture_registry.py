@@ -10,7 +10,7 @@ requirement axis, fails closed on any unknown, keeps ``registration_id``
 non-executable, and that the observation projection is honest (``None`` while
 the registry is empty).
 
-Uses the installed ACES fixture corpus as the contract test source (ADR-047
+Uses the installed RAES fixture corpus as the contract test source (ADR-047
 testing contract), never a copied-in schema.
 """
 
@@ -20,9 +20,9 @@ import dataclasses
 import json
 
 import pytest
-from aces_backend_protocols.capabilities import observation_capability_contract_gaps
-from aces_contracts.contracts import ExperimentCaptureSpecModel
-from aces_contracts.corpus import FIXTURES, corpus_family_root
+from raes_backend_protocols.capabilities import observation_capability_contract_gaps
+from raes_contracts.contracts import ExperimentCaptureSpecModel
+from raes_contracts.corpus import FIXTURES, corpus_family_root
 
 from aptl.core.experiment.capture_registry import (
     DEFAULT_COLLECTOR_REGISTRY,
@@ -42,7 +42,7 @@ _LIMITS = CaptureLimits(max_bytes=1_048_576, max_artifact_count=100, max_duratio
 
 
 def _read(*parts: str) -> bytes:
-    """Read a byte payload from the installed ACES fixture corpus."""
+    """Read a byte payload from the installed RAES fixture corpus."""
     path = CORPUS_ROOT
     for part in parts:
         path = path / part
@@ -336,7 +336,7 @@ class TestObservationProjection:
 
     def test_projection_uses_governed_vocabulary_terms(self):
         # ObservationCapabilities validates channel/capture/sealing terms
-        # against the ACES controlled-vocabulary catalog at construction, so a
+        # against the RAES controlled-vocabulary catalog at construction, so a
         # successful projection proves the declared terms are governed.
         registry = CollectorRegistry((_covering_registration(),))
         observation = registry.observation_projection()

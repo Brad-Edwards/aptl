@@ -1,6 +1,6 @@
 """Real-Docker proof: a real TechVault node (dns) boots working image-free.
 
-Authors the dns node from its real bind9 config + zones as declared ACES state
+Authors the dns node from its real bind9 config + zones as declared RAES state
 (admitted straight from `scenarios/techvault-operational.sdl.yaml`, not a
 reauthored fixture), realizes it via the generic materializer, and asserts
 named is active and resolves the real TechVault zone. Zero product code.
@@ -14,13 +14,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from aces_sdl import parse_sdl_file
-from aces_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
+from raes_runtime.manager import RuntimeManager
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_materializer import PlaceFileOp, PlaceProjectContentOp
-from aptl.backends.aces_node_materialization import realize_node
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_materializer import PlaceFileOp, PlaceProjectContentOp
+from aptl.backends.raes_node_materialization import realize_node
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 

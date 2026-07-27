@@ -6,7 +6,7 @@ owns the Python CLI control plane, ADR-013/ADR-023/ADR-037 own deployment
 backends, ADR-025 owns `aptl.json`, ADR-028 owns generated runtime config,
 ADR-029 owns secret handling, ADR-030 owns lab result envelopes, ADR-031 owns
 orchestration contracts, ADR-043 owns Suricata runtime seeding, and ADR-046
-owns dynamic ACES realization.
+owns dynamic RAES realization.
 
 ## Architecture Decisions
 
@@ -17,7 +17,7 @@ owns dynamic ACES realization.
 - Add one canonical asset materialization boundary for the wheel-owned source
   tree. Do not scatter `importlib.resources` lookups across `certs.py`,
   `env.py`, `credentials.py`, `scenario_catalog.py`, `suricata_seed.py`,
-  `snapshot.py`, ACES adapters, or deployment code.
+  `snapshot.py`, RAES adapters, or deployment code.
 - `aptl lab init <dir>` should materialize every tracked source asset required
   by the public startup path: `aptl.json`, `.env.example`, `docker-compose.yml`,
   `generate-indexer-certs.yml`, `config/certs.yml`, source `config/`
@@ -78,7 +78,7 @@ owns dynamic ACES realization.
   `find_placeholder_env_values()`. Package data must never carry real `.env`
   secrets.
 - **Scenario gate:** curated scenario IDs and explicit paths continue through
-  `ScenarioCatalog` and the ACES parser. Do not revive a local scenario schema
+  `ScenarioCatalog` and the RAES parser. Do not revive a local scenario schema
   or let UI/API code parse `scenarios/` directly.
 - **Docker/OS boundary:** Docker Compose runs with `cwd` set to the materialized
   project. Build contexts and bind mounts must be real filesystem paths. Do not
@@ -127,7 +127,7 @@ or Docker command passthrough.
   `src/aptl/core/credentials.py`, `src/aptl/core/suricata_seed.py`,
   `src/aptl/core/certs.py`, `src/aptl/core/soc_ca.py`,
   `src/aptl/core/deployment/`, `src/aptl/core/snapshot.py`,
-  `src/aptl/core/scenario_catalog.py`, and `src/aptl/backends/aces*.py`.
+  `src/aptl/core/scenario_catalog.py`, and `src/aptl/backends/raes*.py`.
 - Host/runtime layers: local filesystem permissions, symlinks, subprocess
   argv, Docker daemon cwd, SSH Docker transport, image build cache, and package
   installer layout.
@@ -160,7 +160,7 @@ or Docker command passthrough.
 ## Non-Goals
 
 - Do not implement DEP-008 in this preflight.
-- Do not redesign Docker Compose, ACES SDL, deployment backends, startup
+- Do not redesign Docker Compose, RAES SDL, deployment backends, startup
   readiness, Suricata rule semantics, SOC seeding, or run archive layout.
 - Do not switch to published prebuilt images unless a separate requirement
   explicitly replaces local build contexts.

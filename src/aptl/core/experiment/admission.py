@@ -1,4 +1,4 @@
-"""The ACES experiment admission coordinator (ADR-047 "Experiment-controller
+"""The RAES experiment admission coordinator (ADR-047 "Experiment-controller
 boundary", Stage 5 / EXP-002 / issue #438).
 
 This module wires the previously-landed Stage 1-4 modules
@@ -11,13 +11,13 @@ split out to keep this module under the 500-line budget — into one
 all-or-nothing admission sequence: :func:`admit_experiment`. It performs
 ONLY:
 
-* bounded, hardened loading of the ACES experiment graph (root, task,
+* bounded, hardened loading of the RAES experiment graph (root, task,
   scenario, capture specs) from resolver-owned bytes;
 * cross-artifact identity/version joins between those already-validated
-  ACES objects;
+  RAES objects;
 * apparatus and capture capability admission;
 * planning-only per-condition feasibility plus the canonical
-  instantiated-scenario digest ACES itself derives;
+  instantiated-scenario digest RAES itself derives;
 * pure, deterministic trial-plan expansion; and
 * create-once, digest-reverified persistence of the resulting plan via the
   injected ``RunStorageBackend``.
@@ -62,12 +62,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from aces_backend_protocols.manifest import BackendManifest
-from aces_contracts.diagnostics import Diagnostic
-from aces_processor.capabilities import ProcessorManifest
-from aces_processor.manifest import create_reference_processor_manifest
+from raes_backend_protocols.manifest import BackendManifest
+from raes_contracts.diagnostics import Diagnostic
+from raes_processor.capabilities import ProcessorManifest
+from raes_processor.manifest import create_reference_processor_manifest
 
-from aptl.backends.aces_manifest import create_aptl_manifest
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission_artifacts import (
     MappingArtifactSource,
     ResolvedArtifactSource,

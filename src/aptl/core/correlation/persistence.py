@@ -17,7 +17,7 @@ always writes through ``run_store.write_json(run_id, ...)``, never
 actually contains ``correlation.json`` end to end.
 
 Every failure normalizes into the existing ADR-047 fail-closed diagnostic
-shape (:class:`aces_contracts.diagnostics.Diagnostic` /
+shape (:class:`raes_contracts.diagnostics.Diagnostic` /
 :class:`aptl.core.experiment.errors.AdmissionRejection`) rather than a new
 exception hierarchy — a missing/corrupt manifest, an unreadable
 orchestration file, or a builder ``ValueError`` (e.g. an invalid/secret-
@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aces_contracts.diagnostics import Diagnostic, Severity
+from raes_contracts.diagnostics import Diagnostic, Severity
 
 from aptl.core.correlation.builder import CorrelationRuleSet, build_correlation_projection
 from aptl.core.correlation.clock import ClockProvider, SystemClockProvider
@@ -178,7 +178,7 @@ def build_and_persist_correlation(
     :class:`AdmissionRejection` (never a raw exception) on a missing/
     unreadable archive or an invalid projection — every diagnostic message
     passes through :func:`aptl.utils.redaction.redact` and names no raw
-    ACES payload content.
+    RAES payload content.
     """
     manifest = _read_manifest(run_store, run_id)
     orchestration = _read_orchestration(run_store, run_id)

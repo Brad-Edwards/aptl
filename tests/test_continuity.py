@@ -987,7 +987,7 @@ class TestDefaultTargets:
         # capability grant lives in runtime.linux_capabilities.add, not
         # compose cap_add; ad is still Compose-managed, so its grant is
         # still checked there.
-        from aces_sdl import parse_sdl_file
+        from raes import parse_sdl_file
 
         from aptl.core.continuity import default_targets
 

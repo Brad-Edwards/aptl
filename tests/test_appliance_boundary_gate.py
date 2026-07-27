@@ -65,8 +65,8 @@ def _binding(payload: bytes) -> ApplianceBoundaryBinding:
     return ApplianceBoundaryBinding(
         policy_digest="sha256:" + hashlib.sha256(payload).hexdigest(),
         payload_digest="sha256:" + "b" * 64,
-        aces_plan_digest="sha256:" + "d" * 64,
-        aces_boundary_required=False,
+        raes_plan_digest="sha256:" + "d" * 64,
+        raes_boundary_required=False,
         boundary_helper_image="example.test/aptl-boundary@sha256:" + "e" * 64,
         egress_proxy_image="example.test/aptl-egress@sha256:" + "f" * 64,
         boot_id="boot-1",
@@ -105,7 +105,7 @@ class _Adapter:
         self.phases.append(phase)
         return GuestBoundaryObservation(
             policy_digest=binding.policy_digest,
-            aces_plan_digest=binding.aces_plan_digest,
+            raes_plan_digest=binding.raes_plan_digest,
             boot_id=binding.boot_id,
             guest_daemon_id=binding.guest_daemon_id,
             workbench_policy_version="participant-workbench-profile/v1",

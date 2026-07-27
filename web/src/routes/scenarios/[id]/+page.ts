@@ -9,7 +9,7 @@ import type { ScenarioDetail } from '$lib/types';
  * port-scoped `X-APTL-Session` header via the shared API boundary, and threads
  * the load-provided `event.fetch` in so the request resolves in every load
  * context. An unknown scenario surfaces as a route-level 404 (short message +
- * Lab link from the error page); any other failure (malformed catalog/ACES
+ * Lab link from the error page); any other failure (malformed catalog/RAES
  * projection, transport error) becomes a redacted page-level unavailable state.
  */
 export async function load({

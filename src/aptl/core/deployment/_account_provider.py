@@ -43,11 +43,11 @@ _SPN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:-]*$")
 # Code-owned binding: backend service name -> account provider kind. Adding a
 # new account-capable service is one entry here (ADR-046 §Extensibility), never
 # a scenario-name branch. This is the single source of truth the interpret-time
-# gate (``aces_account_realization``) and the realize-time materializer share.
+# gate (``raes_account_realization``) and the realize-time materializer share.
 _PROVIDER_BINDINGS: Mapping[str, str] = {"ad": SAMBA_AD}
 
 # Bound on a single identity token. Usernames, group names, mail, and SPNs are
-# ACES-owned and short; this is a defensive cap against an unbounded value
+# RAES-owned and short; this is a defensive cap against an unbounded value
 # reaching argv or a log field.
 _MAX_IDENTIFIER_LEN = 256
 

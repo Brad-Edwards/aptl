@@ -6,7 +6,7 @@ import type { ScenarioSummary } from '../../src/lib/types';
 const SCENARIO: ScenarioSummary = {
 	id: 'techvault-operational',
 	name: 'TechVault Operational',
-	description: 'Default public APTL startup scenario backed by ACES SDL.',
+	description: 'Default public APTL startup scenario backed by RAES SDL.',
 	mode: 'purple',
 	difficulty: 'advanced',
 	estimated_minutes: 60,

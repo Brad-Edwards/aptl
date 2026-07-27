@@ -1,11 +1,11 @@
-"""ACES scenario-detail workbench projection (UI-008d).
+"""RAES scenario-detail workbench projection (UI-008d).
 
-Turns a curated catalog entry plus its parsed ACES ``Scenario`` into the
+Turns a curated catalog entry plus its parsed RAES ``Scenario`` into the
 backend-owned wire DTOs in :mod:`aptl.api.schemas`: the enriched card summary
 and the scenario-detail response (header facts + an ordered ``WorkbenchBlock``
 discriminated union).
 
-The block families are projected from whatever the ACES SDL actually owns and
+The block families are projected from whatever the RAES SDL actually owns and
 are omitted when their source section is empty — the projection never
 fabricates steps, objectives, or SIEM queries for infra-only scenarios. The
 catalog ``path`` locator is never read into any wire field.
@@ -42,13 +42,13 @@ class MetadataFacts(TypedDict):
 
 
 def _node_type(node: object) -> str:
-    """Return the node's ACES type string (``vm`` / ``switch``), or ``""``."""
+    """Return the node's RAES type string (``vm`` / ``switch``), or ``""``."""
     node_type = getattr(node, "type", None)
     return getattr(node_type, "value", node_type) or ""
 
 
 def _is_vm(node: object) -> bool:
-    """Return whether an ACES node is a VM (a candidate required container)."""
+    """Return whether a RAES node is a VM (a candidate required container)."""
     return _node_type(node) == "vm"
 
 
@@ -64,7 +64,7 @@ def _exposes_ssh(node: object) -> bool:
 
 
 def scenario_required_containers(scenario: object) -> list[str]:
-    """Return the required-container names: the scenario's ACES VM nodes."""
+    """Return the required-container names: the scenario's RAES VM nodes."""
     nodes = getattr(scenario, "nodes", {}) or {}
     return [name for name, node in nodes.items() if _is_vm(node)]
 
@@ -107,7 +107,7 @@ def _title_narrative(
 
 
 def _objective_success_summary(success: object) -> str:
-    """Render an ACES objective's declarative success criteria as display copy."""
+    """Render a RAES objective's declarative success criteria as display copy."""
     mode = getattr(success, "mode", "")
     mode_label = getattr(mode, "value", mode) or "all_of"
     groups = [
@@ -122,7 +122,7 @@ def _objective_success_summary(success: object) -> str:
 
 
 def _objective_blocks(scenario: object) -> list[WorkbenchBlock]:
-    """Project ACES declarative objectives into objective blocks (empty if none)."""
+    """Project RAES declarative objectives into objective blocks (empty if none)."""
     objectives = getattr(scenario, "objectives", {}) or {}
     if not objectives:
         return []
@@ -142,7 +142,7 @@ def _objective_blocks(scenario: object) -> list[WorkbenchBlock]:
 
 
 def _step_blocks(scenario: object) -> list[WorkbenchBlock]:
-    """Project ACES workflow steps into ordered step blocks (empty if none)."""
+    """Project RAES workflow steps into ordered step blocks (empty if none)."""
     workflows = getattr(scenario, "workflows", {}) or {}
     if not workflows:
         return []
@@ -191,7 +191,7 @@ def _terminal_blocks(scenario: object) -> list[WorkbenchBlock]:
 def build_workbench_blocks(
     entry: ScenarioCatalogEntry, scenario: object, facts: MetadataFacts
 ) -> list[WorkbenchBlock]:
-    """Project the ordered ``WorkbenchBlock`` union from ACES scenario data."""
+    """Project the ordered ``WorkbenchBlock`` union from RAES scenario data."""
     blocks: list[WorkbenchBlock] = [_title_narrative(entry, facts)]
     containers = scenario_required_containers(scenario)
     if containers:
@@ -242,7 +242,7 @@ def build_scenario_summary(
 
 
 def invalid_scenario_summary(entry: ScenarioCatalogEntry) -> ScenarioSummaryResponse:
-    """Build a card summary for an entry whose ACES SDL failed to project.
+    """Build a card summary for an entry whose RAES SDL failed to project.
 
     Carries the catalog-owned facts (id/name/description/metadata) and a
     redacted, path-free invalid validation state so the card renders without

@@ -9,7 +9,6 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
 )
 from aptl.core.deployment._compose_boundary import (
-    DEFAULT_BOUNDARY_HELPER_IMAGE,
     realize_boundary as _realize_boundary,
 )
 from aptl.core.deployment._compose_realization_networks import (
@@ -23,7 +22,7 @@ from aptl.core.deployment.boundary import (
 )
 from aptl.core.deployment.boundary_compiler import (
     BoundaryCompileError,
-    compile_aces_boundary,
+    compile_raes_boundary,
     compile_platform_boundary,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
@@ -104,7 +103,7 @@ def _workload_addresses(
 
 
 class ComposeBoundaryRealizationMixin:
-    """Apply platform and ACES policy on the selected Compose daemon host."""
+    """Apply platform and RAES policy on the selected Compose daemon host."""
 
     def configure_appliance_boundary(
         self,
@@ -131,19 +130,19 @@ class ComposeBoundaryRealizationMixin:
     def _record_boundary_receipt(self, policy: BoundaryEnforcementSpec) -> None:
         """Store only normalized enforcement identity needed by qualification."""
 
-        if policy.authority == "aces" and not policy.rules:
-            self._boundary_receipts.pop("aces", None)
+        if policy.authority == "raes" and not policy.rules:
+            self._boundary_receipts.pop("raes", None)
             return
         binding = (
             self._appliance_boundary[1]
             if self._appliance_boundary is not None
             else None
         )
-        source_digest = (
-            policy.policy_digest
-            if policy.authority == "platform"
-            else (binding.aces_plan_digest if binding is not None else "")
-        )
+        source_digest = ""
+        if policy.authority == "platform":
+            source_digest = policy.policy_digest
+        elif binding is not None:
+            source_digest = binding.raes_plan_digest
         self._boundary_receipts[policy.authority] = {
             "source_digest": source_digest,
             "enforcement_digest": policy.digest(),
@@ -155,12 +154,12 @@ class ComposeBoundaryRealizationMixin:
         self,
         realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
-        """Apply platform policy first, then the independent ACES authority."""
+        """Apply platform policy first, then the independent RAES authority."""
 
         platform = self._realize_platform_boundary()
         if platform is not None:
             return platform
-        return self._realize_aces_boundary(realization)
+        return self._realize_raes_boundary(realization)
 
     def _realize_platform_boundary(self) -> LabResult | None:
         """Compile and enforce the configured signed platform policy."""
@@ -187,22 +186,22 @@ class ComposeBoundaryRealizationMixin:
         result = self.realize_boundary(enforcement)
         return None if result.success else result
 
-    def _realize_aces_boundary(
+    def _realize_raes_boundary(
         self,
         realization: DeploymentRealizationSpec,
     ) -> LabResult | None:
-        """Apply admitted ACES ACLs before a scenario workload can start."""
+        """Apply admitted RAES ACLs before a scenario workload can start."""
 
         if not realization.acls:
             configured = getattr(self, "_appliance_boundary", None)
             receipts = getattr(self, "_boundary_receipts", {})
-            if configured is None and "aces" not in receipts:
+            if configured is None and "raes" not in receipts:
                 return None
             enforcement = AcesBoundarySpec.empty(self._project_name)
         else:
             try:
                 networks = self._boundary_network_observations(realization)
-                enforcement = compile_aces_boundary(
+                enforcement = compile_raes_boundary(
                     realization,
                     networks,
                     owner=self._project_name,
@@ -210,7 +209,7 @@ class ComposeBoundaryRealizationMixin:
             except BoundaryCompileError:
                 return LabResult(
                     success=False,
-                    error="ACES boundary could not be bound without widening policy.",
+                    error="RAES boundary could not be bound without widening policy.",
                 )
         result = self.realize_boundary(enforcement)
         return None if result.success else result

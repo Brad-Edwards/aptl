@@ -73,7 +73,7 @@ V1 includes these capabilities:
 | --- | --- | --- |
 | Lab status and startup diagnostics | Read-only status | Preserve ADR-030 `ready`, `degraded_usable`, `degraded_unusable`, and `failed` outcomes. |
 | Lab start, stop, and emergency kill | Control action | Use existing typed API routes and narrow confirmation states. |
-| Scenario catalog browsing | Read-only status | Use a narrow ACES/catalog projection. Do not revive legacy in-tree scenario schemas by accident. |
+| Scenario catalog browsing | Read-only status | Use a narrow RAES/catalog projection. Do not revive legacy in-tree scenario schemas by accident. |
 | Scenario workbench | Human investigation | Notebook-style route with narrative, step, objective, status, SIEM, and terminal blocks. |
 | Focused terminal | Terminal | Allowed containers only, with ADR-039 auth and ADR-040 host-key verification. |
 | Live SIEM query execution | Human investigation | Deliver DET-003 inside this surface as curated query execution and result inspection. |
@@ -98,7 +98,7 @@ V1 does not include:
 - remote shared deployment as a default mode;
 - generic Docker command, shell command, or arbitrary API execution endpoints;
 - full replacement of Wazuh Dashboard, TheHive, MISP, Shuffle, or Cortex;
-- in-browser editing of SDL or ACES artifacts;
+- in-browser editing of SDL or RAES artifacts;
 - persisted operator notes, terminal transcripts, or investigation notebooks;
 - case-management workflow;
 - raw run-archive browsing beyond a bounded status/history summary;
@@ -447,7 +447,7 @@ No icon-only sidebar. Keep the top navigation pattern from `NavBar.svelte`.
 | Route | Purpose | Surface class | API data source | Mutation | Auth carrier | Component family | Future variation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `/` | Lab Home with readiness, lifecycle controls, key containers, and scenario entry points. | Read-only status plus control action. | `/api/lab/status`, `/api/lab/events`, `/api/lab/start`, `/api/lab/stop`, `/api/lab/kill`, catalog summary. DTOs in `src/aptl/api/schemas.py`; mirrors in `web/src/lib/types.ts`. | Start, stop, kill. | Same-origin HTTP/SSE proxy or equivalent FastAPI BFF. | `NavBar`, `LabStatusBadge`, `LabStartNotice`, `ContainerGrid`, `ScenarioCard`. | Add readiness filters or grouped container bands without changing lifecycle DTOs. |
-| `/scenarios/[id]` | Scenario workbench for the selected catalog item. | Human investigation with terminal blocks. | New narrow scenario detail projection from ACES/catalog authority; lab status stream; terminal WebSocket; SIEM query endpoint. | Terminal input; SIEM query execution; hint reveal is local unless scoring later persists it. | HTTP/SSE proxy for data; terminal subprotocol for PTY. | Workbench blocks: narrative, status, step, objective, SIEM query, terminal. | Extend `WorkbenchBlock` for new block types. |
+| `/scenarios/[id]` | Scenario workbench for the selected catalog item. | Human investigation with terminal blocks. | New narrow scenario detail projection from RAES/catalog authority; lab status stream; terminal WebSocket; SIEM query endpoint. | Terminal input; SIEM query execution; hint reveal is local unless scoring later persists it. | HTTP/SSE proxy for data; terminal subprotocol for PTY. | Workbench blocks: narrative, status, step, objective, SIEM query, terminal. | Extend `WorkbenchBlock` for new block types. |
 | `/siem` | Open-ended but bounded SIEM query explorer for approved queries. | Human investigation. | New `/api/siem/queries`, `/api/siem/query`, and result DTOs backed by the existing Wazuh/OpenSearch integration owner. | Execute query. | Same-origin HTTP proxy or equivalent FastAPI BFF. | `SiemQueryBlock` extended into query list, editor, results, and alert detail components. | Add saved query packs by ID, not arbitrary shell or raw OpenSearch passthrough. |
 | `/terminal/[container]` | Focused terminal for an allowed target. | Terminal. | `/api/terminal/ws/{container}` and endpoint registry projection. | PTY input and resize only. | WebSocket subprotocol token carrier or equivalent same-origin terminal carrier. | `Terminal` and `TerminalBlock`. | Add split panes only after session lifecycle and redaction boundaries are designed. |
 | `/config` | Non-secret configuration and web profile status. | Read-only status. | `/api/config`, web serve metadata, allowed-origin summary, service URL summaries with secrets removed. | None in v1. | Same-origin HTTP proxy or equivalent FastAPI BFF. | New summary rows that follow `ContainerCard` density and `LabStartNotice` severity language. | Later edit flow must use `AptlConfig` validation, not pass-through dictionaries. |
@@ -538,7 +538,7 @@ Interaction details:
   text in a shell.
 - Hint reveal stays local in v1 unless UI-008 adds a scoring persistence
   contract.
-- Scenario loading uses a new backend projection from ACES/catalog authority.
+- Scenario loading uses a new backend projection from RAES/catalog authority.
   The missing `/api/scenarios` routes are an implementation gap, not a reason
   to resurrect old removed scenario models.
 
@@ -793,8 +793,8 @@ Required UI-008 contracts:
 
 | Contract | Owner | Notes |
 | --- | --- | --- |
-| `GET /api/scenarios` | New FastAPI router with DTOs in `src/aptl/api/schemas.py`. | Narrow ACES/catalog summary projection. Include id, name, description, mode, difficulty, time, tags, required containers, and validation/status summary. |
-| `GET /api/scenarios/{id}` | Same router. | Workbench detail projection. Source stays ACES/catalog authority. |
+| `GET /api/scenarios` | New FastAPI router with DTOs in `src/aptl/api/schemas.py`. | Narrow RAES/catalog summary projection. Include id, name, description, mode, difficulty, time, tags, required containers, and validation/status summary. |
+| `GET /api/scenarios/{id}` | Same router. | Workbench detail projection. Source stays RAES/catalog authority. |
 | `GET /api/siem/queries` | New or existing SIEM integration owner. | Curated query packs, including scenario-linked packs. |
 | `POST /api/siem/query` | Same owner. | Bounded query execution with validation, time range, row cap, stable errors, and redacted details. |
 | `GET /api/web/status` | Optional. | Read-only shipped web metadata such as bind mode and asset build version. Do not expose secrets. |

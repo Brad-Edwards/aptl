@@ -32,7 +32,7 @@ _POLICY_VERSION = "aptl-admission/v1"
 class CaptureLimitationAcceptance:
     """A trusted operator's explicit acceptance of one supported capture degradation.
 
-    ADR-047 / EXP-010 preflight ("One declaration, one admitted binding"): ACES
+    ADR-047 / EXP-010 preflight ("One declaration, one admitted binding"): RAES
     capture-spec v1 has no general ``required`` flag, so authored capture
     requirements are **required by default**. A degradation is admitted ONLY
     when the policy carries an explicit acceptance here — a stable
@@ -62,7 +62,7 @@ class OrderingKind(str, Enum):
     CONDITION_MAJOR_REPLICATION = "condition-major-replication"
 
 
-#: Controlled mapping from the ACES contract's free-text
+#: Controlled mapping from the RAES contract's free-text
 #: ``allocation_method`` to a supported :class:`OrderingKind`. Additive
 #: only: a future supported method is a new entry here (plus conformance
 #: tests), never a scenario/condition-name branch.
@@ -74,11 +74,11 @@ _DEFAULT_SUPPORTED_ALLOCATION_METHODS: MappingProxyType[str, OrderingKind] = Map
     }
 )
 
-#: Subset of ``ExperimentStochasticControlModel.role``'s six ACES-legal
+#: Subset of ``ExperimentStochasticControlModel.role``'s six RAES-legal
 #: literal values that the controller can currently derive a deterministic,
 #: domain-separated seed/order from (ADR-047: "A seed or randomized order
 #: is derived with a documented, domain-separated cryptographic hash").
-#: The remaining ACES-legal roles are structurally valid but not yet an
+#: The remaining RAES-legal roles are structurally valid but not yet an
 #: admittable controller policy, so they fail closed here.
 _DEFAULT_SUPPORTED_STOCHASTIC_CONTROL_ROLES: frozenset[str] = frozenset({"seed", "randomization"})
 
@@ -112,11 +112,11 @@ class AdmissionPolicy:
     #: Maximum total planned trials across the whole allocation.
     max_allocation_size: int = 10_000
     #: Maximum structural nesting depth admission will walk (same order of
-    #: magnitude as ``aces_sdl.SDLParserLimits.max_depth``).
+    #: magnitude as ``raes.SDLParserLimits.max_depth``).
     max_nesting_depth: int = 128
 
     #: DEBUG-ONLY escape hatch, default ``False`` (production stays
-    #: strict/fail-closed). At the locked ACES 0.23.1 surface, the published
+    #: strict/fail-closed). At the locked RAES 0.23.1 surface, the published
     #: reference-processor manifest names only ``stub`` as a compatible
     #: backend, so ``check_apparatus_admission`` rejects EVERY admission
     #: that uses the real default manifests (ADR-047 Gotchas). This is an

@@ -1,12 +1,12 @@
-"""Model-derived reduced-surface matrix for curated ACES startup variants.
+"""Model-derived reduced-surface matrix for curated RAES startup variants.
 
 Issue #535 live-proves the small catalog variants from
 ``docs/sdl/techvault-curated-variants.md`` by booting them through the public
 start path and checking the running range matches the variant's *reduced*
-ACES-realized surface rather than the full TechVault live surface.
+RAES-realized surface rather than the full TechVault live surface.
 
 This module owns the model-derived half of that proof: it composes the existing
-canonical authorities — the ACES parser/planner, ``interpret_provisioning_plan``,
+canonical authorities — the RAES parser/planner, ``interpret_provisioning_plan``,
 ``select_backend_profiles``, and the ``ComposeProfileIndex`` — into an
 ``ExpectedMatrix`` (selected profiles, realized node names, expected steady-state
 Compose services, expected Compose networks) and compares that matrix against a
@@ -26,18 +26,18 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from aces_runtime.manager import RuntimeManager
-from aces_sdl import parse_sdl_file
+from raes_runtime.manager import RuntimeManager
+from raes import parse_sdl_file
 
-from aptl.backends.aces import create_aptl_runtime_target
-from aptl.backends.aces_participant_runtime import PARTICIPANT_ACTION_ADDRESS
-from aptl.backends.aces_profiles import (
+from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes_participant_runtime import PARTICIPANT_ACTION_ADDRESS
+from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     normalized_identifier_aliases,
     select_backend_profiles,
     steady_state_service_aliases_for_profiles,
 )
-from aptl.backends.aces_realization import interpret_provisioning_plan
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment import get_backend
 from aptl.core.snapshot import capture_snapshot
@@ -56,7 +56,7 @@ class ExpectedMatrix(object):
 
     ``service_aliases`` / ``network_aliases`` map each expected Compose service
     and network to its normalized alias set, so the comparison can bind a
-    snapshot container or network name across the ACES / Compose-key / Compose
+    snapshot container or network name across the RAES / Compose-key / Compose
     project-prefixed naming spaces without re-parsing ``docker-compose.yml``.
     """
 
@@ -84,7 +84,7 @@ def expected_reduced_matrix(
     config: AptlConfig,
     scenario_path: Path,
 ) -> ExpectedMatrix:
-    """Compute a variant's reduced live surface from ACES realization.
+    """Compute a variant's reduced live surface from RAES realization.
 
     Mirrors ``selected_profiles_for_scenario``'s no-start selection path
     (parse -> plan -> interpret -> ``select_backend_profiles``) and then keys the
@@ -216,7 +216,7 @@ def compare_to_snapshot(
     """Compare a captured range snapshot to the expected reduced matrix.
 
     Passing means the running steady-state containers and the networks match the
-    ACES-realized selected profile surface exactly: every expected service has a
+    RAES-realized selected profile surface exactly: every expected service has a
     live container, no unexpected steady-state container is running, and the
     network set matches. Returns ``(ok, diagnostics)`` with one structured,
     layer-named diagnostic per gap (never raw Docker / CLI text).

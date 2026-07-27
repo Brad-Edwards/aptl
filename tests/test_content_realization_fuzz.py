@@ -2,8 +2,8 @@
 
 Guards the ADR-046 TechVault addendum's fail-closed rule: a content
 placement whose declared source path escapes the project root must never
-be realized, at either the ACES interpreter boundary
-(`aces_content_realization.resolve_content_placement`) or the backend seed
+be realized, at either the RAES interpreter boundary
+(`raes_content_realization.resolve_content_placement`) or the backend seed
 boundary (`content_seed.build_content_volume_seeds`, independently
 re-checked per ADR-043's defense-in-depth precedent). Mirrors the
 `../../etc/passwd`-style escape pattern already used for credential path
@@ -17,11 +17,11 @@ excluded from the default suite by ``pyproject.toml`` (``addopts = "-m
 from __future__ import annotations
 
 import pytest
-from aces_contracts.planning import PlannedResource, RuntimeDomain
+from raes_contracts.planning import PlannedResource, RuntimeDomain
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from aptl.backends.aces_content_realization import resolve_content_placement
+from aptl.backends.raes_content_realization import resolve_content_placement
 from aptl.core.content_seed import build_content_volume_seeds
 from aptl.core.credentials import PathContainmentError
 from aptl.core.deployment.realization import DeploymentContentRealization

@@ -20,17 +20,17 @@ class BoundaryCompileError(ValueError):
     """A desired boundary could not be bound without widening it."""
 
 
-def compile_aces_boundary(
+def compile_raes_boundary(
     realization: DeploymentRealizationSpec,
     networks: Sequence[BoundaryNetwork],
     *,
     owner: str,
 ) -> AcesBoundarySpec:
-    """Bind admitted ACES ACLs to concrete networks and owner addresses."""
+    """Bind admitted RAES ACLs to concrete networks and owner addresses."""
 
     if not realization.acls:
         return AcesBoundarySpec.empty(owner)
-    network_index = _validate_aces_networks(realization, networks)
+    network_index = _validate_raes_networks(realization, networks)
     nodes = {node.address: node for node in realization.nodes}
     bindings: list[AcesAclOwnerBinding] = []
     for owner_address in sorted({rule.owner_address for rule in realization.acls}):
@@ -67,7 +67,7 @@ def compile_platform_boundary(
     workloads: Sequence[BoundaryWorkload],
     owner: str,
 ) -> PlatformBoundarySpec:
-    """Resolve exact platform workload selectors without reading ACES topology."""
+    """Resolve exact platform workload selectors without reading RAES topology."""
 
     selected_networks = _select_platform_networks(policy, networks)
     anchors = _select_platform_anchors(policy, workloads, selected_networks)
@@ -112,15 +112,15 @@ def _required_owner_networks(rules: Sequence[object]) -> set[str]:
     return required
 
 
-def _validate_aces_networks(
+def _validate_raes_networks(
     realization: DeploymentRealizationSpec,
     networks: Sequence[BoundaryNetwork],
 ) -> dict[str, BoundaryNetwork]:
-    """Require IPv4-only observations for every referenced ACES network."""
+    """Require IPv4-only observations for every referenced RAES network."""
 
     if any(network.ipv6_cidr is not None for network in networks):
         raise BoundaryCompileError(
-            "ACES ACL networks must remain IPv4-only for this backend"
+            "RAES ACL networks must remain IPv4-only for this backend"
         )
     network_index = {network.name: network for network in networks}
     missing = {
@@ -130,7 +130,7 @@ def _validate_aces_networks(
         if reference is not None and reference not in network_index
     }
     if missing:
-        raise BoundaryCompileError("ACES ACL network binding is incomplete")
+        raise BoundaryCompileError("RAES ACL network binding is incomplete")
     return network_index
 
 
@@ -140,7 +140,7 @@ def _compile_owner_binding(
     nodes: dict[str, object],
     network_index: dict[str, BoundaryNetwork],
 ) -> AcesAclOwnerBinding:
-    """Compile one unambiguous ACES node or network owner binding."""
+    """Compile one unambiguous RAES node or network owner binding."""
 
     first = rules[0]
     owner_type = getattr(first, "owner_resource_type")
@@ -150,17 +150,17 @@ def _compile_owner_binding(
         or getattr(rule, "owner_name") != owner_name
         for rule in rules
     ):
-        raise BoundaryCompileError("ACES ACL owner binding is ambiguous")
+        raise BoundaryCompileError("RAES ACL owner binding is ambiguous")
     if owner_type == "network":
         if owner_name not in network_index:
-            raise BoundaryCompileError("ACES network ACL owner is not observed")
+            raise BoundaryCompileError("RAES network ACL owner is not observed")
         return AcesAclOwnerBinding(
             owner_address=owner_address,
             owner_resource_type="network",
         )
     node = nodes.get(owner_address)
     if node is None:
-        raise BoundaryCompileError("ACES node ACL owner is not realized")
+        raise BoundaryCompileError("RAES node ACL owner is not realized")
     attachments = getattr(node, "network_attachments")
     addresses = tuple(
         sorted(
@@ -172,11 +172,11 @@ def _compile_owner_binding(
     required = _required_owner_networks(rules)
     if required - {network for network, _address in addresses}:
         raise BoundaryCompileError(
-            "ACES node ACL owner requires exact admitted addresses"
+            "RAES node ACL owner requires exact admitted addresses"
         )
     if not addresses:
         raise BoundaryCompileError(
-            "ACES node ACL owner requires at least one exact address"
+            "RAES node ACL owner requires at least one exact address"
         )
     return AcesAclOwnerBinding(
         owner_address=owner_address,

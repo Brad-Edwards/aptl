@@ -52,8 +52,8 @@ def validate_policy(policy: object) -> dict[str, object]:
     if not isinstance(policy, dict):
         raise ValueError("policy must be an object")
     authority = policy.get("authority")
-    if authority == "aces":
-        return _validate_aces(policy)
+    if authority == "raes":
+        return _validate_raes(policy)
     if authority == "platform":
         return _validate_platform(policy)
     raise ValueError("policy authority is invalid")
@@ -108,7 +108,7 @@ def _validate_labels(labels: object) -> None:
         raise ValueError("network labels are invalid")
 
 
-def _validate_aces(policy: dict[str, object]) -> dict[str, object]:
+def _validate_raes(policy: dict[str, object]) -> dict[str, object]:
     _validate_common(
         policy,
         {"authority", "owner", "networks", "owner_bindings", "rules"},
@@ -117,18 +117,18 @@ def _validate_aces(policy: dict[str, object]) -> dict[str, object]:
     bindings = policy["owner_bindings"]
     rules = policy["rules"]
     if not all(isinstance(value, list) for value in (networks, bindings, rules)):
-        raise ValueError("ACES policy collections must be lists")
-    network_index = _validated_network_index(networks, authority="ACES")
+        raise ValueError("RAES policy collections must be lists")
+    network_index = _validated_network_index(networks, authority="RAES")
     if any(network["ipv6_cidr"] is not None for network in network_index.values()):
-        raise ValueError("ACES ACL networks must remain IPv4-only")
+        raise ValueError("RAES ACL networks must remain IPv4-only")
     binding_index: dict[str, dict[str, object]] = {}
     for binding in bindings:
-        _validate_aces_binding(binding, network_index, binding_index)
+        _validate_raes_binding(binding, network_index, binding_index)
     prior: tuple[str, int, str] | None = None
     seen_orders: set[tuple[str, int]] = set()
     seen_names: set[tuple[str, str]] = set()
     for rule in rules:
-        current = _validate_aces_rule(
+        current = _validate_raes_rule(
             rule,
             binding_index,
             network_index,
@@ -136,7 +136,7 @@ def _validate_aces(policy: dict[str, object]) -> dict[str, object]:
             seen_names,
         )
         if prior is not None and current < prior:
-            raise ValueError("ACES rules are not deterministically ordered")
+            raise ValueError("RAES rules are not deterministically ordered")
         prior = current
     return policy
 
@@ -186,7 +186,7 @@ def _validate_address_pairs(
         seen_networks.add(pair[0])
 
 
-def _validate_aces_binding(
+def _validate_raes_binding(
     binding: object,
     networks: Mapping[str, Mapping[str, object]],
     index: dict[str, dict[str, object]],
@@ -197,7 +197,7 @@ def _validate_aces_binding(
         "ipv4_by_network",
         "ipv6_by_network",
     }:
-        raise ValueError("ACES owner binding is invalid")
+        raise ValueError("RAES owner binding is invalid")
     owner = binding["owner_address"]
     kind = binding["owner_resource_type"]
     if (
@@ -207,19 +207,19 @@ def _validate_aces_binding(
         or kind not in {"node", "network"}
         or owner in index
     ):
-        raise ValueError("ACES owner identity is invalid")
+        raise ValueError("RAES owner identity is invalid")
     _validate_address_pairs(binding["ipv4_by_network"], "ipv4_by_network", 4, networks)
     _validate_address_pairs(binding["ipv6_by_network"], "ipv6_by_network", 6, networks)
     if binding["ipv6_by_network"]:
-        raise ValueError("ACES ACL owner addresses must remain IPv4-only")
+        raise ValueError("RAES ACL owner addresses must remain IPv4-only")
     if kind == "node" and not (
         binding["ipv4_by_network"] or binding["ipv6_by_network"]
     ):
-        raise ValueError("ACES node owner has no exact address")
+        raise ValueError("RAES node owner has no exact address")
     index[owner] = binding
 
 
-def _validate_aces_rule(
+def _validate_raes_rule(
     rule: object,
     bindings: Mapping[str, Mapping[str, object]],
     networks: Mapping[str, Mapping[str, object]],
@@ -240,24 +240,24 @@ def _validate_aces_rule(
         "action",
     }
     if not isinstance(rule, dict) or set(rule) != fields:
-        raise ValueError("ACES rule is invalid")
+        raise ValueError("RAES rule is invalid")
     owner = rule["owner_address"]
     binding = bindings.get(owner) if isinstance(owner, str) else None
     if binding is None or binding["owner_resource_type"] != rule["owner_resource_type"]:
-        raise ValueError("ACES rule owner is invalid")
-    _validate_aces_rule_semantics(rule, binding, networks)
+        raise ValueError("RAES rule owner is invalid")
+    _validate_raes_rule_semantics(rule, binding, networks)
     identity = str(rule["name"])
     order = int(rule["order"])
     order_key = (owner, order)
     name_key = (owner, identity)
     if order_key in seen_orders or name_key in seen_names:
-        raise ValueError("ACES rule identity is not unique")
+        raise ValueError("RAES rule identity is not unique")
     seen_orders.add(order_key)
     seen_names.add(name_key)
     return owner, order, identity
 
 
-def _validate_aces_rule_semantics(
+def _validate_raes_rule_semantics(
     rule: Mapping[str, object],
     binding: Mapping[str, object],
     networks: Mapping[str, Mapping[str, object]],
@@ -269,20 +269,20 @@ def _validate_aces_rule_semantics(
     identity = rule["name"]
     order = rule["order"]
     if not isinstance(direction, str) or direction not in _DIRECTIONS:
-        raise ValueError("ACES rule direction is invalid")
+        raise ValueError("RAES rule direction is invalid")
     if (
         not isinstance(protocol, str)
         or protocol not in _PROTOCOLS
         or not isinstance(action, str)
         or action not in _ACTIONS
     ):
-        raise ValueError("ACES rule semantics are invalid")
+        raise ValueError("RAES rule semantics are invalid")
     if any(
         rule[endpoint] is not None
         and (not isinstance(rule[endpoint], str) or rule[endpoint] not in networks)
         for endpoint in ("from_network", "to_network")
     ):
-        raise ValueError("ACES rule endpoint is invalid")
+        raise ValueError("RAES rule endpoint is invalid")
     _validate_ports(rule["ports"], protocol)
     if (
         not isinstance(identity, str)
@@ -293,9 +293,9 @@ def _validate_aces_rule_semantics(
         or isinstance(order, bool)
         or order < 0
     ):
-        raise ValueError("ACES rule ordering is invalid")
+        raise ValueError("RAES rule ordering is invalid")
     if binding["owner_resource_type"] == "network" and owner_name not in networks:
-        raise ValueError("ACES network owner is unresolved")
+        raise ValueError("RAES network owner is unresolved")
 
 
 def _validate_platform(policy: dict[str, object]) -> dict[str, object]:
@@ -528,7 +528,7 @@ def _binding_addresses(binding: Mapping[str, object], network: str | None) -> li
     ]
 
 
-def _aces_rule_expressions(
+def _raes_rule_expressions(
     policy: Mapping[str, object],
     rule: Mapping[str, object],
     *,
@@ -587,7 +587,7 @@ def _aces_rule_expressions(
     return expressions
 
 
-def _aces_table(
+def _raes_table(
     policy: Mapping[str, object], family: str, table_name: str
 ) -> list[str]:
     owner = str(policy["owner"])
@@ -601,7 +601,7 @@ def _aces_table(
         (
             "  comment "
             + _quoted(
-                f"aptl-owner={_owner_marker(owner)},authority=aces,digest={digest}"
+                f"aptl-owner={_owner_marker(owner)},authority=raes,digest={digest}"
             )
         ),
     ]
@@ -615,7 +615,7 @@ def _aces_table(
         lines.append(f"  chain {chain} {{")
         for rule in rules:
             if isinstance(rule, Mapping) and rule["owner_address"] == owner_address:
-                lines.extend(_aces_rule_expressions(policy, rule, family=family))
+                lines.extend(_raes_rule_expressions(policy, rule, family=family))
         lines.extend(
             [
                 (
@@ -855,7 +855,7 @@ def render_ruleset(
     for family in ("inet", "bridge"):
         if family in existing_families:
             lines.append(f"delete table {family} {table_name}")
-    renderer = _aces_table if authority == "aces" else _platform_table
+    renderer = _raes_table if authority == "raes" else _platform_table
     lines.extend(renderer(policy, "inet", table_name))
     lines.extend(renderer(policy, "bridge", table_name))
     return "\n".join(lines) + "\n"
@@ -934,7 +934,7 @@ def _expected_rule_comments(
     family: str,
     table_name: str,
 ) -> list[str]:
-    renderer = _aces_table if policy["authority"] == "aces" else _platform_table
+    renderer = _raes_table if policy["authority"] == "raes" else _platform_table
     comments: list[str] = []
     for line in renderer(policy, family, table_name):
         if not line.startswith("    ") or " comment " not in line:

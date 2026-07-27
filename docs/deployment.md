@@ -32,6 +32,14 @@ Edit `aptl.json` to enable/disable containers:
 }
 ```
 
+For prebuilt, checkout-free QEMU/KVM delivery, see the
+[disposable appliance release guide](reference/appliance-release.md). Appliance
+guests start only from already staged wheels, project assets, and OCI images.
+Their create-once launch descriptor and both release trust anchors are required
+to bind the signed payload into the appliance boundary before startup;
+`aptl lab start --offline-staged` rejects missing images instead of pulling or
+building them.
+
 ## Manual Deployment
 
 **These steps are automated by `aptl lab start`. Use the CLI unless troubleshooting.**

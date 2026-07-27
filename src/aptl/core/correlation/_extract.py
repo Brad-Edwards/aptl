@@ -2,7 +2,8 @@
 
 Split out of :mod:`aptl.core.correlation._assemble` to keep each module within
 the repo's per-file line budget (SonarCloud ``python:S104``). Pure, read-only
-helpers over the already-parsed ``aptl.run-record/v1`` manifest and the ACES
+helpers over the already-parsed ``aptl.run-record`` manifest (v2, and v1
+archives through :func:`contract_section`) and the RAES
 orchestrator's ``orchestration/<addr>/*`` payloads — no I/O, no wall clock, no
 identity minting. Best-effort throughout: EXP-002/REP-001 do not thread
 ``planned_trial_id`` or augmentation disclosures into the run record today, so
@@ -16,6 +17,7 @@ import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
+from aptl.backends.raes_repro import CONTRACT_SECTION, LEGACY_CONTRACT_SECTION
 from aptl.core.correlation.identity import stable_ref
 from aptl.core.correlation.models import ClockContext
 
@@ -102,12 +104,25 @@ def _clocks_reconcilable(a: ClockContext, b: ClockContext) -> bool:
     return a.timestamp_domain == b.timestamp_domain
 
 
+def contract_section(run_record: Mapping[str, object]) -> Mapping[str, object]:
+    """Return a run record's contract-identity section across schema versions.
+
+    This is the **only** place that knows the section was named ``raes`` before
+    the RAES rename. ``aptl.run-record/v2`` writes ``raes``; archives written as
+    v1 still carry ``raes``, and stay readable here. Keeping the fallback in one
+    accessor is deliberate — a future v3 must extend this function rather than
+    add a third spelling at every call site.
+    """
+    for key in (CONTRACT_SECTION, LEGACY_CONTRACT_SECTION):
+        section = run_record.get(key)
+        if isinstance(section, Mapping):
+            return section
+    return {}
+
+
 def _runtime_snapshot(run_record: Mapping[str, object]) -> Mapping[str, object]:
-    """Return the embedded ``aces.runtime_snapshot`` mapping, or ``{}``."""
-    aces_section = run_record.get("aces")
-    if not isinstance(aces_section, Mapping):
-        return {}
-    snapshot = aces_section.get("runtime_snapshot")
+    """Return the embedded contract-section ``runtime_snapshot`` mapping, or ``{}``."""
+    snapshot = contract_section(run_record).get("runtime_snapshot")
     return snapshot if isinstance(snapshot, Mapping) else {}
 
 
@@ -115,12 +130,11 @@ def _find_planned_trial_id(run_record: Mapping[str, object]) -> str | None:
     """Best-effort planned-trial id from the run record, or ``None`` when the
     field is not threaded through (the common case today) — never fabricated."""
     candidates: list[object] = [run_record.get("planned_trial_id")]
-    aces_section = run_record.get("aces")
-    if isinstance(aces_section, Mapping):
-        candidates.append(aces_section.get("planned_trial_id"))
-        realization = aces_section.get("realization")
-        if isinstance(realization, Mapping):
-            candidates.append(realization.get("planned_trial_id"))
+    section = contract_section(run_record)
+    candidates.append(section.get("planned_trial_id"))
+    realization = section.get("realization")
+    if isinstance(realization, Mapping):
+        candidates.append(realization.get("planned_trial_id"))
     for candidate in candidates:
         if isinstance(candidate, str) and candidate:
             return candidate
@@ -130,10 +144,7 @@ def _find_planned_trial_id(run_record: Mapping[str, object]) -> str | None:
 def _find_disclosure_refs(run_record: Mapping[str, object]) -> tuple[str, ...]:
     """Observer-effect / augmentation disclosure refs from the run record's
     realization section (best-effort; empty when absent — never fabricated)."""
-    realization: object = {}
-    aces_section = run_record.get("aces")
-    if isinstance(aces_section, Mapping):
-        realization = aces_section.get("realization")
+    realization: object = contract_section(run_record).get("realization")
     result: tuple[str, ...] = ()
     if isinstance(realization, Mapping):
         for key in ("disclosure_refs", "augmentation_disclosure_refs"):

@@ -1,4 +1,5 @@
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Brad-Edwards/aptl/badge)](https://scorecard.dev/viewer/?uri=github.com/Brad-Edwards/aptl)
 
 🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.** Live Arsenal demos at both conferences, plus the SecTor Briefing talk **APTL for Agentic Purple Teaming**.
 
@@ -6,7 +7,7 @@
 
 **Purple-team lab where AI agents drive the red and blue sides against an enterprise target stack.**
 
-One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are [ACES SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault-operational` scenario.
+One `aptl lab start` brings up: a fictional company's infrastructure (AD, web, DB, file share, and DNS), a Kali red-team box, a SOC stack (Wazuh + Suricata + MISP + TheHive + Cortex + Shuffle), and MCP servers giving AI agents programmatic control over it. Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents, selectable at startup; the Compose topology is realized from the nodes the scenario declares rather than a fixed preset, and each run captures a telemetry archive. Mail and reverse-engineering services are optional profiles and are not part of the default `techvault-operational` scenario.
 
 **Use cases:** autonomous cyber-operations research, purple-team training, AI threat-actor assessment.
 
@@ -128,7 +129,7 @@ The scenario environment is whatever the SDL scenario defines. The default `tech
 
 ## Scenarios
 
-Scenarios are [ACES SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
+Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
 
 The catalog ships the operational default plus four curated slices:
 

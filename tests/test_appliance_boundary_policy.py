@@ -105,8 +105,8 @@ def test_policy_digest_is_bound_by_release_projection(tmp_path) -> None:
     binding = ApplianceBoundaryBinding(
         policy_digest=digest,
         payload_digest="sha256:" + "a" * 64,
-        aces_plan_digest="sha256:" + "c" * 64,
-        aces_boundary_required=False,
+        raes_plan_digest="sha256:" + "c" * 64,
+        raes_boundary_required=False,
         boundary_helper_image="example.test/aptl-boundary@sha256:" + "d" * 64,
         egress_proxy_image="example.test/aptl-egress@sha256:" + "e" * 64,
         boot_id="boot-42",

@@ -22,7 +22,7 @@
       "sha256": "be9e7f8bf0485085ae1903bf47c4566d101367bf2d0b7abc42e1479ac0b2bf4c"
     },
     {
-      "asset_id": "aces-scenario",
+      "asset_id": "raes-scenario",
       "kind": "project-file",
       "source": "scenarios/techvault-attacker-target.sdl.yaml",
       "sha256": "a85b11d98aab9b5b4cd209bade57b5869556882dab5b5f3f41e5f44292372a78"
@@ -31,7 +31,7 @@
       "asset_id": "scenario-catalog",
       "kind": "project-file",
       "source": "scenarios/catalog.json",
-      "sha256": "a3239a0600f6310c7d718ed51582446b25712260aa049d74326396ea504cb082"
+      "sha256": "7fb89ef863ef37c4dbec224ad373f1aa8f66e0795bfed31b1a8a1f5281f12948"
     },
     {
       "asset_id": "workbench-registry",
@@ -43,7 +43,7 @@
       "asset_id": "compose-model",
       "kind": "project-file",
       "source": "docker-compose.yml",
-      "sha256": "8dc9b4c418b732ea8d98eaf70f9bb2604e5af5721a7a6c5ad058c3dfe227fa60"
+      "sha256": "78eb6f561b388432b15f4883a34109df12f0f256308dadaec7063d20f69957c0"
     },
     {
       "asset_id": "mcp-red-build",
@@ -55,7 +55,7 @@
       "asset_id": "mcp-red-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-red/package-lock.json",
-      "sha256": "544ba25c97adbe922cb77e7808252bb49c47862f59e7ded3d3aae2d5c24eded4"
+      "sha256": "f0bbd9c2a70292b111c0c51c3b4f900465bc81bb33e29622172938b88bc28291"
     },
     {
       "asset_id": "mcp-red-config",
@@ -73,7 +73,7 @@
       "asset_id": "mcp-indexer-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-indexer/package-lock.json",
-      "sha256": "3a5a1fdec52e079e0a5ecb1e9a90e1b94a898f1feb6fe567006bb8a390a460ef"
+      "sha256": "a78efa70004faf8d163d12d564b5c2ced90c507070b7034777297377d7807edc"
     },
     {
       "asset_id": "mcp-indexer-config",
@@ -91,7 +91,7 @@
       "asset_id": "mcp-wazuh-dependencies",
       "kind": "project-file",
       "source": "mcp/mcp-wazuh/package-lock.json",
-      "sha256": "a7b68fb470c00e1b64bea66719a68fc0532ff6982cc79f1c4c231c21cab5b03b"
+      "sha256": "682594f8da3517cb41922188df34d1f67ff9516baa1badbf304f07e73f5e68ae"
     },
     {
       "asset_id": "mcp-wazuh-config",

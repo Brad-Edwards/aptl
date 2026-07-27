@@ -596,7 +596,7 @@ services:
     networks:
       aptl-security:
         # Pinned so the orborus asset has a stable, reproducible address
-        # for the ACES inventory capture. It was previously DHCP-assigned,
+        # for the RAES inventory capture. It was previously DHCP-assigned,
         # which let its address drift between capture runs (.6 vs .7) and
         # made the inventory evidence bundle internally inconsistent.
         ipv4_address: 172.20.0.7
@@ -664,7 +664,7 @@ services:
         limits:
           # 512m was too small: the Play/Scala JVM was kernel-killed during
           # warm-up before the /api/status healthcheck could turn green,
-          # blocking the ACES handoff for the whole operational scenario.
+          # blocking the RAES handoff for the whole operational scenario.
           # 2g matches thehive-es next to it and is enough headroom to
           # boot + serve healthchecks in the lab (StrangeBee's guidance
           # for production is 4g, but the lab does not need that).
@@ -859,7 +859,7 @@ services:
   # stub exists only so `--scale db=0` (the mixed-realization exclusion)
   # has a declared service to scale to zero; no config here is live.
   # wazuh-sidecar-db's `db_data:/logs:ro` mount (below) is now stale — the
-  # realized db no longer writes to that volume — pending the same ACES
+  # realized db no longer writes to that volume — pending the same RAES
   # gaps (aces#845/#847/#849) blocking wazuh-sidecar-db's own conversion.
   db:
     profiles: ["enterprise"]

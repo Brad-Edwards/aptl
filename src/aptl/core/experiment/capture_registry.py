@@ -40,8 +40,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
-from aces_backend_protocols.capabilities import ObservationCapabilities
-from aces_contracts.contracts import ExperimentCaptureRequirementModel, ExperimentCaptureSpecModel
+from raes_backend_protocols.capabilities import ObservationCapabilities
+from raes_contracts.contracts import ExperimentCaptureRequirementModel, ExperimentCaptureSpecModel
 
 from aptl.core.experiment.trial_plan import compute_source_set_digest
 
@@ -54,7 +54,7 @@ REGISTRY_SCHEMA_VERSION = "aptl-collector-registry/v1"
 #: Fixed ``ObservationCapabilities.name`` for APTL's aggregate declaration.
 _OBSERVATION_NAME = "aptl-observation"
 
-#: The ACES evidence/run contract set a declared observation capability emits.
+#: The RAES evidence/run contract set a declared observation capability emits.
 #: ``observation_capability_contract_gaps`` additionally requires these be
 #: present in the manifest's top-level ``supported_contract_versions`` — the
 #: manifest builder adds them whenever the projection is non-None.
@@ -136,7 +136,7 @@ class CollectorRegistration:
 
     This is the whole capability surface admission and the observation
     projection read (preflight "One declaration, one admitted binding"): the
-    supported ACES capture-spec contract version, the observation channel kind
+    supported RAES capture-spec contract version, the observation channel kind
     (a governed ``observation-channel-kinds`` term), capture kind/scope, window
     semantics, media types, required artifact roles, sensitivities,
     redaction/integrity/sealing/chain-of-custody/retention support, loss
@@ -147,7 +147,7 @@ class CollectorRegistration:
     ``channel_kind``, ``capture_kind``, and ``sealing_modes`` MUST be governed
     controlled-vocabulary terms (``observation-channel-kinds`` /
     ``observation-capture-kinds`` / ``observation-sealing-modes``); the
-    observation projection validates them against ACES's catalog, so a
+    observation projection validates them against RAES's catalog, so a
     registration with an ungoverned term fails when the manifest is built.
     """
 
@@ -262,7 +262,7 @@ class CaptureBinding:
         ``integrity_requirements``) are semantically unordered, so they are
         SORTED here — ADR-047 "sort semantically unordered maps/sets": two
         requirements identical up to authored list order must yield the same
-        plan digest, so incidental ACES-document ordering never leaks into
+        plan digest, so incidental RAES-document ordering never leaks into
         identity. The projection excludes nothing identity-bearing, so the plan
         digest changes iff a binding meaningfully changes.
         """

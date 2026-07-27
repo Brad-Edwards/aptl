@@ -1,0 +1,72 @@
+name: OpenSSF Scorecard
+
+# Publishes an OpenSSF Scorecard supply-chain posture assessment for this
+# repository (issue #847). Scorecard is ADVISORY: it is a posture report, not a
+# merge gate, and it does not replace the Trivy / OSV-scanner / pip-audit / npm
+# audit scanners in checks.yml (ADR-026 § Scorecard amendment).
+#
+# This lives in its own workflow rather than in checks.yml — the concrete
+# operational exception ADR-026 allows. `publish_results: true` subjects the job
+# to Scorecard's own publisher validation, which rejects workflow- or job-level
+# `env`/`defaults`, any workflow-level write permission, non-Ubuntu runners, and
+# actions outside its approved set. checks.yml violates several of those by
+# design, and folding the publisher into it would make the contract fragile.
+#
+# Token boundary (see docs/architecture/issue-847-openssf-scorecard-preflight.md):
+# the workflow defaults to read-only and the single job elevates only
+# `id-token: write` (OIDC, so api.scorecard.dev can verify the result really
+# came from this repository) and `security-events: write` (Code Scanning is the
+# durable maintainer alert queue). No PAT, no repository secret. The job runs no
+# `run:` step and installs nothing, so checked-out content never executes with
+# that authority.
+#
+# No signup is required: publication for public repositories is authenticated by
+# OIDC alone.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so the published result and the README badge cannot go stale
+    # between pushes to main.
+    - cron: '31 6 * * 1'
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Publish the signed result to api.scorecard.dev (backs the README badge).
+      id-token: write
+      # Upload SARIF to GitHub Code Scanning. ADR-026 requires this permission
+      # to be requested only where SARIF genuinely goes to code scanning rather
+      # than to an artifact; that is the deliberate choice here.
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Leave no usable credential in .git/config for any later step in this
+          # OIDC-capable job.
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      # Diagnostic evidence, at the same short retention as the other scanner
+      # artifacts in checks.yml.
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 7
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          sarif_file: results.sarif

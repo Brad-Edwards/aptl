@@ -23,8 +23,8 @@ def _binding() -> ApplianceBoundaryBinding:
     return ApplianceBoundaryBinding(
         policy_digest=POLICY_DIGEST,
         payload_digest=PAYLOAD_DIGEST,
-        aces_plan_digest="sha256:" + "4" * 64,
-        aces_boundary_required=False,
+        raes_plan_digest="sha256:" + "4" * 64,
+        raes_boundary_required=False,
         boundary_helper_image="example.test/aptl-boundary@sha256:" + "5" * 64,
         egress_proxy_image="example.test/aptl-egress@sha256:" + "6" * 64,
         boot_id="boot-42",
@@ -110,7 +110,7 @@ def _host() -> HostBoundaryObservation:
 def _guest() -> GuestBoundaryObservation:
     return GuestBoundaryObservation(
         policy_digest=POLICY_DIGEST,
-        aces_plan_digest="sha256:" + "4" * 64,
+        raes_plan_digest="sha256:" + "4" * 64,
         boot_id="boot-42",
         guest_daemon_id="daemon-42",
         workbench_policy_version="participant-workbench-profile/v1",
@@ -166,16 +166,16 @@ def test_missing_physical_host_observation_is_fatal() -> None:
     assert result.findings == ("boundary.host-observation-missing",)
 
 
-def test_required_aces_authority_cannot_be_omitted() -> None:
-    binding = _binding().model_copy(update={"aces_boundary_required": True})
+def test_required_raes_authority_cannot_be_omitted() -> None:
+    binding = _binding().model_copy(update={"raes_boundary_required": True})
 
     result = qualify_appliance_boundary(_policy(), binding, _host(), _guest())
 
     assert result.passed is False
     assert result.findings == (
-        "boundary.guest-aces-enforcement-missing",
-        "boundary.guest-aces-positive-probe-failed",
-        "boundary.guest-aces-negative-probe-failed",
+        "boundary.guest-raes-enforcement-missing",
+        "boundary.guest-raes-positive-probe-failed",
+        "boundary.guest-raes-negative-probe-failed",
     )
 
 

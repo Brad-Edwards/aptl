@@ -1,7 +1,7 @@
 """Node-readiness / health-conformance comparison for the live validation gate.
 
 Extracted from ``_live_gate_probes`` (SCN-010F / #323) to keep both modules
-under the file-size budget. These helpers compare the realized ACES node
+under the file-size budget. These helpers compare the realized RAES node
 surface against the booted range's container snapshot: every realized node in a
 started profile must map to a live container, and any container carrying a
 healthcheck must actually report healthy.
@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aptl.backends.aces_profiles import normalize_identifier
+from aptl.backends.raes_profiles import normalize_identifier
 from aptl.utils.logging import get_logger
 
 log = get_logger("live-gate")
@@ -67,7 +67,7 @@ def _container_health_diagnostics(
     """Return hard-failure diagnostics for one realized node's container.
 
     Health is observed, never declared. aces-sdl 0.21.0 removed ``runtime.health``
-    from the authored SDL contract (ACES #761): observed health is evidence, so
+    from the authored SDL contract (RAES #761): observed health is evidence, so
     there is no author-supplied expectation left to compare against — and nothing
     to fabricate one from.
 

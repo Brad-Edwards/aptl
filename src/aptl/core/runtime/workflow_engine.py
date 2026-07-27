@@ -1,8 +1,8 @@
 """RTE-001 workflow execution engine for APTL.
 
-Drives compiled ACES workflow payloads through observable step lifecycles and
+Drives compiled RAES workflow payloads through observable step lifecycles and
 emits portable ``WorkflowExecutionState`` / ``WorkflowHistoryEvent`` records.
-The ACES orchestrator adapter (``aptl.backends.aces_orchestrator``) registers
+The RAES orchestrator adapter (``aptl.backends.raes_orchestrator``) registers
 workflows and delegates execution here; observation surfaces read the stored
 run records rather than seeding static ``PENDING`` state forever.
 """
@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from aces_contracts.workflow import (
+from raes_contracts.workflow import (
     WorkflowExecutionContract,
     WorkflowExecutionState,
     WorkflowHistoryEvent,

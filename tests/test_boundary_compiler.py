@@ -1,4 +1,4 @@
-"""Binding tests for the separate ACES and platform authorities."""
+"""Binding tests for the separate RAES and platform authorities."""
 
 import pytest
 
@@ -6,7 +6,7 @@ from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.core.deployment.boundary import BoundaryNetwork, BoundaryWorkload
 from aptl.core.deployment.boundary_compiler import (
     BoundaryCompileError,
-    compile_aces_boundary,
+    compile_raes_boundary,
     compile_platform_boundary,
 )
 from aptl.core.deployment.realization import (
@@ -117,10 +117,10 @@ def _policy() -> ApplianceBoundaryPolicy:
     )
 
 
-def test_aces_binding_keeps_owner_address_and_platform_data_out() -> None:
-    spec = compile_aces_boundary(_realization(), _networks(), owner="seat-17")
+def test_raes_binding_keeps_owner_address_and_platform_data_out() -> None:
+    spec = compile_raes_boundary(_realization(), _networks(), owner="seat-17")
 
-    assert spec.authority == "aces"
+    assert spec.authority == "raes"
     assert spec.owner_bindings[0].ipv4_by_network == (("quartz", "10.44.2.10"),)
     assert spec.rules[0].details() == {
         "owner_address": "provision.node.sentinel",
@@ -137,15 +137,15 @@ def test_aces_binding_keeps_owner_address_and_platform_data_out() -> None:
     }
 
 
-def test_aces_binding_refuses_to_widen_an_unaddressed_owner() -> None:
+def test_raes_binding_refuses_to_widen_an_unaddressed_owner() -> None:
     realization = _realization(owner_ip=None)
     networks = _networks()
 
     with pytest.raises(BoundaryCompileError, match="exact admitted addresses"):
-        compile_aces_boundary(realization, networks, owner="seat-17")
+        compile_raes_boundary(realization, networks, owner="seat-17")
 
 
-def test_aces_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> None:
+def test_raes_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> None:
     dual_stack = (
         _networks()[0],
         BoundaryNetwork(
@@ -158,7 +158,7 @@ def test_aces_binding_rejects_dual_stack_until_acl_rules_are_dual_stack() -> Non
     realization = _realization()
 
     with pytest.raises(BoundaryCompileError, match="IPv4-only"):
-        compile_aces_boundary(realization, dual_stack, owner="seat-17")
+        compile_raes_boundary(realization, dual_stack, owner="seat-17")
 
 
 def test_platform_binding_uses_only_exact_labels() -> None:

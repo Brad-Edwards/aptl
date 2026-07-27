@@ -15,6 +15,8 @@ from aptl.appliance.seat.models import SeatRecord
 
 
 def _ensure_seat_root(seat_root: Path) -> None:
+    """Create or validate an owner-only seat root directory."""
+
     if seat_root.is_symlink():
         raise SeatLauncherError(
             "corrupt-seat-state", "seat root must not be a symlink"
@@ -36,6 +38,8 @@ def _ensure_seat_root(seat_root: Path) -> None:
 
 
 def seat_state_path(seat_root: Path) -> Path:
+    """Return the canonical seat-state path under one seat root."""
+
     return seat_root / "seat-state.json"
 
 

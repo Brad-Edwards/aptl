@@ -1,8 +1,8 @@
 """Host-side appliance seat lifecycle adapter."""
 
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.kiosk import open_participant_kiosk
 from aptl.appliance.seat.lifecycle import (
-    open_participant_kiosk,
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,

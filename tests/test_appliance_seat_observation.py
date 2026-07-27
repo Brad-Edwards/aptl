@@ -48,7 +48,6 @@ def test_observation_id_is_stable_when_complete_flag_changes() -> None:
         ),
     )
     partial = build_host_observation(
-        policy=policy,
         binding=binding,
         boot_id="boot-42",
         listeners=listeners,
@@ -56,7 +55,6 @@ def test_observation_id_is_stable_when_complete_flag_changes() -> None:
         complete=False,
     )
     complete = build_host_observation(
-        policy=policy,
         binding=binding,
         boot_id="boot-42",
         listeners=listeners,
@@ -97,7 +95,6 @@ def test_host_boundary_findings_detect_missing_recovery_listener() -> None:
         ),
     )
     bundle = build_host_observation(
-        policy=policy,
         binding=_binding("pending"),
         boot_id="boot-42",
         listeners=listeners,
@@ -158,7 +155,6 @@ def test_host_boundary_findings_detect_identity_mismatches() -> None:
         ),
     )
     bundle = build_host_observation(
-        policy=policy,
         binding=_binding("pending"),
         boot_id="boot-42",
         listeners=listeners,

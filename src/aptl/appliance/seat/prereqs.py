@@ -31,6 +31,8 @@ class PrereqReport:
 
 
 def _read_total_memory_bytes() -> int:
+    """Read total physical memory from ``/proc/meminfo`` when available."""
+
     try:
         with Path("/proc/meminfo").open(encoding="utf-8") as handle:
             for line in handle:
@@ -42,10 +44,14 @@ def _read_total_memory_bytes() -> int:
 
 
 def _kvm_available() -> bool:
+    """Return whether the host exposes a readable ``/dev/kvm`` device."""
+
     return Path("/dev/kvm").exists() and os.access("/dev/kvm", os.R_OK | os.W_OK)
 
 
 def _tool_available(command: tuple[str, ...]) -> bool:
+    """Return whether a launcher tool responds successfully to a version probe."""
+
     try:
         result = subprocess.run(
             list(command),

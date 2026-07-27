@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
 from aptl.appliance.bootstrap import initialize_overlay_state
@@ -16,9 +14,9 @@ from aptl.appliance.manifest import (
     verify_release_directory,
     _load_release_documents,
 )
+from aptl.appliance.seat.context import SeatPaths, StartSeatOptions
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.exposure import require_host_exposure
-from aptl.appliance.seat.kiosk import KioskLaunchPlan, build_kiosk_launch_plan
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
 from aptl.appliance.seat.observation import (
     build_host_observation,
@@ -26,6 +24,7 @@ from aptl.appliance.seat.observation import (
     host_boundary_findings,
     map_publications_to_listeners,
 )
+from aptl.appliance.seat.overlay_cleanup import remove_overlay_artifacts
 from aptl.appliance.seat.paths import contained_path, validate_seat_id
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.appliance.seat.prereqs import require_host_prerequisites
@@ -42,23 +41,15 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryPolicy,
     load_boundary_policy,
 )
+from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 
-
-@dataclass(frozen=True)
-class SeatPaths:
-    """Contained directory layout for one physical seat."""
-
-    seat_root: Path
-    release_dir: Path
-    release_public_key: Path
-    qualification_public_key: Path
-    launch_dir: Path
-    launch_descriptor: Path
-    overlay_path: Path
-    overlay_state_dir: Path
+SEAT_RECORD_SCHEMA = "aptl.seat-record/v1"
+SEAT_NOT_STAGED = "seat is not staged"
 
 
 def _read_host_boot_id() -> str:
+    """Read the current physical-host boot identifier."""
+
     try:
         return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
     except OSError as exc:
@@ -66,12 +57,16 @@ def _read_host_boot_id() -> str:
 
 
 def _launch_descriptor_digest(path: Path) -> str:
+    """Hash the launch descriptor bytes bound into the seat record."""
+
     payload = path.read_bytes()
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
-def _policy_publications(policy: ApplianceBoundaryPolicy):
-    from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
+def _policy_publications(
+    policy: ApplianceBoundaryPolicy,
+) -> tuple[BoundaryEndpoint, ...]:
+    """Project signed guest publications into listener inventory endpoints."""
 
     return tuple(
         BoundaryEndpoint(
@@ -87,6 +82,8 @@ def _policy_publications(policy: ApplianceBoundaryPolicy):
 def _load_verified_release(
     paths: SeatPaths,
 ) -> tuple[ApplianceReleaseInspection, ApplianceBoundaryPolicy]:
+    """Verify the release directory and load the signed boundary policy."""
+
     inspection = verify_release_directory(
         paths.release_dir,
         paths.release_public_key,
@@ -121,6 +118,8 @@ def _seat_paths(
     release_public_key: Path,
     qualification_public_key: Path,
 ) -> SeatPaths:
+    """Resolve contained seat paths for one launcher invocation."""
+
     validate_seat_id(seat_id)
     launch_dir = seat_root / "launch"
     overlay_path = contained_path(
@@ -179,7 +178,6 @@ def stage_seat(
     )
     planned = _policy_publications(policy)
     bundle = build_host_observation(
-        policy=policy,
         binding=binding.model_copy(update={"host_observation_id": "pending"}),
         boot_id=boot_id,
         listeners=planned,
@@ -197,7 +195,7 @@ def stage_seat(
     )
     digest = _launch_descriptor_digest(paths.launch_descriptor)
     record = SeatRecord(
-        schema_version="aptl.seat-record/v1",
+        schema_version=SEAT_RECORD_SCHEMA,
         seat_id=seat_id,
         selected_release_id=inspection.release_id,
         launch_descriptor_digest=digest,
@@ -226,6 +224,8 @@ def _relative_to_root(root: Path, path: Path, *, label: str) -> str:
 
 
 def _ensure_overlay(paths: SeatPaths, record: SeatRecord) -> None:
+    """Create the disposable overlay when the seat has none yet."""
+
     if paths.overlay_path.exists():
         return
     manifest, _signature = _load_release_documents(paths.release_dir)
@@ -259,12 +259,11 @@ def start_seat(
     release_dir: Path,
     release_public_key: Path,
     qualification_public_key: Path,
-    prereq_overrides: dict[str, object] | None = None,
-    listener_probe=None,
-    docker_daemon_running: bool | None = None,
+    options: StartSeatOptions | None = None,
 ) -> SeatRecord:
     """Create overlay when needed, start VM, and validate host exposure."""
 
+    launch_options = options or StartSeatOptions()
     record = load_seat_record(seat_root)
     paths = _seat_paths(
         seat_root,
@@ -280,7 +279,7 @@ def start_seat(
             release_dir=release_dir,
             release_public_key=release_public_key,
             qualification_public_key=qualification_public_key,
-            prereq_overrides=prereq_overrides,
+            prereq_overrides=launch_options.prereq_overrides,
         )
     starting = record.model_copy(update={"lifecycle_state": "starting"})
     persist_seat_record(seat_root, starting)
@@ -295,13 +294,13 @@ def start_seat(
         )
         argv = build_qemu_argv(spec)
         require_host_exposure(
-            vm_argv=argv, docker_daemon_running=docker_daemon_running
+            vm_argv=argv, docker_daemon_running=launch_options.docker_daemon_running
         )
         if read_vm_pid(seat_root) is None:
             vm = start_vm(spec)
             write_vm_pid(seat_root, vm.pid)
         inspection, policy = _load_verified_release(paths)
-        observed = collect_loopback_listeners(probe=listener_probe)
+        observed = collect_loopback_listeners(probe=launch_options.listener_probe)
         listeners = map_publications_to_listeners(policy, observed)
         binding = ApplianceBoundaryBinding(
             policy_digest=manifest.boundary.policy_digest,
@@ -315,7 +314,6 @@ def start_seat(
             host_observation_id=record.host_observation_id,
         )
         bundle = build_host_observation(
-            policy=policy,
             binding=binding,
             boot_id=binding.boot_id,
             listeners=listeners,
@@ -325,7 +323,7 @@ def start_seat(
         findings = host_boundary_findings(policy, binding, bundle.observation)
         if findings:
             failed = SeatRecord(
-                schema_version="aptl.seat-record/v1",
+                schema_version=SEAT_RECORD_SCHEMA,
                 seat_id=seat_id,
                 selected_release_id=inspection.release_id,
                 launch_descriptor_digest=record.launch_descriptor_digest,
@@ -338,7 +336,7 @@ def start_seat(
             persist_seat_record(seat_root, failed)
             raise SeatLauncherError(findings[0], "host boundary inventory failed")
         ready = SeatRecord(
-            schema_version="aptl.seat-record/v1",
+            schema_version=SEAT_RECORD_SCHEMA,
             seat_id=seat_id,
             selected_release_id=inspection.release_id,
             launch_descriptor_digest=record.launch_descriptor_digest,
@@ -359,9 +357,11 @@ def start_seat(
 
 
 def stop_seat(seat_root: Path) -> SeatRecord:
+    """Stop the tracked VM and return the seat to staged state."""
+
     record = load_seat_record(seat_root)
     if record is None:
-        raise SeatLauncherError("corrupt-seat-state", "seat is not staged")
+        raise SeatLauncherError("corrupt-seat-state", SEAT_NOT_STAGED)
     stop_vm(seat_root)
     updated = record.model_copy(update={"lifecycle_state": "staged"})
     persist_seat_record(seat_root, updated)
@@ -380,7 +380,7 @@ def reset_seat(
 
     record = load_seat_record(seat_root)
     if record is None:
-        raise SeatLauncherError("corrupt-seat-state", "seat is not staged")
+        raise SeatLauncherError("corrupt-seat-state", SEAT_NOT_STAGED)
     stop_vm(seat_root)
     paths = _seat_paths(
         seat_root,
@@ -389,22 +389,7 @@ def reset_seat(
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
     )
-    for target in (paths.overlay_path, paths.overlay_state_dir):
-        if target.is_dir():
-            for child in sorted(target.rglob("*"), reverse=True):
-                try:
-                    child.unlink()
-                except OSError:
-                    pass
-            try:
-                target.rmdir()
-            except OSError:
-                pass
-        elif target.exists() or target.is_symlink():
-            try:
-                target.unlink()
-            except OSError as exc:
-                raise SeatLauncherError("corrupt-overlay", "overlay reset failed") from exc
+    remove_overlay_artifacts(paths.overlay_path, paths.overlay_state_dir)
     updated = record.model_copy(update={"lifecycle_state": "needs-reset"})
     persist_seat_record(seat_root, updated)
     return stage_seat(
@@ -423,7 +408,7 @@ def recover_seat(
     release_dir: Path,
     release_public_key: Path,
     qualification_public_key: Path,
-    **start_kwargs: object,
+    options: StartSeatOptions | None = None,
 ) -> SeatRecord:
     """Instructor recovery: reset then start."""
 
@@ -440,7 +425,7 @@ def recover_seat(
         release_dir=release_dir,
         release_public_key=release_public_key,
         qualification_public_key=qualification_public_key,
-        **start_kwargs,
+        options=options,
     )
 
 
@@ -449,7 +434,7 @@ def reconcile_seat_after_reboot(seat_root: Path) -> SeatRecord:
 
     record = load_seat_record(seat_root)
     if record is None:
-        raise SeatLauncherError("corrupt-seat-state", "seat is not staged")
+        raise SeatLauncherError("corrupt-seat-state", SEAT_NOT_STAGED)
     boot_id = _read_host_boot_id()
     diagnostics: list[str] = []
     if boot_id != record.host_boot_id:
@@ -474,6 +459,8 @@ def reconcile_seat_after_reboot(seat_root: Path) -> SeatRecord:
 
 
 def status_seat(seat_root: Path) -> SeatStatusProjection:
+    """Return coarse seat health without credentials or topology."""
+
     record = load_seat_record(seat_root)
     if record is None:
         return SeatStatusProjection(
@@ -497,28 +484,3 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
         host_observation_id=record.host_observation_id,
         diagnostics=tuple(diagnostics),
     )
-
-
-def open_participant_kiosk(
-    *,
-    participant_port: int = 443,
-    browser_command: str | None = None,
-    dry_run: bool = False,
-) -> KioskLaunchPlan:
-    """Launch or plan the participant kiosk browser wrapper."""
-
-    plan = build_kiosk_launch_plan(
-        participant_port=participant_port,
-        browser_command=browser_command,
-    )
-    if dry_run:
-        return plan
-    subprocess.Popen(
-        list(plan.argv),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        close_fds=True,
-        start_new_session=True,
-    )
-    return plan

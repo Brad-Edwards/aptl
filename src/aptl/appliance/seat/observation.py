@@ -52,6 +52,8 @@ def collect_loopback_listeners(
 
 
 def _collect_listeners_via_ss() -> tuple[BoundaryEndpoint, ...]:
+    """Parse loopback TCP listeners from ``ss`` output when available."""
+
     try:
         result = subprocess.run(
             ["ss", "-H", "-ltn"],
@@ -117,7 +119,6 @@ def map_publications_to_listeners(
 
 def build_host_observation(
     *,
-    policy: ApplianceBoundaryPolicy,
     binding: ApplianceBoundaryBinding,
     boot_id: str,
     listeners: tuple[BoundaryEndpoint, ...],

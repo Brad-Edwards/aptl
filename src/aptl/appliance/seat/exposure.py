@@ -78,6 +78,8 @@ def audit_host_process_inventory(
 
 
 def _docker_daemon_running() -> bool:
+    """Return whether a local Docker daemon responds to ``docker info``."""
+
     try:
         result = subprocess.run(
             ["docker", "info"],

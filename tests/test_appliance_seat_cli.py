@@ -138,7 +138,7 @@ def test_seat_reconcile_success_emits_json() -> None:
 
 
 def test_open_kiosk_dry_run_does_not_spawn_browser() -> None:
-    with patch("aptl.appliance.seat.lifecycle.subprocess.Popen") as popen:
+    with patch("aptl.appliance.seat.kiosk.subprocess.Popen") as popen:
         result = runner.invoke(
             app,
             ["seat", "open-kiosk", "--dry-run"],
@@ -150,7 +150,7 @@ def test_open_kiosk_dry_run_does_not_spawn_browser() -> None:
 
 
 def test_open_kiosk_honors_browser_command() -> None:
-    with patch("aptl.appliance.seat.lifecycle.subprocess.Popen") as popen:
+    with patch("aptl.appliance.seat.kiosk.subprocess.Popen") as popen:
         result = runner.invoke(
             app,
             [

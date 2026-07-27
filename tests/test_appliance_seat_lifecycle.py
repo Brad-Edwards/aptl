@@ -10,7 +10,7 @@ import pytest
 from aptl.appliance.manifest import ApplianceReleaseInspection
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.lifecycle import (
-    open_participant_kiosk,
+    StartSeatOptions,
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
@@ -19,6 +19,7 @@ from aptl.appliance.seat.lifecycle import (
     status_seat,
     stop_seat,
 )
+from aptl.appliance.seat.kiosk import open_participant_kiosk
 from aptl.appliance.seat.models import SeatRecord
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.core import hostenv
@@ -182,7 +183,7 @@ def test_start_marks_ready_when_boundary_passes(tmp_path: Path) -> None:
             release_dir=release,
             release_public_key=public_key,
             qualification_public_key=qualification_key,
-            listener_probe=_listener_probe,
+            options=StartSeatOptions(listener_probe=_listener_probe),
         )
 
     assert record.lifecycle_state == "ready"
@@ -450,7 +451,7 @@ def test_reconcile_marks_recoverable_failure_when_vm_missing(tmp_path: Path) -> 
 
 
 def test_open_participant_kiosk_spawns_browser_when_not_dry_run() -> None:
-    with patch("aptl.appliance.seat.lifecycle.subprocess.Popen") as popen:
+    with patch("aptl.appliance.seat.kiosk.subprocess.Popen") as popen:
         plan = open_participant_kiosk(
             participant_port=8443,
             browser_command="/usr/bin/browser",

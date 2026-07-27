@@ -8,8 +8,8 @@ from pathlib import Path
 import typer
 
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.kiosk import open_participant_kiosk
 from aptl.appliance.seat.lifecycle import (
-    open_participant_kiosk,
     reconcile_seat_after_reboot,
     recover_seat,
     reset_seat,
@@ -23,10 +23,14 @@ app = typer.Typer(help="Operate one disposable appliance seat on a physical host
 
 
 def _emit(payload: dict[str, object]) -> None:
+    """Print one bounded JSON payload on stdout."""
+
     typer.echo(json.dumps(payload, separators=(",", ":"), sort_keys=True))
 
 
 def _fail(exc: SeatLauncherError) -> None:
+    """Print one bounded JSON error and exit with code 2."""
+
     typer.echo(json.dumps({"error": exc.code, "message": exc.message}), err=True)
     raise typer.Exit(code=2) from exc
 

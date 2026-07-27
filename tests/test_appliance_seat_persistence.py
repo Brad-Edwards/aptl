@@ -61,9 +61,10 @@ def test_persist_seat_record_rejects_symlink_root(tmp_path: Path) -> None:
     target.mkdir()
     link = tmp_path / "link"
     link.symlink_to(target, target_is_directory=True)
+    record = _record()
 
     with pytest.raises(SeatLauncherError) as exc:
-        persist_seat_record(link, _record())
+        persist_seat_record(link, record)
 
     assert exc.value.code == "corrupt-seat-state"
 

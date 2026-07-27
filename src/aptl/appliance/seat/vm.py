@@ -112,32 +112,45 @@ def start_vm(
         close_fds=True,
         start_new_session=True,
     )
-    return SubprocessVm(process=process)
+    if runner is None:
+        return SubprocessVm(process=process)
+    return runner(process=process)
 
 
 def vm_pid_path(seat_root: Path) -> Path:
+    """Return the VM pid file path for one seat root."""
+
     return seat_root / "vm.pid"
 
 
+def _tracked_pid_alive(pid: int) -> bool:
+    """Return whether ``pid`` still refers to a live process."""
+
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
 def read_vm_pid(seat_root: Path) -> int | None:
+    """Return the live VM pid recorded for one seat, if any."""
+
     path = vm_pid_path(seat_root)
     if not path.is_file():
         return None
     try:
-        text = path.read_text(encoding="utf-8").strip()
-        pid = int(text)
+        pid = int(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
-    if pid <= 0:
-        return None
-    try:
-        os.kill(pid, 0)
-    except OSError:
+    if pid <= 0 or not _tracked_pid_alive(pid):
         return None
     return pid
 
 
 def write_vm_pid(seat_root: Path, pid: int | None) -> None:
+    """Persist or clear the tracked VM pid for one seat."""
+
     path = vm_pid_path(seat_root)
     if pid is None:
         try:

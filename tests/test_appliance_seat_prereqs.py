@@ -58,9 +58,10 @@ def test_prereqs_fail_closed_on_missing_kvm(tmp_path: Path) -> None:
 
 
 def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
+    requirements = _requirements()
     with pytest.raises(SeatLauncherError) as exc:
         require_host_prerequisites(
-            _requirements(),
+            requirements,
             seat_root=tmp_path,
             memory_bytes=1024,
             kvm_available=True,

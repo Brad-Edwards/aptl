@@ -235,7 +235,7 @@ def check_import_lock(scenario_path: Path, scenario: Scenario) -> GateCheck:
     """Verify the committed lockfile, trust policy, and import expansion.
 
     Runs the canonical ``raes sdl verify-imports``, which compares the committed
-    ``aces.lock.json`` against a fresh resolution. The lockfile's local
+    ``raes.lock.json`` against a fresh resolution. The lockfile's local
     ``resolved_source`` is checkout-independent (RAES #551), so this passes on CI
     and any developer checkout and fails only when an imported module changes
     without re-running ``raes sdl resolve``.

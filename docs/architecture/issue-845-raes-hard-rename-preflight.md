@@ -77,12 +77,11 @@ rewritten in place.
   values in the active failure taxonomy or reinterpret old evidence in place.
 - Upstream-owned identities are not APTL rename targets. Semantic references,
   lock/trust filenames, lock schema values, media types, contract IDs, and
-  corpus payloads must use exactly what the installed RAES 1.1.0 parser and
-  published corpus define. The inspected RAES 1.1.0 wheel still contains
-  `urn:aces:*` semantic references and `aces.lock.json`; those literals remain
-  valid only where the RAES contract owns them. Do not manufacture
-  `urn:raes:*`, rename an upstream lockfile locally, or preserve an APTL-owned
-  `aces` field on the theory that every occurrence is upstream-owned.
+  corpus payloads must use exactly what the installed RAES parser and published
+  corpus define. RAES 2.0.0 now publishes `raes.lock.json`; consumers continue
+  to read the public `LOCKFILE_NAME` constant instead of manufacturing or
+  preserving either namespace locally. Historical contract literals remain
+  unchanged only where the upstream contract still owns them.
 
 ## Existing Contracts To Reuse
 

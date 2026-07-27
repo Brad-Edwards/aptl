@@ -69,18 +69,18 @@ def _pinned_identity_task_payload(*, extra_notes: list[str] | None = None) -> di
     payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "canonical-minimal"}
     payload["apparatus_constraints"] = {
         "allowed_processor_refs": [
-            {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+            {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
         ],
         "allowed_backend_refs": [{"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}],
         "required_manifest_refs": [
             {
                 "ref_kind": "manifest",
-                "ref_id": "aces-reference-processor",
+                "ref_id": "raes-reference-processor",
                 "ref_version": "processor-manifest/v2",
                 "subject_ref": {
                     "ref_kind": "processor",
-                    "ref_id": "aces-reference-processor",
-                    "ref_version": "0.1.0",
+                    "ref_id": "raes-reference-processor",
+                    "ref_version": "2.0.0",
                 },
             },
             {
@@ -250,6 +250,79 @@ class TestExperimentAdmitDebugOverrideFlag:
         persisted_dir = base_dir / "runs" / "experiment-plans"
         assert persisted_dir.exists()
         assert any(persisted_dir.iterdir())
+
+    def test_existing_aptl_config_is_passed_to_binding_admission(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import aptl.cli.experiment as experiment_cli
+
+        base_dir = _build_pinned_identity_project(tmp_path, spec_id="spec-cli-config-v1")
+        (base_dir / "aptl.json").write_text(
+            json.dumps(
+                {
+                    "experiment": {
+                        "participant_action_timeout_seconds": 37,
+                    }
+                }
+            )
+        )
+        observed: list[int] = []
+        controller_type = experiment_cli.ExperimentController
+
+        def controller_factory(**kwargs):
+            observed.append(
+                kwargs[
+                    "base_config"
+                ].experiment.participant_action_timeout_seconds
+            )
+            return controller_type(**kwargs)
+
+        monkeypatch.setattr(
+            experiment_cli,
+            "ExperimentController",
+            controller_factory,
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                *_CLI_ARGS,
+                "--base-dir",
+                str(base_dir),
+                "--allow-uncertified-apparatus",
+            ],
+        )
+
+        assert result.exit_code == 0, result.stderr
+        assert observed == [37]
+
+    def test_malformed_aptl_config_uses_a_fixed_safe_error(
+        self,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        base_dir = _build_pinned_identity_project(
+            tmp_path,
+            spec_id="spec-cli-invalid-config-v1",
+        )
+        (base_dir / "aptl.json").write_text(
+            '{"experiment": {"participant_action_timeout_seconds": '
+            f'"{SECRET}"'
+        )
+
+        result = runner.invoke(
+            app,
+            [*_CLI_ARGS, "--base-dir", str(base_dir)],
+        )
+
+        assert result.exit_code == 1
+        assert result.stderr.strip() == "invalid aptl configuration"
+        assert SECRET not in result.stdout
+        assert SECRET not in result.stderr
+        assert "validation error" not in result.stderr.lower()
 
 
 class TestExperimentAdmitRejectionIsSafe:

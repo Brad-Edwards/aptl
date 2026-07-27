@@ -37,6 +37,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import rfc8785
+from raes_contracts.contracts import (
+    ParticipantConfigurationResultModel,
+    RealizedBindingProvenanceModel,
+)
 from raes_contracts.experiment_spec import ExperimentSpecModel
 
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
@@ -46,6 +50,7 @@ if TYPE_CHECKING:
     # Typing-only import: at runtime ``capture_registry`` imports from THIS
     # module, so a runtime import here would cycle. ``expand_trial_plan`` only
     # calls ``binding_projection()`` structurally, needing no runtime import.
+    from aptl.core.experiment.bindings import AdmittedConditionBindings
     from aptl.core.experiment.capture_registry import CaptureBinding
 
 # ---------------------------------------------------------------------------
@@ -89,10 +94,10 @@ _PLAN_ID_PREFIX = "plan-"
 _TRIAL_ID_PREFIX = "trial-"
 
 #: Versioned identity for the canonical plan projection shape (an APTL-internal
-#: journal format, never a RAES contract). Bumped to v2 by EXP-010 (#752): the
-#: projection now pins the admitted capture bindings, changing the shape and
-#: digest, so old v1 bytes cannot silently reinterpret under it.
-_PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v2"
+#: journal format, never a RAES contract). Bumped to v3 by EXP-005 (#441): the
+#: projection now pins RAES realized bindings and complete participant/apparatus
+#: configuration identities.
+_PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v3"
 
 _ADDRESS_RUN_PLAN = "run_plan"
 _ADDRESS_STOCHASTIC_CONTROLS = "run_plan.stochastic_controls"
@@ -120,6 +125,9 @@ class PlannedTrial:
     stochastic_seeds: tuple[tuple[str, str], ...]
     scenario_snapshot_digest: str | None
     capture_spec_refs: tuple[str, ...]
+    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = ()
+    participant_configurations: tuple[ParticipantConfigurationResultModel, ...] = ()
+    apparatus_configuration: tuple[tuple[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -288,6 +296,9 @@ def _build_trial(
     parameter_bindings: tuple[tuple[str, object], ...],
     condition_snapshot_digests: Mapping[str, str] | None,
     capture_spec_refs: tuple[str, ...],
+    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = (),
+    participant_configurations: tuple[ParticipantConfigurationResultModel, ...] = (),
+    apparatus_configuration: tuple[tuple[str, object], ...] = (),
 ) -> PlannedTrial:
     """Build one immutable PlannedTrial, deriving its ID and stochastic seeds from source_set_digest and coordinate."""
     scenario_snapshot_digest = (
@@ -312,6 +323,9 @@ def _build_trial(
         ),
         scenario_snapshot_digest=scenario_snapshot_digest,
         capture_spec_refs=capture_spec_refs,
+        realized_bindings=realized_bindings,
+        participant_configurations=participant_configurations,
+        apparatus_configuration=apparatus_configuration,
     )
 
 
@@ -343,6 +357,7 @@ def _expand_condition(
     source_set_digest: str,
     condition_snapshot_digests: Mapping[str, str] | None,
     capture_spec_refs: tuple[str, ...],
+    admitted_bindings: Mapping[str, AdmittedConditionBindings] | None,
 ) -> tuple[PlannedTrial, ...]:
     """Expand a condition allocation into condition-major-replication-ordered trials, one per condition/replication."""
     allocation = spec.run_plan.allocation
@@ -354,9 +369,38 @@ def _expand_condition(
     for condition_id in allocation.compared_conditions:
         assignment = allocation.condition_assignments[condition_id]
         factor_levels = tuple(sorted(assignment.factor_levels.items()))
-        parameter_bindings = tuple(
-            sorted((parameter.name, parameter.value) for parameter in assignment.required_parameters)
+        condition_bindings = (
+            admitted_bindings.get(condition_id) if admitted_bindings is not None else None
         )
+        if spec.binding_descriptors is not None:
+            if condition_bindings is None:
+                raise _reject(
+                    "aptl.experiment-admission.binding-condition-missing",
+                    f"binding_descriptors.{condition_id}",
+                    "explicit condition bindings were not admitted",
+                )
+            parameter_bindings = condition_bindings.scenario_parameters
+            scenario_digest = (
+                condition_snapshot_digests.get(condition_id)
+                if condition_snapshot_digests is not None
+                else None
+            )
+            realized_bindings = _pin_scenario_configuration_digest(
+                condition_bindings.realized_bindings,
+                scenario_digest,
+            )
+            participant_configurations = condition_bindings.participant_configurations
+            apparatus_configuration = condition_bindings.apparatus_projection
+        else:
+            parameter_bindings = tuple(
+                sorted(
+                    (parameter.name, parameter.value)
+                    for parameter in assignment.required_parameters
+                )
+            )
+            realized_bindings = ()
+            participant_configurations = ()
+            apparatus_configuration = ()
         for replication_ordinal in range(allocation.target_runs_per_condition):
             trials.append(
                 _build_trial(
@@ -371,10 +415,31 @@ def _expand_condition(
                     parameter_bindings=parameter_bindings,
                     condition_snapshot_digests=condition_snapshot_digests,
                     capture_spec_refs=capture_spec_refs,
+                    realized_bindings=realized_bindings,
+                    participant_configurations=participant_configurations,
+                    apparatus_configuration=apparatus_configuration,
                 )
             )
             ordering_index += 1
     return tuple(trials)
+
+
+def _pin_scenario_configuration_digest(
+    bindings: tuple[RealizedBindingProvenanceModel, ...],
+    scenario_snapshot_digest: str | None,
+) -> tuple[RealizedBindingProvenanceModel, ...]:
+    """Attach the owner-derived instantiated-scenario digest to scenario bindings."""
+
+    if scenario_snapshot_digest is None:
+        return bindings
+    return tuple(
+        binding.model_copy(
+            update={"configuration_digest": scenario_snapshot_digest}
+        )
+        if binding.descriptor.target.plane == "scenario"
+        else binding
+        for binding in bindings
+    )
 
 
 def _trial_projection(trial: PlannedTrial) -> dict[str, object]:
@@ -393,6 +458,15 @@ def _trial_projection(trial: PlannedTrial) -> dict[str, object]:
         "stochastic_seeds": dict(trial.stochastic_seeds),
         "scenario_snapshot_digest": trial.scenario_snapshot_digest,
         "capture_spec_refs": list(trial.capture_spec_refs),
+        "realized_bindings": [
+            binding.model_dump(mode="json", exclude_none=True)
+            for binding in trial.realized_bindings
+        ],
+        "participant_configurations": [
+            configuration.model_dump(mode="json", exclude_none=True)
+            for configuration in trial.participant_configurations
+        ],
+        "apparatus_configuration": dict(trial.apparatus_configuration),
     }
 
 
@@ -429,6 +503,7 @@ def expand_trial_plan(
     *,
     source_set_digest: str,
     condition_snapshot_digests: Mapping[str, str] | None = None,
+    admitted_bindings: Mapping[str, AdmittedConditionBindings] | None = None,
     capture_bindings: Sequence[CaptureBinding] = (),
     policy: AdmissionPolicy,
 ) -> TrialPlan:
@@ -471,6 +546,7 @@ def expand_trial_plan(
             source_set_digest=source_set_digest,
             condition_snapshot_digests=condition_snapshot_digests,
             capture_spec_refs=capture_refs,
+            admitted_bindings=admitted_bindings,
         )
 
     ids = [trial.planned_trial_id for trial in trials]

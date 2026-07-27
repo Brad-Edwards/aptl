@@ -28,15 +28,29 @@ from raes_backend_protocols.capabilities import (
     BackendManifest,
     EvaluatorCapabilities,
     OrchestratorCapabilities,
+    ParticipantFeatureSupport,
     ParticipantRuntimeCapabilities,
     ProvisionerCapabilities,
 )
+from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
     RealizationSupportDeclaration,
     RealizationSupportMode,
 )
-from raes_contracts.vocabulary import WorkflowFeature, WorkflowStatePredicateFeature
+from raes_contracts.contracts import (
+    BackendManifestV2Model,
+    BindingOwnerModel,
+    BindingScalarType,
+    ConfigurationTargetDeclarationModel,
+    ConfigurationTargetRegistryModel,
+    LiteralBindingValueModel,
+)
+from raes_contracts.vocabulary import (
+    ParticipantFeatureSupportLevel,
+    WorkflowFeature,
+    WorkflowStatePredicateFeature,
+)
 
 try:
     from raes_contracts.manifest_authority import BACKEND_SUPPORTED_CONTRACT_IDS
@@ -52,9 +66,30 @@ from aptl.core.experiment.capture_registry import (
 
 APTL_RAES_TARGET_NAME = "aptl"
 APTL_RAES_TARGET_VERSION = "0.1.0"
+APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = (
+    "participant-runtime.action-timeout-seconds"
+)
+
+_EXPERIMENT_CONFIGURATION_REGISTRY = ConfigurationTargetRegistryModel(
+    owner=BindingOwnerModel(
+        contract_id="backend-manifest/v2",
+        contract_version="1",
+        validator_id="aptl-configuration",
+        validator_version="1",
+    ),
+    targets={
+        APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET: ConfigurationTargetDeclarationModel(
+            target_id=APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET,
+            value_type=BindingScalarType.INTEGER,
+            allowed_value_kinds=["literal"],
+            sensitivity="internal",
+            default=LiteralBindingValueModel(kind="literal", value=120),
+        )
+    },
+)
 
 # The reference RAES processor whose provisioning-plan output APTL realizes.
-_COMPATIBLE_PROCESSORS = frozenset({"aces-reference-processor"})
+_COMPATIBLE_PROCESSORS = frozenset({"raes-reference-processor"})
 
 # Full remote-control-plane contract surface. The profile requires the planning,
 # operation/status, runtime-snapshot, workflow, evaluation, and participant
@@ -86,6 +121,8 @@ _CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
         "participant-shared-state-record-v1",
         "participant-joint-action-record-v1",
         "participant-time-management-context-v1",
+        "participant-control-occurrence-v1",
+        "participant-crossing-occurrence-v1",
     }
 )
 
@@ -136,8 +173,24 @@ _EVALUATOR = EvaluatorCapabilities(
 _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
     name="aptl-participant-runtime",
     supported_participant_roles=frozenset({"red"}),
-    supported_behavior_features=frozenset({"behavior_history"}),
+    supported_behavior_features=frozenset(
+        {
+            "action_contracts",
+            "behavior_history",
+            "observation_boundaries",
+        }
+    ),
     supported_interaction_features=frozenset({"shared_state_change"}),
+    feature_support=(
+        ParticipantFeatureSupport(
+            feature="x-paper:boundary-negative-evidence",
+            support_level=ParticipantFeatureSupportLevel.EXACT,
+        ),
+        ParticipantFeatureSupport(
+            feature="x-paper:wazuh-evidence",
+            support_level=ParticipantFeatureSupportLevel.EXACT,
+        ),
+    ),
     constraints={
         "default_participant_action_address": PARTICIPANT_ACTION_ADDRESS,
         "backend_boundary": "DeploymentBackend.container_exec",
@@ -255,3 +308,29 @@ def create_aptl_manifest() -> BackendManifest:
         participant_runtime=_PARTICIPANT_RUNTIME,
         **capability_options,
     )
+
+
+def create_aptl_binding_manifest_model(
+    manifest: BackendManifest | None = None,
+) -> BackendManifestV2Model:
+    """Return the canonical backend manifest with its closed binding registry."""
+
+    selected = manifest if manifest is not None else create_aptl_manifest()
+    if (
+        selected.name != APTL_RAES_TARGET_NAME
+        or selected.version != APTL_RAES_TARGET_VERSION
+    ):
+        raise ValueError(
+            "APTL binding registry requires the canonical APTL backend identity"
+        )
+    payload = backend_manifest_v2_model(selected).model_dump(mode="json")
+    payload["supported_contract_versions"] = sorted(
+        {
+            *payload["supported_contract_versions"],
+            "experiment-binding-descriptors-v1",
+        }
+    )
+    payload["configuration_registry"] = _EXPERIMENT_CONFIGURATION_REGISTRY.model_dump(
+        mode="json"
+    )
+    return BackendManifestV2Model.model_validate(payload)

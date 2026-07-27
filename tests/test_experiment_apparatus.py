@@ -6,9 +6,9 @@ Two things are exercised here:
 * ``check_apparatus_admission`` — conjunctive identity/manifest-ref/
   capability/mutual-compat admission over ``ExperimentTaskModel.
   apparatus_constraints`` and the authoring input's optional
-  ``apparatus_intent``. At the locked RAES 0.23.1 surface the published
+  ``apparatus_intent``. At the locked RAES 2.0.0 surface the published
   reference-processor manifest names only ``stub`` as a compatible backend
-  while APTL names ``aces-reference-processor`` as compatible — a
+  while APTL names ``raes-reference-processor`` as compatible — a
   one-directional mismatch — so ANY admission using the real default
   manifests is expected to fail closed at the mutual-compatibility gate.
   This is documented, ADR-mandated behavior, not a bug.
@@ -97,7 +97,7 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
     def test_default_aptl_and_reference_processor_manifests_are_not_mutually_declared_compatible(self):
         # Structural fact about the two *canonical* manifests, independent
         # of any task: aptl.compatible_processors names
-        # "aces-reference-processor", but the reference-processor manifest's
+        # "raes-reference-processor", but the reference-processor manifest's
         # compatible_backends names only "stub" (never "aptl"). Isolated
         # here with a task that explicitly allows both identities (and
         # pins them correctly via required_manifest_refs) so the
@@ -106,7 +106,7 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
         task = _task_with_apparatus_constraints(
             {
                 "allowed_processor_refs": [
-                    {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+                    {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
                 ],
                 "allowed_backend_refs": [
                     {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}
@@ -114,12 +114,12 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
                 "required_manifest_refs": [
                     {
                         "ref_kind": "manifest",
-                        "ref_id": "aces-reference-processor",
+                        "ref_id": "raes-reference-processor",
                         "ref_version": "processor-manifest/v2",
                         "subject_ref": {
                             "ref_kind": "processor",
-                            "ref_id": "aces-reference-processor",
-                            "ref_version": "0.1.0",
+                            "ref_id": "raes-reference-processor",
+                            "ref_version": "2.0.0",
                         },
                     },
                     {
@@ -156,7 +156,7 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
         task = _task_with_apparatus_constraints(
             {
                 "allowed_processor_refs": [
-                    {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+                    {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
                 ],
                 "allowed_backend_refs": [
                     {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}
@@ -164,12 +164,12 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
                 "required_manifest_refs": [
                     {
                         "ref_kind": "manifest",
-                        "ref_id": "aces-reference-processor",
+                        "ref_id": "raes-reference-processor",
                         "ref_version": "processor-manifest/v2",
                         "subject_ref": {
                             "ref_kind": "processor",
-                            "ref_id": "aces-reference-processor",
-                            "ref_version": "0.1.0",
+                            "ref_id": "raes-reference-processor",
+                            "ref_version": "2.0.0",
                         },
                     },
                     {
@@ -204,7 +204,7 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
         return _task_with_apparatus_constraints(
             {
                 "allowed_processor_refs": [
-                    {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+                    {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
                 ],
                 "allowed_backend_refs": [
                     {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}
@@ -212,12 +212,12 @@ class TestCheckApparatusAdmissionMutualCompatGotcha:
                 "required_manifest_refs": [
                     {
                         "ref_kind": "manifest",
-                        "ref_id": "aces-reference-processor",
+                        "ref_id": "raes-reference-processor",
                         "ref_version": "processor-manifest/v2",
                         "subject_ref": {
                             "ref_kind": "processor",
-                            "ref_id": "aces-reference-processor",
-                            "ref_version": "0.1.0",
+                            "ref_id": "raes-reference-processor",
+                            "ref_version": "2.0.0",
                         },
                     },
                     {
@@ -545,7 +545,7 @@ class TestCheckApparatusAdmissionUncertifiedApparatusOverride:
         task = _task_with_apparatus_constraints(
             {
                 "allowed_processor_refs": [
-                    {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+                    {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
                 ],
                 "allowed_backend_refs": [
                     {"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}
@@ -553,12 +553,12 @@ class TestCheckApparatusAdmissionUncertifiedApparatusOverride:
                 "required_manifest_refs": [
                     {
                         "ref_kind": "manifest",
-                        "ref_id": "aces-reference-processor",
+                        "ref_id": "raes-reference-processor",
                         "ref_version": "processor-manifest/v2",
                         "subject_ref": {
                             "ref_kind": "processor",
-                            "ref_id": "aces-reference-processor",
-                            "ref_version": "0.1.0",
+                            "ref_id": "raes-reference-processor",
+                            "ref_version": "2.0.0",
                         },
                     },
                     {
@@ -659,7 +659,7 @@ class TestCheckApparatusAdmissionIntentNarrowing:
         # capability gates), but the *narrowing* check itself must not be
         # what rejects a same-or-subset intent.
         task = _load_reference_task()
-        intent = self._processor_intent("aces-reference-processor", "0.1.0")
+        intent = self._processor_intent("raes-reference-processor", "0.1.0")
         policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
@@ -751,7 +751,7 @@ class TestPlanConditionFeasibilityHappyPath:
 
 
 class TestPlanConditionFeasibilityBrokenParameterBinding:
-    """At the locked RAES 0.23.1 surface, ``run_reference_processor`` itself
+    """At the locked RAES 2.0.0 surface, ``run_reference_processor`` itself
     *raises* ``SDLInstantiationError`` for a structurally broken parameter
     binding (verified live) rather than returning an invalid
     ``ReferenceProcessorResult`` — a delta from what a naive reading of the

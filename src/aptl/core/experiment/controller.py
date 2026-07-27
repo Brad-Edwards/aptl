@@ -34,6 +34,7 @@ from raes_processor.capabilities import ProcessorManifest
 from raes_processor.manifest import create_reference_processor_manifest
 
 from aptl.backends.raes_manifest import create_aptl_manifest
+from aptl.core.config import AptlConfig
 from aptl.core.experiment.admission import (
     AdmissionResult,
     ResolvedArtifact,
@@ -42,6 +43,7 @@ from aptl.core.experiment.admission import (
     build_associated_artifact_source,
 )
 from aptl.core.experiment.errors import AdmissionRejection
+from aptl.core.experiment.bindings import ParticipantManifestMap
 from aptl.core.experiment.policy import AdmissionPolicy, default_admission_policy
 from aptl.core.experiment.spec_loading import load_experiment_root
 from aptl.core.runstore import RunStorageBackend
@@ -70,6 +72,8 @@ class ExperimentController:
     policy: AdmissionPolicy | None = None
     backend_manifest: BackendManifest | None = None
     processor_manifest: ProcessorManifest | None = None
+    participant_manifests: ParticipantManifestMap | None = None
+    base_config: AptlConfig | None = None
     artifact_source_factory: ArtifactSourceFactory = build_associated_artifact_source
 
     def __post_init__(self) -> None:
@@ -83,6 +87,10 @@ class ExperimentController:
             self.backend_manifest = create_aptl_manifest()
         if self.processor_manifest is None:
             self.processor_manifest = create_reference_processor_manifest()
+        if self.participant_manifests is None:
+            self.participant_manifests = {}
+        if self.base_config is None:
+            self.base_config = AptlConfig()
 
     def admit(
         self,
@@ -126,4 +134,6 @@ class ExperimentController:
             policy=self.policy,
             backend_manifest=self.backend_manifest,
             processor_manifest=self.processor_manifest,
+            participant_manifests=self.participant_manifests,
+            base_config=self.base_config,
         )

@@ -43,7 +43,11 @@ from raes_contracts.associated_artifacts import (
     AssociatedArtifactValidationLimits,
     validate_associated_artifact_manifest,
 )
-from raes_contracts.contracts import ExperimentCaptureSpecModel, ExperimentTaskModel
+from raes_contracts.contracts import (
+    ExperimentCaptureSpecModel,
+    ExperimentTaskModel,
+    ParticipantImplementationManifestModel,
+)
 from raes_contracts.experiment_spec import (
     ExperimentSpecModel,
     ExperimentSpecValidationError,
@@ -60,11 +64,15 @@ from aptl.core.experiment.policy import AdmissionPolicy
 _ADDRESS_ROOT = "root"
 _ADDRESS_TASK = "task"
 _ADDRESS_CAPTURE_SPEC = "capture_spec"
+_ADDRESS_PARTICIPANT_MANIFEST = "participant_manifest"
 _ADDRESS_SCENARIO = "scenario"
 
 _CODE_ROOT_INVALID = "aptl.experiment-admission.root-invalid"
 _CODE_TASK_INVALID = "aptl.experiment-admission.task-invalid"
 _CODE_CAPTURE_SPEC_INVALID = "aptl.experiment-admission.capture-spec-invalid"
+_CODE_PARTICIPANT_MANIFEST_INVALID = (
+    "aptl.experiment-admission.participant-manifest-invalid"
+)
 _CODE_SCENARIO_INVALID = "aptl.experiment-admission.scenario-invalid"
 _CODE_SCENARIO_IMPORTS_UNSUPPORTED = "aptl.experiment-admission.scenario-imports-unsupported"
 
@@ -209,6 +217,37 @@ def load_capture_spec(data: bytes, *, policy: AdmissionPolicy) -> ExperimentCapt
     except PydanticValidationError as exc:
         raise AdmissionRejection(
             normalize_raes_failure(exc, address=_ADDRESS_CAPTURE_SPEC, code=_CODE_CAPTURE_SPEC_INVALID)
+        ) from exc
+
+
+def load_participant_manifest(
+    data: bytes,
+    *,
+    policy: AdmissionPolicy,
+) -> ParticipantImplementationManifestModel | None:
+    """Load a participant manifest, or return ``None`` for another manifest kind."""
+
+    payload = _load_bounded_json(
+        data,
+        policy=policy,
+        address=_ADDRESS_PARTICIPANT_MANIFEST,
+        code=_CODE_PARTICIPANT_MANIFEST_INVALID,
+    )
+    if (
+        not isinstance(payload, Mapping)
+        or payload.get("schema_version")
+        != "participant-implementation-manifest/v1"
+    ):
+        return None
+    try:
+        return ParticipantImplementationManifestModel.model_validate(payload)
+    except PydanticValidationError as exc:
+        raise AdmissionRejection(
+            normalize_raes_failure(
+                exc,
+                address=_ADDRESS_PARTICIPANT_MANIFEST,
+                code=_CODE_PARTICIPANT_MANIFEST_INVALID,
+            )
         ) from exc
 
 

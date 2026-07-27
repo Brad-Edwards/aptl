@@ -99,7 +99,7 @@ Carrying two SDLs has three concrete costs:
    topology declaration, user-behavior profiles).
 3. **Tooling already exists in RAES**—`raes sdl resolve`,
    `raes sdl verify-imports`, `raes sdl publish`, lockfiles
-   (`aces.lock.json`), OCI module distribution, MCP server, conformance
+   (`raes.lock.json`), OCI module distribution, MCP server, conformance
    runner—and would have to be rebuilt in-tree to reach parity.
 
 Implementation status as of 2026-06-25: public lab startup now defaults to the

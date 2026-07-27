@@ -64,10 +64,12 @@ from pathlib import Path
 
 from raes_backend_protocols.manifest import BackendManifest
 from raes_contracts.diagnostics import Diagnostic
+from raes_contracts.satisfiability import canonical_contract_digest
 from raes_processor.capabilities import ProcessorManifest
 from raes_processor.manifest import create_reference_processor_manifest
 
 from aptl.backends.raes_manifest import create_aptl_manifest
+from aptl.core.config import AptlConfig
 from aptl.core.experiment.admission_artifacts import (
     MappingArtifactSource,
     ResolvedArtifactSource,
@@ -85,6 +87,11 @@ from aptl.core.experiment.admission_steps import (
     _resolve_capture_specs,
 )
 from aptl.core.experiment.apparatus import check_apparatus_admission
+from aptl.core.experiment.bindings import (
+    ParticipantManifestMap,
+    admit_experiment_bindings,
+    scenario_for_explicit_bindings,
+)
 from aptl.core.experiment.capture_mapping import bind_capture_requirements
 from aptl.core.experiment.capture_registry import DEFAULT_COLLECTOR_REGISTRY, CollectorRegistry
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
@@ -108,6 +115,7 @@ _ADDRESS_PLAN_PERSISTENCE = "trial_plan.persistence"
 
 _CODE_PERSISTENCE_FAILED = "aptl.experiment-admission.plan-persistence-failed"
 _CODE_PERSISTED_PLAN_MISMATCH = "aptl.experiment-admission.persisted-plan-digest-mismatch"
+_CODE_BINDING_INVALID = "aptl.experiment-admission.binding-invalid"
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +230,8 @@ def _admit_experiment_inner(
     backend_manifest: BackendManifest,
     processor_manifest: ProcessorManifest,
     capture_registry: CollectorRegistry,
+    participant_manifests: ParticipantManifestMap,
+    base_config: AptlConfig,
 ) -> AdmissionResult:
     """Run the full admission sequence once; raises AdmissionRejection on any fail-closed gap."""
     # Step 1: root.
@@ -241,7 +251,24 @@ def _admit_experiment_inner(
     _check_task_identity(spec, task)
     _check_scenario_identity(effective_scenario_ref, scenario, scenario_canonical_digest)
 
-    # Step 4: apparatus admission.
+    # Step 4: resolve every explicit cross-plane binding before any planning.
+    try:
+        admitted_bindings = admit_experiment_bindings(
+            spec,
+            scenario=scenario,
+            backend_manifest=backend_manifest,
+            participant_manifests=participant_manifests,
+            base_config=base_config,
+        )
+        planning_scenario = scenario_for_explicit_bindings(scenario, admitted_bindings)
+    except (TypeError, ValueError) as exc:
+        raise _reject(
+            _CODE_BINDING_INVALID,
+            "binding_descriptors",
+            "experiment binding descriptors failed owner validation",
+        ) from exc
+
+    # Step 5: apparatus admission.
     warnings = check_apparatus_admission(
         task,
         spec.apparatus_intent,
@@ -250,20 +277,24 @@ def _admit_experiment_inner(
         policy=policy,
     )
 
-    # Step 5: capture-requirement binding against the collector registry
+    # Step 6: capture-requirement binding against the collector registry
     # (fail-closed; empty w/o refs). The immutable bindings are pinned into
     # the trial plan at Step 8 so runtime never re-matches a changed registry.
     capture_bindings = bind_capture_requirements(
         capture_specs, registry=capture_registry, policy=policy
     )
 
-    # Step 6: per-condition planning-only feasibility + snapshot digests.
+    # Step 7: per-condition planning-only feasibility + snapshot digests.
     condition_snapshot_digests, flat_instantiated_digest = _plan_conditions(
-        spec, scenario, backend_manifest=backend_manifest
+        spec,
+        planning_scenario,
+        backend_manifest=backend_manifest,
+        admitted_bindings=admitted_bindings or None,
     )
 
-    # Step 7: source-set projection + digest.
+    # Step 8: source-set projection + digest.
     source_set_projection = _build_source_set_projection(
+        experiment_root=experiment_root,
         task=TaskResolution(task=task, artifact=task_artifact),
         scenario=ScenarioResolution(
             effective_ref=effective_scenario_ref,
@@ -273,22 +304,29 @@ def _admit_experiment_inner(
         ),
         capture=CaptureResolution(specs=capture_specs, artifacts=capture_artifacts),
         flat_instantiated_digest=flat_instantiated_digest,
+        binding_descriptor_digest=(
+            canonical_contract_digest(spec.binding_descriptors)
+            if spec.binding_descriptors is not None
+            else None
+        ),
+        participant_manifests=participant_manifests,
     )
     source_set_digest = compute_source_set_digest(source_set_projection)
 
-    # Step 8: pure trial-plan expansion, pinning the admitted capture bindings.
+    # Step 9: pure trial-plan expansion, pinning all admitted bindings.
     plan = expand_trial_plan(
         spec,
         source_set_digest=source_set_digest,
         condition_snapshot_digests=condition_snapshot_digests or None,
+        admitted_bindings=admitted_bindings or None,
         capture_bindings=capture_bindings,
         policy=policy,
     )
 
-    # Step 9: create-once persistence + digest re-verification.
+    # Step 10: create-once persistence + digest re-verification.
     persisted_path = _persist_plan(plan, run_store=run_store)
 
-    # Step 10.
+    # Step 11.
     return AdmissionResult.admit(
         plan=plan,
         plan_digest=plan.plan_digest,
@@ -307,6 +345,8 @@ def admit_experiment(
     backend_manifest: BackendManifest | None = None,
     processor_manifest: ProcessorManifest | None = None,
     capture_registry: CollectorRegistry = DEFAULT_COLLECTOR_REGISTRY,
+    participant_manifests: ParticipantManifestMap | None = None,
+    base_config: AptlConfig | None = None,
 ) -> AdmissionResult:
     """Run ADR-047 admission for one experiment-authoring-input document.
 
@@ -331,6 +371,10 @@ def admit_experiment(
         processor_manifest if processor_manifest is not None else create_reference_processor_manifest()
     )
     try:
+        resolved_participant_manifests = dict(
+            artifact_source.participant_manifests
+        )
+        resolved_participant_manifests.update(participant_manifests or {})
         return _admit_experiment_inner(
             experiment_root=experiment_root,
             artifact_source=artifact_source,
@@ -339,6 +383,8 @@ def admit_experiment(
             backend_manifest=resolved_backend,
             processor_manifest=resolved_processor,
             capture_registry=capture_registry,
+            participant_manifests=resolved_participant_manifests,
+            base_config=base_config or AptlConfig(),
         )
     except AdmissionRejection as exc:
         return AdmissionResult.rejected(exc.diagnostics)

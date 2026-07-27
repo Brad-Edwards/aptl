@@ -59,7 +59,10 @@ from aptl.core.experiment.capture_registry import (
 from aptl.core.experiment.errors import AdmissionRejection
 from aptl.core.experiment.policy import default_admission_policy
 from aptl.core.experiment.resolver import ResolvedArtifact
-from aptl.core.experiment.spec_loading import load_experiment_root
+from aptl.core.experiment.spec_loading import (
+    load_experiment_root,
+    load_participant_manifest,
+)
 from aptl.core.runstore import LocalRunStore
 
 CORPUS_ROOT = corpus_family_root(FIXTURES)
@@ -150,18 +153,18 @@ def _pinned_identity_task_payload() -> dict:
     payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "canonical-minimal"}
     payload["apparatus_constraints"] = {
         "allowed_processor_refs": [
-            {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+            {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
         ],
         "allowed_backend_refs": [{"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}],
         "required_manifest_refs": [
             {
                 "ref_kind": "manifest",
-                "ref_id": "aces-reference-processor",
+                "ref_id": "raes-reference-processor",
                 "ref_version": "processor-manifest/v2",
                 "subject_ref": {
                     "ref_kind": "processor",
-                    "ref_id": "aces-reference-processor",
-                    "ref_version": "0.1.0",
+                    "ref_id": "raes-reference-processor",
+                    "ref_version": "2.0.0",
                 },
             },
             {
@@ -457,6 +460,22 @@ nodes:
     type: switch
 """
 
+_EXPLICIT_BINDING_SCENARIO_TEXT = """
+name: scenario-condition-admission
+variables:
+  danger_level:
+    type: string
+    allowed_values: [low, high]
+variation_points:
+  danger-level:
+    kind: parameter
+    target: {kind: variable, variable: danger_level}
+    domain: {kind: enum, values: [low, high]}
+nodes:
+  on:
+    type: switch
+"""
+
 
 def _condition_allocation_task_payload() -> dict:
     payload = _read_corpus_task_payload()
@@ -525,6 +544,116 @@ def _condition_allocation_spec_payload_one_infeasible() -> dict:
     }
 
 
+def _explicit_binding_spec_payload(*, scenario_target: str = "variables.danger_level") -> dict:
+    return {
+        "schema_version": "experiment-authoring-input/v1",
+        "spec_id": "spec-explicit-binding-v1",
+        "spec_version": "1.0.0",
+        "title": "Explicit binding",
+        "description": "Exercises RAES cross-plane binding admission.",
+        "task_ref": {
+            "ref_kind": "task",
+            "ref_id": "task-condition-admission",
+            "ref_version": "1.0.0",
+        },
+        "factors": {
+            "danger": {
+                "name": "Danger",
+                "factor_kind": "treatment",
+                "levels": ["high"],
+            },
+            "timeout": {
+                "name": "Timeout",
+                "factor_kind": "apparatus",
+                "levels": ["90"],
+            },
+        },
+        "run_plan": {
+            "stochastic_controls": [
+                {"control_id": "seed-a", "role": "seed", "value": 1}
+            ],
+            "episode_control": {
+                "turn_order": "sequential",
+                "max_steps": 10,
+                "termination_rule": "fixed horizon",
+            },
+            "allocation": {
+                "allocation_unit": "trial",
+                "allocation_method": "balanced",
+                "compared_conditions": ["cond-high"],
+                "condition_assignments": {
+                    "cond-high": {
+                        "condition_id": "cond-high",
+                        "factor_levels": {"danger": "high", "timeout": "90"},
+                        "required_refs": [
+                            {"ref_kind": "profile", "ref_id": "profile.high"}
+                        ],
+                    }
+                },
+                "target_runs_per_condition": 1,
+                "blocking_factors": [],
+                "replication_policy": "independent-replications",
+            },
+        },
+        "binding_semantics": "explicit-required",
+        "binding_descriptors": {
+            "schema_version": "experiment-binding-descriptors/v1",
+            "descriptors": [
+                {
+                    "binding_id": "binding.scenario.danger",
+                    "source_factor_id": "danger",
+                    "source_factor_level_id": "high",
+                    "source_condition_id": "cond-high",
+                    "target": {
+                        "plane": "scenario",
+                        "scenario_family_id": "scenario-condition-admission",
+                        "variation_point_id": "danger-level",
+                        "target_id": scenario_target,
+                    },
+                    "value_type": "string",
+                    "value": {"kind": "literal", "value": "high"},
+                    "owner": {
+                        "contract_id": "sdl-authoring-input-v1",
+                        "contract_version": "1",
+                        "validator_id": "raes-sdl-instantiation",
+                        "validator_version": "1",
+                    },
+                },
+                {
+                    "binding_id": "binding.apparatus.timeout",
+                    "source_factor_id": "timeout",
+                    "source_factor_level_id": "90",
+                    "source_condition_id": "cond-high",
+                    "target": {
+                        "plane": "apparatus",
+                        "component_kind": "backend",
+                        "component_name": "aptl",
+                        "component_version": "0.1.0",
+                        "manifest_version": "backend-manifest/v2",
+                        "target_id": "participant-runtime.action-timeout-seconds",
+                    },
+                    "value_type": "integer",
+                    "value": {"kind": "literal", "value": 90},
+                    "owner": {
+                        "contract_id": "backend-manifest/v2",
+                        "contract_version": "1",
+                        "validator_id": "aptl-configuration",
+                        "validator_version": "1",
+                    },
+                },
+            ],
+        },
+    }
+
+
+def _explicit_binding_bundle(*, scenario_target: str = "variables.danger_level"):
+    task_payload = _condition_allocation_task_payload()
+    return _Bundle(
+        task_payload=task_payload,
+        spec_payload=_explicit_binding_spec_payload(scenario_target=scenario_target),
+    )
+
+
 class TestAdmitExperimentConditionAllocationAllOrNothing:
     def test_one_infeasible_condition_rejects_the_whole_admission_with_no_partial_plan_or_write(self, tmp_path):
         task_payload = _condition_allocation_task_payload()
@@ -565,6 +694,74 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
         # condition failed, never reaches persistence).
         assert store.calls == {}
 
+    def test_explicit_bindings_are_validated_before_planning_and_pinned(self, tmp_path):
+        bundle = _explicit_binding_bundle()
+        bundle.scenario_bytes = _EXPLICIT_BINDING_SCENARIO_TEXT.encode("utf-8")
+        bundle.artifact_source = MappingArtifactSource(
+            artifacts={
+                "task-condition-admission": _resolved(
+                    bundle.task_bytes, "task.json", "application/json"
+                ),
+                "scenario-condition-admission": _resolved(
+                    bundle.scenario_bytes,
+                    "scenario.sdl.yaml",
+                    "application/x-yaml",
+                ),
+            }
+        )
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "store"),
+            policy=dataclasses.replace(
+                default_admission_policy(), allow_uncertified_apparatus=True
+            ),
+        )
+
+        assert result.admitted is True
+        trial = result.plan.trials[0]
+        assert trial.parameter_bindings == (("danger_level", "high"),)
+        assert trial.apparatus_configuration == (
+            ("participant-runtime.action-timeout-seconds", 90),
+        )
+        assert {item.descriptor.target.plane for item in trial.realized_bindings} == {
+            "scenario",
+            "apparatus",
+        }
+
+    def test_unknown_explicit_target_rejects_without_a_store_write(self, tmp_path):
+        bundle = _explicit_binding_bundle(
+            scenario_target="variables.unknown_target"
+        )
+        bundle.scenario_bytes = _EXPLICIT_BINDING_SCENARIO_TEXT.encode("utf-8")
+        bundle.artifact_source = MappingArtifactSource(
+            artifacts={
+                "task-condition-admission": _resolved(
+                    bundle.task_bytes, "task.json", "application/json"
+                ),
+                "scenario-condition-admission": _resolved(
+                    bundle.scenario_bytes,
+                    "scenario.sdl.yaml",
+                    "application/x-yaml",
+                ),
+            }
+        )
+        store = _SpyRunStore(tmp_path / "store")
+
+        result = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=store,
+            policy=dataclasses.replace(
+                default_admission_policy(), allow_uncertified_apparatus=True
+            ),
+        )
+
+        assert result.admitted is False
+        assert result.plan is None
+        assert store.calls == {}
+
 
 # ---------------------------------------------------------------------------
 # admit_experiment — determinism
@@ -598,6 +795,35 @@ class TestAdmitExperimentDeterminism:
         assert first.plan_digest == second.plan_digest
         assert first.persisted_path == second.persisted_path
         assert first.trial_ids == second.trial_ids
+
+    def test_authoring_root_digest_is_part_of_plan_identity(self, tmp_path):
+        bundle, backend, processor = _capability_only_bundle()
+        changed_payload = yaml.safe_load(bundle.root_bytes)
+        changed_payload["description"] = "Same graph, distinct authoring artifact."
+        changed_root = yaml.safe_dump(changed_payload).encode("utf-8")
+
+        first = admit_experiment(
+            experiment_root=bundle.experiment_root,
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "first"),
+            policy=default_admission_policy(),
+            backend_manifest=backend,
+            processor_manifest=processor,
+        )
+        second = admit_experiment(
+            experiment_root=_resolved(
+                changed_root, "experiment.yaml", "application/x-yaml"
+            ),
+            artifact_source=bundle.artifact_source,
+            run_store=LocalRunStore(tmp_path / "second"),
+            policy=default_admission_policy(),
+            backend_manifest=backend,
+            processor_manifest=processor,
+        )
+
+        assert first.admitted and second.admitted
+        assert first.plan.source_set_digest != second.plan.source_set_digest
+        assert first.plan.plan_id != second.plan.plan_id
 
 
 @pytest.mark.fuzz
@@ -1218,6 +1444,53 @@ class TestBuildAssociatedArtifactSource:
             build_associated_artifact_source(tmp_path, "associated-artifact-manifest.json", spec, policy)
 
         assert excinfo.value.diagnostics
+
+
+# ---------------------------------------------------------------------------
+# Participant-manifest artifact classification and validation
+# ---------------------------------------------------------------------------
+
+
+class TestLoadParticipantManifest:
+    def test_another_manifest_schema_is_skipped(self) -> None:
+        payload = {
+            "schema_version": "backend-manifest/v2",
+            "identity": {"name": "not-a-participant-manifest", "version": "1.0.0"},
+        }
+
+        assert (
+            load_participant_manifest(
+                json.dumps(payload).encode("utf-8"),
+                policy=default_admission_policy(),
+            )
+            is None
+        )
+
+    def test_a_malformed_participant_manifest_is_rejected_without_leaking_input(
+        self,
+    ) -> None:
+        path = (
+            CORPUS_ROOT
+            / "participant-implementation-manifest"
+            / "participant-implementation-manifest-v1"
+            / "valid"
+            / "reference.json"
+        )
+        payload = json.loads(path.read_text())
+        payload["identity"] = {"name": SECRET}
+
+        with pytest.raises(AdmissionRejection) as excinfo:
+            load_participant_manifest(
+                json.dumps(payload).encode("utf-8"),
+                policy=default_admission_policy(),
+            )
+
+        rendered = "\n".join(
+            f"{item.code} {item.address} {item.message}"
+            for item in excinfo.value.diagnostics
+        )
+        assert "participant-manifest-invalid" in rendered
+        assert SECRET not in rendered
 
 
 # ---------------------------------------------------------------------------

@@ -212,14 +212,15 @@ entry point, executable, image, environment variable, or provider method.
 
 ### Deterministic immutable trial plan
 
-The trial plan is an APTL internal execution journal, not a portable RAES
+The v3 trial plan is an APTL internal execution journal, not a portable RAES
 experiment, task, study, run, apparatus, capture, or analysis contract. It may
 carry only the data needed to bind execution back to the admitted RAES graph:
 source identities and digests, canonical condition/factor assignments,
-resolved non-secret scenario parameter bindings, stochastic controls, episode
+resolved RAES binding provenance, atomic participant-configuration results, an
+approved non-secret apparatus projection, stochastic controls, episode
 controls, capture-spec references, ordering coordinates, and stable planned
-trial IDs. Eventual portable run and apparatus records use RAES contracts; they
-must not serialize this journal as if it were `experiment-run-v1`.
+trial IDs. Eventual portable run and apparatus records use RAES contracts;
+they must not serialize this journal as if it were `experiment-run-v1`.
 
 Expansion obeys these rules:
 
@@ -232,10 +233,13 @@ Expansion obeys these rules:
   executable only when it maps to a supported, versioned controller policy.
   Free-form text is never evaluated or silently approximated. Unknown or
   under-specified controls fail admission.
-- Condition and red-variant parameters may bind only to uniquely declared RAES
-  scenario variables. The RAES planner validates the assembled binding.
-  Missing targets, multiple candidate targets, conflicting values, and unused
-  parameters are fatal.
+- Explicit condition bindings use RAES
+  `experiment-binding-descriptors-v1`. Scenario targets resolve only to
+  declared parameter variation points; participant targets resolve only
+  through the selected implementation manifest's configuration registry; and
+  apparatus targets resolve only through APTL's closed code-owned registry.
+  Missing targets, canonical alias collisions, conflicting values, unsafe
+  literals, and incomplete scenario variation sets are fatal.
 - A seed or randomized order is derived with a documented, domain-separated
   cryptographic hash from canonical source-set identity plus logical trial
   coordinates and control ID. Do not use Python `hash()`, UUIDs, timestamps,
@@ -322,6 +326,7 @@ duplicate those incumbents.
 | Input shape | Bound the root bytes before `parse_experiment_spec`; use RAES closed-world models and validators for all RAES payloads. Reject unknown versions and malformed/duplicate or ambiguous bindings rather than coercing them into a local shape. |
 | Semantic validation | Use RAES model validators, canonical digest APIs, associated-artifact validation, and reference-processor planning diagnostics. Local checks are parser resource/ambiguity hardening, cross-artifact identity joins, and explicit apparatus policy only. |
 | Artifact resolution | Use the injected authorized resolver, no-follow contained opens, one-handle hash/parse, digest and size verification, aggregate limits, offline default, and no ambient lookup. No input controls imports, commands, collectors, backend methods, environment names, or filesystem roots. |
+| Participant manifests | Resolve selected implementation manifests only from checksum-validated `role="manifest"` entries in the experiment's associated artifact set. Match exact parsed identity and schema to the RAES binding descriptor; reject missing or duplicate owners. |
 | Secret handling | Treat the whole experiment graph as untrusted. Reject secret-shaped scalar content and parameter name/value pairs using the taxonomy owned by `aptl.utils.redaction` before plan construction; never rely on later redaction to make executable data safe. `redact()` is currently a transformation, not a yes/no validator, so expose/reuse classification in that same module rather than copying its private token/regex tables or silently changing admitted values. Keep control-plane secrets out of source artifacts and locators. |
 | Config shape | Non-secret admission limits or resolver policy that become durable settings must be strict `AptlConfig` fields with real consumers. The experiment document cannot add config keys or override deployment provider/project identity. |
 | Environment binding | Admission must not call `.env` hydration or construct `EnvVars`. Experiment parameters cannot name or read environment variables. Runtime secrets remain in `EnvVars`, placeholder validation, and generated config after admission succeeds. |
@@ -390,7 +395,7 @@ Implementation must prove the boundary without creating a new test harness:
   collector, or run-execution call.
 
 Do not weaken these tests by snapshotting APTL-local copies of RAES schemas.
-The project dependency pin (`raes==1.1.0`) and `uv.lock` are the
+The project dependency pin (`raes==2.0.0`) and `uv.lock` are the
 version authority used by the fixtures and public APIs.
 
 ## Gotchas
@@ -398,8 +403,8 @@ version authority used by the fixtures and public APIs.
 - Pydantic validation strings can contain the rejected `input_value`; wrapping
   `str(exc)` in a diagnostic can leak an injected secret. Render only stable
   error type/location metadata and omit input values and documentation URLs.
-- The locked dependency is `raes` 1.1.0, but a stale local `.venv` can
-  still contain 0.21.0 and fail importing the current APTL manifest. Validate
+- The locked dependency is `raes` 2.0.0, but a stale local `.venv` can
+  still contain an older contract surface and fail importing the current APTL manifest. Validate
   APIs and fixtures through the locked environment; direct `python` output from
   a stale environment is not contract evidence.
 - `parse_experiment_spec` is the public schema loader, but callers still need a
@@ -433,7 +438,7 @@ version authority used by the fixtures and public APIs.
   structural redaction.
 - At the locked RAES surface, the published reference processor manifest names
   only `stub` as a compatible backend while APTL names
-  `aces-reference-processor` as compatible. Strict mutual apparatus-manifest
+  `raes-reference-processor` as compatible. Strict mutual apparatus-manifest
   compatibility cannot be fabricated by patching either payload locally; fail
   closed until the canonical RAES declaration and the requested task
   constraints are mutually satisfiable.

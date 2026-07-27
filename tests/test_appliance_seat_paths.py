@@ -47,4 +47,3 @@ def test_contained_path_rejects_escape(tmp_path: Path) -> None:
         contained_path(seat_root, "../outside", label="overlay")
 
     assert exc.value.code == "invalid-seat-id"
-

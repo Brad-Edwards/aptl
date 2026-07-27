@@ -171,4 +171,3 @@ def test_host_boundary_findings_detect_identity_mismatches() -> None:
 
     assert "boundary.host-observation-identity-mismatch" in findings
     assert "boundary.host-observation-incomplete" in findings
-

@@ -87,4 +87,3 @@ def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
     assert "low-disk" in codes
     assert "missing-qemu-img" in codes
     assert "missing-qemu-system" in codes
-

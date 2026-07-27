@@ -165,4 +165,3 @@ def test_open_kiosk_honors_browser_command() -> None:
     assert result.exit_code == 0
     popen.assert_not_called()
     assert "/usr/bin/custom-browser" in result.stdout
-

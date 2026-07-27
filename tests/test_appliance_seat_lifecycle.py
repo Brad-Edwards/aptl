@@ -460,4 +460,3 @@ def test_open_participant_kiosk_spawns_browser_when_not_dry_run() -> None:
     popen.assert_called_once()
     assert plan.url == "https://127.0.0.1:8443/"
     assert plan.argv[0] == "/usr/bin/browser"
-

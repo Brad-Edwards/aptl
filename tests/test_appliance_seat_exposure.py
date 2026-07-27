@@ -74,4 +74,3 @@ def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
 
     assert report.passed is False
     assert "host.exposure.forbidden-vm-flag:-usb" in report.findings
-

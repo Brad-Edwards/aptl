@@ -143,9 +143,7 @@ def read_vm_pid(seat_root: Path) -> int | None:
         pid = int(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
-    if pid <= 0 or not _tracked_pid_alive(pid):
-        return None
-    return pid
+    return pid if pid > 0 and _tracked_pid_alive(pid) else None
 
 
 def write_vm_pid(seat_root: Path, pid: int | None) -> None:

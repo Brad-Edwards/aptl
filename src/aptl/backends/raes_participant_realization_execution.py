@@ -187,6 +187,7 @@ def _enforce_mutation_claim(
         observation.success
         and realization.mutates_state
         and not observation.state_changed
+        and not realization.allows_idempotent_stutter
     ):
         contradiction = (
             "trusted semantic readback did not observe the declared state change",
@@ -278,6 +279,9 @@ def _action_evidence_record(
         "target_refs": list(context.realization.target_nodes),
         "observer_kind": context.realization.observer_kind,
         "mutates_state": context.realization.mutates_state,
+        "allows_idempotent_stutter": (
+            context.realization.allows_idempotent_stutter
+        ),
         "pre_state_digest": observation.pre_state_digest,
         "post_state_digest": observation.post_state_digest,
         "state_changed": observation.state_changed,

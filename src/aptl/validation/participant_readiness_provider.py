@@ -23,6 +23,7 @@ _PROVIDER_VERSION_ENVIRONMENT = {
     "NO_COLOR": "1",
 }
 _INSTALLED_VERSION_UNAVAILABLE = "installed participant provider version is unavailable"
+MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS = 32_768
 
 
 def build_selection_provider(
@@ -100,11 +101,13 @@ def _launch_adapter(
             claude_executable=executable,
             work_dir=work_dir,
             timeout_seconds=MAX_PARTICIPANT_DECISION_SECONDS,
+            max_prompt_chars=MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS,
         )
     return CodexManagedAgentAdapter(
         codex_executable=executable,
         work_dir=work_dir,
         timeout_seconds=MAX_PARTICIPANT_DECISION_SECONDS,
+        max_prompt_chars=MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS,
     )
 
 

@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #852 Dev-To-Main Promotion](issue-852-devmain-promotion-preflight.md)
 - [Issue #847 OpenSSF Scorecard](issue-847-openssf-scorecard-preflight.md)
 - [Issue #820 Resource-Bounded Participant Profile](issue-820-resource-bounded-participant-profile-preflight.md)
 - [DEP-008 Self-Contained Lab Assets](dep-008-self-contained-lab-assets-preflight.md)

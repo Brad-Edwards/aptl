@@ -1,11 +1,43 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, within } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { vi } from 'vitest';
 import type { LabStatus, ScenarioDetail } from '../../src/lib/types';
 
 const labStatus = writable<LabStatus>({ running: false, containers: [], error: null });
 vi.mock('$lib/stores/lab', () => ({ labStatus }));
+
+// Stub the DOM-canvas terminal deps, exactly as tests/components/workbench/blocks.test.ts
+// and tests/routes/terminal-page.test.ts already do. This file renders the whole
+// workbench page, whose fixture includes a `terminal` block, so without these stubs
+// it is the only suite that pulls xterm's lazy dynamic import into a jsdom render.
+// That import resolving after the test had finished is what intermittently left DOM
+// attached and produced "found multiple elements" under CPU contention (issue #852).
+vi.mock('@xterm/xterm', () => ({
+	Terminal: vi.fn(function () {
+		return {
+			loadAddon: vi.fn(),
+			open: vi.fn(),
+			onData: vi.fn(),
+			onResize: vi.fn(),
+			write: vi.fn(),
+			dispose: vi.fn(),
+			cols: 80,
+			rows: 24
+		};
+	})
+}));
+vi.mock('@xterm/addon-fit', () => ({
+	FitAddon: vi.fn(function () {
+		return { fit: vi.fn(), dispose: vi.fn() };
+	})
+}));
+vi.mock('@xterm/addon-web-links', () => ({
+	WebLinksAddon: vi.fn(function () {
+		return { dispose: vi.fn() };
+	})
+}));
+vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
 
 function detail(overrides: Partial<ScenarioDetail> = {}): ScenarioDetail {
 	return {
@@ -52,7 +84,14 @@ function detail(overrides: Partial<ScenarioDetail> = {}): ScenarioDetail {
 
 async function renderWorkbench(data: { scenario: ScenarioDetail }) {
 	const Page = (await import('../../src/routes/scenarios/[id]/+page.svelte')).default;
-	return render(Page, { props: { data } });
+	const { container } = render(Page, { props: { data } });
+	// Scope queries to THIS render's container rather than the global `screen`
+	// (which searches all of document.body). Under CPU contention these tests
+	// intermittently matched a previous test's still-attached DOM and failed with
+	// "found multiple elements" (issue #852). A scoped query asserts against the
+	// component actually under test, so the assertion is both correct and immune
+	// to a leaked sibling container.
+	return within(container);
 }
 
 describe('Scenario workbench route', () => {
@@ -61,34 +100,34 @@ describe('Scenario workbench route', () => {
 	});
 
 	it('renders every workbench block family from the backend projection', async () => {
-		await renderWorkbench({ scenario: detail() });
+		const view = await renderWorkbench({ scenario: detail() });
 
 		// narrative markdown, section divider, objective, step, siem block.
-		expect(screen.getByText('Heading')).toBeTruthy();
-		expect(screen.getByText('Objectives')).toBeTruthy();
-		expect(screen.getByText('Objective One')).toBeTruthy();
-		expect(screen.getByText('step-one')).toBeTruthy();
-		expect(screen.getByText('wazuh')).toBeTruthy();
+		expect(view.getByText('Heading')).toBeTruthy();
+		expect(view.getByText('Objectives')).toBeTruthy();
+		expect(view.getByText('Objective One')).toBeTruthy();
+		expect(view.getByText('step-one')).toBeTruthy();
+		expect(view.getByText('wazuh')).toBeTruthy();
 	});
 
 	it('keeps the SIEM query block execution disabled (owned by #421)', async () => {
-		await renderWorkbench({ scenario: detail() });
-		const runBtn = screen.getByRole('button', { name: 'Run Query' }) as HTMLButtonElement;
+		const view = await renderWorkbench({ scenario: detail() });
+		const runBtn = view.getByRole('button', { name: 'Run Query' }) as HTMLButtonElement;
 		expect(runBtn.disabled).toBe(true);
 	});
 
 	it('keeps the terminal block lazy — no PTY until an explicit action', async () => {
-		await renderWorkbench({ scenario: detail() });
+		const view = await renderWorkbench({ scenario: detail() });
 		// The lazy affordance is present; the maximize link (only shown once the
 		// embedded terminal mounts) is not.
-		expect(screen.getByRole('button', { name: /Open terminal: host-a/ })).toBeTruthy();
-		expect(screen.queryByText('Maximize')).toBeNull();
+		expect(view.getByRole('button', { name: /Open terminal: host-a/ })).toBeTruthy();
+		expect(view.queryByText('Maximize')).toBeNull();
 	});
 
 	it('surfaces an invalid scenario projection state in the status bar', async () => {
-		await renderWorkbench({
+		const view = await renderWorkbench({
 			scenario: detail({ validation: { valid: false, detail: 'Scenario unavailable' } })
 		});
-		expect(screen.getByText('Scenario unavailable')).toBeTruthy();
+		expect(view.getByText('Scenario unavailable')).toBeTruthy();
 	});
 });

@@ -1,14 +1,28 @@
 name: PR Title Lint
 
-# Repository-side guard on feature-PR titles: bans agent-branded prefixes
+# Repository-side guard on PR titles: bans agent-branded prefixes
 # (e.g. `[codex] ...`) and requires a Conventional Commit title. Feature PRs are
 # squash-merged, so the title becomes the commit release-please reads on main to
-# compute the version + changelog. Make this a required check on `dev` only.
+# compute the version + changelog.
 #
-# It runs ONLY on PRs targeting `dev`. A `dev`->`main` promotion PR carries a
-# non-conventional (merge/promotion) title and would always fail this check, so
-# `main` is intentionally not gated — release-please reads the underlying feature
-# commits, not the promotion PR title.
+# Runs on PRs targeting BOTH `main` and `dev` (issue #852). `main` was previously
+# exempt on the grounds that a `dev`->`main` promotion PR "carries a
+# non-conventional (merge/promotion) title and would always fail this check".
+# That was never a necessity: `make devmain` opens the promotion with
+# `chore(main): promote dev`, which this guard accepts and which release-please
+# treats as a no-release type. Every title that reaches `main` is now checked —
+# the promotion, and release-please's own `chore(main): release X.Y.Z`.
+# `tests/test_promotion_workflow.py` pins both halves so the exemption cannot
+# quietly return.
+#
+# Note the merge-commit subject GitHub writes for a merged promotion
+# (`Merge pull request #N from ...`) is NOT a PR title and is not checked here;
+# release-please reads the underlying feature commits, not that subject.
+#
+# Running is not blocking. This workflow reports a check; whether the check is
+# required to merge is live branch-protection configuration.
+# `.github/branch-protection-baseline.json` does not currently list
+# `PR title lint` as a required context on either branch.
 #
 # The PR title is untrusted event data, read from $GITHUB_EVENT_PATH by the
 # checker (never shell-interpolated), the token is read-only, and this uses
@@ -17,6 +31,7 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
     branches:
+      - main
       - dev
 
 permissions:

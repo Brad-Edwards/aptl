@@ -156,8 +156,11 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #859 Idempotent Stuttering In Bounded Participant Realizations](issue-859-idempotent-stuttering-preflight.md)
+- [Issue #858 Bounded Participant Choice Transport](issue-858-bounded-participant-choice-transport-preflight.md)
 - [Issue #852 Dev-To-Main Promotion](issue-852-devmain-promotion-preflight.md)
 - [Issue #847 OpenSSF Scorecard](issue-847-openssf-scorecard-preflight.md)
+- [EXP-005 Safe Parameter Binding And Provenance](exp-005-safe-parameter-binding-provenance-preflight.md)
 - [Issue #820 Resource-Bounded Participant Profile](issue-820-resource-bounded-participant-profile-preflight.md)
 - [DEP-008 Self-Contained Lab Assets](dep-008-self-contained-lab-assets-preflight.md)
 - [RNG-001 Ephemeral Environments](rng-001-ephemeral-environments-preflight.md)

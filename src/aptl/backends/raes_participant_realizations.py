@@ -56,6 +56,7 @@ class ParticipantActionRealization:
     operation: ParticipantOperation
     target_nodes: tuple[str, ...]
     mutates_state: bool
+    allows_idempotent_stutter: bool
     observer_kind: str
 
 
@@ -82,6 +83,7 @@ def _action(
     nodes: tuple[str, ...],
     *,
     mutates_state: bool = False,
+    allows_idempotent_stutter: bool = False,
     observer: str = "bounded-observation",
 ) -> ParticipantActionRealization:
     """Build the internal operation for the bounded participant workflow."""
@@ -91,6 +93,7 @@ def _action(
         operation=operation,
         target_nodes=nodes,
         mutates_state=mutates_state,
+        allows_idempotent_stutter=allows_idempotent_stutter,
         observer_kind=observer,
     )
 
@@ -102,6 +105,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.SYNTHETIC_SESSION,
         ("webapp", "db"),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="session-pre-post",
     ),
     _action("view-permitted-account", ParticipantOperation.CUSTOMER_STATE, ("db",)),
@@ -118,6 +122,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.CUSTOMER_STATE,
         ("db",),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="profile-and-protected-fields-pre-post",
     ),
     _action(
@@ -131,6 +136,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.SUPPORT_STATE,
         ("db",),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="support-request-pre-post",
     ),
     _action("inspect-own-support-request", ParticipantOperation.SUPPORT_STATE, ("db",)),
@@ -139,6 +145,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.SUPPORT_STATE,
         ("db",),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="support-note-pre-post",
     ),
     _action(
@@ -149,6 +156,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.PUBLIC_HTTP,
         ("kali", "webapp"),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="request-and-response-pre-post",
     ),
     _action("inspect-response-metadata", ParticipantOperation.PUBLIC_HTTP, ("kali",)),
@@ -157,6 +165,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.SYNTHETIC_AUTH,
         ("kali", "webapp", "defender-console"),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="authentication-and-telemetry-pre-post",
     ),
     _action("inspect-auth-outcome", ParticipantOperation.SYNTHETIC_AUTH, ("kali",)),
@@ -190,6 +199,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.ALERT_STATE,
         ("event-store",),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="alert-classification-pre-post",
     ),
     _action(
@@ -207,6 +217,7 @@ _BPA_ACTIONS = (
         ParticipantOperation.RESPONSE_STATE,
         ("webapp", "event-store"),
         mutates_state=True,
+        allows_idempotent_stutter=True,
         observer="response-target-and-unrelated-state-pre-post",
     ),
     _action(

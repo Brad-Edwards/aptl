@@ -31,7 +31,7 @@ decision.
   `ScenarioDefinition` compatibility model for RAES fields.
 - Because TechVault uses RAES imports, import/dependency proof belongs to the
   RAES module tooling: `raes sdl resolve` and `raes sdl verify-imports`.
-  Missing or stale `aces.lock.json` is a gate failure, not permission to skip
+  Missing or stale `raes.lock.json` is a gate failure, not permission to skip
   import verification.
 - Backend manifest completion evidence must use the canonical RAES
   `backend-manifest-v2` surface: `raes_backend_protocols.capabilities.BackendManifest`,

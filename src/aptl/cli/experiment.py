@@ -21,7 +21,7 @@ import typer
 from raes_contracts.diagnostics import Diagnostic
 
 from aptl.backends.raes_diagnostics import render_raes_diagnostics
-from aptl.cli._common import resolve_run_store
+from aptl.cli._common import resolve_optional_config_for_cli, resolve_run_store
 from aptl.core.experiment.controller import ExperimentController
 from aptl.core.experiment.errors import EXPERIMENT_ADMISSION_STAGE_LABEL, AdmissionRejection
 from aptl.core.experiment.policy import default_admission_policy
@@ -100,8 +100,13 @@ def admit(
             _print_diagnostics(exc.diagnostics)
             raise typer.Exit(code=1)
 
-        store = resolve_run_store(base_dir)
-        controller = ExperimentController(run_store=store, policy=policy)
+        config = resolve_optional_config_for_cli(base_dir)
+        store = resolve_run_store(base_dir, config)
+        controller = ExperimentController(
+            run_store=store,
+            policy=policy,
+            base_config=config,
+        )
 
         result = controller.admit(
             experiment_root=experiment_root,

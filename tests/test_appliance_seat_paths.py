@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from aptl.appliance.seat.errors import SeatLauncherError
-from aptl.appliance.seat.paths import validate_seat_id
+from aptl.appliance.seat.paths import contained_path, validate_seat_id
 from aptl.appliance.seat.vm import VmLaunchSpec, build_qemu_argv
 
 
@@ -37,3 +37,14 @@ def test_build_qemu_argv_mounts_readonly_launch_directory(tmp_path: Path) -> Non
     assert "readonly=on" in argv[fsdev_index + 1]
     assert str(launch_mount.resolve()) in argv[fsdev_index + 1]
     assert "virtio-9p-pci,fsdev=aptl-launch,mount_tag=aptl-launch" in argv
+
+
+def test_contained_path_rejects_escape(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    seat_root.mkdir()
+
+    with pytest.raises(SeatLauncherError) as exc:
+        contained_path(seat_root, "../outside", label="overlay")
+
+    assert exc.value.code == "invalid-seat-id"
+

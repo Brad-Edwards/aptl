@@ -65,3 +65,13 @@ def test_audit_vm_argv_rejects_writable_fsdev_share() -> None:
 
     assert report.passed is False
     assert "host.exposure.forbidden-vm-share:readonly=off" in report.findings
+
+
+def test_audit_vm_argv_rejects_forbidden_usb_flag() -> None:
+    argv = ("qemu-system-x86_64", "-enable-kvm", "-usb", "off")
+
+    report = audit_vm_argv(argv)
+
+    assert report.passed is False
+    assert "host.exposure.forbidden-vm-flag:-usb" in report.findings
+

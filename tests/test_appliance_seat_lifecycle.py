@@ -10,7 +10,9 @@ import pytest
 from aptl.appliance.manifest import ApplianceReleaseInspection
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.lifecycle import (
+    open_participant_kiosk,
     reconcile_seat_after_reboot,
+    recover_seat,
     reset_seat,
     stage_seat,
     start_seat,
@@ -284,3 +286,178 @@ def test_status_never_includes_credentials(tmp_path: Path) -> None:
     payload = projection.model_dump(mode="json")
     assert "credential" not in str(payload).lower()
     assert projection.lifecycle_state == "empty"
+
+
+def test_status_reports_vm_not_running_for_ready_seat(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="ready",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+    persist_seat_record(seat_root, record)
+
+    with patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=None):
+        projection = status_seat(seat_root)
+
+    assert projection.diagnostics == ("vm-not-running",)
+
+
+def test_stop_seat_requires_existing_record(tmp_path: Path) -> None:
+    with pytest.raises(SeatLauncherError) as exc:
+        stop_seat(tmp_path)
+
+    assert exc.value.code == "corrupt-seat-state"
+
+
+def test_recover_seat_resets_then_starts(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    release = tmp_path / "release"
+    release.mkdir()
+    public_key = tmp_path / "release-public.pem"
+    qualification_key = tmp_path / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+    ready = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="ready",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+
+    with (
+        patch("aptl.appliance.seat.lifecycle.reset_seat") as reset,
+        patch("aptl.appliance.seat.lifecycle.start_seat", return_value=ready) as start,
+    ):
+        record = recover_seat(
+            seat_root,
+            seat_id="seat-01",
+            release_dir=release,
+            release_public_key=public_key,
+            qualification_public_key=qualification_key,
+        )
+
+    reset.assert_called_once()
+    start.assert_called_once()
+    assert record.lifecycle_state == "ready"
+
+
+def test_start_marks_recoverable_failure_when_boundary_fails(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    seat_root.mkdir()
+    release = seat_root / "launch" / "release"
+    release.mkdir(parents=True)
+    public_key = tmp_path / "release-public.pem"
+    qualification_key = tmp_path / "qualification-public.pem"
+    public_key.write_text("public")
+    qualification_key.write_text("qualification")
+    staged = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="staged",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+    persist_seat_record(seat_root, staged)
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle.require_host_prerequisites",
+            return_value=object(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_verified_release",
+            return_value=(_inspection(), _policy()),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle._load_release_documents",
+            return_value=(_manifest_stub(), object()),
+        ),
+        patch("aptl.appliance.seat.lifecycle._ensure_overlay"),
+        patch("aptl.appliance.seat.lifecycle.require_host_exposure"),
+        patch("aptl.appliance.seat.lifecycle.start_vm") as start_vm,
+        patch("aptl.appliance.seat.lifecycle.write_vm_pid"),
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=None),
+        patch(
+            "aptl.appliance.seat.lifecycle.collect_loopback_listeners",
+            return_value=(),
+        ),
+        patch(
+            "aptl.appliance.seat.lifecycle.host_boundary_findings",
+            return_value=("boundary.host-listener-missing",),
+        ),
+        pytest.raises(SeatLauncherError) as exc,
+    ):
+        start_vm.return_value.pid = 4242
+        start_seat(
+            seat_root,
+            seat_id="seat-01",
+            release_dir=release,
+            release_public_key=public_key,
+            qualification_public_key=qualification_key,
+        )
+
+    assert exc.value.code == "boundary.host-listener-missing"
+    failed = load_seat_record(seat_root)
+    assert failed is not None
+    assert failed.lifecycle_state == "recoverable-failure"
+
+
+def test_reconcile_marks_recoverable_failure_when_vm_missing(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    record = SeatRecord(
+        schema_version="aptl.seat-record/v1",
+        seat_id="seat-01",
+        selected_release_id="aptl-v1",
+        launch_descriptor_digest="sha256:" + "a" * 64,
+        overlay_path="instances/seat-01.qcow2",
+        host_observation_id="host-1",
+        lifecycle_state="ready",
+        taint_state="clean",
+        host_boot_id="boot-1",
+    )
+    persist_seat_record(seat_root, record)
+
+    with (
+        patch(
+            "aptl.appliance.seat.lifecycle._read_host_boot_id",
+            return_value="boot-1",
+        ),
+        patch("aptl.appliance.seat.lifecycle.read_vm_pid", return_value=None),
+        pytest.raises(SeatLauncherError) as exc,
+    ):
+        reconcile_seat_after_reboot(seat_root)
+
+    assert exc.value.code == "vm-not-running"
+    updated = load_seat_record(seat_root)
+    assert updated is not None
+    assert updated.lifecycle_state == "recoverable-failure"
+
+
+def test_open_participant_kiosk_spawns_browser_when_not_dry_run() -> None:
+    with patch("aptl.appliance.seat.lifecycle.subprocess.Popen") as popen:
+        plan = open_participant_kiosk(
+            participant_port=8443,
+            browser_command="/usr/bin/browser",
+            dry_run=False,
+        )
+
+    popen.assert_called_once()
+    assert plan.url == "https://127.0.0.1:8443/"
+    assert plan.argv[0] == "/usr/bin/browser"
+

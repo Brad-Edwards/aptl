@@ -69,3 +69,22 @@ def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
         )
 
     assert exc.value.code == "low-memory"
+
+
+def test_prereqs_fail_on_low_disk_and_missing_tools(tmp_path: Path) -> None:
+    report = check_host_prerequisites(
+        _requirements(),
+        seat_root=tmp_path,
+        memory_bytes=32 * 1024**3,
+        free_disk_bytes=1024,
+        kvm_available=True,
+        qemu_img_available=False,
+        qemu_system_available=False,
+    )
+
+    assert report.passed is False
+    codes = {item.code for item in report.findings if not item.passed}
+    assert "low-disk" in codes
+    assert "missing-qemu-img" in codes
+    assert "missing-qemu-system" in codes
+

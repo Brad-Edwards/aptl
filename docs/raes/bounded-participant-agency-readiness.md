@@ -88,11 +88,19 @@ credential lease:
 
 The child receives no action tools, MCP servers, shell, Docker, SSH, browser,
 or backend handle. It only chooses one complete candidate from the delivered
-RAES decision surface. Each finite governed choice is represented by a
-distinct proposal, and the selected values materially determine the native
-semantic operation and independent readback. RAES re-resolves the exact state
-cut, delivery, apparatus, and governed arguments before APTL can execute a
-closed realization.
+RAES decision surface. APTL presents the installed provider with a bounded,
+numbered transport view containing every action identity and governed argument
+map. The number is a transient alias for one delivered `proposal_ref`; APTL
+resolves it to the unchanged full selection before RAES admission. The complete
+delivered solicitation remains the evidence authority.
+
+Each finite governed choice is represented by a distinct proposal, and the
+selected values materially determine the native semantic operation and
+independent readback. RAES re-resolves the exact state cut, delivery,
+apparatus, proposal, and governed arguments before APTL can execute a closed
+realization. Missing, malformed, duplicate, or out-of-range transport choices
+fail before admission. Installed-provider prompts remain bounded to 32,768
+characters.
 
 Run each implementation separately:
 

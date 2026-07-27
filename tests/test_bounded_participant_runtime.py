@@ -24,6 +24,7 @@ from aptl.backends.raes_participant_driver import (
 )
 from aptl.backends.raes_participant_provider import (
     DeterministicSelectionProvider,
+    ManagedAgentSelectionProvider,
     ParticipantDecisionSolicitation,
     candidate_payloads,
 )
@@ -276,6 +277,224 @@ def _apparatus(participant_address: str):
     )
 
 
+def _run_selected_action(
+    control: AptlParticipantControlPlane,
+    model: object,
+    *,
+    behavior_address: str,
+    participant_address: str,
+    action_name: str,
+):
+    """Run one named delivered action through the production participant path."""
+
+    apparatus = _apparatus(participant_address)
+    turn = project_participant_turn(
+        runtime_model=model,
+        runtime_snapshot=control.snapshot,
+        behavior_specification_address=behavior_address,
+        apparatus=apparatus,
+    )
+    candidate_index = next(
+        index
+        for index, candidate in enumerate(turn.candidates)
+        if candidate.action_contract_address.endswith(f".{action_name}")
+    )
+    return run_participant_turn(
+        control,
+        behavior_specification_address=behavior_address,
+        apparatus=apparatus,
+        provider=DeterministicSelectionProvider(candidate_index=candidate_index),
+    )
+
+
+def _solicitation_for_behavior(
+    tmp_path: Path,
+    behavior_address: str,
+) -> ParticipantDecisionSolicitation:
+    control, model, _, _ = _runtime(tmp_path)
+    participant = _participant_for(model, behavior_address)
+    episode_id = f"managed-{behavior_address.rsplit('.', 1)[-1]}"
+    control.initialize_participant_episode(participant, episode_id=episode_id)
+    turn = project_participant_turn(
+        runtime_model=model,
+        runtime_snapshot=control.snapshot,
+        behavior_specification_address=behavior_address,
+        apparatus=_apparatus(participant),
+    )
+    view = turn.surface.participant_view
+    return ParticipantDecisionSolicitation(
+        participant_address=participant,
+        episode_id=episode_id,
+        solicitation_id="participant-selection-solicitations.managed-1",
+        participant_view=view.model_dump(mode="json"),
+        rendered_context=turn.rendered_context,
+        observation_history=turn.observation_history,
+        candidate_selections=candidate_payloads(turn.candidates),
+    )
+
+
+class _ManagedResponseAdapter:
+    def __init__(self, response: str) -> None:
+        self.response = response
+        self.messages: list[str] = []
+
+    def respond(self, _handle: object, message: str) -> str:
+        self.messages.append(message)
+        return self.response
+
+    def close(self, _handle: object) -> None:
+        return None
+
+
+def _managed_provider(
+    response: str,
+) -> tuple[ManagedAgentSelectionProvider, _ManagedResponseAdapter]:
+    adapter = _ManagedResponseAdapter(response)
+    provider = ManagedAgentSelectionProvider(
+        adapter=adapter,
+        handle=object(),
+        implementation_name="managed-test-provider",
+        implementation_version="1.0.0",
+    )
+    return provider, adapter
+
+
+def test_managed_provider_compacts_large_surface_and_maps_exact_candidate(
+    tmp_path: Path,
+) -> None:
+    solicitation = _solicitation_for_behavior(
+        tmp_path,
+        "participant.behavior-specification.triage-authentication-event",
+    )
+    assert len(solicitation.candidate_selections) == 201
+    provider, adapter = _managed_provider('{"candidate":200}')
+
+    selection = json.loads(provider.select(solicitation))
+
+    assert selection == solicitation.candidate_selections[200]
+    prompt = json.loads(adapter.messages[0])
+    assert len(adapter.messages[0]) <= (
+        participant_readiness_provider.MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS
+    )
+    assert "candidate_selections" not in prompt
+    assert prompt["candidate_encoding"] == [
+        "candidate",
+        "action",
+        "arguments",
+    ]
+    assert len(prompt["candidates"]) == len(solicitation.candidate_selections)
+    assert {
+        prompt["actions"][candidate[1]]
+        for candidate in prompt["candidates"]
+    } == {
+        item["action_contract_address"]
+        for item in solicitation.candidate_selections
+    }
+    assert {
+        candidate[0] for candidate in prompt["candidates"]
+    } == set(range(len(solicitation.candidate_selections)))
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "",
+        "not-json",
+        "[]",
+        "{}",
+        '{"candidate":true}',
+        '{"candidate":"0"}',
+        '{"candidate":-1}',
+        '{"candidate":201}',
+        '{"candidate":0,"extra":1}',
+        '{"candidate":0,"candidate":1}',
+    ],
+)
+def test_managed_provider_rejects_invalid_compact_selections(
+    tmp_path: Path,
+    response: str,
+) -> None:
+    solicitation = _solicitation_for_behavior(
+        tmp_path,
+        "participant.behavior-specification.triage-authentication-event",
+    )
+    provider, _ = _managed_provider(response)
+
+    with pytest.raises(ValueError, match="compact participant selection"):
+        provider.select(solicitation)
+
+
+def test_invalid_compact_selection_fails_before_admission_or_realization(
+    tmp_path: Path,
+) -> None:
+    control, model, backend, store = _runtime(tmp_path)
+    behavior = "participant.behavior-specification.triage-authentication-event"
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(
+        participant,
+        episode_id="invalid-compact-selection",
+    )
+    provider, _ = _managed_provider('{"candidate":201}')
+
+    with pytest.raises(ValueError, match="participant selection operation failed"):
+        run_participant_turn(
+            control,
+            behavior_specification_address=behavior,
+            apparatus=_apparatus(participant),
+            provider=provider,
+        )
+
+    assert control.snapshot.participant_behavior_history == {}
+    assert backend.calls == []
+    record = json.loads(
+        (
+            store.get_run_path("readiness-run")
+            / "evaluator/participant-control-evidence.jsonl"
+        ).read_text()
+    )
+    assert record["solicitation_state"] == "failed"
+    assert record["admission_operation_id"] is None
+    assert record["selected_action_contract_address"] is None
+
+
+def test_installed_provider_adapters_use_the_bounded_choice_prompt_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    class _Adapter:
+        def __init__(self, **kwargs: object) -> None:
+            captured.append(kwargs)
+
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "ClaudeCodeManagedAgentAdapter",
+        _Adapter,
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "CodexManagedAgentAdapter",
+        _Adapter,
+    )
+
+    participant_readiness_provider._launch_adapter(
+        "claude",
+        tmp_path / "claude",
+        tmp_path / "claude-work",
+    )
+    participant_readiness_provider._launch_adapter(
+        "codex",
+        tmp_path / "codex",
+        tmp_path / "codex-work",
+    )
+
+    assert [item["max_prompt_chars"] for item in captured] == [
+        participant_readiness_provider.MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS,
+        participant_readiness_provider.MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS,
+    ]
+
+
 def test_all_nine_behaviors_project_the_exact_compiled_action_sets(
     tmp_path: Path,
 ) -> None:
@@ -468,6 +687,100 @@ def test_each_governed_variant_changes_the_verified_native_semantics(
             )
             digests.add(digest)
         assert len(digests) == len(candidates)
+
+
+def test_participant_pipeline_accepts_only_declared_idempotent_stutters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    behavior = "participant.behavior-specification.complete-normal-session"
+    action_name = "authenticate-synthetic-user"
+    action_address = f"participant.action-contract.{action_name}"
+
+    control, model, _, store = _runtime(tmp_path / "permitted")
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(
+        participant,
+        episode_id="permitted-idempotent-stutter",
+    )
+    for _ in range(2):
+        outcome = _run_selected_action(
+            control,
+            model,
+            behavior_address=behavior,
+            participant_address=participant,
+            action_name=action_name,
+        )
+        assert (
+            control.get_operation(outcome.admission_receipt.operation_id).state
+            is OperationState.SUCCEEDED
+        )
+
+    evidence_path = (
+        store.get_run_path("readiness-run")
+        / "evaluator/participant-action-evidence.jsonl"
+    )
+    evidence = [
+        json.loads(line) for line in evidence_path.read_text().splitlines()
+    ]
+    assert [record["state_changed"] for record in evidence] == [True, False]
+    assert evidence[-1]["allows_idempotent_stutter"] is True
+    assert evidence[-1]["status"] == "succeeded"
+    assert (
+        control.snapshot.participant_behavior_history[participant][-1][
+            "action_result"
+        ]["status"]
+        == "succeeded"
+    )
+
+    strict_realization = replace(
+        BPA_ACTION_REALIZATIONS[action_address],
+        allows_idempotent_stutter=False,
+    )
+    monkeypatch.setattr(
+        raes_participant_realizations,
+        "BPA_ACTION_REALIZATIONS",
+        {
+            **BPA_ACTION_REALIZATIONS,
+            action_address: strict_realization,
+        },
+    )
+    assert (
+        BPA_ACTION_REALIZATIONS[
+            "participant.action-contract.sign-out-session"
+        ].allows_idempotent_stutter
+        is False
+    )
+
+    control, model, _, store = _runtime(tmp_path / "strict")
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(
+        participant,
+        episode_id="undeclared-idempotent-stutter",
+    )
+    for _ in range(2):
+        _run_selected_action(
+            control,
+            model,
+            behavior_address=behavior,
+            participant_address=participant,
+            action_name=action_name,
+        )
+
+    evidence_path = (
+        store.get_run_path("readiness-run")
+        / "evaluator/participant-action-evidence.jsonl"
+    )
+    evidence = [
+        json.loads(line) for line in evidence_path.read_text().splitlines()
+    ]
+    assert [record["state_changed"] for record in evidence] == [True, False]
+    assert evidence[-1]["allows_idempotent_stutter"] is False
+    assert evidence[-1]["status"] == "failed"
+    assert evidence[-1]["failure_class"] == "backend_error"
+    terminal = control.snapshot.participant_behavior_history[participant][-1]
+    assert terminal["action_result"]["status"] == "failed"
+    assert terminal["action_result"]["failure_class"] == "backend_error"
 
 
 def test_provider_invocation_is_a_raes_operation_and_admission_commits_history(
@@ -847,6 +1160,13 @@ def test_all_26_action_realizations_execute_through_raes_v2(
         record["action_contract_address"] for record in evaluator_records
     } == EXPECTED_ACTION_ADDRESSES
     assert all(set(record["target_refs"]) <= set(NODES) for record in evaluator_records)
+    assert all(
+        record["allows_idempotent_stutter"]
+        is BPA_ACTION_REALIZATIONS[
+            record["action_contract_address"]
+        ].allows_idempotent_stutter
+        for record in evaluator_records
+    )
     touched_containers = {name for name, _ in backend.calls}
     assert {
         "aptl-webapp",

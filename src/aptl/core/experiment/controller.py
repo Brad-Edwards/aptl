@@ -36,6 +36,7 @@ from raes_processor.manifest import create_reference_processor_manifest
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.config import AptlConfig
 from aptl.core.experiment.admission import (
+    AdmissionEnvironment,
     AdmissionResult,
     ResolvedArtifact,
     ResolvedArtifactSource,
@@ -132,8 +133,10 @@ class ExperimentController:
             artifact_source=artifact_source,
             run_store=self.run_store,
             policy=self.policy,
-            backend_manifest=self.backend_manifest,
-            processor_manifest=self.processor_manifest,
-            participant_manifests=self.participant_manifests,
-            base_config=self.base_config,
+            environment=AdmissionEnvironment(
+                backend_manifest=self.backend_manifest,
+                processor_manifest=self.processor_manifest,
+                participant_manifests=self.participant_manifests,
+                base_config=self.base_config,
+            ),
         )

@@ -45,6 +45,11 @@ from raes_contracts.experiment_spec import ExperimentSpecModel
 
 from aptl.core.experiment.errors import AdmissionRejection, diagnostic
 from aptl.core.experiment.policy import AdmissionPolicy, OrderingKind, resolve_allocation_ordering
+from aptl.core.experiment.trial_plan_models import (
+    PlannedTrial,
+    TrialPlan,
+    canonicalize_trial_plan,
+)
 
 if TYPE_CHECKING:
     # Typing-only import: at runtime ``capture_registry`` imports from THIS
@@ -90,14 +95,7 @@ _FLAT_CONDITION_SENTINEL = "flat"
 #: policy without gaining a meaningless derived seed here.
 _SEED_BEARING_ROLES = frozenset({"seed", "randomization"})
 
-_PLAN_ID_PREFIX = "plan-"
 _TRIAL_ID_PREFIX = "trial-"
-
-#: Versioned identity for the canonical plan projection shape (an APTL-internal
-#: journal format, never a RAES contract). Bumped to v3 by EXP-005 (#441): the
-#: projection now pins RAES realized bindings and complete participant/apparatus
-#: configuration identities.
-_PLAN_PROJECTION_SCHEMA = "aptl-experiment-trial-plan/v3"
 
 _ADDRESS_RUN_PLAN = "run_plan"
 _ADDRESS_STOCHASTIC_CONTROLS = "run_plan.stochastic_controls"
@@ -106,48 +104,6 @@ _ADDRESS_ALLOCATION_METHOD = "run_plan.allocation.allocation_method"
 _CODE_ALLOCATION_TOO_LARGE = "aptl.experiment-admission.allocation-too-large"
 _CODE_STOCHASTIC_ROLE_UNSUPPORTED = "aptl.experiment-admission.stochastic-control-role-unsupported"
 _CODE_ALLOCATION_ORDERING_MISMATCH = "aptl.experiment-admission.allocation-ordering-mismatch"
-
-
-@dataclass(frozen=True)
-class PlannedTrial:
-    """One immutable planned trial coordinate within a :class:`TrialPlan`.
-
-    Every field is a scalar or an already-sorted tuple. No list or dict
-    escapes to a caller, so nothing here is mutable after construction.
-    """
-
-    planned_trial_id: str
-    condition_id: str | None
-    replication_ordinal: int
-    ordering_index: int
-    factor_levels: tuple[tuple[str, str], ...]
-    parameter_bindings: tuple[tuple[str, object], ...]
-    stochastic_seeds: tuple[tuple[str, str], ...]
-    scenario_snapshot_digest: str | None
-    capture_spec_refs: tuple[str, ...]
-    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = ()
-    participant_configurations: tuple[ParticipantConfigurationResultModel, ...] = ()
-    apparatus_configuration: tuple[tuple[str, object], ...] = ()
-
-
-@dataclass(frozen=True)
-class TrialPlan:
-    """An immutable, deterministically-derived plan for one admitted spec.
-
-    ``canonical_bytes``/``plan_digest`` are RFC 8785 canonical JSON (and its
-    SHA-256 digest) of a projection that excludes admission time and any
-    host-absolute/temp path — two expansions of the same admitted inputs
-    always produce byte-identical ``canonical_bytes``.
-    """
-
-    plan_id: str
-    policy_version: str
-    source_set_digest: str
-    ordering_kind: OrderingKind
-    trials: tuple[PlannedTrial, ...]
-    capture_bindings: tuple[CaptureBinding, ...]
-    canonical_bytes: bytes
-    plan_digest: str
 
 
 def compute_source_set_digest(source_set_projection: Mapping[str, object]) -> str:
@@ -287,18 +243,25 @@ class _TrialCoordinate:
     ordering_index: int
 
 
+@dataclass(frozen=True)
+class _TrialPayload:
+    """Condition-derived values copied verbatim into one planned trial."""
+
+    factor_levels: tuple[tuple[str, str], ...]
+    parameter_bindings: tuple[tuple[str, object], ...]
+    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = ()
+    participant_configurations: tuple[ParticipantConfigurationResultModel, ...] = ()
+    apparatus_configuration: tuple[tuple[str, object], ...] = ()
+
+
 def _build_trial(
     spec: ExperimentSpecModel,
     *,
     source_set_digest: str,
     coordinate: _TrialCoordinate,
-    factor_levels: tuple[tuple[str, str], ...],
-    parameter_bindings: tuple[tuple[str, object], ...],
+    payload: _TrialPayload,
     condition_snapshot_digests: Mapping[str, str] | None,
     capture_spec_refs: tuple[str, ...],
-    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = (),
-    participant_configurations: tuple[ParticipantConfigurationResultModel, ...] = (),
-    apparatus_configuration: tuple[tuple[str, object], ...] = (),
 ) -> PlannedTrial:
     """Build one immutable PlannedTrial, deriving its ID and stochastic seeds from source_set_digest and coordinate."""
     scenario_snapshot_digest = (
@@ -313,8 +276,8 @@ def _build_trial(
         condition_id=coordinate.condition_id,
         replication_ordinal=coordinate.replication_ordinal,
         ordering_index=coordinate.ordering_index,
-        factor_levels=factor_levels,
-        parameter_bindings=parameter_bindings,
+        factor_levels=payload.factor_levels,
+        parameter_bindings=payload.parameter_bindings,
         stochastic_seeds=_build_seeds(
             spec,
             source_set_digest=source_set_digest,
@@ -323,9 +286,9 @@ def _build_trial(
         ),
         scenario_snapshot_digest=scenario_snapshot_digest,
         capture_spec_refs=capture_spec_refs,
-        realized_bindings=realized_bindings,
-        participant_configurations=participant_configurations,
-        apparatus_configuration=apparatus_configuration,
+        realized_bindings=payload.realized_bindings,
+        participant_configurations=payload.participant_configurations,
+        apparatus_configuration=payload.apparatus_configuration,
     )
 
 
@@ -342,8 +305,7 @@ def _expand_flat(
             spec,
             source_set_digest=source_set_digest,
             coordinate=_TrialCoordinate(condition_id=None, replication_ordinal=ordinal, ordering_index=ordinal),
-            factor_levels=(),
-            parameter_bindings=(),
+            payload=_TrialPayload(factor_levels=(), parameter_bindings=()),
             condition_snapshot_digests=None,
             capture_spec_refs=capture_spec_refs,
         )
@@ -411,13 +373,15 @@ def _expand_condition(
                         replication_ordinal=replication_ordinal,
                         ordering_index=ordering_index,
                     ),
-                    factor_levels=factor_levels,
-                    parameter_bindings=parameter_bindings,
+                    payload=_TrialPayload(
+                        factor_levels=factor_levels,
+                        parameter_bindings=parameter_bindings,
+                        realized_bindings=realized_bindings,
+                        participant_configurations=participant_configurations,
+                        apparatus_configuration=apparatus_configuration,
+                    ),
                     condition_snapshot_digests=condition_snapshot_digests,
                     capture_spec_refs=capture_spec_refs,
-                    realized_bindings=realized_bindings,
-                    participant_configurations=participant_configurations,
-                    apparatus_configuration=apparatus_configuration,
                 )
             )
             ordering_index += 1
@@ -440,62 +404,6 @@ def _pin_scenario_configuration_digest(
         else binding
         for binding in bindings
     )
-
-
-def _trial_projection(trial: PlannedTrial) -> dict[str, object]:
-    """Project one PlannedTrial into its canonical-JSON-ready dict shape."""
-    return {
-        "planned_trial_id": trial.planned_trial_id,
-        "condition_id": trial.condition_id,
-        "replication_ordinal": trial.replication_ordinal,
-        "ordering_index": trial.ordering_index,
-        # Represented as JSON objects (not arrays of pairs): RFC 8785
-        # sorts object member names, so this is where "sort semantically
-        # unordered maps" is actually enforced for the persisted bytes,
-        # independent of the in-memory tuple already being pre-sorted.
-        "factor_levels": dict(trial.factor_levels),
-        "parameter_bindings": dict(trial.parameter_bindings),
-        "stochastic_seeds": dict(trial.stochastic_seeds),
-        "scenario_snapshot_digest": trial.scenario_snapshot_digest,
-        "capture_spec_refs": list(trial.capture_spec_refs),
-        "realized_bindings": [
-            binding.model_dump(mode="json", exclude_none=True)
-            for binding in trial.realized_bindings
-        ],
-        "participant_configurations": [
-            configuration.model_dump(mode="json", exclude_none=True)
-            for configuration in trial.participant_configurations
-        ],
-        "apparatus_configuration": dict(trial.apparatus_configuration),
-    }
-
-
-def _canonicalize(
-    *,
-    policy_version: str,
-    source_set_digest: str,
-    ordering_kind: OrderingKind,
-    trials: tuple[PlannedTrial, ...],
-    capture_bindings: Sequence[CaptureBinding],
-) -> tuple[bytes, str, str]:
-    """Canonicalize the plan projection to RFC 8785 bytes and derive (canonical_bytes, plan_digest, plan_id)."""
-    projection = {
-        "plan_schema": _PLAN_PROJECTION_SCHEMA,
-        "policy_version": policy_version,
-        "source_set_digest": source_set_digest,
-        "ordering_kind": ordering_kind.value,
-        # The trial sequence itself is an authored-meaningful ordered list
-        # (execution order) and stays a JSON array.
-        "trials": [_trial_projection(trial) for trial in trials],
-        # The admitted capture bindings, pinned so runtime executes exactly
-        # these. Always present (``[]`` w/o capture spec) for a stable shape.
-        "capture_bindings": [binding.binding_projection() for binding in capture_bindings],
-    }
-    canonical_bytes = rfc8785.dumps(projection)
-    digest_hex = hashlib.sha256(canonical_bytes).hexdigest()
-    plan_digest = f"sha256:{digest_hex}"
-    plan_id = _PLAN_ID_PREFIX + digest_hex
-    return canonical_bytes, plan_digest, plan_id
 
 
 def expand_trial_plan(
@@ -555,7 +463,7 @@ def expand_trial_plan(
 
     # Bindings arrive pre-sorted by stable identity (``bind_capture_requirements``).
     capture_bindings_tuple = tuple(capture_bindings)
-    canonical_bytes, plan_digest, plan_id = _canonicalize(
+    canonical_bytes, plan_digest, plan_id = canonicalize_trial_plan(
         policy_version=policy.policy_version,
         source_set_digest=source_set_digest,
         ordering_kind=ordering_kind,

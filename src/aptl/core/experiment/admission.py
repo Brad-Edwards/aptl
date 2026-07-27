@@ -59,7 +59,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from raes_backend_protocols.manifest import BackendManifest
@@ -104,6 +104,7 @@ from aptl.utils.pathsafe import PathContainmentError
 
 __all__ = [
     "AdmissionResult",
+    "AdmissionEnvironment",
     "MappingArtifactSource",
     "ResolvedArtifact",
     "ResolvedArtifactSource",
@@ -121,6 +122,26 @@ _CODE_BINDING_INVALID = "aptl.experiment-admission.binding-invalid"
 # ---------------------------------------------------------------------------
 # AdmissionResult
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AdmissionEnvironment:
+    """Optional apparatus and configuration inputs for experiment admission."""
+
+    backend_manifest: BackendManifest | None = None
+    processor_manifest: ProcessorManifest | None = None
+    participant_manifests: ParticipantManifestMap = field(default_factory=dict)
+    base_config: AptlConfig = field(default_factory=AptlConfig)
+
+
+@dataclass(frozen=True)
+class _ResolvedAdmissionEnvironment:
+    """Concrete admission environment after defaults and artifacts are merged."""
+
+    backend_manifest: BackendManifest
+    processor_manifest: ProcessorManifest
+    participant_manifests: ParticipantManifestMap
+    base_config: AptlConfig
 
 
 @dataclass(frozen=True)
@@ -227,11 +248,8 @@ def _admit_experiment_inner(
     artifact_source: ResolvedArtifactSource,
     run_store: RunStorageBackend,
     policy: AdmissionPolicy,
-    backend_manifest: BackendManifest,
-    processor_manifest: ProcessorManifest,
     capture_registry: CollectorRegistry,
-    participant_manifests: ParticipantManifestMap,
-    base_config: AptlConfig,
+    environment: _ResolvedAdmissionEnvironment,
 ) -> AdmissionResult:
     """Run the full admission sequence once; raises AdmissionRejection on any fail-closed gap."""
     # Step 1: root.
@@ -256,9 +274,9 @@ def _admit_experiment_inner(
         admitted_bindings = admit_experiment_bindings(
             spec,
             scenario=scenario,
-            backend_manifest=backend_manifest,
-            participant_manifests=participant_manifests,
-            base_config=base_config,
+            backend_manifest=environment.backend_manifest,
+            participant_manifests=environment.participant_manifests,
+            base_config=environment.base_config,
         )
         planning_scenario = scenario_for_explicit_bindings(scenario, admitted_bindings)
     except (TypeError, ValueError) as exc:
@@ -272,8 +290,8 @@ def _admit_experiment_inner(
     warnings = check_apparatus_admission(
         task,
         spec.apparatus_intent,
-        backend_manifest=backend_manifest,
-        processor_manifest=processor_manifest,
+        backend_manifest=environment.backend_manifest,
+        processor_manifest=environment.processor_manifest,
         policy=policy,
     )
 
@@ -288,7 +306,7 @@ def _admit_experiment_inner(
     condition_snapshot_digests, flat_instantiated_digest = _plan_conditions(
         spec,
         planning_scenario,
-        backend_manifest=backend_manifest,
+        backend_manifest=environment.backend_manifest,
         admitted_bindings=admitted_bindings or None,
     )
 
@@ -309,7 +327,7 @@ def _admit_experiment_inner(
             if spec.binding_descriptors is not None
             else None
         ),
-        participant_manifests=participant_manifests,
+        participant_manifests=environment.participant_manifests,
     )
     source_set_digest = compute_source_set_digest(source_set_projection)
 
@@ -342,11 +360,8 @@ def admit_experiment(
     artifact_source: ResolvedArtifactSource,
     run_store: RunStorageBackend,
     policy: AdmissionPolicy,
-    backend_manifest: BackendManifest | None = None,
-    processor_manifest: ProcessorManifest | None = None,
     capture_registry: CollectorRegistry = DEFAULT_COLLECTOR_REGISTRY,
-    participant_manifests: ParticipantManifestMap | None = None,
-    base_config: AptlConfig | None = None,
+    environment: AdmissionEnvironment | None = None,
 ) -> AdmissionResult:
     """Run ADR-047 admission for one experiment-authoring-input document.
 
@@ -366,25 +381,32 @@ def admit_experiment(
     target as idempotent success — this function does not special-case
     retries itself.
     """
-    resolved_backend = backend_manifest if backend_manifest is not None else create_aptl_manifest()
-    resolved_processor = (
-        processor_manifest if processor_manifest is not None else create_reference_processor_manifest()
+    supplied_environment = environment or AdmissionEnvironment()
+    resolved_environment = _ResolvedAdmissionEnvironment(
+        backend_manifest=(
+            supplied_environment.backend_manifest
+            if supplied_environment.backend_manifest is not None
+            else create_aptl_manifest()
+        ),
+        processor_manifest=(
+            supplied_environment.processor_manifest
+            if supplied_environment.processor_manifest is not None
+            else create_reference_processor_manifest()
+        ),
+        participant_manifests={
+            **artifact_source.participant_manifests,
+            **supplied_environment.participant_manifests,
+        },
+        base_config=supplied_environment.base_config,
     )
     try:
-        resolved_participant_manifests = dict(
-            artifact_source.participant_manifests
-        )
-        resolved_participant_manifests.update(participant_manifests or {})
         return _admit_experiment_inner(
             experiment_root=experiment_root,
             artifact_source=artifact_source,
             run_store=run_store,
             policy=policy,
-            backend_manifest=resolved_backend,
-            processor_manifest=resolved_processor,
             capture_registry=capture_registry,
-            participant_manifests=resolved_participant_manifests,
-            base_config=base_config or AptlConfig(),
+            environment=resolved_environment,
         )
     except AdmissionRejection as exc:
         return AdmissionResult.rejected(exc.diagnostics)

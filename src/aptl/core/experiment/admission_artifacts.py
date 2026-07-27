@@ -103,6 +103,8 @@ class MappingArtifactSource:
 def _expected_participant_manifest_keys(
     spec: ExperimentSpecModel,
 ) -> set[tuple[str, str, str, str]]:
+    """Return participant manifest identities explicitly required by bindings."""
+
     descriptors = spec.binding_descriptors
     if descriptors is None:
         return set()
@@ -128,6 +130,8 @@ def _resolved_participant_manifests(
     artifacts: Mapping[str, ResolvedArtifact],
     policy: AdmissionPolicy,
 ) -> dict[tuple[str, str, str, str], ParticipantManifestBinding]:
+    """Resolve unique expected participant manifests from validated artifacts."""
+
     expected = _expected_participant_manifest_keys(spec)
     expected_identities = {(name, version, schema) for _, name, version, schema in expected}
     candidates: dict[

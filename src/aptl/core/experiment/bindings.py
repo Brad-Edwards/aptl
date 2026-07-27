@@ -7,7 +7,6 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TypeAlias
 
 import rfc8785
 from pydantic import BaseModel
@@ -48,7 +47,10 @@ from aptl.backends.raes_manifest import (
 from aptl.core.config import AptlConfig
 from aptl.utils.redaction import is_secret_shaped_value, is_sensitive_key
 
-ParticipantManifestMap: TypeAlias = Mapping[ParticipantManifestKey, "ParticipantManifestBinding"]
+ParticipantManifestMap = Mapping[
+    ParticipantManifestKey,
+    "ParticipantManifestBinding",
+]
 
 _SCENARIO_OWNER = BindingOwnerModel(
     contract_id="sdl-authoring-input-v1",
@@ -117,6 +119,8 @@ class ScenarioVariableTargetResolver:
 
 
 def _binding_type(variable_type: VariableType) -> BindingScalarType:
+    """Map a RAES scenario variable type to its binding scalar type."""
+
     return {
         VariableType.STRING: BindingScalarType.STRING,
         VariableType.INTEGER: BindingScalarType.INTEGER,
@@ -126,6 +130,8 @@ def _binding_type(variable_type: VariableType) -> BindingScalarType:
 
 
 def _unsafe_literal(value: object) -> bool:
+    """Return whether a literal could encode a secret or executable locator."""
+
     if is_secret_shaped_value(value):
         return True
     if not isinstance(value, str):
@@ -144,6 +150,8 @@ def _unsafe_literal(value: object) -> bool:
 
 
 def _validate_literal_safety(descriptors: ExperimentBindingDescriptorSetModel) -> None:
+    """Reject every descriptor whose literal crosses the safe-data boundary."""
+
     for descriptor in descriptors.descriptors:
         if isinstance(descriptor.value, LiteralBindingValueModel) and _unsafe_literal(
             descriptor.value.value
@@ -175,12 +183,16 @@ def _validate_scenario_domains(
 def _participant_manifest_models(
     bindings: ParticipantManifestMap,
 ) -> dict[ParticipantManifestKey, ParticipantImplementationManifestModel]:
+    """Project selected participant bindings to the RAES validator input."""
+
     return {key: binding.manifest for key, binding in bindings.items()}
 
 
 def _apparatus_manifest_models(
     manifest: BackendManifest,
 ) -> dict[ApparatusManifestKey, BackendManifestV2Model]:
+    """Project the active APTL backend manifest to its RAES apparatus key."""
+
     model = create_aptl_binding_manifest_model(manifest)
     key: ApparatusManifestKey = (
         "backend",
@@ -194,6 +206,8 @@ def _apparatus_manifest_models(
 def _condition_descriptors(
     descriptors: ExperimentBindingDescriptorSetModel,
 ) -> dict[str, tuple[ExperimentBindingDescriptorModel, ...]]:
+    """Group descriptors by condition with stable binding-ID ordering."""
+
     by_condition: dict[str, list[ExperimentBindingDescriptorModel]] = defaultdict(list)
     for descriptor in descriptors.descriptors:
         by_condition[descriptor.source_condition_id].append(descriptor)
@@ -206,6 +220,8 @@ def _condition_descriptors(
 def _scenario_parameters(
     descriptors: tuple[ExperimentBindingDescriptorModel, ...],
 ) -> tuple[tuple[str, object], ...]:
+    """Return stable scenario variable/value pairs for one condition."""
+
     parameters: list[tuple[str, object]] = []
     for descriptor in descriptors:
         if not isinstance(descriptor.target, ScenarioBindingTargetModel):
@@ -224,6 +240,8 @@ def _participant_configurations(
     tuple[ParticipantConfigurationResultModel, ...],
     dict[str, str],
 ]:
+    """Realize participant-owned configuration results for one condition."""
+
     grouped: dict[ParticipantManifestKey, list[ExperimentBindingDescriptorModel]] = defaultdict(list)
     for descriptor in descriptors:
         target = descriptor.target
@@ -265,6 +283,8 @@ def _apparatus_configuration(
     descriptors: tuple[ExperimentBindingDescriptorModel, ...],
     base_config: AptlConfig,
 ) -> tuple[AptlConfig, tuple[tuple[str, object], ...], str | None, set[str]]:
+    """Apply the closed APTL apparatus projection and derive its digest."""
+
     values: list[tuple[str, object]] = []
     binding_ids: set[str] = set()
     for descriptor in descriptors:
@@ -300,6 +320,8 @@ def _realized_provenance(
     apparatus_digest: str | None,
     apparatus_binding_ids: set[str],
 ) -> tuple[RealizedBindingProvenanceModel, ...]:
+    """Attach owner-derived configuration digests to realized bindings."""
+
     realized: list[RealizedBindingProvenanceModel] = []
     for descriptor in descriptors:
         configuration_digest = participant_digests.get(descriptor.binding_id)

@@ -494,14 +494,17 @@ def test_unsafe_literal_is_rejected_before_binding_realization(unsafe_value: str
     payload = json.loads(_explicit_spec().model_dump_json())
     payload["binding_descriptors"]["descriptors"][0]["value"]["value"] = unsafe_value
     spec = ExperimentSpecModel.model_validate(payload)
+    scenario = _scenario()
+    backend_manifest = create_aptl_manifest()
+    base_config = AptlConfig()
 
     with pytest.raises(ValueError, match="unsafe literal"):
         admit_experiment_bindings(
             spec,
-            scenario=_scenario(),
-            backend_manifest=create_aptl_manifest(),
+            scenario=scenario,
+            backend_manifest=backend_manifest,
             participant_manifests={},
-            base_config=AptlConfig(),
+            base_config=base_config,
         )
 
 
@@ -590,14 +593,16 @@ content: {}
         "destructive"
     )
     spec = ExperimentSpecModel.model_validate(payload)
+    backend_manifest = create_aptl_manifest()
+    base_config = AptlConfig()
 
     with pytest.raises(ValueError, match="variation-point domain"):
         admit_experiment_bindings(
             spec,
             scenario=scenario,
-            backend_manifest=create_aptl_manifest(),
+            backend_manifest=backend_manifest,
             participant_manifests={},
-            base_config=AptlConfig(),
+            base_config=base_config,
         )
 
 

@@ -45,6 +45,7 @@ from raes_processor.manifest import create_reference_processor_manifest
 
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.experiment.admission import (
+    AdmissionEnvironment,
     AdmissionResult,
     MappingArtifactSource,
     admit_experiment,
@@ -376,8 +377,10 @@ class TestAdmitExperimentHappyPathCapabilityOnly:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is True
@@ -395,8 +398,10 @@ class TestAdmitExperimentHappyPathCapabilityOnly:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.persisted_path.exists()
@@ -678,8 +683,10 @@ class TestAdmitExperimentConditionAllocationAllOrNothing:
             artifact_source=artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -778,16 +785,20 @@ class TestAdmitExperimentDeterminism:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
         second = admit_experiment(
             experiment_root=bundle.experiment_root,
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert first.admitted is True
@@ -807,8 +818,10 @@ class TestAdmitExperimentDeterminism:
             artifact_source=bundle.artifact_source,
             run_store=LocalRunStore(tmp_path / "first"),
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
         second = admit_experiment(
             experiment_root=_resolved(
@@ -817,8 +830,10 @@ class TestAdmitExperimentDeterminism:
             artifact_source=bundle.artifact_source,
             run_store=LocalRunStore(tmp_path / "second"),
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert first.admitted and second.admitted
@@ -844,16 +859,20 @@ class TestFuzzAdmitExperimentDeterminism:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
         second = admit_experiment(
             experiment_root=bundle.experiment_root,
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert first.admitted is True
@@ -908,8 +927,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bad_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -927,8 +948,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=tiny_policy,
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -960,8 +983,10 @@ class TestMutationSpyRejectedAdmissionMakesNoMutatingCalls:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -985,8 +1010,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=tiny_policy,
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1012,8 +1039,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bad_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1042,8 +1071,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1061,8 +1092,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1083,8 +1116,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1103,8 +1138,10 @@ class TestAdmitExperimentRejectionPaths:
             artifact_source=empty_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1135,8 +1172,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1162,8 +1201,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1198,8 +1239,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1232,8 +1275,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1264,8 +1309,10 @@ class TestAdmitExperimentCrossArtifactJoinGuards:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1319,8 +1366,10 @@ class TestPersistPlanDiagnostics:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1343,8 +1392,10 @@ class TestPersistPlanDiagnostics:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
         )
 
         assert result.admitted is False
@@ -1478,11 +1529,13 @@ class TestLoadParticipantManifest:
         )
         payload = json.loads(path.read_text())
         payload["identity"] = {"name": SECRET}
+        manifest_bytes = json.dumps(payload).encode("utf-8")
+        policy = default_admission_policy()
 
         with pytest.raises(AdmissionRejection) as excinfo:
             load_participant_manifest(
-                json.dumps(payload).encode("utf-8"),
-                policy=default_admission_policy(),
+                manifest_bytes,
+                policy=policy,
             )
 
         rendered = "\n".join(
@@ -1551,8 +1604,10 @@ class TestAdmitExperimentWithCoveringRegistry:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
             capture_registry=registry,
         )
 
@@ -1574,8 +1629,10 @@ class TestAdmitExperimentWithCoveringRegistry:
             artifact_source=bundle.artifact_source,
             run_store=store,
             policy=default_admission_policy(),
-            backend_manifest=backend,
-            processor_manifest=processor,
+            environment=AdmissionEnvironment(
+                backend_manifest=backend,
+                processor_manifest=processor,
+            ),
             capture_registry=CollectorRegistry(),
         )
 

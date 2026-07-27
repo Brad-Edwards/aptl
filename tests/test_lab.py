@@ -2917,6 +2917,33 @@ class TestStartupClassificationWiring:
         wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
+    def test_test_ssh_skips_profile_alias_without_declared_ssh(
+        self, tmp_path, mocker
+    ):
+        """An image-free Kali node need not inherit the appliance's sshd."""
+        from aptl.core.lab import _step_test_ssh
+
+        ctx = self._ctx(tmp_path, selected_profiles={"kali"})
+        ctx.raes_outcome = mocker.Mock(
+            realization_details={
+                "nodes": [
+                    {
+                        "name": "kali",
+                        "services": [],
+                    }
+                ]
+            }
+        )
+        networks = mocker.patch("aptl.core.lab.container_networks")
+        wait_mock = mocker.patch("aptl.core.lab.wait_for_service")
+
+        result = _step_test_ssh(ctx)
+
+        assert result is None
+        networks.assert_not_called()
+        wait_mock.assert_not_called()
+        assert ctx.diagnostics == []
+
     # -- build_mcps (capability) ---------------------------------------
 
     def test_build_mcps_missing_script_emits_capability_warning(self, tmp_path):

@@ -71,6 +71,22 @@ references and digests rather than copying bytes into a new JSON object.
 Exporter code remains packaging-only and must not become the first redaction or
 normalization point.
 
+Issue #557 applies the same separation to participant action evidence. Once a
+RAES participant transition is accepted, APTL first publishes one immutable
+run-scoped transaction through `LocalRunStore.create_run_json_once()`. That
+transaction contains the participant and evaluator projections together;
+their JSONL streams are derived, recoverable indexes. Failure of either index
+does not rewrite or erase the accepted RAES snapshot, but it is an explicit
+qualification failure. The create-once path is RFC 8785 canonical,
+create-exclusive, descriptor-relative, and no-follow for every component.
+
+When APTL pins a complete RAES `RuntimeModel` as backend authority, it uses a
+versioned backend-owned artifact envelope and RFC 8785 canonical JSON. The
+digest covers every model field, rejects unsupported values, and never depends
+on mapping insertion order or `default=str`. This artifact is reproducibility
+evidence for the admitted compiled model; it is not a replacement RAES
+runtime-model contract.
+
 ## Security Layers
 
 | Layer | Requirement |
@@ -80,7 +96,7 @@ normalization point.
 | Runtime contract gate | Operation receipt/status, RAES `RuntimeSnapshot`, workflow result/history, and evaluation result/history are the portable runtime surfaces. Backend exceptions are translated into redacted RAES diagnostics or `LabResult` errors at the adapter boundary. |
 | Deployment inventory gate | Docker, Compose, container, network, image, port, and host inventory flows through `DeploymentBackend` and existing snapshot helpers. Do not parse `docker-compose.yml` or call raw Docker from a record builder. |
 | Config and env binding | Durable non-secret settings come from strict `AptlConfig`; runtime secrets come from `.env` / `EnvVars`, placeholder checks, ADR-028 generated config, and ADR-034 SOC TLS material. The record may store digests and non-secret identities, not `.env` values, rendered config secrets, API tokens, cookies, private keys, or bearer material. |
-| Persistence and path containment | `LocalRunStore` owns run IDs, relative-path validation, run directory layout, and redacted JSON/JSONL writes. New record paths must use those methods and inherit their traversal checks. |
+| Persistence and path containment | `LocalRunStore` owns run IDs, relative-path validation, run directory layout, redacted JSON/JSONL writes, and immutable run-scoped transactions through `create_run_json_once()`. Authoritative create-once records use descriptor-relative no-follow containment rather than the legacy resolved-path writer. |
 | Snapshot serialization | APTL range inventory enters JSON through `RangeSnapshot.to_dict()`, preserving ADR-029 redaction for service credentials and other secret-shaped fields. |
 | Collector and SOC HTTP safety | Collectors stay fault-tolerant, log counts/status only, and use `curl_safe` where SOC API calls need token/body handling that avoids argv leakage. |
 | API and error envelope | If the record is later exposed through the web API, it must use the existing `verify_token` / `WebAuthSettings` boundary and existing Pydantic response projection style. Error text must be generic and redacted; auth tokens do not travel in URLs. |

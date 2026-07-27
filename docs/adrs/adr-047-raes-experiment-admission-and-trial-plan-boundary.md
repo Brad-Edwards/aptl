@@ -292,6 +292,16 @@ plan that differs from the plan approved for execution. RFC 8785 is a direct
 runtime dependency for this operation; do not rely on it only as a transitive
 dependency of `raes`.
 
+Issue #557 reuses this primitive for a distinct run-scoped integrity need.
+`LocalRunStore.create_run_json_once()` publishes an immutable action-evidence
+transaction beneath an existing run archive. It starts its descriptor-relative
+walk at the configured store root, including the run-id component, so a
+pre-existing symlinked run directory cannot redirect publication. The
+transaction contains both participant and evaluator projections; append-only
+JSONL files are recoverable indexes, not the atomic authority. Because
+publication follows an accepted RAES participant commit, archive failure is
+reported without discarding or falsifying the accepted runtime snapshot.
+
 Use an explicit plan namespace beneath the injected store. A plan ID is not a
 `run_id`, and the plan must not acquire a fake `manifest.json` merely to fit
 `LocalRunStore.list_runs()`. Extend the existing storage boundary narrowly

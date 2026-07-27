@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from raes_contracts.runtime_state import RuntimeSnapshot
 from raes_runtime.manager import RuntimeManager
@@ -14,22 +14,23 @@ from raes import SDLError, SDLInstantiationError, parse_sdl_file
 from aptl.backends.raes_diagnostics import (
     render_raes_diagnostics,
 )
+from aptl.backends.raes_execution_helpers import (
+    evaluation_results as collect_evaluation_results,
+    interpret_realization,
+)
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
+from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
     ParticipantActionSpec,
     participant_action_specs_from_runtime_model,
 )
+from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
-from aptl.backends.raes_realization import (
-    interpret_provisioning_plan,
-)
-from aptl.backends.raes_profiles import (
-    select_backend_profiles,
-)
+from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.backends.raes_start_model import (
     DEFAULT_RAES_SCENARIO,
     AcesRunTarget,
@@ -42,6 +43,7 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from raes_contracts.diagnostics import Diagnostic
     from raes_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
@@ -53,9 +55,7 @@ _INSTANTIATION_FAILURE_MESSAGE = (
     "RAES runtime variable binding failed before deployment. Provide every "
     "required variable using its declared type and allowed values."
 )
-_RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset(
-    {"aptl.provisioner.backend-start-failed"}
-)
+_RETRYABLE_APPLY_DIAGNOSTIC_CODES = frozenset({"aptl.provisioner.backend-start-failed"})
 
 
 def create_aptl_runtime_target(
@@ -64,6 +64,7 @@ def create_aptl_runtime_target(
     config: AptlConfig,
     backend: "DeploymentBackend",
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
+    participant_plan_authority: ParticipantPlanAuthority | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target."""
 
@@ -79,6 +80,7 @@ def create_aptl_runtime_target(
     participant_runtime = AptlParticipantRuntime(
         deployment_backend=backend,
         action_specs=action_specs,
+        plan_authority=participant_plan_authority,
     )
     return RuntimeTarget(
         name=APTL_RAES_TARGET_NAME,
@@ -184,12 +186,17 @@ def _plan_scenario(
         project_dir=project_dir,
         config=config,
     )
-    if participant_action_specs:
-        target = create_aptl_runtime_target(
-            project_dir=project_dir,
-            config=config,
-            backend=backend,
-            participant_action_specs=participant_action_specs,
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+        participant_action_specs=participant_action_specs,
+    )
+    participant_runtime = target.participant_runtime
+    if isinstance(participant_runtime, AptlParticipantRuntime):
+        participant_runtime.plan_authority = ParticipantPlanAuthority(
+            execution_plan,
+            scenario_path,
         )
     return target, execution_plan
 
@@ -272,7 +279,9 @@ def admitted_stateful_artifact_ownership(
         project_dir=project_dir, config=config, backend=backend
     )
     execution_plan = RuntimeManager(target).plan(scenario)
-    blocking = [diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error]
+    blocking = [
+        diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error
+    ]
     if blocking:
         raise ValueError(render_raes_diagnostics(blocking))
     realization = interpret_provisioning_plan(
@@ -280,7 +289,9 @@ def admitted_stateful_artifact_ownership(
         project_dir=project_dir,
         config=config,
     )
-    blocking = [diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error]
+    blocking = [
+        diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
+    ]
     if blocking:
         raise ValueError(render_raes_diagnostics(blocking))
     return frozenset(
@@ -326,9 +337,18 @@ def _run_execution_plan(
             selected_profiles=[],
             scenario_path=scenario_path,
         )
-    realization_details, selected_profiles = _interpret_realization(
+    realization_details, selected_profiles = interpret_realization(
         target, execution_plan
     )
+    participant_runtime = target.participant_runtime
+    if isinstance(participant_runtime, AptlParticipantRuntime):
+        authority = participant_runtime.plan_authority
+        if authority is not None:
+            authority.bind_runtime_context(
+                realization_details,
+                run_store=run_store,
+                run_id=run_id,
+            )
     failure, snapshot, retryable = _apply_execution_plan(
         target,
         execution_plan,
@@ -427,7 +447,7 @@ def _apply_execution_plan(
                 for diagnostic in diagnostics
             ),
         )
-    evaluation_results = _evaluation_results(target, execution_plan)
+    evaluation_results = collect_evaluation_results(target, execution_plan)
     failure = _drive_orchestrator_workflows(
         target.orchestrator,
         evaluation_results,
@@ -435,18 +455,6 @@ def _apply_execution_plan(
         run_id=run_id,
     )
     return failure, snapshot, False
-
-
-def _evaluation_results(
-    target: RuntimeTarget,
-    execution_plan: "ExecutionPlan",
-) -> dict[str, dict[str, object]]:
-    """Return evaluator results only when evaluation actions ran."""
-
-    results: dict[str, dict[str, object]] = {}
-    if execution_plan.evaluation.actionable_operations and target.evaluator is not None:
-        results = target.evaluator.results()
-    return results
 
 
 def _drive_orchestrator_workflows(
@@ -472,26 +480,3 @@ def _drive_orchestrator_workflows(
             error=render_raes_diagnostics(drive_diagnostics),
         )
     return failure
-
-
-def _interpret_realization(
-    target: RuntimeTarget,
-    execution_plan: "ExecutionPlan",
-) -> tuple[dict[str, Any], list[str]]:
-    """Interpret the provisioning plan into realization details + profiles.
-
-    Reuses the ``AptlProvisioner``'s ``project_dir``/``config`` (REP-001 /
-    GAP 1) so the realization is computed exactly once with the real backend
-    context. Returns empty placeholders when the provisioner is unavailable.
-    """
-    provisioner = target.provisioner
-    if not isinstance(provisioner, AptlProvisioner):
-        return {}, []
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning,
-        project_dir=provisioner.project_dir,
-        config=provisioner.config,
-    )
-    return realization.details(), select_backend_profiles(
-        provisioner.config, realization.profiles
-    )

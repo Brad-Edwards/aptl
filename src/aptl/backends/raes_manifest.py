@@ -16,9 +16,9 @@ workflow drive surface through the portable ``workflow-result-envelope-v1`` and
 ``aptl.backends.raes_orchestrator.AptlOrchestrator``), publishes objective and
 condition evaluation through ``evaluation-result-envelope-v1`` and
 ``evaluation-history-event-stream-v1`` (see
-``aptl.backends.raes_evaluator.AptlEvaluator``), and exposes a narrow red
-participant runtime through the participant episode and behavior-history
-contracts. It does not declare the deprecated SDL scoring chain
+``aptl.backends.raes_evaluator.AptlEvaluator``), and exposes a bounded
+green/red/blue participant runtime through the participant episode and
+behavior-history contracts. It does not declare the deprecated SDL scoring chain
 (``metrics``/``evaluations``/``tlos``/``goals``) as an APTL runtime capability.
 """
 
@@ -116,13 +116,13 @@ _BASE_SUPPORTED_CONTRACT_VERSIONS = frozenset(
 
 _CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
     {
+        "participant-control-occurrence-v1",
+        "participant-crossing-occurrence-v1",
         "participant-lifecycle-event-v1",
         "participant-observation-envelope-v1",
         "participant-shared-state-record-v1",
         "participant-joint-action-record-v1",
         "participant-time-management-context-v1",
-        "participant-control-occurrence-v1",
-        "participant-crossing-occurrence-v1",
     }
 )
 
@@ -166,19 +166,15 @@ _EVALUATOR = EvaluatorCapabilities(
     supports_objectives=True,
 )
 
-# Participant runtime capability declaration. The current proof drives a single
-# red participant action from Kali against a realized victim container and emits
-# participant episode plus behavior-history snapshot surfaces. It does not claim
-# blue/green/white roles or multi-party coordination semantics.
+# Participant runtime capability declaration. APTL realizes the bounded
+# green/red/blue research surface through RAES-owned episode, exact action, and
+# observation-boundary contracts. This does not claim multi-party coordination,
+# autonomous scheduling, or a role beyond the three implemented compartments.
 _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
     name="aptl-participant-runtime",
-    supported_participant_roles=frozenset({"red"}),
+    supported_participant_roles=frozenset({"green", "red", "blue"}),
     supported_behavior_features=frozenset(
-        {
-            "action_contracts",
-            "behavior_history",
-            "observation_boundaries",
-        }
+        {"action_contracts", "observation_boundaries", "behavior_history"}
     ),
     supported_interaction_features=frozenset({"shared_state_change"}),
     feature_support=(
@@ -203,7 +199,7 @@ _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
     supported_node_types=frozenset({"switch", "vm"}),
     supported_os_families=frozenset({"linux"}),
-    supported_content_types=frozenset({"directory", "file"}),
+    supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
     # non-secret fields the typed DeploymentAccountRealization carries. auth_method

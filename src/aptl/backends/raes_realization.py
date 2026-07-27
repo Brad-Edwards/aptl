@@ -21,6 +21,7 @@ from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.backends.raes_base_substrate import base_container_spec
 from aptl.backends.raes_image_realization import resolve_node_image
 from aptl.backends.raes_placement_realization import (
     placement_node_lookup as _node_lookup,
@@ -320,13 +321,24 @@ def _realize_node(
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
     service_name = _single_or_none(tuple(sorted(backend_services)))
+    node_os = _node_os(node_spec)
+    node_os_version = _node_os_version(node_spec)
+    node_runtime = _node_runtime(node_spec)
+    container_name = _container_name(profile_index, backend_services)
+    if container_name is None and node_runtime is not None and node_os:
+        container_name = base_container_spec(
+            resource.address,
+            os=node_os,
+            os_version=node_os_version,
+            runtime=node_runtime,
+        ).container_name
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
         aliases=tuple(sorted(aliases)),
         profiles=tuple(sorted(profiles)),
         backend_services=tuple(sorted(backend_services)),
-        container_name=_container_name(profile_index, backend_services),
+        container_name=container_name,
         services=_service_ports(node_spec),
         networks=tuple(sorted(_network_names(infra_spec))),
         static_addresses=tuple(sorted(_static_addresses(infra_spec))),
@@ -340,9 +352,9 @@ def _realize_node(
             diagnostics=diagnostics,
         ),
         ordering_dependencies=resource.ordering_dependencies,
-        os=_node_os(node_spec),
-        os_version=_node_os_version(node_spec),
-        runtime=_node_runtime(node_spec),
+        os=node_os,
+        os_version=node_os_version,
+        runtime=node_runtime,
     )
 
 

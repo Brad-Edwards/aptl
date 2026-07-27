@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
 from raes_contracts.planning import ProvisioningPlan
 
 from aptl.backends.raes_profiles import (

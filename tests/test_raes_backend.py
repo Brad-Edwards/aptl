@@ -37,6 +37,11 @@ def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
             ]
         )
     (project_dir / "docker-compose.yml").write_text("\n".join(lines))
+    scenario_dir = project_dir / "scenarios"
+    scenario_dir.mkdir(exist_ok=True)
+    (scenario_dir / "techvault-operational.sdl.yaml").write_text(
+        "name: test-scenario\nversion: '1.0'\n"
+    )
 
 
 def _write_compose_graph(
@@ -579,7 +584,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert manifest.has_participant_runtime is True
     assert manifest.participant_runtime is not None
     assert manifest.participant_runtime.supported_participant_roles == frozenset(
-        {"red"}
+        {"green", "red", "blue"}
     )
     assert payload["capabilities"]["participant_runtime"] is not None
 
@@ -593,7 +598,9 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
 
     assert provisioner.supported_node_types == frozenset({"switch", "vm"})
     assert provisioner.supported_os_families == frozenset({"linux"})
-    assert provisioner.supported_content_types == frozenset({"directory", "file"})
+    assert provisioner.supported_content_types == frozenset(
+        {"dataset", "directory", "file"}
+    )
     assert provisioner.supported_account_features == frozenset(
         {"disabled", "groups", "mail", "spn"}
     )
@@ -851,7 +858,7 @@ def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):
     )
 
 
-def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path):
+def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
     import subprocess
 
     from raes_contracts.participant_behavior import (
@@ -883,19 +890,25 @@ def test_participant_runtime_action_drives_backend_and_records_behavior(tmp_path
 
     assert status is not None
     assert status.state == OperationState.SUCCEEDED, status.diagnostics
+    backend.container_exec.assert_not_called()
+    action = target.participant_runtime.admit_action(
+        _participant_admission_request(PARTICIPANT_ACTION_ADDRESS),
+        control_plane.snapshot,
+    )
+    assert action.success is True
     backend.container_exec.assert_called_once_with(
         "aptl-kali",
         ["nmap", "-p", "22", "-Pn", "--open", "172.20.2.20", "-oG", "-"],
         timeout=120,
     )
-    snapshot = control_plane.snapshot
+    snapshot = action.snapshot
     behavior = snapshot.participant_behavior_history[PARTICIPANT_ACTION_ADDRESS]
     assert [event["event_type"] for event in behavior] == [
         "action_attempted",
+        "state_transition_recorded",
         "observation_emitted",
     ]
-    assert behavior[-1]["actor_provenance"] == "codex-cli"
-    assert "22/open" in behavior[-1]["details"]["stdout_excerpt"]
+    assert behavior[0]["actor_provenance"].startswith("participant-implementation:")
     assert any(
         entry.resource_type == "participant-action-instance"
         for entry in snapshot.entries.values()
@@ -980,6 +993,15 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
 
     assert status is not None
     assert status.state == OperationState.SUCCEEDED, status.diagnostics
+    action = target.participant_runtime.admit_action(
+        _participant_admission_request(
+            participant_address,
+            action_contract_address=action_contract_address,
+            observation_boundary_address=observation_boundary_address,
+        ),
+        control_plane.snapshot,
+    )
+    assert action.success is True
     backend.container_exec.assert_called_once()
     container_name, command = backend.container_exec.call_args.args
     assert container_name == "aptl-kali"
@@ -987,11 +1009,14 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     assert "172.20.1.20:8080/login" in command[2]
     assert "172.20.2.11/5432" in command[2]
     assert "172.20.2.30/55000" in command[2]
-    behavior = control_plane.snapshot.participant_behavior_history[participant_address]
+    behavior = action.snapshot.participant_behavior_history[participant_address]
     assert behavior[0]["action_contract_address"] == action_contract_address
     assert behavior[-1]["observation_boundary_address"] == observation_boundary_address
-    assert "boundary_db=blocked" in behavior[-1]["details"]["stdout_excerpt"]
-    entries = control_plane.snapshot.entries
+    assert any(
+        "boundary_db=blocked" in observation
+        for observation in behavior[-1]["action_result"]["observations"]
+    )
+    entries = action.snapshot.entries
     assert (
         entries[participant_address].payload["participant_address"]
         == participant_address
@@ -1004,7 +1029,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     )
     assert "Kali victim SSH" not in str(entries[action_contract_address].payload)
     assert "kali-victim-ssh" not in str(entries[observation_boundary_address].payload)
-    shared_state_records = getattr(control_plane.snapshot, "shared_state_records", {})
+    shared_state_records = getattr(action.snapshot, "shared_state_records", {})
     assert {record["state_scope"] for record in shared_state_records.values()} == {
         participant_address
     }
@@ -1386,7 +1411,14 @@ def test_container_name_and_single_value_helpers_handle_ambiguous_inputs():
     assert _container_name(index, frozenset({"missing"})) is None
 
 
-def _participant_admission_request(participant_address: str):
+def _participant_admission_request(
+    participant_address: str,
+    *,
+    action_contract_address: str = "participant.action-contract.aptl-admit-probe",
+    observation_boundary_address: str = (
+        "participant.observation-boundary.aptl-admit-probe"
+    ),
+):
     """Build a valid ParticipantActionAdmissionRequest for *participant_address*.
 
     Mirrors the RAES participant implementation-binding contract shape (manifest
@@ -1464,8 +1496,8 @@ def _participant_admission_request(participant_address: str):
     )
     return ParticipantActionAdmissionRequest(
         participant_address=participant_address,
-        action_contract_address="participant.action-contract.aptl-admit-probe",
-        observation_boundary_address="participant.observation-boundary.aptl-admit-probe",
+        action_contract_address=action_contract_address,
+        observation_boundary_address=observation_boundary_address,
         action_instance_id="aptl-admit-probe-action",
         implementation_manifest=manifest,
         implementation_selection=selection,
@@ -1596,6 +1628,7 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
     backend.realize.return_value = LabResult(success=True, message="ok")
     config = AptlConfig(lab={"name": "test"}, containers={"wazuh": True})
     selected = tmp_path / "scenarios" / "custom.sdl.yaml"
+    selected.write_text("name: custom-test-scenario\nversion: '1.0'\n")
 
     result = raes.start_raes_scenario(tmp_path, config, backend, scenario_path=selected)
 
@@ -3167,6 +3200,7 @@ def _fileshare_and_ad_compose(tmp_path: Path) -> None:
             "aptl-otel-collector": ["otel"],
             "fileshare": ["fileshare"],
             "ad": ["enterprise"],
+            "wazuh.manager": ["wazuh"],
         },
     )
 
@@ -3406,7 +3440,7 @@ def test_content_placement_dataset_type_fails_closed(tmp_path):
     assert result.success is False
     assert "aptl.provisioner.content-placement-rejected" in codes
     assert any(
-        "dataset-not-realizable" in d.message
+        "dataset-carries-materialization" in d.message
         for d in result.diagnostics
         if d.code == "aptl.provisioner.content-placement-rejected"
     )
@@ -3480,14 +3514,37 @@ def test_content_placement_destination_without_backing_mount_fails_closed(tmp_pa
     )
 
 
-def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
-    """Kali is content-capable via the kali_operations volume (#691).
+def test_generic_content_cannot_target_wazuh_configuration_volume(tmp_path):
+    """Scenario content must never share Wazuh's live configuration volume."""
+    from aptl.backends.raes import AptlProvisioner
 
-    Registering `kali -> kali_operations` in `_CONTENT_REALIZABLE_SERVICES`
-    lets the paper scenario's participant-visible task brief lower through the
-    existing typed content path (ADR-046 extensibility seam), with no
-    docker-compose change.
-    """
+    _fileshare_and_ad_compose(tmp_path)
+    backend = MagicMock()
+    backend.realize.return_value = LabResult(success=True, message="ok")
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        config=AptlConfig(lab={"name": "test"}),
+        deployment_backend=backend,
+    )
+    wazuh_node = _node_resource("scenario.wazuh-manager")
+    content = _content_resource(
+        target_node="scenario.wazuh-manager",
+        target_address=wazuh_node.address,
+        spec_overrides={"path": "scenario/task.md", "text": "probe the portal"},
+    )
+    result = provisioner.apply(
+        _plan_for_resources(wazuh_node, content), RuntimeSnapshot()
+    )
+    assert result.success is False
+    assert any(
+        d.code == "aptl.provisioner.content-placement-rejected"
+        and "destination-without-backing-mount" in d.message
+        for d in result.diagnostics
+    )
+
+
+def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
+    """Kali content lowers through its existing operations volume."""
     from aptl.backends.raes import AptlProvisioner
 
     _fileshare_and_ad_compose(tmp_path)
@@ -3504,9 +3561,11 @@ def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
         target_address=kali_node.address,
         spec_overrides={"path": "scenario/task.md", "text": "probe the portal"},
     )
+
     result = provisioner.apply(
         _plan_for_resources(kali_node, content), RuntimeSnapshot()
     )
+
     assert result.success is True
     assert not any(
         d.code == "aptl.provisioner.content-placement-rejected"
@@ -3517,9 +3576,8 @@ def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
 def test_content_placement_absolute_path_rejects_on_content_capable_service(tmp_path):
     """An absolute destination path fails closed even on a mounted service.
 
-    Content paths are volume-relative; the paper scenario's original
-    `/scenario/...` absolute paths could never realize. Guard the invariant so
-    registering kali does not accidentally accept absolute destinations.
+    Content paths are volume-relative. Guard the invariant on a service with a
+    registered backing volume.
     """
     from aptl.backends.raes import AptlProvisioner
 

@@ -121,6 +121,7 @@ class PlacementRealization(object):
     target_address: str
     target_node: str | None
     content: DeploymentContentRealization | None = None
+    dataset: "ParticipantDatasetRealization | None" = None
     account: DeploymentAccountRealization | None = None
 
     def details(self) -> dict[str, object]:
@@ -133,9 +134,37 @@ class PlacementRealization(object):
         }
         if self.content is not None:
             details["content"] = self.content.details()
+        if self.dataset is not None:
+            details["dataset"] = self.dataset.details()
         if self.account is not None:
             details["account"] = self.account.details()
         return details
+
+
+@dataclass(frozen=True)
+class ParticipantDatasetRealization(object):
+    """Logical append-only dataset owned by the participant evidence runtime."""
+
+    address: str
+    target_address: str
+    content_name: str
+    item_names: tuple[str, ...]
+    tags: tuple[str, ...]
+    sensitive: bool
+    storage_kind: str = "aptl-participant-run-store-jsonl"
+
+    def details(self) -> dict[str, object]:
+        """Return the secret-free realization identity used for readback."""
+
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "content_name": self.content_name,
+            "item_names": list(self.item_names),
+            "tags": list(self.tags),
+            "sensitive": self.sensitive,
+            "storage_kind": self.storage_kind,
+        }
 
 
 @dataclass(frozen=True)

@@ -143,8 +143,8 @@ def test_module_lockfile_name_is_the_upstream_owned_contract():
     Production and the fixtures both read ``LOCKFILE_NAME`` from RAES so they
     can never drift apart, but that also means a silent upstream rename would
     be followed without anyone noticing. This assertion is the tripwire: RAES
-    2.0.0 publishes ``raes.lock.json`` as part of the hard namespace rename, so
-    a later change here is a real on-disk contract change that must be handled
-    deliberately rather than absorbed.
+    2.0.0 publishes ``raes.lock.json``. A future change here is another real
+    on-disk contract change and must be handled deliberately rather than
+    absorbed through an APTL-owned alias.
     """
     assert LOCKFILE_NAME == "raes.lock.json"

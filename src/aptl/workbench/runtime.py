@@ -34,11 +34,23 @@ class ProfileLaunch:
     policy_version: str
 
 
+@dataclass(frozen=True)
+class DecisionAgentLaunch:
+    """Secret-free launch for an installed agent with no action tools."""
+
+    provider: str
+    run_id: str
+    policy_version: str = "aptl-participant-decision-provider/v1"
+
+
+AgentLaunch = ProfileLaunch | DecisionAgentLaunch
+
+
 class ManagedAgentAdapter(Protocol):
     """Owns installed-agent and MCP process start/stop inside management."""
 
     def launch(
-        self, launch: ProfileLaunch, credentials: Mapping[str, str]
+        self, launch: AgentLaunch, credentials: Mapping[str, str]
     ) -> object: ...
 
     def close(self, handle: object) -> None: ...

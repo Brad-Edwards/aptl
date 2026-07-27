@@ -28,6 +28,9 @@ nodes:
     - name: ssh
       port: 22
       protocol: tcp
+    runtime:
+      packages:
+      - {manager: apt, name: curl, version: "*"}
     roles:
       paper-evaluator: paper-evaluator
     conditions:
@@ -718,8 +721,6 @@ behavior_specifications:
     - action_contracts
     - observation_boundaries
     - behavior_history
-    - x-paper:wazuh-evidence
-    - x-paper:boundary-negative-evidence
     evidence_contract_refs:
     - participant-behavior-history-event-stream-v1
     extension_policy: governed-extension

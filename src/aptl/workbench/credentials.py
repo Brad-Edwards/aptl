@@ -20,22 +20,43 @@ class EphemeralCredentialBroker:
 
     def __init__(self, secret_source: Mapping[str, str]) -> None:
         self._secret_source = dict(secret_source)
-        self._leases: dict[tuple[ProfileId, str], dict[str, str]] = {}
+        self._leases: dict[tuple[object, str], dict[str, str]] = {}
 
     def prepare(
         self, profile: ProfileId, run_id: str, aliases: tuple[str, ...]
     ) -> Mapping[str, str]:
         """Create one lease containing model auth and selected service aliases."""
-        names = (_MODEL_CREDENTIAL, *aliases)
+        return self.prepare_named(
+            profile,
+            run_id,
+            (_MODEL_CREDENTIAL, *aliases),
+        )
+
+    def prepare_named(
+        self,
+        subject: object,
+        run_id: str,
+        names: tuple[str, ...],
+    ) -> Mapping[str, str]:
+        """Create one lease for an exact, caller-declared credential set."""
+
+        if not names or len(set(names)) != len(names):
+            raise WorkbenchCredentialError(
+                "credential lease names must be unique and non-empty"
+            )
         values: dict[str, str] = {}
         for name in names:
+            if not isinstance(name, str) or not name:
+                raise WorkbenchCredentialError(
+                    "credential lease names must be unique and non-empty"
+                )
             value = self._secret_source.get(name)
             if not value or contains_placeholder(value):
                 raise WorkbenchCredentialError(
                     f"missing or placeholder workbench credential: {name}"
                 )
             values[name] = value
-        key = (profile, run_id)
+        key = (subject, run_id)
         if key in self._leases:
             raise WorkbenchCredentialError("credential lease already exists")
         self._leases[key] = values
@@ -50,6 +71,11 @@ class EphemeralCredentialBroker:
 
     def destroy(self, profile: ProfileId, run_id: str) -> None:
         """Drop all references held by the active profile lease."""
-        lease = self._leases.pop((profile, run_id), None)
+        self.destroy_named(profile, run_id)
+
+    def destroy_named(self, subject: object, run_id: str) -> None:
+        """Drop a provider or profile lease without widening its identity."""
+
+        lease = self._leases.pop((subject, run_id), None)
         if lease is not None:
             lease.clear()

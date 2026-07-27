@@ -337,9 +337,12 @@ def test_participant_action_proof_uses_control_plane_and_records_behavior(
     behavior = proof["participant_behavior_history"][PARTICIPANT_ACTION_ADDRESS]
     assert [event["event_type"] for event in behavior] == [
         "action_attempted",
+        "state_transition_recorded",
         "observation_emitted",
     ]
-    assert behavior[-1]["actor_provenance"] == "codex-cli"
+    assert behavior[0]["actor_provenance"].startswith(
+        "participant-implementation:aptl-curated-live-proof@1.0.0"
+    )
     assert any(
         address.startswith(f"{PARTICIPANT_ACTION_ADDRESS}.")
         for address in proof["participant_snapshot_entries"]

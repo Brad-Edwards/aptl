@@ -120,8 +120,8 @@ def _raes_lock_digest(scenario_path: Path | None) -> str | None:
     """Compute the sha256 of the module lockfile adjacent to scenario_path.
 
     The lockfile name is upstream-owned and read from RAES rather than
-    hardcoded: RAES 1.1.0 still publishes it as ``aces.lock.json``, so the file
-    on disk is unchanged by the rename and tracks upstream if it ever moves.
+    hardcoded: RAES 2.0.0 publishes it as ``raes.lock.json``, and APTL tracks
+    that upstream contract through the imported constant.
     """
     if scenario_path is None:
         return None

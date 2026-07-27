@@ -54,7 +54,7 @@ APTL_RAES_TARGET_NAME = "aptl"
 APTL_RAES_TARGET_VERSION = "0.1.0"
 
 # The reference RAES processor whose provisioning-plan output APTL realizes.
-_COMPATIBLE_PROCESSORS = frozenset({"aces-reference-processor"})
+_COMPATIBLE_PROCESSORS = frozenset({"raes-reference-processor"})
 
 # Full remote-control-plane contract surface. The profile requires the planning,
 # operation/status, runtime-snapshot, workflow, evaluation, and participant
@@ -81,6 +81,8 @@ _BASE_SUPPORTED_CONTRACT_VERSIONS = frozenset(
 
 _CURRENT_PARTICIPANT_CONTRACT_VERSIONS = frozenset(
     {
+        "participant-control-occurrence-v1",
+        "participant-crossing-occurrence-v1",
         "participant-lifecycle-event-v1",
         "participant-observation-envelope-v1",
         "participant-shared-state-record-v1",
@@ -129,14 +131,16 @@ _EVALUATOR = EvaluatorCapabilities(
     supports_objectives=True,
 )
 
-# Participant runtime capability declaration. The current proof drives a single
-# red participant action from Kali against a realized victim container and emits
-# participant episode plus behavior-history snapshot surfaces. It does not claim
-# blue/green/white roles or multi-party coordination semantics.
+# Participant runtime capability declaration. APTL realizes the bounded
+# green/red/blue research surface through RAES-owned episode, exact action, and
+# observation-boundary contracts. This does not claim multi-party coordination,
+# autonomous scheduling, or a role beyond the three implemented compartments.
 _PARTICIPANT_RUNTIME = ParticipantRuntimeCapabilities(
     name="aptl-participant-runtime",
-    supported_participant_roles=frozenset({"red"}),
-    supported_behavior_features=frozenset({"behavior_history"}),
+    supported_participant_roles=frozenset({"green", "red", "blue"}),
+    supported_behavior_features=frozenset(
+        {"action_contracts", "observation_boundaries", "behavior_history"}
+    ),
     supported_interaction_features=frozenset({"shared_state_change"}),
     constraints={
         "default_participant_action_address": PARTICIPANT_ACTION_ADDRESS,
@@ -150,7 +154,7 @@ _PROVISIONER = ProvisionerCapabilities(
     name="aptl-docker-compose-provisioner",
     supported_node_types=frozenset({"switch", "vm"}),
     supported_os_families=frozenset({"linux"}),
-    supported_content_types=frozenset({"directory", "file"}),
+    supported_content_types=frozenset({"dataset", "directory", "file"}),
     # Manifest honesty (#577, ADR-046 addendum): advertise only the account
     # features the backend materializes AND verifies by read-after-write — the
     # non-secret fields the typed DeploymentAccountRealization carries. auth_method

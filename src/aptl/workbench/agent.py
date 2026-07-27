@@ -23,7 +23,7 @@ from aptl.workbench.process import (
     ProcessResult,
     ProcessRunner,
 )
-from aptl.workbench.runtime import ProfileLaunch
+from aptl.workbench.runtime import AgentLaunch, DecisionAgentLaunch
 
 __all__ = [
     "AgentExecutionError",
@@ -42,6 +42,9 @@ _BASE_ENVIRONMENT = {
 _MODEL_CREDENTIAL = "ANTHROPIC_API_KEY"
 _MCP_INVENTORY_TIMEOUT_SECONDS = 10
 _MAX_CONFIG_BYTES = 1_000_000
+_POSIX_OWNERSHIP_REQUIRED = (
+    "installed agent execution requires POSIX ownership semantics"
+)
 
 
 InventoryProbe = Callable[[str, str, list[str], dict[str, str]], tuple[str, ...]]
@@ -51,11 +54,12 @@ InventoryProbe = Callable[[str, str, list[str], dict[str, str]], tuple[str, ...]
 class _ClaudeHandle:
     """Mutable state for one admitted managed-agent launch."""
 
-    launch: ProfileLaunch
+    launch: AgentLaunch
     servers: dict[str, dict[str, object]]
     environment: dict[str, str]
     config_sha256: str
     inventory: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    ready: bool = False
     closed: bool = False
 
 
@@ -68,9 +72,7 @@ async def _probe(
         async with ClientSession(
             read_stream,
             write_stream,
-            read_timeout_seconds=timedelta(
-                seconds=_MCP_INVENTORY_TIMEOUT_SECONDS
-            ),
+            read_timeout_seconds=timedelta(seconds=_MCP_INVENTORY_TIMEOUT_SECONDS),
         ) as session:
             await session.initialize()
             result = await session.list_tools()
@@ -106,11 +108,9 @@ class ClaudeCodeManagedAgentAdapter:
         max_output_bytes: int = 1_000_000,
         max_prompt_chars: int = 16_000,
     ) -> None:
-        if (
-            timeout_seconds <= 0
-            or max_output_bytes <= 0
-            or max_prompt_chars <= 0
-        ):
+        """Initialize the admitted executable and bounded process adapter."""
+
+        if timeout_seconds <= 0 or max_output_bytes <= 0 or max_prompt_chars <= 0:
             raise AgentExecutionError("agent limits are invalid")
         self._executable = _admitted_executable(claude_executable)
         self._work_dir = _prepare_work_dir(work_dir)
@@ -121,11 +121,13 @@ class ClaudeCodeManagedAgentAdapter:
         self._max_prompt_chars = max_prompt_chars
 
     @staticmethod
-    def launch(
-        launch: ProfileLaunch, credentials: Mapping[str, str]
-    ) -> object:
+    def launch(launch: AgentLaunch, credentials: Mapping[str, str]) -> object:
         """Admit a generated strict config and create a minimal secret lease."""
-        servers, config_sha256 = _load_server_config(launch.client_config_path)
+        if isinstance(launch, DecisionAgentLaunch):
+            servers: dict[str, dict[str, object]] = {}
+            config_sha256 = ""
+        else:
+            servers, config_sha256 = _load_server_config(launch.client_config_path)
         required_aliases = _credential_aliases(servers)
         admitted = (_MODEL_CREDENTIAL, *sorted(required_aliases))
         environment = dict(_BASE_ENVIRONMENT)
@@ -134,13 +136,22 @@ class ClaudeCodeManagedAgentAdapter:
             if not value or contains_placeholder(value):
                 raise AgentExecutionError("agent credential lease is incomplete")
             environment[name] = value
-        return _ClaudeHandle(launch, servers, environment, config_sha256)
+        return _ClaudeHandle(
+            launch,
+            servers,
+            environment,
+            config_sha256,
+            ready=isinstance(launch, DecisionAgentLaunch),
+        )
 
     def list_tools(self, handle: object) -> Mapping[str, tuple[str, ...]]:
         """Probe every selected stdio server instead of trusting the descriptor."""
         active = _require_handle(handle)
         if active.closed:
             raise AgentExecutionError("agent profile is closed")
+        if isinstance(active.launch, DecisionAgentLaunch):
+            active.ready = True
+            return {}
         _assert_config_unchanged(active)
         inventory: dict[str, tuple[str, ...]] = {}
         for server_id, server in active.servers.items():
@@ -152,16 +163,19 @@ class ClaudeCodeManagedAgentAdapter:
                 environment,
             )
         active.inventory = inventory
+        active.ready = True
         return inventory
 
     def respond(self, handle: object, message: str) -> str:
         """Run one bounded non-persistent agent request with prompt on stdin."""
         active = _require_handle(handle)
-        if active.closed or not active.inventory:
+        if active.closed or not active.ready:
             raise AgentExecutionError("agent profile is not ready")
         _assert_config_unchanged(active)
         if not message or len(message) > self._max_prompt_chars:
-            raise AgentExecutionError("participant message exceeds the configured limit")
+            raise AgentExecutionError(
+                "participant message exceeds the configured limit"
+            )
         result = self._runner.run(
             self._argv(self._executable, active),
             env=dict(active.environment),
@@ -180,16 +194,14 @@ class ClaudeCodeManagedAgentAdapter:
         active = _require_handle(handle)
         active.environment.clear()
         active.inventory.clear()
+        active.ready = False
         active.closed = True
 
     @staticmethod
     def _argv(executable: Path, handle: _ClaudeHandle) -> tuple[str, ...]:
-        allowed = ",".join(
-            f"mcp__{server_id}__{tool}"
-            for server_id, tools in handle.inventory.items()
-            for tool in tools
-        )
-        return (
+        """Build the strict Claude Code invocation for an admitted profile."""
+
+        base = (
             str(executable),
             "--print",
             "--bare",
@@ -204,6 +216,16 @@ class ClaudeCodeManagedAgentAdapter:
             "dontAsk",
             "--tools",
             "",
+        )
+        if isinstance(handle.launch, DecisionAgentLaunch):
+            return base
+        allowed = ",".join(
+            f"mcp__{server_id}__{tool}"
+            for server_id, tools in handle.inventory.items()
+            for tool in tools
+        )
+        return (
+            *base,
             "--allowedTools",
             allowed,
             "--mcp-config",
@@ -214,18 +236,42 @@ class ClaudeCodeManagedAgentAdapter:
 
 def _admitted_executable(path: Path) -> Path:
     """Resolve and validate a trusted installed-agent executable."""
+    if not hasattr(os, "getuid"):
+        raise AgentExecutionError(_POSIX_OWNERSHIP_REQUIRED)
     if not path.is_absolute():
         raise AgentExecutionError("agent executable must be absolute")
     resolved = path.resolve(strict=True)
-    stat = resolved.stat()
+    file_stat = resolved.stat()
     if (
         not resolved.is_file()
         or not os.access(resolved, os.X_OK)
-        or stat.st_uid not in {0, os.getuid()}
-        or stat.st_mode & 0o022
+        or file_stat.st_uid not in {0, os.getuid()}
+        or file_stat.st_mode & 0o002
+        or (
+            file_stat.st_mode & 0o020
+            and not _group_is_private_to_current_user(file_stat.st_gid)
+        )
     ):
         raise AgentExecutionError("agent executable is not admissible")
     return resolved
+
+
+def _group_is_private_to_current_user(group_id: int) -> bool:
+    """Whether a writable executable group contains no other principals."""
+
+    try:
+        import grp
+        import pwd
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        group = grp.getgrgid(group_id)
+        primary_group_users = {
+            entry.pw_name for entry in pwd.getpwall() if entry.pw_gid == group_id
+        }
+    except (KeyError, OSError):
+        return False
+    group_users = {*group.gr_mem, *primary_group_users}
+    return group_users <= {current_user}
 
 
 def _prepare_work_dir(path: Path) -> Path:
@@ -247,6 +293,8 @@ def _prepare_work_dir(path: Path) -> Path:
 
 def _require_private_directory(path: Path) -> None:
     """Reject a directory that is not private and owned by this process."""
+    if not hasattr(os, "getuid"):
+        raise AgentExecutionError(_POSIX_OWNERSHIP_REQUIRED)
     stat = path.stat()
     if (
         path.is_symlink()
@@ -267,9 +315,7 @@ def _load_server_config(
         document = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AgentExecutionError("generated MCP config is unreadable") from exc
-    if set(document) != {"mcpServers"} or not isinstance(
-        document["mcpServers"], dict
-    ):
+    if set(document) != {"mcpServers"} or not isinstance(document["mcpServers"], dict):
         raise AgentExecutionError("generated MCP config has an invalid shape")
     servers = document["mcpServers"]
     if not servers:
@@ -282,6 +328,8 @@ def _load_server_config(
 
 def _read_private_config(path: Path) -> bytes:
     """Read a bounded private file without following symbolic links."""
+    if not hasattr(os, "getuid"):
+        raise AgentExecutionError(_POSIX_OWNERSHIP_REQUIRED)
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except OSError as exc:
@@ -308,6 +356,8 @@ def _read_private_config(path: Path) -> bytes:
 
 def _assert_config_unchanged(handle: _ClaudeHandle) -> None:
     """Reject a generated configuration changed after initial admission."""
+    if isinstance(handle.launch, DecisionAgentLaunch):
+        return
     current = hashlib.sha256(
         _read_private_config(handle.launch.client_config_path)
     ).hexdigest()

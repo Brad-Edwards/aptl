@@ -38,10 +38,10 @@ Two independent surfaces live here:
     contains the backend's name). This check runs UNCONDITIONALLY for
     every admission call (it is a structural fact about the two manifests
     actually being used, independent of what any one task's allow-lists
-    say) — at the locked RAES 0.23.1 surface, the published
+    say) — at the locked RAES 2.0.0 surface, the published
     reference-processor manifest names only ``stub`` as a compatible
     backend while ``create_aptl_manifest()`` names
-    ``aces-reference-processor`` as compatible, so this gate currently
+    ``raes-reference-processor`` as compatible, so this gate currently
     rejects EVERY admission that uses the real default manifests. That is
     the correct, ADR-mandated fail-closed behavior, not a bug: "Strict
     mutual apparatus-manifest compatibility cannot be fabricated by

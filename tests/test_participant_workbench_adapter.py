@@ -14,14 +14,16 @@ from aptl.workbench.agent import (
     BoundedProcessRunner,
     ClaudeCodeManagedAgentAdapter,
     ProcessResult,
+    _admitted_executable,
     probe_mcp_server,
 )
 from aptl.workbench.credentials import (
     EphemeralCredentialBroker,
     WorkbenchCredentialError,
 )
+from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.profiles import ProfileId, profile_for, render_profile_config
-from aptl.workbench.runtime import ProfileLaunch
+from aptl.workbench.runtime import DecisionAgentLaunch, ProfileLaunch
 
 
 def test_ephemeral_broker_returns_only_the_selected_profile_lease() -> None:
@@ -51,6 +53,24 @@ def test_ephemeral_broker_returns_only_the_selected_profile_lease() -> None:
     broker.destroy(ProfileId.BLUE, "a" * 32)
     with pytest.raises(WorkbenchCredentialError, match="no active credential lease"):
         broker.lease(ProfileId.BLUE, "a" * 32)
+
+
+def test_ephemeral_broker_issues_provider_specific_model_leases() -> None:
+    broker = EphemeralCredentialBroker(
+        {
+            "ANTHROPIC_API_KEY": "anthropic-secret",
+            "CODEX_API_KEY": "codex-secret",
+        }
+    )
+
+    lease = broker.prepare_named(
+        "codex",
+        "a" * 32,
+        ("CODEX_API_KEY",),
+    )
+
+    assert lease == {"CODEX_API_KEY": "codex-secret"}
+    broker.destroy_named("codex", "a" * 32)
 
 
 @pytest.mark.parametrize("value", ["", "CHANGE_ME", "please-replace_me-now"])
@@ -247,6 +267,136 @@ def test_claude_adapter_rejects_config_tampering_after_inventory(
     with pytest.raises(AgentExecutionError, match="config changed"):
         adapter.respond(handle, "inspect")
     assert runner.invocations == []
+
+
+def test_claude_decision_launch_has_no_mcp_or_action_tools(
+    tmp_path: Path,
+) -> None:
+    runner = _RecordingRunner(
+        ProcessResult(
+            returncode=0,
+            stdout=(
+                b'{"type":"result","is_error":false,'
+                b'"result":"{\\"surface_id\\":\\"selected\\"}"}'
+            ),
+            stderr=b"",
+        )
+    )
+    adapter = ClaudeCodeManagedAgentAdapter(
+        claude_executable=_executable(tmp_path / "claude"),
+        work_dir=tmp_path / "work",
+        runner=runner,
+    )
+    handle = adapter.launch(
+        DecisionAgentLaunch(provider="claude", run_id="a" * 32),
+        {
+            "ANTHROPIC_API_KEY": "model-secret",
+            "OPENAI_API_KEY": "must-not-pass",
+        },
+    )
+
+    assert adapter.list_tools(handle) == {}
+    assert adapter.respond(handle, "choose") == '{"surface_id":"selected"}'
+    invocation = runner.invocations[0]
+    assert invocation.env["ANTHROPIC_API_KEY"] == "model-secret"
+    assert "OPENAI_API_KEY" not in invocation.env
+    assert _option_value(invocation.argv, "--tools") == ""
+    assert "--mcp-config" not in invocation.argv
+    assert "--allowedTools" not in invocation.argv
+
+
+def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
+    tmp_path: Path,
+) -> None:
+    runner = _RecordingRunner(
+        ProcessResult(
+            returncode=0,
+            stdout=(
+                b'{"type":"thread.started","thread_id":"test"}\n'
+                b'{"type":"item.completed","item":{"type":"agent_message",'
+                b'"text":"{\\"surface_id\\":\\"selected\\"}"}}\n'
+                b'{"type":"turn.completed"}\n'
+            ),
+            stderr=b"",
+        )
+    )
+    adapter = CodexManagedAgentAdapter(
+        codex_executable=_executable(tmp_path / "codex"),
+        work_dir=tmp_path / "work",
+        runner=runner,
+    )
+    handle = adapter.launch(
+        DecisionAgentLaunch(provider="codex", run_id="a" * 32),
+        {
+            "CODEX_API_KEY": "model-secret",
+            "ANTHROPIC_API_KEY": "must-not-pass",
+            "OPENAI_API_KEY": "must-not-pass",
+        },
+    )
+
+    assert adapter.list_tools(handle) == {}
+    assert adapter.respond(handle, "choose") == '{"surface_id":"selected"}'
+    invocation = runner.invocations[0]
+    assert invocation.env["CODEX_API_KEY"] == "model-secret"
+    assert "ANTHROPIC_API_KEY" not in invocation.env
+    assert "OPENAI_API_KEY" not in invocation.env
+    assert "CODEX_HOME" in invocation.env
+    assert invocation.argv[-1] == "-"
+    assert _option_value(invocation.argv, "--sandbox") == "read-only"
+    assert "--ignore-user-config" in invocation.argv
+    assert "--ignore-rules" in invocation.argv
+    assert "--ephemeral" in invocation.argv
+    disabled = {
+        invocation.argv[index + 1]
+        for index, value in enumerate(invocation.argv[:-1])
+        if value == "--disable"
+    }
+    assert {
+        "shell_tool",
+        "unified_exec",
+        "code_mode_host",
+        "browser_use",
+        "computer_use",
+        "apps",
+        "multi_agent",
+        "image_generation",
+    } <= disabled
+
+
+def test_agent_executable_accepts_group_write_only_for_a_private_group(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path / "agent")
+    executable.chmod(0o770)
+    monkeypatch.setattr(
+        "aptl.workbench.agent._group_is_private_to_current_user",
+        lambda _group_id: True,
+    )
+
+    assert _admitted_executable(executable) == executable.resolve()
+
+    monkeypatch.setattr(
+        "aptl.workbench.agent._group_is_private_to_current_user",
+        lambda _group_id: False,
+    )
+    with pytest.raises(AgentExecutionError, match="not admissible"):
+        _admitted_executable(executable)
+
+
+def test_agent_executable_rejects_other_writable_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = _executable(tmp_path / "agent")
+    executable.chmod(0o702)
+    monkeypatch.setattr(
+        "aptl.workbench.agent._group_is_private_to_current_user",
+        lambda _group_id: True,
+    )
+
+    with pytest.raises(AgentExecutionError, match="not admissible"):
+        _admitted_executable(executable)
 
 
 def test_bounded_runner_terminates_output_overflow_and_timeout(

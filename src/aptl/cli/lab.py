@@ -8,6 +8,7 @@ import typer
 
 from aptl.cli import lab_init, lifecycle
 from aptl.cli.participant_profile import qualify_profile
+from aptl.cli.participant_readiness import participant_readiness
 from aptl.cli.continuity import continuity_audit
 from aptl.cli.lab_render import (
     emit_lab_access_summary,
@@ -45,6 +46,7 @@ lab_init.register(app)
 # `aptl lab enforce` / `monitor` / `policy show`).
 lifecycle.register(app)
 app.command("qualify-profile")(qualify_profile)
+app.command("participant-readiness")(participant_readiness)
 
 
 # Shared destructive-data warning. Both `stop --volumes` and

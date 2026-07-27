@@ -130,6 +130,7 @@ def participant_action_specs_from_runtime_model(
                 binding,
                 model=model,
                 context=context,
+                config=config,
                 spec_factory=spec_factory,
             )
         except (TypeError, ValueError):
@@ -178,6 +179,7 @@ def _spec_from_binding(
     *,
     model: object,
     context: _BindingContext,
+    config: AptlConfig,
     spec_factory: Callable[..., object],
 ) -> tuple[str, object]:
     """Build one participant action spec from a validated binding payload."""
@@ -224,7 +226,10 @@ def _spec_from_binding(
         actor_provenance=_optional_string(binding, "actor_provenance")
         or "scenario-runtime-binding",
         target_refs=target_refs,
-        timeout_seconds=_optional_positive_int(binding, "timeout_seconds") or 120,
+        timeout_seconds=(
+            _optional_positive_int(binding, "timeout_seconds")
+            or config.experiment.participant_action_timeout_seconds
+        ),
     )
 
 

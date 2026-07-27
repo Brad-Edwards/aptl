@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aptl.utils.logging import get_logger
 
@@ -187,6 +187,19 @@ class LabLifecyclePolicyConfig(BaseModel):
         return v
 
 
+class ExperimentSettings(BaseModel):
+    """Strict non-secret apparatus settings approved for experiment binding."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    participant_action_timeout_seconds: int = Field(
+        default=120,
+        strict=True,
+        ge=1,
+        le=3600,
+    )
+
+
 class AptlConfig(BaseModel):
     """Top-level APTL configuration.
 
@@ -203,6 +216,7 @@ class AptlConfig(BaseModel):
     deployment: DeploymentConfig = DeploymentConfig()
     run_storage: RunStorageConfig = RunStorageConfig()
     lifecycle_policy: LabLifecyclePolicyConfig | None = None
+    experiment: ExperimentSettings = ExperimentSettings()
 
 
 def load_config(path: Path) -> AptlConfig:

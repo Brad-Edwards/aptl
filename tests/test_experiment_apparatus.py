@@ -6,7 +6,7 @@ Two things are exercised here:
 * ``check_apparatus_admission`` — conjunctive identity/manifest-ref/
   capability/mutual-compat admission over ``ExperimentTaskModel.
   apparatus_constraints`` and the authoring input's optional
-  ``apparatus_intent``. At the locked RAES 0.23.1 surface the published
+  ``apparatus_intent``. At the locked RAES 2.0.0 surface the published
   reference-processor manifest names only ``stub`` as a compatible backend
   while APTL names ``raes-reference-processor`` as compatible — a
   one-directional mismatch — so ANY admission using the real default
@@ -751,7 +751,7 @@ class TestPlanConditionFeasibilityHappyPath:
 
 
 class TestPlanConditionFeasibilityBrokenParameterBinding:
-    """At the locked RAES 0.23.1 surface, ``run_reference_processor`` itself
+    """At the locked RAES 2.0.0 surface, ``run_reference_processor`` itself
     *raises* ``SDLInstantiationError`` for a structurally broken parameter
     binding (verified live) rather than returning an invalid
     ``ReferenceProcessorResult`` — a delta from what a naive reading of the

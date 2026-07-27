@@ -113,7 +113,7 @@ pre-live prerequisite.
   checks. APTL must not add a local Pydantic mirror or direct
   `ScenarioDefinition` compatibility path for live validation.
 - **Import and dependency trust:** RAES module resolution and
-  `aces.lock.json` verification are RAES-owned. Do not fetch, expand, or
+  `raes.lock.json` verification are RAES-owned. Do not fetch, expand, or
   execute imports through an APTL helper.
 - **Backend manifest/profile:** the live gate must use APTL's real
   `RuntimeTarget` manifest and the canonical `provisioning-only` profile.

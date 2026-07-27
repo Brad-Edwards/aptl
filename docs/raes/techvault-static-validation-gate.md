@@ -20,7 +20,7 @@ editing the gate. TechVault is the proving input, never a hardcoded branch.
    `scenarios/techvault-operational.sdl.yaml`.
 2. **Import lock** (when the scenario declares imports and `check_imports` is
    enabled). `raes sdl verify-imports` verifies the committed
-   `aces.lock.json` next to the scenario against a fresh resolution. The
+   `raes.lock.json` next to the scenario against a fresh resolution. The
    lockfile's local `resolved_source` is checkout-independent (RAES #551), so
    this passes on CI and any developer checkout and fails only when an
    imported module changes without re-running `raes sdl resolve`.

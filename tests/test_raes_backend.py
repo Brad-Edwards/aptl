@@ -1195,6 +1195,27 @@ def test_valid_binding_yields_participant_spec_baseline():
     assert _PAPER_PARTICIPANT_ADDRESS in specs
 
 
+def test_participant_binding_uses_the_approved_apparatus_timeout_default():
+    from aptl.backends.raes_participant_actions import (
+        participant_action_specs_from_runtime_model,
+    )
+
+    model, plan, config = _compile_paper_model_plan_config()
+    _paper_binding(model).pop("timeout_seconds", None)
+    payload = config.model_dump(mode="python")
+    payload["experiment"] = {"participant_action_timeout_seconds": 37}
+    configured = AptlConfig.model_validate(payload)
+
+    specs = participant_action_specs_from_runtime_model(
+        model,
+        provisioning_plan=plan.provisioning,
+        project_dir=PROJECT_ROOT,
+        config=configured,
+    )
+
+    assert specs[_PAPER_PARTICIPANT_ADDRESS].timeout_seconds == 37
+
+
 def _set_runtime_target(binding):
     binding["runtime_target"] = "libvirt"
 

@@ -120,6 +120,22 @@ class TestContainerSettings:
         assert set(settings.enabled_profiles()) == {"wazuh", "kali"}
 
 
+class TestExperimentSettings:
+    """The sole code-owned apparatus binding target stays strict and bounded."""
+
+    def test_default_participant_action_timeout(self):
+        from aptl.core.config import ExperimentSettings
+
+        assert ExperimentSettings().participant_action_timeout_seconds == 120
+
+    @pytest.mark.parametrize("value", [0, 3601, "90", True])
+    def test_rejects_out_of_range_or_non_integer_timeout(self, value):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(participant_action_timeout_seconds=value)
+
+
 class TestAptlConfig:
     """Tests for the top-level AptlConfig model."""
 

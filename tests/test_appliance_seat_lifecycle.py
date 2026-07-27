@@ -19,8 +19,14 @@ from aptl.appliance.seat.lifecycle import (
 )
 from aptl.appliance.seat.models import SeatRecord
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
+from aptl.core import hostenv
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from tests.test_appliance_boundary_inventory import _policy
+
+pytestmark = pytest.mark.skipif(
+    hostenv.host_os() != hostenv.OS_LINUX,
+    reason="appliance seat launcher lifecycle is Linux-only",
+)
 
 
 def _inspection() -> ApplianceReleaseInspection:

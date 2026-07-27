@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from aptl.appliance.seat.exposure import audit_host_process_inventory
+from aptl.core import hostenv
+
+pytestmark = pytest.mark.skipif(
+    hostenv.host_os() != hostenv.OS_LINUX,
+    reason="appliance seat launcher exposure checks are Linux-only",
+)
 
 
 def test_audit_host_process_inventory_probes_docker_by_default() -> None:

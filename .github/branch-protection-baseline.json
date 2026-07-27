@@ -1,5 +1,5 @@
 {
-  "source": "APTL required merge checks (issue #502); advisory scanners per ADR-026 stay optional",
+  "source": "APTL required merge checks (issues #502, #852); advisory scanners per ADR-026 stay optional",
   "branches": {
     "main": {
       "admin_bypass_allowed": true,
@@ -12,7 +12,8 @@
           "Python tests + coverage",
           "MCP TypeScript tests + coverage",
           "Web frontend tests + coverage",
-          "SonarCloud quality gate"
+          "SonarCloud quality gate",
+          "PR title lint"
         ]
       }
     },
@@ -27,7 +28,8 @@
           "Python tests + coverage",
           "MCP TypeScript tests + coverage",
           "Web frontend tests + coverage",
-          "SonarCloud quality gate"
+          "SonarCloud quality gate",
+          "PR title lint"
         ]
       }
     }

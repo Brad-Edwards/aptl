@@ -179,6 +179,13 @@ class RunStorageBackend(Protocol):
         self, run_id: str, relative_path: str, records: list[dict[str, Any]]
     ) -> None: ...
 
+    def create_run_json_once(
+        self,
+        run_id: str,
+        relative_path: str,
+        payload: object,
+    ) -> Path: ...
+
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None: ...
 
     def create_json_once(self, namespace: str, name: str, payload: object) -> Path: ...
@@ -275,6 +282,45 @@ class LocalRunStore:
         with open(target, "ab") as fh:
             fh.write(chunk)
         log.debug("Appended %d JSONL records to %s", len(records), target)
+
+    def create_run_json_once(
+        self,
+        run_id: str,
+        relative_path: str,
+        payload: object,
+    ) -> Path:
+        """Atomically publish one immutable, run-scoped JSON artifact.
+
+        The artifact uses the same canonical, no-follow, create-once
+        semantics as :meth:`create_json_once`, but remains inside the run
+        archive so it can act as an authoritative transaction record for
+        recoverable JSONL projections.
+        """
+
+        safe_run_id = _validate_id(run_id, "run_id")
+        safe_relpath = _validate_relative_path(relative_path).replace("\\", "/")
+        contained_relpath = f"{safe_run_id}/{safe_relpath}"
+        canonical, normalized = _canonicalize_payload(payload)
+        _assert_no_secret_drift(normalized)
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        target = self._base_dir / safe_run_id / PurePosixPath(safe_relpath)
+        try:
+            create_exclusive_nofollow(
+                self._base_dir,
+                contained_relpath,
+                canonical,
+            )
+        except FileExistsError:
+            existing = read_contained_nofollow(
+                self._base_dir,
+                contained_relpath,
+            )
+            if existing != canonical:
+                raise RunStoreConflictError(
+                    "create_run_json_once target already exists with "
+                    f"different content: {safe_relpath}"
+                ) from None
+        return target
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
         target = self._resolve_run_target(run_id, relative_path)

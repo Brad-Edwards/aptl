@@ -1,7 +1,8 @@
 """Resolve RAES content-placement payloads into deployment content operations.
 
 Issue #689 / ADR-046's TechVault addendum: a `content-placement` resource
-must lower into typed backend realization (:class:`DeploymentContentRealization`)
+must lower into typed backend realization (:class:`DeploymentContentRealization`
+or :class:`ParticipantDatasetRealization`)
 or fail closed with an error diagnostic before any `aptl lab start` side
 effect. Mirrors the worked pattern in `raes_image_realization.py`: parse,
 apply a narrow policy, and lower one resource, emitting redacted diagnostics
@@ -16,10 +17,14 @@ Realizable content (ADR-046):
 - an explicit empty-directory declaration (``type: directory`` with no
   ``source``).
 
+Logical participant datasets are admitted only as an empty, append-only,
+run-scoped evidence carrier. They are not planted into a container and cannot
+name a source, path, destination, text payload, or arbitrary schema.
+
 Unrealizable content (error diagnostic, no side effects):
 
-- ``type: dataset`` (never dynamically realizable — CyRIS-style dataset
-  content has no bounded, portable materialization contract);
+- a dataset carrying pre-seeded bytes, a filesystem destination, or malformed
+  item declarations;
 - any ``source.name`` prefixed ``runtime-observed:`` (captured-but-not-
   recreatable content per the ADR's TechVault Operational Standup Addendum);
 - a ``source.name`` that resolves outside the project root;
@@ -40,6 +45,7 @@ from raes_contracts.planning import PlannedResource
 
 from aptl.backends.raes_content_source_policy import forbidden_source_reason
 from aptl.backends.raes_diagnostics import diagnostic
+from aptl.backends.raes_realization_model import ParticipantDatasetRealization
 from aptl.backends.raes_realization_values import (
     content_source_name as _content_source_name,
     content_text as _content_text,
@@ -56,10 +62,8 @@ from aptl.core.deployment.realization import DeploymentContentRealization
 # branch (ADR-046 §Extensibility).
 _CONTENT_REALIZABLE_SERVICES: dict[str, str] = {
     "fileshare": "fileshare_data",
-    # Kali carries the paper scenario's participant-visible task brief. The
-    # `kali_operations` named volume already exists in docker-compose.yml
-    # (mounted at /home/kali/operations), so a volume-relative content path
-    # lowers straight through the ADR-043 seed mechanism (issue #691).
+    # Retained scenarios place participant-visible task material on Kali's
+    # existing operations volume. Keep this scenario-independent realization.
     "kali": "kali_operations",
 }
 
@@ -94,7 +98,10 @@ def resolve_content_placement(
     target_address: str,
     target_service: str | None,
     project_dir: Path,
-) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+) -> tuple[
+    DeploymentContentRealization | ParticipantDatasetRealization | None,
+    list[Diagnostic],
+]:
     """Lower one content-placement resource or return fail-closed diagnostics."""
 
     spec = _placement_spec(payload)
@@ -105,9 +112,16 @@ def resolve_content_placement(
     )
     inputs, reason = _content_placement_inputs(spec, target_service)
 
-    content: DeploymentContentRealization | None = None
+    content: DeploymentContentRealization | ParticipantDatasetRealization | None = None
     diagnostics: list[Diagnostic] = []
-    if inputs is None:
+    if spec is not None and spec.get("type") == "dataset":
+        content, diagnostics = _resolve_dataset_content(
+            resource=resource,
+            spec=spec,
+            content_name=content_name,
+            target_address=target_address,
+        )
+    elif inputs is None:
         diagnostics = [_reject(resource.address, reason)]
     else:
         resolver = (
@@ -150,10 +164,12 @@ def _content_placement_inputs(
             else None
         )
         if content_type == "dataset":
-            reason = "dataset-not-realizable"
+            inputs = None
         elif content_type not in ("file", "directory"):
             reason = "unknown-content-type"
-        elif source_name is not None and source_name.startswith(_RUNTIME_OBSERVED_PREFIX):
+        elif source_name is not None and source_name.startswith(
+            _RUNTIME_OBSERVED_PREFIX
+        ):
             reason = "runtime-observed-source"
         elif volume_suffix is None:
             reason = "destination-without-backing-mount"
@@ -164,6 +180,68 @@ def _content_placement_inputs(
                 volume_suffix=volume_suffix,
             )
     return inputs, reason
+
+
+def _resolve_dataset_content(
+    *,
+    resource: PlannedResource,
+    spec: Mapping[str, Any],
+    content_name: str,
+    target_address: str,
+) -> tuple[ParticipantDatasetRealization | None, list[Diagnostic]]:
+    """Lower one empty logical evidence dataset into the run-store carrier."""
+
+    dataset: ParticipantDatasetRealization | None = None
+    diagnostics: list[Diagnostic] = []
+    forbidden_values = (
+        spec.get("source"),
+        spec.get("text"),
+        spec.get("path"),
+        spec.get("destination"),
+    )
+    if any(value not in (None, "") for value in forbidden_values):
+        diagnostics = [_reject(resource.address, "dataset-carries-materialization")]
+    else:
+        item_names = _dataset_item_names(spec.get("items"))
+        tags = _dataset_tags(spec.get("tags", []))
+        if item_names is None:
+            diagnostics = [_reject(resource.address, "dataset-items-invalid")]
+        elif tags is None:
+            diagnostics = [_reject(resource.address, "dataset-tags-invalid")]
+        else:
+            dataset = ParticipantDatasetRealization(
+                address=resource.address,
+                target_address=target_address,
+                content_name=content_name,
+                item_names=item_names,
+                tags=tags,
+                sensitive=_is_sensitive(spec),
+            )
+    return dataset, diagnostics
+
+
+def _dataset_item_names(raw_items: object) -> tuple[str, ...] | None:
+    """Validate and normalize the declared dataset item names."""
+
+    if not isinstance(raw_items, list) or not raw_items:
+        return None
+    item_names: list[str] = []
+    for item in raw_items:
+        name = item.get("name") if isinstance(item, Mapping) else None
+        if not isinstance(name, str) or not name or name in item_names:
+            return None
+        item_names.append(name)
+    return tuple(item_names)
+
+
+def _dataset_tags(raw_tags: object) -> tuple[str, ...] | None:
+    """Validate and normalize the declared dataset tags."""
+
+    if not isinstance(raw_tags, list) or any(
+        not isinstance(tag, str) or not tag for tag in raw_tags
+    ):
+        return None
+    return tuple(raw_tags)
 
 
 def _resolve_file_content(
@@ -298,7 +376,9 @@ def _resolve_directory_content_from_source(
     """Resolve a project-sourced `type: directory` content spec."""
 
     content: DeploymentContentRealization | None = None
-    resolved, diagnostics = _resolve_project_source(resource.address, source_name, project_dir)
+    resolved, diagnostics = _resolve_project_source(
+        resource.address, source_name, project_dir
+    )
     if resolved is not None:
         if not resolved.is_dir():
             diagnostics = [_reject(resource.address, "source-directory-missing")]

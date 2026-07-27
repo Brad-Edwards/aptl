@@ -149,7 +149,7 @@ def test_paper_scenario_content_surface_realizes_with_no_rejection():
     task_brief = content_placements[0].content
     assert isinstance(task_brief, DeploymentContentRealization)
     assert task_brief.content_name == "task-brief"
-    assert task_brief.volume_suffix == "kali_operations"
+    assert task_brief.volume_suffix == ""
     assert task_brief.dest_relpath == "scenario/task.md"
     assert task_brief.source_kind == "inline-text"
 

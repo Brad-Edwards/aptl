@@ -2,7 +2,7 @@
 
 import json
 
-from aptl.core.runstore import LocalRunStore
+from aptl.core.runstore import LocalRunStore, RunStoreConflictError
 
 
 class TestLocalRunStore:
@@ -56,6 +56,69 @@ class TestLocalRunStore:
 
         content = (tmp_path / "runs" / "r1" / "empty.jsonl").read_bytes()
         assert content == b""
+
+    def test_create_run_json_once_is_canonical_and_idempotent(self, tmp_path):
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("r1")
+
+        first = store.create_run_json_once(
+            "r1",
+            "evaluator/transactions/action.json",
+            {"beta": 2, "alpha": 1},
+        )
+        second = store.create_run_json_once(
+            "r1",
+            "evaluator/transactions/action.json",
+            {"alpha": 1, "beta": 2},
+        )
+
+        assert first == second
+        assert first.read_bytes() == b'{"alpha":1,"beta":2}'
+
+    def test_create_run_json_once_rejects_conflicting_republication(
+        self,
+        tmp_path,
+    ):
+        import pytest
+
+        store = LocalRunStore(tmp_path / "runs")
+        store.create_run("r1")
+        store.create_run_json_once(
+            "r1",
+            "evaluator/transactions/action.json",
+            {"status": "accepted"},
+        )
+
+        with pytest.raises(RunStoreConflictError):
+            store.create_run_json_once(
+                "r1",
+                "evaluator/transactions/action.json",
+                {"status": "different"},
+            )
+
+    def test_create_run_json_once_rejects_symlinked_run_directory(
+        self,
+        tmp_path,
+    ):
+        import pytest
+
+        from aptl.utils.pathsafe import PathContainmentError
+
+        store_root = tmp_path / "runs"
+        store_root.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (store_root / "r1").symlink_to(outside, target_is_directory=True)
+        store = LocalRunStore(store_root)
+
+        with pytest.raises(PathContainmentError):
+            store.create_run_json_once(
+                "r1",
+                "evaluator/transactions/action.json",
+                {"status": "accepted"},
+            )
+
+        assert list(outside.iterdir()) == []
 
     def test_copy_file(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")

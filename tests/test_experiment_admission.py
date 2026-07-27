@@ -150,18 +150,18 @@ def _pinned_identity_task_payload() -> dict:
     payload["scenario_ref"] = {"ref_kind": "scenario", "ref_id": "canonical-minimal"}
     payload["apparatus_constraints"] = {
         "allowed_processor_refs": [
-            {"ref_kind": "processor", "ref_id": "aces-reference-processor", "ref_version": "0.1.0"}
+            {"ref_kind": "processor", "ref_id": "raes-reference-processor", "ref_version": "2.0.0"}
         ],
         "allowed_backend_refs": [{"ref_kind": "backend", "ref_id": "aptl", "ref_version": "0.1.0"}],
         "required_manifest_refs": [
             {
                 "ref_kind": "manifest",
-                "ref_id": "aces-reference-processor",
+                "ref_id": "raes-reference-processor",
                 "ref_version": "processor-manifest/v2",
                 "subject_ref": {
                     "ref_kind": "processor",
-                    "ref_id": "aces-reference-processor",
-                    "ref_version": "0.1.0",
+                    "ref_id": "raes-reference-processor",
+                    "ref_version": "2.0.0",
                 },
             },
             {

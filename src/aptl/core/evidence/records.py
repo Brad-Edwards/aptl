@@ -30,6 +30,9 @@ from raes_contracts.contracts import (
     ExperimentEvidenceRecordModel,
     ExperimentReferenceModel,
 )
+from raes_contracts.contracts.experiment_capture import (
+    ExperimentRawEvidenceContentModel,
+)
 
 # RAES 1.1.0 stopped re-exporting this model from ``raes_contracts.contracts``;
 # it is now owned by the ``experiment_capture`` submodule.

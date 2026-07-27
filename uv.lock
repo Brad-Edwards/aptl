@@ -119,7 +119,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.12.0" },
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.6.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "raes", specifier = "==1.1.0" },
+    { name = "raes", specifier = "==2.0.0" },
     { name = "rfc8785", specifier = ">=0.1.4,<0.2.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
@@ -2182,7 +2182,7 @@ wheels = [
 
 [[package]]
 name = "raes"
-version = "1.1.0"
+version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asyncssh" },
@@ -2201,9 +2201,9 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "z3-solver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/65/67/19c5b64b5cec853e07bd339694a015ba3ec2b115752e82c6620f6918497c/raes-1.1.0.tar.gz", hash = "sha256:fb84bebd677e907d70171c8ef098bac59c856ac433b72a003af22c1c65175b93", size = 2157890, upload-time = "2026-07-26T02:18:17.246Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/d5/2444e66bd45ffdd8ffdffc2588c853bdb1025bfd3ce951448107d6275ac7/raes-2.0.0.tar.gz", hash = "sha256:12b7e338350ad11cb65a32216a4a6ea3fd3f165e7f97207e27d1bb88ddd0976d", size = 2392051, upload-time = "2026-07-27T06:59:00.395Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/11/d3/73924a63465ed939aaf58cb720893d914d9712fa77bf0797a017f3c0289c/raes-1.1.0-py3-none-any.whl", hash = "sha256:8cc01e59a5b58a92a649cc9b6b47d51be80adb193de5c9829d5e52cdd25939fb", size = 1985119, upload-time = "2026-07-26T02:18:15.313Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/30/29169747ee4629d733794c780f2684494a74cf2df5b7346a947ff485ec56/raes-2.0.0-py3-none-any.whl", hash = "sha256:8205f90631009a6867c861914fb0e6fa33b32f65faa15873f3dabed02c9e02c2", size = 2250915, upload-time = "2026-07-27T06:58:58.44Z" },
 ]
 
 [[package]]

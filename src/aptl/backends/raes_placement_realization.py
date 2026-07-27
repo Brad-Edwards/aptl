@@ -28,6 +28,7 @@ from aptl.backends.raes_image_free_content_realization import (
 from aptl.backends.raes_profiles import normalize_identifier
 from aptl.backends.raes_realization_model import (
     NodeRealization,
+    ParticipantDatasetRealization,
     PlacementRealization,
     _single_or_none,
 )
@@ -119,7 +120,7 @@ def _realize_placement(
             ],
         )
 
-    content, account, resource_diagnostics = _realize_placement_resource(
+    content, dataset, account, resource_diagnostics = _realize_placement_resource(
         resource, payload, target_address, node_by_address, project_dir
     )
     return (
@@ -130,6 +131,7 @@ def _realize_placement(
             target_address=target_address,
             target_node=_first_nonempty_string(target_values),
             content=content,
+            dataset=dataset,
             account=account,
         ),
         resource_diagnostics,
@@ -144,6 +146,7 @@ def _realize_placement_resource(
     project_dir: Path,
 ) -> tuple[
     DeploymentContentRealization | None,
+    ParticipantDatasetRealization | None,
     DeploymentAccountRealization | None,
     list[Diagnostic],
 ]:
@@ -164,30 +167,45 @@ def _realize_placement_resource(
     """
 
     target_node = node_by_address.get(target_address)
-    target_service = _single_or_none(target_node.backend_services) if target_node else None
+    target_service = (
+        _single_or_none(target_node.backend_services) if target_node else None
+    )
 
+    content: DeploymentContentRealization | None = None
+    dataset: ParticipantDatasetRealization | None = None
+    account: DeploymentAccountRealization | None = None
+    diagnostics: list[Diagnostic] = []
     if resource.resource_type == "content-placement":
-        if target_node is not None and target_node.os and target_node.runtime is not None:
+        spec = payload.get("spec")
+        is_dataset = isinstance(spec, Mapping) and spec.get("type") == "dataset"
+        if (
+            not is_dataset
+            and target_node is not None
+            and target_node.os
+            and target_node.runtime is not None
+        ):
             # Image-free node: the materializer places content directly into the
             # container, no compose service / named volume required.
-            content, diagnostics = resolve_image_free_content_placement(
+            resolved_content, diagnostics = resolve_image_free_content_placement(
                 resource, payload, target_address
             )
         else:
-            content, diagnostics = resolve_content_placement(
+            resolved_content, diagnostics = resolve_content_placement(
                 resource=resource,
                 payload=payload,
                 target_address=target_address,
                 target_service=target_service,
                 project_dir=project_dir,
             )
-        return content, None, diagnostics
-    if resource.resource_type == "account-placement":
+        if isinstance(resolved_content, ParticipantDatasetRealization):
+            dataset = resolved_content
+        else:
+            content = resolved_content
+    elif resource.resource_type == "account-placement":
         account, diagnostics = resolve_account_placement(
             resource=resource,
             payload=payload,
             target_address=target_address,
             target_service=target_service,
         )
-        return None, account, diagnostics
-    return None, None, []
+    return content, dataset, account, diagnostics

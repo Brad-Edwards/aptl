@@ -46,7 +46,10 @@ from aptl.backends._raes_stateful_observation import (
     _observe_generated_artifact,
     _observe_persistent_volume,
 )
-from aptl.backends.raes_realization_model import AptlRealization
+from aptl.backends.raes_realization_model import (
+    AptlRealization,
+    ParticipantDatasetRealization,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
@@ -97,6 +100,11 @@ def observe_realization(
         for placement in realization.placements
         if placement.content is not None
     }
+    placement_datasets = {
+        placement.address: placement.dataset
+        for placement in realization.placements
+        if placement.dataset is not None
+    }
     project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
     realized_networks = _realized_network_names(backend, project_name)
 
@@ -130,6 +138,7 @@ def observe_realization(
                 node_containers,
                 placement_targets.get(address),
                 placement_content.get(address),
+                placement_datasets.get(address),
             )
     return observations
 
@@ -146,7 +155,9 @@ def observation_evidence(
     }
 
 
-def _declared_domain_topology(resource: "PlannedResource") -> Mapping[str, object] | None:
+def _declared_domain_topology(
+    resource: "PlannedResource",
+) -> Mapping[str, object] | None:
     """Return the node's declared domain topology when the plan carries one."""
 
     payload = resource.payload
@@ -206,6 +217,7 @@ def _observe_placement(
     node_containers: dict[str, str],
     target_address: str | None,
     content: DeploymentContentRealization | None,
+    dataset: ParticipantDatasetRealization | None,
 ) -> ObservedResource:
     """Observe a node-scoped placement through the node that received it.
 
@@ -217,14 +229,26 @@ def _observe_placement(
     feature binding), so this does not re-derive it from the raw payload.
     """
 
-    container_name = node_containers.get(target_address) if target_address else None
-    if not container_name:
-        return ObservedResource(realized=False)
-    if not _container_realized(_settled_inspect(backend, container_name)):
-        return ObservedResource(realized=False)
-
-    concerns: dict[tuple[str, ...], object] = {}
-    content_type = _observed_content_type(backend, content, container_name)
-    if content_type is not None:
-        concerns[_CONTENT_TYPE_PATH] = content_type
-    return ObservedResource(realized=True, concerns=concerns)
+    observed: ObservedResource
+    if dataset is not None:
+        observed = ObservedResource(
+            realized=True,
+            concerns={_CONTENT_TYPE_PATH: "dataset"},
+            evidence={
+                "storage_kind": dataset.storage_kind,
+                "item_names": list(dataset.item_names),
+            },
+        )
+    else:
+        container_name = node_containers.get(target_address) if target_address else None
+        if not container_name or not _container_realized(
+            _settled_inspect(backend, container_name)
+        ):
+            observed = ObservedResource(realized=False)
+        else:
+            concerns: dict[tuple[str, ...], object] = {}
+            content_type = _observed_content_type(backend, content, container_name)
+            if content_type is not None:
+                concerns[_CONTENT_TYPE_PATH] = content_type
+            observed = ObservedResource(realized=True, concerns=concerns)
+    return observed

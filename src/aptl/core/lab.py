@@ -1790,55 +1790,62 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
             "Compose bridge IPs to the host"
         )
         return None
-    # Probe only the interactive targets the scenario actually started. Gating
-    # on the selected profiles (not config flags) keeps a bounded scenario from
-    # warning about targets it intentionally omitted.
-    ssh_tests: list[tuple[str, str]] = []
-    if "victim" in ctx.selected_profiles:
-        ssh_tests.append(("victim", "labadmin"))
-    if "kali" in ctx.selected_profiles:
-        ssh_tests.append(("kali", "kali"))
-    if "reverse" in ctx.selected_profiles:
-        ssh_tests.append(("reverse", "labadmin"))
+    for name, user in _ssh_test_targets(ctx):
+        _probe_ssh_target(ctx, name, user)
+    return None
 
-    for name, user in ssh_tests:
-        # Lab targets sit on internal-only networks with no published
-        # host port (issue #293), so a `localhost:<port>` probe never
-        # connects. Address sshd by container IP — the host reaches it
-        # over the bridge — on the container-side port 22 directly.
-        host = select_ssh_host(container_networks(ctx.backend, f"aptl-{name}"))
-        if host is None:
-            _emit_diagnostic(
-                ctx,
-                step="test_ssh",
-                component=f"ssh:{name}",
-                impact=DiagnosticImpact.READINESS,
-                severity=DiagnosticSeverity.WARNING,
-                message=f"{name} container has no resolvable network IP",
-                operator_action=(
-                    f"Check that the aptl-{name} container is running and "
-                    "attached to a lab network"
-                ),
-            )
-            continue
-        ssh_wait = wait_for_service(
-            check_fn=partial(
-                test_ssh_connection,
-                host=host,
-                port=22,
-                user=user,
-                key_path=ctx.ssh_key_path,
+
+def _ssh_test_targets(ctx: _LabStartContext) -> tuple[tuple[str, str], ...]:
+    """Return interactive targets whose admitted realization declares SSH."""
+
+    candidates = (
+        ("victim", "labadmin"),
+        ("kali", "kali"),
+        ("reverse", "labadmin"),
+    )
+    return tuple(
+        (name, user)
+        for name, user in candidates
+        if name in ctx.selected_profiles
+        and _realized_service_is_not_absent(ctx, name, "ssh")
+    )
+
+
+def _probe_ssh_target(ctx: _LabStartContext, name: str, user: str) -> None:
+    """Probe one container-addressed SSH service and record readiness debt."""
+
+    assert ctx.backend is not None and ctx.ssh_key_path is not None
+    host = select_ssh_host(container_networks(ctx.backend, f"aptl-{name}"))
+    if host is None:
+        _emit_diagnostic(
+            ctx,
+            step="test_ssh",
+            component=f"ssh:{name}",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.WARNING,
+            message=f"{name} container has no resolvable network IP",
+            operator_action=(
+                f"Check that the aptl-{name} container is running and "
+                "attached to a lab network"
             ),
-            timeout=60,
-            interval=5,
-            service_name=f"SSH ({name})",
-            progress=ctx.progress,
         )
-        if ssh_wait.ready:
-            log.info("SSH to %s is ready", name)
-            continue
-        # SSH to a target is the control plane scenarios drive — without
-        # it, that target is effectively unreachable for red/blue work.
+        return
+    ssh_wait = wait_for_service(
+        check_fn=partial(
+            test_ssh_connection,
+            host=host,
+            port=22,
+            user=user,
+            key_path=ctx.ssh_key_path,
+        ),
+        timeout=60,
+        interval=5,
+        service_name=f"SSH ({name})",
+        progress=ctx.progress,
+    )
+    if ssh_wait.ready:
+        log.info("SSH to %s is ready", name)
+    else:
         _emit_diagnostic(
             ctx,
             step="test_ssh",
@@ -1851,7 +1858,36 @@ def _step_test_ssh(ctx: _LabStartContext) -> LabResult | None:
                 "drive this target until SSH is reachable"
             ),
         )
-    return None
+
+
+def _realized_service_is_not_absent(
+    ctx: _LabStartContext,
+    node_name: str,
+    service_name: str,
+) -> bool:
+    """Return whether a service is declared, falling back for legacy callers.
+
+    ``None``/malformed realization details occur in older unit seams and before
+    a RAES outcome exists; those callers retain the profile-based behavior.
+    A real admitted outcome with a matching node is authoritative.
+    """
+
+    declared = True
+    details = getattr(ctx.raes_outcome, "realization_details", None)
+    if isinstance(details, Mapping):
+        nodes = details.get("nodes")
+        if isinstance(nodes, list | tuple):
+            declared = False
+            for node in nodes:
+                if isinstance(node, Mapping) and node.get("name") == node_name:
+                    services = node.get("services")
+                    declared = isinstance(services, list | tuple) and any(
+                        isinstance(service, Mapping)
+                        and service.get("name") == service_name
+                        for service in services
+                    )
+                    break
+    return declared
 
 
 def _docker_vm_hides_bridge_ips() -> bool:

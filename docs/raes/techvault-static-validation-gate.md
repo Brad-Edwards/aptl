@@ -68,6 +68,7 @@ components mean:
 | `orchestrator` | Drives RTE-001 workflows through `WorkflowEngine`, including decision, parallel-barrier, failure-transition, outcome-matching, condition-reference, and inject-binding surfaces. |
 | `evaluator` | Evaluates conditions and objectives and publishes result/history envelopes. It does not support scoring or the deprecated SDL scoring chain. |
 | `participant_runtime` | Supports the bounded red-participant episode, behavior-history, observation, and shared-state-change surface through `DeploymentBackend.container_exec()`. It does not claim other roles or general multi-party semantics. |
+| `cleanup` | Uses the runtime target's cleanup lifecycle after failed or completed applies; it does not expose participant-controlled teardown. |
 | `observation` | Is `null`: participant observations are participant-runtime contract data, not a standalone observation component. |
 | `cleanup` | Is `null`: RAES 1.1.0 added an optional portable cleanup capability (`trial-cleanup-plan-v1` / `trial-cleanup-receipt-v1`). APTL tears a lab down through `aptl lab stop -v` and the Compose project lifecycle, not through a declared cleanup contract, so it declares no cleanup component rather than claiming one it does not implement. |
 

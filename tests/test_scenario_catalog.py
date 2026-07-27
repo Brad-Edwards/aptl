@@ -72,15 +72,16 @@ scenarios:
     assert catalog.scenarios[0].path == "scenarios/custom.sdl.yaml"
 
 
-def test_repository_catalog_includes_paper_agent_loop():
+def test_repository_catalog_includes_bounded_participant_agency():
     from aptl.core.scenario_catalog import load_scenario_catalog
 
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
     entries = {entry.id: entry for entry in catalog.scenarios}
 
-    assert entries["paper-agent-loop"].path == "scenarios/paper-agent-loop.sdl.yaml"
-    assert (project_root / entries["paper-agent-loop"].path).exists()
+    scenario = entries["bounded-participant-agency-techvault"]
+    assert scenario.path == "scenarios/bounded-participant-agency-techvault.sdl.yaml"
+    assert (project_root / scenario.path).exists()
 
 
 def test_resolves_catalog_id_to_project_contained_sdl(mocker, tmp_path):
@@ -249,10 +250,11 @@ def test_rejects_missing_raes_parser_dependency(monkeypatch, tmp_path):
 
     monkeypatch.setattr(builtins, "__import__", blocked_import)
 
+    scenario_path = Path("scenarios/custom.sdl.yaml")
     with pytest.raises(ValueError, match="RAES runtime handoff unavailable"):
         resolve_scenario_selection(
             tmp_path,
-            scenario_path=Path("scenarios/custom.sdl.yaml"),
+            scenario_path=scenario_path,
         )
 
 

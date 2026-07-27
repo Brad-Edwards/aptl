@@ -1,0 +1,64 @@
+"""Prerequisite checks for the appliance seat launcher."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from aptl.appliance.models import HostPrerequisites
+from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.prereqs import check_host_prerequisites, require_host_prerequisites
+
+
+def _requirements() -> HostPrerequisites:
+    return HostPrerequisites(
+        architecture="x86_64",
+        vcpus=8,
+        memory_bytes=16 * 1024**3,
+        disk_bytes=100 * 1024**3,
+        hardware_virtualization=True,
+        local_adapter="qemu-kvm",
+        supported_hypervisors=("qemu>=8.2",),
+    )
+
+
+def test_prereqs_pass_with_injected_probes(tmp_path: Path) -> None:
+    report = check_host_prerequisites(
+        _requirements(),
+        seat_root=tmp_path,
+        memory_bytes=32 * 1024**3,
+        kvm_available=True,
+        qemu_img_available=True,
+        qemu_system_available=True,
+    )
+
+    assert report.passed is True
+
+
+def test_prereqs_fail_closed_on_missing_kvm(tmp_path: Path) -> None:
+    report = check_host_prerequisites(
+        _requirements(),
+        seat_root=tmp_path,
+        memory_bytes=32 * 1024**3,
+        kvm_available=False,
+        qemu_img_available=True,
+        qemu_system_available=True,
+    )
+
+    assert report.passed is False
+    assert any(item.code == "no-kvm" for item in report.findings)
+
+
+def test_require_host_prerequisites_raises(tmp_path: Path) -> None:
+    with pytest.raises(SeatLauncherError) as exc:
+        require_host_prerequisites(
+            _requirements(),
+            seat_root=tmp_path,
+            memory_bytes=1024,
+            kvm_available=True,
+            qemu_img_available=True,
+            qemu_system_available=True,
+        )
+
+    assert exc.value.code == "low-memory"

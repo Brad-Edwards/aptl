@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 
 WORKDIR /app
 
@@ -24,7 +24,15 @@ COPY README.md .
 # into the API image.
 COPY hatch_build.py .
 COPY src/ src/
-RUN pip install --no-cache-dir ".[web]" && \
+# Third-party dependencies come from the hash-verified export generated from
+# uv.lock, so the image cannot pick up a different (or tampered) artifact than
+# the one the lock pins. The project itself is then installed with --no-deps,
+# which pulls nothing from a registry. `-e` keeps the install a pure metadata
+# link to the /app/src tree already COPYed above rather than a second copy under
+# site-packages (issue #847).
+COPY requirements/web.txt requirements/web.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements/web.txt && \
+    pip install --no-cache-dir -e . --no-deps --no-build-isolation && \
     apt-get purge -y git && \
     apt-get autoremove -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/*

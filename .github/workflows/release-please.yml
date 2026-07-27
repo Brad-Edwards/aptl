@@ -40,8 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write   # upload release assets
-      id-token: write   # OIDC trusted publishing to PyPI
+      contents: write        # upload release assets
+      id-token: write        # OIDC trusted publishing to PyPI + provenance signing
+      attestations: write    # record SLSA build provenance for the release artifacts
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -51,15 +52,32 @@ jobs:
           python-version: "3.12"
 
       - name: Build sdist + wheel
+        # Release tooling comes from the hashed CI export so the artifact that
+        # ships to PyPI is produced by a known-good toolchain (issue #847).
         run: |
-          python -m pip install --upgrade pip build
-          python -m build
+          pip install --require-hashes -r requirements/ci.txt
+          python -m build --no-isolation
 
       - name: Generate CycloneDX SBOM
+        # Install the locked runtime set plus the freshly built wheel (with
+        # --no-deps, so pip resolves nothing off-lock). The SBOM then describes
+        # exactly the dependency versions uv.lock pins, rather than whatever pip
+        # happened to resolve at release time.
         run: |
-          python -m pip install dist/*.whl cyclonedx-bom
+          pip install --require-hashes -r requirements/runtime.txt
+          pip install dist/*.whl --no-deps
           mkdir -p sbom
           cyclonedx-py environment --output-format JSON --output-file sbom/aptl.cdx.json
+
+      # Sign the built artifacts with a SLSA build-provenance attestation
+      # (issue #847). Sigstore keyless signing via the job's OIDC token — no key
+      # material to hold or rotate. This runs BEFORE publishing so nothing
+      # unattested can reach PyPI if signing fails.
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: 'dist/*'
 
       - name: Publish to PyPI (OIDC trusted publishing)
         uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # v1.14.1
@@ -67,9 +85,22 @@ jobs:
           packages-dir: dist
 
       - name: Attach artifacts to the GitHub Release
+        # The attestation bundle is also attached as a release asset, not just
+        # recorded in the attestations API: a consumer verifying a downloaded
+        # tarball (and OpenSSF Scorecard's Signed-Releases check) looks for a
+        # `.intoto.jsonl` sibling of the artifact.
+        #
+        # BUNDLE and TAG go through the environment rather than being
+        # interpolated into the shell, so no workflow expression is ever parsed
+        # as shell.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/* sbom/* --clobber
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" "dist/aptl-labs-${TAG}.intoto.jsonl"
+          gh release upload "$TAG" dist/* sbom/* --clobber
 
   backmerge:
     name: Back-merge release into dev

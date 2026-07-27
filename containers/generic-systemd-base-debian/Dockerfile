@@ -3,7 +3,7 @@
 # systemd runs their units. Validated locally against Docker with APTL's systemd
 # run flags (env container=docker, cgroupns=host, /sys/fs/cgroup:rw, tmpfs
 # /run+/run/lock+/tmp, cap SYS_ADMIN, seccomp:unconfined, /sbin/init).
-FROM debian:12
+FROM debian:12@sha256:9344f8b8992482f80cba753f323adeaf17690076c095ccff6cc9536be98185dc
 # gnupg: debian:12 ships gpgv (verify-only) but not the full gpg binary
 # apt-key needs for some bookworm InRelease signature paths — without it,
 # a materialized node's own first `apt-get update` intermittently fails

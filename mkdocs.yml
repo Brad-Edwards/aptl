@@ -127,6 +127,7 @@ nav:
     - TechVault Company Profile: reference/techvault-company-profile.md
     - TechVault OSINT Readiness: reference/techvault-osint-readiness.md
     - Experiment Runs: reference/experiment-runs.md
+    - Portable Evidence Bundle Export: reference/evidence-bundle-export.md
     - SOC Feature Spec: specs/soc-feature-spec.md
     - Web GUI Design Specification: specs/web-gui-design.md
     - Web GUI Design Preflight Guardrails: specs/web-gui-design-preflight.md

@@ -57,6 +57,41 @@ class ComposeRealizationImageMixin:
         override_path = self._write_image_override(realization.images)
         return None, (self._project_dir / "docker-compose.yml", override_path)
 
+    def artifact_available(
+        self, image_ref: str, *, allow_remote: bool | None = None
+    ) -> bool:
+        """Whether one immutable artifact reference can be obtained.
+
+        This is the backend half of the RAES artifact availability trust
+        boundary (ADR-050). It reports an operational fact only; it never
+        pulls, tags, or otherwise mutates state, and it never decides
+        admission. The caller partitions the answer by compiled address and
+        hands it to RAES planning as trusted facts.
+
+        A locally present reference always counts. A registry-resolvable
+        reference counts only when remote acquisition is allowed, which it is
+        not for an offline/staged appliance where backend preparation may not
+        pull. ``allow_remote`` defaults to this backend's own staging mode so
+        callers never have to reach into it; pass it explicitly only to force
+        one branch.
+        """
+
+        if allow_remote is None:
+            allow_remote = not self._offline_staged
+        present = self._run(
+            ["docker", "image", "inspect", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if present.returncode == 0:
+            return True
+        if not allow_remote:
+            return False
+        resolvable = self._run(
+            ["docker", "manifest", "inspect", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        return resolvable.returncode == 0
+
     def _verify_staged_image(
         self,
         image: DeploymentImageRealization,

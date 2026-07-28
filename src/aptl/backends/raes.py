@@ -18,6 +18,7 @@ from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
     interpret_realization,
 )
+from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
@@ -175,10 +176,18 @@ def _plan_scenario(
         backend=backend,
     )
     manager = RuntimeManager(target)
+    # Artifact availability is a trusted input to planning, gathered at the
+    # backend trust boundary before the single admitted plan() call (ADR-050).
+    # It is a no-op for a scenario that authors no artifact_requirement.
+    availability = artifact_availability_for_scenario(scenario, backend)
     execution_plan = (
-        manager.plan(scenario, parameters=dict(parameters))
+        manager.plan(
+            scenario,
+            parameters=dict(parameters),
+            artifact_availability=availability,
+        )
         if parameters is not None
-        else manager.plan(scenario)
+        else manager.plan(scenario, artifact_availability=availability)
     )
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,

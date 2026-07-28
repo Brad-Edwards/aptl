@@ -142,6 +142,27 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def artifact_available(
+        self, image_ref: str, *, allow_remote: bool | None = None
+    ) -> bool:
+        """Report whether one immutable artifact reference can be obtained.
+
+        Operational fact only: implementations must not pull, build, tag, or
+        otherwise mutate state here, and must not decide admission. The result
+        feeds the RAES artifact availability context, which the planner uses to
+        admit or reject an authored artifact requirement (ADR-050).
+
+        Args:
+            image_ref: Digest-pinned artifact reference to check.
+            allow_remote: Whether a registry-resolvable reference counts. None
+                lets the backend decide from its own staging mode; False means
+                only local presence counts (offline/staged appliance).
+
+        Returns:
+            True when the reference is obtainable under those rules.
+        """
+        ...
+
     def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
         """Materialize one scenario-declared network.
 

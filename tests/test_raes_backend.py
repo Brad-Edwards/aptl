@@ -536,7 +536,7 @@ class _FakeRuntimeManager:
         self.target = target
         self._initial_snapshot = initial_snapshot
 
-    def plan(self, parsed_scenario):
+    def plan(self, parsed_scenario, *, artifact_availability=None):
         raise NotImplementedError
 
     def apply(self, execution_plan):
@@ -1587,7 +1587,7 @@ def test_start_raes_scenario_uses_parser_runtime_manager_and_backend(
     calls: dict[str, object] = {}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             calls["planned_scenario"] = parsed_scenario
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.wazuh-manager", "techvault.kali")
@@ -1619,7 +1619,7 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser = mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("techvault.wazuh-manager"))
 
@@ -1647,7 +1647,7 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
     calls: dict[str, object] = {}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, parameters=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             calls["scenario"] = parsed_scenario
             calls["parameters"] = parameters
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
@@ -1678,7 +1678,7 @@ def test_start_raes_scenario_threads_resolved_run_target(mocker, tmp_path):
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
 
@@ -1722,7 +1722,7 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(
                 _plan_for_nodes("aptl-victim"), model=planned_model
@@ -1795,7 +1795,7 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
     calls = {"plan": 0, "apply": 0}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, parameters=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
             assert parameters == {"victim_os": "linux"}
             calls["plan"] += 1
@@ -1837,7 +1837,7 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
     calls = {"plan": 0, "apply": 0}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             calls["plan"] += 1
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
@@ -1973,7 +1973,7 @@ def test_start_raes_scenario_submits_orchestration_for_workflow_scenario(
     orchestrator_start = mocker.spy(AptlOrchestrator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"), orchestration=orchestration
             )
@@ -2000,7 +2000,7 @@ def test_start_raes_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=object())
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(_plan_for_nodes("techvault.victim"))
 
     mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
@@ -2039,7 +2039,7 @@ def test_start_raes_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"), orchestration=bad_orchestration
             )
@@ -2092,7 +2092,7 @@ def test_start_raes_scenario_submits_evaluation_for_objective_scenario(
     evaluator_start = mocker.spy(AptlEvaluator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 orchestration=orchestration,
@@ -2127,7 +2127,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             return super().drive_workflows(**kwargs)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 orchestration=orchestration,
@@ -2183,7 +2183,7 @@ def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_pa
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 is_valid=False,
@@ -2219,7 +2219,7 @@ def test_start_raes_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 is_valid=False,

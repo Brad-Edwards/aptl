@@ -16,6 +16,7 @@ import hashlib
 import json
 import tarfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import BinaryIO
 
 import rfc8785
@@ -356,7 +357,7 @@ def verify_stream(fileobj: BinaryIO) -> VerificationReport:
         return _verify_archive(tar)
 
 
-def verify_bundle(path: str) -> VerificationReport:
+def verify_bundle(path: str | Path) -> VerificationReport:
     """Verify a bundle archive at ``path``."""
     with open(path, "rb") as fileobj:
         return verify_stream(fileobj)

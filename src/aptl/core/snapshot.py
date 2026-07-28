@@ -420,13 +420,12 @@ def detection_content_digest(project_dir: Path) -> str:
     from aptl.core.provenance.outcomes import ProvenanceStatus
     from aptl.core.provenance.protocol import ProvenanceContext
     from aptl.core.provenance.providers.detection import DetectionContentProvider
-    from aptl.core.provenance.registrations import DEFAULT_PROVENANCE_REGISTRY
+    from aptl.core.provenance.registrations import DETECTION_REGISTRATION
 
-    registration = DEFAULT_PROVENANCE_REGISTRY.get("detection-content")
-    if registration is None:  # pragma: no cover - the built-in is always present
-        return ""
     context = ProvenanceContext(
-        registration=registration, clock=time.monotonic, started_at=time.monotonic()
+        registration=DETECTION_REGISTRATION,
+        clock=time.monotonic,
+        started_at=time.monotonic(),
     )
     result = DetectionContentProvider(project_dir).collect(context)
     if result.status is not ProvenanceStatus.COLLECTED or not result.leaves:

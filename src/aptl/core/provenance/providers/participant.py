@@ -19,13 +19,14 @@ import logging
 from collections.abc import Mapping
 
 from aptl.core.provenance.identity import (
-    ProvenanceIdentityError,
     ProvenanceLeaf,
     derive_identity,
     validate_logical_id,
 )
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.protocol import ProvenanceContext, ProvenanceResult
+from aptl.core.provenance.providers import _degraded
+from aptl.core.provenance.providers._degraded import ProviderDegraded
 
 log = logging.getLogger(__name__)
 
@@ -56,24 +57,30 @@ class ParticipantApparatusProvider:
 
     provider_id = PARTICIPANT_PROVIDER_ID
 
-    def __init__(self, apparatus_by_address: Mapping[str, object]):
+    def __init__(self, apparatus_by_address: Mapping[str, object]) -> None:
         self._apparatus_by_address = dict(apparatus_by_address)
 
     def collect(self, context: ProvenanceContext) -> ProvenanceResult:
         """Project every accepted participant selection into a leaf."""
-        if not self._apparatus_by_address:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.UNAVAILABLE,
-                detail="source not present",
-            )
+        try:
+            leaves, participants = self._gather(context)
+        except ProviderDegraded as signal:
+            return signal.as_result(self.provider_id)
+        return ProvenanceResult(
+            provider_id=self.provider_id,
+            status=ProvenanceStatus.COLLECTED,
+            leaves=leaves,
+            payload={"participants": participants},
+        )
 
+    def _gather(
+        self, context: ProvenanceContext
+    ) -> tuple[tuple[ProvenanceLeaf, ...], dict[str, object]]:
+        """Build each participant's leaf, or declare a degradation."""
+        if not self._apparatus_by_address:
+            raise _degraded.absent()
         if len(self._apparatus_by_address) > context.max_entries:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TRUNCATED,
-                detail="entry limit reached",
-            )
+            raise _degraded.entry_limit()
 
         leaves: list[ProvenanceLeaf] = []
         participants: dict[str, object] = {}
@@ -87,24 +94,9 @@ class ParticipantApparatusProvider:
                     ProvenanceLeaf(safe_address, derive_identity(_DOMAIN, projection))
                 )
                 participants[safe_address] = projection
-        except (ProvenanceIdentityError, TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             log.warning("run-provenance: participant apparatus projection was rejected")
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.FAILED,
-                detail="owner reported failure",
-            )
-
+            raise _degraded.owner_failure() from exc
         if context.expired():
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TIMED_OUT,
-                detail="deadline exceeded",
-            )
-
-        return ProvenanceResult(
-            provider_id=self.provider_id,
-            status=ProvenanceStatus.COLLECTED,
-            leaves=tuple(sorted(leaves)),
-            payload={"participants": participants},
-        )
+            raise _degraded.deadline()
+        return tuple(sorted(leaves)), participants

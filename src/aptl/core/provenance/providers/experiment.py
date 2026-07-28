@@ -21,12 +21,13 @@ import logging
 from collections.abc import Sequence
 
 from aptl.core.provenance.identity import (
-    ProvenanceIdentityError,
     ProvenanceLeaf,
     derive_identity,
 )
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.protocol import ProvenanceContext, ProvenanceResult
+from aptl.core.provenance.providers import _degraded
+from aptl.core.provenance.providers._degraded import ProviderDegraded
 
 log = logging.getLogger(__name__)
 
@@ -98,31 +99,42 @@ class AdmittedExperimentProvider:
 
     provider_id = EXPERIMENT_PROVIDER_ID
 
-    def __init__(self, plan: object | None):
+    def __init__(self, plan: object | None) -> None:
         self._plan = plan
 
     def collect(self, context: ProvenanceContext) -> ProvenanceResult:
         """Project the admitted plan into leaves without re-admitting anything."""
+        try:
+            leaves, collectors = self._gather(context)
+        except ProviderDegraded as signal:
+            return signal.as_result(self.provider_id)
+        return ProvenanceResult(
+            provider_id=self.provider_id,
+            status=ProvenanceStatus.COLLECTED,
+            leaves=leaves,
+            payload={
+                **_plan_projection(self._plan),
+                "trial_count": len(tuple(getattr(self._plan, "trials", ()) or ())),
+                "collectors": collectors,
+            },
+        )
+
+    def _gather(
+        self, context: ProvenanceContext
+    ) -> tuple[tuple[ProvenanceLeaf, ...], list[dict[str, object]]]:
+        """Build the plan, trial, and capture-binding leaves, or degrade."""
         plan = self._plan
         if plan is None:
             # No admitted plan is a real fact about this run (a plain lab
             # start), not a source that failed. It must never become a
             # fabricated plan identity.
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.UNAVAILABLE,
-                detail="source not present",
-            )
+            raise _degraded.absent()
 
         trials: Sequence[object] = tuple(getattr(plan, "trials", ()) or ())
         bindings: Sequence[object] = tuple(getattr(plan, "capture_bindings", ()) or ())
         # +1 for the plan leaf itself.
         if len(trials) + len(bindings) + 1 > context.max_entries:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TRUNCATED,
-                detail="entry limit reached",
-            )
+            raise _degraded.entry_limit()
 
         collectors: list[dict[str, object]] = []
         try:
@@ -131,43 +143,24 @@ class AdmittedExperimentProvider:
             ]
             for trial in trials:
                 projection = _trial_projection(trial)
-                trial_id = projection["planned_trial_id"]
                 leaves.append(
-                    ProvenanceLeaf(f"trial/{trial_id}", derive_identity(_DOMAIN, projection))
+                    ProvenanceLeaf(
+                        f"trial/{projection['planned_trial_id']}",
+                        derive_identity(_DOMAIN, projection),
+                    )
                 )
             for binding in bindings:
                 projection = _binding_projection(binding)
-                capture_id = projection["capture_spec_id"]
-                requirement_id = projection["requirement_id"]
                 leaves.append(
                     ProvenanceLeaf(
-                        f"capture/{capture_id}/{requirement_id}",
+                        f"capture/{projection['capture_spec_id']}/{projection['requirement_id']}",
                         derive_identity(_DOMAIN, projection),
                     )
                 )
                 collectors.append(projection)
-        except (ProvenanceIdentityError, TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             log.warning("run-provenance: admitted plan projection could not be identified")
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.FAILED,
-                detail="owner reported failure",
-            )
-
+            raise _degraded.owner_failure() from exc
         if context.expired():
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TIMED_OUT,
-                detail="deadline exceeded",
-            )
-
-        return ProvenanceResult(
-            provider_id=self.provider_id,
-            status=ProvenanceStatus.COLLECTED,
-            leaves=tuple(sorted(leaves)),
-            payload={
-                **_plan_projection(plan),
-                "trial_count": len(trials),
-                "collectors": collectors,
-            },
-        )
+            raise _degraded.deadline()
+        return tuple(sorted(leaves)), collectors

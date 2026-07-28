@@ -28,7 +28,7 @@ separate authorization and sandboxing design and are out of scope here.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -216,5 +216,4 @@ def build_registry(
     registrations: Iterable[ProvenanceProviderRegistration],
 ) -> ProvenanceProviderRegistry:
     """Return an immutable registry over ``registrations``."""
-    items: Sequence[ProvenanceProviderRegistration] = tuple(registrations)
-    return ProvenanceProviderRegistry(tuple(items))
+    return ProvenanceProviderRegistry(tuple(registrations))

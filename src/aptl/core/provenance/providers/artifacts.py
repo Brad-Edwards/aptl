@@ -23,6 +23,8 @@ from pathlib import Path
 from aptl.core.provenance.identity import ProvenanceLeaf, digest_bytes, validate_logical_id
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.protocol import ProvenanceContext, ProvenanceResult
+from aptl.core.provenance.providers import _degraded
+from aptl.core.provenance.providers._degraded import ProviderDegraded
 from aptl.utils.pathsafe import PathContainmentError, open_contained_nofollow
 
 log = logging.getLogger(__name__)
@@ -85,63 +87,40 @@ def _participant_asset_locks(project_dir: Path) -> list[DependencyArtifact]:
     return artifacts
 
 
-class _ByteBudgetExceeded(Exception):
-    """Internal signal that the declared byte budget would be exceeded."""
-
-
 class DependencyArtifactProvider:
     """Collects dependency and asset lock identities from the project tree."""
 
     provider_id = ARTIFACTS_PROVIDER_ID
 
-    def __init__(self, project_dir: Path):
+    def __init__(self, project_dir: Path) -> None:
         self._project_dir = Path(project_dir)
 
     def collect(self, context: ProvenanceContext) -> ProvenanceResult:
         """Read every present lock artifact under the declared limits."""
-        artifacts = list(DEPENDENCY_ARTIFACTS) + _participant_asset_locks(self._project_dir)
+        try:
+            leaves = self._gather(context)
+        except ProviderDegraded as signal:
+            return signal.as_result(self.provider_id)
+        return ProvenanceResult(
+            provider_id=self.provider_id,
+            status=ProvenanceStatus.COLLECTED,
+            leaves=leaves,
+            payload={"artifact_count": len(leaves)},
+        )
 
+    def _gather(self, context: ProvenanceContext) -> tuple[ProvenanceLeaf, ...]:
+        """Build a leaf per present lock, or declare a degradation."""
+        artifacts = list(DEPENDENCY_ARTIFACTS) + _participant_asset_locks(self._project_dir)
         leaves: list[ProvenanceLeaf] = []
         consumed = 0
         for artifact in artifacts:
             if context.expired():
-                return ProvenanceResult(
-                    provider_id=self.provider_id,
-                    status=ProvenanceStatus.TIMED_OUT,
-                    detail="deadline exceeded",
-                )
+                raise _degraded.deadline()
             if len(leaves) >= context.max_entries:
-                return ProvenanceResult(
-                    provider_id=self.provider_id,
-                    status=ProvenanceStatus.TRUNCATED,
-                    detail="entry limit reached",
-                )
-            try:
-                data = self._read(artifact.relative_path, context.max_bytes - consumed)
-            except _ByteBudgetExceeded:
-                return ProvenanceResult(
-                    provider_id=self.provider_id,
-                    status=ProvenanceStatus.TRUNCATED,
-                    detail="byte limit reached",
-                )
-            except PermissionError:
-                return ProvenanceResult(
-                    provider_id=self.provider_id,
-                    status=ProvenanceStatus.DENIED,
-                    detail="source not readable",
-                )
-            except PathContainmentError:
-                # Absent, symlinked, or not a regular file: never an admitted
-                # artifact, so it contributes nothing rather than failing the
-                # whole provider.
+                raise _degraded.entry_limit()
+            data = self._read(artifact.relative_path, context.max_bytes - consumed)
+            if data is None:
                 continue
-            except OSError:
-                log.warning("run-provenance: dependency artifact could not be read")
-                return ProvenanceResult(
-                    provider_id=self.provider_id,
-                    status=ProvenanceStatus.FAILED,
-                    detail="owner reported failure",
-                )
             consumed += len(data)
             leaves.append(
                 ProvenanceLeaf(
@@ -149,27 +128,29 @@ class DependencyArtifactProvider:
                     digest=digest_bytes(data),
                 )
             )
-
         if not leaves:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.UNAVAILABLE,
-                detail="source not present",
-                payload={"artifact_count": 0},
-            )
-        return ProvenanceResult(
-            provider_id=self.provider_id,
-            status=ProvenanceStatus.COLLECTED,
-            leaves=tuple(sorted(leaves)),
-            payload={"artifact_count": len(leaves)},
-        )
+            raise _degraded.absent({"artifact_count": 0})
+        return tuple(sorted(leaves))
 
-    def _read(self, relative: str, remaining: int) -> bytes:
-        """Read one lock no-follow, refusing to exceed the byte budget."""
+    def _read(self, relative: str, remaining: int) -> bytes | None:
+        """Read one lock no-follow; ``None`` when it is simply not an artifact here.
+
+        A :class:`PathContainmentError` means the lock is absent, symlinked, or
+        not a regular file. None of those is an admitted artifact, so the entry
+        contributes nothing rather than degrading the whole provider.
+        """
         if remaining <= 0:
-            raise _ByteBudgetExceeded
-        with open_contained_nofollow(self._project_dir, relative) as handle:
-            data = handle.read(remaining + 1)
+            raise _degraded.byte_limit()
+        try:
+            with open_contained_nofollow(self._project_dir, relative) as handle:
+                data = handle.read(remaining + 1)
+        except PermissionError as exc:
+            raise _degraded.denied() from exc
+        except PathContainmentError:
+            return None
+        except OSError as exc:
+            log.warning("run-provenance: a dependency artifact could not be read")
+            raise _degraded.owner_failure() from exc
         if len(data) > remaining:
-            raise _ByteBudgetExceeded
+            raise _degraded.byte_limit()
         return data

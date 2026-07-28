@@ -26,7 +26,6 @@ from collections.abc import Callable, Mapping
 import rfc8785
 
 from aptl.core.provenance.identity import (
-    ProvenanceIdentityError,
     ProvenanceLeaf,
     derive_identity,
     digest_bytes,
@@ -35,6 +34,8 @@ from aptl.core.provenance.identity import (
 )
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.protocol import ProvenanceContext, ProvenanceResult
+from aptl.core.provenance.providers import _degraded
+from aptl.core.provenance.providers._degraded import ProviderDegraded
 
 log = logging.getLogger(__name__)
 
@@ -179,86 +180,84 @@ class RuntimeFactsProvider:
         self,
         snapshot: object | None,
         host_facts: Callable[[], Mapping[str, object]] = no_host_facts,
-    ):
+    ) -> None:
         self._snapshot = snapshot
         self._host_facts = host_facts
 
     def collect(self, context: ProvenanceContext) -> ProvenanceResult:
         """Project the captured range snapshot into leaves and observations."""
+        try:
+            leaves, payload = self._gather(context)
+        except ProviderDegraded as signal:
+            return signal.as_result(self.provider_id)
+        return ProvenanceResult(
+            provider_id=self.provider_id,
+            status=ProvenanceStatus.COLLECTED,
+            leaves=leaves,
+            payload=payload,
+        )
+
+    def _gather(
+        self, context: ProvenanceContext
+    ) -> tuple[tuple[ProvenanceLeaf, ...], dict[str, object]]:
+        """Build the image, tool, range, and host leaves, or declare a degradation."""
         snapshot = self._snapshot
         if snapshot is None:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.UNAVAILABLE,
-                detail="source not present",
-            )
+            raise _degraded.absent()
 
         containers = tuple(getattr(snapshot, "containers", ()) or ())
         # +3 for the tool-versions, range-snapshot, and host-facts leaves.
         if len(containers) + 3 > context.max_entries:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TRUNCATED,
-                detail="entry limit reached",
-            )
+            raise _degraded.entry_limit()
 
-        leaves: list[ProvenanceLeaf] = []
-        without_digest: list[str] = []
         try:
-            for container in containers:
-                name = validate_logical_id(str(getattr(container, "name", "")))
-                digest = str(getattr(container, "image_digest", "") or "")
-                if not digest:
-                    # Disclosed gap, not a tag substituted for an identity.
-                    without_digest.append(name)
-                    continue
-                leaves.append(
-                    ProvenanceLeaf(f"image/{name}", normalize_digest(digest))
-                )
-
+            leaves, without_digest = self._image_leaves(containers)
             versions = _tool_versions(snapshot)
             leaves.append(
                 ProvenanceLeaf("tool-versions", derive_identity(_DOMAIN, versions))
             )
-
-            range_identity = derive_identity(
-                _DOMAIN, _stable_range_projection(snapshot)
+            leaves.append(
+                ProvenanceLeaf(
+                    "range-snapshot",
+                    derive_identity(_DOMAIN, _stable_range_projection(snapshot)),
+                )
             )
-            leaves.append(ProvenanceLeaf("range-snapshot", range_identity))
-
             host_facts = _safe_host_facts(self._host_facts)
             leaves.append(
                 ProvenanceLeaf("host-facts", derive_identity(_DOMAIN, host_facts))
             )
-        except (ProvenanceIdentityError, TypeError, ValueError, AttributeError):
+            observation = digest_bytes(rfc8785.dumps(snapshot.to_dict()))
+        except (TypeError, ValueError, AttributeError) as exc:
             log.warning("run-provenance: range snapshot projection was rejected")
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.FAILED,
-                detail="owner reported failure",
-            )
-
+            raise _degraded.owner_failure() from exc
         if context.expired():
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TIMED_OUT,
-                detail="deadline exceeded",
-            )
+            raise _degraded.deadline()
 
-        return ProvenanceResult(
-            provider_id=self.provider_id,
-            status=ProvenanceStatus.COLLECTED,
-            leaves=tuple(sorted(leaves)),
-            payload={
-                "tool_versions": versions,
-                "range_snapshot_identity": range_identity,
-                # The owner's full redacted projection, kept as an OBSERVATION
-                # only: it is deliberately outside every identity above.
-                "range_snapshot_observation": digest_bytes(
-                    rfc8785.dumps(snapshot.to_dict())
-                ),
-                "container_count": len(containers),
-                "images_without_digest": sorted(without_digest),
-                "host_facts": host_facts,
-            },
-        )
+        payload: dict[str, object] = {
+            "tool_versions": versions,
+            "range_snapshot_identity": next(
+                leaf.digest for leaf in leaves if leaf.logical_id == "range-snapshot"
+            ),
+            # The owner's full redacted projection, kept as an OBSERVATION
+            # only: it is deliberately outside every identity above.
+            "range_snapshot_observation": observation,
+            "container_count": len(containers),
+            "images_without_digest": sorted(without_digest),
+            "host_facts": host_facts,
+        }
+        return tuple(sorted(leaves)), payload
+
+    @staticmethod
+    def _image_leaves(containers: tuple[object, ...]) -> tuple[list[ProvenanceLeaf], list[str]]:
+        """Return the image-digest leaves and the containers that had none."""
+        leaves: list[ProvenanceLeaf] = []
+        without_digest: list[str] = []
+        for container in containers:
+            name = validate_logical_id(str(getattr(container, "name", "")))
+            digest = str(getattr(container, "image_digest", "") or "")
+            if digest:
+                leaves.append(ProvenanceLeaf(f"image/{name}", normalize_digest(digest)))
+            else:
+                # Disclosed gap, not a tag substituted for an identity.
+                without_digest.append(name)
+        return leaves, without_digest

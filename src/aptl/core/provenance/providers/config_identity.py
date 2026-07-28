@@ -25,9 +25,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
-from aptl.core.provenance.identity import ProvenanceIdentityError, ProvenanceLeaf, derive_identity
+from aptl.core.provenance.identity import ProvenanceLeaf, derive_identity
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.protocol import ProvenanceContext, ProvenanceResult
+from aptl.core.provenance.providers import _degraded
+from aptl.core.provenance.providers._degraded import ProviderDegraded
 
 log = logging.getLogger(__name__)
 
@@ -102,39 +104,34 @@ class ConfigIdentityProvider:
 
     provider_id = CONFIG_PROVIDER_ID
 
-    def __init__(self, config: object | None):
+    def __init__(self, config: object | None) -> None:
         self._config = config
 
     def collect(self, context: ProvenanceContext) -> ProvenanceResult:
         """Derive one identity from the safe configuration projection."""
-        if self._config is None:
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.UNAVAILABLE,
-                detail="source not present",
-            )
-
         try:
-            projection: Mapping[str, object] = safe_config_projection(self._config)
-            leaf = ProvenanceLeaf("effective-config", derive_identity(_DOMAIN, projection))
-        except (ProvenanceIdentityError, TypeError, ValueError, AttributeError):
-            log.warning("run-provenance: safe config projection could not be identified")
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.FAILED,
-                detail="owner reported failure",
-            )
-
-        if context.expired():
-            return ProvenanceResult(
-                provider_id=self.provider_id,
-                status=ProvenanceStatus.TIMED_OUT,
-                detail="deadline exceeded",
-            )
-
+            projection, leaf = self._gather(context)
+        except ProviderDegraded as signal:
+            return signal.as_result(self.provider_id)
         return ProvenanceResult(
             provider_id=self.provider_id,
             status=ProvenanceStatus.COLLECTED,
             leaves=(leaf,),
             payload=dict(projection),
         )
+
+    def _gather(
+        self, context: ProvenanceContext
+    ) -> tuple[Mapping[str, object], ProvenanceLeaf]:
+        """Build the safe projection and its leaf, or declare a degradation."""
+        if self._config is None:
+            raise _degraded.absent()
+        try:
+            projection: Mapping[str, object] = safe_config_projection(self._config)
+            leaf = ProvenanceLeaf("effective-config", derive_identity(_DOMAIN, projection))
+        except (TypeError, ValueError, AttributeError) as exc:
+            log.warning("run-provenance: safe config projection could not be identified")
+            raise _degraded.owner_failure() from exc
+        if context.expired():
+            raise _degraded.deadline()
+        return projection, leaf

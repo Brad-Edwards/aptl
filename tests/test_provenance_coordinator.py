@@ -257,12 +257,11 @@ class TestRequiredProviders:
             seal_point=SealPoint.RUN_READY_TO_SEAL,
             required_provider_ids=frozenset({"nonexistent"}),
         )
+        providers = [_StubProvider("apparatus")]
+        clock = _FakeClock()
         with pytest.raises(ProvenanceRegistrationError):
             collect_provenance(
-                providers=[_StubProvider("apparatus")],
-                registry=registry,
-                profile=profile,
-                monotonic=_FakeClock(),
+                providers=providers, registry=registry, profile=profile, monotonic=clock
             )
 
 

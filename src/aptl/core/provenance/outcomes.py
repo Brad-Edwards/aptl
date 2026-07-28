@@ -34,20 +34,31 @@ _PROVIDER_ID_RE = re.compile(r"[a-z][a-z0-9-]{0,63}")
 _REDACTED_DETAIL = "detail withheld"
 _MAX_DETAIL_LEN = 120
 
-#: The details the coordinator itself may attach. Restricting to an allowlist
-#: is what keeps `str(exc)`, backend stderr, and hostile metadata out of the
-#: record — filtering afterwards would be the pattern this design rejects.
+#: The details the coordinator and providers may attach. Naming them once
+#: keeps the vocabulary in a single place and lets both layers share it.
+DETAIL_ABSENT = "source not present"
+DETAIL_UNREADABLE = "source not readable"
+DETAIL_UNSUPPORTED = "source not supported"
+DETAIL_OWNER_FAILURE = "owner reported failure"
+DETAIL_ENTRY_LIMIT = "entry limit reached"
+DETAIL_BYTE_LIMIT = "byte limit reached"
+DETAIL_DEADLINE = "deadline exceeded"
+DETAIL_CONTAINMENT = "path containment rejected"
+
+#: Restricting to an allowlist is what keeps `str(exc)`, backend stderr, and
+#: hostile metadata out of the record — filtering afterwards would be the
+#: pattern this design rejects.
 _SAFE_DETAILS = frozenset(
     {
         "",
-        "byte limit reached",
-        "entry limit reached",
-        "deadline exceeded",
-        "source not present",
-        "source not readable",
-        "source not supported",
-        "owner reported failure",
-        "path containment rejected",
+        DETAIL_BYTE_LIMIT,
+        DETAIL_ENTRY_LIMIT,
+        DETAIL_DEADLINE,
+        DETAIL_ABSENT,
+        DETAIL_UNREADABLE,
+        DETAIL_UNSUPPORTED,
+        DETAIL_OWNER_FAILURE,
+        DETAIL_CONTAINMENT,
     }
 )
 

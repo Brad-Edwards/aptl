@@ -63,7 +63,9 @@ class TestRegistration:
         )
 
     def test_digest_is_stable_for_an_identical_declaration(self):
-        assert _registration().effective_config_digest() == _registration().effective_config_digest()
+        first = _registration().effective_config_digest()
+        second = _registration().effective_config_digest()
+        assert first == second
 
     @pytest.mark.parametrize(
         "provider_id",
@@ -105,8 +107,9 @@ class TestRegistry:
     """The registry is the sole source of truth and iterates deterministically."""
 
     def test_duplicate_provider_ids_are_rejected(self):
+        duplicated = (_registration(), _registration())
         with pytest.raises(ProvenanceRegistrationError):
-            ProvenanceProviderRegistry((_registration(), _registration()))
+            ProvenanceProviderRegistry(duplicated)
 
     def test_iteration_is_id_sorted_regardless_of_construction_order(self):
         first = _registration("apparatus")
@@ -132,10 +135,9 @@ class TestRegistry:
         assert registry.get("absent") is None
 
     def test_empty_registry_has_a_stable_declaration_digest(self):
-        assert (
-            ProvenanceProviderRegistry(()).declaration_digest()
-            == ProvenanceProviderRegistry(()).declaration_digest()
-        )
+        first = ProvenanceProviderRegistry(()).declaration_digest()
+        second = ProvenanceProviderRegistry(()).declaration_digest()
+        assert first == second
 
     def test_for_seal_point_selects_only_matching_registrations(self):
         run_scoped = _registration("apparatus", seal_point=SealPoint.RUN_READY_TO_SEAL)
@@ -176,8 +178,6 @@ class TestSealProfile:
 
     @pytest.mark.parametrize("provider_id", ["", "Apparatus", "a b"])
     def test_profile_rejects_a_hostile_required_id(self, provider_id):
+        required = frozenset({provider_id})
         with pytest.raises(ProvenanceRegistrationError):
-            SealProfile(
-                seal_point=SealPoint.RUN_READY_TO_SEAL,
-                required_provider_ids=frozenset({provider_id}),
-            )
+            SealProfile(seal_point=SealPoint.RUN_READY_TO_SEAL, required_provider_ids=required)

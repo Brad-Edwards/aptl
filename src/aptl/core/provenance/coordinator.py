@@ -31,6 +31,11 @@ from aptl.core.provenance.identity import (
     family_identity,
 )
 from aptl.core.provenance.outcomes import (
+    DETAIL_ABSENT,
+    DETAIL_DEADLINE,
+    DETAIL_ENTRY_LIMIT,
+    DETAIL_OWNER_FAILURE,
+    DETAIL_UNSUPPORTED,
     SUCCESS_STATUSES,
     ProvenanceLimitation,
     ProvenanceStatus,
@@ -125,24 +130,38 @@ class ProvenanceCollection:
         }
 
 
+def _mapping_is_bounded(value: Mapping[object, object], depth: int) -> bool:
+    """Return whether a mapping's size, keys, and values are all within bounds."""
+    keys_bounded = all(
+        isinstance(key, str) and len(key) <= _MAX_PAYLOAD_STRING for key in value
+    )
+    return (
+        len(value) <= _MAX_PAYLOAD_KEYS
+        and keys_bounded
+        and all(_payload_is_bounded(item, depth + 1) for item in value.values())
+    )
+
+
+def _sequence_is_bounded(value: list | tuple, depth: int) -> bool:
+    """Return whether a sequence's length and every item are within bounds."""
+    return len(value) <= _MAX_PAYLOAD_KEYS and all(
+        _payload_is_bounded(item, depth + 1) for item in value
+    )
+
+
 def _payload_is_bounded(value: object, depth: int = 0) -> bool:
     """Return whether ``value`` is within the hard structural ceilings."""
     if depth > _MAX_PAYLOAD_DEPTH:
-        return False
-    if isinstance(value, str):
-        return len(value) <= _MAX_PAYLOAD_STRING
-    if isinstance(value, Mapping):
-        if len(value) > _MAX_PAYLOAD_KEYS:
-            return False
-        return all(
-            isinstance(key, str) and len(key) <= _MAX_PAYLOAD_STRING
-            for key in value
-        ) and all(_payload_is_bounded(item, depth + 1) for item in value.values())
-    if isinstance(value, (list, tuple)):
-        if len(value) > _MAX_PAYLOAD_KEYS:
-            return False
-        return all(_payload_is_bounded(item, depth + 1) for item in value)
-    return isinstance(value, (int, float, bool)) or value is None
+        bounded = False
+    elif isinstance(value, str):
+        bounded = len(value) <= _MAX_PAYLOAD_STRING
+    elif isinstance(value, Mapping):
+        bounded = _mapping_is_bounded(value, depth)
+    elif isinstance(value, (list, tuple)):
+        bounded = _sequence_is_bounded(value, depth)
+    else:
+        bounded = isinstance(value, (int, float, bool)) or value is None
+    return bounded
 
 
 def _payload_is_safe(payload: Mapping[str, object]) -> bool:
@@ -157,12 +176,12 @@ def _payload_is_safe(payload: Mapping[str, object]) -> bool:
     if not _payload_is_bounded(payload):
         return False
     try:
-        if redact(dict(payload)) != dict(payload):
-            return False
-        derive_identity(_SECTION_DOMAIN, {"payload": dict(payload)})
-    except (ProvenanceIdentityError, TypeError, ValueError, RecursionError):
-        return False
-    return True
+        snapshot = dict(payload)
+        safe = redact(snapshot) == snapshot
+        derive_identity(_SECTION_DOMAIN, {"payload": snapshot})
+    except (TypeError, ValueError, RecursionError):
+        safe = False
+    return safe
 
 
 def _degraded(
@@ -194,42 +213,56 @@ def _collected(
     )
 
 
+def _rejection(
+    registration: ProvenanceProviderRegistration,
+    result: ProvenanceResult,
+    elapsed: float,
+) -> tuple[ProvenanceStatus, str] | None:
+    """Return the first ``(status, detail)`` disqualifying ``result``, else ``None``.
+
+    Ordered so the most fundamental violation wins: a result that impersonates
+    another provider is a wiring fault, an overrun deadline invalidates whatever
+    was gathered, and only then are quota and content validity considered.
+    """
+    impersonating = result.provider_id != registration.provider_id
+    if impersonating:
+        log.warning(
+            "run-provenance: provider %s returned a result for another provider id",
+            registration.provider_id,
+        )
+    unsafe_payload = not _payload_is_safe(result.payload)
+    if unsafe_payload:
+        log.warning(
+            "run-provenance: provider %s payload rejected by the safety invariant",
+            registration.provider_id,
+        )
+    checks = (
+        (impersonating, ProvenanceStatus.FAILED, DETAIL_OWNER_FAILURE),
+        (elapsed >= float(registration.limits.timeout_s), ProvenanceStatus.TIMED_OUT, DETAIL_DEADLINE),
+        (result.status not in SUCCESS_STATUSES, result.status, result.detail),
+        (
+            len(result.leaves) > registration.limits.max_entries,
+            ProvenanceStatus.TRUNCATED,
+            DETAIL_ENTRY_LIMIT,
+        ),
+        (unsafe_payload, ProvenanceStatus.FAILED, DETAIL_OWNER_FAILURE),
+    )
+    for failed, status, detail in checks:
+        if failed:
+            return status, detail
+    return None
+
+
 def _evaluate(
     registration: ProvenanceProviderRegistration,
     result: ProvenanceResult,
     *,
     elapsed: float,
 ) -> tuple[ProvenanceSection, ProvenanceLimitation | None]:
-    """Turn one raw provider result into a validated section (+ limitation).
-
-    Checks are ordered so the most fundamental violation wins: a result that
-    impersonates another provider is a wiring fault, an overrun deadline
-    invalidates whatever was gathered, and only then are quota and content
-    validity considered.
-    """
-    if result.provider_id != registration.provider_id:
-        log.warning(
-            "run-provenance: provider %s returned a result for another provider id",
-            registration.provider_id,
-        )
-        return _degraded(registration, ProvenanceStatus.FAILED, "owner reported failure")
-
-    if elapsed >= float(registration.limits.timeout_s):
-        return _degraded(registration, ProvenanceStatus.TIMED_OUT, "deadline exceeded")
-
-    if result.status not in SUCCESS_STATUSES:
-        return _degraded(registration, result.status, result.detail)
-
-    if len(result.leaves) > registration.limits.max_entries:
-        return _degraded(registration, ProvenanceStatus.TRUNCATED, "entry limit reached")
-
-    if not _payload_is_safe(result.payload):
-        log.warning(
-            "run-provenance: provider %s payload rejected by the safety invariant",
-            registration.provider_id,
-        )
-        return _degraded(registration, ProvenanceStatus.FAILED, "owner reported failure")
-
+    """Turn one raw provider result into a validated section (+ limitation)."""
+    rejection = _rejection(registration, result, elapsed)
+    if rejection is not None:
+        return _degraded(registration, rejection[0], rejection[1])
     try:
         return _collected(registration, result), None
     except ProvenanceIdentityError:
@@ -237,7 +270,7 @@ def _evaluate(
             "run-provenance: provider %s produced an invalid content identity",
             registration.provider_id,
         )
-        return _degraded(registration, ProvenanceStatus.FAILED, "owner reported failure")
+        return _degraded(registration, ProvenanceStatus.FAILED, DETAIL_OWNER_FAILURE)
 
 
 def _invoke(
@@ -259,7 +292,7 @@ def _invoke(
         log.warning(
             "run-provenance: provider %s raised during collection", registration.provider_id
         )
-        return _degraded(registration, ProvenanceStatus.FAILED, "owner reported failure")
+        return _degraded(registration, ProvenanceStatus.FAILED, DETAIL_OWNER_FAILURE)
     return _evaluate(registration, result, elapsed=monotonic() - started_at)
 
 
@@ -296,7 +329,7 @@ def collect_provenance(
                 limits=_UNREGISTERED_LIMITS,
             )
             section, limitation = _degraded(
-                unregistered, ProvenanceStatus.UNSUPPORTED, "source not supported"
+                unregistered, ProvenanceStatus.UNSUPPORTED, DETAIL_UNSUPPORTED
             )
         else:
             section, limitation = _invoke(provider, registration, monotonic)
@@ -310,7 +343,7 @@ def collect_provenance(
         if not profile.requires(registration.provider_id):
             continue
         section, limitation = _degraded(
-            registration, ProvenanceStatus.UNAVAILABLE, "source not present"
+            registration, ProvenanceStatus.UNAVAILABLE, DETAIL_ABSENT
         )
         sections[section.provider_id] = section
         limitations.append(limitation)

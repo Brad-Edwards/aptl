@@ -12,6 +12,7 @@ import pytest
 from aptl.core.config import AptlConfig
 from aptl.core.provenance.outcomes import ProvenanceStatus
 from aptl.core.provenance.record import PROVENANCE_RECORD_PATH, PROVISIONAL_RECORD_PATH
+from aptl.core.provenance.registry import ProvenanceProviderRegistry
 from aptl.core.provenance.registrations import (
     BUILTIN_REGISTRATIONS,
     DEFAULT_PROVENANCE_REGISTRY,
@@ -94,10 +95,9 @@ class TestBuiltinRegistrations:
         DEFAULT_SEAL_PROFILE.validate_against(DEFAULT_PROVENANCE_REGISTRY)
 
     def test_the_registry_declaration_digest_is_stable(self):
-        assert (
-            DEFAULT_PROVENANCE_REGISTRY.declaration_digest()
-            == DEFAULT_PROVENANCE_REGISTRY.declaration_digest()
-        )
+        first = DEFAULT_PROVENANCE_REGISTRY.declaration_digest()
+        second = ProvenanceProviderRegistry(tuple(reversed(BUILTIN_REGISTRATIONS))).declaration_digest()
+        assert first == second
 
     def test_adding_a_provider_requires_only_a_registration(self):
         """The extension seam: a new source is one registration, not a rewrite."""

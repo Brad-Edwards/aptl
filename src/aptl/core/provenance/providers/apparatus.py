@@ -70,7 +70,7 @@ class ApparatusManifestProvider:
         processor_manifest_factory: Callable[
             [], Mapping[str, object]
         ] = reference_processor_manifest_payload,
-    ):
+    ) -> None:
         self._backend_factory = backend_manifest_factory
         self._processor_factory = processor_manifest_factory
 

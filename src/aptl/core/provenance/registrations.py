@@ -91,6 +91,18 @@ def _registration(
     )
 
 
+#: The detection-content registration, named so callers that need only this
+#: provider's declared limits (for example the snapshot adapter) can reference
+#: it directly instead of looking it up and handling an impossible miss.
+DETECTION_REGISTRATION = _registration(
+    DETECTION_PROVIDER_ID,
+    "detection-content",
+    "provenance.providers.detection",
+    max_bytes=64_000_000,
+    max_entries=1024,
+    timeout_s=60,
+)
+
 #: The declared built-in fleet. Limits are sized to the real surfaces: the
 #: detection roots hold on the order of a dozen small text artifacts, while a
 #: trial plan can carry many planned trials.
@@ -119,14 +131,7 @@ BUILTIN_REGISTRATIONS: tuple[ProvenanceProviderRegistration, ...] = (
         max_entries=64,
         timeout_s=30,
     ),
-    _registration(
-        DETECTION_PROVIDER_ID,
-        "detection-content",
-        "provenance.providers.detection",
-        max_bytes=64_000_000,
-        max_entries=1024,
-        timeout_s=60,
-    ),
+    DETECTION_REGISTRATION,
     _registration(
         CONFIG_PROVIDER_ID,
         "effective-config",

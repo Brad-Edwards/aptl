@@ -86,8 +86,13 @@ def resolve_node_image(
                 service_name=service_name,
                 diagnostics=diagnostics,
             )
-            if image is None and not _is_compose_owned_source(
-                source.name, source.version
+            # A node that authored artifact demand must fail loudly when that
+            # demand cannot be resolved. The Compose-owned carve-out below only
+            # applies to nodes whose binding Compose still owns, never to one
+            # that declared an artifact identity of its own.
+            if image is None and (
+                source.artifact_requirement is not None
+                or not _is_compose_owned_source(source.name, source.version)
             ):
                 diagnostics.append(
                     _policy_diagnostic(resource.address, "untrusted-image")
@@ -192,11 +197,17 @@ def _resolve_trusted_image(
 ) -> DeploymentImageRealization | None:
     """Resolve one normalized source through build, alias, and digest policies."""
 
-    image = _authored_artifact_image(
-        resource=resource, source=source, service_name=service_name
-    )
-    if image is not None:
-        return image
+    if source.artifact_requirement is not None:
+        # Authored artifact demand is the sole authority for this node. When it
+        # cannot be resolved — a non-exact posture APTL does not advertise, or a
+        # malformed identity — the answer is no image, which the caller turns
+        # into a refusal. Falling through to build provenance or the local
+        # product allowlist would substitute an APTL-chosen artifact for the one
+        # the author declared, which SEM-218 I1/I2 forbid.
+        return _authored_artifact_image(
+            resource=resource, source=source, service_name=service_name
+        )
+    image: DeploymentImageRealization | None = None
     if isinstance(source.build, Mapping):
         image = _build_image(
             resource=resource,

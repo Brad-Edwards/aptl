@@ -17,9 +17,39 @@ import stat
 from aptl.utils.pathsafe import (
     PathContainmentError,
     create_exclusive_nofollow,
+    listdir_contained_nofollow,
     open_contained_nofollow,
     read_contained_nofollow,
 )
+
+
+class TestListdirContainedNofollow:
+    def test_lists_sorted_entries_of_a_contained_dir(self, tmp_path):
+        (tmp_path / "records").mkdir()
+        (tmp_path / "records" / "b.json").write_bytes(b"{}")
+        (tmp_path / "records" / "a.json").write_bytes(b"{}")
+
+        assert listdir_contained_nofollow(tmp_path, "records") == ["a.json", "b.json"]
+
+    def test_rejects_a_symlinked_directory_component(self, tmp_path):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "secret.json").write_bytes(b"{}")
+        (tmp_path / "records").symlink_to(outside)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            listdir_contained_nofollow(tmp_path, "records")
+        assert excinfo.value.reason == "symlink"
+
+    def test_missing_dir_raises_not_found(self, tmp_path):
+        with pytest.raises(PathContainmentError) as excinfo:
+            listdir_contained_nofollow(tmp_path, "records")
+        assert excinfo.value.reason == "not_found"
+
+    def test_traversal_component_is_rejected(self, tmp_path):
+        with pytest.raises(PathContainmentError) as excinfo:
+            listdir_contained_nofollow(tmp_path, "../etc")
+        assert excinfo.value.reason == "traversal"
 
 
 class TestHappyPath:

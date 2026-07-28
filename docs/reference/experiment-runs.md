@@ -2,6 +2,8 @@
 
 The experiment run system captures data from each scenario execution for reproducibility and post-run analysis.
 
+For a portable, third-party-verifiable evidence archive built from a run's verified artifact closure, see [Portable Evidence Bundle Export](evidence-bundle-export.md) (`aptl runs export-bundle`).
+
 ## Clean State Between Runs
 
 Persistent containers accumulate state across runs: service databases, indexes, logs, generated in-container credentials, and files written during a prior exercise. That state contaminates the next run and undermines reliable batch execution and benchmarking.

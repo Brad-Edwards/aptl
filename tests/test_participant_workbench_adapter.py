@@ -150,6 +150,12 @@ def test_blue_profile_uses_the_existing_mcp_credential_contracts() -> None:
     assert aliases["aptl-network"] == ("INDEXER_USERNAME", "INDEXER_PASSWORD")
 
 
+# Spawns a real MCP-server subprocess and performs an initialize + tools/list
+# stdio handshake bounded by a 10s read timeout. That handshake intermittently
+# exceeds the timeout under `-n auto` parallel load, so this belongs in the
+# integration selection (see the `integration` marker: "tests that spawn
+# subprocesses") rather than the fast parallel default run.
+@pytest.mark.integration
 def test_real_stdio_probe_performs_initialize_and_tools_list(tmp_path: Path) -> None:
     fixture = Path(__file__).parent / "fixtures" / "workbench_mcp_server.py"
 

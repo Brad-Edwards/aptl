@@ -240,3 +240,105 @@ def export_run(
     else:
         archive = export_local(store, resolved_id, output_dir)
         typer.echo(f"Exported to: {archive}")
+
+
+@app.command("export-bundle")
+def export_bundle(
+    run_id: str = typer.Argument(help="Run UUID (full or prefix)."),
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("./exports"),
+        "--output-dir",
+        "-o",
+        help="Directory to write the bundle to (must be outside the run tree).",
+    ),
+    projection: list[str] = typer.Option(
+        None,
+        "--projection",
+        "-p",
+        help="Derived projection(s) to include: jsonl, parquet, ocsf. Repeatable.",
+    ),
+    verify: bool = typer.Option(
+        True,
+        "--verify/--no-verify",
+        help="Self-verify the bundle after building.",
+    ),
+) -> None:
+    """Export a run as a portable, self-describing evidence bundle (local/offline).
+
+    Packages the run's verified artifact closure with a machine-readable
+    inventory/data-dictionary, the published RAES schemas, and any requested
+    loss-accounted projections, into a deterministic archive a third party can
+    verify without importing APTL internals.
+    """
+    from aptl.core.evidence_bundle import (
+        BundleError,
+        BundleOptions,
+        build_evidence_bundle,
+    )
+    from aptl.core.evidence_bundle.projections import available_formats
+
+    store = _get_store(project_dir)
+    resolved_id = _resolve_run_id(store, run_id)
+    run_dir = store.get_run_path(resolved_id)
+
+    formats = list(projection or [])
+    unknown = sorted(set(formats) - available_formats())
+    if unknown:
+        known = ", ".join(sorted(available_formats()))
+        typer.echo(
+            f"Unknown projection format(s): {', '.join(unknown)}; known: {known}"
+        )
+        raise typer.Exit(code=1)
+
+    output_path = output_dir / f"{resolved_id}.evidence-bundle.tar"
+    try:
+        result = build_evidence_bundle(
+            run_dir,
+            resolved_id,
+            output_path,
+            options=BundleOptions(projections=formats, self_verify=verify),
+        )
+    except BundleError as exc:
+        typer.echo(f"Error building bundle: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"Exported evidence bundle: {result.archive.archive_path}")
+    typer.echo(f"  root identity: {result.root_identity}")
+    typer.echo(
+        f"  members: {result.archive.member_count}  size: {result.archive.size} bytes"
+    )
+    if result.unsealed:
+        typer.echo(
+            "  seal: UNSEALED (no #444 verified seal available; "
+            "exported with disclosed limitations)"
+        )
+    if result.limitations:
+        typer.echo(f"  limitations: {len(result.limitations)}")
+        for limitation in result.limitations:
+            subject = f" [{limitation.subject}]" if limitation.subject else ""
+            typer.echo(f"    - {limitation.code}: {limitation.detail}{subject}")
+
+
+@app.command("verify-bundle")
+def verify_bundle_command(
+    bundle_path: Path = typer.Argument(help="Path to an evidence-bundle .tar archive."),
+) -> None:
+    """Verify an evidence bundle's integrity, inventory, and root identity."""
+    from aptl.core.evidence_bundle import verify_bundle
+
+    report = verify_bundle(bundle_path)
+    typer.echo(f"root identity: {report.root_identity}")
+    typer.echo(f"members: {report.member_count}  seal: {report.seal_scope}")
+    if report.ok:
+        typer.echo("OK: bundle verified")
+        return
+    typer.echo("FAILED:")
+    for issue in report.issues:
+        typer.echo(f"  - {issue}")
+    raise typer.Exit(code=1)

@@ -115,7 +115,7 @@ def start_raes_scenario(
     planner sees it, and APTL neither logs nor persists it.
     """
 
-    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path)
+    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path, config)
     try:
         target, execution_plan = _plan_scenario(
             project_dir,
@@ -156,11 +156,35 @@ def start_raes_scenario(
         )
 
 
-def _resolve_scenario_path(project_dir: Path, scenario_path: Path | None) -> Path:
-    """Resolve the authored scenario beneath the project when it is relative."""
+def _resolve_scenario_path(
+    project_dir: Path,
+    scenario_path: Path | None,
+    config: AptlConfig | None = None,
+) -> Path:
+    """Resolve which scenario to realize, and where its bytes come from.
 
-    resolved = scenario_path or DEFAULT_RAES_SCENARIO
-    return resolved if resolved.is_absolute() else project_dir / resolved
+    Precedence is explicit selection, then configuration, then the historical
+    in-tree default. A backend is handed a scenario rather than owning one, so
+    the operator chooses it before ``aptl lab start``; nothing here switches at
+    runtime.
+
+    A configured root anchors the scenario's own inputs. It is validated as a
+    contained relative path when the configuration is parsed, so joining it here
+    cannot escape the project.
+    """
+
+    if scenario_path is not None:
+        return (
+            scenario_path
+            if scenario_path.is_absolute()
+            else project_dir / scenario_path
+        )
+    if config is not None:
+        selection = config.scenario
+        relative = Path(f"{selection.identity}.sdl.yaml")
+        base = Path(selection.root) if selection.root else Path("scenarios")
+        return project_dir / base / relative
+    return project_dir / DEFAULT_RAES_SCENARIO
 
 
 def _plan_scenario(

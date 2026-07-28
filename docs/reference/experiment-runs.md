@@ -29,6 +29,9 @@ Each run is stored under `<project_dir>/runs/<run_id>/` with:
   manifest.json          # Run metadata (scenario, timing, flags)
   snapshot.json          # Range snapshot (software, containers, rules, networks, config hashes)
   flags.json             # Captured flags
+  provenance/
+    startup-provenance.json  # Provisional apparatus provenance, written at lab start
+    run-provenance.json      # Canonical ready-to-seal provenance, written at the seal boundary
   scenario/
     definition.yaml      # Scenario YAML copy
     events.jsonl         # Scenario events timeline
@@ -45,6 +48,54 @@ Each run is stored under `<project_dir>/runs/<run_id>/` with:
   agents/
     traces.jsonl         # MCP agent traces (if available)
 ```
+
+## Run Provenance (`provenance/`)
+
+Records which apparatus the run was actually realized on, so a later reader can
+tell exactly which scenario, backend, participant implementation, images,
+detector rules, collectors, and configuration produced the results.
+
+There are two records, written at different lifecycle boundaries:
+
+- `startup-provenance.json` is **provisional**. Lab start knows the effective
+  configuration, detection content, dependency locks, and realized images, but
+  not the admitted trial plan, the realized participants, or any execution
+  outcome.
+- `run-provenance.json` is the canonical **ready-to-seal** record, written by
+  the collector that owns the admitted and executed run context. Publishing it
+  without that context is refused rather than written with the experiment and
+  participant sources reported missing.
+
+Both are written **create-once**: republishing identical content is a no-op,
+and republishing different content for the same run fails rather than
+overwriting. Separate paths are what keep the provisional startup artifact from
+foreclosing the later canonical write. Neither record is a seal; they carry no
+signature or attestation claim.
+
+| Field | Description |
+|-------|-------------|
+| `schema_version` | Version of the record shape |
+| `run_id` | The run this provenance describes |
+| `seal_state` | `ready-to-seal` for the canonical record, `provisional` for the startup record |
+| `aggregate_identity` | Canonical identity over every section |
+| `registry_declaration_digest` | Pins which provider declarations collected this run |
+| `sections[]` | One entry per provenance source: status, declaration digest, content identity, and a bounded payload |
+| `limitations[]` | Every source that did not fully collect, with a stable reason code |
+
+Each source is collected by a code-owned provider under declared byte, entry,
+and time limits. A source that is unavailable, denied, unsupported, truncated,
+timed out, or failed appears in `limitations[]` with a stable reason code. Such
+a source is never silently omitted and never given a fabricated digest. A plain
+`aptl lab start` has no admitted experiment plan and no installed participants,
+so its provisional record reports those two sources `unavailable` rather than
+leaving them out.
+
+Content identity is framed per artifact: every detector rule, decoder,
+allowlist, image, and configuration is a leaf bound to its logical role, and
+family identities fold the sorted leaves. Changing one rule therefore moves
+that rule's leaf and the aggregate, and nothing else. Secret sources are
+excluded by allowlist before collection: `.env`, rendered secret-bearing
+config, credentials, and private keys are never read or hashed.
 
 ## Range Snapshot (`snapshot.json`)
 
@@ -66,7 +117,7 @@ Captured at the start of each run for reproducibility. Contains:
 | `wazuh_rules.total_decoders` | Total decoders loaded |
 | `wazuh_rules.custom_decoders` | Custom decoders count |
 | `networks[]` | Docker network name, subnet, gateway, connected containers |
-| `config_hashes` | SHA-256 of `aptl.json`, `docker-compose.yml`, `.env` |
+| `config_hashes` | SHA-256 of `aptl.json` and `docker-compose.yml`. `.env` is deliberately excluded: it holds control-plane secrets whose values have a small guessable domain, so a digest of it would be a confirmation oracle rather than an opaque identity. |
 
 Snapshots and trace exports must not contain live credentials, API keys, bearer
 tokens, cookies, JWTs, private key material, or default lab passwords. Redact at

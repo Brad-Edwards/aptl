@@ -590,3 +590,70 @@ class TestDetectionContentDigest:
         rule_file.write_text('alert tcp any any -> any any (msg:"v2"; sid:1;)')
         digest2 = detection_content_digest(tmp_path)
         assert digest1 != digest2
+
+
+class TestDetectionAndConfigProvenanceGaps:
+    """REP-003 (#452): gaps in the REP-001 snapshot helpers that must not persist.
+
+    ``_hash_config_files`` hashed ``.env``, and ``detection_content_digest``
+    hashed an unframed concatenation over stale, non-recursive globs — two of
+    which named a ``config/wazuh/etc`` tree that does not exist, while the real
+    Wazuh rule surface (``config/wazuh_cluster``) and Suricata's nested MISP
+    content went unrecorded.
+    """
+
+    def test_env_is_never_hashed(self, tmp_path):
+        """A digest of a secret-bearing file is not safe disclosure (ADR-029)."""
+        from aptl.core.snapshot import _hash_config_files
+
+        (tmp_path / "aptl.json").write_text('{"lab": {"name": "test"}}')
+        (tmp_path / ".env").write_text("WAZUH_API_PASSWORD=hunter2\n")
+
+        hashes = _hash_config_files(tmp_path)
+        assert ".env" not in hashes
+        assert "aptl.json" in hashes
+
+    def test_detection_digest_covers_nested_suricata_content(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+
+        nested = tmp_path / "config" / "suricata" / "rules" / "misp"
+        nested.mkdir(parents=True)
+        (nested / "misp-iocs.rules").write_text('alert tcp any any -> any any (sid:2;)')
+
+        assert detection_content_digest(tmp_path) != ""
+
+    def test_detection_digest_covers_the_real_wazuh_rule_surface(self, tmp_path):
+        from aptl.core.snapshot import detection_content_digest
+
+        cluster = tmp_path / "config" / "wazuh_cluster"
+        cluster.mkdir(parents=True)
+        (cluster / "suricata_rules.xml").write_text("<group/>")
+
+        assert detection_content_digest(tmp_path) != ""
+
+    def test_detection_digest_distinguishes_a_content_split(self, tmp_path):
+        """The unframed-concatenation collision: 'ab'+'c' vs 'a'+'bc'."""
+        from aptl.core.snapshot import detection_content_digest
+
+        rules = tmp_path / "config" / "suricata" / "rules"
+        rules.mkdir(parents=True)
+        (rules / "a.rules").write_bytes(b"ab")
+        (rules / "b.rules").write_bytes(b"c")
+        first = detection_content_digest(tmp_path)
+
+        (rules / "a.rules").write_bytes(b"a")
+        (rules / "b.rules").write_bytes(b"bc")
+        assert detection_content_digest(tmp_path) != first
+
+    def test_detection_digest_does_not_follow_symlinks(self, tmp_path):
+        import os
+
+        from aptl.core.snapshot import detection_content_digest
+
+        secret = tmp_path / "outside.rules"
+        secret.write_bytes(b"SECRET")
+        rules = tmp_path / "config" / "suricata" / "rules"
+        rules.mkdir(parents=True)
+        os.symlink(secret, rules / "linked.rules")
+
+        assert detection_content_digest(tmp_path) == ""

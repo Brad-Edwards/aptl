@@ -10,8 +10,14 @@ CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
 # kind. The artifact's declared provenance names the producer, and this maps it
 # to the directory that producer writes into. An unmapped provenance falls back
 # to the Wazuh indexer root, which is where every pre-existing bundle lands.
+# This table is the single allowlist of accepted certificate-bundle producers.
+# Admission validates membership and realization resolves the root from the same
+# entry, so a producer cannot be accepted without a known root, or acquire a root
+# without being accepted.
+SOC_CA_PROVENANCE = "src/aptl/core/soc_ca.py"
 CERTIFICATE_ROOT_BY_PROVENANCE: dict[str, Path] = {
-    "src/aptl/core/soc_ca.py": Path("config/soc_certs"),
+    "config/certs.yml": CERTIFICATE_ROOT_RELPATH,
+    SOC_CA_PROVENANCE: Path("config/soc_certs"),
 }
 REALIZATION_ADDRESS_LABEL = "org.aptl.realization.address"
 REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"

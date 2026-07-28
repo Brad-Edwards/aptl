@@ -16,6 +16,8 @@ from __future__ import annotations
 import os
 import stat
 
+from aptl.core.env import load_dotenv
+
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -169,6 +171,20 @@ class ComposeBaseSubstrateMixin(object):
             argv += [spec.image_ref, "sleep", "infinity"]
         return argv
 
+    def _project_dotenv(self) -> dict[str, str]:
+        """Return the project's generated credential bindings, or nothing.
+
+        Reuses the existing dotenv boundary rather than re-parsing the file, so
+        quoting, comment, and validation behaviour stay in one place. A missing
+        or unreadable file yields no bindings; the caller then omits those
+        variables rather than binding them empty.
+        """
+
+        try:
+            return load_dotenv(self._project_dir / ".env")
+        except (OSError, ValueError):
+            return {}
+
     def _append_base_environment(
         self, argv: list[str], spec: "BaseContainerSpec"
     ) -> None:
@@ -189,10 +205,15 @@ class ComposeBaseSubstrateMixin(object):
 
         if not spec.environment_names:
             return
+        # Values come from the project's own credential boundary first: APTL
+        # keeps them in the generated `.env`, which is never exported into this
+        # process. A real process-environment entry still wins, so an operator
+        # can override one variable without editing generated credentials.
+        available = {**self._project_dotenv(), **os.environ}
         bindings = {
-            name: os.environ[name]
+            name: available[name]
             for name in spec.environment_names
-            if name in os.environ
+            if name in available
         }
         if not bindings:
             return

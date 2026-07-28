@@ -15,7 +15,12 @@ from aptl.core.credentials import (
     _ensure_secure_dir,
     sync_manager_config,
 )
+from dataclasses import dataclass as _dataclass
+
+from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.deployment._compose_stateful_constants import (
+    CERTIFICATE_ROOT_BY_PROVENANCE,
+    SOC_CA_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     MIN_OVERRIDE_COMPOSE_VERSION,
     STATEFUL_OVERRIDE_RELPATH,
@@ -51,6 +56,14 @@ from aptl.core.services import check_indexer_ready, check_manager_api_ready
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+
+
+@_dataclass(frozen=True)
+class _BundleResult:
+    """One generator's outcome plus the directory it wrote its outputs into."""
+
+    success: bool
+    certs_dir: "Path"
 
 
 class ComposeStatefulRealizationMixin:
@@ -276,15 +289,36 @@ class ComposeStatefulRealizationMixin:
             )
         return failure
 
+    def _generate_certificate_bundle(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        root: "Path",
+    ) -> "_BundleResult":
+        """Run the generator that owns this bundle and report its output root."""
+
+        if artifact.provenance == SOC_CA_PROVENANCE:
+            outcome = ensure_soc_certs(self._project_dir)
+            return _BundleResult(
+                success=outcome.success, certs_dir=self._project_dir / root
+            )
+        outcome = ensure_ssl_certs(
+            self._project_dir,
+            run_command=self._run_certificate_command,
+        )
+        return _BundleResult(success=outcome.success, certs_dir=outcome.certs_dir)
+
     def _realize_certificate_bundle(
         self,
         artifact: DeploymentGeneratedArtifactRealization,
     ) -> LabResult | None:
         """Generate and cryptographically validate a certificate bundle."""
 
+        root = CERTIFICATE_ROOT_BY_PROVENANCE.get(
+            artifact.provenance, CERTIFICATE_ROOT_RELPATH
+        )
         failure: LabResult | None = None
         try:
-            _canonical_generated_path(self._project_dir, CERTIFICATE_ROOT_RELPATH)
+            _canonical_generated_path(self._project_dir, root)
         except ValueError:
             failure = LabResult(
                 success=False,
@@ -292,10 +326,11 @@ class ComposeStatefulRealizationMixin:
             )
         result = None
         if failure is None:
-            result = ensure_ssl_certs(
-                self._project_dir,
-                run_command=self._run_certificate_command,
-            )
+            # Dispatch to the producer this artifact declares. RAES's generator
+            # vocabulary cannot distinguish them, so provenance is what says
+            # which generator owns the bundle; calling the Wazuh one for every
+            # certificate_bundle would look for the outputs in the wrong place.
+            result = self._generate_certificate_bundle(artifact, root)
             if not result.success:
                 failure = LabResult(
                     success=False,

@@ -64,3 +64,39 @@ def test_rendered_config_is_unaffected_by_certificate_root_mapping():
     )
 
     assert path != _PROJECT.resolve() / "config/soc_certs"
+
+
+def test_admission_and_resolution_share_one_producer_allowlist():
+    """A producer cannot be accepted without a root, or get a root unaccepted.
+
+    Admission previously hardcoded a single acceptable provenance while
+    resolution keyed off the generator kind. Keeping both on one table means a
+    new producer is either fully known or fully rejected, never half-wired.
+    """
+
+    from aptl.core.deployment._compose_stateful_constants import (
+        CERTIFICATE_ROOT_BY_PROVENANCE,
+    )
+
+    assert "config/certs.yml" in CERTIFICATE_ROOT_BY_PROVENANCE
+    assert "src/aptl/core/soc_ca.py" in CERTIFICATE_ROOT_BY_PROVENANCE
+    for provenance, root in CERTIFICATE_ROOT_BY_PROVENANCE.items():
+        assert artifact_source_path(_PROJECT, _artifact(provenance)) == (
+            _PROJECT.resolve() / root
+        )
+
+
+def test_unknown_producer_is_refused_by_admission():
+    """An unlisted provenance fails admission rather than defaulting silently."""
+
+    from aptl.core.deployment._compose_stateful_graph import _artifact_errors
+    from aptl.core.deployment.realization import DeploymentRealizationSpec
+
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(),
+        networks=(),
+        generated_artifacts=(_artifact("config/attacker-supplied.yml"),),
+    )
+
+    assert any("unsupported provenance" in e for e in _artifact_errors(spec))

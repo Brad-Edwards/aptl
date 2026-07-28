@@ -31,20 +31,21 @@ def _webapp_runtime():
     return parse_sdl_file(_SCENARIO).nodes["webapp"].runtime
 
 
-class _Backend:
-    """Minimal stand-in exposing what the env binding needs."""
+def _backend(project_dir: Path):
+    """Real mixin instance with only the project attributes it needs."""
 
-    def __init__(self, project_dir: Path) -> None:
-        self._project_dir = project_dir
-        self._project_name = "aptl"
+    from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
+
+    backend = ComposeBaseSubstrateMixin()
+    backend._project_dir = project_dir
+    backend._project_name = "aptl"
+    return backend
 
 
 def _append(spec: BaseContainerSpec, project_dir: Path) -> list[str]:
-    from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
-
-    backend = _Backend(project_dir)
+    backend = _backend(project_dir)
     argv: list[str] = []
-    ComposeBaseSubstrateMixin._append_base_environment(backend, argv, spec)
+    backend._append_base_environment(argv, spec)
     return argv
 
 
@@ -150,3 +151,31 @@ def test_restored_named_volumes_are_lowered():
     # No raw host or project bind smuggled in alongside them.
     for mounts in lowered.values():
         assert all(not source.startswith((".", "/")) for source, _ in mounts)
+
+
+def test_values_come_from_the_project_credential_boundary(tmp_path, monkeypatch):
+    """APTL keeps values in the generated .env, never in this process.
+
+    Reading only ``os.environ`` produced no bindings at all during a real lab
+    start, because the lab-start process never exports them. The project's
+    dotenv boundary is the actual source.
+    """
+
+    monkeypatch.delenv("DB_HOST", raising=False)
+    (tmp_path / ".env").write_text("DB_HOST=db\n", encoding="utf-8")
+
+    argv = _append(_spec(("DB_HOST",)), tmp_path)
+
+    assert argv[0] == "--env-file"
+    assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=db\n"
+
+
+def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
+    """An operator can override one variable without editing credentials."""
+
+    (tmp_path / ".env").write_text("DB_HOST=from-file\n", encoding="utf-8")
+    monkeypatch.setenv("DB_HOST", "from-operator")
+
+    argv = _append(_spec(("DB_HOST",)), tmp_path)
+
+    assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"

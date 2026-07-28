@@ -92,6 +92,49 @@ class ComposeRealizationImageMixin:
         )
         return resolvable.returncode == 0
 
+    def container_image_digest(self, container_name: str) -> str | None:
+        """Return the manifest digest of the image backing one container.
+
+        This is the read-after-write half of exact artifact realization: it
+        reports what the container is *actually* running, so the satisfaction
+        disclosure can be built from the observed digest rather than the
+        planned one. A node whose digest cannot be read returns None, which
+        surfaces as a refused disclosure rather than an assumed match.
+        """
+
+        container = self._run(
+            ["docker", "inspect", "--format", "{{.Image}}", container_name],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if container.returncode != 0:
+            return None
+        image_id = container.stdout.strip()
+        if not image_id:
+            return None
+        repo_digests = self._run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{json .RepoDigests}}",
+                image_id,
+            ],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if repo_digests.returncode != 0:
+            return None
+        try:
+            references = yaml.safe_load(repo_digests.stdout.strip()) or []
+        except yaml.YAMLError:
+            return None
+        if not isinstance(references, list):
+            return None
+        for reference in references:
+            if isinstance(reference, str) and "@sha256:" in reference:
+                return reference.rsplit("@", 1)[1]
+        return None
+
     def _verify_staged_image(
         self,
         image: DeploymentImageRealization,

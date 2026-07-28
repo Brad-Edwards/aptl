@@ -163,6 +163,16 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def container_image_digest(self, container_name: str) -> str | None:
+        """Return the manifest digest of the image backing one container.
+
+        Read-after-write for exact artifact realization: the satisfaction
+        disclosure is built from this observed value, never from the planned
+        one. Return None when the digest cannot be determined, so the caller
+        refuses the disclosure instead of assuming a match.
+        """
+        ...
+
     def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
         """Materialize one scenario-declared network.
 

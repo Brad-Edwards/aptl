@@ -199,3 +199,52 @@ def test_missing_disclosure_is_rejected():
 
     assert diagnostic is not None
     assert diagnostic.code == "runtime.backend-contract-invalid"
+
+
+class _FakeRun:
+    """Minimal stand-in for the compose backend's typed subprocess runner."""
+
+    def __init__(self, results: dict[str, tuple[int, str]]) -> None:
+        self.results = results
+
+    def __call__(self, argv, timeout=None):
+        import subprocess
+
+        key = "inspect-container" if argv[1] == "inspect" else "inspect-image"
+        code, out = self.results.get(key, (1, ""))
+        return subprocess.CompletedProcess(argv, code, stdout=out, stderr="")
+
+
+def _backend(results):
+    from aptl.core.deployment._compose_image_realization import (
+        ComposeRealizationImageMixin,
+    )
+
+    backend = ComposeRealizationImageMixin()
+    backend._run = _FakeRun(results)  # type: ignore[attr-defined]
+    return backend
+
+
+def test_realized_digest_is_read_back_from_the_container():
+    """The observed digest comes from the running container, not the plan."""
+
+    backend = _backend(
+        {
+            "inspect-container": (0, "sha256:imageid\n"),
+            "inspect-image": (0, f'["example/app@{_DIGEST}"]\n'),
+        }
+    )
+
+    assert backend.container_image_digest("aptl-target") == _DIGEST
+
+
+def test_unreadable_digest_returns_none_rather_than_assuming_a_match():
+    """A node whose digest cannot be read must not be disclosed as compliant."""
+
+    assert _backend({"inspect-container": (1, "")}).container_image_digest("x") is None
+    assert (
+        _backend(
+            {"inspect-container": (0, "sha256:imageid"), "inspect-image": (0, "[]")}
+        ).container_image_digest("x")
+        is None
+    )

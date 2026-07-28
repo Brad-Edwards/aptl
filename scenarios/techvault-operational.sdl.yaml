@@ -568,6 +568,11 @@ nodes:
         # manager accepts remote syslog on 514 from 172.20.0.0/16), which the
         # web-accesslog decoder + custom rules process identically.
         - {manager: apt, name: rsyslog, version: "*"}
+        # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
+        # iptables here to revert blanket kali source-IP DROPs left by Wazuh
+        # active response. The node already declares CAP_NET_ADMIN for that;
+        # without the tool itself the audit cannot inspect or clear the chain.
+        - {manager: apt, name: iptables, version: "*"}
       filesystem_inventory:
         - {path: /var/log/gunicorn, entry_type: directory}
       # aptl lab continuity-audit (src/aptl/core/continuity.py) execs
@@ -750,6 +755,10 @@ nodes:
           value_classification: plain
           provenance: compose
       packages:
+        # continuity-audit execs iptables here to revert active-response
+        # DROPs; the node declares CAP_NET_ADMIN for it, so the tool must
+        # be present or the audit cannot inspect or clear the chain.
+        - {manager: apt, name: iptables, version: "*"}
         - {manager: apt, name: samba, version: "*"}
       # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
       # source-IP DROPs on this node's INPUT chain (src/aptl/core/continuity.py).
@@ -793,6 +802,10 @@ nodes:
           value_classification: plain
           provenance: compose
       packages:
+        # continuity-audit execs iptables here to revert active-response
+        # DROPs; the node declares CAP_NET_ADMIN for it, so the tool must
+        # be present or the audit cannot inspect or clear the chain.
+        - {manager: apt, name: iptables, version: "*"}
         - {manager: apt, name: bind9, version: "*"}
         - {manager: apt, name: dnsutils, version: "*"}
       filesystem_inventory:

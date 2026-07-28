@@ -57,6 +57,7 @@ from aptl.backends.raes_realization_values import (
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
 
@@ -65,8 +66,21 @@ def interpret_provisioning_plan(
     plan: ProvisioningPlan,
     project_dir: Path,
     config: AptlConfig,
+    bundle: ScenarioBundle | None = None,
 ) -> AptlRealization:
-    """Interpret RAES provisioning resources as an APTL realization plan."""
+    """Interpret RAES provisioning resources as an APTL realization plan.
+
+    ``bundle`` supplies the root scenario content is anchored to. It defaults to
+    a bundle over the project directory, which is exactly today's behaviour, so
+    a caller that does not yet resolve a bundle is unaffected.
+
+    The distinction matters because ``project_dir`` is the *engine's* checkout
+    while the bundle root is the *scenario's*. Anchoring content to the engine
+    is what currently makes a scenario inseparable from it; once a resolver
+    hands back a staged bundle root instead, realization needs no change.
+    """
+
+    content_root = bundle.root if bundle is not None else project_dir.resolve()
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
@@ -93,11 +107,15 @@ def interpret_provisioning_plan(
     )
     append_network_topology_diagnostics(nodes, networks, diagnostics)
     acls = realize_acls(payload_resources, networks, diagnostics)
+    # Scenario content resolves against the bundle root, not the engine's
+    # checkout. They are the same directory for an in-tree scenario, so this is
+    # behaviour-preserving today and is the single point that changes when a
+    # scenario is handed over from somewhere else.
     placements = _realize_placements(
         payload_resources,
         _node_lookup(nodes),
         {node.address: node for node in nodes},
-        project_dir,
+        content_root,
         diagnostics,
     )
     generated_artifacts, persistent_volumes = realize_stateful_resources(

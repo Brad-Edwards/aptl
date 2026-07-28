@@ -26,8 +26,10 @@ disclosed reference to be a subset of the processor-owned verified sets.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
 from raes.artifact_requirements import ArtifactSatisfactionRoute
 
 from aptl.backends.raes_artifact_mechanisms import exact_artifact_provenance_ref
@@ -142,3 +144,62 @@ def satisfaction_payload(
         "integrity_refs": [realized_digest],
         "provenance_refs": [exact_artifact_provenance_ref()],
     }
+
+
+def _authored_requirement(payload: object) -> ArtifactRequirement | None:
+    """Return the artifact requirement authored on one planned node resource."""
+
+    from raes.artifact_requirements import ArtifactRequirement as _Requirement
+
+    spec = payload.get("spec") if isinstance(payload, Mapping) else None
+    node = spec.get("node") if isinstance(spec, Mapping) else None
+    source = node.get("source") if isinstance(node, Mapping) else None
+    authored = source.get("artifact_requirement") if isinstance(source, Mapping) else None
+    if authored is None:
+        return None
+    try:
+        return _Requirement.model_validate(authored)
+    except ValidationError:
+        # A malformed requirement is a parse/compile concern, already reported
+        # upstream. Producing no disclosure here makes the runtime gate reject
+        # rather than letting a half-understood contract look satisfied.
+        return None
+
+
+def satisfactions_for_plan(
+    plan: object,
+    container_names: Mapping[str, str],
+    backend: object,
+    manifest: BackendManifest,
+    *,
+    requirement_kind: str,
+) -> dict[str, dict[str, object]]:
+    """Return the ``artifact_satisfaction`` payload for each realized address.
+
+    An address is omitted when it authors no artifact requirement, when no
+    container backs it, when its realized digest cannot be read, or when that
+    digest differs from the authored pin. Every one of those omissions makes
+    RAES's runtime gate reject the apply, which is the intended behaviour: a
+    missing disclosure is a refusal, never an implicit pass.
+    """
+
+    disclosures: dict[str, dict[str, object]] = {}
+    for address, resource in getattr(plan, "resources", {}).items():
+        if getattr(resource, "resource_type", None) != "node":
+            continue
+        contract = _authored_requirement(getattr(resource, "payload", None))
+        container = container_names.get(address)
+        if contract is None or not container:
+            continue
+        realized = backend.container_image_digest(container)
+        if not realized:
+            continue
+        payload = satisfaction_payload(
+            contract,
+            manifest,
+            requirement_kind=requirement_kind,
+            realized_digest=realized,
+        )
+        if payload is not None:
+            disclosures[address] = payload
+    return disclosures

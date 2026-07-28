@@ -177,7 +177,7 @@ class ExperimentExecutor:
             # and let terminal-cause normalization classify the interruption.
             try:
                 holder["outcome"] = self.workload(trial_context)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 log.warning("trial workload raised for attempt %s", attempt_id)
         ended_at = self.clock.now()
         outcome = holder.get("outcome")

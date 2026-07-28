@@ -62,30 +62,30 @@ class TerminalAttemptContext:
     run_version: str
     terminal_cause: TerminalCause
     # -- required RAES sub-models -----------------------------------------
-    task: "ExperimentTaskModel"
-    scenario_snapshot_ref: "ExperimentScenarioSnapshotReferenceModel"
-    apparatus_context: "ExperimentApparatusContextModel"
-    parameter_set: tuple["ExperimentParameterModel", ...]
-    stochastic_controls: tuple["ExperimentStochasticControlModel", ...]
-    clock_context: "ExperimentClockContextModel"
-    traceability: "ExperimentRunTraceabilityModel"
-    evidence_artifacts: tuple["ExperimentArtifactRefModel", ...]
-    result_summaries: Mapping[str, "ExperimentResultSummaryModel"]
+    task: ExperimentTaskModel
+    scenario_snapshot_ref: ExperimentScenarioSnapshotReferenceModel
+    apparatus_context: ExperimentApparatusContextModel
+    parameter_set: tuple[ExperimentParameterModel, ...]
+    stochastic_controls: tuple[ExperimentStochasticControlModel, ...]
+    clock_context: ExperimentClockContextModel
+    traceability: ExperimentRunTraceabilityModel
+    evidence_artifacts: tuple[ExperimentArtifactRefModel, ...]
+    result_summaries: Mapping[str, ExperimentResultSummaryModel]
     started_at: str
     ended_at: str
     # -- optional / defaulted ---------------------------------------------
     #: The evaluator's verdict; REQUIRED when ``terminal_cause`` is COMPLETED and
     #: ignored otherwise. The archival layer never derives an outcome.
     evaluator_outcome: str | None = None
-    participant_implementation_provenance: "ParticipantImplementationProvenanceModel | None" = None
-    realized_bindings: tuple["RealizedBindingProvenanceModel", ...] = ()
-    stochastic_draws: tuple["RandomStreamDrawRecordModel", ...] = ()
-    realized_time_model: "RealizedTimeModelProvenanceModel | None" = None
+    participant_implementation_provenance: ParticipantImplementationProvenanceModel | None = None
+    realized_bindings: tuple[RealizedBindingProvenanceModel, ...] = ()
+    stochastic_draws: tuple[RandomStreamDrawRecordModel, ...] = ()
+    realized_time_model: RealizedTimeModelProvenanceModel | None = None
     #: Present only for a time-model-governed scenario; drives
     #: ``validate_experiment_run_time_model``.
-    time_model_declaration: "TimeModelDeclarationModel | None" = None
-    realized_form_disclosures: tuple["ExperimentRealizedFormDisclosureModel", ...] = ()
-    augmentation_disclosures: tuple["ExperimentAugmentationDisclosureModel", ...] = ()
+    time_model_declaration: TimeModelDeclarationModel | None = None
+    realized_form_disclosures: tuple[ExperimentRealizedFormDisclosureModel, ...] = ()
+    augmentation_disclosures: tuple[ExperimentAugmentationDisclosureModel, ...] = ()
     deviations: tuple[str, ...] = ()
     #: Reason for an invalidated run (capture loss / validity failure). Required
     #: when the terminal cause maps to ``run_status="invalidated"``.
@@ -93,12 +93,12 @@ class TerminalAttemptContext:
     #: When the invalidation occurred; defaults to ``ended_at`` if unset.
     invalidated_at: str | None = None
     #: The run that replaces an invalidated one (``invalidation.superseded_by``).
-    superseded_by: "ExperimentReferenceModel | None" = None
+    superseded_by: ExperimentReferenceModel | None = None
     #: The predecessor run of a retry; folded into ``derived_from_refs``.
-    predecessor_run_ref: "ExperimentReferenceModel | None" = None
-    used_refs: tuple["ExperimentReferenceModel", ...] = ()
-    generated_refs: tuple["ExperimentReferenceModel", ...] = ()
-    derived_from_refs: tuple["ExperimentReferenceModel", ...] = ()
+    predecessor_run_ref: ExperimentReferenceModel | None = None
+    used_refs: tuple[ExperimentReferenceModel, ...] = ()
+    generated_refs: tuple[ExperimentReferenceModel, ...] = ()
+    derived_from_refs: tuple[ExperimentReferenceModel, ...] = ()
     #: The already-written run-relative artifacts the seal binds beyond the run
     #: manifest: evidence records/blobs, final provenance, correlation/clock
     #: disclosures, evaluator exports, and required lifecycle evidence. Each is

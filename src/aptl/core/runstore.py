@@ -23,8 +23,9 @@ from typing import Any, Iterator, Protocol
 
 try:
     import fcntl
-except ModuleNotFoundError:  # pragma: no cover - Windows has no POSIX flock
-    fcntl = None  # type: ignore[assignment]
+except ModuleNotFoundError:
+    # Windows has no POSIX flock; the per-run lock becomes in-process only.
+    fcntl = None
 
 from aptl.core.runstore_internals import (
     _LOCK_REGISTRY,

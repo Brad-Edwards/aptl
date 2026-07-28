@@ -32,8 +32,9 @@ from pathlib import Path
 
 try:
     import fcntl
-except ModuleNotFoundError:  # pragma: no cover - Windows has no POSIX flock
-    fcntl = None  # type: ignore[assignment]
+except ModuleNotFoundError:
+    # Windows has no POSIX flock; the journal lock becomes in-process only.
+    fcntl = None
 
 from aptl.core.archival.layout import (
     INDEX_DIR,
@@ -410,7 +411,8 @@ class _JournalLock:
             0o600,
             dir_fd=self._dir_fd,
         )
-        if fcntl is not None:  # in-process only without POSIX flock (Windows)
+        # Without POSIX flock (Windows) the journal lock is in-process only.
+        if fcntl is not None:
             fcntl.flock(self._lock_fd, fcntl.LOCK_EX)
         return self._dir_fd
 

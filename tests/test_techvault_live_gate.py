@@ -1383,3 +1383,34 @@ def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
     )
 
     assert not any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+
+
+def test_ssh_listening_targets_are_probed_first(monkeypatch):
+    """Failed-auth proof needs a host that answers on 22.
+
+    Taking an arbitrary slice of reachable containers can probe only hosts with
+    no SSH listener, which produces no auth event and no alert however many times
+    it is retried — indistinguishable from a broken detection path.
+    """
+    from aptl.validation import _live_gate_probes as probes
+
+    targets = [("no-ssh-a", "10.0.0.1"), ("no-ssh-b", "10.0.0.2"), ("has-ssh", "10.0.0.9")]
+    monkeypatch.setattr(
+        probes, "_ssh_reachable_from_kali", lambda _b, ip: ip == "10.0.0.9"
+    )
+
+    ordered = probes._prioritise_ssh_targets(object(), targets)
+
+    assert ordered[0] == ("has-ssh", "10.0.0.9")
+    # Nothing is dropped: a host that did not answer the probe is still a target.
+    assert sorted(ordered) == sorted(targets)
+
+
+def test_target_order_is_stable_when_nothing_listens(monkeypatch):
+    """With no listener anywhere the original order is preserved, not shuffled."""
+    from aptl.validation import _live_gate_probes as probes
+
+    targets = [("a", "10.0.0.1"), ("b", "10.0.0.2")]
+    monkeypatch.setattr(probes, "_ssh_reachable_from_kali", lambda _b, _ip: False)
+
+    assert probes._prioritise_ssh_targets(object(), targets) == targets

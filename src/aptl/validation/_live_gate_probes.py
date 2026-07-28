@@ -222,6 +222,41 @@ def _ping_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
     return result.returncode == 0
 
 
+def _ssh_reachable_from_kali(backend: "DeploymentBackend", ip: str) -> bool:
+    """Return whether Kali can open a TCP connection to ``ip`` on port 22."""
+    try:
+        result = backend.container_exec(
+            _KALI_CONTAINER,
+            ["nc", "-z", "-w", "3", ip, "22"],
+            timeout=15,
+        )
+    # broad-except: backend exec surfaces diverse transport errors.
+    except Exception as exc:
+        log.warning("ssh probe failed for %s: %s", ip, redact(str(exc)))
+        return False
+    return result.returncode == 0
+
+
+def _prioritise_ssh_targets(
+    backend: "DeploymentBackend", targets: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Order targets so hosts actually exposing SSH are probed first.
+
+    The generator proves host monitoring through failed SSH authentication, so a
+    target with no listener produces no auth event and no alert however many
+    times it is tried. Taking an arbitrary slice of reachable containers can
+    therefore probe only hosts that cannot answer, which reads as a broken
+    detection path when the path is fine.
+
+    This stays scenario-generic: it asks which reachable hosts expose the service
+    whose failed auth is being generated, rather than naming any node.
+    """
+
+    listening = [target for target in targets if _ssh_reachable_from_kali(backend, target[1])]
+    remaining = [target for target in targets if target not in listening]
+    return listening + remaining
+
+
 def _collect_until_evidence(
     backend: "DeploymentBackend",
     start_iso: str,
@@ -278,7 +313,7 @@ def _generate_event(
     """
     first_ip = targets[0][1]
     _exec_kali(backend, ["nmap", "-Pn", "-T4", "-p", "22,80,443,445", first_ip], 120)
-    for _name, ip in targets[:_MAX_EVENT_TARGETS]:
+    for _name, ip in _prioritise_ssh_targets(backend, targets)[:_MAX_EVENT_TARGETS]:
         for _attempt in range(3):
             _exec_kali(
                 backend,

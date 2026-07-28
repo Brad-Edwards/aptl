@@ -61,6 +61,27 @@ __all__ = [
 _COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
 
 
+def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
+    """Whether any node is left for Compose to start.
+
+    Derived from the nodes themselves rather than a spec-level flag, so a graph
+    that mixes pinned artifacts, per-component builds and materialized nodes
+    routes correctly instead of falling into a whole-graph special case.
+
+    An empty graph keeps the Compose path: having no nodes is not the same as
+    having materialized them all, and the Compose pipeline still owns networks,
+    stateful prerequisites and validation.
+    """
+
+    if not realization.nodes:
+        return True
+    materialized = _image_free_node_addresses(realization)
+    return any(
+        node.address not in materialized and node.service_name
+        for node in realization.nodes
+    )
+
+
 class ComposeRealizationMixin(
     ComposeBoundaryRealizationMixin,
     ComposeRealizationImageMixin,
@@ -79,8 +100,13 @@ class ComposeRealizationMixin(
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose."""
 
-        if realization.image_free:
-            return self._realize_image_free(realization)
+        # Route from per-node facts, never a whole-graph flag. A mixed graph is
+        # normal (ADR-050): some nodes come from a pinned artifact, some are
+        # built from a specification, some are composed from declared state. The
+        # only whole-graph question left is whether Compose has anything to
+        # start.
+        if not _needs_compose(realization):
+            return self._realize_without_compose(realization)
         return self._realize_mixed_or_legacy(realization, build=build)
 
     def _realize_mixed_or_legacy(
@@ -208,12 +234,14 @@ class ComposeRealizationMixin(
         )
         return _realize_node_subset(self, nodes, content)
 
-    def _realize_image_free(
+    def _realize_without_compose(
         self,
         realization: DeploymentRealizationSpec,
     ) -> LabResult:
-        """Realize every node by materializing declared state onto a generic
-        base substrate, with no appliance image and no compose-up (ADR-048).
+        """Realize a graph in which no node is Compose-managed.
+
+        Every node is materialized from declared state onto a generic base
+        substrate, so there is nothing for ``compose up`` to start.
 
         Networks first, then each node's declared packages/identity/services are
         materialized and verified by read-after-write, then content placements.

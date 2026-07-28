@@ -357,4 +357,3 @@ class DeploymentRealizationSpec(object):
     # no compose-up of the hand-authored model). Set by the interpreter only
     # when the scenario is fully image-free authored; False keeps the legacy
     # compose path unchanged so a partially-authored scenario never boots empty.
-    image_free: bool = False

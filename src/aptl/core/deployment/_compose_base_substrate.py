@@ -13,6 +13,9 @@ declared init requirements, and copy checked-in project content into it.
 
 from __future__ import annotations
 
+import os
+import stat
+
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -157,6 +160,7 @@ class ComposeBaseSubstrateMixin(object):
                 argv += ["--ip", first_attachment.ipv4_address]
         self._append_base_mounts(argv, spec)
         self._append_base_ports(argv, spec)
+        self._append_base_environment(argv, spec)
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
@@ -164,6 +168,46 @@ class ComposeBaseSubstrateMixin(object):
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
         return argv
+
+    def _append_base_environment(
+        self, argv: list[str], spec: "BaseContainerSpec"
+    ) -> None:
+        """Bind a node's declared environment through a contained env file.
+
+        The SDL declares *which* variables a node requires; their values come
+        from the operator environment through the existing secret boundary. The
+        binding is written to an owner-only file under the project's generated
+        realization directory and passed as ``--env-file``, never as ``-e
+        NAME=value``: a value on the command line would put credentials into
+        process argv, where any local process can read them, and into anything
+        that echoes the command.
+
+        A declared variable absent from the environment is omitted rather than
+        bound empty, so the container fails on its own missing-configuration
+        path instead of starting with a silently blank credential.
+        """
+
+        if not spec.environment_names:
+            return
+        bindings = {
+            name: os.environ[name]
+            for name in spec.environment_names
+            if name in os.environ
+        }
+        if not bindings:
+            return
+        env_dir = self._project_dir / ".aptl" / "realization" / "env"
+        env_dir.mkdir(parents=True, exist_ok=True)
+        env_path = env_dir / f"{spec.container_name}.env"
+        # Create restricted before writing so the values are never briefly
+        # world-readable between creation and chmod.
+        descriptor = os.open(
+            env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            for name, value in bindings.items():
+                handle.write(f"{name}={value}\n")
+        argv.extend(("--env-file", str(env_path)))
 
     def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
         """Append declared named-volume mounts to a base-container command."""

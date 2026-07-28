@@ -108,6 +108,11 @@ class BaseContainerSpec:
     init: InitRequirements | None = None
     published_ports: tuple[PublishedPort, ...] = ()
     volume_mounts: tuple[VolumeMount, ...] = ()
+    # Declared environment variable NAMES only, in authored order. Values are
+    # never carried on this spec: they are resolved at the backend's existing
+    # secret boundary and written to a contained, owner-only env file, so a
+    # credential never reaches process argv, image labels, or logs.
+    environment_names: tuple[str, ...] = ()
 
 
 def _container_name(node_address: str) -> str:
@@ -143,6 +148,7 @@ def base_container_spec(
         init=_init_requirements(runtime) if runs_services else None,
         published_ports=_published_ports(runtime),
         volume_mounts=_volume_mounts(runtime),
+        environment_names=_environment_names(runtime),
     )
 
 
@@ -166,6 +172,26 @@ def _published_ports(runtime: RuntimeConfiguration | None) -> tuple[PublishedPor
             host_port=int(port.host_port) if port.host_port is not None else None,
         )
         for port in network.published_ports
+    )
+
+
+def _environment_names(runtime: RuntimeConfiguration | None) -> tuple[str, ...]:
+    """Return the environment variable names a node declares it requires.
+
+    Only names travel. ``RuntimeEnvironmentVariable`` carries a classification
+    and provenance alongside an optional value, and a declared value is only
+    ever a non-secret default; anything classified as a secret is authored with
+    an empty value and supplied by the operator environment. Carrying values
+    through the realization spec would put credentials into a DTO that reaches
+    logs, diagnostics, and run evidence.
+    """
+
+    if runtime is None:
+        return ()
+    return tuple(
+        variable.name
+        for variable in runtime.environment
+        if getattr(variable, "name", "")
     )
 
 

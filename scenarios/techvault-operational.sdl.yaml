@@ -195,6 +195,41 @@ nodes:
     os: linux
     services: []
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: MISP_URL
+          value_classification: plain
+          provenance: compose
+        - name: MISP_API_KEY
+          value_classification: operator_secret
+          provenance: compose
+        - name: MISP_VERIFY_SSL
+          value_classification: plain
+          provenance: compose
+        - name: MISP_CA_CERT_PATH
+          value_classification: plain
+          provenance: compose
+        - name: IOC_TAG_FILTER
+          value_classification: plain
+          provenance: compose
+        - name: SYNC_INTERVAL_SECONDS
+          value_classification: plain
+          provenance: compose
+        - name: RULES_OUT_PATH
+          value_classification: plain
+          provenance: compose
+        - name: SURICATA_SOCKET_PATH
+          value_classification: plain
+          provenance: compose
+        - name: SID_BASE
+          value_classification: plain
+          provenance: compose
+        - name: LOG_LEVEL
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: apt, name: python3-pip, version: "*"}
       dependency_manifests:
@@ -414,6 +449,44 @@ nodes:
     services:
       - {name: http, port: 8080, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: DB_HOST
+          value_classification: plain
+          provenance: compose
+        - name: DB_PORT
+          value_classification: plain
+          provenance: compose
+        - name: DB_NAME
+          value_classification: plain
+          provenance: compose
+        - name: DB_USER
+          value_classification: plain
+          provenance: compose
+        - name: DB_PASSWORD
+          value_classification: operator_secret
+          provenance: compose
+        - name: FLASK_ENV
+          value_classification: plain
+          provenance: compose
+        - name: SIEM_IP
+          value_classification: plain
+          provenance: compose
+        - name: WAZUH_MANAGER
+          value_classification: plain
+          provenance: compose
+        - name: AGENT_NAME
+          value_classification: plain
+          provenance: compose
+        - name: LOG_PATHS
+          value_classification: plain
+          provenance: compose
+        - name: LOG_FORMAT
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: apt, name: python3-flask, version: "*"}
         - {manager: apt, name: python3-gunicorn, version: "*"}
@@ -465,6 +538,20 @@ nodes:
     services:
       - {name: postgres, port: 5432, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: POSTGRES_DB
+          value_classification: plain
+          provenance: compose
+        - name: POSTGRES_USER
+          value_classification: plain
+          provenance: compose
+        - name: POSTGRES_PASSWORD
+          value_classification: operator_secret
+          provenance: compose
       packages:
         - {manager: apt, name: postgresql, version: "*"}
       service_manager_units:
@@ -476,6 +563,17 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: SIEM_IP
+          value_classification: plain
+          provenance: compose
+        - name: LABADMIN_SSH_KEY_FILE
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
         # openssh-clients (the `ssh` binary) + postgresql (the `psql` client):
@@ -511,6 +609,26 @@ nodes:
     services:
       - {name: smb, port: 445, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: SIEM_IP
+          value_classification: plain
+          provenance: compose
+        - name: WAZUH_MANAGER
+          value_classification: plain
+          provenance: compose
+        - name: AGENT_NAME
+          value_classification: plain
+          provenance: compose
+        - name: LOG_PATHS
+          value_classification: plain
+          provenance: compose
+        - name: LOG_FORMAT
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: apt, name: samba, version: "*"}
       # aptl lab continuity-audit needs CAP_NET_ADMIN to revert blanket kali
@@ -527,6 +645,23 @@ nodes:
     services:
       - {name: dns, port: 53, protocol: udp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: WAZUH_MANAGER
+          value_classification: plain
+          provenance: compose
+        - name: AGENT_NAME
+          value_classification: plain
+          provenance: compose
+        - name: LOG_PATHS
+          value_classification: plain
+          provenance: compose
+        - name: LOG_FORMAT
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: apt, name: bind9, version: "*"}
         - {manager: apt, name: dnsutils, version: "*"}
@@ -556,6 +691,17 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: SIEM_IP
+          value_classification: plain
+          provenance: compose
+        - name: LABADMIN_SSH_KEY_FILE
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: dnf, name: openssh-server, version: "*"}
         - {manager: dnf, name: sudo, version: "*"}
@@ -581,6 +727,14 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Environment the pre-refactor component required. Names and
+      # classification only: a secret value is supplied by the operator
+      # environment through the existing secret boundary, never authored
+      # here and never carried in realization DTOs, argv, or logs.
+      environment:
+        - name: VICTIM_IP
+          value_classification: plain
+          provenance: compose
       packages:
         - {manager: apt, name: openssh-server, version: "*"}
         # iputils-ping: the live gate's kali_reachability check ICMP-pings

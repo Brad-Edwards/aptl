@@ -179,8 +179,11 @@ def _plan_scenario(
     # Artifact availability is a trusted input to planning, gathered at the
     # backend trust boundary before the single admitted plan() call (ADR-050).
     # It is a no-op for a scenario that authors no artifact_requirement.
+    # The scenario's own inputs — including a component build context — anchor
+    # to the bundle, which is the project directory only while the scenario
+    # still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, project_dir=project_dir
+        scenario, backend, scenario_root=project_dir
     )
     execution_plan = (
         manager.plan(
@@ -263,7 +266,7 @@ def selected_profiles_for_scenario(
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, project_dir=project_dir
+            scenario, backend, scenario_root=project_dir
         ),
     )
     realization = interpret_provisioning_plan(
@@ -297,7 +300,7 @@ def admitted_stateful_artifact_ownership(
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, project_dir=project_dir
+            scenario, backend, scenario_root=project_dir
         ),
     )
     blocking = [

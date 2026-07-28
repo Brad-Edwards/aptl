@@ -120,3 +120,37 @@ def test_realization_anchors_content_to_the_bundle_not_the_engine(tmp_path):
     )
     if resolved is not None:
         assert elsewhere in resolved.parents
+
+
+def test_component_build_contexts_anchor_to_the_scenario_not_the_engine(tmp_path):
+    """A build context is scenario content and must resolve against the bundle.
+
+    Component images are declared by the scenario, so a scenario handed over from
+    elsewhere must not build one out of APTL's own `containers/` tree. Without
+    this the engine would keep satisfying component builds from its checkout and
+    a rehomed scenario would appear to work.
+    """
+
+    from aptl.backends.raes_artifact_availability import _context_dockerfile
+
+    engine = tmp_path / "engine"
+    (engine / "containers" / "widget").mkdir(parents=True)
+    (engine / "containers" / "widget" / "Dockerfile").write_text(
+        "FROM scratch\n", encoding="utf-8"
+    )
+    elsewhere = tmp_path / "bundle"
+    elsewhere.mkdir()
+
+    assert _context_dockerfile(engine, "widget") is not None
+    assert _context_dockerfile(elsewhere, "widget") is None
+
+
+def test_a_specification_id_cannot_escape_the_context_root(tmp_path):
+    """Specification ids are authored data and are treated as untrusted."""
+
+    from aptl.backends.raes_artifact_availability import _context_dockerfile
+
+    (tmp_path / "containers").mkdir()
+
+    for hostile in ("../..", "../escape", "a/b", ".", ".."):
+        assert _context_dockerfile(tmp_path, hostile) is None

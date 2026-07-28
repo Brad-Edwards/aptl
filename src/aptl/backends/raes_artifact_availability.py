@@ -85,7 +85,7 @@ def _artifact_reference(requirement: ArtifactRequirement) -> str | None:
     return f"{exact.artifact_id}@{exact.digest}"
 
 
-def _context_dockerfile(project_dir: Path, specification_id: str) -> Path | None:
+def _context_dockerfile(scenario_root: Path, specification_id: str) -> Path | None:
     """Return the contained Dockerfile a specification names, if it is safe.
 
     The specification id is authored data, so it is treated as untrusted: it must
@@ -98,7 +98,7 @@ def _context_dockerfile(project_dir: Path, specification_id: str) -> Path | None
         return None
     if specification_id in {".", ".."}:
         return None
-    root = (project_dir / _CONTEXT_ROOT).resolve()
+    root = (scenario_root / _CONTEXT_ROOT).resolve()
     candidate = (root / specification_id / "Dockerfile").resolve()
     try:
         candidate.relative_to(root)
@@ -107,34 +107,10 @@ def _context_dockerfile(project_dir: Path, specification_id: str) -> Path | None
     return candidate if candidate.is_file() else None
 
 
-def _available_specification_digests(
-    requirement: ArtifactRequirement, project_dir: Path | None
-) -> list[str]:
-    """Return the authored specification digests whose context matches on disk.
-
-    A specification is available only when the contained Dockerfile hashes to the
-    digest the author declared. That is the integrity check the profile promises:
-    a drifted build context is not the artifact that was authorised, so it is
-    reported unavailable and admission refuses it.
-    """
-
-    if project_dir is None:
-        return []
-    available: list[str] = []
-    for specification in requirement.materialization_specifications:
-        dockerfile = _context_dockerfile(project_dir, specification.specification_id)
-        if dockerfile is None:
-            continue
-        digest = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
-        if digest == specification.digest:
-            available.append(specification.digest)
-    return available
-
-
 def _materialized_specifications(
     requirement: ArtifactRequirement,
     probe: ArtifactProbe,
-    project_dir: Path | None,
+    scenario_root: Path | None,
     materialized: dict[str, str],
 ) -> tuple[list[str], list[str]]:
     """Materialize each authored specification and report what it produced.
@@ -157,16 +133,16 @@ def _materialized_specifications(
 
     available: list[str] = []
     digests: list[str] = []
-    if project_dir is None:
+    if scenario_root is None:
         return available, digests
-    # The caller may pass a relative project directory; every path below is
-    # compared against the resolved root so containment holds either way.
-    project_dir = project_dir.resolve()
+    # The caller may pass a relative root; every path below is compared against
+    # the resolved form so containment holds either way.
+    scenario_root = scenario_root.resolve()
     for specification in sorted(
         requirement.materialization_specifications,
         key=lambda item: item.specification_id,
     ):
-        dockerfile = _context_dockerfile(project_dir, specification.specification_id)
+        dockerfile = _context_dockerfile(scenario_root, specification.specification_id)
         if dockerfile is None:
             continue
         actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
@@ -182,8 +158,8 @@ def _materialized_specifications(
             continue
         realized = probe.materialize_component_image(
             f"{specification.specification_id}:local",
-            str(dockerfile.relative_to(project_dir)),
-            str(project_dir),
+            str(dockerfile.relative_to(scenario_root)),
+            str(scenario_root),
         )
         if isinstance(realized, str) and realized.startswith("sha256:"):
             materialized[specification.digest] = realized
@@ -216,7 +192,7 @@ def artifact_availability_for_scenario(
     probe: ArtifactProbe,
     *,
     allow_remote: bool | None = None,
-    project_dir: Path | None = None,
+    scenario_root: Path | None = None,
 ) -> ArtifactAvailabilityContext:
     """Return address-partitioned availability facts for ``scenario``.
 
@@ -225,6 +201,10 @@ def artifact_availability_for_scenario(
         probe: Deployment backend exposing ``artifact_available``.
         allow_remote: Whether registry-resolvable artifacts count as available.
             None lets the backend decide from its own staging mode.
+        scenario_root: Root the scenario's own inputs resolve against — the
+            bundle root, not the engine checkout. A component build context is
+            scenario content, so a scenario handed over from elsewhere must not
+            resolve one out of APTL's tree.
 
     Returns:
         Context carrying one entry per address with artifact demand. An address
@@ -245,7 +225,7 @@ def artifact_availability_for_scenario(
         provenance: list[str] = []
         if requirement.materialization_specifications:
             specifications, digests = _materialized_specifications(
-                requirement, probe, project_dir, materialized
+                requirement, probe, scenario_root, materialized
             )
             # A locked input is verified when its immutable base artifact is
             # genuinely obtainable; an unobtainable base means the build cannot

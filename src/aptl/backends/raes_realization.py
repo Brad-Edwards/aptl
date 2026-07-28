@@ -84,6 +84,9 @@ def interpret_provisioning_plan(
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
+    # The profile index reads APTL's own derived Compose file, which is engine
+    # infrastructure rather than scenario content, so it stays anchored to the
+    # project directory even when the scenario is handed over from elsewhere.
     profile_index = _load_profile_index(project_dir, diagnostics)
     if profile_index is None:
         return _empty_realization(diagnostics)
@@ -92,7 +95,7 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
-        project_dir,
+        content_root,
         config,
         diagnostics,
     )
@@ -183,11 +186,16 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
-    project_dir: Path,
+    scenario_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
-    """Realize node and network resources before resolving placements."""
+    """Realize node and network resources before resolving placements.
+
+    ``scenario_root`` anchors anything the scenario declares, including a
+    component's build context. It is the bundle root, not the engine checkout;
+    the two coincide only for a scenario that still lives in-tree.
+    """
 
     nodes: list[NodeRealization] = []
     networks: list[NetworkRealization] = []
@@ -199,7 +207,7 @@ def _realize_nodes_and_networks(
                 resource,
                 payload,
                 profile_index,
-                project_dir,
+                scenario_root,
                 config,
                 diagnostics,
             )
@@ -318,7 +326,7 @@ def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
-    project_dir: Path,
+    scenario_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> NodeRealization:
@@ -365,7 +373,7 @@ def _realize_node(
         image=resolve_node_image(
             resource=resource,
             payload=payload,
-            project_dir=project_dir,
+            project_dir=scenario_root,
             service_name=service_name,
             diagnostics=diagnostics,
         ),

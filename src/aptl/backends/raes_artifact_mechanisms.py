@@ -80,6 +80,23 @@ def exact_artifact_profile() -> ArtifactMechanismProfile:
     )
 
 
+def exact_artifact_provenance_ref() -> str:
+    """Return the provenance reference APTL can honestly vouch for.
+
+    The provenance of an exactly-pinned artifact is *how it was obtained*: through
+    this backend's declared, digest-bound mechanism profile. That is a non-secret
+    capability identity, and it changes whenever the profile body changes.
+
+    It deliberately is not a registry URL, region, account, or repository path.
+    ADR-098 §5 forbids location and channel fields in a satisfaction disclosure,
+    because they are mutable operational facts that do not identify artifact
+    bytes and can leak host or account information.
+    """
+
+    profile = exact_artifact_profile()
+    return f"{profile.mechanism}:{profile.profile}@{profile.digest}"
+
+
 def exact_artifact_capability() -> ArtifactMechanismCapability:
     """Return the backend capability entry for immutable artifact pulls.
 

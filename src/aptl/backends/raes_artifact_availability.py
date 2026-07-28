@@ -36,6 +36,8 @@ from raes_contracts.contracts import (
 )
 from raes_processor.compiler import compile_runtime_model
 
+from aptl.backends.raes_artifact_mechanisms import exact_artifact_provenance_ref
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from raes.artifact_requirements import ArtifactRequirement
     from raes_processor.semantics.realization import CompiledRealizationRequirement
@@ -121,9 +123,19 @@ def artifact_availability_for_scenario(
                 and probe.artifact_available(reference, allow_remote=allow_remote)
             ):
                 digests.append(exact.digest)
+        # The digest APTL confirmed obtainable is exactly the integrity fact it
+        # can vouch for, and the runtime gate requires the realized digest to be
+        # disclosed as an integrity ref drawn from this verified set. Nothing
+        # else is claimed: authenticity, admission, provenance, and evidence
+        # remain empty until a trust policy actually verifies them.
         entries.append(
             ArtifactRequirementAvailability(
-                address=compiled.address, available_artifact_digests=digests
+                address=compiled.address,
+                available_artifact_digests=digests,
+                verified_integrity_refs=list(digests),
+                verified_provenance_refs=(
+                    [exact_artifact_provenance_ref()] if digests else []
+                ),
             )
         )
     return ArtifactAvailabilityContext(requirements=entries)

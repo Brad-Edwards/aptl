@@ -46,6 +46,7 @@ from raes_contracts.contracts import (
     ConfigurationTargetRegistryModel,
     LiteralBindingValueModel,
 )
+from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from raes_contracts.vocabulary import (
     ParticipantFeatureSupportLevel,
     WorkflowFeature,
@@ -232,6 +233,20 @@ _PROVISIONER = ProvisionerCapabilities(
 # requirements are covered by ``declared-capability-match``; account features are
 # realized through the account provider's typed read-after-write path but are not
 # yet a RAES runtime realization concern.
+#
+# ``artifact_mechanisms`` declares which RAES artifact-satisfaction routes APTL
+# can admit (ADR-050, RAES ADR-098). It is deliberately narrow: a mechanism is
+# advertised only once APTL can both materialize it and read the result back
+# (SEM-218 I4). ``support_mode`` stays CONSTRAINED because APTL cannot honestly
+# realize an open artifact concern; an ``open`` requirement is refused with
+# ``artifact.unsupported-open-realization`` rather than silently chosen for.
+#
+# ``source-artifact`` belongs on the mechanism's ``supported_requirement_kinds``
+# (which ``_artifact_route_diagnostics`` filters on), NOT on
+# ``supported_exact_requirement_kinds``. The SEM-218 exact gate keys on the
+# single ``declared-capability-match`` kind regardless of the requirement's own
+# kind, so listing ``source-artifact`` there would claim a capability the gate
+# never consults.
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
@@ -241,6 +256,7 @@ _REALIZATION_SUPPORT = (
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
+        artifact_mechanisms=list(aptl_artifact_mechanisms()),
         constraints={},
     ),
 )

@@ -449,6 +449,12 @@ nodes:
     services:
       - {name: http, port: 8080, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /var/log/gunicorn, source: webapp_logs, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -538,6 +544,12 @@ nodes:
     services:
       - {name: postgres, port: 5432, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /var/lib/postgresql/data, source: db_data, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -563,6 +575,12 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /var/log, source: workstation_logs, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -609,6 +627,13 @@ nodes:
     services:
       - {name: smb, port: 445, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /srv/shares, source: fileshare_data, source_kind: volume}
+        - {target: /var/log/samba, source: fileshare_logs, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -645,6 +670,12 @@ nodes:
     services:
       - {name: dns, port: 53, protocol: udp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /var/log/named, source: dns_logs, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -691,6 +722,12 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /var/log, source: victim_logs, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored
@@ -727,6 +764,12 @@ nodes:
     services:
       - {name: ssh, port: 22, protocol: tcp}
     runtime:
+      # Named volumes the pre-refactor component owned. Bind mounts of
+      # project keys and certificates are not restated here: they are
+      # already authored as content placements, which carry containment
+      # and sensitivity handling a raw bind does not.
+      mounts:
+        - {target: /home/kali/operations, source: kali_operations, source_kind: volume}
       # Environment the pre-refactor component required. Names and
       # classification only: a secret value is supplied by the operator
       # environment through the existing secret boundary, never authored

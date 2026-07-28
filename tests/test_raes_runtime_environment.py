@@ -123,3 +123,30 @@ def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     monkeypatch.delenv("DB_HOST", raising=False)
 
     assert _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path) == []
+
+
+def test_restored_named_volumes_are_lowered():
+    """The persistent state the refactor dropped is declared and lowered again.
+
+    Bind mounts of project keys and certificates are deliberately absent: they
+    are authored as content placements, which carry containment, symlink
+    rejection, and sensitivity handling that a raw bind does not.
+    """
+
+    from aptl.backends.raes_base_substrate import _volume_mounts
+
+    scenario = parse_sdl_file(_SCENARIO)
+    lowered = {
+        name: {(m.source, m.target) for m in _volume_mounts(node.runtime)}
+        for name, node in scenario.nodes.items()
+        if getattr(node, "runtime", None) and node.runtime.mounts
+    }
+
+    assert ("db_data", "/var/lib/postgresql/data") in lowered["db"]
+    assert ("webapp_logs", "/var/log/gunicorn") in lowered["webapp"]
+    assert ("kali_operations", "/home/kali/operations") in lowered["kali"]
+    assert ("fileshare_data", "/srv/shares") in lowered["fileshare"]
+    assert sum(len(v) for v in lowered.values()) == 10
+    # No raw host or project bind smuggled in alongside them.
+    for mounts in lowered.values():
+        assert all(not source.startswith((".", "/")) for source, _ in mounts)

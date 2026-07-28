@@ -78,6 +78,7 @@ nav:
   - Workshop:
     - Playbook: workshop/playbook.md
     - Lab Walkthrough: workshop/walkthrough.md
+    - Hosted Backup Seats: workshop/hosted-backup-seats.md
   - Architecture:
     - Overview: architecture/index.md
     - Networking: architecture/networking.md
@@ -89,6 +90,7 @@ nav:
     - "Issue #557 Participant Implementation Binding Preflight": architecture/issue-557-participant-implementation-binding-preflight.md
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
+    - "Issue #825 Hosted Desktop Seat Preflight": architecture/issue-825-hosted-backup-seat-preflight.md
     - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
   - Deployment: deployment.md
   - Components:

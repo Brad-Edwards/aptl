@@ -42,13 +42,13 @@ def _sealed_members(store: "LocalRunStore", run_id: str) -> list[str] | None:
     sealed run this verifies the archive and returns exactly the seal marker, the
     manifest, and every verified inventory path.
     """
-    if not store.is_sealed(run_id):
-        return None
     from aptl.core.archival.layout import RUN_MANIFEST_RELPATH, SEAL_MARKER_RELPATH
     from aptl.core.archival.verify import verify_sealed_archive
 
+    # ``verify_sealed_archive`` returns ``None`` for an unsealed run (no seal
+    # marker) and raises when a present marker is malformed or its bytes drifted.
     verified = verify_sealed_archive(store.base_dir, run_id)
-    if verified is None:  # pragma: no cover - is_sealed was true
+    if verified is None:
         return None
     return sorted({RUN_MANIFEST_RELPATH, SEAL_MARKER_RELPATH, *verified.inventory_paths})
 

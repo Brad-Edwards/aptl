@@ -15,6 +15,18 @@ from __future__ import annotations
 # layout constants from one module without the store importing this package.
 from aptl.core.runstore import SEAL_MARKER_RELPATH
 
+__all__ = [
+    "INDEX_DIR",
+    "INDEX_JOURNAL_NAME",
+    "INDEX_JOURNAL_RELPATH",
+    "INDEX_LOCK_NAME",
+    "INDEX_LOCK_RELPATH",
+    "RUN_MANIFEST_RELPATH",
+    "SEAL_MARKER_DIGEST_FIELD",
+    "SEAL_MARKER_RELPATH",
+    "SEAL_MARKER_SCHEMA_VERSION",
+]
+
 #: Run-relative path of the canonical serialized public RAES ``ExperimentRunModel``
 #: (``schema_version="experiment-run/v1"``). ADR-050: for a terminal attempt this
 #: IS ``manifest.json`` — the single portable run record. The legacy

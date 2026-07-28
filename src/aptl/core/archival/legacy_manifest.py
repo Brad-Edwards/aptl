@@ -57,7 +57,7 @@ def is_raes_run_record(manifest: object) -> bool:
     )
 
 
-def summarize_manifest(manifest: dict) -> RunSummary:
+def summarize_manifest(manifest: dict[str, object]) -> RunSummary:
     """Return a normalized :class:`RunSummary` for any supported manifest shape."""
     schema_version = manifest.get("schema_version")
     if schema_version == RAES_RUN_SCHEMA_VERSION:
@@ -67,7 +67,8 @@ def summarize_manifest(manifest: dict) -> RunSummary:
     return _summarize_flat(manifest, schema_version)
 
 
-def _summarize_raes(manifest: dict) -> RunSummary:
+def _summarize_raes(manifest: dict[str, object]) -> RunSummary:
+    """Summarize the portable RAES ``experiment-run/v1`` record shape."""
     snapshot = manifest.get("scenario_snapshot_ref") or {}
     scenario_id = snapshot.get("ref_id", _UNKNOWN)
     started = manifest.get("started_at", _UNKNOWN)
@@ -77,7 +78,8 @@ def _summarize_raes(manifest: dict) -> RunSummary:
         schema_version=RAES_RUN_SCHEMA_VERSION,
         is_raes=True,
         scenario_id=scenario_id,
-        scenario_name=scenario_id,  # the RAES record carries no display name
+        # the RAES record carries no display name
+        scenario_name=scenario_id,
         started_at=started,
         finished_at=ended,
         status=manifest.get("run_status", _UNKNOWN),
@@ -88,7 +90,10 @@ def _summarize_raes(manifest: dict) -> RunSummary:
     )
 
 
-def _summarize_reproducibility(manifest: dict, schema_version: str | None) -> RunSummary:
+def _summarize_reproducibility(
+    manifest: dict[str, object], schema_version: str | None
+) -> RunSummary:
+    """Summarize a legacy ``aptl.run-record/v1|v2`` reproducibility record."""
     # v2 renamed the contract-identity section ``aces`` -> ``raes``; read either.
     section = manifest.get("raes") or manifest.get("aces") or {}
     scenario = section.get("scenario") or {}
@@ -110,7 +115,7 @@ def _summarize_reproducibility(manifest: dict, schema_version: str | None) -> Ru
     )
 
 
-def _summarize_flat(manifest: dict, schema_version: str | None) -> RunSummary:
+def _summarize_flat(manifest: dict[str, object], schema_version: str | None) -> RunSummary:
     """Summarize the older flat run-manifest shape (top-level scenario fields)."""
     outcome = manifest.get("outcome", _UNKNOWN)
     return RunSummary(
@@ -139,6 +144,7 @@ def _duration(started: str, ended: str) -> float | None:
 
 
 def _parse_rfc3339(value: str) -> datetime | None:
+    """Parse an RFC3339 timestamp, returning ``None`` when it is not parseable."""
     if not isinstance(value, str) or not value:
         return None
     try:

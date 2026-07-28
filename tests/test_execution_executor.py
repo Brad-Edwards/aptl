@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 from raes_contracts.contracts import (
     ExperimentApparatusConstraintModel,
     ExperimentEvaluationProtocolModel,
@@ -203,8 +204,10 @@ class TestProductionSealPath:
         executor = ExperimentExecutor(
             store=store, clock=_CLOCK, collectors={}, workload=dangling_workload
         )
-        with pytest.raises(Exception):  # noqa: B017 - RAES ValidationError
-            executor.execute_trial(_admitted(), _admitted().plan.trials[0])
+        admitted = _admitted()
+        trial = admitted.plan.trials[0]
+        with pytest.raises(ValidationError):
+            executor.execute_trial(admitted, trial)
         assert not store.is_sealed("trial-0001-attempt-1")
 
     def test_recovers_an_interrupted_attempt(self, tmp_path):

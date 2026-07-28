@@ -101,31 +101,35 @@ class TestApparatusContextBridge:
     def test_builds_a_valid_apparatus_context(self):
         from raes_contracts.contracts import ExperimentApparatusContextModel
 
-        from aptl.core.execution.apparatus import build_apparatus_context
+        from aptl.core.execution.apparatus import ApparatusInputs, build_apparatus_context
 
         clock = clock_context_from_provider(
             FixedClockProvider(measurement_time="2026-05-26T00:00:00Z")
         )
         ctx = build_apparatus_context(
-            apparatus_context_id="apparatus-aptl",
-            declared_at="2026-05-26T00:00:00Z",
-            clock=clock,
-            participant=("reference-red-agent", "1.0.0"),
+            ApparatusInputs(
+                apparatus_context_id="apparatus-aptl",
+                declared_at="2026-05-26T00:00:00Z",
+                clock=clock,
+                participant=("reference-red-agent", "1.0.0"),
+            )
         )
         # Round-trips through the installed contract model with participant.
         ExperimentApparatusContextModel.model_validate(ctx.model_dump(mode="json"))
         assert set(ctx.components) == {"processor", "backend", "participant"}
 
     def test_without_participant_has_two_components(self):
-        from aptl.core.execution.apparatus import build_apparatus_context
+        from aptl.core.execution.apparatus import ApparatusInputs, build_apparatus_context
 
         clock = clock_context_from_provider(
             FixedClockProvider(measurement_time="2026-05-26T00:00:00Z")
         )
         ctx = build_apparatus_context(
-            apparatus_context_id="apparatus-aptl",
-            declared_at="2026-05-26T00:00:00Z",
-            clock=clock,
+            ApparatusInputs(
+                apparatus_context_id="apparatus-aptl",
+                declared_at="2026-05-26T00:00:00Z",
+                clock=clock,
+            )
         )
         assert set(ctx.components) == {"processor", "backend"}
 

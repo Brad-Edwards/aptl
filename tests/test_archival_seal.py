@@ -167,8 +167,9 @@ class TestInventoryVerification:
         )
         with pytest.raises(SealVerificationError):
             verify_sealed_archive(store.base_dir, context.attempt_id)
+        index = DiscoveryIndex(store.base_dir)
         with pytest.raises(IndexCorruptionError):
-            DiscoveryIndex(store.base_dir).discover()
+            index.discover()
 
 
 class TestArtifactIdentityJoin:
@@ -239,8 +240,9 @@ class TestArtifactIdentityJoin:
             artifact_ref=ref,
             role="evidence-blob",
         )
+        context = completed_context(sealed_artifacts=(spec,))
         with pytest.raises(SealIntegrityError):
-            finalize_terminal_attempt(completed_context(sealed_artifacts=(spec,)), store=store)
+            finalize_terminal_attempt(context, store=store)
 
 
 class TestReservedMarkerPath:

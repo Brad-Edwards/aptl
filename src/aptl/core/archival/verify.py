@@ -53,10 +53,10 @@ def verify_sealed_archive(base_dir: Path, run_id: str) -> VerifiedArchive | None
     inventory entry's bytes do not match the committed size/checksum.
     """
     safe_run_id = _validate_id(run_id, "run_id")
-    marker = _read_json(base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}")
-    if marker is None:
+    raw_marker = _read_json(base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}")
+    if raw_marker is None:
         return None
-    _require_marker_shape(safe_run_id, marker)
+    marker = _require_marker_shape(safe_run_id, raw_marker)
 
     digest = marker[SEAL_MARKER_DIGEST_FIELD]
     manifest = _read_bytes(base_dir, f"{safe_run_id}/{RUN_MANIFEST_RELPATH}")
@@ -76,7 +76,13 @@ def verify_sealed_archive(base_dir: Path, run_id: str) -> VerifiedArchive | None
     )
 
 
-def _require_marker_shape(run_id: str, marker: object) -> None:
+def _require_marker_shape(run_id: str, marker: object) -> dict[str, object]:
+    """Validate the marker's shape/identity and return it narrowed to a dict.
+
+    Raises :class:`SealVerificationError` when the marker is not an object, has an
+    unexpected schema, binds a different run id, is not in the sealed state, is
+    missing its inventory, or carries no valid run-record digest.
+    """
     if not isinstance(marker, dict):
         raise SealVerificationError(f"seal marker for {run_id!r} is not an object")
     if marker.get("schema_version") != SEAL_MARKER_SCHEMA_VERSION:
@@ -90,9 +96,11 @@ def _require_marker_shape(run_id: str, marker: object) -> None:
     digest = marker.get(SEAL_MARKER_DIGEST_FIELD)
     if not isinstance(digest, str) or not _PREFIXED_SHA256_RE.fullmatch(digest):
         raise SealVerificationError(f"seal marker for {run_id!r} has no valid run-record digest")
+    return marker
 
 
-def _verify_inventory(base_dir: Path, run_id: str, inventory: list) -> list[str]:
+def _verify_inventory(base_dir: Path, run_id: str, inventory: list[object]) -> list[str]:
+    """Verify each inventory entry's path, size, and checksum against the bytes."""
     paths: list[str] = []
     for entry in inventory:
         if not isinstance(entry, dict):
@@ -121,6 +129,7 @@ def _verify_inventory(base_dir: Path, run_id: str, inventory: list) -> list[str]
 
 
 def _read_bytes(base_dir: Path, relative_path: str) -> bytes | None:
+    """Read a contained no-follow file, returning ``None`` when it is absent."""
     try:
         return read_contained_nofollow(base_dir, relative_path)
     except PathContainmentError as exc:
@@ -130,6 +139,7 @@ def _read_bytes(base_dir: Path, relative_path: str) -> bytes | None:
 
 
 def _read_json(base_dir: Path, relative_path: str) -> object | None:
+    """Read and parse a contained no-follow JSON file, or ``None`` when absent."""
     raw = _read_bytes(base_dir, relative_path)
     if raw is None:
         return None

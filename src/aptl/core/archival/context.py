@@ -18,33 +18,31 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+
+from raes_contracts.contracts import (
+    ExperimentApparatusContextModel,
+    ExperimentArtifactRefModel,
+    ExperimentAugmentationDisclosureModel,
+    ExperimentClockContextModel,
+    ExperimentParameterModel,
+    ExperimentRealizedFormDisclosureModel,
+    ExperimentReferenceModel,
+    ExperimentResultSummaryModel,
+    ExperimentRunTraceabilityModel,
+    ExperimentScenarioSnapshotReferenceModel,
+    ExperimentStochasticControlModel,
+    ExperimentTaskModel,
+    ParticipantImplementationProvenanceModel,
+    RandomStreamDrawRecordModel,
+    RealizedBindingProvenanceModel,
+)
+from raes_contracts.contracts.time_model import (
+    RealizedTimeModelProvenanceModel,
+    TimeModelDeclarationModel,
+)
 
 from aptl.core.archival.seal import SealLimitation, SealedArtifactSpec
 from aptl.core.archival.status import TerminalCause
-
-if TYPE_CHECKING:  # heavy RAES models are needed only for annotations here
-    from raes_contracts.contracts import (
-        ExperimentApparatusContextModel,
-        ExperimentArtifactRefModel,
-        ExperimentAugmentationDisclosureModel,
-        ExperimentClockContextModel,
-        ExperimentParameterModel,
-        ExperimentRealizedFormDisclosureModel,
-        ExperimentReferenceModel,
-        ExperimentResultSummaryModel,
-        ExperimentRunTraceabilityModel,
-        ExperimentScenarioSnapshotReferenceModel,
-        ExperimentStochasticControlModel,
-        ExperimentTaskModel,
-        ParticipantImplementationProvenanceModel,
-        RandomStreamDrawRecordModel,
-        RealizedBindingProvenanceModel,
-    )
-    from raes_contracts.contracts.time_model import (
-        RealizedTimeModelProvenanceModel,
-        TimeModelDeclarationModel,
-    )
 
 
 @dataclass(frozen=True)

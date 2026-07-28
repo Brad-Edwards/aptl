@@ -12,6 +12,8 @@ requirement is satisfied consistently.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from raes_contracts.contracts import (
     ExperimentApparatusComponentModel,
     ExperimentApparatusContextModel,
@@ -43,6 +45,7 @@ _EMPTY_SHA256 = "0" * 64
 def _component(
     *, component_kind: str, name: str, version: str, manifest_version: str
 ) -> ExperimentApparatusComponentModel:
+    """Build one observed apparatus component with its manifest reference."""
     return ExperimentApparatusComponentModel(
         component_kind=component_kind,
         identity=ApparatusIdentityModel(name=name, version=version),
@@ -58,24 +61,38 @@ def _component(
     )
 
 
-def build_apparatus_context(
-    *,
-    apparatus_context_id: str,
-    declared_at: str,
-    clock: ExperimentClockContextModel,
-    backend_name: str = "aptl",
-    backend_version: str = "0.1.0",
-    processor_name: str = "raes-reference-processor",
-    processor_version: str = "2.0.0",
-    participant: tuple[str, str] | None = None,
-    context_version: str = "1.0.0",
-) -> ExperimentApparatusContextModel:
-    """Return the portable apparatus context for a realized APTL run.
+@dataclass(frozen=True)
+class ApparatusInputs:
+    """Bundled inputs for :func:`build_apparatus_context`.
 
     ``participant`` is an optional ``(name, version)`` for the realized
     participant-implementation component; supply it whenever participant
     provenance is recorded so the RAES run model's participant requirement holds.
+    The backend/processor identity fields default to the reference APTL apparatus.
     """
+
+    apparatus_context_id: str
+    declared_at: str
+    clock: ExperimentClockContextModel
+    backend_name: str = "aptl"
+    backend_version: str = "0.1.0"
+    processor_name: str = "raes-reference-processor"
+    processor_version: str = "2.0.0"
+    participant: tuple[str, str] | None = None
+    context_version: str = "1.0.0"
+
+
+def build_apparatus_context(inputs: ApparatusInputs) -> ExperimentApparatusContextModel:
+    """Return the portable apparatus context for a realized APTL run."""
+    apparatus_context_id = inputs.apparatus_context_id
+    declared_at = inputs.declared_at
+    clock = inputs.clock
+    backend_name = inputs.backend_name
+    backend_version = inputs.backend_version
+    processor_name = inputs.processor_name
+    processor_version = inputs.processor_version
+    participant = inputs.participant
+    context_version = inputs.context_version
     processor = _component(
         component_kind="processor",
         name=processor_name,

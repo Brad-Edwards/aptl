@@ -196,13 +196,15 @@ class TestCorruptionSurfaces:
 class TestValidation:
     def test_prepare_rejects_unsafe_run_id(self, tmp_path):
         index = DiscoveryIndex(tmp_path)
+        entry = _entry("../escape", "sha256:" + "a" * 64)
         with pytest.raises(ValueError):
-            index.prepare(_entry("../escape", "sha256:" + "a" * 64))
+            index.prepare(entry)
 
     def test_prepare_rejects_non_prefixed_digest(self, tmp_path):
         index = DiscoveryIndex(tmp_path)
+        entry = _entry("attempt-0001", "a" * 64)  # missing sha256: prefix
         with pytest.raises(ValueError):
-            index.prepare(_entry("attempt-0001", "a" * 64))  # missing sha256: prefix
+            index.prepare(entry)
 
     def test_prepare_rejects_absolute_location(self, tmp_path):
         index = DiscoveryIndex(tmp_path)

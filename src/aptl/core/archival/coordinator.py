@@ -34,6 +34,7 @@ from aptl.core.archival.run_record import build_experiment_run_model
 from aptl.core.archival.seal import (
     SealInventoryEntry,
     SealLimitation,
+    SealMarkerInputs,
     SealedArtifactSpec,
     build_inventory_entry,
     build_seal_marker,
@@ -110,15 +111,17 @@ def finalize_terminal_attempt(
             run, inventory, limitations
         )
         marker = build_seal_marker(
-            run_id=run.run_id,
-            run_version=run.run_version,
-            run_status=run.run_status,
-            outcome_status=run.outcome_status,
-            run_record_digest=run_record_digest,
-            inventory=inventory,
-            contract_versions=_sealed_contract_versions(run, context),
-            limitations=limitations,
-            completeness_statement=statement,
+            SealMarkerInputs(
+                run_id=run.run_id,
+                run_version=run.run_version,
+                run_status=run.run_status,
+                outcome_status=run.outcome_status,
+                run_record_digest=run_record_digest,
+                inventory=inventory,
+                contract_versions=_sealed_contract_versions(run, context),
+                limitations=limitations,
+                completeness_statement=statement,
+            )
         )
 
         # ADR-050 commit sequence: prepared entry names the expected identity,

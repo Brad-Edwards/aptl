@@ -21,8 +21,6 @@ from pathlib import Path
 from aptl.core.runstore import (
     LocalRunStore,
     RunStoreConflictError,
-    _assert_no_secret_drift,
-    _canonicalize_payload,
     _validate_id,
     _validate_relative_path,
 )

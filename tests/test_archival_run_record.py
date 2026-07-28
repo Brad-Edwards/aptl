@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
+from pydantic import ValidationError
 from raes_contracts.contracts import (
     ExperimentReferenceModel,
     ExperimentRunModel,
@@ -100,14 +101,13 @@ class TestInvalidation:
         assert run.invalidation.invalidated_at == run.ended_at
 
     def test_invalidated_run_requires_a_reason(self) -> None:
+        context = completed_context(
+            terminal_cause=TerminalCause.CAPTURE_LOSS,
+            evaluator_outcome=None,
+            invalidation_reason=None,
+        )
         with pytest.raises(ValueError, match="invalidation reason"):
-            build_experiment_run_model(
-                completed_context(
-                    terminal_cause=TerminalCause.CAPTURE_LOSS,
-                    evaluator_outcome=None,
-                    invalidation_reason=None,
-                )
-            )
+            build_experiment_run_model(context)
 
     def test_invalidation_carries_superseded_by_when_supplied(self) -> None:
         successor = ExperimentReferenceModel(ref_kind="run", ref_id="attempt-retry-2")
@@ -149,12 +149,12 @@ class TestCrossArtifactValidationGate:
         context = completed_context(
             result_summaries={"foothold-achieved-result": dangling}
         )
-        with pytest.raises(Exception):  # noqa: B017 - RAES ValidationError/ValueError
+        with pytest.raises(ValidationError):
             build_experiment_run_model(context)
 
     def test_ended_before_started_is_rejected(self) -> None:
         context = completed_context(
             started_at="2026-05-26T00:40:00Z", ended_at="2026-05-26T00:10:00Z"
         )
-        with pytest.raises(Exception):  # noqa: B017
+        with pytest.raises(ValidationError):
             build_experiment_run_model(context)

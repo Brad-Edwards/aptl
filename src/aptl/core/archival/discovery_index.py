@@ -23,13 +23,17 @@ atomically under the lock.
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # pragma: no cover - Windows has no POSIX flock
+    fcntl = None  # type: ignore[assignment]
 
 from aptl.core.archival.layout import (
     INDEX_DIR,
@@ -99,6 +103,7 @@ class IndexEntry:
 
 
 def _require(condition: bool, message: str, *, error: type[Exception]) -> None:
+    """Raise ``error(message)`` unless ``condition`` holds."""
     if not condition:
         raise error(message)
 
@@ -207,7 +212,8 @@ class DiscoveryIndex:
         sealed: list[IndexEntry] = []
         for run_id, committed, prepared in self._reconcile():
             entry = committed or prepared
-            assert entry is not None  # a run only appears if it has an event
+            # a run only appears if it has an event
+            assert entry is not None
             is_sealed = self._verify_seal(run_id, entry)
             if committed is not None:
                 if not is_sealed:
@@ -310,7 +316,8 @@ class DiscoveryIndex:
         raw = self._read_journal_bytes()
         return [self._parse_line(line) for line in _split_complete_lines(raw)]
 
-    def _parse_line(self, line: bytes) -> tuple[str, IndexEntry]:
+    @staticmethod
+    def _parse_line(line: bytes) -> tuple[str, IndexEntry]:
         if len(line) + 1 > _MAX_LINE_BYTES:
             raise IndexCorruptionError("index journal line exceeds the maximum size")
         try:
@@ -403,12 +410,14 @@ class _JournalLock:
             0o600,
             dir_fd=self._dir_fd,
         )
-        fcntl.flock(self._lock_fd, fcntl.LOCK_EX)
+        if fcntl is not None:  # in-process only without POSIX flock (Windows)
+            fcntl.flock(self._lock_fd, fcntl.LOCK_EX)
         return self._dir_fd
 
     def __exit__(self, *_exc: object) -> None:
         if self._lock_fd is not None:
-            fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+            if fcntl is not None:
+                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
             os.close(self._lock_fd)
             self._lock_fd = None
         if self._dir_fd is not None:

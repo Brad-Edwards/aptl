@@ -431,20 +431,18 @@ def _create_temp_leaf(tmp_name: str, parent_fd: int) -> int:
     """
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        return os.open(tmp_name, flags, 0o600, dir_fd=parent_fd)
-    except FileExistsError:
         try:
-            os.unlink(tmp_name, dir_fd=parent_fd)
-        except OSError:
-            pass
-        retry_name = f"{tmp_name}.{next(_TMP_COUNTER)}"
-        try:
+            return os.open(tmp_name, flags, 0o600, dir_fd=parent_fd)
+        except FileExistsError:
+            try:
+                os.unlink(tmp_name, dir_fd=parent_fd)
+            except OSError:
+                pass
+            retry_name = f"{tmp_name}.{next(_TMP_COUNTER)}"
             return os.open(retry_name, flags, 0o600, dir_fd=parent_fd)
-        except OSError as exc:  # pragma: no cover - defensive
-            raise PathContainmentError(
-                REASON_OPEN_FAILED, f"cannot create temporary publish inode: {exc}"
-            ) from exc
     except OSError as exc:
+        # A non-EEXIST failure of the first open, or any failure of the retry
+        # (including an EEXIST on the fresh unique name), is a containment error.
         raise PathContainmentError(
             REASON_OPEN_FAILED, f"cannot create temporary publish inode: {exc}"
         ) from exc

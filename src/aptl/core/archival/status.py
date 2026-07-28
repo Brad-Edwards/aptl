@@ -95,7 +95,8 @@ def map_terminal_cause(
     fixed by policy and ``evaluator_outcome`` is ignored.
 
     Raises :class:`ValueError` for a completed run with a missing/invalid
-    evaluator outcome, and for an unrecognized cause (fail closed).
+    evaluator outcome and :class:`TypeError` for a non-:class:`TerminalCause`
+    argument (fail closed).
     """
     if not isinstance(cause, TerminalCause):
         raise TypeError(f"cause must be a TerminalCause, got {type(cause)!r}")
@@ -117,10 +118,9 @@ def map_terminal_cause(
             requires_invalidation=False,
         )
 
-    fixed = _FIXED_STATUS.get(cause)
-    if fixed is None:  # pragma: no cover - defensive; every member is in the table
-        raise ValueError(f"unmapped terminal cause: {cause!r}")
-    run_status, outcome_status, requires_invalidation = fixed
+    # Every non-completed TerminalCause member is present in _FIXED_STATUS, so a
+    # missing key is a programmer error (KeyError), not a runtime condition.
+    run_status, outcome_status, requires_invalidation = _FIXED_STATUS[cause]
     return TerminalStatus(
         run_status=run_status,
         outcome_status=outcome_status,

@@ -31,6 +31,7 @@ __all__ = [
     "SEAL_STATE_SEALED",
     "SealInventoryEntry",
     "SealLimitation",
+    "SealMarkerInputs",
     "SealedArtifactSpec",
     "SealIntegrityError",
     "build_inventory_entry",
@@ -186,18 +187,28 @@ def _join_claimed_identity(
         )
 
 
-def build_seal_marker(
-    *,
-    run_id: str,
-    run_version: str,
-    run_status: str,
-    outcome_status: str,
-    run_record_digest: str,
-    inventory: list[SealInventoryEntry],
-    contract_versions: list[str],
-    limitations: list[SealLimitation],
-    completeness_statement: str,
-) -> dict[str, object]:
+@dataclass(frozen=True)
+class SealMarkerInputs:
+    """The bundled inputs :func:`build_seal_marker` composes into a marker.
+
+    ``run_id`` / ``run_version`` / ``run_status`` / ``outcome_status`` /
+    ``run_record_digest`` carry the sealed record's identity and its real
+    terminal outcome; ``inventory`` / ``contract_versions`` / ``limitations`` /
+    ``completeness_statement`` describe the closed sealed byte graph.
+    """
+
+    run_id: str
+    run_version: str
+    run_status: str
+    outcome_status: str
+    run_record_digest: str
+    inventory: list[SealInventoryEntry]
+    contract_versions: list[str]
+    limitations: list[SealLimitation]
+    completeness_statement: str
+
+
+def build_seal_marker(inputs: SealMarkerInputs) -> dict[str, object]:
     """Return the canonical seal-marker payload.
 
     ``complete`` is ``True`` iff there are no accepted limitations; the marker
@@ -206,17 +217,17 @@ def build_seal_marker(
     """
     return {
         "schema_version": SEAL_MARKER_SCHEMA_VERSION,
-        "run_id": run_id,
-        "run_version": run_version,
+        "run_id": inputs.run_id,
+        "run_version": inputs.run_version,
         "seal_state": SEAL_STATE_SEALED,
-        "run_status": run_status,
-        "outcome_status": outcome_status,
-        SEAL_MARKER_DIGEST_FIELD: run_record_digest,
-        "sealed_contract_versions": sorted(set(contract_versions)),
-        "inventory": [entry.projection() for entry in inventory],
+        "run_status": inputs.run_status,
+        "outcome_status": inputs.outcome_status,
+        SEAL_MARKER_DIGEST_FIELD: inputs.run_record_digest,
+        "sealed_contract_versions": sorted(set(inputs.contract_versions)),
+        "inventory": [entry.projection() for entry in inputs.inventory],
         "completeness": {
-            "complete": not limitations,
-            "statement": completeness_statement,
-            "limitations": [limitation.projection() for limitation in limitations],
+            "complete": not inputs.limitations,
+            "statement": inputs.completeness_statement,
+            "limitations": [limitation.projection() for limitation in inputs.limitations],
         },
     }

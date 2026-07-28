@@ -1075,6 +1075,21 @@ generated_artifacts:
         access_mode: read_only
     ordering_dependencies: [generated_artifacts.wazuh-manager-certs]
 
+  # The lab-managed SOC CA (ADR-034) is generated at standup, not checked in.
+  # misp-suricata-sync verifies MISP's TLS against it, which is what its
+  # MISP_CA_CERT_PATH points at; before this it was supplied by a Compose bind
+  # and so was invisible to the admitted graph.
+  lab-soc-ca:
+    generator: certificate_bundle
+    lifecycle: reuse_valid
+    provenance: config/certs.yml
+    outputs:
+      - {name: lab-ca, path: lab-ca.pem, sensitivity: public}
+    consumers:
+      - node: misp-suricata-sync
+        mount_destination: /etc/lab-ca
+        access_mode: read_only
+
 persistent_volumes:
   wazuh-indexer-data:
     lifecycle: retain

@@ -28,7 +28,8 @@ Each run is stored under `<project_dir>/runs/<run_id>/` with:
 
 ```
 <run_id>/
-  manifest.json          # Run metadata (scenario, timing, flags)
+  manifest.json          # Terminal attempts: the sealed RAES experiment-run/v1 record
+  seal.json              # Atomic seal marker (digest, inventory, completeness statement)
   snapshot.json          # Range snapshot (software, containers, rules, networks, config hashes)
   flags.json             # Captured flags
   provenance/
@@ -99,6 +100,61 @@ that rule's leaf and the aggregate, and nothing else. Secret sources are
 excluded by allowlist before collection: `.env`, rendered secret-bearing
 config, credentials, and private keys are never read or hashed.
 
+## Sealed Terminal-Attempt Records (`manifest.json`, `seal.json`)
+
+Every terminal execution attempt produces one conformant, sealed ACES run
+record (ADR-050). The execution controller (`src/aptl/core/execution/`) drives
+each admitted trial: it runs the trial workload under the evidence coordinator,
+normalizes the terminal cause, and hands the archival coordinator an immutable
+terminal-attempt context exactly once. The archival coordinator consumes the
+admitted plan, the observed apparatus and participant provenance, the evidence
+acquisition result, the evaluator-supplied result summaries, the clock context,
+and the normalized terminal cause, and it composes the public RAES
+`ExperimentRunModel` (`schema_version = experiment-run/v1`). It never recomputes
+metrics, reconstructs captures, or infers a run from mutable state.
+
+Each attempt always records its own terminal attestation as lifecycle evidence,
+so the run record's mandatory evidence, traceability, and result fields are
+satisfied even when a trial ends before any authored capture starts.
+
+- `manifest.json` is the canonical serialized RAES run record for a terminal
+  attempt. It replaces the legacy `aptl.run-record/v2` shape as the single
+  permanent run model; existing archives stay readable through one
+  version-dispatching adapter.
+- `seal.json` is the atomic seal marker. A run is discoverable as sealed only
+  after this marker is durably committed. Before it exists the attempt is an
+  unsealed recovery candidate even if `manifest.json` is present. The marker
+  binds the canonical run-record digest, a bounded inventory (path, media type,
+  size, and checksum for every sealed artifact), the applicable contract
+  versions, and an explicit completeness and limitation statement.
+
+Each execution attempt receives a distinct `attempt_id`, which is also its
+portable `run_id` and its run-directory name. A retry reuses the same admitted
+plan and `planned_trial_id` but gets a new `attempt_id`; retry and repair
+lineage travel as RAES run references (`used_refs`, `derived_from_refs`,
+`generated_refs`, and, where applicable, `invalidation.superseded_by`). The
+terminal cause maps to the record's real status and is never overwritten by the
+seal: completed execution records `completed` with the evaluator's outcome;
+scenario or evaluator failure records `failed`; cancellation, policy stop, or
+infrastructure interruption records `aborted`; capture loss or another validity
+failure records `invalidated` with an invalidation reason; and a replaced record
+version records `superseded`.
+
+Sealing is atomic and immutable. The record and every referenced artifact are
+verified and checksummed through the run store's descriptor-relative, no-follow
+boundary before the marker is published create-once with durable, no-replace
+semantics. Once sealed, every overwrite-capable writer refuses; a correction is
+a new run version or attestation with explicit lineage, never an in-place edit.
+Export packages the already-sealed bytes and never writes back into the archive.
+
+A small, append-safe discovery index under the run store records bounded routing
+facts (attempt identity, run version, manifest digest, seal state, terminal
+timestamp, and safe relative location) using a prepared and committed journal.
+Discovery replays that journal and verifies each entry against the on-disk seal
+marker, so restart discovery works without scanning or trusting arbitrary
+filesystem paths. The index is derived and rebuildable from sealed archives; its
+loss never changes the portable record or the seal.
+
 ## Range Snapshot (`snapshot.json`)
 
 Captured at the start of each run for reproducibility. Contains:
@@ -148,7 +204,9 @@ aptl runs export <run-id> --s3-bucket my-bucket --s3-prefix runs/
 
 ## Key Source Files
 
-- `src/aptl/core/runstore.py`: Storage backend protocol and local filesystem implementation
+- `src/aptl/core/runstore.py`: Storage backend protocol and local filesystem implementation, seal-marker commit, and sealed-state immutability
+- `src/aptl/core/archival/`: Terminal-attempt archival, covering RAES run-record composition, terminal-cause status mapping, atomic seal marker, discovery index, and the legacy-manifest read adapter
+- `src/aptl/core/execution/`: The execution controller that drives admitted trials to sealed terminal records, plus the owner-native RAES sub-model bridges (clock, apparatus context, parameters, stochastic controls, evidence artifacts, result summaries)
 - `src/aptl/core/run_assembler.py`: Orchestrates data collection after scenario stop
 - `src/aptl/core/snapshot.py`: Range snapshot dataclasses and capture logic
 - `src/aptl/core/exporter.py`: Local tar.gz and S3 export

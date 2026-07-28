@@ -8,13 +8,22 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from aptl.utils.logging import get_logger
 
 log = get_logger("config")
 
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+_PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
+_IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
+    "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
+    "codex": re.compile(
+        r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o\d[a-z0-9._-]*)"
+        r"-\d{4}-\d{2}-\d{2}$",
+        flags=re.ASCII,
+    ),
+}
 _CONFIG_FILENAMES = ["aptl.json"]
 
 
@@ -65,10 +74,7 @@ class ContainerSettings(BaseModel):
 
     def enabled_profiles(self) -> list[str]:
         """Return docker compose profile names for enabled containers."""
-        return [
-            name for name in type(self).model_fields
-            if getattr(self, name)
-        ]
+        return [name for name in type(self).model_fields if getattr(self, name)]
 
 
 class RunStorageConfig(BaseModel):
@@ -187,6 +193,51 @@ class LabLifecyclePolicyConfig(BaseModel):
         return v
 
 
+def validate_installed_participant_model_id(provider: str, value: str) -> str:
+    """Validate one explicit, non-secret installed-provider model identity."""
+
+    immutable_pattern = _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS.get(provider)
+    if (
+        immutable_pattern is None
+        or not isinstance(value, str)
+        or not _PARTICIPANT_MODEL_PATTERN.fullmatch(value)
+        or not immutable_pattern.fullmatch(value)
+    ):
+        raise ValueError("installed participant model identifier is invalid")
+    return value
+
+
+class InstalledParticipantModels(BaseModel):
+    """Closed model selections for APTL's installed participant providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    claude: str | None = Field(default=None, strict=True, max_length=128)
+    codex: str | None = Field(default=None, strict=True, max_length=128)
+
+    @field_validator("claude", "codex")
+    @classmethod
+    def validate_model(cls, value: str | None, info: ValidationInfo) -> str | None:
+        """Reject implicit, ambiguous, or unsafe provider model identities."""
+
+        if value is None:
+            return None
+        assert info.field_name is not None
+        return validate_installed_participant_model_id(info.field_name, value)
+
+    def model_for(self, provider: str) -> str:
+        """Return one configured model or fail closed for installed use."""
+
+        if provider not in {"claude", "codex"}:
+            raise ValueError("unknown installed participant provider")
+        model = getattr(self, provider)
+        if model is None:
+            raise ValueError(
+                f"installed participant model is not configured for {provider}"
+            )
+        return model
+
+
 class ExperimentSettings(BaseModel):
     """Strict non-secret apparatus settings approved for experiment binding."""
 
@@ -197,6 +248,9 @@ class ExperimentSettings(BaseModel):
         strict=True,
         ge=1,
         le=3600,
+    )
+    participant_models: InstalledParticipantModels = Field(
+        default_factory=InstalledParticipantModels
     )
 
 
@@ -250,8 +304,7 @@ def load_config(path: Path) -> AptlConfig:
     # `except (FileNotFoundError, ValueError)` see a consistent shape.
     if not isinstance(data, dict):
         raise ValueError(
-            f"Config root must be a JSON object, got "
-            f"{type(data).__name__}: {path}"
+            f"Config root must be a JSON object, got {type(data).__name__}: {path}"
         )
 
     log.debug("Loaded config from %s", path)

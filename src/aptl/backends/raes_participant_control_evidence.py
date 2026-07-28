@@ -65,7 +65,7 @@ def _control_evidence_payload(
     delivery = turn.surface.delivery
     selection = evidence.selection
     return {
-        "schema": "aptl.participant-control-evidence/v1",
+        "schema": "aptl.participant-control-evidence/v2",
         "run_id": authority.run_id,
         "participant_address": view.participant_address,
         "episode_id": view.episode_id,
@@ -77,9 +77,17 @@ def _control_evidence_payload(
         "delivery_ref": delivery.delivery_ref if delivery is not None else None,
         "implementation_name": evidence.provider.implementation_name,
         "implementation_version": evidence.provider.implementation_version,
+        "provider": turn.apparatus.provider,
+        "model": turn.apparatus.model,
         "implementation_manifest_ref": turn.apparatus.manifest_ref,
         "implementation_manifest_digest": turn.apparatus.selection.manifest_digest,
         "implementation_selection_ref": turn.apparatus.implementation_selection_ref,
+        "implementation_configuration_ref": (
+            turn.apparatus.selection.configuration_ref
+        ),
+        "implementation_configuration_digest": (
+            turn.apparatus.selection.configuration_digest
+        ),
         "exposure_policy_ref": turn.apparatus.selection.exposure_policy.policy_id,
         "solicitation_id": evidence.solicitation.solicitation_id,
         "solicitation_operation_id": evidence.solicitation_receipt.operation_id,

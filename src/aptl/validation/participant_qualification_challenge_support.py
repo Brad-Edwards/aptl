@@ -26,6 +26,8 @@ class StaticResponseProvider:
 
     implementation_name = "aptl-controlled-challenge-fixture"
     implementation_version = "1.0.0"
+    provider_name = "deterministic"
+    model = None
 
     def __init__(self, response: str) -> None:
         """Retain one controlled provider response."""
@@ -44,6 +46,8 @@ class TimeoutSelectionProvider:
 
     implementation_name = "aptl-timeout-challenge-fixture"
     implementation_version = "1.0.0"
+    provider_name = "deterministic"
+    model = None
 
     def __init__(self) -> None:
         """Initialize child-process observation state."""

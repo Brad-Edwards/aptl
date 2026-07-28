@@ -35,10 +35,15 @@ from aptl.validation.participant_readiness_provider import (
     build_selection_provider,
     installed_version,
 )
+from aptl.validation.participant_readiness_reports import (
+    configured_readiness_model,
+    persist_failed_readiness_report,
+)
+from aptl.workbench.process import AgentExecutionError
 
 if TYPE_CHECKING:
+    from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
-    from aptl.core.runstore import RunStorageBackend
 
 SCENARIO_RELATIVE_PATH = Path("scenarios/bounded-participant-agency-techvault.sdl.yaml")
 _PROVIDER_VERSION_ENVIRONMENT = {
@@ -107,13 +112,15 @@ def validate_participant_agency_readiness(
     _validate_readiness_request(request)
     selected_run_id = request.run_id or f"participant-readiness-{uuid4().hex}"
     request.run_store.create_run(selected_run_id)
+    selected_model = configured_readiness_model(request)
     try:
         context = _prepare_readiness_context(request, selected_run_id)
     except _ReadinessFailure as exc:
-        return _persist_failed_report(
+        return persist_failed_readiness_report(
             request.run_store,
             selected_run_id,
             request.provider_name,
+            selected_model,
             request.behavior_name,
             exc.participant_address,
             str(exc),
@@ -121,13 +128,19 @@ def validate_participant_agency_readiness(
     try:
         provider, cleanup = _resolve_selection_provider(request, selected_run_id)
     except (OSError, RuntimeError, ValueError) as exc:
-        return _persist_failed_report(
+        diagnostic = (
+            "installed participant model is not configured"
+            if str(exc).startswith("installed participant model is not configured")
+            else type(exc).__name__
+        )
+        return persist_failed_readiness_report(
             request.run_store,
             selected_run_id,
             request.provider_name,
+            selected_model,
             request.behavior_name,
             context.participant_address,
-            f"participant decision provider is unavailable: {type(exc).__name__}",
+            f"participant decision provider is unavailable: {diagnostic}",
         )
     trajectory = _run_readiness_trajectory(context, provider, cleanup)
     return _terminate_and_persist(context, trajectory)
@@ -228,6 +241,7 @@ def _resolve_selection_provider(
         return request.provider_override, _noop
     return _selection_provider(
         request.provider_name,
+        config=request.config,
         project_dir=request.project_dir,
         run_id=run_id,
     )
@@ -248,6 +262,8 @@ def _run_readiness_trajectory(
             participant_address=context.participant_address,
             implementation_name=provider.implementation_name,
             implementation_version=provider.implementation_version,
+            provider_name=provider.provider_name,
+            model=provider.model,
             run_id=context.run_id,
         )
         for _ in range(context.request.turns):
@@ -260,6 +276,8 @@ def _run_readiness_trajectory(
                 diagnostics,
             ):
                 break
+    except AgentExecutionError as exc:
+        diagnostics.append(f"participant provider request failed: {exc}")
     except (OSError, RuntimeError, ValueError) as exc:
         diagnostics.append(
             f"participant readiness trajectory failed: {type(exc).__name__}"
@@ -353,6 +371,7 @@ def _terminate_and_persist(
         ),
         run_id=context.run_id,
         provider=context.request.provider_name,
+        model=configured_readiness_model(context.request),
         behavior=context.request.behavior_name,
         participant_address=context.participant_address,
         selected_actions=trajectory.selected_actions,
@@ -433,6 +452,7 @@ def _verify_live_materialization(
 def _selection_provider(
     provider_name: str,
     *,
+    config: AptlConfig,
     project_dir: Path,
     run_id: str,
 ) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
@@ -440,6 +460,7 @@ def _selection_provider(
 
     return build_selection_provider(
         provider_name,
+        config=config,
         project_dir=project_dir,
         run_id=run_id,
     )
@@ -453,30 +474,3 @@ def _installed_version(executable: Path) -> str:
 
 def _noop() -> None:
     """No-op cleanup for deterministic selection providers."""
-
-
-def _persist_failed_report(
-    run_store: RunStorageBackend,
-    run_id: str,
-    provider: str,
-    behavior: str,
-    participant_address: str,
-    *diagnostics: str,
-) -> ParticipantReadinessReport:
-    """Persist failed report for the bounded participant workflow."""
-    report = ParticipantReadinessReport(
-        passed=False,
-        run_id=run_id,
-        provider=provider,
-        behavior=behavior,
-        participant_address=participant_address,
-        selected_actions=(),
-        completed_turns=0,
-        diagnostics=tuple(diagnostics),
-    )
-    run_store.write_json(
-        run_id,
-        "participant/readiness-report.json",
-        report.to_payload(),
-    )
-    return report

@@ -279,9 +279,7 @@ def _action_evidence_record(
         "target_refs": list(context.realization.target_nodes),
         "observer_kind": context.realization.observer_kind,
         "mutates_state": context.realization.mutates_state,
-        "allows_idempotent_stutter": (
-            context.realization.allows_idempotent_stutter
-        ),
+        "allows_idempotent_stutter": (context.realization.allows_idempotent_stutter),
         "pre_state_digest": observation.pre_state_digest,
         "post_state_digest": observation.post_state_digest,
         "state_changed": observation.state_changed,
@@ -460,10 +458,11 @@ def _unmet_prior_actions(
 ) -> tuple[str, ...]:
     """Return required prior actions without successful episode observations."""
 
-    from aptl.backends.raes_participant_realizations import REQUIRED_PRIOR_ACTIONS
+    from aptl.backends.raes_participant_realizations import (
+        unmet_required_prior_actions,
+    )
 
-    required = REQUIRED_PRIOR_ACTIONS.get(request.action_contract_address, ())
-    completed = {
+    completed = tuple(
         str(event.get("action_contract_address"))
         for event in snapshot.participant_behavior_history.get(
             request.participant_address, []
@@ -472,8 +471,8 @@ def _unmet_prior_actions(
         and event.get("event_type") == "observation_emitted"
         and isinstance(event.get("action_result"), Mapping)
         and event["action_result"].get("status") == "succeeded"
-    }
-    return tuple(address for address in required if address not in completed)
+    )
+    return unmet_required_prior_actions(request.action_contract_address, completed)
 
 
 def persist_action_evidence(

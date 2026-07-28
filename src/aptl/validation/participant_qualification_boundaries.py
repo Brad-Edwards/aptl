@@ -134,7 +134,7 @@ def _selection_boundary_challenge(
         apparatus=context.apparatus,
     )
     candidate = (
-        _candidate(turn, "inspect-response-metadata")
+        _candidate(turn, "probe-permitted-endpoint")
         if challenge_id == "BC-04"
         else turn.candidates[0]
     )
@@ -181,13 +181,16 @@ def _mutate_selection_challenge(
         }
     elif challenge_id == "BC-04":
         payload["arguments"] = {
-            "fields": ["status", "content-type", "content-length", "location"]
+            "endpoint": "/",
+            "method": "TRACE",
         }
     elif challenge_id == "BC-05":
         stale_apparatus = build_participant_apparatus(
             participant_address=context.participant_address,
             implementation_name="aptl-stale-challenge-fixture",
             implementation_version=context.apparatus.manifest.identity.version,
+            provider_name="deterministic",
+            model=None,
             run_id=f"{context.run_id}-prior-episode",
         )
         stale_apparatus = replace(

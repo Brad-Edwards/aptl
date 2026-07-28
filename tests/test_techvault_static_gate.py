@@ -222,11 +222,14 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         )
     )
     nodes = {node["name"]: node for node in details["nodes"]}
+    # Digest-pinned, resolved from the node's authored exact artifact
+    # requirement rather than an APTL-side allowlist entry (ADR-050): a mutable
+    # tag is not an admissible pin.
     assert nodes["wazuh-manager"]["image"]["image_ref"] == (
-        "wazuh/wazuh-manager:4.12.0"
+        "wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561"
     )
     assert nodes["wazuh-indexer"]["image"]["image_ref"] == (
-        "wazuh/wazuh-indexer:4.12.0"
+        "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
     )
     assert (
         "provision.node.wazuh-indexer"

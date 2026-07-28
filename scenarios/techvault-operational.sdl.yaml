@@ -22,7 +22,25 @@ nodes:
   wazuh-manager:
     type: vm
     os: linux
-    source: {name: wazuh-manager, version: 4.x}
+    source:
+      name: "wazuh/wazuh-manager"
+      version: "4.12.0"
+      artifact_requirement:
+        requirement_id: wazuh-manager-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "wazuh/wazuh-manager"
+          version: "4.12.0"
+          digest: "sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561"
+          media_type: "application/vnd.docker.distribution.manifest.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: wazuh-api, port: 55000, protocol: tcp}
       - {name: agent-events, port: 1514, protocol: tcp}
@@ -31,37 +49,145 @@ nodes:
   wazuh-indexer:
     type: vm
     os: linux
-    source: {name: wazuh-indexer, version: 4.x}
+    source:
+      name: "wazuh/wazuh-indexer"
+      version: "4.12.0"
+      artifact_requirement:
+        requirement_id: wazuh-indexer-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "wazuh/wazuh-indexer"
+          version: "4.12.0"
+          digest: "sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
+          media_type: "application/vnd.docker.distribution.manifest.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: indexer-api, port: 9200, protocol: tcp}
   wazuh-dashboard:
     type: vm
     os: linux
-    source: {name: wazuh-dashboard, version: 4.x}
+    source:
+      name: "wazuh/wazuh-dashboard"
+      version: "4.12.0"
+      artifact_requirement:
+        requirement_id: wazuh-dashboard-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "wazuh/wazuh-dashboard"
+          version: "4.12.0"
+          digest: "sha256:8f5b50fde67a0b1c4d2321aa26b12bbc5cef21269cf4f6225746f0b946458bd7"
+          media_type: "application/vnd.docker.distribution.manifest.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: dashboard, port: 5601, protocol: tcp}
 
   suricata:
     type: vm
     os: linux
-    source: {name: "jasonish/suricata", version: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"}
+    source:
+      name: "jasonish/suricata"
+      version: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"
+      artifact_requirement:
+        requirement_id: suricata-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "jasonish/suricata"
+          version: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"
+          digest: "sha256:d64c491f6eb5d03b6562d873b3c5303e4c17d5dc1d75b3761a68319f11527dc3"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services: []
   misp:
     type: vm
     os: linux
-    source: {name: "ghcr.io/misp/misp-docker/misp-core", version: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"}
+    source:
+      name: "ghcr.io/misp/misp-docker/misp-core"
+      version: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"
+      artifact_requirement:
+        requirement_id: misp-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "ghcr.io/misp/misp-docker/misp-core"
+          version: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"
+          digest: "sha256:0eaa4e423d5cd965b7b76aa5665e81d5c05a35bc46a4ffec2ca52e0cfe627e86"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: https, port: 443, protocol: tcp}
   misp-db:
     type: vm
     os: linux
-    source: {name: mariadb, version: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"}
+    source:
+      name: "mariadb"
+      version: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"
+      artifact_requirement:
+        requirement_id: misp-db-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "mariadb"
+          version: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"
+          digest: "sha256:be981e4113326ada8d6004174dd09eeaefc03094037f811182a52d4f2e737350"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: mysql, port: 3306, protocol: tcp}
   misp-redis:
     type: vm
     os: linux
-    source: {name: redis, version: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"}
+    source:
+      name: "redis"
+      version: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+      artifact_requirement:
+        requirement_id: misp-redis-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "redis"
+          version: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+          digest: "sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: redis, port: 6379, protocol: tcp}
   misp-suricata-sync:
@@ -83,49 +209,193 @@ nodes:
   thehive:
     type: vm
     os: linux
-    source: {name: "strangebee/thehive", version: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"}
+    source:
+      name: "strangebee/thehive"
+      version: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
+      artifact_requirement:
+        requirement_id: thehive-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "strangebee/thehive"
+          version: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
+          digest: "sha256:ba3212a89be79de6ec8e6e66b84f3c0801c3b8d726aacc767ad6257030df7a13"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: thehive-api, port: 9000, protocol: tcp}
   thehive-cassandra:
     type: vm
     os: linux
-    source: {name: cassandra, version: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"}
+    source:
+      name: "cassandra"
+      version: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"
+      artifact_requirement:
+        requirement_id: thehive-cassandra-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "cassandra"
+          version: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"
+          digest: "sha256:d25e8ee78d648fade002d0d176b7e8c953c69164b9f316ccbccf62f524c9dfbf"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: cassandra, port: 9042, protocol: tcp}
   thehive-es:
     type: vm
     os: linux
-    source: {name: "docker.elastic.co/elasticsearch/elasticsearch", version: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"}
+    source:
+      name: "docker.elastic.co/elasticsearch/elasticsearch"
+      version: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"
+      artifact_requirement:
+        requirement_id: thehive-es-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "docker.elastic.co/elasticsearch/elasticsearch"
+          version: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"
+          digest: "sha256:f2ce8a4c644a35762e6e115c9a373c5cd20df03c2dd75cb0a570011934cdffd1"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: elasticsearch, port: 9200, protocol: tcp}
   cortex:
     type: vm
     os: linux
-    source: {name: "thehiveproject/cortex", version: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"}
+    source:
+      name: "thehiveproject/cortex"
+      version: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"
+      artifact_requirement:
+        requirement_id: cortex-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "thehiveproject/cortex"
+          version: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"
+          digest: "sha256:ae8b3d72eb5de785513bc33492d93278c32b79d9ff89401463c3a9c577e0bc0b"
+          media_type: "application/vnd.docker.distribution.manifest.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: cortex-api, port: 9001, protocol: tcp}
   shuffle-backend:
     type: vm
     os: linux
-    source: {name: "ghcr.io/shuffle/shuffle-backend", version: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"}
+    source:
+      name: "ghcr.io/shuffle/shuffle-backend"
+      version: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"
+      artifact_requirement:
+        requirement_id: shuffle-backend-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "ghcr.io/shuffle/shuffle-backend"
+          version: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"
+          digest: "sha256:d4a5d2bf1f956955b68b099ba1c38997e4b257b2518215e0427f433515bea5c8"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: shuffle-api, port: 5001, protocol: tcp}
   shuffle-frontend:
     type: vm
     os: linux
-    source: {name: "ghcr.io/shuffle/shuffle-frontend", version: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"}
+    source:
+      name: "ghcr.io/shuffle/shuffle-frontend"
+      version: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"
+      artifact_requirement:
+        requirement_id: shuffle-frontend-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "ghcr.io/shuffle/shuffle-frontend"
+          version: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"
+          digest: "sha256:4d700a6f0822cb081822bd2fa6c633080553bdd4313aed2c4bdce75b87e82836"
+          media_type: "application/vnd.oci.image.index.v1+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: https, port: 443, protocol: tcp}
       - {name: http, port: 80, protocol: tcp}
   shuffle-orborus:
     type: vm
     os: linux
-    source: {name: "ghcr.io/shuffle/shuffle-orborus", version: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"}
+    source:
+      name: "ghcr.io/shuffle/shuffle-orborus"
+      version: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"
+      artifact_requirement:
+        requirement_id: shuffle-orborus-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "ghcr.io/shuffle/shuffle-orborus"
+          version: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"
+          digest: "sha256:94e61e7916aea28351fce3851f26f14fb85204f1567a8807d137321418366dba"
+          media_type: "application/vnd.docker.distribution.manifest.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services: []
   shuffle-opensearch:
     type: vm
     os: linux
-    source: {name: "opensearchproject/opensearch", version: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"}
+    source:
+      name: "opensearchproject/opensearch"
+      version: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"
+      artifact_requirement:
+        requirement_id: shuffle-opensearch-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "opensearchproject/opensearch"
+          version: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"
+          digest: "sha256:466a49f379bb8889af29d615475e69b7b990898c6987d28470cd7105df9046ff"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: opensearch-rest, port: 9200, protocol: tcp}
       - {name: opensearch-transport, port: 9300, protocol: tcp}
@@ -360,20 +630,74 @@ nodes:
   aptl-otel-collector:
     type: vm
     os: linux
-    source: {name: "otel/opentelemetry-collector-contrib", version: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"}
+    source:
+      name: "otel/opentelemetry-collector-contrib"
+      version: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"
+      artifact_requirement:
+        requirement_id: aptl-otel-collector-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "otel/opentelemetry-collector-contrib"
+          version: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"
+          digest: "sha256:e39311df1f3d941923c00da79ac7ba6269124a870ee87e3c3ad24d60f8aee4d2"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: otlp-grpc, port: 4317, protocol: tcp}
       - {name: otlp-http, port: 4318, protocol: tcp}
   aptl-tempo:
     type: vm
     os: linux
-    source: {name: "grafana/tempo", version: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"}
+    source:
+      name: "grafana/tempo"
+      version: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"
+      artifact_requirement:
+        requirement_id: aptl-tempo-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "grafana/tempo"
+          version: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"
+          digest: "sha256:4b0277a9b572a4b1fa43b01468e58911ec214dd69d033f2cd476596d14de9fe3"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: tempo-http, port: 3200, protocol: tcp}
   aptl-grafana-otel:
     type: vm
     os: linux
-    source: {name: "grafana/grafana", version: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"}
+    source:
+      name: "grafana/grafana"
+      version: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"
+      artifact_requirement:
+        requirement_id: aptl-grafana-otel-image
+        explicitness: exact
+        exact_artifact:
+          artifact_id: "grafana/grafana"
+          version: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"
+          digest: "sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb"
+          media_type: "application/vnd.docker.distribution.manifest.list.v2+json"
+        permitted_routes:
+          - mechanism:
+              mechanism: "exact-artifact"
+              profile: "aptl-oci-exact-pull"
+              version: "1"
+              digest: "sha256:041966e3e607d90c1237bdbbf1a7a8b48de397ea134405094318f41521b8dfea"
+            acquisition: pull
+            timing: backend-preparation
     services:
       - {name: grafana, port: 3000, protocol: tcp}
 

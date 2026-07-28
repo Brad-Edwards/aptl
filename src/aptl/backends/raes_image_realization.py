@@ -60,6 +60,7 @@ class _NodeSource:
     name: str
     version: str
     build: object
+    artifact_requirement: object = None
 
 
 def resolve_node_image(
@@ -117,6 +118,7 @@ def _node_source(
                     name=source_name,
                     version=_source_string(source.get("version")) or "*",
                     build=source.get("build"),
+                    artifact_requirement=source.get("artifact_requirement"),
                 )
             else:
                 diagnostics.append(_policy_diagnostic(address, "invalid-source"))
@@ -134,6 +136,52 @@ def _source_string(value: object) -> str | None:
     return None
 
 
+def _authored_artifact_image(
+    *,
+    resource: PlannedResource,
+    source: _NodeSource,
+    service_name: str,
+) -> DeploymentImageRealization | None:
+    """Resolve the image from the node's authored exact artifact requirement.
+
+    When the SDL names an immutable artifact identity, that identity is the
+    authority (ADR-050): the digest the author pinned is the reference APTL
+    pulls. The local product allowlist below is legacy compatibility for
+    scenarios that have not been migrated, and is not consulted here — an
+    authored pin must not depend on APTL-side membership of a hand-maintained
+    table, which is exactly what ADR-098 replaces.
+
+    Reference syntax is still validated as defence in depth before the value
+    reaches the deployment backend.
+    """
+
+    requirement = source.artifact_requirement
+    if isinstance(requirement, Mapping):
+        exact = requirement.get("exact_artifact")
+    else:
+        exact = getattr(requirement, "exact_artifact", None)
+    if exact is None:
+        return None
+    if isinstance(exact, Mapping):
+        artifact_id = _source_string(exact.get("artifact_id")) or ""
+        digest = _source_string(exact.get("digest")) or ""
+    else:
+        artifact_id = getattr(exact, "artifact_id", "")
+        digest = getattr(exact, "digest", "")
+    if not _safe_image_name(artifact_id) or _DIGEST_RE.fullmatch(digest) is None:
+        return None
+    return DeploymentImageRealization(
+        address=resource.address,
+        service_name=service_name,
+        source_name=source.name,
+        source_version=source.version,
+        image_ref=f"{artifact_id}@{digest}",
+        mode="pull",
+        policy_rule="authored-exact-artifact",
+        provenance=_provenance_counts(source.build),
+    )
+
+
 def _resolve_trusted_image(
     *,
     resource: PlannedResource,
@@ -144,7 +192,11 @@ def _resolve_trusted_image(
 ) -> DeploymentImageRealization | None:
     """Resolve one normalized source through build, alias, and digest policies."""
 
-    image = None
+    image = _authored_artifact_image(
+        resource=resource, source=source, service_name=service_name
+    )
+    if image is not None:
+        return image
     if isinstance(source.build, Mapping):
         image = _build_image(
             resource=resource,

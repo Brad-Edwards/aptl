@@ -258,7 +258,10 @@ def selected_profiles_for_scenario(
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend
     )
-    execution_plan = RuntimeManager(target).plan(scenario)
+    execution_plan = RuntimeManager(target).plan(
+        scenario,
+        artifact_availability=artifact_availability_for_scenario(scenario, backend),
+    )
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning, project_dir=project_dir, config=config
     )
@@ -287,7 +290,10 @@ def admitted_stateful_artifact_ownership(
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend
     )
-    execution_plan = RuntimeManager(target).plan(scenario)
+    execution_plan = RuntimeManager(target).plan(
+        scenario,
+        artifact_availability=artifact_availability_for_scenario(scenario, backend),
+    )
     blocking = [
         diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error
     ]

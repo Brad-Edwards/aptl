@@ -174,8 +174,8 @@ def test_facts_are_scoped_to_the_declaring_address(tmp_path):
     assert "artifact.unavailable-exact-artifact" in _codes(scenario, availability)
 
 
-def test_scenario_without_artifact_demand_produces_no_facts():
-    """The shipped scenario authors no requirement yet, so the provider no-ops."""
+def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node():
+    """The shipped scenario now pins each image-backed node to an exact artifact."""
 
     scenario = parse_sdl_file(
         Path(__file__).resolve().parents[1]
@@ -186,5 +186,8 @@ def test_scenario_without_artifact_demand_produces_no_facts():
 
     context = artifact_availability_for_scenario(scenario, probe)
 
-    assert context.requirements == []
-    assert probe.calls == []
+    # One address per image-backed node, each probed by digest-pinned reference.
+    assert len(context.requirements) == 18
+    assert all(ref.count("@sha256:") == 1 for ref, _ in probe.calls)
+    # Nothing was obtainable for this probe, so nothing is claimed available.
+    assert all(not e.available_artifact_digests for e in context.requirements)

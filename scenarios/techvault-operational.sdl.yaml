@@ -1082,7 +1082,9 @@ generated_artifacts:
   lab-soc-ca:
     generator: certificate_bundle
     lifecycle: reuse_valid
-    provenance: config/certs.yml
+    # Names the producer, which is how the backend resolves this bundle's host
+    # root. The Wazuh bundles come from config/certs.yml; this one does not.
+    provenance: src/aptl/core/soc_ca.py
     outputs:
       - {name: lab-ca, path: lab-ca.pem, sensitivity: public}
     consumers:

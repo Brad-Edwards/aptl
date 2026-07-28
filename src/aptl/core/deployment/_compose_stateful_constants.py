@@ -4,6 +4,15 @@ from pathlib import Path
 
 STATEFUL_OVERRIDE_RELPATH = Path(".aptl/realization/compose.stateful.yml")
 CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
+# A certificate bundle's host root depends on which producer generated it, not
+# on the RAES generator kind: RAES's vocabulary is deliberately small
+# (certificate_bundle, rendered_config), so several distinct producers share one
+# kind. The artifact's declared provenance names the producer, and this maps it
+# to the directory that producer writes into. An unmapped provenance falls back
+# to the Wazuh indexer root, which is where every pre-existing bundle lands.
+CERTIFICATE_ROOT_BY_PROVENANCE: dict[str, Path] = {
+    "src/aptl/core/soc_ca.py": Path("config/soc_certs"),
+}
 REALIZATION_ADDRESS_LABEL = "org.aptl.realization.address"
 REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"
 REALIZATION_PROJECT_LABEL = "org.aptl.realization.project"

@@ -209,7 +209,15 @@ class ComposeBaseSubstrateMixin(object):
         # keeps them in the generated `.env`, which is never exported into this
         # process. A real process-environment entry still wins, so an operator
         # can override one variable without editing generated credentials.
-        available = {**self._project_dotenv(), **os.environ}
+        # Precedence: an operator's process environment, then the project's
+        # generated credentials, then the scenario's authored non-secret
+        # default. The author supplies what is safe to write down; the
+        # credential boundary supplies what is not.
+        available = {
+            **dict(spec.environment_defaults),
+            **self._project_dotenv(),
+            **os.environ,
+        }
         bindings = {
             name: available[name]
             for name in spec.environment_names

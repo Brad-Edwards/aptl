@@ -113,6 +113,10 @@ class BaseContainerSpec:
     # secret boundary and written to a contained, owner-only env file, so a
     # credential never reaches process argv, image labels, or logs.
     environment_names: tuple[str, ...] = ()
+    # Authored non-secret defaults, as (name, value). Safe to carry: a variable
+    # classified as a secret is authored with an empty value and is supplied by
+    # the credential boundary instead, so no secret can travel here.
+    environment_defaults: tuple[tuple[str, str], ...] = ()
 
 
 def _container_name(node_address: str) -> str:
@@ -149,6 +153,7 @@ def base_container_spec(
         published_ports=_published_ports(runtime),
         volume_mounts=_volume_mounts(runtime),
         environment_names=_environment_names(runtime),
+        environment_defaults=_environment_defaults(runtime),
     )
 
 
@@ -192,6 +197,26 @@ def _environment_names(runtime: RuntimeConfiguration | None) -> tuple[str, ...]:
         variable.name
         for variable in runtime.environment
         if getattr(variable, "name", "")
+    )
+
+
+def _environment_defaults(
+    runtime: RuntimeConfiguration | None,
+) -> tuple[tuple[str, str], ...]:
+    """Return authored non-secret environment defaults.
+
+    ``RuntimeEnvironmentVariable.value`` carries a non-secret default; anything
+    classified as a secret is authored empty and resolved through the project's
+    credential boundary. Filtering on a non-empty value is therefore sufficient
+    to keep secrets out of this tuple.
+    """
+
+    if runtime is None:
+        return ()
+    return tuple(
+        (variable.name, variable.value)
+        for variable in runtime.environment
+        if getattr(variable, "name", "") and getattr(variable, "value", "")
     )
 
 

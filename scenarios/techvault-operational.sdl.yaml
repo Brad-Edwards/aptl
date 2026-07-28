@@ -201,6 +201,7 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: MISP_URL
+          value: "https://misp"
           value_classification: plain
           provenance: compose
         - name: MISP_API_KEY
@@ -213,21 +214,27 @@ nodes:
           value_classification: plain
           provenance: compose
         - name: IOC_TAG_FILTER
+          value: "aptl:enforce"
           value_classification: plain
           provenance: compose
         - name: SYNC_INTERVAL_SECONDS
+          value: "300"
           value_classification: plain
           provenance: compose
         - name: RULES_OUT_PATH
+          value: "/var/lib/suricata/rules/misp/misp-iocs.rules"
           value_classification: plain
           provenance: compose
         - name: SURICATA_SOCKET_PATH
+          value: "/var/run/suricata/suricata-command.socket"
           value_classification: plain
           provenance: compose
         - name: SID_BASE
+          value: "99000000"
           value_classification: plain
           provenance: compose
         - name: LOG_LEVEL
+          value: "INFO"
           value_classification: plain
           provenance: compose
       packages:
@@ -461,36 +468,46 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: DB_HOST
+          value: "172.20.2.11"
           value_classification: plain
           provenance: compose
         - name: DB_PORT
+          value: "5432"
           value_classification: plain
           provenance: compose
         - name: DB_NAME
+          value: "techvault"
           value_classification: plain
           provenance: compose
         - name: DB_USER
+          value: "techvault"
           value_classification: plain
           provenance: compose
         - name: DB_PASSWORD
           value_classification: operator_secret
           provenance: compose
         - name: FLASK_ENV
+          value: "production"
           value_classification: plain
           provenance: compose
         - name: SIEM_IP
+          value: "172.20.2.30"
           value_classification: plain
           provenance: compose
         - name: WAZUH_MANAGER
+          value: "wazuh.manager"
           value_classification: plain
           provenance: compose
         - name: AGENT_NAME
+          value: "aptl-webapp-agent"
           value_classification: plain
           provenance: compose
         - name: LOG_PATHS
+          value: "/var/log/gunicorn/access.log"
           value_classification: plain
           provenance: compose
         - name: LOG_FORMAT
+          value: "syslog"
           value_classification: plain
           provenance: compose
       packages:
@@ -556,9 +573,11 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: POSTGRES_DB
+          value: "techvault"
           value_classification: plain
           provenance: compose
         - name: POSTGRES_USER
+          value: "techvault"
           value_classification: plain
           provenance: compose
         - name: POSTGRES_PASSWORD
@@ -587,9 +606,11 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: SIEM_IP
+          value: "172.20.2.30"
           value_classification: plain
           provenance: compose
         - name: LABADMIN_SSH_KEY_FILE
+          value: "/keys/aptl_lab_key.pub"
           value_classification: plain
           provenance: compose
       packages:
@@ -640,18 +661,23 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: SIEM_IP
+          value: "172.20.0.10"
           value_classification: plain
           provenance: compose
         - name: WAZUH_MANAGER
+          value: "wazuh.manager"
           value_classification: plain
           provenance: compose
         - name: AGENT_NAME
+          value: "aptl-fileshare-agent"
           value_classification: plain
           provenance: compose
         - name: LOG_PATHS
+          value: "/var/log/samba/log.samba-bgqd,/var/log/samba/log.*"
           value_classification: plain
           provenance: compose
         - name: LOG_FORMAT
+          value: "syslog"
           value_classification: plain
           provenance: compose
       packages:
@@ -682,15 +708,19 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: WAZUH_MANAGER
+          value: "wazuh.manager"
           value_classification: plain
           provenance: compose
         - name: AGENT_NAME
+          value: "aptl-dns-agent"
           value_classification: plain
           provenance: compose
         - name: LOG_PATHS
+          value: "/var/log/named/query.log,/var/log/named/default.log"
           value_classification: plain
           provenance: compose
         - name: LOG_FORMAT
+          value: "syslog"
           value_classification: plain
           provenance: compose
       packages:
@@ -734,9 +764,11 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: SIEM_IP
+          value: "172.20.2.30"
           value_classification: plain
           provenance: compose
         - name: LABADMIN_SSH_KEY_FILE
+          value: "/keys/aptl_lab_key.pub"
           value_classification: plain
           provenance: compose
       packages:
@@ -776,6 +808,7 @@ nodes:
       # here and never carried in realization DTOs, argv, or logs.
       environment:
         - name: VICTIM_IP
+          value: "172.20.2.20"
           value_classification: plain
           provenance: compose
       packages:

@@ -179,3 +179,49 @@ def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
     argv = _append(_spec(("DB_HOST",)), tmp_path)
 
     assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"
+
+
+def test_authored_non_secret_defaults_are_bound():
+    """Values that were literals in Compose are authored, not lost.
+
+    Only credential-class variables live in the generated .env. The rest were
+    plain literals in the pre-refactor Compose file, so without an authored
+    default they would have no source at all and be silently omitted.
+    """
+
+    from aptl.backends.raes_base_substrate import _environment_defaults
+
+    defaults = dict(_environment_defaults(_webapp_runtime()))
+
+    assert defaults["DB_HOST"] == "172.20.2.11"
+    assert defaults["DB_NAME"] == "techvault"
+    # A secret is authored empty and therefore never carried as a default.
+    assert "DB_PASSWORD" not in defaults
+
+
+def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, monkeypatch):
+    """Precedence is operator, then project credentials, then authored default."""
+
+    from aptl.backends.raes_base_substrate import BaseContainerSpec
+
+    (tmp_path / ".env").write_text("DB_NAME=from-credentials\n", encoding="utf-8")
+    monkeypatch.setenv("DB_HOST", "from-operator")
+    monkeypatch.delenv("DB_NAME", raising=False)
+
+    spec = BaseContainerSpec(
+        node_address="provision.node.webapp",
+        container_name="aptl-webapp",
+        image_ref="debian:12-slim",
+        runs_services=True,
+        environment_names=("DB_HOST", "DB_NAME", "DB_PORT"),
+        environment_defaults=(
+            ("DB_HOST", "authored"),
+            ("DB_NAME", "authored"),
+            ("DB_PORT", "5432"),
+        ),
+    )
+    body = Path(_append(spec, tmp_path)[1]).read_text(encoding="utf-8")
+
+    assert "DB_HOST=from-operator" in body
+    assert "DB_NAME=from-credentials" in body
+    assert "DB_PORT=5432" in body

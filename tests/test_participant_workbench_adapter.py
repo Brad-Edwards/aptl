@@ -436,11 +436,12 @@ def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
     } <= disabled
 
     output_schema.write_text("{}\n")
+    response_schema = _selection_schema(4)
     with pytest.raises(AgentExecutionError, match="sealed"):
         adapter.respond(
             handle,
             "choose",
-            response_schema=_selection_schema(4),
+            response_schema=response_schema,
         )
     assert len(runner.invocations) == 1
 
@@ -454,23 +455,25 @@ def test_decision_adapters_reject_cross_provider_launches(tmp_path: Path) -> Non
         codex_executable=_executable(tmp_path / "codex"),
         work_dir=tmp_path / "codex-work",
     )
+    codex_launch = DecisionAgentLaunch(
+        provider="codex",
+        run_id="a" * 32,
+        model="gpt-5-nano-2025-08-07",
+    )
+    claude_launch = DecisionAgentLaunch(
+        provider="claude",
+        run_id="a" * 32,
+        model="claude-sonnet-4-5-20250929",
+    )
 
     with pytest.raises(AgentExecutionError, match="provider"):
         claude.launch(
-            DecisionAgentLaunch(
-                provider="codex",
-                run_id="a" * 32,
-                model="gpt-5-nano-2025-08-07",
-            ),
+            codex_launch,
             {"ANTHROPIC_API_KEY": "model-secret"},
         )
     with pytest.raises(AgentExecutionError, match="provider"):
         codex.launch(
-            DecisionAgentLaunch(
-                provider="claude",
-                run_id="a" * 32,
-                model="claude-sonnet-4-5-20250929",
-            ),
+            claude_launch,
             {"CODEX_API_KEY": "model-secret"},
         )
 
@@ -504,12 +507,13 @@ def test_codex_model_access_failure_is_classified_without_raw_detail(
         {"CODEX_API_KEY": "model-secret"},
     )
     adapter.list_tools(handle)
+    response_schema = _selection_schema()
 
     with pytest.raises(AgentExecutionError, match="model is unavailable") as error:
         adapter.respond(
             handle,
             "choose",
-            response_schema=_selection_schema(),
+            response_schema=response_schema,
         )
     assert "secret-project" not in str(error.value)
     assert "secret-request-id" not in str(error.value)

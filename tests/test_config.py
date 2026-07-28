@@ -151,8 +151,9 @@ class TestExperimentSettings:
         assert (
             settings.participant_models.model_for("codex") == "gpt-5-nano-2025-08-07"
         )
+        default_models = ExperimentSettings().participant_models
         with pytest.raises(ValueError, match="not configured"):
-            ExperimentSettings().participant_models.model_for("codex")
+            default_models.model_for("codex")
         with pytest.raises(ValueError, match="unknown installed participant provider"):
             settings.participant_models.model_for("other")
 

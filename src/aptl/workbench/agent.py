@@ -18,6 +18,7 @@ from mcp.client.stdio import stdio_client
 
 from aptl.utils.placeholders import contains_placeholder
 from aptl.core.config import validate_installed_participant_model_id
+from aptl.workbench.decision_schema import admit_decision_response_schema
 from aptl.workbench.process import (
     AgentExecutionError,
     BoundedProcessRunner,
@@ -183,7 +184,7 @@ class ClaudeCodeManagedAgentAdapter:
         if active.closed or not active.ready:
             raise AgentExecutionError("agent profile is not ready")
         _assert_config_unchanged(active)
-        schema_json = _admit_decision_response_schema(
+        schema_json = admit_decision_response_schema(
             active.launch,
             response_schema,
         )
@@ -261,48 +262,6 @@ class ClaudeCodeManagedAgentAdapter:
             str(handle.launch.client_config_path),
             "--strict-mcp-config",
         )
-
-
-def _admit_decision_response_schema(
-    launch: AgentLaunch,
-    response_schema: Mapping[str, object] | None,
-) -> str | None:
-    """Admit only the exact bounded candidate-index schema for decisions."""
-
-    if not isinstance(launch, DecisionAgentLaunch):
-        if response_schema is not None:
-            raise AgentExecutionError(
-                "agent response schema is limited to decision launches"
-            )
-        return None
-    if not isinstance(response_schema, Mapping) or set(response_schema) != {
-        "type",
-        "properties",
-        "required",
-        "additionalProperties",
-    }:
-        raise AgentExecutionError("agent response schema is invalid")
-    properties = response_schema.get("properties")
-    if (
-        response_schema.get("type") != "object"
-        or response_schema.get("required") != ["candidate"]
-        or response_schema.get("additionalProperties") is not False
-        or not isinstance(properties, Mapping)
-        or set(properties) != {"candidate"}
-    ):
-        raise AgentExecutionError("agent response schema is invalid")
-    candidate = properties.get("candidate")
-    if (
-        not isinstance(candidate, Mapping)
-        or set(candidate) != {"type", "minimum", "maximum"}
-        or candidate.get("type") != "integer"
-        or type(candidate.get("minimum")) is not int
-        or candidate.get("minimum") != 0
-        or type(candidate.get("maximum")) is not int
-        or candidate["maximum"] < 0
-    ):
-        raise AgentExecutionError("agent response schema is invalid")
-    return json.dumps(response_schema, separators=(",", ":"), sort_keys=True)
 
 
 def _admitted_executable(path: Path) -> Path:

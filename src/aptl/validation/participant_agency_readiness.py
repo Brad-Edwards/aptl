@@ -35,6 +35,10 @@ from aptl.validation.participant_readiness_provider import (
     build_selection_provider,
     installed_version,
 )
+from aptl.validation.participant_readiness_reports import (
+    configured_readiness_model,
+    persist_failed_readiness_report,
+)
 from aptl.workbench.process import AgentExecutionError
 
 if TYPE_CHECKING:
@@ -109,11 +113,11 @@ def validate_participant_agency_readiness(
     _validate_readiness_request(request)
     selected_run_id = request.run_id or f"participant-readiness-{uuid4().hex}"
     request.run_store.create_run(selected_run_id)
-    selected_model = _configured_model(request)
+    selected_model = configured_readiness_model(request)
     try:
         context = _prepare_readiness_context(request, selected_run_id)
     except _ReadinessFailure as exc:
-        return _persist_failed_report(
+        return persist_failed_readiness_report(
             request.run_store,
             selected_run_id,
             request.provider_name,
@@ -130,7 +134,7 @@ def validate_participant_agency_readiness(
             if str(exc).startswith("installed participant model is not configured")
             else type(exc).__name__
         )
-        return _persist_failed_report(
+        return persist_failed_readiness_report(
             request.run_store,
             selected_run_id,
             request.provider_name,
@@ -368,7 +372,7 @@ def _terminate_and_persist(
         ),
         run_id=context.run_id,
         provider=context.request.provider_name,
-        model=_configured_model(context.request),
+        model=configured_readiness_model(context.request),
         behavior=context.request.behavior_name,
         participant_address=context.participant_address,
         selected_actions=trajectory.selected_actions,
@@ -471,46 +475,3 @@ def _installed_version(executable: Path) -> str:
 
 def _noop() -> None:
     """No-op cleanup for deterministic selection providers."""
-
-
-def _persist_failed_report(
-    run_store: RunStorageBackend,
-    run_id: str,
-    provider: str,
-    model: str | None,
-    behavior: str,
-    participant_address: str,
-    *diagnostics: str,
-) -> ParticipantReadinessReport:
-    """Persist failed report for the bounded participant workflow."""
-    report = ParticipantReadinessReport(
-        passed=False,
-        run_id=run_id,
-        provider=provider,
-        model=model,
-        behavior=behavior,
-        participant_address=participant_address,
-        selected_actions=(),
-        completed_turns=0,
-        diagnostics=tuple(diagnostics),
-    )
-    run_store.write_json(
-        run_id,
-        "participant/readiness-report.json",
-        report.to_payload(),
-    )
-    return report
-
-
-def _configured_model(request: ParticipantReadinessRequest) -> str | None:
-    """Return admitted non-secret model provenance without triggering launch."""
-
-    if request.provider_override is not None:
-        return request.provider_override.model
-    if request.provider_name == "deterministic":
-        return None
-    return getattr(
-        request.config.experiment.participant_models,
-        request.provider_name,
-        None,
-    )

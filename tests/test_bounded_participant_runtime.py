@@ -1604,14 +1604,15 @@ def test_provider_executable_is_admitted_before_version_probe(
         unexpected_run,
     )
 
+    config = AptlConfig(
+        experiment={
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"}
+        }
+    )
     with pytest.raises(ValueError, match="untrusted provider executable"):
         participant_agency_readiness._selection_provider(
             "claude",
-            config=AptlConfig(
-                experiment={
-                    "participant_models": {"claude": "claude-sonnet-4-5-20250929"}
-                }
-            ),
+            config=config,
             project_dir=tmp_path,
             run_id="rejected-provider",
         )

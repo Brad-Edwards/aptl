@@ -12,6 +12,17 @@ from fastapi.testclient import TestClient
 
 from aptl.core.session import ScenarioSession
 from aptl.core.runstore import LocalRunStore
+from aptl.workbench.runtime import WorkbenchPaths
+
+
+def _runtime_paths(payload_root: Path, generated_config_dir: Path) -> WorkbenchPaths:
+    """Build trusted runtime paths for one isolated workbench test."""
+
+    return WorkbenchPaths(
+        payload_root=payload_root,
+        generated_config_dir=generated_config_dir,
+        node_executable=Path(sys.executable),
+    )
 
 
 def test_profiles_expose_exactly_the_allowed_mcp_servers() -> None:
@@ -231,10 +242,8 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
         session_manager,
         adapter,
         LocalRunStore(tmp_path / "runs"),
-        payload_root=payload_root,
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(payload_root, tmp_path / "generated"),
         credential_broker=credentials,
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -267,10 +276,11 @@ def test_profile_runtime_fails_closed_without_an_active_scenario(
         ScenarioSession(tmp_path / "state"),
         _FakeAdapter(),
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=_FakeCredentials(),
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -290,10 +300,11 @@ def test_runtime_creates_its_managed_config_parent_on_fresh_state(
         session_manager,
         _FakeAdapter(),
         LocalRunStore(tmp_path / "state" / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=generated,
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            generated,
+        ),
         credential_broker=_FakeCredentials(),
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -315,10 +326,11 @@ def test_failed_agent_start_revokes_credentials_and_removes_generated_config(
         session_manager,
         _FailingAdapter(),
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=credentials,
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -342,10 +354,11 @@ def test_runtime_rejects_a_profile_with_an_unexpected_mcp_tool_inventory(
         session_manager,
         adapter,
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=credentials,
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -370,10 +383,11 @@ def test_runtime_keeps_a_rejected_agent_until_failed_cleanup_is_retried(
         session_manager,
         adapter,
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=credentials,
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
 
@@ -412,10 +426,11 @@ def test_runtime_validates_a_switch_target_before_closing_the_active_profile(
         session_manager,
         adapter,
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=credentials,
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
     red = runtime.start(ProfileId.RED)
@@ -441,10 +456,11 @@ def test_profile_switch_waits_for_an_active_agent_turn(tmp_path: Path) -> None:
         session_manager,
         adapter,
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=_FakeCredentials(),
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
     runtime.start(ProfileId.RED)
@@ -484,10 +500,11 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         session_manager,
         _FakeAdapter(),
         LocalRunStore(tmp_path / "runs"),
-        payload_root=_payload_with_all_artifacts(tmp_path / "payload"),
-        generated_config_dir=tmp_path / "generated",
+        paths=_runtime_paths(
+            _payload_with_all_artifacts(tmp_path / "payload"),
+            tmp_path / "generated",
+        ),
         credential_broker=_FakeCredentials(),
-        node_executable=Path(sys.executable),
         model="claude-sonnet-4-5-20250929",
     )
     app = create_participant_workbench_app(

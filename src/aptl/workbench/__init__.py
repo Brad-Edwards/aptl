@@ -22,6 +22,7 @@ from aptl.workbench.profiles import (
 )
 from aptl.workbench.runtime import (
     ProfileLaunch,
+    WorkbenchPaths,
     WorkbenchRuntime,
     WorkbenchStateError,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "ProfileLaunch",
     "WorkbenchConfigurationError",
     "WorkbenchCredentialError",
+    "WorkbenchPaths",
     "WorkbenchRuntime",
     "WorkbenchStateError",
     "create_appliance_workbench_app",

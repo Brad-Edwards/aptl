@@ -13,7 +13,7 @@ from aptl.core.session import ScenarioSession
 from aptl.workbench.agent import ClaudeCodeManagedAgentAdapter
 from aptl.workbench.app import ParticipantAuthorizer, create_participant_workbench_app
 from aptl.workbench.credentials import EphemeralCredentialBroker
-from aptl.workbench.runtime import WorkbenchRuntime
+from aptl.workbench.runtime import WorkbenchPaths, WorkbenchRuntime
 
 
 @dataclass(frozen=True)
@@ -44,10 +44,12 @@ def create_appliance_workbench_app(
         ScenarioSession(state_dir),
         adapter,
         LocalRunStore(state_dir / "runs"),
-        payload_root=settings.payload_root,
-        generated_config_dir=state_dir / "workbench" / "mcp-config",
+        paths=WorkbenchPaths(
+            payload_root=settings.payload_root,
+            generated_config_dir=state_dir / "workbench" / "mcp-config",
+            node_executable=settings.node_executable,
+        ),
         credential_broker=broker,
         model=settings.model,
-        node_executable=settings.node_executable,
     )
     return create_participant_workbench_app(runtime, authorizer)

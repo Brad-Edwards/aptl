@@ -17,10 +17,11 @@ log = get_logger("config")
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
-    "claude": re.compile(r"^claude-[a-z0-9-]+-[0-9]{8}$"),
+    "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
     "codex": re.compile(
-        r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o[0-9][a-z0-9._-]*)"
-        r"-[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        r"^(?:codex-[a-z0-9._-]+|gpt-[a-z0-9._-]+|o\d[a-z0-9._-]*)"
+        r"-\d{4}-\d{2}-\d{2}$",
+        flags=re.ASCII,
     ),
 }
 _CONFIG_FILENAMES = ["aptl.json"]

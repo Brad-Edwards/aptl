@@ -48,6 +48,15 @@ class DecisionAgentLaunch:
 AgentLaunch = ProfileLaunch | DecisionAgentLaunch
 
 
+@dataclass(frozen=True)
+class WorkbenchPaths:
+    """Trusted filesystem inputs for one workbench runtime."""
+
+    payload_root: Path
+    generated_config_dir: Path
+    node_executable: Path = Path("/usr/bin/node")
+
+
 class ManagedAgentAdapter(Protocol):
     """Owns installed-agent and MCP process start/stop inside management."""
 
@@ -96,21 +105,19 @@ class WorkbenchRuntime:
         adapter: ManagedAgentAdapter,
         run_store: RunStorageBackend,
         *,
-        payload_root: Path,
-        generated_config_dir: Path,
+        paths: WorkbenchPaths,
         credential_broker: SessionCredentialBroker,
         model: str,
-        node_executable: Path = Path("/usr/bin/node"),
     ) -> None:
         self._session_manager = session_manager
         self._adapter = adapter
         self._run_store = run_store
-        self._payload_root = payload_root
-        self._generated_config_dir = generated_config_dir
+        self._payload_root = paths.payload_root
+        self._generated_config_dir = paths.generated_config_dir
         self._prepare_generated_config_parent()
         self._credential_broker = credential_broker
         self._model = model
-        self._node_executable = node_executable
+        self._node_executable = paths.node_executable
         self._current: _ActiveProfile | None = None
         self._lock = RLock()
 

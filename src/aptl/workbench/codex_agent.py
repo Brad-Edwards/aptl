@@ -17,10 +17,10 @@ from aptl.utils.pathsafe import (
 )
 from aptl.utils.placeholders import contains_placeholder
 from aptl.workbench.agent import (
-    _admit_decision_response_schema,
     _admitted_executable,
     _prepare_work_dir,
 )
+from aptl.workbench.decision_schema import admit_decision_response_schema
 from aptl.workbench.process import (
     AgentExecutionError,
     BoundedProcessRunner,
@@ -33,6 +33,7 @@ _BASE_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
     "NO_COLOR": "1",
 }
+_SCHEMA_SEAL_ERROR = "agent output schema could not be sealed"
 
 
 @dataclass
@@ -119,7 +120,7 @@ class CodexManagedAgentAdapter:
         active = _require_handle(handle)
         if active.closed or not active.ready:
             raise AgentExecutionError("agent profile is not ready")
-        schema_json = _admit_decision_response_schema(
+        schema_json = admit_decision_response_schema(
             active.launch,
             response_schema,
         )
@@ -160,15 +161,11 @@ class CodexManagedAgentAdapter:
             try:
                 existing = read_contained_nofollow(self._work_dir, schema_name)
             except PathContainmentError as exc:
-                raise AgentExecutionError(
-                    "agent output schema could not be sealed"
-                ) from exc
+                raise AgentExecutionError(_SCHEMA_SEAL_ERROR) from exc
             if not hmac.compare_digest(existing, schema_bytes):
-                raise AgentExecutionError("agent output schema could not be sealed")
+                raise AgentExecutionError(_SCHEMA_SEAL_ERROR)
         except PathContainmentError as exc:
-            raise AgentExecutionError(
-                "agent output schema could not be sealed"
-            ) from exc
+            raise AgentExecutionError(_SCHEMA_SEAL_ERROR) from exc
         return self._work_dir / schema_name
 
     @staticmethod

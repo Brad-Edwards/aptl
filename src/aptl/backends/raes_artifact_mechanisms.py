@@ -61,6 +61,28 @@ _EXACT_ARTIFACT_PROFILE_BODY: dict[str, Any] = {
 }
 
 
+# Per-component build. The profile body states the containment rule so the
+# mapping from an authored specification to a build context is a uniform,
+# scenario-agnostic convention rather than a per-product lookup table: the
+# specification id names a directory under ``containers/`` and nothing else.
+_MATERIALIZATION_PROFILE_BODY: dict[str, Any] = {
+    "mechanism": "materialization-specification",
+    "profile": "aptl-contained-component-build",
+    "version": _PROFILE_VERSION,
+    "description": (
+        "Build one component image from a project-contained build context "
+        "named by the authored specification id, verify the context's "
+        "Dockerfile hashes to the authored specification digest, then verify "
+        "the built image by read-after-write."
+    ),
+    "context_root": "containers",
+    "context_selector": "specification_id",
+    "integrity": "sha256 of the context Dockerfile equals the specification digest",
+    "inputs": "every declared locked input must be an immutable pinned base",
+    "substitution": "forbidden",
+}
+
+
 def _profile_digest(body: dict[str, Any]) -> str:
     """Return the SHA-256 digest of a profile body's canonical JSON encoding."""
 
@@ -78,6 +100,43 @@ def exact_artifact_profile() -> ArtifactMechanismProfile:
         version=body["version"],
         digest=_profile_digest(body),
     )
+
+
+def materialization_profile() -> ArtifactMechanismProfile:
+    """Return APTL's digest-bound per-component build profile."""
+
+    body = _MATERIALIZATION_PROFILE_BODY
+    return ArtifactMechanismProfile(
+        mechanism=body["mechanism"],
+        profile=body["profile"],
+        version=body["version"],
+        digest=_profile_digest(body),
+    )
+
+
+def materialization_capability() -> ArtifactMechanismCapability:
+    """Return the backend capability entry for per-component builds.
+
+    Acquisition is ``none``: nothing is fetched, the artifact is produced
+    locally during backend preparation from inputs the author pinned.
+    """
+
+    return ArtifactMechanismCapability(
+        mechanism=materialization_profile(),
+        supported_requirement_kinds=[SOURCE_ARTIFACT_REQUIREMENT_KIND],
+        supported_routes=[
+            ArtifactAcquisitionTimingModel(
+                acquisition="none", timing="backend-preparation"
+            )
+        ],
+    )
+
+
+def materialization_provenance_ref() -> str:
+    """Return the provenance reference for a locally materialized component."""
+
+    profile = materialization_profile()
+    return f"{profile.mechanism}:{profile.profile}@{profile.digest}"
 
 
 def exact_artifact_provenance_ref() -> str:
@@ -123,11 +182,10 @@ def exact_artifact_capability() -> ArtifactMechanismCapability:
 def aptl_artifact_mechanisms() -> tuple[ArtifactMechanismCapability, ...]:
     """Return every artifact mechanism APTL can materialize and verify.
 
-    ``materialization-specification`` (digest-bound per-component builds) and
-    ``dynamic-composition`` (generic runtime composition) are deliberately absent
-    until their selection, materialization, and readback exist end to end. Adding
-    them here before that would be exactly the optimistic capability declaration
+    ``dynamic-composition`` (generic runtime composition) is deliberately absent
+    until its selection, materialization, and readback exist end to end. Adding
+    it here before that would be exactly the optimistic capability declaration
     SEM-218 I4 forbids.
     """
 
-    return (exact_artifact_capability(),)
+    return (exact_artifact_capability(), materialization_capability())

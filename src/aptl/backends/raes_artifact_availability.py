@@ -36,7 +36,18 @@ from raes_contracts.contracts import (
 )
 from raes_processor.compiler import compile_runtime_model
 
-from aptl.backends.raes_artifact_mechanisms import exact_artifact_provenance_ref
+import hashlib
+from pathlib import Path
+
+from aptl.backends.raes_artifact_mechanisms import (
+    exact_artifact_provenance_ref,
+    materialization_provenance_ref,
+)
+
+# The build-context root the materialization profile declares. A specification
+# id names one directory beneath it and nothing else, so no scenario-specific
+# path table is needed and no authored value can escape the root.
+_CONTEXT_ROOT = "containers"
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from raes.artifact_requirements import ArtifactRequirement
@@ -68,6 +79,52 @@ def _artifact_reference(requirement: ArtifactRequirement) -> str | None:
     return f"{exact.artifact_id}@{exact.digest}"
 
 
+def _context_dockerfile(project_dir: Path, specification_id: str) -> Path | None:
+    """Return the contained Dockerfile a specification names, if it is safe.
+
+    The specification id is authored data, so it is treated as untrusted: it must
+    be a single path segment resolving beneath the profile's declared context
+    root. Anything else returns nothing, which makes the specification
+    unavailable rather than reaching outside the project.
+    """
+
+    if not specification_id or "/" in specification_id or "\\" in specification_id:
+        return None
+    if specification_id in {".", ".."}:
+        return None
+    root = (project_dir / _CONTEXT_ROOT).resolve()
+    candidate = (root / specification_id / "Dockerfile").resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _available_specification_digests(
+    requirement: ArtifactRequirement, project_dir: Path | None
+) -> list[str]:
+    """Return the authored specification digests whose context matches on disk.
+
+    A specification is available only when the contained Dockerfile hashes to the
+    digest the author declared. That is the integrity check the profile promises:
+    a drifted build context is not the artifact that was authorised, so it is
+    reported unavailable and admission refuses it.
+    """
+
+    if project_dir is None:
+        return []
+    available: list[str] = []
+    for specification in requirement.materialization_specifications:
+        dockerfile = _context_dockerfile(project_dir, specification.specification_id)
+        if dockerfile is None:
+            continue
+        digest = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+        if digest == specification.digest:
+            available.append(specification.digest)
+    return available
+
+
 def _source_artifact_requirements(
     scenario: object,
 ) -> list[CompiledRealizationRequirement]:
@@ -92,6 +149,7 @@ def artifact_availability_for_scenario(
     probe: ArtifactProbe,
     *,
     allow_remote: bool | None = None,
+    project_dir: Path | None = None,
 ) -> ArtifactAvailabilityContext:
     """Return address-partitioned availability facts for ``scenario``.
 
@@ -114,6 +172,25 @@ def artifact_availability_for_scenario(
         if requirement is None:  # pragma: no cover - filtered above
             continue
         digests: list[str] = []
+        specifications: list[str] = []
+        verified_inputs: list[str] = []
+        provenance: list[str] = []
+        if requirement.materialization_specifications:
+            specifications = _available_specification_digests(requirement, project_dir)
+            # A locked input is verified when its immutable base artifact is
+            # genuinely obtainable; an unobtainable base means the build cannot
+            # be reproduced from what the author pinned.
+            verified_inputs = [
+                locked.input_id
+                for locked in requirement.locked_inputs
+                if locked.artifact is not None
+                and probe.artifact_available(
+                    f"{locked.artifact.artifact_id}@{locked.artifact.digest}",
+                    allow_remote=allow_remote,
+                )
+            ]
+            if specifications:
+                provenance.append(materialization_provenance_ref())
         if requirement.explicitness is ExplicitnessClass.EXACT:
             reference = _artifact_reference(requirement)
             exact = requirement.exact_artifact
@@ -123,6 +200,7 @@ def artifact_availability_for_scenario(
                 and probe.artifact_available(reference, allow_remote=allow_remote)
             ):
                 digests.append(exact.digest)
+                provenance.append(exact_artifact_provenance_ref())
         # The digest APTL confirmed obtainable is exactly the integrity fact it
         # can vouch for, and the runtime gate requires the realized digest to be
         # disclosed as an integrity ref drawn from this verified set. Nothing
@@ -133,9 +211,9 @@ def artifact_availability_for_scenario(
                 address=compiled.address,
                 available_artifact_digests=digests,
                 verified_integrity_refs=list(digests),
-                verified_provenance_refs=(
-                    [exact_artifact_provenance_ref()] if digests else []
-                ),
+                verified_provenance_refs=provenance,
+                available_materialization_specification_digests=specifications,
+                verified_locked_input_ids=verified_inputs,
             )
         )
     return ArtifactAvailabilityContext(requirements=entries)

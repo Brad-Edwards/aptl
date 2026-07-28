@@ -241,17 +241,19 @@ _PROVISIONER = ProvisionerCapabilities(
 # realize an open artifact concern; an ``open`` requirement is refused with
 # ``artifact.unsupported-open-realization`` rather than silently chosen for.
 #
-# ``source-artifact`` belongs on the mechanism's ``supported_requirement_kinds``
-# (which ``_artifact_route_diagnostics`` filters on), NOT on
-# ``supported_exact_requirement_kinds``. The SEM-218 exact gate keys on the
-# single ``declared-capability-match`` kind regardless of the requirement's own
-# kind, so listing ``source-artifact`` there would claim a capability the gate
-# never consults.
+# ``source-artifact`` appears on the mechanism's ``supported_requirement_kinds``
+# and on ``supported_constraint_kinds``, but deliberately NOT on
+# ``supported_exact_requirement_kinds``. The two SEM-218 branches differ: the
+# exact branch keys on the single ``declared-capability-match`` kind regardless
+# of the requirement's own kind, so listing it there would claim a capability the
+# gate never consults, while the constrained branch keys on the requirement's own
+# kind and so genuinely needs it. The constrained claim is backed by the
+# per-component build mechanism and its read-after-write of the built image.
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.CONSTRAINED,
-        supported_constraint_kinds=frozenset({"os-family"}),
+        supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
         supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}

@@ -615,7 +615,9 @@ def test_manifest_realization_support_matches_exercised_concerns():
     (support,) = create_aptl_manifest().realization_support
 
     assert support.domain == "runtime-realization"
-    assert support.supported_constraint_kinds == frozenset({"os-family"})
+    assert support.supported_constraint_kinds == frozenset(
+        {"os-family", "source-artifact"}
+    )
     assert support.supported_exact_requirement_kinds == frozenset(
         {"declared-capability-match"}
     )

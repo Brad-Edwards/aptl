@@ -179,7 +179,9 @@ def _plan_scenario(
     # Artifact availability is a trusted input to planning, gathered at the
     # backend trust boundary before the single admitted plan() call (ADR-050).
     # It is a no-op for a scenario that authors no artifact_requirement.
-    availability = artifact_availability_for_scenario(scenario, backend)
+    availability = artifact_availability_for_scenario(
+        scenario, backend, project_dir=project_dir
+    )
     execution_plan = (
         manager.plan(
             scenario,
@@ -260,7 +262,9 @@ def selected_profiles_for_scenario(
     )
     execution_plan = RuntimeManager(target).plan(
         scenario,
-        artifact_availability=artifact_availability_for_scenario(scenario, backend),
+        artifact_availability=artifact_availability_for_scenario(
+            scenario, backend, project_dir=project_dir
+        ),
     )
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning, project_dir=project_dir, config=config
@@ -292,7 +296,9 @@ def admitted_stateful_artifact_ownership(
     )
     execution_plan = RuntimeManager(target).plan(
         scenario,
-        artifact_availability=artifact_availability_for_scenario(scenario, backend),
+        artifact_availability=artifact_availability_for_scenario(
+            scenario, backend, project_dir=project_dir
+        ),
     )
     blocking = [
         diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error

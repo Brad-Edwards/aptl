@@ -118,10 +118,10 @@ def test_manifest_declares_only_mechanisms_backed_by_readback():
     """SEM-218 I4: no mechanism is advertised before its readback exists."""
 
     declared = {c.mechanism.mechanism for c in aptl_artifact_mechanisms()}
-    assert declared == {"exact-artifact"}
-    # These remain unimplemented; advertising them would be the exact
-    # optimistic capability declaration I4 forbids.
-    assert "materialization-specification" not in declared
+    assert declared == {"exact-artifact", "materialization-specification"}
+    # dynamic-composition remains unimplemented: generic runtime composition has
+    # no per-dimension readback yet, so advertising it would be the optimistic
+    # capability declaration I4 forbids.
     assert "dynamic-composition" not in declared
 
 
@@ -262,4 +262,7 @@ def test_manifest_still_serializes_under_the_published_v2_contract():
     payload = json.loads(model.model_dump_json())
     declarations = payload["realization_support"]
     mechanisms = [m for d in declarations for m in d.get("artifact_mechanisms", [])]
-    assert [m["mechanism"]["mechanism"] for m in mechanisms] == ["exact-artifact"]
+    assert sorted(m["mechanism"]["mechanism"] for m in mechanisms) == [
+        "exact-artifact",
+        "materialization-specification",
+    ]

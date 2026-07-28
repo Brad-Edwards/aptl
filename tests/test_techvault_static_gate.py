@@ -103,21 +103,6 @@ def test_operational_gate_passes():
     ]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata still have no "
-        "declared realization in the SDL. Upstream Brad-Edwards/aces#845 (no "
-        "compiled placement for domain-controller bootstrap) is RESOLVED as of "
-        "RAES 1.1.0, which ships the domain-controller-placement resource type, "
-        "so ad is now authorable and blocks only on that authoring. The remaining "
-        "upstream expressivity gaps are #847 (RuntimePackage has no documented way "
-        "to declare a third-party package repository - needed for the Wazuh agent) "
-        "and #849 (no SDL concept for a node sharing another node's network "
-        "namespace). Remove this marker once all four are authored; strict=True "
-        "fails the build the moment that happens without the marker being removed."
-    ),
-    strict=True,
-)
 def test_operational_scenario_passes_the_realization_declaration_gate():
     """Every OS-bearing node in the shipped SDL resolves through a declared
     realization (ADR-048 P7): generic-materializer runtime: or a trust-

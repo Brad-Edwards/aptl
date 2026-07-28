@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -146,6 +147,7 @@ def _authored_artifact_image(
     resource: PlannedResource,
     source: _NodeSource,
     service_name: str,
+    project_dir: Path,
 ) -> DeploymentImageRealization | None:
     """Resolve the image from the node's authored exact artifact requirement.
 
@@ -163,10 +165,18 @@ def _authored_artifact_image(
     requirement = source.artifact_requirement
     if isinstance(requirement, Mapping):
         exact = requirement.get("exact_artifact")
+        specifications = requirement.get("materialization_specifications") or []
     else:
         exact = getattr(requirement, "exact_artifact", None)
+        specifications = getattr(requirement, "materialization_specifications", []) or []
     if exact is None:
-        return None
+        return _materialized_component_image(
+            resource=resource,
+            source=source,
+            service_name=service_name,
+            project_dir=project_dir,
+            specifications=specifications,
+        )
     if isinstance(exact, Mapping):
         artifact_id = _source_string(exact.get("artifact_id")) or ""
         digest = _source_string(exact.get("digest")) or ""
@@ -187,6 +197,91 @@ def _authored_artifact_image(
     )
 
 
+def _materialized_component_image(
+    *,
+    resource: PlannedResource,
+    source: _NodeSource,
+    service_name: str,
+    project_dir: Path,
+    specifications: object,
+) -> DeploymentImageRealization | None:
+    """Build one component image from an authored materialization specification.
+
+    The specification id names a contained build context, and the specification
+    digest must equal the sha256 of that context's Dockerfile. A drifted context
+    is not the artifact the author authorised, so it resolves to nothing and
+    admission refuses the node rather than building something else.
+
+    Selection is deterministic by specification id, so the same authored contract
+    always builds the same context.
+    """
+
+    if not isinstance(specifications, (list, tuple)) or not specifications:
+        return None
+    chosen: tuple[str, str] | None = None
+    for specification in sorted(
+        specifications, key=lambda item: _specification_id(item)
+    ):
+        identifier = _specification_id(specification)
+        digest = _specification_digest(specification)
+        dockerfile = _contained_context_dockerfile(project_dir, identifier)
+        if dockerfile is None or not digest:
+            continue
+        actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+        if actual == digest:
+            chosen = (identifier, digest)
+            break
+    if chosen is None:
+        return None
+    identifier, digest = chosen
+    if not _safe_image_name(source.name):
+        return None
+    return DeploymentImageRealization(
+        address=resource.address,
+        service_name=service_name,
+        source_name=source.name,
+        source_version=source.version,
+        image_ref=f"{source.name}:local",
+        mode="build",
+        policy_rule="authored-materialization-specification",
+        dockerfile_path=f"containers/{identifier}/Dockerfile",
+        context_path=".",
+        provenance=_provenance_counts(source.build),
+    )
+
+
+def _specification_id(specification: object) -> str:
+    """Return a specification's id whether it is a mapping or a model."""
+
+    if isinstance(specification, Mapping):
+        return _source_string(specification.get("specification_id")) or ""
+    return getattr(specification, "specification_id", "") or ""
+
+
+def _specification_digest(specification: object) -> str:
+    """Return a specification's digest whether it is a mapping or a model."""
+
+    if isinstance(specification, Mapping):
+        return _source_string(specification.get("digest")) or ""
+    return getattr(specification, "digest", "") or ""
+
+
+def _contained_context_dockerfile(project_dir: Path, identifier: str) -> Path | None:
+    """Return the contained Dockerfile for one specification id, or nothing."""
+
+    if not identifier or "/" in identifier or "\\" in identifier:
+        return None
+    if identifier in {".", ".."}:
+        return None
+    root = (project_dir / "containers").resolve()
+    candidate = (root / identifier / "Dockerfile").resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
 def _resolve_trusted_image(
     *,
     resource: PlannedResource,
@@ -205,7 +300,10 @@ def _resolve_trusted_image(
         # product allowlist would substitute an APTL-chosen artifact for the one
         # the author declared, which SEM-218 I1/I2 forbid.
         return _authored_artifact_image(
-            resource=resource, source=source, service_name=service_name
+            resource=resource,
+            source=source,
+            service_name=service_name,
+            project_dir=project_dir,
         )
     image: DeploymentImageRealization | None = None
     if isinstance(source.build, Mapping):

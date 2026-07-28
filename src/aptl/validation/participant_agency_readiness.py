@@ -38,6 +38,7 @@ from aptl.validation.participant_readiness_provider import (
 from aptl.workbench.process import AgentExecutionError
 
 if TYPE_CHECKING:
+    from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.runstore import RunStorageBackend
 

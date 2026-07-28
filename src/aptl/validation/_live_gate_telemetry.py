@@ -51,6 +51,7 @@ def telemetry_diagnostics(
         options.event_window_seconds,
         indexer_url=f"https://localhost:{indexer_port}",
         indexer_auth=(env.indexer_username, env.indexer_password),
+        regenerate=lambda: _generate_event(backend, targets),
     )
     end_iso = _now_iso()
 

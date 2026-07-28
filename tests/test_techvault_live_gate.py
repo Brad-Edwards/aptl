@@ -1324,3 +1324,62 @@ def test_cli_validate_live_yes_runs_destructive(mocker):
     assert result.exit_code == 0
     run.assert_called_once()
     assert run.call_args.kwargs["options"].skip_clean_boot is False
+
+
+def test_trigger_is_redriven_on_every_poll(monkeypatch):
+    """Host monitoring becomes ready after boot, so a one-shot trigger is lost.
+
+    A trigger fired once before the SIEM path is live produces events that never
+    arrive, and polling afterwards cannot recover them — the observed failure was
+    a window with Suricata evidence, Wazuh alerts flowing, and zero correlated
+    alerts. Re-driving asks whether the path works within the window.
+    """
+    from aptl.validation import _live_gate_probes as probes
+
+    attempts = {"n": 0}
+    monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
+
+    def _alerts(*_a, **_k):
+        # Correlates only once the trigger has been re-driven, mimicking a path
+        # that becomes ready partway through the window.
+        if attempts["n"] >= 2:
+            return [{"rule": {"id": "5710"}, "data": {"dstuser": probes._WAZUH_TRIGGER_IDENTITY}}]
+        return [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}]
+
+    monkeypatch.setattr(probes, "collect_wazuh_alerts", _alerts)
+
+    _eve, alerts = probes._collect_until_evidence(
+        object(),
+        "2026-01-01T00:00:00+00:00",
+        60,
+        indexer_url="https://localhost:9200",
+        indexer_auth=("u", "p"),
+        sleep_fn=lambda _s: None,
+        regenerate=lambda: attempts.__setitem__("n", attempts["n"] + 1),
+    )
+
+    assert attempts["n"] >= 2, "trigger was not re-driven while waiting"
+    assert any(probes._is_correlated_wazuh_alert(a) for a in alerts)
+
+
+def test_without_redrive_a_lost_trigger_is_never_recovered(monkeypatch):
+    """The pre-fix behaviour: one-shot triggering cannot recover readiness lag."""
+    from aptl.validation import _live_gate_probes as probes
+
+    monkeypatch.setattr(probes, "collect_suricata_eve", lambda *a, **k: [])
+    monkeypatch.setattr(
+        probes,
+        "collect_wazuh_alerts",
+        lambda *a, **k: [{"rule": {"id": "1002"}, "data": {"srcip": "10.0.0.1"}}],
+    )
+
+    _eve, alerts = probes._collect_until_evidence(
+        object(),
+        "2026-01-01T00:00:00+00:00",
+        30,
+        indexer_url="https://localhost:9200",
+        indexer_auth=("u", "p"),
+        sleep_fn=lambda _s: None,
+    )
+
+    assert not any(probes._is_correlated_wazuh_alert(a) for a in alerts)

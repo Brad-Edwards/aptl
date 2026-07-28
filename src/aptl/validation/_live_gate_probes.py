@@ -230,6 +230,7 @@ def _collect_until_evidence(
     indexer_url: str,
     indexer_auth: tuple[str, str],
     sleep_fn: Callable[[float], None] = time.sleep,
+    regenerate: Callable[[], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Poll for a post-trigger Wazuh alert until the window elapses.
 
@@ -238,12 +239,21 @@ def _collect_until_evidence(
     returned summary, but only a Wazuh alert ends the poll: a sensor-only event
     does not prove the realized Wazuh ingestion path. ``sleep_fn`` is injectable
     so tests can skip the real poll wait without patching ``time.sleep``.
+
+    ``regenerate`` re-drives the trigger on each poll. Host monitoring on a
+    freshly booted range becomes ready some seconds after the containers report
+    healthy, and a trigger fired once before that happens is simply lost: the
+    events never reach the SIEM and no amount of later polling can recover them.
+    Re-driving makes the check ask whether the path works within the window
+    rather than whether it happened to be ready at one instant.
     """
     steps = max(1, window_seconds // _POLL_STEP_SECONDS)
     eve: list[dict[str, Any]] = []
     alerts: list[dict[str, Any]] = []
     for _ in range(steps):
         sleep_fn(_POLL_STEP_SECONDS)
+        if regenerate is not None:
+            regenerate()
         now = _now_iso()
         eve = collect_suricata_eve(start_iso, now, backend)
         alerts = collect_wazuh_alerts(

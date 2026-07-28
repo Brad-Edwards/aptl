@@ -17,6 +17,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from aptl.utils.placeholders import contains_placeholder
+from aptl.core.config import validate_installed_participant_model_id
+from aptl.workbench.decision_schema import admit_decision_response_schema
 from aptl.workbench.process import (
     AgentExecutionError,
     BoundedProcessRunner,
@@ -45,8 +47,6 @@ _MAX_CONFIG_BYTES = 1_000_000
 _POSIX_OWNERSHIP_REQUIRED = (
     "installed agent execution requires POSIX ownership semantics"
 )
-
-
 InventoryProbe = Callable[[str, str, list[str], dict[str, str]], tuple[str, ...]]
 
 
@@ -123,6 +123,12 @@ class ClaudeCodeManagedAgentAdapter:
     @staticmethod
     def launch(launch: AgentLaunch, credentials: Mapping[str, str]) -> object:
         """Admit a generated strict config and create a minimal secret lease."""
+        if isinstance(launch, DecisionAgentLaunch) and launch.provider != "claude":
+            raise AgentExecutionError("agent launch provider does not match adapter")
+        try:
+            validate_installed_participant_model_id("claude", launch.model)
+        except ValueError as exc:
+            raise AgentExecutionError("agent model selection is invalid") from exc
         if isinstance(launch, DecisionAgentLaunch):
             servers: dict[str, dict[str, object]] = {}
             config_sha256 = ""
@@ -166,18 +172,28 @@ class ClaudeCodeManagedAgentAdapter:
         active.ready = True
         return inventory
 
-    def respond(self, handle: object, message: str) -> str:
+    def respond(
+        self,
+        handle: object,
+        message: str,
+        *,
+        response_schema: Mapping[str, object] | None = None,
+    ) -> str:
         """Run one bounded non-persistent agent request with prompt on stdin."""
         active = _require_handle(handle)
         if active.closed or not active.ready:
             raise AgentExecutionError("agent profile is not ready")
         _assert_config_unchanged(active)
+        schema_json = admit_decision_response_schema(
+            active.launch,
+            response_schema,
+        )
         if not message or len(message) > self._max_prompt_chars:
             raise AgentExecutionError(
                 "participant message exceeds the configured limit"
             )
         result = self._runner.run(
-            self._argv(self._executable, active),
+            self._argv(self._executable, active, schema_json),
             env=dict(active.environment),
             cwd=self._work_dir,
             stdin=message.encode(),
@@ -198,7 +214,11 @@ class ClaudeCodeManagedAgentAdapter:
         active.closed = True
 
     @staticmethod
-    def _argv(executable: Path, handle: _ClaudeHandle) -> tuple[str, ...]:
+    def _argv(
+        executable: Path,
+        handle: _ClaudeHandle,
+        response_schema_json: str | None,
+    ) -> tuple[str, ...]:
         """Build the strict Claude Code invocation for an admitted profile."""
 
         base = (
@@ -218,7 +238,15 @@ class ClaudeCodeManagedAgentAdapter:
             "",
         )
         if isinstance(handle.launch, DecisionAgentLaunch):
-            return base
+            if response_schema_json is None:
+                raise AgentExecutionError("agent response schema is required")
+            return (
+                *base,
+                "--model",
+                handle.launch.model,
+                "--json-schema",
+                response_schema_json,
+            )
         allowed = ",".join(
             f"mcp__{server_id}__{tool}"
             for server_id, tools in handle.inventory.items()
@@ -226,6 +254,8 @@ class ClaudeCodeManagedAgentAdapter:
         )
         return (
             *base,
+            "--model",
+            handle.launch.model,
             "--allowedTools",
             allowed,
             "--mcp-config",

@@ -37,6 +37,7 @@ class ParticipantReadinessReport:
     passed: bool
     run_id: str
     provider: str
+    model: str | None
     behavior: str
     participant_address: str
     selected_actions: tuple[str, ...]
@@ -52,10 +53,11 @@ class ParticipantReadinessReport:
         """Serialize the readiness outcome without provider secrets."""
 
         return {
-            "schema": "aptl.participant-agency-readiness/v1",
+            "schema": "aptl.participant-agency-readiness/v2",
             "passed": self.passed,
             "run_id": self.run_id,
             "provider": self.provider,
+            "model": self.model,
             "behavior": self.behavior,
             "participant_address": self.participant_address,
             "selected_actions": list(self.selected_actions),
@@ -81,6 +83,7 @@ class ParticipantReadinessReport:
             f"participant agency readiness: {status}",
             f"run id: {self.run_id}",
             f"provider: {self.provider}",
+            f"model: {self.model or 'not applicable'}",
             f"behavior: {self.behavior}",
             f"turns: {self.completed_turns}",
             f"selected actions: {actions}",

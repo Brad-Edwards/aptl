@@ -147,6 +147,8 @@ def run_participant_action_proof(
             participant_address=participant_address,
             implementation_name="aptl-curated-live-proof",
             implementation_version="1.0.0",
+            provider_name="deterministic",
+            model=None,
             run_id="curated-live-proof",
         )
         request = ParticipantActionAdmissionRequest(

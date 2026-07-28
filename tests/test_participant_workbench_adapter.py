@@ -26,6 +26,21 @@ from aptl.workbench.profiles import ProfileId, profile_for, render_profile_confi
 from aptl.workbench.runtime import DecisionAgentLaunch, ProfileLaunch
 
 
+def _selection_schema(maximum: int = 0) -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": {
+            "candidate": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": maximum,
+            }
+        },
+        "required": ["candidate"],
+        "additionalProperties": False,
+    }
+
+
 def test_ephemeral_broker_returns_only_the_selected_profile_lease() -> None:
     broker = EphemeralCredentialBroker(
         {
@@ -172,6 +187,7 @@ def test_claude_adapter_uses_fixed_argv_minimal_env_and_stdin(
         run_id="a" * 32,
         client_config_path=config_path,
         policy_version="participant-workbench-profile/v1",
+        model="claude-sonnet-4-5-20250929",
     )
     handle = adapter.launch(
         launch,
@@ -197,6 +213,7 @@ def test_claude_adapter_uses_fixed_argv_minimal_env_and_stdin(
     assert _option_value(invocation.argv, "--max-budget-usd") == "1.00"
     assert _option_value(invocation.argv, "--tools") == ""
     assert _option_value(invocation.argv, "--permission-mode") == "dontAsk"
+    assert _option_value(invocation.argv, "--model") == ("claude-sonnet-4-5-20250929")
     assert _option_value(invocation.argv, "--mcp-config") == str(config_path)
     assert _option_value(invocation.argv, "--allowedTools") == (
         "mcp__aptl-red__kali_info"
@@ -223,6 +240,7 @@ def test_claude_adapter_rejects_oversized_prompts_and_failed_results(
             run_id="a" * 32,
             client_config_path=_single_server_config(tmp_path),
             policy_version="participant-workbench-profile/v1",
+            model="claude-sonnet-4-5-20250929",
         ),
         {"ANTHROPIC_API_KEY": "model-secret"},
     )
@@ -258,6 +276,7 @@ def test_claude_adapter_rejects_config_tampering_after_inventory(
             run_id="a" * 32,
             client_config_path=config_path,
             policy_version="participant-workbench-profile/v1",
+            model="claude-sonnet-4-5-20250929",
         ),
         {"ANTHROPIC_API_KEY": "model-secret"},
     )
@@ -288,7 +307,11 @@ def test_claude_decision_launch_has_no_mcp_or_action_tools(
         runner=runner,
     )
     handle = adapter.launch(
-        DecisionAgentLaunch(provider="claude", run_id="a" * 32),
+        DecisionAgentLaunch(
+            provider="claude",
+            run_id="a" * 32,
+            model="claude-sonnet-4-5-20250929",
+        ),
         {
             "ANTHROPIC_API_KEY": "model-secret",
             "OPENAI_API_KEY": "must-not-pass",
@@ -296,11 +319,34 @@ def test_claude_decision_launch_has_no_mcp_or_action_tools(
     )
 
     assert adapter.list_tools(handle) == {}
-    assert adapter.respond(handle, "choose") == '{"surface_id":"selected"}'
+    with pytest.raises(AgentExecutionError, match="response schema"):
+        adapter.respond(handle, "choose")
+    assert runner.invocations == []
+    assert (
+        adapter.respond(
+            handle,
+            "choose",
+            response_schema=_selection_schema(4),
+        )
+        == '{"surface_id":"selected"}'
+    )
     invocation = runner.invocations[0]
     assert invocation.env["ANTHROPIC_API_KEY"] == "model-secret"
     assert "OPENAI_API_KEY" not in invocation.env
     assert _option_value(invocation.argv, "--tools") == ""
+    assert _option_value(invocation.argv, "--model") == ("claude-sonnet-4-5-20250929")
+    assert json.loads(_option_value(invocation.argv, "--json-schema")) == {
+        "type": "object",
+        "properties": {
+            "candidate": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4,
+            }
+        },
+        "required": ["candidate"],
+        "additionalProperties": False,
+    }
     assert "--mcp-config" not in invocation.argv
     assert "--allowedTools" not in invocation.argv
 
@@ -326,7 +372,11 @@ def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
         runner=runner,
     )
     handle = adapter.launch(
-        DecisionAgentLaunch(provider="codex", run_id="a" * 32),
+        DecisionAgentLaunch(
+            provider="codex",
+            run_id="a" * 32,
+            model="gpt-5-nano-2025-08-07",
+        ),
         {
             "CODEX_API_KEY": "model-secret",
             "ANTHROPIC_API_KEY": "must-not-pass",
@@ -335,13 +385,36 @@ def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
     )
 
     assert adapter.list_tools(handle) == {}
-    assert adapter.respond(handle, "choose") == '{"surface_id":"selected"}'
+    assert (
+        adapter.respond(
+            handle,
+            "choose",
+            response_schema=_selection_schema(4),
+        )
+        == '{"surface_id":"selected"}'
+    )
     invocation = runner.invocations[0]
     assert invocation.env["CODEX_API_KEY"] == "model-secret"
     assert "ANTHROPIC_API_KEY" not in invocation.env
     assert "OPENAI_API_KEY" not in invocation.env
     assert "CODEX_HOME" in invocation.env
     assert invocation.argv[-1] == "-"
+    assert _option_value(invocation.argv, "--model") == "gpt-5-nano-2025-08-07"
+    output_schema = Path(_option_value(invocation.argv, "--output-schema"))
+    assert output_schema.parent == tmp_path / "work"
+    assert json.loads(output_schema.read_text()) == {
+        "type": "object",
+        "properties": {
+            "candidate": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4,
+            }
+        },
+        "required": ["candidate"],
+        "additionalProperties": False,
+    }
+    assert output_schema.stat().st_mode & 0o777 == 0o600
     assert _option_value(invocation.argv, "--sandbox") == "read-only"
     assert "--ignore-user-config" in invocation.argv
     assert "--ignore-rules" in invocation.argv
@@ -361,6 +434,89 @@ def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
         "multi_agent",
         "image_generation",
     } <= disabled
+
+    output_schema.write_text("{}\n")
+    response_schema = _selection_schema(4)
+    with pytest.raises(AgentExecutionError, match="sealed"):
+        adapter.respond(
+            handle,
+            "choose",
+            response_schema=response_schema,
+        )
+    assert len(runner.invocations) == 1
+
+
+def test_decision_adapters_reject_cross_provider_launches(tmp_path: Path) -> None:
+    claude = ClaudeCodeManagedAgentAdapter(
+        claude_executable=_executable(tmp_path / "claude"),
+        work_dir=tmp_path / "claude-work",
+    )
+    codex = CodexManagedAgentAdapter(
+        codex_executable=_executable(tmp_path / "codex"),
+        work_dir=tmp_path / "codex-work",
+    )
+    codex_launch = DecisionAgentLaunch(
+        provider="codex",
+        run_id="a" * 32,
+        model="gpt-5-nano-2025-08-07",
+    )
+    claude_launch = DecisionAgentLaunch(
+        provider="claude",
+        run_id="a" * 32,
+        model="claude-sonnet-4-5-20250929",
+    )
+
+    with pytest.raises(AgentExecutionError, match="provider"):
+        claude.launch(
+            codex_launch,
+            {"ANTHROPIC_API_KEY": "model-secret"},
+        )
+    with pytest.raises(AgentExecutionError, match="provider"):
+        codex.launch(
+            claude_launch,
+            {"CODEX_API_KEY": "model-secret"},
+        )
+
+
+def test_codex_model_access_failure_is_classified_without_raw_detail(
+    tmp_path: Path,
+) -> None:
+    runner = _RecordingRunner(
+        ProcessResult(
+            returncode=1,
+            stdout=(
+                b'{"type":"error","message":"request failed"}\n'
+                b'{"type":"item.completed","item":{"type":"error",'
+                b'"message":"Project secret-project does not have access to '
+                b'model gpt-5-nano-2025-08-07"}}\n'
+            ),
+            stderr=b"request secret-request-id failed",
+        )
+    )
+    adapter = CodexManagedAgentAdapter(
+        codex_executable=_executable(tmp_path / "codex"),
+        work_dir=tmp_path / "work",
+        runner=runner,
+    )
+    handle = adapter.launch(
+        DecisionAgentLaunch(
+            provider="codex",
+            run_id="a" * 32,
+            model="gpt-5-nano-2025-08-07",
+        ),
+        {"CODEX_API_KEY": "model-secret"},
+    )
+    adapter.list_tools(handle)
+    response_schema = _selection_schema()
+
+    with pytest.raises(AgentExecutionError, match="model is unavailable") as error:
+        adapter.respond(
+            handle,
+            "choose",
+            response_schema=response_schema,
+        )
+    assert "secret-project" not in str(error.value)
+    assert "secret-request-id" not in str(error.value)
 
 
 def test_agent_executable_accepts_group_write_only_for_a_private_group(
@@ -439,6 +595,7 @@ def test_appliance_factory_wires_the_production_workbench_without_operator_route
             state_dir=tmp_path / "state",
             claude_executable=_executable(tmp_path / "claude"),
             node_executable=Path(sys.executable),
+            model="claude-sonnet-4-5-20250929",
         ),
         secret_source={"ANTHROPIC_API_KEY": "model-secret"},
         authorizer=lambda request: request.headers.get("X-Seat") == "seat",

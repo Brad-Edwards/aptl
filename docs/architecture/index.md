@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #862 Explicit Participant Model Selection](issue-862-explicit-participant-model-selection-preflight.md)
 - [Issue #859 Idempotent Stuttering In Bounded Participant Realizations](issue-859-idempotent-stuttering-preflight.md)
 - [Issue #858 Bounded Participant Choice Transport](issue-858-bounded-participant-choice-transport-preflight.md)
 - [Issue #852 Dev-To-Main Promotion](issue-852-devmain-promotion-preflight.md)

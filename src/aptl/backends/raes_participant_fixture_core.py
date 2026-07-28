@@ -283,9 +283,11 @@ def _http_status(
         "0",
         "--proto",
         "=http",
-        "-X",
-        method,
     ]
+    if method == "HEAD":
+        command.append("--head")
+    else:
+        command.extend(("-X", method))
     command.append(f"{_LAB_HTTP_ORIGIN}{endpoint}")
     return _checked_exec(
         context.backend,
@@ -315,10 +317,12 @@ def _http_response_metadata(
         "0",
         "--proto",
         "=http",
-        "-X",
-        method,
-        f"{_LAB_HTTP_ORIGIN}{endpoint}",
     ]
+    if method == "HEAD":
+        command.append("--head")
+    else:
+        command.extend(("-X", method))
+    command.append(f"{_LAB_HTTP_ORIGIN}{endpoint}")
     observed = _checked_exec(
         context.backend,
         context.container(source_node),

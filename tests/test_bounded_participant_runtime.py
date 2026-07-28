@@ -273,8 +273,32 @@ def _apparatus(participant_address: str):
         participant_address=participant_address,
         implementation_name="aptl-readiness-agent",
         implementation_version="1.0.0",
+        provider_name="deterministic",
+        model=None,
         run_id="readiness-run",
     )
+
+
+def test_installed_model_is_bound_as_raes_implementation_configuration() -> None:
+    apparatus = build_participant_apparatus(
+        participant_address="participant.behavior.security-assessor-agent",
+        implementation_name="aptl-installed-codex",
+        implementation_version="0.145.0",
+        provider_name="codex",
+        model="gpt-5-nano-2025-08-07",
+        run_id="explicit-model-run",
+    )
+
+    assert apparatus.provider == "codex"
+    assert apparatus.model == "gpt-5-nano-2025-08-07"
+    assert apparatus.selection.configuration_ref is not None
+    assert apparatus.selection.configuration_digest is not None
+    assert apparatus.selection.configuration_digest.startswith("sha256:")
+    assert apparatus.manifest.configuration_registry is not None
+    declaration = apparatus.manifest.configuration_registry.targets["model.identifier"]
+    assert declaration.value_type.value == "string"
+    assert declaration.allowed_value_kinds == ["literal"]
+    assert declaration.default is None
 
 
 def _run_selected_action(
@@ -310,11 +334,21 @@ def _run_selected_action(
 def _solicitation_for_behavior(
     tmp_path: Path,
     behavior_address: str,
+    *,
+    satisfy_for_action: str | None = None,
 ) -> ParticipantDecisionSolicitation:
     control, model, _, _ = _runtime(tmp_path)
     participant = _participant_for(model, behavior_address)
     episode_id = f"managed-{behavior_address.rsplit('.', 1)[-1]}"
     control.initialize_participant_episode(participant, episode_id=episode_id)
+    if satisfy_for_action is not None:
+        _satisfy_candidate_prerequisites(
+            control,
+            model,
+            behavior_address=behavior_address,
+            participant_address=participant,
+            action_address=f"participant.action-contract.{satisfy_for_action}",
+        )
     turn = project_participant_turn(
         runtime_model=model,
         runtime_snapshot=control.snapshot,
@@ -337,9 +371,17 @@ class _ManagedResponseAdapter:
     def __init__(self, response: str) -> None:
         self.response = response
         self.messages: list[str] = []
+        self.response_schemas: list[Mapping[str, object] | None] = []
 
-    def respond(self, _handle: object, message: str) -> str:
+    def respond(
+        self,
+        _handle: object,
+        message: str,
+        *,
+        response_schema: Mapping[str, object] | None = None,
+    ) -> str:
         self.messages.append(message)
+        self.response_schemas.append(response_schema)
         return self.response
 
     def close(self, _handle: object) -> None:
@@ -353,6 +395,8 @@ def _managed_provider(
     provider = ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=object(),
+        provider_name="codex",
+        model="gpt-5-nano-2025-08-07",
         implementation_name="managed-test-provider",
         implementation_version="1.0.0",
     )
@@ -365,6 +409,7 @@ def test_managed_provider_compacts_large_surface_and_maps_exact_candidate(
     solicitation = _solicitation_for_behavior(
         tmp_path,
         "participant.behavior-specification.triage-authentication-event",
+        satisfy_for_action="classify-alert",
     )
     assert len(solicitation.candidate_selections) == 201
     provider, adapter = _managed_provider('{"candidate":200}')
@@ -383,16 +428,26 @@ def test_managed_provider_compacts_large_surface_and_maps_exact_candidate(
         "arguments",
     ]
     assert len(prompt["candidates"]) == len(solicitation.candidate_selections)
-    assert {
-        prompt["actions"][candidate[1]]
-        for candidate in prompt["candidates"]
-    } == {
-        item["action_contract_address"]
-        for item in solicitation.candidate_selections
+    assert {prompt["actions"][candidate[1]] for candidate in prompt["candidates"]} == {
+        item["action_contract_address"] for item in solicitation.candidate_selections
     }
-    assert {
-        candidate[0] for candidate in prompt["candidates"]
-    } == set(range(len(solicitation.candidate_selections)))
+    assert {candidate[0] for candidate in prompt["candidates"]} == set(
+        range(len(solicitation.candidate_selections))
+    )
+    assert adapter.response_schemas == [
+        {
+            "type": "object",
+            "properties": {
+                "candidate": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 200,
+                }
+            },
+            "required": ["candidate"],
+            "additionalProperties": False,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
@@ -524,8 +579,8 @@ def test_all_nine_behaviors_project_the_exact_compiled_action_sets(
 
         assert turn.surface.surface_state == "delivered"
         assert {
-            candidate.action_contract_address.rsplit(".", 1)[-1]
-            for candidate in turn.candidates
+            entry.action_contract_address.rsplit(".", 1)[-1]
+            for entry in turn.surface.participant_view.action_entries
         } == set(expected_names)
         participant_payload = turn.surface.participant_view.model_dump_json()
         rendered_payload = json.dumps(turn.rendered_context)
@@ -539,6 +594,102 @@ def test_all_nine_behaviors_project_the_exact_compiled_action_sets(
         assert "BPA-HIDDEN-CANARY" not in rendered_payload
 
 
+def test_projected_candidates_require_successful_prior_observations(
+    tmp_path: Path,
+) -> None:
+    behavior = "participant.behavior-specification.triage-authentication-event"
+    control, model, _, _ = _runtime(tmp_path)
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(participant, episode_id="eligible-actions")
+
+    def available_actions() -> set[str]:
+        turn = project_participant_turn(
+            runtime_model=model,
+            runtime_snapshot=control.snapshot,
+            behavior_specification_address=behavior,
+            apparatus=_apparatus(participant),
+        )
+        return {
+            candidate.action_contract_address.rsplit(".", 1)[-1]
+            for candidate in turn.candidates
+        }
+
+    assert available_actions() == {"list-assigned-alerts"}
+
+    _run_selected_action(
+        control,
+        model,
+        behavior_address=behavior,
+        participant_address=participant,
+        action_name="list-assigned-alerts",
+    )
+    assert available_actions() == {
+        "list-assigned-alerts",
+        "inspect-assigned-alert",
+    }
+
+    _run_selected_action(
+        control,
+        model,
+        behavior_address=behavior,
+        participant_address=participant,
+        action_name="inspect-assigned-alert",
+    )
+    assert available_actions() == {
+        "list-assigned-alerts",
+        "inspect-assigned-alert",
+        "query-allowed-context",
+        "classify-alert",
+    }
+
+
+def test_projected_candidates_require_a_current_authenticated_session(
+    tmp_path: Path,
+) -> None:
+    behavior = "participant.behavior-specification.complete-normal-session"
+    control, model, _, _ = _runtime(tmp_path)
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(participant, episode_id="session-state")
+
+    def available_actions() -> set[str]:
+        turn = project_participant_turn(
+            runtime_model=model,
+            runtime_snapshot=control.snapshot,
+            behavior_specification_address=behavior,
+            apparatus=_apparatus(participant),
+        )
+        return {
+            candidate.action_contract_address.rsplit(".", 1)[-1]
+            for candidate in turn.candidates
+        }
+
+    assert "sign-out-session" not in available_actions()
+    _run_selected_action(
+        control,
+        model,
+        behavior_address=behavior,
+        participant_address=participant,
+        action_name="authenticate-synthetic-user",
+    )
+    assert "sign-out-session" in available_actions()
+    _run_selected_action(
+        control,
+        model,
+        behavior_address=behavior,
+        participant_address=participant,
+        action_name="sign-out-session",
+    )
+    assert "sign-out-session" not in available_actions()
+    _run_selected_action(
+        control,
+        model,
+        behavior_address=behavior,
+        participant_address=participant,
+        action_name="authenticate-synthetic-user",
+    )
+    assert "sign-out-session" in available_actions()
+
+
 def _projected_candidates_for_action(
     tmp_path: Path,
     behavior_address: str,
@@ -549,6 +700,13 @@ def _projected_candidates_for_action(
     control.initialize_participant_episode(
         participant,
         episode_id=f"variants-{action_name}",
+    )
+    _satisfy_candidate_prerequisites(
+        control,
+        model,
+        behavior_address=behavior_address,
+        participant_address=participant,
+        action_address=f"participant.action-contract.{action_name}",
     )
     turn = project_participant_turn(
         runtime_model=model,
@@ -561,6 +719,46 @@ def _projected_candidates_for_action(
         for candidate in turn.candidates
         if candidate.action_contract_address.endswith(f".{action_name}")
     )
+
+
+def _satisfy_candidate_prerequisites(
+    control: AptlParticipantControlPlane,
+    model: object,
+    *,
+    behavior_address: str,
+    participant_address: str,
+    action_address: str,
+) -> None:
+    """Create the successful episode observations required by one action."""
+
+    for prior_address in raes_participant_realizations.REQUIRED_PRIOR_ACTIONS.get(
+        action_address,
+        (),
+    ):
+        _satisfy_candidate_prerequisites(
+            control,
+            model,
+            behavior_address=behavior_address,
+            participant_address=participant_address,
+            action_address=prior_address,
+        )
+        completed = {
+            event["action_contract_address"]
+            for event in control.snapshot.participant_behavior_history.get(
+                participant_address,
+                [],
+            )
+            if event["event_type"] == "observation_emitted"
+            and event["action_result"]["status"] == "succeeded"
+        }
+        if prior_address not in completed:
+            _run_selected_action(
+                control,
+                model,
+                behavior_address=behavior_address,
+                participant_address=participant_address,
+                action_name=prior_address.rsplit(".", 1)[-1],
+            )
 
 
 def test_decision_surface_enumerates_every_finite_governed_choice(
@@ -690,6 +888,27 @@ def test_each_governed_variant_changes_the_verified_native_semantics(
         assert len(digests) == len(candidates)
 
 
+def test_head_endpoint_probe_uses_curl_head_semantics() -> None:
+    backend = _StatefulBackend()
+    address = "participant.action-contract.probe-permitted-endpoint"
+
+    operation = execute_verified_participant_operation(
+        backend=backend,
+        container_by_node={name: f"aptl-{name}" for name in NODES},
+        action_contract_address=address,
+        arguments={"endpoint": "/", "method": "HEAD"},
+        participant_address="participant.behavior.semantic-probe",
+        episode_id="head-semantics",
+        target_nodes=BPA_ACTION_REALIZATIONS[address].target_nodes,
+    )
+
+    assert operation.success is True
+    curl_calls = [command for _, command in backend.calls if command[0] == "curl"]
+    assert curl_calls
+    assert all("--head" in command for command in curl_calls)
+    assert all("-X" not in command for command in curl_calls)
+
+
 def test_participant_pipeline_accepts_only_declared_idempotent_stutters(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -721,16 +940,14 @@ def test_participant_pipeline_accepts_only_declared_idempotent_stutters(
         store.get_run_path("readiness-run")
         / "evaluator/participant-action-evidence.jsonl"
     )
-    evidence = [
-        json.loads(line) for line in evidence_path.read_text().splitlines()
-    ]
+    evidence = [json.loads(line) for line in evidence_path.read_text().splitlines()]
     assert [record["state_changed"] for record in evidence] == [True, False]
     assert evidence[-1]["allows_idempotent_stutter"] is True
     assert evidence[-1]["status"] == "succeeded"
     assert (
-        control.snapshot.participant_behavior_history[participant][-1][
-            "action_result"
-        ]["status"]
+        control.snapshot.participant_behavior_history[participant][-1]["action_result"][
+            "status"
+        ]
         == "succeeded"
     )
 
@@ -772,9 +989,7 @@ def test_participant_pipeline_accepts_only_declared_idempotent_stutters(
         store.get_run_path("readiness-run")
         / "evaluator/participant-action-evidence.jsonl"
     )
-    evidence = [
-        json.loads(line) for line in evidence_path.read_text().splitlines()
-    ]
+    evidence = [json.loads(line) for line in evidence_path.read_text().splitlines()]
     assert [record["state_changed"] for record in evidence] == [True, False]
     assert evidence[-1]["allows_idempotent_stutter"] is False
     assert evidence[-1]["status"] == "failed"
@@ -884,6 +1099,53 @@ def test_provider_invocation_is_a_raes_operation_and_admission_commits_history(
     )
     assert "pre_state_digest" not in json.dumps(next_turn.observation_history)
     assert "study-evaluator-evidence" not in json.dumps(next_turn.observation_history)
+
+
+def test_installed_provider_control_evidence_records_model_configuration(
+    tmp_path: Path,
+) -> None:
+    control, model, _, store = _runtime(tmp_path)
+    behavior = "participant.behavior-specification.complete-normal-session"
+    participant = _participant_for(model, behavior)
+    control.initialize_participant_episode(
+        participant,
+        episode_id="model-provenance",
+    )
+    provider, _ = _managed_provider('{"candidate":0}')
+    apparatus = build_participant_apparatus(
+        participant_address=participant,
+        implementation_name=provider.implementation_name,
+        implementation_version=provider.implementation_version,
+        provider_name=provider.provider_name,
+        model=provider.model,
+        run_id="readiness-run",
+    )
+
+    run_participant_turn(
+        control,
+        behavior_specification_address=behavior,
+        apparatus=apparatus,
+        provider=provider,
+    )
+
+    record = json.loads(
+        (
+            store.get_run_path("readiness-run")
+            / "evaluator/participant-control-evidence.jsonl"
+        ).read_text()
+    )
+    assert record["schema"] == "aptl.participant-control-evidence/v2"
+    assert record["provider"] == "codex"
+    assert record["model"] == "gpt-5-nano-2025-08-07"
+    assert (
+        record["implementation_configuration_ref"]
+        == apparatus.selection.configuration_ref
+    )
+    assert (
+        record["implementation_configuration_digest"]
+        == apparatus.selection.configuration_digest
+    )
+    assert record["official_capture_started"] is False
 
 
 class _MalformedProvider:
@@ -1342,9 +1604,15 @@ def test_provider_executable_is_admitted_before_version_probe(
         unexpected_run,
     )
 
+    config = AptlConfig(
+        experiment={
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"}
+        }
+    )
     with pytest.raises(ValueError, match="untrusted provider executable"):
         participant_agency_readiness._selection_provider(
             "claude",
+            config=config,
             project_dir=tmp_path,
             run_id="rejected-provider",
         )
@@ -1417,10 +1685,70 @@ def test_readiness_runner_is_explicitly_pre_capture(
     assert report.participant_address.startswith("participant.behavior.")
     assert report.episode_terminal_reason
     assert report.official_capture_started is False
+    assert report.model is None
     assert (
         store.get_run_path("pre-capture-readiness")
         / "participant/readiness-report.json"
     ).exists()
+    payload = json.loads(
+        (
+            store.get_run_path("pre-capture-readiness")
+            / "participant/readiness-report.json"
+        ).read_text()
+    )
+    assert payload["schema"] == "aptl.participant-agency-readiness/v2"
+    assert payload["model"] is None
+
+
+def test_missing_installed_model_fails_before_provider_launch_with_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable_discovery_attempted = False
+
+    def unexpected_discovery(_name: str) -> str | None:
+        nonlocal executable_discovery_attempted
+        executable_discovery_attempted = True
+        return None
+
+    monkeypatch.setattr(
+        participant_readiness_provider.shutil,
+        "which",
+        unexpected_discovery,
+    )
+    store = LocalRunStore(tmp_path / "runs")
+
+    report = validate_participant_agency_readiness(
+        ParticipantReadinessRequest(
+            project_dir=PROJECT_ROOT,
+            config=AptlConfig(lab={"name": "test"}),
+            run_store=store,
+            provider_name="codex",
+            behavior_name="green-normal-session",
+            turns=1,
+            run_id="missing-installed-model",
+            backend=_StatefulBackend(),
+        )
+    )
+
+    assert report.passed is False
+    assert report.provider == "codex"
+    assert report.model is None
+    assert report.completed_turns == 0
+    assert report.diagnostics == (
+        "participant decision provider is unavailable: "
+        "installed participant model is not configured",
+    )
+    assert executable_discovery_attempted is False
+    payload = json.loads(
+        (
+            store.get_run_path("missing-installed-model")
+            / "participant/readiness-report.json"
+        ).read_text()
+    )
+    assert payload["schema"] == "aptl.participant-agency-readiness/v2"
+    assert payload["provider"] == "codex"
+    assert payload["model"] is None
 
 
 def test_positive_readiness_rejects_a_failed_native_terminal_outcome(
@@ -1486,7 +1814,16 @@ def test_full_qualification_covers_all_actions_and_boundary_challenges(
         check.check_id for check in report.checks if check.check_id.startswith("BC-")
     } == {f"BC-{index:02d}" for index in range(1, 11)}
     assert report.official_capture_started is False
+    assert report.installed_model is None
     assert (
         store.get_run_path("full-pre-capture-qualification")
         / "participant/readiness-suite-report.json"
     ).exists()
+    payload = json.loads(
+        (
+            store.get_run_path("full-pre-capture-qualification")
+            / "participant/readiness-suite-report.json"
+        ).read_text()
+    )
+    assert payload["schema"] == "aptl.participant-agency-qualification/v2"
+    assert payload["installed_model"] is None

@@ -235,6 +235,7 @@ def test_profile_switch_closes_the_previous_runtime_and_records_the_active_trace
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     red = runtime.start(ProfileId.RED)
@@ -270,6 +271,7 @@ def test_profile_runtime_fails_closed_without_an_active_scenario(
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     with pytest.raises(WorkbenchStateError, match="active scenario"):
@@ -292,6 +294,7 @@ def test_runtime_creates_its_managed_config_parent_on_fresh_state(
         generated_config_dir=generated,
         credential_broker=_FakeCredentials(),
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     launch = runtime.start(ProfileId.RED)
@@ -316,6 +319,7 @@ def test_failed_agent_start_revokes_credentials_and_removes_generated_config(
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     with pytest.raises(RuntimeError, match="agent launch failed"):
@@ -342,6 +346,7 @@ def test_runtime_rejects_a_profile_with_an_unexpected_mcp_tool_inventory(
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     with pytest.raises(WorkbenchStateError, match="MCP tool inventory"):
@@ -369,6 +374,7 @@ def test_runtime_keeps_a_rejected_agent_until_failed_cleanup_is_retried(
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
 
     with pytest.raises(WorkbenchStateError, match="cleanup remains incomplete"):
@@ -410,6 +416,7 @@ def test_runtime_validates_a_switch_target_before_closing_the_active_profile(
         generated_config_dir=tmp_path / "generated",
         credential_broker=credentials,
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
     red = runtime.start(ProfileId.RED)
 
@@ -438,6 +445,7 @@ def test_profile_switch_waits_for_an_active_agent_turn(tmp_path: Path) -> None:
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
     runtime.start(ProfileId.RED)
     turn = threading.Thread(target=runtime.respond, args=("inspect",))
@@ -480,6 +488,7 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         generated_config_dir=tmp_path / "generated",
         credential_broker=_FakeCredentials(),
         node_executable=Path(sys.executable),
+        model="claude-sonnet-4-5-20250929",
     )
     app = create_participant_workbench_app(
         runtime,
@@ -496,13 +505,13 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
         == 404
     )
     assert client.post("/workbench/profiles/red").status_code == 401
-    assert client.post("/workbench/messages", json={"message": "help"}).status_code == 401
+    assert (
+        client.post("/workbench/messages", json={"message": "help"}).status_code == 401
+    )
     assert client.delete("/workbench/profile").status_code == 401
     assert client.get("/openapi.json").status_code == 404
 
-    response = client.post(
-        "/workbench/profiles/red", headers=participant_headers
-    )
+    response = client.post("/workbench/profiles/red", headers=participant_headers)
     assert response.status_code == 200
     assert response.json() == {
         "profile": "red",
@@ -567,7 +576,9 @@ def test_browser_workbench_is_a_separate_authenticated_profile_surface(
     closed = client.delete("/workbench/profile", headers=participant_headers)
     assert closed.status_code == 200
     assert closed.json() == {"status": "closed"}
-    assert client.get("/workbench", headers=participant_headers).json()["profile"] is None
+    assert (
+        client.get("/workbench", headers=participant_headers).json()["profile"] is None
+    )
 
 
 class _FakeAdapter:

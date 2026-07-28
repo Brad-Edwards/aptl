@@ -7,6 +7,10 @@ from collections.abc import Mapping
 
 import rfc8785
 from raes_contracts.contracts import (
+    BindingOwnerModel,
+    BindingScalarType,
+    ConfigurationTargetDeclarationModel,
+    ConfigurationTargetRegistryModel,
     ParticipantImplementationManifestModel,
     ParticipantImplementationSelectionModel,
 )
@@ -28,6 +32,8 @@ __all__ = [
 _PARTICIPANT_CONTRACTS = (
     "participant-implementation-manifest-v1",
     "participant-implementation-provenance-v1",
+    "experiment-binding-descriptors-v1",
+    "participant-configuration-result-v1",
     "participant-episode-state-envelope-v1",
     "participant-episode-history-event-stream-v1",
     "participant-behavior-history-event-stream-v1",
@@ -58,6 +64,7 @@ _CONCEPT_BINDINGS = (
         "family": "provenance-and-evidence",
     },
 )
+_MODEL_CONFIGURATION_TARGET = "model.identifier"
 
 
 def build_participant_apparatus(
@@ -65,6 +72,8 @@ def build_participant_apparatus(
     participant_address: str,
     implementation_name: str,
     implementation_version: str,
+    provider_name: str,
+    model: str | None,
     run_id: str,
 ) -> ParticipantApparatus:
     """Build the manifest and exact run selection for one installed agent."""
@@ -81,41 +90,67 @@ def build_participant_apparatus(
         f"participant-exposure-policies.{run_id}."
         f"{participant_address.removeprefix('participant.behavior.')}"
     )
-    manifest = ParticipantImplementationManifestModel.model_validate(
-        {
-            "identity": {
-                "name": implementation_name,
-                "version": implementation_version,
-            },
-            "implementation_kind": "agent",
-            "supported_contract_versions": list(_PARTICIPANT_CONTRACTS),
-            "compatibility": {
-                "participant_runtimes": ["aptl"],
-                "processors": ["raes-reference-processor"],
-                "backends": ["aptl"],
-            },
-            "concept_bindings": list(_CONCEPT_BINDINGS),
-            "constraints": {
-                "max_parallel_episodes": "1",
-                "action_execution": "none; decision source only",
-                "decision_payload": "RAES participant-decision-surface-v2 view",
-            },
-            "capabilities": {
-                "supported_participant_contracts": list(
-                    _PARTICIPANT_SELECTION_CONTRACTS
-                ),
-                "supported_decision_surface_modes": ["autonomous"],
-                # The installed CLI is a decision source only.  It is never
-                # given participant action, shell, browser, filesystem,
-                # network, or MCP affordances.
-                "tool_affordance_expectations": ["x-aptl:no-action-tools"],
-                "exposure_policy_kinds": [
-                    "task-statement",
-                    "observation-stream",
-                ],
-            },
+    manifest_payload: dict[str, object] = {
+        "identity": {
+            "name": implementation_name,
+            "version": implementation_version,
+        },
+        "implementation_kind": "agent",
+        "supported_contract_versions": list(_PARTICIPANT_CONTRACTS),
+        "compatibility": {
+            "participant_runtimes": ["aptl"],
+            "processors": ["raes-reference-processor"],
+            "backends": ["aptl"],
+        },
+        "concept_bindings": list(_CONCEPT_BINDINGS),
+        "constraints": {
+            "max_parallel_episodes": "1",
+            "action_execution": "none; decision source only",
+            "decision_payload": "RAES participant-decision-surface-v2 view",
+        },
+        "capabilities": {
+            "supported_participant_contracts": list(_PARTICIPANT_SELECTION_CONTRACTS),
+            "supported_decision_surface_modes": ["autonomous"],
+            # The installed CLI is a decision source only. It is never
+            # given participant action, shell, browser, filesystem,
+            # network, or MCP affordances.
+            "tool_affordance_expectations": ["x-aptl:no-action-tools"],
+            "exposure_policy_kinds": [
+                "task-statement",
+                "observation-stream",
+            ],
+        },
+    }
+    configuration_ref: str | None = None
+    configuration_digest: str | None = None
+    if model is not None:
+        configuration_payload = {
+            "schema": "aptl.installed-participant-model-configuration/v1",
+            "provider": provider_name,
+            "model": model,
         }
-    )
+        configuration_digest = canonical_mapping_digest(configuration_payload)
+        configuration_ref = (
+            "participant-implementation-configurations."
+            f"{provider_name}.{configuration_digest.removeprefix('sha256:')[:16]}"
+        )
+        manifest_payload["configuration_registry"] = ConfigurationTargetRegistryModel(
+            owner=BindingOwnerModel(
+                contract_id="participant-implementation-manifest/v1",
+                contract_version="1",
+                validator_id="aptl-installed-participant-model",
+                validator_version="1",
+            ),
+            targets={
+                _MODEL_CONFIGURATION_TARGET: ConfigurationTargetDeclarationModel(
+                    target_id=_MODEL_CONFIGURATION_TARGET,
+                    value_type=BindingScalarType.STRING,
+                    allowed_value_kinds=["literal"],
+                    sensitivity="internal",
+                )
+            },
+        ).model_dump(mode="json")
+    manifest = ParticipantImplementationManifestModel.model_validate(manifest_payload)
     policy_digest = canonical_mapping_digest(
         {
             "policy_id": policy_id,
@@ -131,6 +166,8 @@ def build_participant_apparatus(
             "implementation_identity": manifest.identity.model_dump(mode="json"),
             "manifest_ref": manifest_ref,
             "manifest_digest": canonical_contract_digest(manifest),
+            "configuration_ref": configuration_ref,
+            "configuration_digest": configuration_digest,
             "selected_decision_surface_mode": "autonomous",
             "participant_contract_versions": list(_PARTICIPANT_SELECTION_CONTRACTS),
             "exposure_policy": {
@@ -158,6 +195,8 @@ def build_participant_apparatus(
         manifest_ref=manifest_ref,
         manifest=manifest,
         selection=selection,
+        provider=provider_name,
+        model=model,
     )
 
 

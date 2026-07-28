@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from aptl.backends.raes_participant_driver import MAX_PARTICIPANT_DECISION_SECONDS
 from aptl.backends.raes_participant_provider import (
@@ -17,6 +18,9 @@ from aptl.workbench.agent import ClaudeCodeManagedAgentAdapter, _admitted_execut
 from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.credentials import EphemeralCredentialBroker
 from aptl.workbench.runtime import DecisionAgentLaunch
+
+if TYPE_CHECKING:
+    from aptl.core.config import AptlConfig
 
 _PROVIDER_VERSION_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -29,6 +33,7 @@ MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS = 32_768
 def build_selection_provider(
     provider_name: str,
     *,
+    config: AptlConfig,
     project_dir: Path,
     run_id: str,
 ) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
@@ -40,6 +45,7 @@ def build_selection_provider(
         )
 
         return DeterministicSelectionProvider(), _noop
+    model = config.experiment.participant_models.model_for(provider_name)
     discovered_executable = shutil.which(provider_name)
     if discovered_executable is None:
         raise ValueError(
@@ -58,7 +64,11 @@ def build_selection_provider(
     try:
         adapter = _launch_adapter(provider_name, executable, work_dir)
         handle = adapter.launch(
-            DecisionAgentLaunch(provider=provider_name, run_id=run_id),
+            DecisionAgentLaunch(
+                provider=provider_name,
+                run_id=run_id,
+                model=model,
+            ),
             lease,
         )
         inventory = adapter.list_tools(handle)
@@ -74,6 +84,8 @@ def build_selection_provider(
     provider = ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=handle,
+        provider_name=provider_name,
+        model=model,
         implementation_name=f"aptl-installed-{provider_name}",
         implementation_version=version,
     )

@@ -32,6 +32,7 @@ class ProfileLaunch:
     run_id: str
     client_config_path: Path
     policy_version: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class DecisionAgentLaunch:
 
     provider: str
     run_id: str
+    model: str
     policy_version: str = "aptl-participant-decision-provider/v1"
 
 
@@ -49,15 +51,19 @@ AgentLaunch = ProfileLaunch | DecisionAgentLaunch
 class ManagedAgentAdapter(Protocol):
     """Owns installed-agent and MCP process start/stop inside management."""
 
-    def launch(
-        self, launch: AgentLaunch, credentials: Mapping[str, str]
-    ) -> object: ...
+    def launch(self, launch: AgentLaunch, credentials: Mapping[str, str]) -> object: ...
 
     def close(self, handle: object) -> None: ...
 
     def list_tools(self, handle: object) -> Mapping[str, Collection[str]]: ...
 
-    def respond(self, handle: object, message: str) -> str: ...
+    def respond(
+        self,
+        handle: object,
+        message: str,
+        *,
+        response_schema: Mapping[str, object] | None = None,
+    ) -> str: ...
 
 
 class SessionCredentialBroker(Protocol):
@@ -93,6 +99,7 @@ class WorkbenchRuntime:
         payload_root: Path,
         generated_config_dir: Path,
         credential_broker: SessionCredentialBroker,
+        model: str,
         node_executable: Path = Path("/usr/bin/node"),
     ) -> None:
         self._session_manager = session_manager
@@ -102,6 +109,7 @@ class WorkbenchRuntime:
         self._generated_config_dir = generated_config_dir
         self._prepare_generated_config_parent()
         self._credential_broker = credential_broker
+        self._model = model
         self._node_executable = node_executable
         self._current: _ActiveProfile | None = None
         self._lock = RLock()
@@ -123,9 +131,7 @@ class WorkbenchRuntime:
             or stat.st_mode & 0o022
             or not os.access(parent, os.W_OK | os.X_OK)
         ):
-            raise WorkbenchStateError(
-                "managed configuration directory is unavailable"
-            )
+            raise WorkbenchStateError("managed configuration directory is unavailable")
 
     @property
     def current_launch(self) -> ProfileLaunch | None:
@@ -164,6 +170,7 @@ class WorkbenchRuntime:
             run_id=run_id,
             client_config_path=config_path,
             policy_version=selected.policy_version,
+            model=self._model,
         )
         try:
             handle = self._adapter.launch(launch, credentials)

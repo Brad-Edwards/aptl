@@ -29,6 +29,12 @@ class ParticipantSelectionProvider(Protocol):
     """Select one complete RAES proposal without executing its action."""
 
     @property
+    def provider_name(self) -> str: ...
+
+    @property
+    def model(self) -> str | None: ...
+
+    @property
     def implementation_name(self) -> str: ...
 
     @property
@@ -42,15 +48,15 @@ class DeterministicSelectionProvider:
 
     implementation_name = "aptl-deterministic-selection-fixture"
     implementation_version = "1.0.0"
+    provider_name = "deterministic"
+    model = None
 
     def __init__(self, *, candidate_index: int = 0) -> None:
         self._candidate_index = candidate_index
 
     def select(self, solicitation: ParticipantDecisionSolicitation) -> str:
         try:
-            candidate = solicitation.candidate_selections[
-                self._candidate_index
-            ]
+            candidate = solicitation.candidate_selections[self._candidate_index]
         except IndexError as exc:
             raise ValueError(
                 "deterministic provider candidate index is outside the surface"
@@ -66,13 +72,25 @@ class ManagedAgentSelectionProvider:
         *,
         adapter: ManagedAgentAdapter,
         handle: object,
+        provider_name: str,
+        model: str,
         implementation_name: str,
         implementation_version: str,
     ) -> None:
         self._adapter = adapter
         self._handle = handle
+        self._provider_name = provider_name
+        self._model = model
         self._implementation_name = implementation_name
         self._implementation_version = implementation_version
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
+
+    @property
+    def model(self) -> str:
+        return self._model
 
     @property
     def implementation_name(self) -> str:
@@ -84,7 +102,11 @@ class ManagedAgentSelectionProvider:
 
     def select(self, solicitation: ParticipantDecisionSolicitation) -> str:
         prompt, aliases = _compact_selection_prompt(solicitation)
-        raw_selection = self._adapter.respond(self._handle, prompt)
+        raw_selection = self._adapter.respond(
+            self._handle,
+            prompt,
+            response_schema=_compact_selection_schema(len(aliases)),
+        )
         candidate_number = _parse_compact_selection(
             raw_selection,
             candidate_count=len(aliases),
@@ -112,9 +134,7 @@ def _compact_selection_prompt(
     candidates: list[list[object]] = []
     aliases: list[str] = []
     alias_set: set[str] = set()
-    for candidate_number, candidate in enumerate(
-        solicitation.candidate_selections
-    ):
+    for candidate_number, candidate in enumerate(solicitation.candidate_selections):
         address = candidate.get("action_contract_address")
         proposal_ref = candidate.get("proposal_ref")
         arguments = candidate.get("arguments")
@@ -154,9 +174,7 @@ def _compact_selection_prompt(
                 "or additional keys. You do not execute actions."
             ),
             "participant_view": dict(solicitation.participant_view),
-            "rendered_context": [
-                dict(item) for item in solicitation.rendered_context
-            ],
+            "rendered_context": [dict(item) for item in solicitation.rendered_context],
             "observation_history": [
                 dict(item) for item in solicitation.observation_history
             ],
@@ -172,6 +190,25 @@ def _compact_selection_prompt(
         sort_keys=True,
     )
     return prompt, tuple(aliases)
+
+
+def _compact_selection_schema(candidate_count: int) -> Mapping[str, object]:
+    """Constrain structured output to the current delivered candidate range."""
+
+    if candidate_count <= 0:
+        raise ValueError("compact participant selection has no candidates")
+    return {
+        "type": "object",
+        "properties": {
+            "candidate": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": candidate_count - 1,
+            }
+        },
+        "required": ["candidate"],
+        "additionalProperties": False,
+    }
 
 
 def _parse_compact_selection(raw: str, *, candidate_count: int) -> int:
@@ -216,9 +253,7 @@ def parse_provider_selection(
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            "participant provider did not return valid JSON"
-        ) from exc
+        raise ValueError("participant provider did not return valid JSON") from exc
     if not isinstance(payload, Mapping):
         raise ValueError("participant provider selection must be one JSON object")
     return ParticipantDecisionSurfaceSelectionV2Model.model_validate(payload)
@@ -229,6 +264,4 @@ def candidate_payloads(
 ) -> tuple[Mapping[str, object], ...]:
     """Return defensive JSON projections for the provider boundary."""
 
-    return tuple(
-        candidate.model_dump(mode="json") for candidate in candidates
-    )
+    return tuple(candidate.model_dump(mode="json") for candidate in candidates)

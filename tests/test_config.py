@@ -135,6 +135,78 @@ class TestExperimentSettings:
         with pytest.raises(ValidationError):
             ExperimentSettings(participant_action_timeout_seconds=value)
 
+    def test_installed_participant_models_are_explicit_and_provider_closed(self):
+        from aptl.core.config import ExperimentSettings
+
+        settings = ExperimentSettings(
+            participant_models={
+                "claude": "claude-sonnet-4-5-20250929",
+                "codex": "gpt-5-nano-2025-08-07",
+            }
+        )
+
+        assert settings.participant_models.model_for("claude") == (
+            "claude-sonnet-4-5-20250929"
+        )
+        assert (
+            settings.participant_models.model_for("codex") == "gpt-5-nano-2025-08-07"
+        )
+        with pytest.raises(ValueError, match="not configured"):
+            ExperimentSettings().participant_models.model_for("codex")
+        with pytest.raises(ValueError, match="unknown installed participant provider"):
+            settings.participant_models.model_for("other")
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "",
+            " ",
+            "latest",
+            "default",
+            "auto",
+            "sonnet",
+            "claude-sonnet-4-5",
+            "gpt-4o",
+            "gpt-5.2-codex",
+            "bad model",
+            "bad\nmodel",
+            "x" * 129,
+            7,
+            True,
+        ],
+    )
+    def test_rejects_ambiguous_or_malformed_participant_model(self, value):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(participant_models={"codex": value})
+
+    def test_rejects_unknown_participant_model_provider_or_option(self):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(participant_models={"other": "gpt-5-nano-2025-08-07"})
+        with pytest.raises(ValidationError):
+            ExperimentSettings(
+                participant_models={
+                    "codex": "gpt-5-nano-2025-08-07",
+                    "codex_options": {"fallback": "o1"},
+                }
+            )
+
+    @pytest.mark.parametrize(
+        ("provider", "model"),
+        [
+            ("claude", "gpt-5-nano-2025-08-07"),
+            ("codex", "claude-sonnet-4-5-20250929"),
+        ],
+    )
+    def test_rejects_model_identity_from_another_provider(self, provider, model):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(participant_models={provider: model})
+
 
 class TestAptlConfig:
     """Tests for the top-level AptlConfig model."""
@@ -240,7 +312,10 @@ class TestConfigLoading:
         ],
     )
     def test_load_from_non_mapping_json_raises_valueerror(
-        self, tmp_config_dir, body, top_type,
+        self,
+        tmp_config_dir,
+        body,
+        top_type,
     ):
         """A JSON top-level that isn't an object must raise ``ValueError``.
 

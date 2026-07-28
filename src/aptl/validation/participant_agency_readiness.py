@@ -35,6 +35,7 @@ from aptl.validation.participant_readiness_provider import (
     build_selection_provider,
     installed_version,
 )
+from aptl.workbench.process import AgentExecutionError
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -107,6 +108,7 @@ def validate_participant_agency_readiness(
     _validate_readiness_request(request)
     selected_run_id = request.run_id or f"participant-readiness-{uuid4().hex}"
     request.run_store.create_run(selected_run_id)
+    selected_model = _configured_model(request)
     try:
         context = _prepare_readiness_context(request, selected_run_id)
     except _ReadinessFailure as exc:
@@ -114,6 +116,7 @@ def validate_participant_agency_readiness(
             request.run_store,
             selected_run_id,
             request.provider_name,
+            selected_model,
             request.behavior_name,
             exc.participant_address,
             str(exc),
@@ -121,13 +124,19 @@ def validate_participant_agency_readiness(
     try:
         provider, cleanup = _resolve_selection_provider(request, selected_run_id)
     except (OSError, RuntimeError, ValueError) as exc:
+        diagnostic = (
+            "installed participant model is not configured"
+            if str(exc).startswith("installed participant model is not configured")
+            else type(exc).__name__
+        )
         return _persist_failed_report(
             request.run_store,
             selected_run_id,
             request.provider_name,
+            selected_model,
             request.behavior_name,
             context.participant_address,
-            f"participant decision provider is unavailable: {type(exc).__name__}",
+            f"participant decision provider is unavailable: {diagnostic}",
         )
     trajectory = _run_readiness_trajectory(context, provider, cleanup)
     return _terminate_and_persist(context, trajectory)
@@ -228,6 +237,7 @@ def _resolve_selection_provider(
         return request.provider_override, _noop
     return _selection_provider(
         request.provider_name,
+        config=request.config,
         project_dir=request.project_dir,
         run_id=run_id,
     )
@@ -248,6 +258,8 @@ def _run_readiness_trajectory(
             participant_address=context.participant_address,
             implementation_name=provider.implementation_name,
             implementation_version=provider.implementation_version,
+            provider_name=provider.provider_name,
+            model=provider.model,
             run_id=context.run_id,
         )
         for _ in range(context.request.turns):
@@ -260,6 +272,8 @@ def _run_readiness_trajectory(
                 diagnostics,
             ):
                 break
+    except AgentExecutionError as exc:
+        diagnostics.append(f"participant provider request failed: {exc}")
     except (OSError, RuntimeError, ValueError) as exc:
         diagnostics.append(
             f"participant readiness trajectory failed: {type(exc).__name__}"
@@ -353,6 +367,7 @@ def _terminate_and_persist(
         ),
         run_id=context.run_id,
         provider=context.request.provider_name,
+        model=_configured_model(context.request),
         behavior=context.request.behavior_name,
         participant_address=context.participant_address,
         selected_actions=trajectory.selected_actions,
@@ -433,6 +448,7 @@ def _verify_live_materialization(
 def _selection_provider(
     provider_name: str,
     *,
+    config: AptlConfig,
     project_dir: Path,
     run_id: str,
 ) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
@@ -440,6 +456,7 @@ def _selection_provider(
 
     return build_selection_provider(
         provider_name,
+        config=config,
         project_dir=project_dir,
         run_id=run_id,
     )
@@ -459,6 +476,7 @@ def _persist_failed_report(
     run_store: RunStorageBackend,
     run_id: str,
     provider: str,
+    model: str | None,
     behavior: str,
     participant_address: str,
     *diagnostics: str,
@@ -468,6 +486,7 @@ def _persist_failed_report(
         passed=False,
         run_id=run_id,
         provider=provider,
+        model=model,
         behavior=behavior,
         participant_address=participant_address,
         selected_actions=(),
@@ -480,3 +499,17 @@ def _persist_failed_report(
         report.to_payload(),
     )
     return report
+
+
+def _configured_model(request: ParticipantReadinessRequest) -> str | None:
+    """Return admitted non-secret model provenance without triggering launch."""
+
+    if request.provider_override is not None:
+        return request.provider_override.model
+    if request.provider_name == "deterministic":
+        return None
+    return getattr(
+        request.config.experiment.participant_models,
+        request.provider_name,
+        None,
+    )

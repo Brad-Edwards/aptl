@@ -270,6 +270,45 @@ _REQUIRED_PRIOR_ACTIONS: Mapping[str, tuple[str, ...]] = {
     ),
 }
 REQUIRED_PRIOR_ACTIONS = _REQUIRED_PRIOR_ACTIONS
+_FRESH_REQUIRED_PRIOR_ACTIONS: Mapping[str, tuple[str, ...]] = {
+    "participant.action-contract.sign-out-session": (_AUTHENTICATE_ACTION,),
+}
+
+
+def unmet_required_prior_actions(
+    action_contract_address: str,
+    successful_action_sequence: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return missing or consumed successful-observation prerequisites."""
+
+    required = _REQUIRED_PRIOR_ACTIONS.get(action_contract_address, ())
+    completed = set(successful_action_sequence)
+    unmet = [address for address in required if address not in completed]
+    for address in _FRESH_REQUIRED_PRIOR_ACTIONS.get(
+        action_contract_address,
+        (),
+    ):
+        prior_index = _last_index(successful_action_sequence, address)
+        action_index = _last_index(
+            successful_action_sequence,
+            action_contract_address,
+        )
+        if prior_index <= action_index and address not in unmet:
+            unmet.append(address)
+    return tuple(unmet)
+
+
+def _last_index(values: tuple[str, ...], expected: str) -> int:
+    """Return the last matching index, or -1 when absent."""
+
+    return next(
+        (
+            index
+            for index in range(len(values) - 1, -1, -1)
+            if values[index] == expected
+        ),
+        -1,
+    )
 
 
 def _node_containers(realization_details: Mapping[str, object]) -> dict[str, str]:

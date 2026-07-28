@@ -23,6 +23,7 @@ class ApplianceWorkbenchSettings:
     payload_root: Path
     state_dir: Path
     claude_executable: Path
+    model: str
     node_executable: Path = Path("/usr/bin/node")
 
 
@@ -46,6 +47,7 @@ def create_appliance_workbench_app(
         payload_root=settings.payload_root,
         generated_config_dir=state_dir / "workbench" / "mcp-config",
         credential_broker=broker,
+        model=settings.model,
         node_executable=settings.node_executable,
     )
     return create_participant_workbench_app(runtime, authorizer)

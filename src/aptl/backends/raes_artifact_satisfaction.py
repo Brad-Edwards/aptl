@@ -32,7 +32,10 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 from raes.artifact_requirements import ArtifactSatisfactionRoute
 
-from aptl.backends.raes_artifact_mechanisms import exact_artifact_provenance_ref
+from aptl.backends.raes_artifact_mechanisms import (
+    exact_artifact_provenance_ref,
+    materialization_provenance_ref,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from raes.artifact_requirements import ArtifactRequirement
@@ -124,9 +127,13 @@ def satisfaction_payload(
     """
 
     route = select_route(contract, manifest, requirement_kind=requirement_kind)
-    exact = contract.exact_artifact
-    if route is None or exact is None:
+    if route is None:
         return None
+    exact = contract.exact_artifact
+    if exact is None:
+        return _materialized_payload(
+            contract, manifest, route=route, realized_digest=realized_digest
+        )
     if realized_digest != exact.digest:
         # The backend realized something other than what the author pinned.
         # Disclosing it anyway would be the silent approximation I2 forbids.
@@ -203,3 +210,59 @@ def satisfactions_for_plan(
         if payload is not None:
             disclosures[address] = payload
     return disclosures
+
+
+def _materialized_payload(
+    contract: ArtifactRequirement,
+    manifest: BackendManifest,
+    *,
+    route: ArtifactSatisfactionRoute,
+    realized_digest: str,
+) -> dict[str, object] | None:
+    """Return the disclosure for a locally materialized component artifact.
+
+    A built image has no authored digest to compare against, because a build is
+    not bit-reproducible. Its identity is therefore the digest it actually
+    materialized to, which entered the verified integrity set when backend
+    preparation built it. The authored specification is disclosed alongside, so
+    the gate can confirm the backend built the specification the author declared
+    rather than something else.
+
+    The specification digest is deliberately not reused as the artifact digest:
+    that would claim the build specification is the built image.
+    """
+
+    selected = next(
+        (
+            specification
+            for specification in sorted(
+                contract.materialization_specifications,
+                key=lambda item: item.specification_id,
+            )
+            if _mechanism_key(specification.profile) == _mechanism_key(route.mechanism)
+        ),
+        None,
+    )
+    if selected is None or not realized_digest:
+        return None
+    return {
+        "requirement_id": contract.requirement_id,
+        "artifact": {
+            "artifact_id": selected.specification_id,
+            "version": "local",
+            "digest": realized_digest,
+            "media_type": "application/vnd.oci.image.manifest.v1+json",
+        },
+        "mechanism": route.mechanism.model_dump(mode="json"),
+        "acquisition": route.acquisition,
+        "timing": route.timing,
+        "backend": {
+            "name": manifest.identity.name,
+            "version": manifest.identity.version,
+        },
+        "materialization_specification_id": selected.specification_id,
+        "materialization_specification_digest": selected.digest,
+        "locked_input_ids": list(selected.locked_input_ids),
+        "integrity_refs": [realized_digest],
+        "provenance_refs": [materialization_provenance_ref()],
+    }

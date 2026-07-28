@@ -187,7 +187,7 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node():
     context = artifact_availability_for_scenario(scenario, probe)
 
     # One address per image-backed node, each probed by digest-pinned reference.
-    assert len(context.requirements) == 18
+    assert len(context.requirements) == 21
     # Exact pins are probed by digest-pinned reference; materialized components
     # probe their locked base input the same way.
     assert all(ref.count("@sha256:") == 1 for ref, _ in probe.calls)

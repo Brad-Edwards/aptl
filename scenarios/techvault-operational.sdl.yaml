@@ -444,10 +444,56 @@ nodes:
   wazuh-sidecar-db:
     type: vm
     os: linux
+    source:
+      name: "aptl-wazuh-sidecar"
+      version: local
+      artifact_requirement:
+        requirement_id: wazuh-sidecar-db-image
+        explicitness: constrained
+        materialization_specifications:
+          - specification_id: wazuh-sidecar
+            profile:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            digest: "sha256:1fdafc28ba63364e7d91a5fbb68bce8e251f35b40287ea99a7d3c903198a8985"
+            locked_input_ids: []
+        permitted_routes:
+          - mechanism:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            acquisition: none
+            timing: backend-preparation
     services: []
   wazuh-sidecar-suricata:
     type: vm
     os: linux
+    source:
+      name: "aptl-wazuh-sidecar"
+      version: local
+      artifact_requirement:
+        requirement_id: wazuh-sidecar-suricata-image
+        explicitness: constrained
+        materialization_specifications:
+          - specification_id: wazuh-sidecar
+            profile:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            digest: "sha256:1fdafc28ba63364e7d91a5fbb68bce8e251f35b40287ea99a7d3c903198a8985"
+            locked_input_ids: []
+        permitted_routes:
+          - mechanism:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            acquisition: none
+            timing: backend-preparation
     services: []
 
   webapp:
@@ -551,6 +597,29 @@ nodes:
   ad:
     type: vm
     os: linux
+    source:
+      name: "aptl-ad"
+      version: local
+      artifact_requirement:
+        requirement_id: ad-image
+        explicitness: constrained
+        materialization_specifications:
+          - specification_id: ad
+            profile:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            digest: "sha256:8a891ee9c6483942c18116d135fba0e0aacfb4ec12da33cde6356ed32d0b5c46"
+            locked_input_ids: []
+        permitted_routes:
+          - mechanism:
+              mechanism: "materialization-specification"
+              profile: "aptl-contained-component-build"
+              version: "1"
+              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
+            acquisition: none
+            timing: backend-preparation
     services:
       - {name: ldap, port: 389, protocol: tcp}
       - {name: kerberos, port: 88, protocol: tcp}

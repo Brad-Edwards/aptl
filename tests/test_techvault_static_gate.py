@@ -105,21 +105,18 @@ def test_operational_gate_passes():
 
 @pytest.mark.xfail(
     reason=(
-        "ad, kali-capture, wazuh-sidecar-db and wazuh-sidecar-suricata are still "
-        "realized by docker-compose.yml alone. The blocker is no longer upstream "
-        "expressivity: RAES 2.0.0 ships RuntimeIdentityAuthority, "
-        "RuntimeForwardingAgent and RuntimeNetworkNamespace, and APTL now declares "
-        "the materialization-specification mechanism, so all four author and admit "
-        "cleanly and their images build and run. What blocks them is the runtime "
-        "satisfaction disclosure: _trust_claims_verified requires the realized "
-        "artifact digest to be in the processor-owned verified integrity set, but a "
-        "locally built image's digest is only knowable after the build, while "
-        "availability facts are gathered before planning. Docker builds are not "
-        "bit-reproducible, so the digest cannot be predicted. Closing this needs the "
-        "integrity facts for a materialized artifact to be established after "
-        "backend preparation rather than before planning. Disclosing the "
-        "specification digest as the artifact identity would satisfy the gate "
-        "dishonestly, claiming the build specification is the built image."
+        "kali-capture alone is still realized by docker-compose.yml. The other "
+        "three per-component nodes (ad and both Wazuh forwarding sidecars) now "
+        "author a digest-bound materialization specification, admit, build, and "
+        "satisfy the runtime non-approximation gate. kali-capture's Dockerfile "
+        "copies from its own directory while ad and the sidecars copy shared "
+        "assets from the repository root, so one uniform build-context rule "
+        "cannot cover all three without editing that Dockerfile. Doing so changes "
+        "the built image digest, which participant-profiles/guided-purple-v1/"
+        "asset-lock.json pins as local://aptl-kali-capture@sha256:821ec7c2..., and "
+        "re-pinning a participant-profile asset is a reproducibility decision for "
+        "the profile owner rather than an incidental edit. Closing this needs that "
+        "re-pin, or a profile that declares its build context per specification."
     ),
     strict=True,
 )

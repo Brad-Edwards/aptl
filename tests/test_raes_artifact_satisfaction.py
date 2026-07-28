@@ -242,9 +242,25 @@ def test_unreadable_digest_returns_none_rather_than_assuming_a_match():
     """A node whose digest cannot be read must not be disclosed as compliant."""
 
     assert _backend({"inspect-container": (1, "")}).container_image_digest("x") is None
+    # An unusable image id is not an identity either.
     assert (
         _backend(
-            {"inspect-container": (0, "sha256:imageid"), "inspect-image": (0, "[]")}
+            {"inspect-container": (0, "not-a-digest"), "inspect-image": (0, "[]")}
         ).container_image_digest("x")
         is None
     )
+
+
+def test_locally_built_image_is_identified_by_its_image_id():
+    """A built image has no registry manifest digest, so its id is its identity.
+
+    A pulled image is identified by the manifest digest an authored exact pin
+    names; a locally materialized one has none, and falling through to None would
+    make every per-component node undisclosable.
+    """
+
+    backend = _backend(
+        {"inspect-container": (0, "sha256:imageid"), "inspect-image": (0, "[]")}
+    )
+
+    assert backend.container_image_digest("x") == "sha256:imageid"

@@ -92,14 +92,60 @@ class ComposeRealizationImageMixin:
         )
         return resolvable.returncode == 0
 
+    def materialize_component_image(
+        self, image_ref: str, dockerfile_path: str, context_path: str
+    ) -> str | None:
+        """Build one component image and return the digest it materialized to.
+
+        This runs during backend preparation, which is the timing the
+        per-component build profile declares. It produces a local artifact only;
+        no lab state is touched. Building here is what makes the resulting
+        digest knowable, so it can enter the processor-owned verified integrity
+        set before the runtime gate checks the satisfaction disclosure against
+        it. A built image's digest cannot be predicted, because Docker builds are
+        not bit-reproducible.
+
+        Idempotent in practice: a repeat build is served from the layer cache.
+        Returns nothing when the build fails or the digest cannot be read, so the
+        specification is reported unavailable rather than assumed good.
+        """
+
+        build = self._run(
+            [
+                "docker",
+                "build",
+                "-t",
+                image_ref,
+                "-f",
+                dockerfile_path,
+                context_path,
+            ],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if build.returncode != 0:
+            return None
+        return self._image_digest(image_ref)
+
+    def _image_digest(self, image_ref: str) -> str | None:
+        """Return the sha256 identity of a local image reference."""
+
+        inspect = self._run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if inspect.returncode != 0:
+            return None
+        digest = inspect.stdout.strip()
+        return digest if digest.startswith("sha256:") else None
+
     def container_image_digest(self, container_name: str) -> str | None:
         """Return the manifest digest of the image backing one container.
 
-        This is the read-after-write half of exact artifact realization: it
-        reports what the container is *actually* running, so the satisfaction
-        disclosure can be built from the observed digest rather than the
-        planned one. A node whose digest cannot be read returns None, which
-        surfaces as a refused disclosure rather than an assumed match.
+        This is the read-after-write half of artifact realization: it reports
+        what the container is *actually* running, so the satisfaction disclosure
+        is built from the observed digest rather than the planned one. A node
+        whose digest cannot be read returns None, which surfaces as a refused
+        disclosure rather than an assumed match.
         """
 
         container = self._run(
@@ -133,7 +179,10 @@ class ComposeRealizationImageMixin:
         for reference in references:
             if isinstance(reference, str) and "@sha256:" in reference:
                 return reference.rsplit("@", 1)[1]
-        return None
+        # A locally built image has no registry manifest digest, so its identity
+        # is the image id. A pulled image is identified by the manifest digest
+        # above, which is what an authored exact pin names.
+        return image_id if image_id.startswith("sha256:") else None
 
     def _verify_staged_image(
         self,
@@ -161,6 +210,14 @@ class ComposeRealizationImageMixin:
         if image.mode == "pull":
             return self._pull_realization_image(image)
         if image.mode == "build":
+            if image.policy_rule == "authored-materialization-specification":
+                # Already materialized during backend preparation, which is the
+                # timing the per-component build profile declares. Rebuilding
+                # here would produce a second image whose digest may differ from
+                # the one that entered the verified integrity set, so the
+                # satisfaction disclosure would no longer match. Verify presence
+                # instead: exactly one build per artifact.
+                return self._verify_staged_image(image)
             return self._build_realization_image(image)
         return LabResult(
             success=False,

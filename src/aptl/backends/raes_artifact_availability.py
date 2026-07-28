@@ -63,6 +63,12 @@ class ArtifactProbe(Protocol):
         """Return whether one immutable artifact reference is obtainable."""
         ...
 
+    def materialize_component_image(
+        self, image_ref: str, dockerfile_path: str, context_path: str
+    ) -> str | None:
+        """Build one component image and return its resulting digest."""
+        ...
+
 
 def _artifact_reference(requirement: ArtifactRequirement) -> str | None:
     """Return the pullable reference for an exact requirement, if it has one.
@@ -125,6 +131,67 @@ def _available_specification_digests(
     return available
 
 
+def _materialized_specifications(
+    requirement: ArtifactRequirement,
+    probe: ArtifactProbe,
+    project_dir: Path | None,
+    materialized: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Materialize each authored specification and report what it produced.
+
+    A built image's digest cannot be predicted, so it is only knowable by
+    building. That happens here, during backend preparation, which is the timing
+    the per-component build profile declares. The result is a local artifact, not
+    lab state, so establishing it is fact-gathering rather than a side effect on
+    the scenario.
+
+    Only a specification whose contained Dockerfile hashes to the authored digest
+    is built: a drifted context is not the artifact that was authorised.
+
+    One specification yields exactly one artifact. Local builds are not
+    reproducible — building the same context twice produces two different image
+    ids — so a specification shared by several nodes is materialized once and its
+    result reused. Building per node would leave every node but the last
+    disclosing a digest that no longer exists under the tag.
+    """
+
+    available: list[str] = []
+    digests: list[str] = []
+    if project_dir is None:
+        return available, digests
+    # The caller may pass a relative project directory; every path below is
+    # compared against the resolved root so containment holds either way.
+    project_dir = project_dir.resolve()
+    for specification in sorted(
+        requirement.materialization_specifications,
+        key=lambda item: item.specification_id,
+    ):
+        dockerfile = _context_dockerfile(project_dir, specification.specification_id)
+        if dockerfile is None:
+            continue
+        actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+        if actual != specification.digest:
+            continue
+        # The specification id is the one identity both the availability pass and
+        # the realization pass can derive independently, so tagging on it keeps
+        # the image they each refer to the same one.
+        cached = materialized.get(specification.digest)
+        if cached is not None:
+            available.append(specification.digest)
+            digests.append(cached)
+            continue
+        realized = probe.materialize_component_image(
+            f"{specification.specification_id}:local",
+            str(dockerfile.relative_to(project_dir)),
+            str(project_dir),
+        )
+        if isinstance(realized, str) and realized.startswith("sha256:"):
+            materialized[specification.digest] = realized
+            available.append(specification.digest)
+            digests.append(realized)
+    return available, digests
+
+
 def _source_artifact_requirements(
     scenario: object,
 ) -> list[CompiledRealizationRequirement]:
@@ -167,6 +234,7 @@ def artifact_availability_for_scenario(
     """
 
     entries: list[ArtifactRequirementAvailability] = []
+    materialized: dict[str, str] = {}
     for compiled in _source_artifact_requirements(scenario):
         requirement = compiled.artifact_requirement
         if requirement is None:  # pragma: no cover - filtered above
@@ -176,7 +244,9 @@ def artifact_availability_for_scenario(
         verified_inputs: list[str] = []
         provenance: list[str] = []
         if requirement.materialization_specifications:
-            specifications = _available_specification_digests(requirement, project_dir)
+            specifications, digests = _materialized_specifications(
+                requirement, probe, project_dir, materialized
+            )
             # A locked input is verified when its immutable base artifact is
             # genuinely obtainable; an unobtainable base means the build cannot
             # be reproduced from what the author pinned.

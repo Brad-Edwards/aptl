@@ -234,14 +234,14 @@ def _materialized_component_image(
     if chosen is None:
         return None
     identifier, digest = chosen
-    if not _safe_image_name(source.name):
+    if not _safe_image_name(identifier):
         return None
     return DeploymentImageRealization(
         address=resource.address,
         service_name=service_name,
         source_name=source.name,
         source_version=source.version,
-        image_ref=f"{source.name}:local",
+        image_ref=f"{identifier}:local",
         mode="build",
         policy_rule="authored-materialization-specification",
         dockerfile_path=f"containers/{identifier}/Dockerfile",

@@ -163,6 +163,19 @@ class DeploymentBackend(Protocol):
         """
         ...
 
+    def materialize_component_image(
+        self, image_ref: str, dockerfile_path: str, context_path: str
+    ) -> str | None:
+        """Build one component image and return the digest it materialized to.
+
+        Runs during backend preparation and produces a local artifact only. The
+        returned digest is what makes a materialized artifact's identity
+        knowable, since a built image's digest cannot be predicted.
+
+        Returns None when the build fails or the digest cannot be read.
+        """
+        ...
+
     def container_image_digest(self, container_name: str) -> str | None:
         """Return the manifest digest of the image backing one container.
 

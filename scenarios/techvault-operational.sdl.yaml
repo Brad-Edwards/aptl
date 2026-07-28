@@ -444,74 +444,10 @@ nodes:
   wazuh-sidecar-db:
     type: vm
     os: linux
-    source:
-      name: "aptl-wazuh-sidecar"
-      version: local
-      artifact_requirement:
-        requirement_id: wazuh-sidecar-db-image
-        explicitness: constrained
-        locked_inputs:
-          - input_id: base
-            artifact:
-              artifact_id: "debian"
-              version: "12-slim"
-              digest: "sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"
-              media_type: "application/vnd.oci.image.index.v1+json"
-            associated_artifact_manifest_ref: "associated-artifact-manifest-v1:wazuh-sidecar-base"
-            trust_policy_ref: "reusable-asset-trust-policy-v1#associated_artifact_set"
-        materialization_specifications:
-          - specification_id: wazuh-sidecar
-            profile:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            digest: "sha256:1fdafc28ba63364e7d91a5fbb68bce8e251f35b40287ea99a7d3c903198a8985"
-            locked_input_ids: [base]
-        permitted_routes:
-          - mechanism:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            acquisition: none
-            timing: backend-preparation
     services: []
   wazuh-sidecar-suricata:
     type: vm
     os: linux
-    source:
-      name: "aptl-wazuh-sidecar"
-      version: local
-      artifact_requirement:
-        requirement_id: wazuh-sidecar-suricata-image
-        explicitness: constrained
-        locked_inputs:
-          - input_id: base
-            artifact:
-              artifact_id: "debian"
-              version: "12-slim"
-              digest: "sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"
-              media_type: "application/vnd.oci.image.index.v1+json"
-            associated_artifact_manifest_ref: "associated-artifact-manifest-v1:wazuh-sidecar-base"
-            trust_policy_ref: "reusable-asset-trust-policy-v1#associated_artifact_set"
-        materialization_specifications:
-          - specification_id: wazuh-sidecar
-            profile:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            digest: "sha256:1fdafc28ba63364e7d91a5fbb68bce8e251f35b40287ea99a7d3c903198a8985"
-            locked_input_ids: [base]
-        permitted_routes:
-          - mechanism:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            acquisition: none
-            timing: backend-preparation
     services: []
 
   webapp:
@@ -615,38 +551,6 @@ nodes:
   ad:
     type: vm
     os: linux
-    source:
-      name: "aptl-ad"
-      version: local
-      artifact_requirement:
-        requirement_id: ad-image
-        explicitness: constrained
-        locked_inputs:
-          - input_id: base
-            artifact:
-              artifact_id: "ubuntu"
-              version: "22.04"
-              digest: "sha256:0e0a0fc6d18feda9db1590da249ac93e8d5abfea8f4c3c0c849ce512b5ef8982"
-              media_type: "application/vnd.oci.image.index.v1+json"
-            associated_artifact_manifest_ref: "associated-artifact-manifest-v1:ad-base"
-            trust_policy_ref: "reusable-asset-trust-policy-v1#associated_artifact_set"
-        materialization_specifications:
-          - specification_id: ad
-            profile:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            digest: "sha256:8a891ee9c6483942c18116d135fba0e0aacfb4ec12da33cde6356ed32d0b5c46"
-            locked_input_ids: [base]
-        permitted_routes:
-          - mechanism:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            acquisition: none
-            timing: backend-preparation
     services:
       - {name: ldap, port: 389, protocol: tcp}
       - {name: kerberos, port: 88, protocol: tcp}
@@ -951,38 +855,6 @@ nodes:
   kali-capture:
     type: vm
     os: linux
-    source:
-      name: "aptl-kali-capture"
-      version: local
-      artifact_requirement:
-        requirement_id: kali-capture-image
-        explicitness: constrained
-        locked_inputs:
-          - input_id: base
-            artifact:
-              artifact_id: "debian"
-              version: "bookworm-slim"
-              digest: "sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"
-              media_type: "application/vnd.oci.image.index.v1+json"
-            associated_artifact_manifest_ref: "associated-artifact-manifest-v1:kali-capture-base"
-            trust_policy_ref: "reusable-asset-trust-policy-v1#associated_artifact_set"
-        materialization_specifications:
-          - specification_id: kali-capture
-            profile:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            digest: "sha256:996cc24689da0ad977c3c4dc2522dd8463a06c7e40ca4a80f075d1427e8ec610"
-            locked_input_ids: [base]
-        permitted_routes:
-          - mechanism:
-              mechanism: "materialization-specification"
-              profile: "aptl-contained-component-build"
-              version: "1"
-              digest: "sha256:e728ca8aa2805d5fca152df145d4c331578caffec9b7dfe58d0c86a20b9e9c76"
-            acquisition: none
-            timing: backend-preparation
     services: []
 
   aptl-otel-collector:

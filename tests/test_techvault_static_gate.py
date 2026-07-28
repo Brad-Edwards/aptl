@@ -103,6 +103,26 @@ def test_operational_gate_passes():
     ]
 
 
+@pytest.mark.xfail(
+    reason=(
+        "ad, kali-capture, wazuh-sidecar-db and wazuh-sidecar-suricata are still "
+        "realized by docker-compose.yml alone. The blocker is no longer upstream "
+        "expressivity: RAES 2.0.0 ships RuntimeIdentityAuthority, "
+        "RuntimeForwardingAgent and RuntimeNetworkNamespace, and APTL now declares "
+        "the materialization-specification mechanism, so all four author and admit "
+        "cleanly and their images build and run. What blocks them is the runtime "
+        "satisfaction disclosure: _trust_claims_verified requires the realized "
+        "artifact digest to be in the processor-owned verified integrity set, but a "
+        "locally built image's digest is only knowable after the build, while "
+        "availability facts are gathered before planning. Docker builds are not "
+        "bit-reproducible, so the digest cannot be predicted. Closing this needs the "
+        "integrity facts for a materialized artifact to be established after "
+        "backend preparation rather than before planning. Disclosing the "
+        "specification digest as the artifact identity would satisfy the gate "
+        "dishonestly, claiming the build specification is the built image."
+    ),
+    strict=True,
+)
 def test_operational_scenario_passes_the_realization_declaration_gate():
     """Every OS-bearing node in the shipped SDL resolves through a declared
     realization (ADR-048 P7): generic-materializer runtime: or a trust-

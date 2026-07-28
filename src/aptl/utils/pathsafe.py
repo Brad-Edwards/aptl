@@ -235,6 +235,51 @@ def read_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> 
         return handle.read()
 
 
+def _open_leaf_dir_nofollow(component: str, parent_fd: int) -> int:
+    """Open ``component`` as a directory under ``parent_fd``, no-follow.
+
+    The listing companion to :func:`_open_leaf_read_nofollow`: the leaf must be
+    a real directory, and a symlink at the leaf is rejected exactly like any
+    other symlinked component.
+    """
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    try:
+        return os.open(component, flags, dir_fd=parent_fd)
+    except OSError as exc:
+        raise PathContainmentError(
+            _reason_for(exc, component, parent_fd),
+            f"rejected path component {component!r}: {exc}",
+        ) from exc
+
+
+def listdir_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> list[str]:
+    """Return the sorted entry names of ``relative_path`` under ``base_dir``.
+
+    Walks each path component no-follow (openat-style) exactly like
+    :func:`open_contained_nofollow`, then lists the leaf directory through the
+    descriptor that was opened — never by re-resolving the path — so a symlinked
+    component anywhere on the path (including the leaf directory itself) raises
+    :class:`PathContainmentError` instead of enumerating an attacker-chosen
+    directory. Names are sorted for deterministic iteration.
+
+    Raises :class:`PathContainmentError` for an absolute, empty, ``.``, or
+    ``..`` component; a symlinked component; a missing component; or a leaf that
+    is not a directory (surfaced as its ``os.open`` failure reason).
+    """
+    components = _split_components(relative_path)
+    base_fd = _open_base_fd(base_dir)
+    try:
+        dir_fd = _walk(
+            components, base_fd, open_dir=_open_dir_nofollow, open_leaf=_open_leaf_dir_nofollow
+        )
+    finally:
+        os.close(base_fd)
+    try:
+        return sorted(os.listdir(dir_fd))
+    finally:
+        os.close(dir_fd)
+
+
 def _open_dir_nofollow_or_create(component: str, parent_fd: int) -> int:
     """Open ``component`` no-follow, creating it as a real directory if
     (and only if) it does not already exist. A pre-existing symlink or

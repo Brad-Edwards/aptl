@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [EXP-008 Portable Research Evidence Bundle](exp-008-portable-evidence-bundle-preflight.md)
 - [REP-003 Run-Scoped Provenance](rep-003-run-scoped-provenance-preflight.md)
 - [Issue #862 Explicit Participant Model Selection](issue-862-explicit-participant-model-selection-preflight.md)
 - [Issue #859 Idempotent Stuttering In Bounded Participant Realizations](issue-859-idempotent-stuttering-preflight.md)

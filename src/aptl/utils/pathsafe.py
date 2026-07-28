@@ -30,11 +30,17 @@ maintaining their own lexical path checker.
 from __future__ import annotations
 
 import errno
+import itertools
 import os
 import stat
 from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO
+
+#: Per-process monotonic counter for unique temporary publish names. Combined
+#: with the PID it makes create-once temp inodes collision-free without needing
+#: a wall clock or randomness.
+_TMP_COUNTER = itertools.count()
 
 REASON_NOT_RELATIVE = "not_relative"
 REASON_NUL_BYTE = "nul_byte"
@@ -271,6 +277,53 @@ def _open_dir_nofollow_or_create(component: str, parent_fd: int) -> int:
         ) from exc
 
 
+def _walk_to_parent(
+    dir_components: list[str],
+    base_fd: int,
+    *,
+    open_dir: Callable[[str, int], int],
+) -> int:
+    """Walk the directory components under ``base_fd``, returning the leaf's parent fd.
+
+    Like :func:`_walk` but stops at the parent directory of the leaf and returns
+    that descriptor OPEN (creating intermediate dirs when ``open_dir`` does),
+    closing every earlier intermediate. When ``dir_components`` is empty the leaf
+    lives directly under ``base_dir``, so ``base_fd`` itself is the parent and is
+    returned unchanged — the caller must never close it here. Any non-``base_fd``
+    parent it returns is caller-owned and must be closed by the caller.
+    """
+    current_fd = base_fd
+    try:
+        for component in dir_components:
+            next_fd = open_dir(component, current_fd)
+            if current_fd != base_fd:
+                os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        if current_fd != base_fd:
+            os.close(current_fd)
+        raise
+
+
+def write_all(fd: int, data: bytes) -> None:
+    """Write every byte of ``data`` to ``fd``, looping over short writes.
+
+    ``os.write`` is permitted to accept fewer bytes than offered (POSIX), so a
+    single call is not a durable-write primitive. A refusal to make progress
+    (``0`` bytes on a non-empty buffer) is an error rather than a silent partial
+    seal.
+    """
+    view = memoryview(data)
+    total = 0
+    length = len(view)
+    while total < length:
+        written = os.write(fd, view[total:])
+        if written <= 0:
+            raise OSError(errno.EIO, "short write while sealing archive file")
+        total += written
+
+
 def _open_leaf_create_exclusive_nofollow(component: str, parent_fd: int) -> int:
     """Create-exclusive-open component under parent_fd, no-follow, for the create-once write path."""
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -303,6 +356,14 @@ def create_exclusive_nofollow(
     two processes racing to create the same path cannot silently clobber
     one another.
 
+    The final name becomes visible only when it is complete: ``data`` is written
+    in full (short writes are looped over) and ``fsync``-ed to a temporary inode,
+    which is then atomically linked into place with no-replace semantics, and the
+    parent directory is ``fsync``-ed so the new entry survives a crash. A partial
+    write or crash therefore never publishes a half-written final file or a false
+    "exists" state (ADR-050 "A seal marker is never observable partially"); the
+    temporary inode is always cleaned up.
+
     Raises :class:`PathContainmentError` for the same structural/symlink
     reasons as :func:`open_contained_nofollow`. Raises ``FileExistsError``
     (unwrapped) when the leaf already exists — the create-once caller
@@ -310,18 +371,104 @@ def create_exclusive_nofollow(
     match via :func:`read_contained_nofollow`).
     """
     components = _split_components(relative_path)
+    dir_components = components[:-1]
+    leaf_component = components[-1]
     base_fd = _open_base_fd(base_dir)
+    parent_fd = base_fd
     try:
-        leaf_fd = _walk(
-            components,
-            base_fd,
-            open_dir=_open_dir_nofollow_or_create,
-            open_leaf=_open_leaf_create_exclusive_nofollow,
+        parent_fd = _walk_to_parent(
+            dir_components, base_fd, open_dir=_open_dir_nofollow_or_create
+        )
+        _atomic_publish(parent_fd, leaf_component, data)
+        # Durably link the new entry into its directory: an fsync of the file
+        # alone does not guarantee the dirent is persisted.
+        os.fsync(parent_fd)
+    finally:
+        if parent_fd != base_fd:
+            os.close(parent_fd)
+        os.close(base_fd)
+
+
+def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:
+    """Write ``data`` to a temp inode under ``parent_fd``, fsync, then link it
+    into place as ``leaf_component`` with no-replace semantics.
+
+    The temporary name is unlinked whether the publish succeeds or fails, so a
+    failed/aborted write never strands a partial file. ``FileExistsError`` from
+    the final link (the leaf already exists) propagates unwrapped for the
+    create-once caller's idempotency policy.
+    """
+    tmp_name = f".{leaf_component}.{os.getpid()}.{next(_TMP_COUNTER)}.tmp"
+    tmp_fd = _create_temp_leaf(tmp_name, parent_fd)
+    try:
+        try:
+            write_all(tmp_fd, data)
+            os.fsync(tmp_fd)
+        finally:
+            os.close(tmp_fd)
+        # Atomic, no-replace publication: linkat fails with EEXIST if the final
+        # name already exists, so two racing writers cannot clobber each other
+        # and a create-once conflict surfaces as FileExistsError.
+        os.link(
+            tmp_name,
+            leaf_component,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+            follow_symlinks=False,
         )
     finally:
-        os.close(base_fd)
+        try:
+            os.unlink(tmp_name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+
+
+def _create_temp_leaf(tmp_name: str, parent_fd: int) -> int:
+    """Create-exclusive-open the temporary publish inode under ``parent_fd``.
+
+    Retries once under a fresh name if a stale temp with the same name exists
+    (a crashed same-PID predecessor); any other failure is a containment error.
+    """
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
-        os.write(leaf_fd, data)
-        os.fsync(leaf_fd)
+        return os.open(tmp_name, flags, 0o600, dir_fd=parent_fd)
+    except FileExistsError:
+        try:
+            os.unlink(tmp_name, dir_fd=parent_fd)
+        except OSError:
+            pass
+        retry_name = f"{tmp_name}.{next(_TMP_COUNTER)}"
+        try:
+            return os.open(retry_name, flags, 0o600, dir_fd=parent_fd)
+        except OSError as exc:  # pragma: no cover - defensive
+            raise PathContainmentError(
+                REASON_OPEN_FAILED, f"cannot create temporary publish inode: {exc}"
+            ) from exc
+    except OSError as exc:
+        raise PathContainmentError(
+            REASON_OPEN_FAILED, f"cannot create temporary publish inode: {exc}"
+        ) from exc
+
+
+def open_dir_contained_nofollow(
+    base_dir: Path | str, relative_dir: str | Path, *, create: bool = False
+) -> int:
+    """Return a descriptor for ``relative_dir`` under ``base_dir``, walked no-follow.
+
+    Every component (including the leaf directory) is opened with
+    ``O_DIRECTORY | O_NOFOLLOW`` under its parent's descriptor, so a symlinked
+    intermediate — the classic ``index -> /elsewhere`` swap — is rejected rather
+    than followed. With ``create=True`` missing directory components are created
+    as real directories (never replacing an existing symlink). The caller owns
+    the returned descriptor and must close it.
+
+    Raises :class:`PathContainmentError` for an absolute/``.``/``..``/empty/NUL
+    component, a symlinked component, or (when ``create`` is false) a missing one.
+    """
+    components = _split_components(relative_dir)
+    opener = _open_dir_nofollow_or_create if create else _open_dir_nofollow
+    base_fd = _open_base_fd(base_dir)
+    try:
+        return _walk(components, base_fd, open_dir=opener, open_leaf=opener)
     finally:
-        os.close(leaf_fd)
+        os.close(base_fd)

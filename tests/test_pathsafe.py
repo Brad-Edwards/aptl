@@ -12,8 +12,11 @@ import os
 
 import pytest
 
+import stat
+
 from aptl.utils.pathsafe import (
     PathContainmentError,
+    create_exclusive_nofollow,
     open_contained_nofollow,
     read_contained_nofollow,
 )
@@ -191,3 +194,84 @@ class TestBaseDirUnavailable:
         with pytest.raises(PathContainmentError) as excinfo:
             open_contained_nofollow(tmp_path / "does-not-exist", "f.txt")
         assert excinfo.value.reason == "base_dir_unavailable"
+
+
+class TestCreateExclusiveNofollowDurability:
+    """ADR-050: the create-once write path must write all bytes and durably
+    link the new entry into its directory."""
+
+    def test_writes_exact_bytes_at_the_top_level(self, tmp_path):
+        create_exclusive_nofollow(tmp_path, "record.json", b"payload-bytes")
+        assert (tmp_path / "record.json").read_bytes() == b"payload-bytes"
+
+    def test_creates_intermediate_directories_and_writes_nested(self, tmp_path):
+        create_exclusive_nofollow(tmp_path, "run/evidence/blob.bin", b"nested")
+        assert (tmp_path / "run" / "evidence" / "blob.bin").read_bytes() == b"nested"
+
+    def test_existing_leaf_raises_file_exists_unwrapped(self, tmp_path):
+        (tmp_path / "x.json").write_bytes(b"already")
+        with pytest.raises(FileExistsError):
+            create_exclusive_nofollow(tmp_path, "x.json", b"new")
+        # The create-once caller owns idempotency: the original bytes survive.
+        assert (tmp_path / "x.json").read_bytes() == b"already"
+
+    def test_large_payload_is_written_completely(self, tmp_path):
+        # Larger than a typical pipe buffer, to exercise the write path with a
+        # real multi-page buffer.
+        data = bytes(range(256)) * 4096  # 1 MiB
+        create_exclusive_nofollow(tmp_path, "big.bin", data)
+        assert (tmp_path / "big.bin").read_bytes() == data
+
+    def test_short_writes_are_looped_until_complete(self, tmp_path, monkeypatch):
+        real_write = os.write
+
+        def chunked_write(fd, buf):
+            # Accept at most 7 bytes per call to force the short-write loop.
+            return real_write(fd, bytes(buf)[:7])
+
+        monkeypatch.setattr(os, "write", chunked_write)
+        payload = b"this payload is definitely longer than seven bytes"
+        create_exclusive_nofollow(tmp_path, "chunked.bin", payload)
+        assert (tmp_path / "chunked.bin").read_bytes() == payload
+
+    def test_a_refusal_to_make_progress_is_an_error(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(os, "write", lambda fd, buf: 0)
+        with pytest.raises(OSError):
+            create_exclusive_nofollow(tmp_path, "stuck.bin", b"nonempty")
+
+    def test_failed_write_strands_no_partial_final_or_temp(self, tmp_path, monkeypatch):
+        # ADR-050: a partial write must never publish a half-written final file
+        # or a false "exists" state; the temp inode is always cleaned up.
+        import aptl.utils.pathsafe as pathsafe
+
+        def boom(fd, data):
+            raise OSError("simulated disk failure")
+
+        monkeypatch.setattr(pathsafe, "write_all", boom)
+        with pytest.raises(OSError):
+            create_exclusive_nofollow(tmp_path, "rec.json", b"data")
+
+        assert not (tmp_path / "rec.json").exists()
+        # No stranded temporary publish inode remains.
+        assert list(tmp_path.glob(".rec.json*")) == []
+
+    def test_parent_directory_is_fsynced(self, tmp_path):
+        fsynced_modes = []
+        real_fsync = os.fsync
+
+        def recording_fsync(fd):
+            fsynced_modes.append(stat.S_ISDIR(os.fstat(fd).st_mode))
+            return real_fsync(fd)
+
+        import aptl.utils.pathsafe as pathsafe
+
+        original = pathsafe.os.fsync
+        pathsafe.os.fsync = recording_fsync
+        try:
+            create_exclusive_nofollow(tmp_path, "sub/record.json", b"durable")
+        finally:
+            pathsafe.os.fsync = original
+
+        # Both the file (not a dir) and its containing directory were fsynced.
+        assert True in fsynced_modes  # a directory fd was fsynced
+        assert False in fsynced_modes  # a regular file fd was fsynced

@@ -13,17 +13,60 @@ cannot be structurally redacted and are pass-through by design —
 callers must not route control-plane secrets through them.
 """
 
+import fcntl
 import json
+import os
 import re
 import shutil
+import threading
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Protocol, TypedDict
+from typing import Any, Iterator, Protocol, TypedDict
 
 import rfc8785
 
 from aptl.utils.logging import get_logger
-from aptl.utils.pathsafe import create_exclusive_nofollow, read_contained_nofollow
+from aptl.utils.pathsafe import (
+    REASON_BASE_DIR_UNAVAILABLE,
+    REASON_NOT_FOUND,
+    PathContainmentError,
+    create_exclusive_nofollow,
+    open_dir_contained_nofollow,
+    read_contained_nofollow,
+)
 from aptl.utils.redaction import redact
+
+#: Store-relative directory holding per-attempt finalization locks (store-owned,
+#: no-follow). Skipped by ``list_runs`` since it carries no ``manifest.json``.
+_LOCKS_DIR = "locks"
+
+
+@dataclass
+class _HeldLock:
+    fd: int
+    depth: int
+
+
+#: Process-wide registry of held per-run locks, keyed by
+#: ``(base_dir, run_id, thread_id)``. Reentrancy is per THREAD: the same thread
+#: nesting acquisitions (a coordinator holding the lock while its create-once
+#: manifest write re-acquires it) reuses one ``flock``; a different thread or
+#: process opens its own descriptor and blocks on ``flock`` until released. This
+#: makes every run-directory mutation mutually exclusive with finalization
+#: without the coordinator deadlocking on itself.
+_LOCK_REGISTRY: dict[tuple[str, str, int], _HeldLock] = {}
+_LOCK_REGISTRY_GUARD = threading.Lock()
+
+#: Run-relative path of the ADR-050 atomic seal marker. Defined here — the store
+#: owns seal-state enforcement — and re-exported by
+#: :mod:`aptl.core.archival.layout` so the archival package has one source of
+#: truth without the store importing the archival package (which would cycle).
+SEAL_MARKER_RELPATH = "seal.json"
+
+#: Containment reasons that mean "no seal marker is present" rather than an
+#: error: the run directory, or the whole run store, does not exist yet.
+_UNSEALED_REASONS = frozenset({REASON_NOT_FOUND, REASON_BASE_DIR_UNAVAILABLE})
 
 log = get_logger("runstore")
 
@@ -49,6 +92,16 @@ class RunStoreConflictError(ValueError):
 
     A byte-identical existing payload is treated as idempotent success
     (ADR-047); only a genuine mismatch is an error.
+    """
+
+
+class SealedRunError(RuntimeError):
+    """Raised when a mutable write targets an already-sealed run archive.
+
+    ADR-050 "A seal marker is the atomic commit point": once the run's seal
+    marker exists, every structured, opaque, and export path must treat the
+    archive as immutable. Overwrite-capable writers refuse rather than mutate
+    sealed bytes; a correction is a new run version, never an in-place edit.
     """
 
 
@@ -233,11 +286,138 @@ class LocalRunStore:
         log.info("Created run directory: %s", run_dir)
         return run_dir
 
+    def is_sealed(self, run_id: str) -> bool:
+        """Return whether the run's ADR-050 seal marker has been committed.
+
+        Read no-follow: a missing marker (or missing run directory) is
+        ``False``; any other containment failure propagates.
+        """
+        safe_run_id = _validate_id(run_id, "run_id")
+        try:
+            read_contained_nofollow(
+                self._base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}"
+            )
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return False
+            raise
+        return True
+
+    def read_seal_marker(self, run_id: str) -> dict[str, Any] | None:
+        """Return the parsed seal marker for ``run_id``, or ``None`` if unsealed."""
+        safe_run_id = _validate_id(run_id, "run_id")
+        try:
+            raw = read_contained_nofollow(
+                self._base_dir, f"{safe_run_id}/{SEAL_MARKER_RELPATH}"
+            )
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return None
+            raise
+        return json.loads(raw)
+
+    def commit_seal_marker(self, run_id: str, marker: object) -> Path:
+        """Atomically publish the seal marker create-once (the archive commit point).
+
+        This is the ONLY path allowed to write the reserved marker: it holds the
+        per-run lock and writes create-once WITHOUT the sealed-state rejection
+        (the marker is what makes the run sealed). An identical marker is
+        idempotent; a differing marker raises :class:`RunStoreConflictError`.
+        Once it returns, every other mutation path refuses.
+        """
+        with self.finalization_lock(run_id):
+            return self._create_run_json_once_raw(run_id, SEAL_MARKER_RELPATH, marker)
+
+    def read_run_json(self, run_id: str, relative_path: str) -> Any | None:
+        """Return a parsed run-relative JSON file (no-follow), or ``None`` if absent."""
+        safe_run_id = _validate_id(run_id, "run_id")
+        safe_rel = _validate_relative_path(relative_path)
+        try:
+            raw = read_contained_nofollow(self._base_dir, f"{safe_run_id}/{safe_rel}")
+        except PathContainmentError as exc:
+            if exc.reason in _UNSEALED_REASONS:
+                return None
+            raise
+        return json.loads(raw)
+
+    @contextmanager
+    def finalization_lock(self, run_id: str) -> Iterator[None]:
+        """Hold the store-owned exclusive per-run lock (reentrant per thread).
+
+        The archival coordinator holds this across compose, verification, and
+        marker publication so two finalizers of the same attempt cannot race
+        (ADR-050 "per-attempt finalization exclusion"). Every run-directory
+        mutation acquires it too, so a producer cannot pass a sealed-state check
+        and then interleave a write with the seal commit. Nesting within one
+        thread reuses a single ``flock``; a different thread or process blocks
+        until release. The lock file lives in a store-owned ``locks/`` directory
+        opened descriptor-relative and no-follow, so an attacker-swapped
+        ``locks`` symlink cannot redirect it.
+        """
+        safe_run_id = _validate_id(run_id, "run_id")
+        key = (str(self._base_dir), safe_run_id, threading.get_ident())
+        with _LOCK_REGISTRY_GUARD:
+            held = _LOCK_REGISTRY.get(key)
+            if held is not None:
+                held.depth += 1
+                reused = True
+            else:
+                reused = False
+        if not reused:
+            lock_fd = self._open_run_lock_fd(safe_run_id)
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            with _LOCK_REGISTRY_GUARD:
+                _LOCK_REGISTRY[key] = _HeldLock(fd=lock_fd, depth=1)
+        try:
+            yield
+        finally:
+            with _LOCK_REGISTRY_GUARD:
+                entry = _LOCK_REGISTRY[key]
+                entry.depth -= 1
+                if entry.depth == 0:
+                    fcntl.flock(entry.fd, fcntl.LOCK_UN)
+                    os.close(entry.fd)
+                    del _LOCK_REGISTRY[key]
+
+    def _open_run_lock_fd(self, safe_run_id: str) -> int:
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        dir_fd = open_dir_contained_nofollow(self._base_dir, _LOCKS_DIR, create=True)
+        try:
+            return os.open(
+                f"{safe_run_id}.lock",
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=dir_fd,
+            )
+        finally:
+            os.close(dir_fd)
+
+    def _reject_if_sealed(self, run_id: str, relative_path: str) -> None:
+        """Refuse a mutable write to a sealed run or the reserved marker path.
+
+        The seal marker path is reserved from every generic writer (ADR-050 /
+        codex security finding): only :meth:`commit_seal_marker` may publish it,
+        so a compromised collector or sidecar cannot forge a marker or race the
+        seal commit through ``write_json`` / ``append_jsonl`` / ``copy_file``.
+        """
+        if _validate_relative_path(relative_path).replace("\\", "/") == SEAL_MARKER_RELPATH:
+            raise SealedRunError(
+                f"{SEAL_MARKER_RELPATH!r} is the reserved seal marker path; only "
+                "the seal-commit path may write it"
+            )
+        if self.is_sealed(run_id):
+            raise SealedRunError(
+                f"run {run_id!r} is sealed; its archive is immutable — a "
+                "correction is a new run version, not an in-place write"
+            )
+
     def write_file(self, run_id: str, relative_path: str, data: bytes) -> None:
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-        log.debug("Wrote %d bytes to %s", len(data), target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            log.debug("Wrote %d bytes to %s", len(data), target)
 
     def write_json(self, run_id: str, relative_path: str, obj: object) -> None:
         # Redact at the persistence boundary (ADR-029) so individual
@@ -271,17 +451,19 @@ class LocalRunStore:
         """
         if not records:
             return
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Redact each record at the persistence boundary (ADR-029).
-        lines = [
-            json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
-            for r in records
-        ]
-        chunk = ("\n".join(lines) + "\n").encode("utf-8")
-        with open(target, "ab") as fh:
-            fh.write(chunk)
-        log.debug("Appended %d JSONL records to %s", len(records), target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # Redact each record at the persistence boundary (ADR-029).
+            lines = [
+                json.dumps(redact(r), separators=(",", ":"), default=_safe_default)
+                for r in records
+            ]
+            chunk = ("\n".join(lines) + "\n").encode("utf-8")
+            with open(target, "ab") as fh:
+                fh.write(chunk)
+            log.debug("Appended %d JSONL records to %s", len(records), target)
 
     def create_run_json_once(
         self,
@@ -291,12 +473,23 @@ class LocalRunStore:
     ) -> Path:
         """Atomically publish one immutable, run-scoped JSON artifact.
 
-        The artifact uses the same canonical, no-follow, create-once
-        semantics as :meth:`create_json_once`, but remains inside the run
-        archive so it can act as an authoritative transaction record for
-        recoverable JSONL projections.
+        Holds the per-run lock and rechecks seal state while holding it, so a
+        create-once write cannot add a file to (or forge the marker of) a run
+        that is being, or has been, sealed by another writer.
         """
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            return self._create_run_json_once_raw(run_id, relative_path, payload)
 
+    def _create_run_json_once_raw(
+        self, run_id: str, relative_path: str, payload: object
+    ) -> Path:
+        """The unguarded create-once write (canonical, no-follow, atomic).
+
+        Callers MUST already hold :meth:`finalization_lock` and have applied the
+        appropriate sealed-state policy — only :meth:`commit_seal_marker` may use
+        it to write the reserved marker.
+        """
         safe_run_id = _validate_id(run_id, "run_id")
         safe_relpath = _validate_relative_path(relative_path).replace("\\", "/")
         contained_relpath = f"{safe_run_id}/{safe_relpath}"
@@ -305,16 +498,9 @@ class LocalRunStore:
         self._base_dir.mkdir(parents=True, exist_ok=True)
         target = self._base_dir / safe_run_id / PurePosixPath(safe_relpath)
         try:
-            create_exclusive_nofollow(
-                self._base_dir,
-                contained_relpath,
-                canonical,
-            )
+            create_exclusive_nofollow(self._base_dir, contained_relpath, canonical)
         except FileExistsError:
-            existing = read_contained_nofollow(
-                self._base_dir,
-                contained_relpath,
-            )
+            existing = read_contained_nofollow(self._base_dir, contained_relpath)
             if existing != canonical:
                 raise RunStoreConflictError(
                     "create_run_json_once target already exists with "
@@ -323,10 +509,12 @@ class LocalRunStore:
         return target
 
     def copy_file(self, run_id: str, relative_path: str, source: Path) -> None:
-        target = self._resolve_run_target(run_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        log.debug("Copied %s -> %s", source, target)
+        with self.finalization_lock(run_id):
+            self._reject_if_sealed(run_id, relative_path)
+            target = self._resolve_run_target(run_id, relative_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            log.debug("Copied %s -> %s", source, target)
 
     def create_json_once(self, namespace: str, name: str, payload: object) -> Path:
         """Create-once, canonical, no-follow, atomic persistence for a

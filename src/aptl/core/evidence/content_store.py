@@ -91,13 +91,18 @@ def create_content_addressed(
 
     base_dir = store.base_dir
     base_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        create_exclusive_nofollow(base_dir, rel, data)
-    except FileExistsError:
-        if read_contained_nofollow(base_dir, rel) != data:
-            raise RunStoreConflictError(
-                f"create_content_addressed digest collision with different bytes: {run_id}/{relative_path}"
-            ) from None
+    # Acquire the per-run lock and recheck seal state so a content-addressed
+    # insertion cannot add bytes to a run being (or already) sealed by another
+    # writer (ADR-050 write/seal exclusion).
+    with store.finalization_lock(run_id):
+        store._reject_if_sealed(run_id, relative_path)
+        try:
+            create_exclusive_nofollow(base_dir, rel, data)
+        except FileExistsError:
+            if read_contained_nofollow(base_dir, rel) != data:
+                raise RunStoreConflictError(
+                    f"create_content_addressed digest collision with different bytes: {run_id}/{relative_path}"
+                ) from None
 
     stored = read_contained_nofollow(base_dir, rel)
     if len(stored) != len(data) or hashlib.sha256(stored).hexdigest() != digest_hex:
@@ -112,25 +117,9 @@ def create_content_addressed(
 def create_run_json_once(store: LocalRunStore, run_id: str, relative_path: str, payload: object) -> Path:
     """Create-once, canonical, no-follow JSON persistence UNDER the run dir.
 
-    Like the store's ``create_json_once`` but run-scoped, so the evidence
-    ledger travels in the exporter's per-run tar. Same secret invariant,
-    RFC-8785 canonicalization, and idempotent-on-byte-match semantics; a
-    differing existing target raises :class:`RunStoreConflictError`.
+    Delegates to :meth:`LocalRunStore.create_run_json_once` (ADR-050
+    consolidation) so it inherits the per-run finalization lock and sealed-state
+    recheck — a create-once write can never add a file to a run being or already
+    sealed, and the reserved marker path is refused here too.
     """
-    safe_run_id = _validate_id(run_id, "run_id")
-    safe_rel = _validate_relative_path(relative_path)
-    canonical, normalized = _canonicalize_payload(payload)
-    _assert_no_secret_drift(normalized)
-
-    base_dir = store.base_dir
-    base_dir.mkdir(parents=True, exist_ok=True)
-    rel = f"{safe_run_id}/{safe_rel}"
-    target = store.get_run_path(run_id) / safe_rel
-    try:
-        create_exclusive_nofollow(base_dir, rel, canonical)
-    except FileExistsError:
-        if read_contained_nofollow(base_dir, rel) != canonical:
-            raise RunStoreConflictError(
-                f"create_run_json_once target already exists with different content: {run_id}/{relative_path}"
-            ) from None
-    return target
+    return store.create_run_json_once(run_id, relative_path, payload)

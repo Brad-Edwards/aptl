@@ -71,3 +71,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [047](adr-047-raes-experiment-admission-and-trial-plan-boundary.md) | RAES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
 | [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | accepted | 2026-07-20 |
 | [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | accepted | 2026-07-25 |
+| [050](adr-050-terminal-attempt-archival-and-atomic-seal.md) | Terminal Attempt Archival And Atomic Seal Boundary | accepted | 2026-07-28 |

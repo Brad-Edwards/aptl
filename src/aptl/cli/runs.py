@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from aptl.cli._common import resolve_run_store
+from aptl.core.archival.legacy_manifest import summarize_manifest
 from aptl.core.runstore import LocalRunStore
 from aptl.utils.logging import get_logger
 
@@ -58,16 +59,17 @@ def list_runs(
 
         for run_id in run_ids:
             try:
-                manifest = store.get_run_manifest(run_id)
-                duration = manifest.get("duration_seconds", 0)
+                summary = summarize_manifest(store.get_run_manifest(run_id))
+                duration = summary.duration_seconds or 0
                 minutes = int(duration // 60)
                 seconds = int(duration % 60)
+                flags = "0" if summary.flags_captured is None else str(summary.flags_captured)
                 table.add_row(
                     run_id[:12] + "...",
-                    manifest.get("scenario_name", "?"),
-                    manifest.get("started_at", "?")[:19],
+                    summary.scenario_name,
+                    summary.started_at[:19],
                     f"{minutes}m {seconds}s",
-                    str(manifest.get("flags_captured", 0)),
+                    flags,
                 )
             except (FileNotFoundError, KeyError) as e:
                 log.warning("Skipping run %s: %s", run_id, e)
@@ -77,10 +79,9 @@ def list_runs(
     else:
         for run_id in run_ids:
             try:
-                manifest = store.get_run_manifest(run_id)
+                summary = summarize_manifest(store.get_run_manifest(run_id))
                 typer.echo(
-                    f"{run_id}\t{manifest.get('scenario_name', '?')}\t"
-                    f"{manifest.get('started_at', '?')[:19]}"
+                    f"{run_id}\t{summary.scenario_name}\t{summary.started_at[:19]}"
                 )
             except (FileNotFoundError, KeyError):
                 typer.echo(f"{run_id}\tERROR")
@@ -114,26 +115,27 @@ def show_run(
     resolved_id = matches[0]
 
     try:
-        manifest = store.get_run_manifest(resolved_id)
+        summary = summarize_manifest(store.get_run_manifest(resolved_id))
     except FileNotFoundError:
         typer.echo(f"Run {resolved_id} has no manifest.")
         raise typer.Exit(code=1)
 
-    duration = manifest.get("duration_seconds", 0)
+    duration = summary.duration_seconds or 0
     minutes = int(duration // 60)
     seconds = int(duration % 60)
 
     typer.echo(f"Run: {resolved_id}")
-    typer.echo(f"  Scenario:     {manifest.get('scenario_name', '?')}")
-    typer.echo(f"  Scenario ID:  {manifest.get('scenario_id', '?')}")
-    typer.echo(f"  Started:      {manifest.get('started_at', '?')}")
-    typer.echo(f"  Finished:     {manifest.get('finished_at', '?')}")
+    typer.echo(f"  Scenario:     {summary.scenario_name}")
+    typer.echo(f"  Scenario ID:  {summary.scenario_id}")
+    typer.echo(f"  Started:      {summary.started_at}")
+    typer.echo(f"  Finished:     {summary.finished_at}")
     typer.echo(f"  Duration:     {minutes}m {seconds}s")
-    typer.echo(f"  Flags:        {manifest.get('flags_captured', 0)}")
+    if summary.status != "?":
+        typer.echo(f"  Status:       {summary.status}")
+    typer.echo(f"  Flags:        {0 if summary.flags_captured is None else summary.flags_captured}")
 
-    containers = manifest.get("containers", [])
-    if containers:
-        typer.echo(f"  Containers:   {', '.join(containers)}")
+    if summary.containers:
+        typer.echo(f"  Containers:   {', '.join(summary.containers)}")
 
     # List files in run directory
     run_path = store.get_run_path(resolved_id)

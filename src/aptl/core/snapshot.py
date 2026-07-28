@@ -14,6 +14,7 @@ the remote daemon and behave identically to local Docker Compose.
 
 import hashlib
 import sys
+import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -367,13 +368,24 @@ def _get_network_snapshots(
 
 
 def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
-    """Compute SHA-256 hashes for config files in the project."""
+    """Compute SHA-256 hashes for non-secret config files in the project.
+
+    ``.env`` is deliberately absent (REP-003 / issue #452). It holds
+    control-plane secrets, and a digest is not safe disclosure for a
+    secret-bearing file — the values it contains have a small guessable
+    domain, so a hash is a confirmation oracle rather than an opaque
+    identity. ADR-029 permits the record to store non-secret identities;
+    apparatus-relevant configuration identity comes from the explicit safe
+    projection in
+    :func:`aptl.core.provenance.providers.config_identity.safe_config_projection`,
+    not from hashing whole files.
+    """
     hashes = {}
 
     if config_dir is None:
         config_dir = Path(".")
 
-    patterns = ["aptl.json", "docker-compose*.yml", "docker-compose*.yaml", ".env"]
+    patterns = ["aptl.json", "docker-compose*.yml", "docker-compose*.yaml"]
     for pattern in patterns:
         for f in sorted(config_dir.glob(pattern)):
             if f.is_file():
@@ -384,27 +396,44 @@ def _hash_config_files(config_dir: Path | None = None) -> dict[str, str]:
 
 
 def detection_content_digest(project_dir: Path) -> str:
-    """Compute a combined sha256 digest of detection content under project_dir.
+    """Return the framed sha256 identity of detection content under project_dir.
 
-    Hashes Suricata custom rules and Wazuh custom rules found under the
-    project directory. Returns an empty string when no detection files are
-    found (empty-safe). Reuses the same file-glob/hash pattern as
-    :func:`_hash_config_files`.
+    Thin adapter over the single detection-content owner,
+    :class:`~aptl.core.provenance.providers.detection.DetectionContentProvider`
+    (REP-003 / issue #452), so there is exactly one implementation of
+    detection-content identity rather than a second hashing path here.
+
+    The previous implementation had four defects this delegation removes: it
+    concatenated file bytes unframed (so ``"ab" + "c"`` and ``"a" + "bc"``
+    collided); it globbed ``config/wazuh/etc/rules`` and
+    ``config/wazuh/etc/decoders``, neither of which exists — the real Wazuh
+    rule/decoder/allowlist surface is ``config/wazuh_cluster``; it was
+    non-recursive, missing ``config/suricata/rules/misp``; and it read through
+    ``glob()``/``read_bytes()``, following symlinks. In practice it covered a
+    single file.
+
+    The empty-string-when-absent and bare-hex return shape is preserved for
+    the existing REP-001 record field; richer per-artifact leaves and explicit
+    limitations live in the run provenance record.
     """
-    patterns = [
-        "config/suricata/rules/*.rules",
-        "config/suricata/rules/*.conf",
-        "config/wazuh/etc/rules/*.xml",
-        "config/wazuh/etc/decoders/*.xml",
-    ]
-    combined = hashlib.sha256()
-    found_any = False
-    for pattern in patterns:
-        for f in sorted(project_dir.glob(pattern)):
-            if f.is_file():
-                combined.update(f.read_bytes())
-                found_any = True
-    return combined.hexdigest() if found_any else ""
+    from aptl.core.provenance.identity import DIGEST_PREFIX, family_identity
+    from aptl.core.provenance.outcomes import ProvenanceStatus
+    from aptl.core.provenance.protocol import ProvenanceContext
+    from aptl.core.provenance.providers.detection import DetectionContentProvider
+    from aptl.core.provenance.registrations import DEFAULT_PROVENANCE_REGISTRY
+
+    registration = DEFAULT_PROVENANCE_REGISTRY.get("detection-content")
+    if registration is None:  # pragma: no cover - the built-in is always present
+        return ""
+    context = ProvenanceContext(
+        registration=registration, clock=time.monotonic, started_at=time.monotonic()
+    )
+    result = DetectionContentProvider(project_dir).collect(context)
+    if result.status is not ProvenanceStatus.COLLECTED or not result.leaves:
+        # Absent, denied, truncated, or timed-out content is not a digest. The
+        # run provenance record states which; this field stays empty-safe.
+        return ""
+    return family_identity("detection", result.leaves)[len(DIGEST_PREFIX) :]
 
 
 def capture_snapshot(

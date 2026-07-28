@@ -38,6 +38,7 @@ from aptl.backends.raes_start_model import (
     AcesStartOutcome,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -66,6 +67,7 @@ def create_aptl_runtime_target(
     backend: "DeploymentBackend",
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
     participant_plan_authority: ParticipantPlanAuthority | None = None,
+    bundle: ScenarioBundle | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target."""
 
@@ -73,6 +75,7 @@ def create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
         deployment_backend=backend,
+        bundle=bundle,
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -170,10 +173,15 @@ def _plan_scenario(
     """Build one RAES plan and the target that consumes its concrete model."""
 
     scenario = parse_sdl_file(scenario_path)
+    # Resolve the scenario bundle once, here, where the scenario itself is
+    # resolved. Everything downstream anchors its content to this rather than to
+    # the engine's checkout, so rehoming the scenario changes only the resolver.
+    bundle = project_tree_bundle(project_dir, scenario_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
         backend=backend,
+        bundle=bundle,
     )
     manager = RuntimeManager(target)
     # Artifact availability is a trusted input to planning, gathered at the
@@ -183,7 +191,7 @@ def _plan_scenario(
     # to the bundle, which is the project directory only while the scenario
     # still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, scenario_root=project_dir
+        scenario, backend, scenario_root=bundle.root
     )
     execution_plan = (
         manager.plan(
@@ -205,6 +213,7 @@ def _plan_scenario(
         config=config,
         backend=backend,
         participant_action_specs=participant_action_specs,
+        bundle=bundle,
     )
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):

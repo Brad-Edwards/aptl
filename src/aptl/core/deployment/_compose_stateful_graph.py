@@ -6,7 +6,7 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from aptl.core.deployment._compose_stateful_constants import (
-    CERTIFICATE_ROOT_BY_PROVENANCE,
+    CERTIFICATE_PROVENANCE,
     OWNED_WAZUH_SERVICES,
     WAZUH_INDEXER_SERVICE,
     WAZUH_MANAGER_SERVICE,
@@ -98,7 +98,7 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
     for artifact in realization.generated_artifacts:
         if (
             artifact.generator == "certificate_bundle"
-            and artifact.provenance not in CERTIFICATE_ROOT_BY_PROVENANCE
+            and artifact.provenance != CERTIFICATE_PROVENANCE
         ):
             errors.append(
                 f"Generated artifact {artifact.address} has unsupported provenance."

@@ -181,12 +181,12 @@ def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
     assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"
 
 
-def test_authored_non_secret_defaults_are_bound():
+def test_authored_defaults_are_bound():
     """Values that were literals in Compose are authored, not lost.
 
-    Only credential-class variables live in the generated .env. The rest were
-    plain literals in the pre-refactor Compose file, so without an authored
-    default they would have no source at all and be silently omitted.
+    Without an authored default they would have no source at all and be silently
+    omitted, because only genuine deployment credentials live in the generated
+    `.env`.
     """
 
     from aptl.backends.raes_base_substrate import _environment_defaults
@@ -195,8 +195,6 @@ def test_authored_non_secret_defaults_are_bound():
 
     assert defaults["DB_HOST"] == "172.20.2.11"
     assert defaults["DB_NAME"] == "techvault"
-    # A secret is authored empty and therefore never carried as a default.
-    assert "DB_PASSWORD" not in defaults
 
 
 def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, monkeypatch):
@@ -225,3 +223,56 @@ def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, mon
     assert "DB_HOST=from-operator" in body
     assert "DB_NAME=from-credentials" in body
     assert "DB_PORT=5432" in body
+
+
+def test_planted_range_credentials_are_authored_not_stripped():
+    """A range credential is scenario content and must be declared in the SDL.
+
+    The pre-refactor compose file carried `POSTGRES_PASSWORD=techvault_db_pass`
+    as a literal — a deliberately weak credential the attack path is meant to
+    find. Classifying it as an operator secret stripped the value and left the
+    database with no password at all, because nothing else supplies it.
+
+    `secret_fixture` is the honest classification: a secret that is a fixture.
+    """
+
+    from aptl.backends.raes_base_substrate import _environment_defaults
+
+    scenario = parse_sdl_file(_SCENARIO)
+
+    db = dict(_environment_defaults(scenario.nodes["db"].runtime))
+    webapp = dict(_environment_defaults(scenario.nodes["webapp"].runtime))
+
+    assert db["POSTGRES_PASSWORD"], "the range's database password is not authored"
+    assert webapp["DB_PASSWORD"] == db["POSTGRES_PASSWORD"], (
+        "webapp and db must agree on the planted credential"
+    )
+
+
+def test_a_real_operator_secret_is_still_authored_empty():
+    """The distinction must cut both ways, or everything becomes a fixture."""
+
+    from aptl.backends.raes_base_substrate import _environment_defaults
+
+    scenario = parse_sdl_file(_SCENARIO)
+    sync = dict(_environment_defaults(scenario.nodes["misp-suricata-sync"].runtime))
+
+    # MISP's API key is a real deployment credential, not planted range content.
+    assert "MISP_API_KEY" not in sync
+
+
+def test_range_credentials_are_classified_as_fixtures_not_operator_secrets():
+    """The classification carries the distinction, so tooling can tell them apart."""
+
+    scenario = parse_sdl_file(_SCENARIO)
+
+    for node, name in (("db", "POSTGRES_PASSWORD"), ("webapp", "DB_PASSWORD")):
+        variable = next(
+            v for v in scenario.nodes[node].runtime.environment if v.name == name
+        )
+        classification = getattr(
+            variable.value_classification, "value", variable.value_classification
+        )
+        assert classification == "secret_fixture", (
+            f"{node}.{name} is planted range content, not a deployment secret"
+        )

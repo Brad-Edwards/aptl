@@ -530,7 +530,8 @@ nodes:
           value_classification: plain
           provenance: compose
         - name: DB_PASSWORD
-          value_classification: operator_secret
+          value: "techvault_db_pass"
+          value_classification: secret_fixture
           provenance: compose
         - name: FLASK_ENV
           value: "production"
@@ -655,7 +656,8 @@ nodes:
           value_classification: plain
           provenance: compose
         - name: POSTGRES_PASSWORD
-          value_classification: operator_secret
+          value: "techvault_db_pass"
+          value_classification: secret_fixture
           provenance: compose
       packages:
         - {manager: apt, name: postgresql, version: "*"}

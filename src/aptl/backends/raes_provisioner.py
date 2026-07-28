@@ -30,6 +30,7 @@ from aptl.backends.raes_profiles import (
     select_backend_profiles,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -43,6 +44,9 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
+    # The scenario being realized, and the root its content is anchored to.
+    # None keeps the pre-bundle behaviour for a caller that has not resolved one.
+    bundle: "ScenarioBundle | None" = None
     # RAES's backend-call boundary replaces a failed apply's diagnostics with
     # its snapshot-contract / SEM-218 gate output (the gate reads the
     # never-realized snapshot, so every exact declaration looks unrealized).
@@ -250,6 +254,7 @@ class AptlProvisioner(object):
             plan=plan,
             project_dir=self.project_dir,
             config=self.config,
+            bundle=self.bundle,
         )
 
     @staticmethod

@@ -113,9 +113,10 @@ class BaseContainerSpec:
     # secret boundary and written to a contained, owner-only env file, so a
     # credential never reaches process argv, image labels, or logs.
     environment_names: tuple[str, ...] = ()
-    # Authored non-secret defaults, as (name, value). Safe to carry: a variable
-    # classified as a secret is authored with an empty value and is supplied by
-    # the credential boundary instead, so no secret can travel here.
+    # Environment values the scenario authors, as (name, value). Planted range
+    # credentials belong here — they are content, not deployment secrets. A real
+    # operator secret is authored empty and supplied by the credential boundary,
+    # so it cannot travel here.
     environment_defaults: tuple[tuple[str, str], ...] = ()
 
 
@@ -203,12 +204,17 @@ def _environment_names(runtime: RuntimeConfiguration | None) -> tuple[str, ...]:
 def _environment_defaults(
     runtime: RuntimeConfiguration | None,
 ) -> tuple[tuple[str, str], ...]:
-    """Return authored non-secret environment defaults.
+    """Return the environment values the scenario itself authors.
 
-    ``RuntimeEnvironmentVariable.value`` carries a non-secret default; anything
-    classified as a secret is authored empty and resolved through the project's
-    credential boundary. Filtering on a non-empty value is therefore sufficient
-    to keep secrets out of this tuple.
+    Two different things are called secrets and only one of them is authored
+    here. A planted range credential — the weak database password an attacker is
+    meant to find — is scenario content: it shipped in a checked-in file for
+    anyone to read, and the range does not work without it. It is classified
+    ``secret_fixture`` and carries its value.
+
+    An ``operator_secret`` is a real deployment credential. It is authored with
+    an empty value and resolved through the project's credential boundary, so
+    filtering on a non-empty value keeps it out of this tuple.
     """
 
     if runtime is None:

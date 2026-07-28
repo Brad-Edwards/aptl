@@ -2136,7 +2136,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             )
 
     def fake_create_target(
-        *, project_dir, config, backend, participant_action_specs=None
+        *, project_dir, config, backend, participant_action_specs=None, bundle=None
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 

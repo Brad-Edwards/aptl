@@ -7,7 +7,6 @@ from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._compose_stateful_constants import (
-    CERTIFICATE_ROOT_BY_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
@@ -73,12 +72,11 @@ def artifact_source_path(
 ) -> Path:
     """Return the canonical host source for a supported artifact provider."""
 
-    if artifact.generator == "certificate_bundle":
-        relative = CERTIFICATE_ROOT_BY_PROVENANCE.get(
-            artifact.provenance, CERTIFICATE_ROOT_RELPATH
-        )
-    else:
-        relative = RENDERED_MANAGER_RELPATH
+    relative = (
+        CERTIFICATE_ROOT_RELPATH
+        if artifact.generator == "certificate_bundle"
+        else RENDERED_MANAGER_RELPATH
+    )
     return project_dir.resolve() / relative
 
 

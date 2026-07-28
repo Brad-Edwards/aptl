@@ -44,7 +44,6 @@ from aptl.workbench.process import AgentExecutionError
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.core.deployment.backend import DeploymentBackend
-    from aptl.core.runstore import RunStorageBackend
 
 SCENARIO_RELATIVE_PATH = Path("scenarios/bounded-participant-agency-techvault.sdl.yaml")
 _PROVIDER_VERSION_ENVIRONMENT = {

@@ -269,7 +269,11 @@ def export_bundle(
     loss-accounted projections, into a deterministic archive a third party can
     verify without importing APTL internals.
     """
-    from aptl.core.evidence_bundle import BundleError, build_evidence_bundle
+    from aptl.core.evidence_bundle import (
+        BundleError,
+        BundleOptions,
+        build_evidence_bundle,
+    )
     from aptl.core.evidence_bundle.projections import available_formats
 
     store = _get_store(project_dir)
@@ -288,7 +292,10 @@ def export_bundle(
     output_path = output_dir / f"{resolved_id}.evidence-bundle.tar"
     try:
         result = build_evidence_bundle(
-            run_dir, resolved_id, output_path, projections=formats, self_verify=verify
+            run_dir,
+            resolved_id,
+            output_path,
+            options=BundleOptions(projections=formats, self_verify=verify),
         )
     except BundleError as exc:
         typer.echo(f"Error building bundle: {exc}")

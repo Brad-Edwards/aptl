@@ -52,6 +52,7 @@ class ArchiveResult:
 
 
 def _validate_bundle_path(path: str, limits: BundleLimits) -> None:
+    """Reject a bundle member path that is not a safe, bounded relative path."""
     if not path or path.startswith("/") or "\\" in path:
         raise BundleError(
             codes.REJECTED_SOURCE, f"bundle path is not a safe relative path: {path!r}"
@@ -72,6 +73,7 @@ def _validate_bundle_path(path: str, limits: BundleLimits) -> None:
 
 
 def _validate_members(members: list[BundleMember], limits: BundleLimits) -> None:
+    """Reject members that break count, uniqueness, source-shape, or byte bounds."""
     if len(members) > limits.max_entries:
         raise BundleError(
             codes.REJECTED_SOURCE, "bundle exceeds the member entry limit"
@@ -131,6 +133,7 @@ def _prepare_parent(parent: Path) -> None:
 
 
 def _resolve_output(run_dir: Path, output_path: Path) -> Path:
+    """Resolve the output path, refusing an existing one or any under the run tree."""
     out = Path(output_path)
     if out.exists() or out.is_symlink():
         raise BundleError(codes.REJECTED_SOURCE, "bundle output already exists")
@@ -145,11 +148,12 @@ def _resolve_output(run_dir: Path, output_path: Path) -> Path:
 
 
 def _member_bytes(run_dir: Path, member: BundleMember, limits: BundleLimits) -> bytes:
+    """Return the member's bytes (generated content or a re-read source), verified."""
     if member.content is not None:
         data = member.content
     else:
         try:
-            digest, size, data = _io.read_source(
+            _, _, data = _io.read_source(
                 run_dir,
                 member.source_run_relpath or "",
                 max_bytes=limits.max_member_bytes,
@@ -174,6 +178,7 @@ def _member_bytes(run_dir: Path, member: BundleMember, limits: BundleLimits) -> 
 def _write_tar(
     run_dir: Path, members: list[BundleMember], candidate: Path, limits: BundleLimits
 ) -> None:
+    """Assemble the sorted members into the candidate USTAR file."""
     # Create the candidate through an exclusive, no-follow, mode-0600 descriptor
     # so its bytes are never exposed to other accounts under a permissive umask
     # and cannot be redirected through a pre-planted symlink.

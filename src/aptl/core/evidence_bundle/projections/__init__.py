@@ -7,7 +7,7 @@ no dynamic import or plugin discovery.
 
 from __future__ import annotations
 
-from aptl.core.evidence_bundle.projections import jsonl, ocsf, parquet  # noqa: F401
+from aptl.core.evidence_bundle.projections import jsonl, ocsf, parquet
 from aptl.core.evidence_bundle.projections.registry import (
     ProjectionContext,
     ProjectionResult,
@@ -16,6 +16,10 @@ from aptl.core.evidence_bundle.projections.registry import (
     get_projection,
     run_projections,
 )
+
+# Importing the modules above runs their registration side effects; bind them to
+# a name so the imports read as used and need no lint suppression.
+_REGISTERED = (jsonl, ocsf, parquet)
 
 __all__ = [
     "ProjectionContext",

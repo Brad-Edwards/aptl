@@ -27,19 +27,21 @@ _BUNDLE_PATH = "projections/jsonl/evidence-records.jsonl"
 _MEDIA = "application/x-ndjson"
 _MAPPING_ID = "aptl.evidence-bundle.jsonl.evidence-record"
 _MAPPING_VERSION = "1"
+_RECORD_CONTRACT = "experiment-evidence-record/v1"
 
 
 def _descriptor() -> ProjectionDescriptor:
+    """Describe the lossless JSONL projection of whole evidence records."""
     return ProjectionDescriptor(
         mapping_id=_MAPPING_ID,
         mapping_version=_MAPPING_VERSION,
         target_format="jsonl",
-        target_schema_version="experiment-evidence-record/v1",
-        source_contract_versions=["experiment-evidence-record/v1"],
+        target_schema_version=_RECORD_CONTRACT,
+        source_contract_versions=[_RECORD_CONTRACT],
         bundle_paths=[_BUNDLE_PATH],
         field_maps=[
             ProjectionFieldMap(
-                source_contract="experiment-evidence-record/v1",
+                source_contract=_RECORD_CONTRACT,
                 source_field="(whole record)",
                 target_field="(row)",
                 physical_type="canonical-json-object",
@@ -58,9 +60,12 @@ def _descriptor() -> ProjectionDescriptor:
 
 
 class JsonlProjection:
+    """Lossless JSONL projection: one canonical-JSON evidence record per row."""
+
     format = "jsonl"
 
-    def project(self, ctx: ProjectionContext) -> ProjectionResult:
+    @staticmethod
+    def project(ctx: ProjectionContext) -> ProjectionResult:
         if not ctx.records:
             return ProjectionResult(
                 descriptor=None,

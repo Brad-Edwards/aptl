@@ -21,6 +21,7 @@ import rfc8785
 sys.path.insert(0, str(Path(__file__).parent))
 import _bundle_fixtures as fixtures  # noqa: E402
 
+from aptl.core.evidence_bundle import BundleOptions  # noqa: E402
 from aptl.core.evidence_bundle import build_evidence_bundle  # noqa: E402
 from aptl.core.evidence_bundle.limits import DEFAULT_LIMITS  # noqa: E402
 from aptl.core.evidence_bundle.projections import available_formats  # noqa: E402
@@ -66,7 +67,9 @@ class TestSymlinkAndTraversal:
         blob.symlink_to(secret_target)
 
         out = tmp_path / "exports" / "b.tar"
-        result = build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+        result = build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+        )
 
         assert "aptl.evidence-bundle.rejected-source" in _codes(result)
         archive_bytes = out.read_bytes()
@@ -112,7 +115,9 @@ class TestResourceExhaustion:
         limits = dataclasses.replace(DEFAULT_LIMITS, max_member_bytes=20_000)
 
         out = tmp_path / "exports" / "b.tar"
-        result = build_evidence_bundle(run_dir, "run-1", out, limits=limits)
+        result = build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(limits=limits)
+        )
 
         assert "aptl.evidence-bundle.rejected-source" in _codes(result)
         assert not any(
@@ -135,7 +140,9 @@ class TestFormulaInjection:
         )
 
         out = tmp_path / "exports" / "b.tar"
-        build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+        build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+        )
 
         with tarfile.open(out, "r:") as tar:
             jsonl = (
@@ -185,7 +192,9 @@ class TestAccidentalSecrets:
         fixtures.write_evidence(run_dir, run_id="run-1", loss_disclosure=_SECRET)
 
         out = tmp_path / "exports" / "b.tar"
-        result = build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+        result = build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+        )
 
         envelope = _envelope_bytes(out)
         assert _SECRET_TOKEN.encode() not in envelope

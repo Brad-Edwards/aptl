@@ -29,7 +29,9 @@ from aptl.core.evidence_bundle.closure import (
     build_closure,
 )
 from aptl.core.evidence_bundle.envelope import BundleEnvelopeV1, InventoryRow
+from aptl.core.evidence_bundle.errors import BundleError
 from aptl.core.evidence_bundle.inventory import (
+    EnvelopeInputs,
     build_envelope,
     envelope_member,
     projection_row,
@@ -39,8 +41,8 @@ from aptl.core.evidence_bundle.inventory import (
 from aptl.core.evidence_bundle.limits import DEFAULT_LIMITS, BundleLimits
 from aptl.core.evidence_bundle.projections import run_projections
 from aptl.core.evidence_bundle.projections.registry import ProjectionContext
-from aptl.core.evidence_bundle.schemas import collect_schemas
-from aptl.core.evidence_bundle.verify import verify_bundle
+from aptl.core.evidence_bundle.schemas import SchemaArtifact, collect_schemas
+from aptl.core.evidence_bundle.verify import VerificationReport, verify_bundle
 from aptl.utils import redaction
 
 _BUNDLE_PROFILE = "aptl-evidence-bundle-profile/v1"
@@ -80,7 +82,7 @@ class BundleBuildResult:
 
 def _load_records(
     run_dir: Path, closure: VerifiedClosure, limits: BundleLimits
-) -> tuple[list[dict], dict[str, int | None]]:
+) -> tuple[list[dict[str, object]], dict[str, int | None]]:
     """Re-read the evidence records as canonical SOURCE dicts + retained sizes.
 
     Parsing to a plain dict (rather than the pydantic model) preserves each
@@ -92,7 +94,7 @@ def _load_records(
         for entry in closure.entries
         if entry.logical_role == "evidence-blob"
     }
-    records: list[dict] = []
+    records: list[dict[str, object]] = []
     retained: dict[str, int | None] = {}
     for entry in closure.entries:
         if entry.logical_role != "evidence-record":
@@ -107,21 +109,33 @@ def _load_records(
     return records, retained
 
 
+@dataclass(frozen=True)
+class BundleOptions:
+    """Optional inputs controlling how an evidence bundle is built."""
+
+    projections: Sequence[str] = ()
+    seal_verifier: SealVerifier | None = None
+    source: ClosureSource | None = None
+    limits: BundleLimits = DEFAULT_LIMITS
+    created_at: str | None = None
+    self_verify: bool = True
+
+
 def build_evidence_bundle(
     run_dir: Path,
     run_id: str,
     output_path: Path,
     *,
-    projections: Sequence[str] = (),
-    seal_verifier: SealVerifier | None = None,
-    source: ClosureSource | None = None,
-    limits: BundleLimits = DEFAULT_LIMITS,
-    created_at: str | None = None,
-    self_verify: bool = True,
+    options: BundleOptions = BundleOptions(),
 ) -> BundleBuildResult:
     """Build and publish a portable evidence bundle for ``run_id``."""
+    limits = options.limits
     closure = build_closure(
-        run_dir, run_id, seal_verifier=seal_verifier, source=source, limits=limits
+        run_dir,
+        run_id,
+        seal_verifier=options.seal_verifier,
+        source=options.source,
+        limits=limits,
     )
     records, retained = _load_records(run_dir, closure, limits)
 
@@ -129,8 +143,8 @@ def build_evidence_bundle(
         run_dir=run_dir, records=tuple(records), retained_sizes=retained, limits=limits
     )
     projection_run = (
-        run_projections(projections, proj_ctx)
-        if projections
+        run_projections(options.projections, proj_ctx)
+        if options.projections
         else run_projections([], proj_ctx)
     )
 
@@ -174,21 +188,23 @@ def build_evidence_bundle(
         "semantic/conformance validation is NOT performed by export",
     ]
     envelope = build_envelope(
-        run_id=run_id,
-        bundle_profile=_BUNDLE_PROFILE,
-        limits_profile=limits.profile_id,
-        seal=closure.seal,
-        rows=rows,
-        schemas=schemas,
-        projections=projection_run.descriptors,
-        limitations=limitations,
-        validation_disclosures=validation_disclosures,
-        created_at=created_at,
+        EnvelopeInputs(
+            run_id=run_id,
+            bundle_profile=_BUNDLE_PROFILE,
+            limits_profile=limits.profile_id,
+            seal=closure.seal,
+            rows=rows,
+            schemas=schemas,
+            projections=projection_run.descriptors,
+            limitations=limitations,
+            validation_disclosures=validation_disclosures,
+            created_at=options.created_at,
+        )
     )
 
     members = _assemble_members(closure, schemas, projection_run.members, envelope)
     archive = write_bundle_archive(run_dir, output_path, members, limits=limits)
-    if self_verify:
+    if options.self_verify:
         report = verify_bundle(Path(archive.archive_path))
         if not report.ok:
             raise _verification_failed(report)
@@ -203,10 +219,11 @@ def build_evidence_bundle(
 
 def _assemble_members(
     closure: VerifiedClosure,
-    schemas,
-    projection_members,
+    schemas: Sequence[SchemaArtifact],
+    projection_members: Sequence[BundleMember],
     envelope: BundleEnvelopeV1,
 ) -> list[BundleMember]:
+    """Collect closure, schema, projection, and envelope members into one list."""
     members: list[BundleMember] = [
         BundleMember(
             bundle_path=entry.bundle_path,
@@ -232,12 +249,11 @@ def _assemble_members(
     return members
 
 
-def _verification_failed(report):
-    from aptl.core.evidence_bundle.errors import BundleError
-
+def _verification_failed(report: VerificationReport) -> BundleError:
+    """Build the ``BundleError`` raised when a bundle fails local self-verification."""
     return BundleError(
         codes.REJECTED_SOURCE, f"self-verification failed: {'; '.join(report.issues)}"
     )
 
 
-__all__ = ["BundleBuildResult", "build_evidence_bundle"]
+__all__ = ["BundleBuildResult", "BundleOptions", "build_evidence_bundle"]

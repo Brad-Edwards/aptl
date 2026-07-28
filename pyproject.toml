@@ -168,6 +168,7 @@ show_missing = true
 # — not replaces — coverage's defaults, so ``# pragma: no cover`` still works.
 exclude_also = [
     "if os.name != \"posix\":",
+    "except metadata.PackageNotFoundError:",
 ]
 
 [tool.coverage.xml]

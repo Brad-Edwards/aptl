@@ -30,6 +30,7 @@ _TAXONOMY_VERSION = "aptl-red-team-taxonomy/v1"
 
 
 def _descriptor() -> ProjectionDescriptor:
+    """Describe the OCSF-aligned passthrough of mcp-red's derivative rows."""
     return ProjectionDescriptor(
         mapping_id=_MAPPING_ID,
         mapping_version=_MAPPING_VERSION,
@@ -57,9 +58,12 @@ def _descriptor() -> ProjectionDescriptor:
 
 
 class OcsfProjection:
+    """OCSF-aligned projection: include mcp-red's derivative verbatim."""
+
     format = "ocsf"
 
-    def project(self, ctx: ProjectionContext) -> ProjectionResult:
+    @staticmethod
+    def project(ctx: ProjectionContext) -> ProjectionResult:
         try:
             digest, size, body = _io.read_source(
                 ctx.run_dir, _SOURCE_RELPATH, max_bytes=ctx.limits.max_member_bytes

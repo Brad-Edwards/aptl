@@ -40,19 +40,24 @@ class SchemaArtifact:
 
 @lru_cache(maxsize=1)
 def _schemas_root() -> Path:
+    """Return the installed RAES corpus SCHEMAS family root (cached)."""
     return Path(corpus.corpus_family_root(corpus.SCHEMAS))
 
 
 @lru_cache(maxsize=1)
 def _raes_version() -> str:
+    """Return the installed ``raes`` distribution version, or ``"unknown"``."""
     try:
         return metadata.version("raes")
-    except metadata.PackageNotFoundError:  # pragma: no cover - always installed in-tree
+    # ``raes`` is always installed in-tree, so this fallback is unreachable in
+    # tests; it is excluded from coverage via ``[tool.coverage.report]``
+    # ``exclude_also`` in pyproject.toml rather than an inline pragma (S139).
+    except metadata.PackageNotFoundError:
         return "unknown"
 
 
 def _contract_filename(contract_id: str) -> str:
-    # "experiment-evidence-record/v1" -> "experiment-evidence-record-v1.json"
+    """Map a contract id to its schema filename (``.../v1`` -> ``...-v1.json``)."""
     return contract_id.replace("/", "-") + _CONTRACT_TO_FILENAME_SUFFIX
 
 

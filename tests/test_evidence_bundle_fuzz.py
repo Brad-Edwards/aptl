@@ -18,6 +18,7 @@ from raes_contracts.contracts import ExperimentEvidenceRecordModel
 sys.path.insert(0, str(Path(__file__).parent))
 import _bundle_fixtures as fixtures  # noqa: E402
 
+from aptl.core.evidence_bundle import BundleOptions  # noqa: E402
 from aptl.core.evidence_bundle import build_evidence_bundle  # noqa: E402
 
 pytestmark = pytest.mark.fuzz
@@ -78,10 +79,16 @@ def test_export_is_byte_deterministic(specs: list[dict]) -> None:
         run_dir = base / "run-1"
         _write_run(run_dir, specs)
         first = build_evidence_bundle(
-            run_dir, "run-1", base / "o1" / "b.tar", projections=["jsonl", "parquet"]
+            run_dir,
+            "run-1",
+            base / "o1" / "b.tar",
+            options=BundleOptions(projections=["jsonl", "parquet"]),
         )
         second = build_evidence_bundle(
-            run_dir, "run-1", base / "o2" / "b.tar", projections=["jsonl", "parquet"]
+            run_dir,
+            "run-1",
+            base / "o2" / "b.tar",
+            options=BundleOptions(projections=["jsonl", "parquet"]),
         )
         assert (
             Path(first.archive.archive_path).read_bytes()
@@ -100,7 +107,9 @@ def test_jsonl_rows_round_trip_through_the_raes_model(specs: list[dict]) -> None
         run_dir = base / "run-1"
         _write_run(run_dir, specs)
         out = base / "o" / "b.tar"
-        build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+        build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+        )
         with tarfile.open(out, "r:") as tar:
             body = tar.extractfile("projections/jsonl/evidence-records.jsonl").read()
 

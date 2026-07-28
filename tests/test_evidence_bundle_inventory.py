@@ -11,6 +11,7 @@ from aptl.core.evidence_bundle.closure import (
 )
 from aptl.core.evidence_bundle.envelope import SCHEMA_VERSION
 from aptl.core.evidence_bundle.inventory import (
+    EnvelopeInputs,
     build_envelope,
     envelope_member,
     row_from_closure_entry,
@@ -91,19 +92,21 @@ class TestEnvelope:
             row_from_closure_entry(_entry("a.json")),
         ]
         envelope = build_envelope(
-            run_id="run-1",
-            bundle_profile="aptl-evidence-bundle-profile/v1",
-            limits_profile="aptl-evidence-bundle-limits/v1",
-            seal=_unsealed(),
-            rows=rows,
-            schemas=[],
-            projections=[],
-            limitations=[
-                ClosureLimitation(
-                    "aptl.evidence-bundle.seal-absent", "unsealed", "run-1"
-                )
-            ],
-            validation_disclosures=["json-schema structural validation performed"],
+            EnvelopeInputs(
+                run_id="run-1",
+                bundle_profile="aptl-evidence-bundle-profile/v1",
+                limits_profile="aptl-evidence-bundle-limits/v1",
+                seal=_unsealed(),
+                rows=rows,
+                schemas=[],
+                projections=[],
+                limitations=[
+                    ClosureLimitation(
+                        "aptl.evidence-bundle.seal-absent", "unsealed", "run-1"
+                    )
+                ],
+                validation_disclosures=["json-schema structural validation performed"],
+            )
         )
         assert envelope.schema_version == SCHEMA_VERSION
         assert [row.bundle_path for row in envelope.inventory] == ["a.json", "z.json"]
@@ -123,8 +126,10 @@ class TestEnvelope:
             limitations=[],
             validation_disclosures=[],
         )
-        without = build_envelope(**kwargs)
-        stamped = build_envelope(**kwargs, created_at="2026-07-28T00:00:00Z")
+        without = build_envelope(EnvelopeInputs(**kwargs))
+        stamped = build_envelope(
+            EnvelopeInputs(**kwargs, created_at="2026-07-28T00:00:00Z")
+        )
 
         assert without.root_identity() == stamped.root_identity()
         assert without.to_canonical_bytes() != stamped.to_canonical_bytes()
@@ -142,11 +147,15 @@ class TestEnvelope:
             validation_disclosures=[],
         )
         unsealed = build_envelope(
-            seal=SealBinding(SealScope.UNSEALED, None, None), **common
+            EnvelopeInputs(seal=SealBinding(SealScope.UNSEALED, None, None), **common)
         )
         verified = build_envelope(
-            seal=SealBinding(SealScope.VERIFIED, "sha256:" + "b" * 64, "verifier-x"),
-            **common,
+            EnvelopeInputs(
+                seal=SealBinding(
+                    SealScope.VERIFIED, "sha256:" + "b" * 64, "verifier-x"
+                ),
+                **common,
+            )
         )
         # A detached seal is an attestation OVER the root, so the same content
         # yields the same root identity regardless of seal state.
@@ -155,15 +164,17 @@ class TestEnvelope:
     def test_envelope_member_is_not_in_its_own_inventory(self) -> None:
         rows = [row_from_closure_entry(_entry())]
         envelope = build_envelope(
-            run_id="run-1",
-            bundle_profile="p",
-            limits_profile="l",
-            seal=_unsealed(),
-            rows=rows,
-            schemas=[],
-            projections=[],
-            limitations=[],
-            validation_disclosures=[],
+            EnvelopeInputs(
+                run_id="run-1",
+                bundle_profile="p",
+                limits_profile="l",
+                seal=_unsealed(),
+                rows=rows,
+                schemas=[],
+                projections=[],
+                limitations=[],
+                validation_disclosures=[],
+            )
         )
         member = envelope_member(envelope)
         assert member.bundle_path == "bundle.json"

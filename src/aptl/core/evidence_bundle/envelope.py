@@ -24,16 +24,22 @@ SCHEMA_VERSION = "aptl-evidence-bundle/v1"
 
 
 class _Frozen(BaseModel):
+    """Base config for the frozen, extra-forbidding envelope models."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class SealDoc(_Frozen):
+    """Seal identity recorded in the envelope: scope and optional root/verifier."""
+
     scope: str
     root_identity: str | None = None
     verifier_id: str | None = None
 
 
 class InventoryRow(_Frozen):
+    """One inventory row referencing an included artifact by path/role/digest."""
+
     bundle_path: str
     logical_role: str
     classification: str
@@ -52,6 +58,8 @@ class InventoryRow(_Frozen):
 
 
 class SchemaRef(_Frozen):
+    """A published RAES JSON Schema included in the bundle's data dictionary."""
+
     contract_id: str
     bundle_path: str
     schema_id: str
@@ -61,6 +69,8 @@ class SchemaRef(_Frozen):
 
 
 class ProjectionFieldMap(_Frozen):
+    """One source-to-target field mapping within a projection descriptor."""
+
     source_contract: str | None
     source_field: str | None
     target_field: str
@@ -70,6 +80,8 @@ class ProjectionFieldMap(_Frozen):
 
 
 class ProjectionDescriptor(_Frozen):
+    """Describes one projection: its mapping, target format, and loss disclosures."""
+
     mapping_id: str
     mapping_version: str
     target_format: str
@@ -83,17 +95,23 @@ class ProjectionDescriptor(_Frozen):
 
 
 class DataDictionary(_Frozen):
+    """The bundle's published schemas and projection descriptors."""
+
     schemas: list[SchemaRef]
     projections: list[ProjectionDescriptor]
 
 
 class LimitationDoc(_Frozen):
+    """One disclosed limitation: code, detail, and optional subject."""
+
     code: str
     detail: str
     subject: str | None = None
 
 
 class BundleEnvelopeV1(_Frozen):
+    """The ``aptl-evidence-bundle/v1`` packaging envelope."""
+
     schema_version: Literal["aptl-evidence-bundle/v1"] = SCHEMA_VERSION
     bundle_profile: str
     limits_profile: str
@@ -106,7 +124,7 @@ class BundleEnvelopeV1(_Frozen):
     #: Optional, human-facing, EXCLUDED from the reproducible identity.
     created_at: str | None = None
 
-    def identity_document(self) -> dict:
+    def identity_document(self) -> dict[str, object]:
         # The reproducible root identity is the CONTENT identity: inventory, data
         # dictionary, projections, limitations. It excludes ``created_at`` (human
         # metadata) AND ``seal`` — a #444 seal is a DETACHED attestation OVER this

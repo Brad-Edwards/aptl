@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from typing import BinaryIO
 
 from aptl.utils import pathsafe
 
@@ -29,7 +30,8 @@ class SourceRejected(Exception):
         self.detail = detail
 
 
-def _open(run_dir: Path, relpath: str):
+def _open(run_dir: Path, relpath: str) -> BinaryIO:
+    """Open ``relpath`` under ``run_dir`` no-follow, mapping containment errors."""
     try:
         return pathsafe.open_contained_nofollow(run_dir, relpath)
     except pathsafe.PathContainmentError as exc:
@@ -38,7 +40,10 @@ def _open(run_dir: Path, relpath: str):
         raise SourceRejected(exc.reason) from exc
 
 
-def _stream(handle, *, max_bytes: int, keep_body: bool) -> tuple[str, int, bytes]:
+def _stream(
+    handle: BinaryIO, *, max_bytes: int, keep_body: bool
+) -> tuple[str, int, bytes]:
+    """Hash a handle to ``sha256:<hex>`` and its size, optionally retaining bytes."""
     digest = hashlib.sha256()
     size = 0
     body = bytearray()

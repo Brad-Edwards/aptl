@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 from aptl.core.evidence_bundle.archive import BundleMember
 from aptl.core.evidence_bundle.closure import (
@@ -34,6 +35,7 @@ _MEDIA_JSON = "application/json"
 
 
 def row_from_closure_entry(entry: ClosureEntry) -> InventoryRow:
+    """Build an inventory row from a closure entry and its carried disclosures."""
     disclosures = entry.disclosures
     return InventoryRow(
         bundle_path=entry.bundle_path,
@@ -55,6 +57,7 @@ def row_from_closure_entry(entry: ClosureEntry) -> InventoryRow:
 
 
 def row_from_schema(schema: SchemaArtifact) -> InventoryRow:
+    """Build a reference-classified inventory row for a published RAES schema."""
     return InventoryRow(
         bundle_path=schema.bundle_path,
         logical_role="raes-schema",
@@ -68,6 +71,7 @@ def row_from_schema(schema: SchemaArtifact) -> InventoryRow:
 
 
 def schema_ref(schema: SchemaArtifact) -> SchemaRef:
+    """Build the data-dictionary schema reference for a published RAES schema."""
     return SchemaRef(
         contract_id=schema.contract_id,
         bundle_path=schema.bundle_path,
@@ -81,6 +85,7 @@ def schema_ref(schema: SchemaArtifact) -> SchemaRef:
 def projection_row(
     member: BundleMember, descriptor: ProjectionDescriptor
 ) -> InventoryRow:
+    """Build a derived-classification inventory row for a projection member."""
     return InventoryRow(
         bundle_path=member.bundle_path,
         logical_role="projection",
@@ -95,12 +100,14 @@ def projection_row(
 
 
 def limitation_doc(limitation: ClosureLimitation) -> LimitationDoc:
+    """Convert a closure limitation into its envelope document form."""
     return LimitationDoc(
         code=limitation.code, detail=limitation.detail, subject=limitation.subject
     )
 
 
 def seal_doc(seal: SealBinding) -> SealDoc:
+    """Convert a seal binding into its envelope seal document."""
     return SealDoc(
         scope=seal.scope.value,
         root_identity=seal.root_identity,
@@ -108,34 +115,38 @@ def seal_doc(seal: SealBinding) -> SealDoc:
     )
 
 
-def build_envelope(
-    *,
-    run_id: str,
-    bundle_profile: str,
-    limits_profile: str,
-    seal: SealBinding,
-    rows: Iterable[InventoryRow],
-    schemas: Sequence[SchemaArtifact],
-    projections: Sequence[ProjectionDescriptor],
-    limitations: Iterable[ClosureLimitation],
-    validation_disclosures: Sequence[str],
-    created_at: str | None = None,
-) -> BundleEnvelopeV1:
+@dataclass(frozen=True)
+class EnvelopeInputs:
+    """The parts assembled into an ``aptl-evidence-bundle/v1`` envelope."""
+
+    run_id: str
+    bundle_profile: str
+    limits_profile: str
+    seal: SealBinding
+    rows: Iterable[InventoryRow]
+    schemas: Sequence[SchemaArtifact]
+    projections: Sequence[ProjectionDescriptor]
+    limitations: Iterable[ClosureLimitation]
+    validation_disclosures: Sequence[str]
+    created_at: str | None = None
+
+
+def build_envelope(inputs: EnvelopeInputs) -> BundleEnvelopeV1:
     """Assemble the ``aptl-evidence-bundle/v1`` envelope from its parts."""
-    inventory = sorted(rows, key=lambda row: row.bundle_path)
+    inventory = sorted(inputs.rows, key=lambda row: row.bundle_path)
     return BundleEnvelopeV1(
-        bundle_profile=bundle_profile,
-        limits_profile=limits_profile,
-        run_id=run_id,
-        seal=seal_doc(seal),
+        bundle_profile=inputs.bundle_profile,
+        limits_profile=inputs.limits_profile,
+        run_id=inputs.run_id,
+        seal=seal_doc(inputs.seal),
         inventory=inventory,
         data_dictionary=DataDictionary(
-            schemas=[schema_ref(schema) for schema in schemas],
-            projections=list(projections),
+            schemas=[schema_ref(schema) for schema in inputs.schemas],
+            projections=list(inputs.projections),
         ),
-        limitations=[limitation_doc(limitation) for limitation in limitations],
-        validation_disclosures=list(validation_disclosures),
-        created_at=created_at,
+        limitations=[limitation_doc(limitation) for limitation in inputs.limitations],
+        validation_disclosures=list(inputs.validation_disclosures),
+        created_at=inputs.created_at,
     )
 
 
@@ -158,6 +169,7 @@ __all__ = [
     "schema_ref",
     "limitation_doc",
     "seal_doc",
+    "EnvelopeInputs",
     "build_envelope",
     "envelope_member",
 ]

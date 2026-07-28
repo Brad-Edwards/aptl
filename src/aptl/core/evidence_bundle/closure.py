@@ -37,6 +37,7 @@ from aptl.utils import pathsafe
 
 _MEDIA_JSON = "application/json"
 _MEDIA_OCTET = "application/octet-stream"
+_EVIDENCE_LEDGER_DIR = "evidence/records"
 
 # Known backend-evidence roots: (run-relative source, bundle path, role,
 # contract id, whether absence is a recorded limitation).
@@ -102,10 +103,12 @@ class ClosureEntry:
 
     bundle_path: str
     logical_role: str
-    classification: str  # canonical | backend-evidence | derived | reference
+    # canonical | backend-evidence | derived | reference
+    classification: str
     contract_id: str | None
     source_ref: str
-    digest: str  # sha256:<hex> of the retained bytes
+    # sha256:<hex> of the retained bytes
+    digest: str
     size: int
     media_type: str
     source_run_relpath: str
@@ -136,16 +139,21 @@ class VerifiedClosure:
 
 
 class SealVerifier(Protocol):
-    """The #444 seam: verify (or honestly decline to verify) a run's seal."""
+    """The #444 seam: verify (or honestly decline to verify) a run's seal.
 
-    def verify(self, run_dir: Path, run_id: str) -> SealBinding: ...
+    A future sealed verifier receives run context out of band; the seam takes
+    only ``run_id`` because the unsealed default needs nothing more.
+    """
+
+    def verify(self, run_id: str) -> SealBinding: ...
 
 
 @dataclass(frozen=True)
 class UnsealedClosureVerifier:
     """Default seam until #444 lands: report the closure as unsealed."""
 
-    def verify(self, run_dir: Path, run_id: str) -> SealBinding:
+    @staticmethod
+    def verify(run_id: str) -> SealBinding:
         return SealBinding(
             scope=SealScope.UNSEALED,
             root_identity=None,
@@ -176,6 +184,7 @@ def _collect_backend_evidence(
     limitations: list[ClosureLimitation],
     limits: BundleLimits,
 ) -> None:
+    """Add each known backend-evidence root that belongs to this run, disclosing gaps."""
     for relpath, bundle_path, role, contract_id, expected in _BACKEND_ROOTS:
         try:
             digest, size, body = read_source(
@@ -226,8 +235,9 @@ def _collect_evidence(
     limitations: list[ClosureLimitation],
     limits: BundleLimits,
 ) -> None:
+    """Enumerate the evidence ledger and collect each record (and its blob)."""
     try:
-        names = pathsafe.listdir_contained_nofollow(run_dir, "evidence/records")
+        names = pathsafe.listdir_contained_nofollow(run_dir, _EVIDENCE_LEDGER_DIR)
     except pathsafe.PathContainmentError as exc:
         code = (
             codes.MISSING_SOURCE
@@ -235,7 +245,7 @@ def _collect_evidence(
             else codes.REJECTED_SOURCE
         )
         limitations.append(
-            ClosureLimitation(code, "evidence ledger unavailable", "evidence/records")
+            ClosureLimitation(code, "evidence ledger unavailable", _EVIDENCE_LEDGER_DIR)
         )
         return
 
@@ -243,7 +253,7 @@ def _collect_evidence(
     if not record_names:
         limitations.append(
             ClosureLimitation(
-                codes.MISSING_SOURCE, "evidence ledger empty", "evidence/records"
+                codes.MISSING_SOURCE, "evidence ledger empty", _EVIDENCE_LEDGER_DIR
             )
         )
         return
@@ -256,6 +266,31 @@ def _collect_evidence(
         _collect_one_record(run_dir, run_id, name, entries, limitations, limits)
 
 
+def _read_and_validate_record(
+    run_dir: Path, relpath: str, limits: BundleLimits
+) -> tuple[
+    tuple[str, int, ExperimentEvidenceRecordModel] | None, ClosureLimitation | None
+]:
+    """Read and RAES-validate one ledger record, or return a disclosing limitation."""
+    try:
+        digest, size, body = read_source(
+            run_dir, relpath, max_bytes=limits.max_member_bytes
+        )
+    except SourceMissing:
+        return None, ClosureLimitation(
+            codes.MISSING_SOURCE, "evidence record absent", relpath
+        )
+    except SourceRejected as exc:
+        return None, ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, relpath)
+    try:
+        record = ExperimentEvidenceRecordModel.model_validate_json(body)
+    except ValueError:
+        return None, ClosureLimitation(
+            codes.INVALID_RECORD, "record failed RAES validation", relpath
+        )
+    return (digest, size, record), None
+
+
 def _collect_one_record(
     run_dir: Path,
     run_id: str,
@@ -264,30 +299,13 @@ def _collect_one_record(
     limitations: list[ClosureLimitation],
     limits: BundleLimits,
 ) -> None:
-    relpath = f"evidence/records/{name}"
-    try:
-        digest, size, body = read_source(
-            run_dir, relpath, max_bytes=limits.max_member_bytes
-        )
-    except SourceMissing:
-        limitations.append(
-            ClosureLimitation(codes.MISSING_SOURCE, "evidence record absent", relpath)
-        )
+    """Read, run-join, and append one ledger record plus its referenced blob."""
+    relpath = f"{_EVIDENCE_LEDGER_DIR}/{name}"
+    parsed, limitation = _read_and_validate_record(run_dir, relpath, limits)
+    if limitation is not None:
+        limitations.append(limitation)
         return
-    except SourceRejected as exc:
-        limitations.append(
-            ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, relpath)
-        )
-        return
-    try:
-        record = ExperimentEvidenceRecordModel.model_validate_json(body)
-    except ValueError:
-        limitations.append(
-            ClosureLimitation(
-                codes.INVALID_RECORD, "record failed RAES validation", relpath
-            )
-        )
-        return
+    digest, size, record = parsed
 
     # Run-join: a record whose run_ref names a different run is not part of this
     # run's closure. Exclude and disclose rather than misattributing it.
@@ -306,7 +324,7 @@ def _collect_one_record(
     )
     entries.append(
         ClosureEntry(
-            bundle_path=f"evidence/records/{record.evidence_record_id}.json",
+            bundle_path=f"{_EVIDENCE_LEDGER_DIR}/{record.evidence_record_id}.json",
             logical_role="evidence-record",
             classification="canonical",
             contract_id=record.schema_version,
@@ -332,6 +350,7 @@ def _collect_blob(
     limitations: list[ClosureLimitation],
     limits: BundleLimits,
 ) -> None:
+    """Verify and append the record's referenced blob, or disclose its absence."""
     blob_uri = record.raw_content.content_uri
     try:
         digest, size = hash_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
@@ -389,8 +408,9 @@ class ReadyToSealClosureSource:
     manifest instead, without changing the bundle builder or archive rules.
     """
 
+    @staticmethod
     def collect(
-        self, run_dir: Path, run_id: str, *, limits: BundleLimits
+        run_dir: Path, run_id: str, *, limits: BundleLimits
     ) -> tuple[list[ClosureEntry], list[ClosureLimitation]]:
         entries: list[ClosureEntry] = []
         limitations: list[ClosureLimitation] = []
@@ -444,6 +464,7 @@ def _coalesce(
 
 
 def _dedup(limitations: list[ClosureLimitation]) -> list[ClosureLimitation]:
+    """Drop duplicate limitations and return them sorted by (code, subject, detail)."""
     seen: set[tuple[str, str, str | None]] = set()
     ordered: list[ClosureLimitation] = []
     for lim in limitations:
@@ -470,7 +491,7 @@ def build_closure(
     """
     verifier = seal_verifier if seal_verifier is not None else UnsealedClosureVerifier()
     collector = source if source is not None else ReadyToSealClosureSource()
-    seal = verifier.verify(run_dir, run_id)
+    seal = verifier.verify(run_id)
     entries, limitations = collector.collect(run_dir, run_id, limits=limits)
     all_limitations = list(seal.limitations) + limitations
     return VerifiedClosure(

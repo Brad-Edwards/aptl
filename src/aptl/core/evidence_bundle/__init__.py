@@ -13,13 +13,18 @@ certification (see ``docs/architecture/exp-008-portable-evidence-bundle-prefligh
 
 from __future__ import annotations
 
-from aptl.core.evidence_bundle.build import BundleBuildResult, build_evidence_bundle
+from aptl.core.evidence_bundle.build import (
+    BundleBuildResult,
+    BundleOptions,
+    build_evidence_bundle,
+)
 from aptl.core.evidence_bundle.errors import BundleError
 from aptl.core.evidence_bundle.verify import VerificationReport, verify_bundle
 
 __all__ = [
     "BundleError",
     "BundleBuildResult",
+    "BundleOptions",
     "build_evidence_bundle",
     "VerificationReport",
     "verify_bundle",

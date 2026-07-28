@@ -18,6 +18,7 @@ pyarrow is an optional extra. When it is absent, the projection records a
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 
 import rfc8785
 
@@ -40,10 +41,12 @@ _INT64_MAX = 2**63 - 1
 
 
 def _canonical_json(value: object) -> str:
+    """Return the RFC 8785 canonical JSON of ``value`` as an ASCII string."""
     return rfc8785.dumps(value).decode("ascii")
 
 
-def _get(record: dict, *path: str):
+def _get(record: dict[str, object], *path: str) -> object | None:
+    """Walk ``record`` along ``path``, returning the value or ``None`` if absent."""
     cur: object = record
     for key in path:
         if not isinstance(cur, dict) or key not in cur:
@@ -52,7 +55,8 @@ def _get(record: dict, *path: str):
     return cur
 
 
-def _string_columns(records: list[dict]) -> dict[str, list[str | None]]:
+def _string_columns(records: list[dict[str, object]]) -> dict[str, list[str | None]]:
+    """Build the string-typed Parquet columns from the evidence records."""
     return {
         "evidence_record_id": [r.get("evidence_record_id") for r in records],
         "record_version": [r.get("record_version") for r in records],
@@ -81,7 +85,8 @@ def _string_columns(records: list[dict]) -> dict[str, list[str | None]]:
     }
 
 
-def _presence_columns(records: list[dict]) -> dict[str, list[bool]]:
+def _presence_columns(records: list[dict[str, object]]) -> dict[str, list[bool]]:
+    """Build the companion presence booleans distinguishing absent from null."""
     # Companion booleans so absent and explicit-null stay distinguishable in the
     # flat table: `<field>_present` is True when the key exists in the source
     # (even if its value is null), False when the field is absent.
@@ -93,7 +98,10 @@ def _presence_columns(records: list[dict]) -> dict[str, list[bool]]:
     }
 
 
-def _retained_bytes_column(records: list[dict], retained_sizes):
+def _retained_bytes_column(
+    records: list[dict[str, object]], retained_sizes: Mapping[str, int | None]
+) -> tuple[str, list[int | str | None], str | None]:
+    """Return the retained-bytes column type, cells, and any loss disclosure."""
     values = [retained_sizes.get(r["evidence_record_id"]) for r in records]
     present = [v for v in values if v is not None]
     if all(0 <= v <= _INT64_MAX for v in present):
@@ -106,6 +114,7 @@ def _retained_bytes_column(records: list[dict], retained_sizes):
 
 
 def _field_maps() -> list[ProjectionFieldMap]:
+    """Return the field maps documenting the Parquet projection's type fidelity."""
     src = "experiment-evidence-record/v1"
     return [
         ProjectionFieldMap(
@@ -168,6 +177,7 @@ def _field_maps() -> list[ProjectionFieldMap]:
 
 
 def _descriptor(loss: list[str]) -> ProjectionDescriptor:
+    """Describe the loss-accounted Parquet projection of the evidence records."""
     return ProjectionDescriptor(
         mapping_id=_MAPPING_ID,
         mapping_version=_MAPPING_VERSION,
@@ -183,9 +193,12 @@ def _descriptor(loss: list[str]) -> ProjectionDescriptor:
 
 
 class ParquetProjection:
+    """Loss-accounted Parquet projection of the evidence records."""
+
     format = "parquet"
 
-    def project(self, ctx: ProjectionContext) -> ProjectionResult:
+    @staticmethod
+    def project(ctx: ProjectionContext) -> ProjectionResult:
         try:
             import pyarrow as pa
             import pyarrow.parquet as pq

@@ -6,15 +6,17 @@ aptl`` (asserted by test), so it can be lifted out of the tree and run
 anywhere. It streams the archive (never ``extractall``), enforces its OWN
 conservative safety bounds (a verifier must not trust limits declared inside the
 artifact it is verifying), recomputes every member digest/size against the
-inventory, recomputes the reproducible bundle root identity, and — when a seal
-claims to be verified — checks that the seal binds that root.
+inventory, recomputes the reproducible bundle root identity, and rejects a
+malformed envelope or a self-declared verified seal.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import tarfile
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import BinaryIO
 
 import rfc8785
 
@@ -68,41 +70,61 @@ class VerificationReport:
     issues: list[str] = field(default_factory=list)
 
 
-def _sha256_hex(data: bytes) -> str:
-    import hashlib
+class _Fatal(Exception):
+    """Internal signal that verification cannot continue; carries the report."""
 
+    def __init__(self, member_count: int, issues: list[str]) -> None:
+        super().__init__("fatal verification failure")
+        self.member_count = member_count
+        self.issues = issues
+
+
+def _sha256_hex(data: bytes) -> str:
+    """Return the ``sha256:<hex>`` digest of ``data``."""
     return f"sha256:{hashlib.sha256(data).hexdigest()}"
 
 
-def _name_problem(name: str) -> str | None:
-    """Reject an unsafe archive/inventory path. Messages use ``repr`` so a hostile
-    name cannot inject control/terminal sequences into operator diagnostics."""
+def _name_problem(name: object) -> str | None:
+    """Return a safe message if ``name`` is an unsafe archive/inventory path.
+
+    Messages use ``repr`` so a hostile name cannot inject control or terminal
+    sequences into operator diagnostics. Returns ``None`` when the path is safe.
+    """
     if not isinstance(name, str) or not name or name.startswith("/") or "\\" in name:
         return f"unsafe path: {name!r}"
-    if "\x00" in name or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name):
-        return f"control character in path: {name!r}"
-    if len(name) > _MAX_PATH_LENGTH:
-        return f"path too long: {name!r}"
     parts = name.split("/")
-    if any(part in ("", ".", "..") for part in parts):
-        return f"path has an unsafe component: {name!r}"
-    if len(parts) > _MAX_PATH_DEPTH:
-        return f"path too deep: {name!r}"
+    violations = (
+        ("control character in path", _has_control_char(name)),
+        ("path too long", len(name) > _MAX_PATH_LENGTH),
+        (
+            "path has an unsafe component",
+            any(part in ("", ".", "..") for part in parts),
+        ),
+        ("path too deep", len(parts) > _MAX_PATH_DEPTH),
+    )
+    for label, failed in violations:
+        if failed:
+            return f"{label}: {name!r}"
     return None
 
 
+def _has_control_char(name: str) -> bool:
+    """Return True if ``name`` contains a NUL, C0, or DEL control character."""
+    return "\x00" in name or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name)
+
+
 def _member_problem(member: tarfile.TarInfo) -> str | None:
+    """Return a safe message if ``member`` is not a safe regular archive member."""
     if member.issym() or member.islnk():
         return f"link member rejected: {member.name!r}"
     if not member.isreg():
         return f"non-regular member rejected: {member.name!r}"
     problem = _name_problem(member.name)
-    if problem:
-        return f"member {problem}"
-    return None
+    return f"member {problem}" if problem else None
 
 
 def _read_member(tar: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
+    """Stream one member's bytes, raising ``_Fatal`` past the member byte bound."""
     handle = tar.extractfile(member)
     if handle is None:
         return b""
@@ -113,14 +135,16 @@ def _read_member(tar: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
             break
         data.extend(chunk)
         if len(data) > _MAX_MEMBER_BYTES:
-            raise ValueError("member exceeds byte limit while streaming")
+            raise _Fatal(0, ["member exceeds byte limit while streaming"])
     return bytes(data)
 
 
-def _root_identity(envelope: dict) -> str:
-    # The reproducible root is the content identity: it excludes both the
-    # human-facing ``created_at`` and the detached ``seal`` (a verified seal is
-    # an attestation OVER this root, never part of the document it binds).
+def _root_identity(envelope: dict[str, object]) -> str:
+    """Recompute the reproducible content root, excluding ``created_at`` + ``seal``.
+
+    A verified seal is an attestation OVER this root, never part of the document
+    it binds, so both it and the human-facing ``created_at`` are excluded.
+    """
     document = {
         key: value
         for key, value in envelope.items()
@@ -129,7 +153,8 @@ def _root_identity(envelope: dict) -> str:
     return _sha256_hex(rfc8785.dumps(document))
 
 
-def _validate_inventory_rows(inventory: list, issues: list[str]) -> None:
+def _validate_inventory_rows(inventory: list[object], issues: list[str]) -> None:
+    """Append an issue for each inventory row that is malformed or unsafe."""
     seen: set[str] = set()
     for row in inventory:
         if not isinstance(row, dict):
@@ -149,6 +174,18 @@ def _validate_inventory_rows(inventory: list, issues: list[str]) -> None:
         if path in seen:
             issues.append(f"duplicate inventory bundle_path: {path!r}")
         seen.add(path)
+
+
+def _validate_seal(seal: object, issues: list[str]) -> None:
+    """Append an issue for a malformed seal object."""
+    if not isinstance(seal, dict):
+        issues.append("envelope seal must be an object")
+        return
+    if seal.get("scope") not in _SEAL_SCOPES:
+        issues.append("envelope seal.scope is missing or unrecognized")
+    root_id = seal.get("root_identity")
+    if root_id is not None and not isinstance(root_id, str):
+        issues.append("envelope seal.root_identity must be a string or null")
 
 
 def _validate_envelope_structure(envelope: object) -> list[str]:
@@ -171,20 +208,18 @@ def _validate_envelope_structure(envelope: object) -> list[str]:
     for name in ("bundle_profile", "limits_profile", "run_id"):
         if not isinstance(envelope.get(name), str) or not envelope.get(name):
             issues.append(f"envelope {name} must be a non-empty string")
-    seal = envelope.get("seal")
-    if not isinstance(seal, dict):
-        issues.append("envelope seal must be an object")
-    else:
-        if seal.get("scope") not in _SEAL_SCOPES:
-            issues.append("envelope seal.scope is missing or unrecognized")
-        root_id = seal.get("root_identity")
-        if root_id is not None and not isinstance(root_id, str):
-            issues.append("envelope seal.root_identity must be a string or null")
+    _validate_seal(envelope.get("seal"), issues)
     inventory = envelope.get("inventory")
     if not isinstance(inventory, list):
         issues.append("envelope inventory must be a list")
     else:
         _validate_inventory_rows(inventory, issues)
+    _validate_collections(envelope, issues)
+    return issues
+
+
+def _validate_collections(envelope: dict[str, object], issues: list[str]) -> None:
+    """Append an issue for a malformed data dictionary, limitations, or disclosures."""
     data_dictionary = envelope.get("data_dictionary")
     if (
         not isinstance(data_dictionary, dict)
@@ -198,10 +233,12 @@ def _validate_envelope_structure(envelope: object) -> list[str]:
         issues.append("envelope limitations must be a list")
     if not isinstance(envelope.get("validation_disclosures"), list):
         issues.append("envelope validation_disclosures must be a list")
-    return issues
 
 
-def _scan_members(tar: tarfile.TarFile, members, issues):
+def _scan_members(
+    tar: tarfile.TarFile, members: list[tarfile.TarInfo], issues: list[str]
+) -> tuple[set[str], dict[str, str], dict[str, int]]:
+    """Validate and hash every member, returning names, digests, and sizes."""
     digests: dict[str, str] = {}
     sizes: dict[str, int] = {}
     names: set[str] = set()
@@ -212,10 +249,10 @@ def _scan_members(tar: tarfile.TarFile, members, issues):
             issues.append(problem)
             continue
         if member.name in names:
-            issues.append(f"duplicate member: {member.name}")
+            issues.append(f"duplicate member: {member.name!r}")
             continue
         if member.size > _MAX_MEMBER_BYTES:
-            issues.append(f"member exceeds byte limit: {member.name}")
+            issues.append(f"member exceeds byte limit: {member.name!r}")
             continue
         total += member.size
         if total > _MAX_TOTAL_BYTES:
@@ -227,7 +264,14 @@ def _scan_members(tar: tarfile.TarFile, members, issues):
     return names, digests, sizes
 
 
-def _check_inventory(envelope, names, digests, sizes, issues) -> None:
+def _check_inventory(
+    envelope: dict[str, object],
+    names: set[str],
+    digests: dict[str, str],
+    sizes: dict[str, int],
+    issues: list[str],
+) -> None:
+    """Append an issue for any inventory/archive digest, size, or coverage mismatch."""
     inventory = envelope.get("inventory", [])
     inventory_paths: set[str] = set()
     for row in inventory:
@@ -247,11 +291,61 @@ def _check_inventory(envelope, names, digests, sizes, issues) -> None:
         issues.append(f"archive member not in inventory: {extra!r}")
 
 
-def verify_stream(fileobj) -> VerificationReport:
-    """Verify a bundle from an open binary stream."""
-    import json
+def _load_envelope(
+    tar: tarfile.TarFile, names: set[str], member_count: int, issues: list[str]
+) -> dict[str, object]:
+    """Read, size-bound, parse, and structurally validate the envelope.
 
+    Raises ``_Fatal`` when the envelope is absent, oversized, unparseable, or
+    structurally invalid; otherwise returns the parsed envelope object.
+    """
+    if _ENVELOPE_NAME not in names:
+        raise _Fatal(member_count, issues + ["missing bundle.json envelope"])
+    env_bytes = _read_member(tar, tar.getmember(_ENVELOPE_NAME))
+    if len(env_bytes) > _MAX_ENVELOPE_BYTES:
+        raise _Fatal(member_count, issues + ["envelope exceeds metadata size limit"])
+    try:
+        envelope = json.loads(env_bytes)
+    except ValueError as exc:
+        raise _Fatal(
+            member_count, issues + [f"envelope is not valid JSON: {exc}"]
+        ) from exc
+    structure_issues = _validate_envelope_structure(envelope)
+    if structure_issues:
+        raise _Fatal(member_count, issues + structure_issues)
+    return envelope
+
+
+def _verify_archive(tar: tarfile.TarFile) -> VerificationReport:
+    """Verify an opened archive, accumulating issues into one final report."""
     issues: list[str] = []
+    members = tar.getmembers()
+    try:
+        if len(members) > _MAX_MEMBERS:
+            raise _Fatal(len(members), ["member count exceeds limit"])
+        names, digests, sizes = _scan_members(tar, members, issues)
+        envelope = _load_envelope(tar, names, len(members), issues)
+        root_identity = _root_identity(envelope)
+        seal_scope = envelope["seal"].get("scope")
+        _check_inventory(envelope, names, digests, sizes, issues)
+        if seal_scope == "verified":
+            # A "verified" claim requires portable #444 attestation material a
+            # third party can authenticate against a trust anchor. That contract
+            # does not exist yet, and a self-declared root identity is not
+            # evidence, so a verified seal cannot be confirmed. Producers only
+            # ever emit "unsealed" today.
+            issues.append(
+                "seal claims 'verified' but carries no verifiable attestation material"
+            )
+        return VerificationReport(
+            not issues, root_identity, len(members), seal_scope, issues
+        )
+    except _Fatal as fatal:
+        return VerificationReport(False, None, fatal.member_count, None, fatal.issues)
+
+
+def verify_stream(fileobj: BinaryIO) -> VerificationReport:
+    """Verify a bundle from an open binary stream."""
     try:
         tar = tarfile.open(fileobj=fileobj, mode="r:")
     except tarfile.TarError as exc:
@@ -259,72 +353,10 @@ def verify_stream(fileobj) -> VerificationReport:
             False, None, 0, None, [f"not an uncompressed USTAR bundle: {exc}"]
         )
     with tar:
-        members = tar.getmembers()
-        if len(members) > _MAX_MEMBERS:
-            return VerificationReport(
-                False, None, len(members), None, ["member count exceeds limit"]
-            )
-        try:
-            names, digests, sizes = _scan_members(tar, members, issues)
-        except ValueError as exc:
-            return VerificationReport(
-                False, None, len(members), None, issues + [str(exc)]
-            )
-        if _ENVELOPE_NAME not in names:
-            return VerificationReport(
-                False,
-                None,
-                len(members),
-                None,
-                issues + ["missing bundle.json envelope"],
-            )
-        env_bytes = _read_member(tar, tar.getmember(_ENVELOPE_NAME))
-        if len(env_bytes) > _MAX_ENVELOPE_BYTES:
-            return VerificationReport(
-                False,
-                None,
-                len(members),
-                None,
-                issues + ["envelope exceeds metadata size limit"],
-            )
-        try:
-            envelope = json.loads(env_bytes)
-        except ValueError as exc:
-            return VerificationReport(
-                False,
-                None,
-                len(members),
-                None,
-                issues + [f"envelope is not valid JSON: {exc}"],
-            )
-        structure_issues = _validate_envelope_structure(envelope)
-        if structure_issues:
-            return VerificationReport(
-                False, None, len(members), None, issues + structure_issues
-            )
-        root_identity = _root_identity(envelope)
-        seal = envelope["seal"]
-        seal_scope = seal.get("scope")
-        _check_inventory(envelope, names, digests, sizes, issues)
-        if seal_scope == "verified":
-            # A "verified" claim requires portable #444 attestation material a
-            # third party can authenticate against a trust anchor. That contract
-            # does not exist yet, and a self-declared root identity is not
-            # evidence, so the verifier cannot confirm a verified seal and must
-            # not bless one. Producers only ever emit "unsealed" today.
-            issues.append(
-                "seal claims 'verified' but carries no verifiable attestation material"
-            )
-        return VerificationReport(
-            ok=not issues,
-            root_identity=root_identity,
-            member_count=len(members),
-            seal_scope=seal_scope,
-            issues=issues,
-        )
+        return _verify_archive(tar)
 
 
-def verify_bundle(path: Path | str) -> VerificationReport:
+def verify_bundle(path: str) -> VerificationReport:
     """Verify a bundle archive at ``path``."""
     with open(path, "rb") as fileobj:
         return verify_stream(fileobj)

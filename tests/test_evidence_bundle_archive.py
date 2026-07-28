@@ -114,14 +114,16 @@ class TestPublication:
     def test_refuses_to_overwrite_existing_output(self, tmp_path: Path) -> None:
         run_dir, blob = _run_with_source(tmp_path)
         out = tmp_path / "out" / "b.tar"
-        write_bundle_archive(run_dir, out, _members(blob))
+        members = _members(blob)
+        write_bundle_archive(run_dir, out, members)
         with pytest.raises(BundleError):
-            write_bundle_archive(run_dir, out, _members(blob))
+            write_bundle_archive(run_dir, out, members)
 
     def test_refuses_output_under_the_run_tree(self, tmp_path: Path) -> None:
         run_dir, blob = _run_with_source(tmp_path)
+        members = _members(blob)
         with pytest.raises(BundleError):
-            write_bundle_archive(run_dir, run_dir / "exports" / "b.tar", _members(blob))
+            write_bundle_archive(run_dir, run_dir / "exports" / "b.tar", members)
 
     def test_rejects_duplicate_bundle_paths(self, tmp_path: Path) -> None:
         run_dir, blob = _run_with_source(tmp_path)
@@ -147,8 +149,9 @@ class TestOutputPermissions:
         parent = tmp_path / "shared"
         parent.mkdir()
         parent.chmod(0o755)
+        members = _members(blob)
         with pytest.raises(BundleError) as excinfo:
-            write_bundle_archive(run_dir, parent / "b.tar", _members(blob))
+            write_bundle_archive(run_dir, parent / "b.tar", members)
         assert "group/other" in str(excinfo.value).lower()
 
     def test_rejects_symlinked_parent(self, tmp_path: Path) -> None:
@@ -157,8 +160,9 @@ class TestOutputPermissions:
         real.mkdir(mode=0o700)
         link = tmp_path / "linkdir"
         link.symlink_to(real)
+        members = _members(blob)
         with pytest.raises(BundleError):
-            write_bundle_archive(run_dir, link / "b.tar", _members(blob))
+            write_bundle_archive(run_dir, link / "b.tar", members)
 
     def test_created_parent_is_owner_only(self, tmp_path: Path) -> None:
         run_dir, blob = _run_with_source(tmp_path)

@@ -35,7 +35,7 @@ class ProjectionContext:
     """
 
     run_dir: Path
-    records: tuple[dict, ...]
+    records: tuple[dict[str, object], ...]
     retained_sizes: Mapping[str, int | None]
     limits: BundleLimits
 
@@ -50,6 +50,8 @@ class ProjectionResult:
 
 
 class Projection(Protocol):
+    """The projection seam: map a projection context to one projection result."""
+
     format: str
 
     def project(self, ctx: ProjectionContext) -> ProjectionResult: ...
@@ -68,14 +70,17 @@ _REGISTRY: dict[str, Projection] = {}
 
 
 def register(projection: Projection) -> None:
+    """Register ``projection`` in the closed registry under its format name."""
     _REGISTRY[projection.format] = projection
 
 
 def available_formats() -> frozenset[str]:
+    """Return the set of registered projection format names."""
     return frozenset(_REGISTRY)
 
 
 def get_projection(fmt: str) -> Projection:
+    """Return the projection for ``fmt``, failing closed on an unknown format."""
     try:
         return _REGISTRY[fmt]
     except KeyError as exc:

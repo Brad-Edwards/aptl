@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 import _bundle_fixtures as fixtures  # noqa: E402
 
+from aptl.core.evidence_bundle import BundleOptions  # noqa: E402
 from aptl.core.evidence_bundle import build_evidence_bundle  # noqa: E402
 from aptl.core.evidence_bundle import verify as verify_mod  # noqa: E402
 from aptl.core.evidence_bundle.verify import verify_bundle  # noqa: E402
@@ -26,7 +27,9 @@ def _build(tmp_path: Path) -> tuple[Path, str]:
     run_dir = tmp_path / "run-1"
     fixtures.build_ready_to_seal_run(run_dir, run_id="run-1", evidence_count=2)
     out = tmp_path / "exports" / "run-1.tar"
-    result = build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+    result = build_evidence_bundle(
+        run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+    )
     return out, result.root_identity
 
 
@@ -235,7 +238,9 @@ class TestSharedBlobExport:
             capture_spec_id="spec-b",
         )
         out = tmp_path / "exports" / "b.tar"
-        result = build_evidence_bundle(run_dir, "run-1", out, projections=["jsonl"])
+        result = build_evidence_bundle(
+            run_dir, "run-1", out, options=BundleOptions(projections=["jsonl"])
+        )
         report = verify_bundle(out)
         assert report.ok, report.issues
         assert result.archive.member_count >= 1

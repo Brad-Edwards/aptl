@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)
 - [Issue #866 TechVault Component Realization](issue-866-techvault-realization-contract-preflight.md)
 - [Issue #859 Idempotent Stuttering In Bounded Participant Realizations](issue-859-idempotent-stuttering-preflight.md)
 - [Issue #858 Bounded Participant Choice Transport](issue-858-bounded-participant-choice-transport-preflight.md)

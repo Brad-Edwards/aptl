@@ -669,6 +669,28 @@ nodes:
             acquisition: pull
             timing: backend-preparation
     services: []
+    runtime:
+      orchestration_authorities:
+        - orchestration_authority_id: shuffle-orborus
+          engine: docker
+          name: Shuffle worker orchestrator
+          privilege_class: host_root_equivalent
+          description: Spawns SOAR worker containers on demand. It mounts the host Docker socket, so it can create workloads outside the declared node set; that authority is stated here rather than left implicit.
+          spawn_templates:
+            - template_id: shuffle-worker
+              image_ref: ghcr.io/shuffle/shuffle-worker:latest
+              purpose: workflow execution
+          lifecycle_policy:
+            execution_timeout: '600'
+            description: Per-execution ceiling from SHUFFLE_ORBORUS_EXECUTION_TIMEOUT.
+          control_interface_ref: docker-sock
+      local_control_interfaces:
+        - control_interface_id: docker-sock
+          path: /var/run/docker.sock
+          kind: unix_socket
+          access: read_write
+          bind_source: /var/run/docker.sock
+          description: The host Docker socket, mounted read-write. Holding it is what lets this node create containers outside the declared range.
   shuffle-opensearch:
     type: vm
     os: linux

@@ -1788,12 +1788,17 @@ class TestStatefulArtifactOwnership:
         )
 
         project_root = Path(__file__).resolve().parents[1]
+        backend = MagicMock()
+        # The real contract returns a sha256 identity for a materialized
+        # component image; a bare MagicMock would be treated as no digest and
+        # the scenario would fail admission before artifact preparation.
+        backend.materialize_component_image.return_value = "sha256:" + "e" * 64
         ctx = _LabStartContext(
             project_dir=project_root,
             skip_seed=False,
             scenario_path=project_root / "scenarios/techvault-operational.sdl.yaml",
             config=load_config(project_root / "aptl.json"),
-            backend=MagicMock(),
+            backend=backend,
         )
 
         result = _load_stateful_artifact_ownership(ctx)

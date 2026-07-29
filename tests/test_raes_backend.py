@@ -536,7 +536,7 @@ class _FakeRuntimeManager:
         self.target = target
         self._initial_snapshot = initial_snapshot
 
-    def plan(self, parsed_scenario):
+    def plan(self, parsed_scenario, *, artifact_availability=None):
         raise NotImplementedError
 
     def apply(self, execution_plan):
@@ -615,7 +615,9 @@ def test_manifest_realization_support_matches_exercised_concerns():
     (support,) = create_aptl_manifest().realization_support
 
     assert support.domain == "runtime-realization"
-    assert support.supported_constraint_kinds == frozenset({"os-family"})
+    assert support.supported_constraint_kinds == frozenset(
+        {"os-family", "source-artifact"}
+    )
     assert support.supported_exact_requirement_kinds == frozenset(
         {"declared-capability-match"}
     )
@@ -1587,7 +1589,7 @@ def test_start_raes_scenario_uses_parser_runtime_manager_and_backend(
     calls: dict[str, object] = {}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             calls["planned_scenario"] = parsed_scenario
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.wazuh-manager", "techvault.kali")
@@ -1619,7 +1621,7 @@ def test_start_raes_scenario_uses_selected_scenario_path(mocker, tmp_path):
     parser = mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("techvault.wazuh-manager"))
 
@@ -1647,7 +1649,7 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
     calls: dict[str, object] = {}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, parameters=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             calls["scenario"] = parsed_scenario
             calls["parameters"] = parameters
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
@@ -1678,7 +1680,7 @@ def test_start_raes_scenario_threads_resolved_run_target(mocker, tmp_path):
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
 
@@ -1722,7 +1724,7 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             return _FakeExecutionPlan(
                 _plan_for_nodes("aptl-victim"), model=planned_model
@@ -1795,7 +1797,7 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
     calls = {"plan": 0, "apply": 0}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario, *, parameters=None):
+        def plan(self, parsed_scenario, *, parameters=None, artifact_availability=None):
             assert parsed_scenario is scenario
             assert parameters == {"victim_os": "linux"}
             calls["plan"] += 1
@@ -1837,7 +1839,7 @@ def test_start_raes_scenario_does_not_retry_non_soc_apply(mocker, tmp_path):
     calls = {"plan": 0, "apply": 0}
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             assert parsed_scenario is scenario
             calls["plan"] += 1
             return _FakeExecutionPlan(_plan_for_nodes("aptl-victim"))
@@ -1973,7 +1975,7 @@ def test_start_raes_scenario_submits_orchestration_for_workflow_scenario(
     orchestrator_start = mocker.spy(AptlOrchestrator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"), orchestration=orchestration
             )
@@ -2000,7 +2002,7 @@ def test_start_raes_scenario_fails_when_provisioning_backend_fails(mocker, tmp_p
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=object())
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(_plan_for_nodes("techvault.victim"))
 
     mocker.patch("aptl.backends.raes.RuntimeManager", FakeRuntimeManager)
@@ -2039,7 +2041,7 @@ def test_start_raes_scenario_fails_when_orchestration_fails(mocker, tmp_path):
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"), orchestration=bad_orchestration
             )
@@ -2092,7 +2094,7 @@ def test_start_raes_scenario_submits_evaluation_for_objective_scenario(
     evaluator_start = mocker.spy(AptlEvaluator, "start")
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 orchestration=orchestration,
@@ -2127,14 +2129,14 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             return super().drive_workflows(**kwargs)
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 orchestration=orchestration,
             )
 
     def fake_create_target(
-        *, project_dir, config, backend, participant_action_specs=None
+        *, project_dir, config, backend, participant_action_specs=None, bundle=None
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2183,7 +2185,7 @@ def test_start_raes_scenario_fails_closed_on_evaluator_plan_error(mocker, tmp_pa
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 is_valid=False,
@@ -2219,7 +2221,7 @@ def test_start_raes_scenario_fails_closed_on_provisioning_plan_error(mocker, tmp
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):
-        def plan(self, parsed_scenario):
+        def plan(self, parsed_scenario, *, artifact_availability=None):
             return _FakeExecutionPlan(
                 _plan_for_nodes("techvault.victim"),
                 is_valid=False,
@@ -4002,3 +4004,64 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         for entry in result.snapshot.realization_provenance
     }
     assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
+
+
+def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):
+    """A shared build context must not make the service it is named after ambiguous.
+
+    ``webapp-proxy`` builds from ``./containers/kali-ssh-proxy``, so the
+    directory name was registered as an alias of *both* services. The node
+    actually named ``kali-ssh-proxy`` then matched two services and could not be
+    realized at all — the range ran a container the scenario was unable to
+    declare.
+
+    A build context records where an image came from, not which service this is,
+    so the service genuinely named by it wins.
+    """
+
+    from aptl.backends.raes_profiles import (
+        load_compose_profile_index,
+        normalize_identifier,
+    )
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  kali-ssh-proxy:\n"
+        "    build: {context: ./containers/kali-ssh-proxy}\n"
+        "    container_name: aptl-kali-ssh-proxy\n"
+        "  webapp-proxy:\n"
+        "    build: {context: ./containers/kali-ssh-proxy}\n"
+        "    container_name: aptl-webapp-proxy\n"
+    )
+    index = load_compose_profile_index(tmp_path)
+
+    assert index.service_names_for_aliases(
+        {normalize_identifier("kali-ssh-proxy")}
+    ) == frozenset({"kali-ssh-proxy"})
+    # The other service keeps its own identity and is not absorbed.
+    assert index.service_names_for_aliases(
+        {normalize_identifier("webapp-proxy")}
+    ) == frozenset({"webapp-proxy"})
+
+
+def test_a_name_derived_alias_collision_is_still_ambiguous(tmp_path):
+    """Only *source* claims yield; a real name collision must still be rejected.
+
+    Narrowness is the point: if the fix above let any identity alias win
+    outright, two distinct services differing only by APTL's prefix would
+    silently resolve to one of them instead of being reported.
+    """
+
+    from aptl.backends.raes_profiles import (
+        load_compose_profile_index,
+        normalize_identifier,
+    )
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  db:\n    image: postgres:16\n  aptl-db:\n    image: postgres:16\n"
+    )
+    index = load_compose_profile_index(tmp_path)
+
+    assert index.service_names_for_aliases({normalize_identifier("db")}) == frozenset(
+        {"db", "aptl-db"}
+    )

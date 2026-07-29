@@ -13,6 +13,11 @@ declared init requirements, and copy checked-in project content into it.
 
 from __future__ import annotations
 
+import os
+import stat
+
+from aptl.core.env import load_dotenv
+
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -115,13 +120,50 @@ class ComposeBaseSubstrateMixin(object):
         the RAES `LabResult` envelope.
         """
 
-        self._run(["docker", "rm", "-f", spec.container_name])
         network_bindings = getattr(self, "_base_networks_by_address", {}).get(
             spec.node_address
         )
+        if self._base_container_already_realized(spec):
+            # Idempotent: a node that already materialized correctly is left in
+            # place. `aptl lab start` retries a single SOC backend-start failure
+            # by re-running the whole admitted plan, which re-enters node
+            # materialization. Tearing the container down and recreating it would
+            # drop the project networks the post-start reconcile
+            # (_reconcile_realization_networks) attached -- the container is
+            # recreated on the default bridge -- and if that retry then fails or
+            # times out before its own reconcile runs, the node is left stranded
+            # on bridge with no scenario network (the attacker among them). The
+            # retry only fires after materialization already succeeded, so the
+            # existing container is known-good; the caller's remaining
+            # materialization ops run against it idempotently.
+            return
+        self._run(["docker", "rm", "-f", spec.container_name])
         argv = self._base_container_create_command(spec, network_bindings)
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
+
+    def _base_container_already_realized(self, spec: "BaseContainerSpec") -> bool:
+        """Return whether this node's base container is already up on its image.
+
+        True only when a container of the exact name is running the exact image
+        the spec calls for. A stopped, missing, or wrong-image container returns
+        False so it is recreated cleanly. Network attachments are deliberately
+        not part of the test: the post-start reconcile owns them, and a preserved
+        container keeps whatever it already had.
+        """
+
+        try:
+            info = self.container_inspect(spec.container_name)
+        # inspect shells out; treat any error as the container being absent.
+        except Exception:
+            return False
+        if not isinstance(info, dict):
+            return False
+        state = info.get("State")
+        running = isinstance(state, dict) and bool(state.get("Running"))
+        config = info.get("Config")
+        image = config.get("Image") if isinstance(config, dict) else None
+        return running and image == spec.image_ref
 
     def _base_container_create_command(
         self,
@@ -157,6 +199,7 @@ class ComposeBaseSubstrateMixin(object):
                 argv += ["--ip", first_attachment.ipv4_address]
         self._append_base_mounts(argv, spec)
         self._append_base_ports(argv, spec)
+        self._append_base_environment(argv, spec)
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
@@ -164,6 +207,73 @@ class ComposeBaseSubstrateMixin(object):
         else:
             argv += [spec.image_ref, "sleep", "infinity"]
         return argv
+
+    def _project_dotenv(self) -> dict[str, str]:
+        """Return the project's generated credential bindings, or nothing.
+
+        Reuses the existing dotenv boundary rather than re-parsing the file, so
+        quoting, comment, and validation behaviour stay in one place. A missing
+        or unreadable file yields no bindings; the caller then omits those
+        variables rather than binding them empty.
+        """
+
+        try:
+            return load_dotenv(self._project_dir / ".env")
+        except (OSError, ValueError):
+            return {}
+
+    def _append_base_environment(
+        self, argv: list[str], spec: "BaseContainerSpec"
+    ) -> None:
+        """Bind a node's declared environment through a contained env file.
+
+        The SDL declares *which* variables a node requires; their values come
+        from the operator environment through the existing secret boundary. The
+        binding is written to an owner-only file under the project's generated
+        realization directory and passed as ``--env-file``, never as ``-e
+        NAME=value``: a value on the command line would put credentials into
+        process argv, where any local process can read them, and into anything
+        that echoes the command.
+
+        A declared variable absent from the environment is omitted rather than
+        bound empty, so the container fails on its own missing-configuration
+        path instead of starting with a silently blank credential.
+        """
+
+        if not spec.environment_names:
+            return
+        # Values come from the project's own credential boundary first: APTL
+        # keeps them in the generated `.env`, which is never exported into this
+        # process. A real process-environment entry still wins, so an operator
+        # can override one variable without editing generated credentials.
+        # Precedence: an operator's process environment, then the project's
+        # generated credentials, then the scenario's authored non-secret
+        # default. The author supplies what is safe to write down; the
+        # credential boundary supplies what is not.
+        available = {
+            **dict(spec.environment_defaults),
+            **self._project_dotenv(),
+            **os.environ,
+        }
+        bindings = {
+            name: available[name]
+            for name in spec.environment_names
+            if name in available
+        }
+        if not bindings:
+            return
+        env_dir = self._project_dir / ".aptl" / "realization" / "env"
+        env_dir.mkdir(parents=True, exist_ok=True)
+        env_path = env_dir / f"{spec.container_name}.env"
+        # Create restricted before writing so the values are never briefly
+        # world-readable between creation and chmod.
+        descriptor = os.open(
+            env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            for name, value in bindings.items():
+                handle.write(f"{name}={value}\n")
+        argv.extend(("--env-file", str(env_path)))
 
     def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
         """Append declared named-volume mounts to a base-container command."""

@@ -1028,3 +1028,39 @@ def test_image_free_content_exec_timeout_fails_closed_not_crash():
 
     assert observation.realized is True
     assert observation.concerns == {}
+
+
+def test_container_realized_accepts_a_completed_one_shot():
+    """A run-to-completion init container is realized, not unrealized (#866).
+
+    The Cortex Elasticsearch index initializer creates its index and exits 0 by
+    design. Before this, the RAES realization gate read its exited container as
+    an unrealized node and rejected the whole apply for a node-type requirement
+    the container actually satisfied -- which forced `aptl lab start` to fail.
+    """
+
+    from aptl.backends._raes_observation_helpers import container_realized
+
+    one_shot = {
+        "State": {"Running": False, "Status": "exited", "ExitCode": 0},
+        "HostConfig": {"RestartPolicy": {"Name": "no"}},
+    }
+    assert container_realized(one_shot) is True
+
+    # A stay-up service that exited is still a real failure.
+    dead_service = {
+        "State": {"Running": False, "Status": "exited", "ExitCode": 0},
+        "HostConfig": {"RestartPolicy": {"Name": "unless-stopped"}},
+    }
+    assert container_realized(dead_service) is False
+
+    # A one-shot that errored failed its job.
+    errored = {
+        "State": {"Running": False, "Status": "exited", "ExitCode": 1},
+        "HostConfig": {"RestartPolicy": {"Name": "no"}},
+    }
+    assert container_realized(errored) is False
+
+    # A running healthy service is realized as before.
+    running = {"State": {"Running": True}, "HostConfig": {"RestartPolicy": {"Name": "always"}}}
+    assert container_realized(running) is True

@@ -57,6 +57,151 @@ class ComposeRealizationImageMixin:
         override_path = self._write_image_override(realization.images)
         return None, (self._project_dir / "docker-compose.yml", override_path)
 
+    def artifact_available(
+        self, image_ref: str, *, allow_remote: bool | None = None
+    ) -> bool:
+        """Whether one immutable artifact reference can be obtained.
+
+        This is the backend half of the RAES artifact availability trust
+        boundary (ADR-051). It reports an operational fact only; it never
+        pulls, tags, or otherwise mutates state, and it never decides
+        admission. The caller partitions the answer by compiled address and
+        hands it to RAES planning as trusted facts.
+
+        A locally present reference always counts. A registry-resolvable
+        reference counts only when remote acquisition is allowed, which it is
+        not for an offline/staged appliance where backend preparation may not
+        pull. ``allow_remote`` defaults to this backend's own staging mode so
+        callers never have to reach into it; pass it explicitly only to force
+        one branch.
+        """
+
+        if allow_remote is None:
+            allow_remote = not self._offline_staged
+        present = self._run(
+            ["docker", "image", "inspect", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if present.returncode == 0:
+            return True
+        if not allow_remote:
+            return False
+        resolvable = self._run(
+            ["docker", "manifest", "inspect", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        return resolvable.returncode == 0
+
+    def materialize_component_image(
+        self, image_ref: str, dockerfile_path: str, context_path: str
+    ) -> str | None:
+        """Build one component image and return the digest it materialized to.
+
+        This runs during backend preparation, which is the timing the
+        per-component build profile declares. It produces a local artifact only;
+        no lab state is touched. Building here is what makes the resulting
+        digest knowable, so it can enter the processor-owned verified integrity
+        set before the runtime gate checks the satisfaction disclosure against
+        it. A built image's digest cannot be predicted, because Docker builds are
+        not bit-reproducible.
+
+        Idempotent in practice: a repeat build is served from the layer cache.
+        Returns nothing when the build fails or the digest cannot be read, so the
+        specification is reported unavailable rather than assumed good.
+        """
+
+        build = self._run(
+            [
+                "docker",
+                "build",
+                "-t",
+                image_ref,
+                "-f",
+                dockerfile_path,
+                context_path,
+            ],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if build.returncode != 0:
+            return None
+        return self._image_digest(image_ref)
+
+    def _image_digest(self, image_ref: str) -> str | None:
+        """Return the sha256 identity of a local image reference."""
+
+        inspect = self._run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image_ref],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if inspect.returncode != 0:
+            return None
+        digest = inspect.stdout.strip()
+        return digest if digest.startswith("sha256:") else None
+
+    def container_image_digest(self, container_name: str) -> str | None:
+        """Return the manifest digest of the image backing one container.
+
+        This is the read-after-write half of artifact realization: it reports
+        what the container is *actually* running, so the satisfaction disclosure
+        is built from the observed digest rather than the planned one. A node
+        whose digest cannot be read returns None, which surfaces as a refused
+        disclosure rather than an assumed match.
+        """
+
+        container = self._run(
+            ["docker", "inspect", "--format", "{{.Image}}", container_name],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if container.returncode != 0:
+            return None
+        image_id = container.stdout.strip()
+        if not image_id:
+            return None
+        return self._image_manifest_digest(image_id)
+
+    def _image_manifest_digest(self, image_id: str) -> str | None:
+        """Return an image's registry manifest digest, or its id as a fallback.
+
+        A pulled image is identified by the manifest digest carried in
+        ``RepoDigests``, which is what an authored exact pin names. A locally
+        built image has no such digest, so its identity is the image id itself.
+        """
+
+        references = self._repo_digest_references(image_id)
+        if references is None:
+            return None
+        digest = next(
+            (
+                reference.rsplit("@", 1)[1]
+                for reference in references
+                if isinstance(reference, str) and "@sha256:" in reference
+            ),
+            None,
+        )
+        return digest or (image_id if image_id.startswith("sha256:") else None)
+
+    def _repo_digest_references(self, image_id: str) -> list[object] | None:
+        """Return an image's ``RepoDigests`` list, or None when it is unreadable."""
+
+        repo_digests = self._run(
+            [
+                "docker",
+                "image",
+                "inspect",
+                "--format",
+                "{{json .RepoDigests}}",
+                image_id,
+            ],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if repo_digests.returncode != 0:
+            return None
+        try:
+            references = yaml.safe_load(repo_digests.stdout.strip()) or []
+        except yaml.YAMLError:
+            return None
+        return references if isinstance(references, list) else None
+
     def _verify_staged_image(
         self,
         image: DeploymentImageRealization,
@@ -83,11 +228,27 @@ class ComposeRealizationImageMixin:
         if image.mode == "pull":
             return self._pull_realization_image(image)
         if image.mode == "build":
-            return self._build_realization_image(image)
+            return self._realize_build_image(image)
         return LabResult(
             success=False,
             error=f"Unsupported image realization mode for RAES node {image.address}.",
         )
+
+    def _realize_build_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Build one image, or verify a component already materialized upstream."""
+
+        if image.policy_rule == "authored-materialization-specification":
+            # Already materialized during backend preparation, which is the
+            # timing the per-component build profile declares. Rebuilding
+            # here would produce a second image whose digest may differ from
+            # the one that entered the verified integrity set, so the
+            # satisfaction disclosure would no longer match. Verify presence
+            # instead: exactly one build per artifact.
+            return self._verify_staged_image(image)
+        return self._build_realization_image(image)
 
     def _pull_realization_image(
         self,

@@ -11,6 +11,10 @@ from raes_runtime.manager import RuntimeManager
 from raes_runtime.registry import RuntimeTarget
 from raes import SDLError, SDLInstantiationError, parse_sdl_file
 
+from aptl.backends._raes_apply_helpers import (
+    _drive_orchestrator_workflows,
+    _with_backend_failure_diagnostics,
+)
 from aptl.backends.raes_diagnostics import (
     render_raes_diagnostics,
 )
@@ -18,6 +22,7 @@ from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
     interpret_realization,
 )
+from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
@@ -37,13 +42,13 @@ from aptl.backends.raes_start_model import (
     AcesStartOutcome,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
-    from raes_contracts.diagnostics import Diagnostic
     from raes_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
@@ -65,6 +70,7 @@ def create_aptl_runtime_target(
     backend: "DeploymentBackend",
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
     participant_plan_authority: ParticipantPlanAuthority | None = None,
+    bundle: ScenarioBundle | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target."""
 
@@ -72,6 +78,7 @@ def create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
         deployment_backend=backend,
+        bundle=bundle,
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -111,7 +118,7 @@ def start_raes_scenario(
     planner sees it, and APTL neither logs nor persists it.
     """
 
-    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path)
+    resolved_scenario = _resolve_scenario_path(project_dir, scenario_path, config)
     try:
         target, execution_plan = _plan_scenario(
             project_dir,
@@ -152,11 +159,35 @@ def start_raes_scenario(
         )
 
 
-def _resolve_scenario_path(project_dir: Path, scenario_path: Path | None) -> Path:
-    """Resolve the authored scenario beneath the project when it is relative."""
+def _resolve_scenario_path(
+    project_dir: Path,
+    scenario_path: Path | None,
+    config: AptlConfig | None = None,
+) -> Path:
+    """Resolve which scenario to realize, and where its bytes come from.
 
-    resolved = scenario_path or DEFAULT_RAES_SCENARIO
-    return resolved if resolved.is_absolute() else project_dir / resolved
+    Precedence is explicit selection, then configuration, then the historical
+    in-tree default. A backend is handed a scenario rather than owning one, so
+    the operator chooses it before ``aptl lab start``; nothing here switches at
+    runtime.
+
+    A configured root anchors the scenario's own inputs. It is validated as a
+    contained relative path when the configuration is parsed, so joining it here
+    cannot escape the project.
+    """
+
+    if scenario_path is not None:
+        return (
+            scenario_path
+            if scenario_path.is_absolute()
+            else project_dir / scenario_path
+        )
+    if config is not None:
+        selection = config.scenario
+        relative = Path(f"{selection.identity}.sdl.yaml")
+        base = Path(selection.root) if selection.root else Path("scenarios")
+        return project_dir / base / relative
+    return project_dir / DEFAULT_RAES_SCENARIO
 
 
 def _plan_scenario(
@@ -169,16 +200,34 @@ def _plan_scenario(
     """Build one RAES plan and the target that consumes its concrete model."""
 
     scenario = parse_sdl_file(scenario_path)
+    # Resolve the scenario bundle once, here, where the scenario itself is
+    # resolved. Everything downstream anchors its content to this rather than to
+    # the engine's checkout, so rehoming the scenario changes only the resolver.
+    bundle = project_tree_bundle(project_dir, scenario_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
         backend=backend,
+        bundle=bundle,
     )
     manager = RuntimeManager(target)
+    # Artifact availability is a trusted input to planning, gathered at the
+    # backend trust boundary before the single admitted plan() call (ADR-051).
+    # It is a no-op for a scenario that authors no artifact_requirement.
+    # The scenario's own inputs — including a component build context — anchor
+    # to the bundle, which is the project directory only while the scenario
+    # still lives in-tree.
+    availability = artifact_availability_for_scenario(
+        scenario, backend, scenario_root=bundle.root
+    )
     execution_plan = (
-        manager.plan(scenario, parameters=dict(parameters))
+        manager.plan(
+            scenario,
+            parameters=dict(parameters),
+            artifact_availability=availability,
+        )
         if parameters is not None
-        else manager.plan(scenario)
+        else manager.plan(scenario, artifact_availability=availability)
     )
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,
@@ -191,6 +240,7 @@ def _plan_scenario(
         config=config,
         backend=backend,
         participant_action_specs=participant_action_specs,
+        bundle=bundle,
     )
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):
@@ -249,7 +299,12 @@ def selected_profiles_for_scenario(
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend
     )
-    execution_plan = RuntimeManager(target).plan(scenario)
+    execution_plan = RuntimeManager(target).plan(
+        scenario,
+        artifact_availability=artifact_availability_for_scenario(
+            scenario, backend, scenario_root=project_dir
+        ),
+    )
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning, project_dir=project_dir, config=config
     )
@@ -278,7 +333,12 @@ def admitted_stateful_artifact_ownership(
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend
     )
-    execution_plan = RuntimeManager(target).plan(scenario)
+    execution_plan = RuntimeManager(target).plan(
+        scenario,
+        artifact_availability=artifact_availability_for_scenario(
+            scenario, backend, scenario_root=project_dir
+        ),
+    )
     blocking = [
         diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error
     ]
@@ -376,35 +436,6 @@ def _run_execution_plan(
     )
 
 
-def _with_backend_failure_diagnostics(
-    target: RuntimeTarget,
-    diagnostics: list["Diagnostic"],
-) -> list["Diagnostic"]:
-    """Re-attach the provisioner's own failure report to a failed apply.
-
-    ``raes_runtime``'s backend-call boundary replaces a failed backend apply's
-    diagnostics with its snapshot-contract / SEM-218 gate output — the gate
-    evaluates the never-realized snapshot, so every exact declaration reads as
-    unrealized. That hides the backend's actionable failure (for example a
-    Docker subnet conflict with its remediation steps) and severs the
-    retryable-code signal the SOC retry keys on. The backend's own report is
-    authoritative for what failed, so it renders first.
-    """
-    captured = tuple(getattr(target.provisioner, "last_failure_diagnostics", ()))
-    if not captured:
-        return diagnostics
-    seen = {
-        (diagnostic.code, diagnostic.address, diagnostic.message)
-        for diagnostic in diagnostics
-    }
-    fresh = [
-        diagnostic
-        for diagnostic in captured
-        if (diagnostic.code, diagnostic.address, diagnostic.message) not in seen
-    ]
-    return [*fresh, *diagnostics]
-
-
 def _apply_execution_plan(
     target: RuntimeTarget,
     execution_plan: "ExecutionPlan",
@@ -455,28 +486,3 @@ def _apply_execution_plan(
         run_id=run_id,
     )
     return failure, snapshot, False
-
-
-def _drive_orchestrator_workflows(
-    orchestrator: object,
-    evaluation_results: dict[str, dict[str, object]],
-    *,
-    run_store: RunStorageBackend | None = None,
-    run_id: str | None = None,
-) -> LabResult | None:
-    """Drive registered workflows and convert diagnostics to a lab failure."""
-
-    drive_diagnostics = []
-    if isinstance(orchestrator, AptlOrchestrator) and orchestrator.results():
-        drive_diagnostics = orchestrator.drive_workflows(
-            evaluation_results=evaluation_results,
-            run_store=run_store,
-            run_id=run_id,
-        )
-    failure = None
-    if drive_diagnostics:
-        failure = LabResult(
-            success=False,
-            error=render_raes_diagnostics(drive_diagnostics),
-        )
-    return failure

@@ -156,6 +156,8 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)
+- [Issue #866 TechVault Component Realization](issue-866-techvault-realization-contract-preflight.md)
 - [EXP-009 ACES Archival Run And Evidence Sealing](exp-009-aces-archival-sealing-preflight.md)
 - [EXP-008 Portable Research Evidence Bundle](exp-008-portable-evidence-bundle-preflight.md)
 - [REP-003 Run-Scoped Provenance](rep-003-run-scoped-provenance-preflight.md)

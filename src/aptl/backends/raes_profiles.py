@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import re
 
 import yaml
 
+from aptl.backends._compose_profile_index import (
+    ComposeProfileIndex,
+    ComposeServiceInfo,
+    normalize_identifier,
+    normalized_identifier_aliases,
+)
 from aptl.core.config import AptlConfig
 
 CORE_PROFILES = ("otel",)
-IDENTIFIER_SEPARATORS = re.compile(r"[^a-z0-9]+")
 APTL_SERVICE_ALIASES = {
     "db": frozenset({"customer-db", "postgres"}),
     "kali": frozenset({"red-workbench"}),
@@ -23,146 +26,32 @@ APTL_SERVICE_ALIASES = {
 }
 
 
-@dataclass(frozen=True)
-class ComposeServiceInfo(object):
-    """APTL-relevant metadata for one Compose service."""
-
-    name: str
-    aliases: frozenset[str]
-    profiles: frozenset[str]
-    dependencies: frozenset[str]
-    networks: frozenset[str]
-    container_name: str | None
-    network_addresses: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ComposeProfileIndex(object):
-    """Compose service aliases indexed to profile names and dependencies."""
-
-    alias_to_profiles: dict[str, frozenset[str]]
-    alias_to_services: dict[str, frozenset[str]]
-    services: dict[str, ComposeServiceInfo]
-
-    def profiles_for_aliases(self, aliases: set[str]) -> frozenset[str]:
-        """Return all profiles associated with any normalized alias."""
-        profiles: set[str] = set()
-        for alias in aliases:
-            profiles.update(self.alias_to_profiles.get(alias, frozenset()))
-        return frozenset(profiles)
-
-    def service_names_for_aliases(self, aliases: set[str]) -> frozenset[str]:
-        """Return Compose service names associated with normalized aliases."""
-        unique_services: set[str] = set()
-        services: set[str] = set()
-        for alias in aliases:
-            matches = self.alias_to_services.get(alias, frozenset())
-            if len(matches) == 1:
-                unique_services.update(matches)
-            services.update(matches)
-        if unique_services:
-            return frozenset(unique_services)
-        return frozenset(services)
-
-    def profiles_for_services(self, service_names: set[str]) -> frozenset[str]:
-        """Return all profiles for the named Compose services."""
-        profiles: set[str] = set()
-        for service_name in service_names:
-            service = self.services.get(service_name)
-            if service is not None:
-                profiles.update(service.profiles)
-        return frozenset(profiles)
-
-    def network_aliases(self) -> frozenset[str]:
-        """Return normalized Compose network aliases used by indexed services."""
-        aliases: set[str] = set()
-        for service in self.services.values():
-            for network_name in service.networks:
-                aliases.update(normalized_identifier_aliases(network_name))
-        return frozenset(aliases)
-
-    def dependency_closure_for_services(
-        self, service_names: set[str]
-    ) -> tuple[frozenset[str], dict[str, tuple[str, ...]]]:
-        """Return transitive Compose ``depends_on`` closure and missing edges."""
-        closure = set(service_names)
-        pending = list(service_names)
-        missing: dict[str, set[str]] = {}
-        while pending:
-            service_name = pending.pop()
-            service = self.services.get(service_name)
-            if service is None:
-                continue
-            for dependency in service.dependencies:
-                if dependency not in self.services:
-                    missing.setdefault(service_name, set()).add(dependency)
-                    continue
-                if dependency not in closure:
-                    closure.add(dependency)
-                    pending.append(dependency)
-        return (
-            frozenset(closure),
-            {
-                service_name: tuple(sorted(dependencies))
-                for service_name, dependencies in missing.items()
-            },
-        )
-
-    def _service_active(self, service_name: str, selected_profiles: set[str]) -> bool:
-        """Return whether a Compose service runs under the selected profiles."""
-        service = self.services.get(service_name)
-        if service is None:
-            return False
-        # A service with no profiles is always active; otherwise it runs when
-        # it shares at least one profile with the selection. This mirrors
-        # `docker compose --profile` activation semantics.
-        return (not service.profiles) or bool(service.profiles & selected_profiles)
-
-    def cross_profile_dependency_gaps(
-        self, selected_profiles: set[str]
-    ) -> dict[str, tuple[str, ...]]:
-        """Return active services whose ``depends_on`` targets are inactive.
-
-        ``docker compose --profile`` activates every service in a selected
-        profile, not just the RAES nodes a scenario declares. When an activated
-        service depends on a known service that the profile selection excludes,
-        Compose rejects the project ("depends on undefined service"). This is
-        invisible to node-level realization, so it is checked here against the
-        full Compose service graph for the selected profiles.
-        """
-        selected = set(selected_profiles)
-        gaps: dict[str, set[str]] = {}
-        for service_name, service in self.services.items():
-            if not self._service_active(service_name, selected):
-                continue
-            for dependency in service.dependencies:
-                # Unknown dependencies are reported by the dependency-closure
-                # pass; here we only flag known services excluded by the
-                # profile selection.
-                if dependency not in self.services:
-                    continue
-                if not self._service_active(dependency, selected):
-                    gaps.setdefault(service_name, set()).add(dependency)
-        return {
-            service_name: tuple(sorted(dependencies))
-            for service_name, dependencies in gaps.items()
-        }
-
-
 def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     """Load Compose service/profile aliases from ``docker-compose.yml``."""
     services = _load_compose_services(project_dir)
     alias_to_profiles: dict[str, set[str]] = {}
     alias_to_services: dict[str, set[str]] = {}
+    identity_aliases: dict[str, set[str]] = {}
+    source_aliases: dict[str, frozenset[str]] = {}
     service_infos: dict[str, ComposeServiceInfo] = {}
     for service_name, service_def in services.items():
         info = _service_info(str(service_name), service_def)
         if info is None:
             continue
         service_infos[info.name] = info
+        for alias in _identity_aliases(str(service_name), service_def):
+            identity_aliases.setdefault(alias, set()).add(info.name)
+        source_aliases[info.name] = _source_aliases(service_def)
         for alias in info.aliases:
             alias_to_services.setdefault(alias, set()).add(info.name)
             alias_to_profiles.setdefault(alias, set()).update(info.profiles)
+    _prune_source_only_aliases(
+        alias_to_services,
+        alias_to_profiles,
+        identity_aliases=identity_aliases,
+        source_aliases=source_aliases,
+        service_infos=service_infos,
+    )
     return ComposeProfileIndex(
         alias_to_profiles={
             alias: frozenset(profiles)
@@ -174,6 +63,54 @@ def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
         },
         services=service_infos,
     )
+
+
+def _prune_source_only_aliases(
+    alias_to_services: dict[str, set[str]],
+    alias_to_profiles: dict[str, set[str]],
+    *,
+    identity_aliases: dict[str, set[str]],
+    source_aliases: dict[str, frozenset[str]],
+    service_infos: dict[str, ComposeServiceInfo],
+) -> None:
+    """Drop source-only claimants from an alias a real service actually names.
+
+    An alias derived from a service's *source* — its image repository or its
+    build-context directory — records where the image came from, not which
+    service this is. Two services may share one build context (webapp-proxy and
+    kali-ssh-proxy both build ./containers/kali-ssh-proxy), so that directory
+    name is not evidence about either one.
+
+    When some service is actually *named* by that alias, its claim wins and the
+    source-only claimants drop out. Without this, declaring a node named after
+    the shared context left it ambiguous against a service it has nothing to do
+    with, and the node could not be realized at all.
+
+    Deliberately narrow: only source-derived claims yield. A name-derived alias
+    (a service key, or the same name with APTL's prefix stripped) still collides
+    normally, so a genuinely ambiguous dependency is still rejected rather than
+    silently resolved to one of the candidates.
+    """
+
+    for alias, owners in identity_aliases.items():
+        claimants = alias_to_services.get(alias)
+        if claimants is None or claimants <= owners:
+            continue
+        surviving = {
+            name
+            for name in claimants
+            if name in owners or alias not in source_aliases.get(name, frozenset())
+        }
+        if surviving and surviving != claimants:
+            alias_to_services[alias] = surviving
+            alias_to_profiles[alias] = _profiles_for_names(surviving, service_infos)
+
+
+def _profiles_for_names(
+    names: set[str], service_infos: dict[str, ComposeServiceInfo]
+) -> set[str]:
+    """Return every profile declared by the named indexed services."""
+    return {profile for name in names for profile in service_infos[name].profiles}
 
 
 def node_aliases(address: str, payload: Mapping[str, Any]) -> set[str]:
@@ -241,23 +178,6 @@ def steady_state_service_aliases_for_profiles(
         for service_name, service_def in services.items()
         if _service_selected(service_def, selected)
     }
-
-
-def normalized_identifier_aliases(raw: str) -> set[str]:
-    """Return normalized aliases for one Compose or RAES identifier."""
-    normalized = normalize_identifier(raw)
-    if not normalized:
-        return set()
-    aliases = {normalized}
-    if normalized.startswith("aptl-"):
-        aliases.add(normalized.removeprefix("aptl-"))
-    return {alias for alias in aliases if alias}
-
-
-def normalize_identifier(raw: str) -> str:
-    """Normalize punctuation and case for loose identifier matching."""
-    lowered = raw.strip().lower()
-    return IDENTIFIER_SEPARATORS.sub("-", lowered).strip("-")
 
 
 def _load_compose_services(project_dir: Path) -> Mapping[str, object]:
@@ -383,6 +303,37 @@ def _service_aliases(
     aliases.update(_image_aliases(service_def))
     aliases.update(_build_aliases(service_def))
     return aliases
+
+
+def _identity_aliases(service_name: str, service_def: Mapping[str, object]) -> set[str]:
+    """Return the aliases that actually name this service.
+
+    These are the names Compose gives one specific service — its key, its
+    container name, its hostname, and APTL's curated equivalents. Unlike aliases
+    derived from an image repository or a build context, they cannot be shared
+    with another service, so they stay authoritative even when a source alias
+    has to be pruned for ambiguity.
+    """
+
+    aliases = {service_name}
+    aliases.update(APTL_SERVICE_ALIASES.get(service_name, frozenset()))
+    for alias_key in ("container_name", "hostname"):
+        value = service_def.get(alias_key)
+        if isinstance(value, str) and value.strip():
+            aliases.add(value)
+    return {alias for alias in map(normalize_identifier, aliases) if alias}
+
+
+def _source_aliases(service_def: Mapping[str, object]) -> frozenset[str]:
+    """Return aliases that describe where a service's image came from.
+
+    An image repository or a build-context directory can be shared by several
+    services, so these names are provenance rather than identity and must yield
+    to a service that is genuinely named by them.
+    """
+
+    raw = _image_aliases(service_def) | _build_aliases(service_def)
+    return frozenset(alias for alias in map(normalize_identifier, raw) if alias)
 
 
 def _service_container_name(service_def: Mapping[str, object]) -> str | None:

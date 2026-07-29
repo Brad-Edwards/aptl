@@ -352,9 +352,8 @@ class DeploymentRealizationSpec(object):
     accounts: tuple[DeploymentAccountRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
-    # ADR-048: when True, the backend realizes every node by materializing its
-    # declared desired state onto a generic base substrate (no appliance image,
-    # no compose-up of the hand-authored model). Set by the interpreter only
-    # when the scenario is fully image-free authored; False keeps the legacy
-    # compose path unchanged so a partially-authored scenario never boots empty.
-    image_free: bool = False
+    # ADR-048 image-free materialization is no longer a whole-spec flag: routing
+    # is derived per node at realize() time (``_needs_compose`` /
+    # ``_image_free_node_addresses``) so a graph that mixes pinned artifacts,
+    # per-component builds and materialized nodes routes each node correctly
+    # rather than falling into a single whole-graph decision.

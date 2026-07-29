@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -11,46 +12,17 @@ from typing import Any
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
-from aptl.backends.raes_diagnostics import diagnostic
-from aptl.core.deployment.realization import DeploymentImageRealization
-
-_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_SAFE_TAG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
-_COMPOSE_SOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-_PROJECT_DOCKERFILE_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
-
-_ALLOWED_SOURCE_IMAGE_REFS = {
-    ("postgres", "16"): "postgres:16-alpine",
-    ("postgres", "16-alpine"): "postgres:16-alpine",
-    ("wazuh-manager", "4.x"): "wazuh/wazuh-manager:4.12.0",
-    ("wazuh-indexer", "4.x"): "wazuh/wazuh-indexer:4.12.0",
-    ("wazuh-dashboard", "4.x"): "wazuh/wazuh-dashboard:4.12.0",
-}
-
-_ALLOWED_DIGEST_SOURCE_NAMES = frozenset(
-    {
-        "cassandra",
-        "docker.elastic.co/elasticsearch/elasticsearch",
-        "ghcr.io/docker-mailserver/docker-mailserver",
-        "ghcr.io/misp/misp-docker/misp-core",
-        "ghcr.io/shuffle/shuffle-backend",
-        "ghcr.io/shuffle/shuffle-frontend",
-        "ghcr.io/shuffle/shuffle-orborus",
-        "grafana/grafana",
-        "grafana/tempo",
-        "jasonish/suricata",
-        "mariadb",
-        "opensearchproject/opensearch",
-        "otel/opentelemetry-collector-contrib",
-        "postgres",
-        "redis",
-        "strangebee/thehive",
-        "thehiveproject/cortex",
-        "wazuh/wazuh-dashboard",
-        "wazuh/wazuh-indexer",
-        "wazuh/wazuh-manager",
-    }
+from aptl.backends._raes_image_policy import (
+    _ALLOWED_DIGEST_SOURCE_NAMES,
+    _ALLOWED_SOURCE_IMAGE_REFS,
+    _COMPOSE_SOURCE_NAME_RE,
+    _DIGEST_RE,
+    _PROJECT_DOCKERFILE_PATH_RE,
+    _SAFE_TAG_RE,
+    _policy_diagnostic,
+    _provenance_counts,
 )
+from aptl.core.deployment.realization import DeploymentImageRealization
 
 
 @dataclass(frozen=True)
@@ -60,6 +32,7 @@ class _NodeSource:
     name: str
     version: str
     build: object
+    artifact_requirement: object = None
 
 
 def resolve_node_image(
@@ -85,8 +58,13 @@ def resolve_node_image(
                 service_name=service_name,
                 diagnostics=diagnostics,
             )
-            if image is None and not _is_compose_owned_source(
-                source.name, source.version
+            # A node that authored artifact demand must fail loudly when that
+            # demand cannot be resolved. The Compose-owned carve-out below only
+            # applies to nodes whose binding Compose still owns, never to one
+            # that declared an artifact identity of its own.
+            if image is None and (
+                source.artifact_requirement is not None
+                or not _is_compose_owned_source(source.name, source.version)
             ):
                 diagnostics.append(
                     _policy_diagnostic(resource.address, "untrusted-image")
@@ -117,6 +95,7 @@ def _node_source(
                     name=source_name,
                     version=_source_string(source.get("version")) or "*",
                     build=source.get("build"),
+                    artifact_requirement=source.get("artifact_requirement"),
                 )
             else:
                 diagnostics.append(_policy_diagnostic(address, "invalid-source"))
@@ -134,6 +113,147 @@ def _source_string(value: object) -> str | None:
     return None
 
 
+def _authored_artifact_image(
+    *,
+    resource: PlannedResource,
+    source: _NodeSource,
+    service_name: str,
+    project_dir: Path,
+) -> DeploymentImageRealization | None:
+    """Resolve the image from the node's authored exact artifact requirement.
+
+    When the SDL names an immutable artifact identity, that identity is the
+    authority (ADR-050): the digest the author pinned is the reference APTL
+    pulls. The local product allowlist below is legacy compatibility for
+    scenarios that have not been migrated, and is not consulted here — an
+    authored pin must not depend on APTL-side membership of a hand-maintained
+    table, which is exactly what ADR-098 replaces.
+
+    Reference syntax is still validated as defence in depth before the value
+    reaches the deployment backend.
+    """
+
+    requirement = source.artifact_requirement
+    if isinstance(requirement, Mapping):
+        exact = requirement.get("exact_artifact")
+        specifications = requirement.get("materialization_specifications") or []
+    else:
+        exact = getattr(requirement, "exact_artifact", None)
+        specifications = getattr(requirement, "materialization_specifications", []) or []
+    if exact is None:
+        return _materialized_component_image(
+            resource=resource,
+            source=source,
+            service_name=service_name,
+            project_dir=project_dir,
+            specifications=specifications,
+        )
+    if isinstance(exact, Mapping):
+        artifact_id = _source_string(exact.get("artifact_id")) or ""
+        digest = _source_string(exact.get("digest")) or ""
+    else:
+        artifact_id = getattr(exact, "artifact_id", "")
+        digest = getattr(exact, "digest", "")
+    if not _safe_image_name(artifact_id) or _DIGEST_RE.fullmatch(digest) is None:
+        return None
+    return DeploymentImageRealization(
+        address=resource.address,
+        service_name=service_name,
+        source_name=source.name,
+        source_version=source.version,
+        image_ref=f"{artifact_id}@{digest}",
+        mode="pull",
+        policy_rule="authored-exact-artifact",
+        provenance=_provenance_counts(source.build),
+    )
+
+
+def _materialized_component_image(
+    *,
+    resource: PlannedResource,
+    source: _NodeSource,
+    service_name: str,
+    project_dir: Path,
+    specifications: object,
+) -> DeploymentImageRealization | None:
+    """Build one component image from an authored materialization specification.
+
+    The specification id names a contained build context, and the specification
+    digest must equal the sha256 of that context's Dockerfile. A drifted context
+    is not the artifact the author authorised, so it resolves to nothing and
+    admission refuses the node rather than building something else.
+
+    Selection is deterministic by specification id, so the same authored contract
+    always builds the same context.
+    """
+
+    if not isinstance(specifications, (list, tuple)) or not specifications:
+        return None
+    chosen: tuple[str, str] | None = None
+    for specification in sorted(
+        specifications, key=lambda item: _specification_id(item)
+    ):
+        identifier = _specification_id(specification)
+        digest = _specification_digest(specification)
+        dockerfile = _contained_context_dockerfile(project_dir, identifier)
+        if dockerfile is None or not digest:
+            continue
+        actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
+        if actual == digest:
+            chosen = (identifier, digest)
+            break
+    if chosen is None or not _safe_image_name(chosen[0]):
+        return None
+    identifier, digest = chosen
+    return DeploymentImageRealization(
+        address=resource.address,
+        service_name=service_name,
+        source_name=source.name,
+        source_version=source.version,
+        image_ref=f"{identifier}:local",
+        mode="build",
+        policy_rule="authored-materialization-specification",
+        dockerfile_path=f"containers/{identifier}/Dockerfile",
+        context_path=".",
+        provenance=_provenance_counts(source.build),
+    )
+
+
+def _specification_id(specification: object) -> str:
+    """Return a specification's id whether it is a mapping or a model."""
+
+    if isinstance(specification, Mapping):
+        return _source_string(specification.get("specification_id")) or ""
+    return getattr(specification, "specification_id", "") or ""
+
+
+def _specification_digest(specification: object) -> str:
+    """Return a specification's digest whether it is a mapping or a model."""
+
+    if isinstance(specification, Mapping):
+        return _source_string(specification.get("digest")) or ""
+    return getattr(specification, "digest", "") or ""
+
+
+def _contained_context_dockerfile(project_dir: Path, identifier: str) -> Path | None:
+    """Return the contained Dockerfile for one specification id, or nothing."""
+
+    if (
+        not identifier
+        or "/" in identifier
+        or "\\" in identifier
+        or identifier in {".", ".."}
+    ):
+        return None
+    root = (project_dir / "containers").resolve()
+    candidate = (root / identifier / "Dockerfile").resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
 def _resolve_trusted_image(
     *,
     resource: PlannedResource,
@@ -144,7 +264,20 @@ def _resolve_trusted_image(
 ) -> DeploymentImageRealization | None:
     """Resolve one normalized source through build, alias, and digest policies."""
 
-    image = None
+    if source.artifact_requirement is not None:
+        # Authored artifact demand is the sole authority for this node. When it
+        # cannot be resolved — a non-exact posture APTL does not advertise, or a
+        # malformed identity — the answer is no image, which the caller turns
+        # into a refusal. Falling through to build provenance or the local
+        # product allowlist would substitute an APTL-chosen artifact for the one
+        # the author declared, which SEM-218 I1/I2 forbid.
+        return _authored_artifact_image(
+            resource=resource,
+            source=source,
+            service_name=service_name,
+            project_dir=project_dir,
+        )
+    image: DeploymentImageRealization | None = None
     if isinstance(source.build, Mapping):
         image = _build_image(
             resource=resource,
@@ -336,29 +469,3 @@ def _safe_image_name(value: str) -> bool:
     if not value or value.startswith(("-", ".")) or value.endswith(("/", ":")):
         return False
     return all(part not in {"", ".", ".."} for part in re.split(r"[/:]", value))
-
-
-def _provenance_counts(build: object) -> dict[str, int] | None:
-    """Return non-secret provenance list sizes for realization details."""
-
-    if not isinstance(build, Mapping):
-        return None
-    counts = {
-        key: len(value)
-        for key in ("instructions", "layers", "source_inputs")
-        if isinstance((value := build.get(key)), list)
-    }
-    return counts or None
-
-
-def _policy_diagnostic(address: str, reason_code: str) -> Diagnostic:
-    """Build a policy diagnostic without exposing rejected source values."""
-
-    return diagnostic(
-        "aptl.provisioner.image-policy-rejected",
-        address,
-        (
-            "RAES node image source was rejected by the APTL image policy "
-            f"(reason={reason_code})."
-        ),
-    )

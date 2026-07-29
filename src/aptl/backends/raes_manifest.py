@@ -46,6 +46,7 @@ from raes_contracts.contracts import (
     ConfigurationTargetRegistryModel,
     LiteralBindingValueModel,
 )
+from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from raes_contracts.vocabulary import (
     ParticipantFeatureSupportLevel,
     WorkflowFeature,
@@ -232,15 +233,32 @@ _PROVISIONER = ProvisionerCapabilities(
 # requirements are covered by ``declared-capability-match``; account features are
 # realized through the account provider's typed read-after-write path but are not
 # yet a RAES runtime realization concern.
+#
+# ``artifact_mechanisms`` declares which RAES artifact-satisfaction routes APTL
+# can admit (ADR-050, RAES ADR-098). It is deliberately narrow: a mechanism is
+# advertised only once APTL can both materialize it and read the result back
+# (SEM-218 I4). ``support_mode`` stays CONSTRAINED because APTL cannot honestly
+# realize an open artifact concern; an ``open`` requirement is refused with
+# ``artifact.unsupported-open-realization`` rather than silently chosen for.
+#
+# ``source-artifact`` appears on the mechanism's ``supported_requirement_kinds``
+# and on ``supported_constraint_kinds``, but deliberately NOT on
+# ``supported_exact_requirement_kinds``. The two SEM-218 branches differ: the
+# exact branch keys on the single ``declared-capability-match`` kind regardless
+# of the requirement's own kind, so listing it there would claim a capability the
+# gate never consults, while the constrained branch keys on the requirement's own
+# kind and so genuinely needs it. The constrained claim is backed by the
+# per-component build mechanism and its read-after-write of the built image.
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
         support_mode=RealizationSupportMode.CONSTRAINED,
-        supported_constraint_kinds=frozenset({"os-family"}),
+        supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
         supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
+        artifact_mechanisms=list(aptl_artifact_mechanisms()),
         constraints={},
     ),
 )

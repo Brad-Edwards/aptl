@@ -72,7 +72,11 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     assert [d.message for d in realization.diagnostics if d.is_error] == []
 
     spec = realization.deployment_spec([])
-    assert spec.image_free is True
+    # Fully image-free: every node is materialized, so nothing is left for the
+    # Compose path (this replaces the removed whole-spec image_free flag).
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    assert _needs_compose(spec) is False
 
     try:
         result = backend.realize(spec)
@@ -128,7 +132,11 @@ def test_admit_and_realize_service_node_boots_a_real_service(tmp_path):
     realization = interpret_provisioning_plan(plan=plan.provisioning, project_dir=tmp_path, config=cfg)
     assert [d.message for d in realization.diagnostics if d.is_error] == []
     spec = realization.deployment_spec([])
-    assert spec.image_free is True
+    # Fully image-free: every node is materialized, so nothing is left for the
+    # Compose path (this replaces the removed whole-spec image_free flag).
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    assert _needs_compose(spec) is False
 
     try:
         result = backend.realize(spec)

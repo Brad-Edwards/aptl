@@ -105,16 +105,18 @@ def test_operational_gate_passes():
 
 @pytest.mark.xfail(
     reason=(
-        "ad, kali-capture, wazuh-sidecar-db, wazuh-sidecar-suricata still have no "
-        "declared realization in the SDL. Upstream Brad-Edwards/aces#845 (no "
-        "compiled placement for domain-controller bootstrap) is RESOLVED as of "
-        "RAES 1.1.0, which ships the domain-controller-placement resource type, "
-        "so ad is now authorable and blocks only on that authoring. The remaining "
-        "upstream expressivity gaps are #847 (RuntimePackage has no documented way "
-        "to declare a third-party package repository - needed for the Wazuh agent) "
-        "and #849 (no SDL concept for a node sharing another node's network "
-        "namespace). Remove this marker once all four are authored; strict=True "
-        "fails the build the moment that happens without the marker being removed."
+        "kali-capture alone is still realized by docker-compose.yml. The other "
+        "three per-component nodes (ad and both Wazuh forwarding sidecars) now "
+        "author a digest-bound materialization specification, admit, build, and "
+        "satisfy the runtime non-approximation gate. kali-capture's Dockerfile "
+        "copies from its own directory while ad and the sidecars copy shared "
+        "assets from the repository root, so one uniform build-context rule "
+        "cannot cover all three without editing that Dockerfile. Doing so changes "
+        "the built image digest, which participant-profiles/guided-purple-v1/"
+        "asset-lock.json pins as local://aptl-kali-capture@sha256:821ec7c2..., and "
+        "re-pinning a participant-profile asset is a reproducibility decision for "
+        "the profile owner rather than an incidental edit. Closing this needs that "
+        "re-pin, or a profile that declares its build context per specification."
     ),
     strict=True,
 )
@@ -222,11 +224,14 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
         )
     )
     nodes = {node["name"]: node for node in details["nodes"]}
+    # Digest-pinned, resolved from the node's authored exact artifact
+    # requirement rather than an APTL-side allowlist entry (ADR-050): a mutable
+    # tag is not an admissible pin.
     assert nodes["wazuh-manager"]["image"]["image_ref"] == (
-        "wazuh/wazuh-manager:4.12.0"
+        "wazuh/wazuh-manager@sha256:dea2fa1e6d5062147b6a85b241f5f501c5f1ba4b817d12bda06f7870a89ad561"
     )
     assert nodes["wazuh-indexer"]["image"]["image_ref"] == (
-        "wazuh/wazuh-indexer:4.12.0"
+        "wazuh/wazuh-indexer@sha256:3691b3b27658695aad0c6879b412a001caf233ebbc1a5ba15647053aa03a2299"
     )
     assert (
         "provision.node.wazuh-indexer"

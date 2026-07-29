@@ -4,6 +4,13 @@ from pathlib import Path
 
 STATEFUL_OVERRIDE_RELPATH = Path(".aptl/realization/compose.stateful.yml")
 CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
+# The one accepted certificate-bundle producer. Adding a second needs more than
+# a root path: the bundle validator in ``_stateful_certificates`` assumes this
+# producer's shape throughout — the root is named ``root-ca.pem``, a manager root
+# must agree with it, and identities must match a ``config/certs.yml``-shaped
+# provenance document. A producer whose bundle differs in any of those fails
+# validation regardless of where its root is found.
+CERTIFICATE_PROVENANCE = "config/certs.yml"
 REALIZATION_ADDRESS_LABEL = "org.aptl.realization.address"
 REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"
 REALIZATION_PROJECT_LABEL = "org.aptl.realization.project"

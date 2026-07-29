@@ -5,7 +5,7 @@ Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 
 import json
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
@@ -90,6 +90,55 @@ class RunStorageConfig(BaseModel):
     s3_bucket: str | None = None
     # Future
     s3_prefix: str = "runs/"
+
+
+class ScenarioSourceConfig(BaseModel):
+    """Which scenario APTL realizes, and where its bytes come from.
+
+    A backend is handed a scenario; it does not own one. Selecting it is an
+    operator decision made before ``aptl lab start`` rather than something the
+    backend decides or switches at runtime, so it lives here.
+
+    ``root`` is where the scenario's own inputs — its start-state document and
+    the content it declares — are anchored. ``None`` keeps the historical
+    behaviour of resolving them inside the APTL checkout. A configured root is
+    operator input and is treated as untrusted: it must be a relative path that
+    cannot escape the project.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    identity: str = "techvault-operational"
+    root: str | None = None
+
+    @field_validator("identity")
+    @classmethod
+    def validate_identity(cls, value: str) -> str:
+        """Refuse an identity that names nothing."""
+
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("scenario identity must not be empty")
+        return cleaned
+
+    @field_validator("root")
+    @classmethod
+    def validate_root(cls, value: str | None) -> str | None:
+        """Refuse a root that is absolute, escapes upward, or carries a NUL."""
+
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("scenario root must not be empty")
+        if "\x00" in cleaned:
+            raise ValueError("scenario root must not contain a NUL byte")
+        candidate = PurePosixPath(cleaned)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise ValueError(
+                "scenario root must be a relative path contained by the project"
+            )
+        return cleaned
 
 
 class DeploymentConfig(BaseModel):
@@ -268,6 +317,7 @@ class AptlConfig(BaseModel):
     lab: LabSettings = LabSettings(name="aptl")
     containers: ContainerSettings = ContainerSettings()
     deployment: DeploymentConfig = DeploymentConfig()
+    scenario: ScenarioSourceConfig = ScenarioSourceConfig()
     run_storage: RunStorageConfig = RunStorageConfig()
     lifecycle_policy: LabLifecyclePolicyConfig | None = None
     experiment: ExperimentSettings = ExperimentSettings()

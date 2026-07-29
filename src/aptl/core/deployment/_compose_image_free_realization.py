@@ -45,10 +45,28 @@ def _strip_image_free_published_ports(
 def _image_free_node_addresses(
     realization: DeploymentRealizationSpec,
 ) -> frozenset[str]:
-    """Return the addresses of every node declaring runtime desired state."""
+    """Return the addresses of nodes the generic materializer realizes from a base OS.
 
+    A node is materialized image-free only when it declares runtime desired state
+    *and* resolves to no backing image. A node that declares runtime inventory but
+    also carries a real image -- ``suricata`` describing its detection engine while
+    still pulling ``jasonish/suricata``, ``wazuh-manager`` describing its SIEM while
+    pulling ``wazuh/wazuh-manager`` -- is an image node whose Compose service must
+    start, not a bare-OS node to stub.
+
+    Keying on ``runtime`` alone silently scaled those services to zero and started
+    a ``debian:12-slim`` ``sleep infinity`` substrate in their place, so declaring
+    a node's security tooling turned the actual tool off. The image check is the
+    same one the realization-time materializable test applies
+    (``_is_materializable_node``); the two must agree, or a node is realized one
+    way here and scaled the other way there.
+    """
+
+    imaged = {image.address for image in realization.images}
     return frozenset(
-        node.address for node in realization.nodes if node.runtime is not None
+        node.address
+        for node in realization.nodes
+        if node.runtime is not None and node.address not in imaged
     )
 
 

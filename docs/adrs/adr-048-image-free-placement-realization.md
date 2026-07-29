@@ -194,6 +194,22 @@ make a working Wazuh) lives entirely in the SDL.
 
 ## Supersession
 
+> **Superseded in part by [ADR-051](adr-051-component-level-raes-realization.md)
+> (2026-07-28).** Decision point 2 above, that a generic base substrate is the
+> only permitted container image and that no per-component image may supply a
+> node's software, no longer holds. A node may be realized from a pinned upstream
+> artifact or a digest-bound per-component materialization when the authored RAES
+> `Source.artifact_requirement` says so, because under SEM-218 the authored
+> posture binds the backend and APTL does not get to substitute a generic
+> materialization for an exact declaration. Everything else in this ADR remains in
+> force: placement-driven realization, fail-closed readback, the
+> no-scenario-branch materializer invariant, Docker-local single-user scope,
+> bidirectional parity, `docker-compose.yml` as derived reference only, and the
+> prohibition on a whole-range appliance image. ADR-051 additionally requires the
+> complete runtime contract for *every* node, including image-backed ones, so an
+> image may own component software but never TechVault's topology, credentials,
+> accounts, seeded content, or peer wiring.
+
 This ADR supersedes ADR-046's Image Realization Addendum (issue #574): a node's
 realized software, content, accounts, and configuration is no longer sourced
 from a pulled or built appliance image. ADR-046 otherwise remains authoritative

@@ -793,3 +793,34 @@ class TestWazuhActiveResponseSource:
             "Dockerfile AR-extras contract violated:\n  "
             + "\n  ".join(violations)
         )
+
+
+def test_continuity_audit_targets_declare_iptables():
+    """Every audit target must actually carry the tool the audit runs.
+
+    The scenario grants CAP_NET_ADMIN to these nodes precisely so
+    `aptl lab continuity-audit` can inspect and clear active-response DROPs on
+    their INPUT chain. Granting the capability without declaring the package
+    leaves the audit unable to run at all, which reads as "no drops found".
+    """
+    from pathlib import Path
+
+    from raes.parser import parse_sdl_file
+
+    from aptl.core.continuity import default_targets
+
+    scenario = parse_sdl_file(
+        Path(__file__).resolve().parents[1]
+        / "scenarios"
+        / "techvault-operational.sdl.yaml"
+    )
+    # `ad` installs iptables in its own component image rather than declaring a
+    # package, so it is satisfied by its build rather than by runtime packages.
+    generically_materialized = {"webapp", "fileshare", "dns"}
+
+    for container in default_targets():
+        node = container.removeprefix("aptl-")
+        if node not in generically_materialized:
+            continue
+        packages = {p.name for p in scenario.nodes[node].runtime.packages}
+        assert "iptables" in packages, f"{node} audit target cannot run iptables"

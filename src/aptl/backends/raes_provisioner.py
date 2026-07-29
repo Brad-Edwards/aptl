@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +17,9 @@ from aptl.backends.raes_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
+from aptl.backends.raes_artifact_mechanisms import SOURCE_ARTIFACT_REQUIREMENT_KIND
+from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observation_evidence, observe_realization
 from aptl.backends.raes_realization import (
     AptlRealization,
@@ -31,6 +34,7 @@ from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
+    from aptl.core.scenario_bundle import ScenarioBundle
 
 
 @dataclass
@@ -40,6 +44,9 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
+    # The scenario being realized, and the root its content is anchored to.
+    # None keeps the pre-bundle behaviour for a caller that has not resolved one.
+    bundle: ScenarioBundle | None = None
     # RAES's backend-call boundary replaces a failed apply's diagnostics with
     # its snapshot-contract / SEM-218 gate output (the gate reads the
     # never-realized snapshot, so every exact declaration looks unrealized).
@@ -144,7 +151,9 @@ class AptlProvisioner(object):
             realization,
             plan,
         )
-        realized_snapshot = snapshot_after_apply(plan, snapshot, observations)
+        realized_snapshot = self._with_artifact_satisfactions(
+            plan, snapshot_after_apply(plan, snapshot, observations), realization
+        )
         return ApplyResult(
             success=True,
             snapshot=realized_snapshot,
@@ -156,6 +165,50 @@ class AptlProvisioner(object):
                 "observation_evidence": observation_evidence(observations),
             },
         )
+
+    def _with_artifact_satisfactions(
+        self,
+        plan: ProvisioningPlan,
+        realized: RuntimeSnapshot,
+        realization: AptlRealization,
+    ) -> RuntimeSnapshot:
+        """Attach artifact satisfaction disclosures to the realized snapshot.
+
+        RAES's runtime non-approximation gate reads ``artifact_satisfaction``
+        off each entry to prove the backend realized the artifact the author
+        pinned. The disclosure is derived from the digest read back off the
+        running container, so an address whose artifact cannot be read, or whose
+        realized digest differs from the pin, simply gets no disclosure and the
+        gate rejects the apply.
+
+        A scenario that authors no artifact requirement produces no disclosures
+        and the snapshot is returned unchanged.
+        """
+
+        container_names = {
+            node.address: node.container_name
+            for node in realization.nodes
+            if node.container_name
+        }
+        disclosures = satisfactions_for_plan(
+            plan,
+            container_names,
+            self.deployment_backend,
+            create_aptl_manifest(),
+            requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+        )
+        if not disclosures:
+            return realized
+        entries = dict(realized.entries)
+        for address, disclosure in disclosures.items():
+            entry = entries.get(address)
+            if entry is None:
+                continue
+            entries[address] = replace(
+                entry,
+                payload={**entry.payload, "artifact_satisfaction": disclosure},
+            )
+        return realized.with_entries(entries)
 
     def _compose_validity_diagnostics(
         self, selected_profiles: list[str]
@@ -201,6 +254,7 @@ class AptlProvisioner(object):
             plan=plan,
             project_dir=self.project_dir,
             config=self.config,
+            bundle=self.bundle,
         )
 
     @staticmethod

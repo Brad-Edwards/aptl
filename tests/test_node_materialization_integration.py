@@ -79,7 +79,7 @@ def test_realize_node_through_backend_on_real_docker(tmp_path):
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 def test_realize_routes_image_free_spec_through_materializer(tmp_path):
-    """backend.realize() with image_free=True materializes nodes (no compose-up)."""
+    """realize() materializes an image-free node directly (no compose-up)."""
     from aptl.core.deployment.realization import (
         DeploymentNodeRealization,
         DeploymentRealizationSpec,
@@ -100,9 +100,14 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
             packages=[RuntimePackage(manager="apt", name="curl", version="*")],
         ),
     )
-    spec = DeploymentRealizationSpec(
-        profiles=(), nodes=(node,), networks=(), image_free=True
-    )
+    spec = DeploymentRealizationSpec(profiles=(), nodes=(node,), networks=())
+    # The node is image-free by shape -- runtime state, no image, no service --
+    # so nothing is left for Compose and realize() routes it straight to the
+    # generic materializer. (The old whole-spec image_free flag was removed when
+    # routing moved to per-node facts.)
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    assert _needs_compose(spec) is False
     try:
         result = backend.realize(spec)
         assert result.success, result.error

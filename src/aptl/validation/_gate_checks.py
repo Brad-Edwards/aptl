@@ -13,6 +13,7 @@ import json
 import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -48,6 +49,12 @@ _SUBPROCESS_TIMEOUT_S = 120
 _IMPORT_LOCK_TIMEOUT_S = 600
 
 
+def _simulated_digest(reference: str) -> str:
+    """Return a stable synthetic sha256 for one reference in the offline gate."""
+
+    return "sha256:" + hashlib.sha256(reference.encode("utf-8")).hexdigest()
+
+
 class _NoStartBackend(object):
     """Deployment backend stub that simulates realization without Docker.
 
@@ -68,6 +75,37 @@ class _NoStartBackend(object):
     """
 
     project_name = "aptl"
+
+    # Artifact-facing operations the deployment protocol requires (ADR-051).
+    # The stub simulates realization offline, so it reports every declared
+    # artifact as obtainable and materializes nothing: the static gate proves
+    # the typed contract can be represented, never that bytes were fetched or
+    # built. Digests are deterministic per reference so the disclosure the
+    # provisioner builds is stable across runs.
+
+    @staticmethod
+    def artifact_available(
+        image_ref: str, *, allow_remote: bool | None = None
+    ) -> bool:
+        """Report every declared artifact as obtainable in the offline gate."""
+
+        del image_ref, allow_remote
+        return True
+
+    @staticmethod
+    def materialize_component_image(
+        image_ref: str, dockerfile_path: str, context_path: str
+    ) -> str | None:
+        """Return a deterministic stand-in digest without building anything."""
+
+        del dockerfile_path, context_path
+        return _simulated_digest(image_ref)
+
+    @staticmethod
+    def container_image_digest(container_name: str) -> str | None:
+        """Return the digest the stub simulated for this container's image."""
+
+        return _simulated_digest(container_name)
 
     def __init__(self) -> None:
         self._container_names: set[str] = set()

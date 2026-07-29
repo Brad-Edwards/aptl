@@ -44,6 +44,10 @@ from aptl.backends.raes_realization_model import (
     NodeRealization,
     _single_or_none,
 )
+from aptl.backends._raes_conformance_probe import (
+    _conformance_probe_services,
+    _is_raes_conformance_probe_node,
+)
 from aptl.backends.raes_realization_values import (
     mapping as _mapping,
     network_names as _network_names,
@@ -51,12 +55,12 @@ from aptl.backends.raes_realization_values import (
     optional_string as _optional_string,
     published_ports as _published_ports,
     resource_name as _resource_name,
-    service_names as _service_names,
     service_ports as _service_ports,
     static_address_assignments as _static_address_assignments,
     static_addresses as _static_addresses,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
 
@@ -65,11 +69,27 @@ def interpret_provisioning_plan(
     plan: ProvisioningPlan,
     project_dir: Path,
     config: AptlConfig,
+    bundle: ScenarioBundle | None = None,
 ) -> AptlRealization:
-    """Interpret RAES provisioning resources as an APTL realization plan."""
+    """Interpret RAES provisioning resources as an APTL realization plan.
+
+    ``bundle`` supplies the root scenario content is anchored to. It defaults to
+    a bundle over the project directory, which is exactly today's behaviour, so
+    a caller that does not yet resolve a bundle is unaffected.
+
+    The distinction matters because ``project_dir`` is the *engine's* checkout
+    while the bundle root is the *scenario's*. Anchoring content to the engine
+    is what currently makes a scenario inseparable from it; once a resolver
+    hands back a staged bundle root instead, realization needs no change.
+    """
+
+    content_root = bundle.root if bundle is not None else project_dir.resolve()
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
+    # The profile index reads APTL's own derived Compose file, which is engine
+    # infrastructure rather than scenario content, so it stays anchored to the
+    # project directory even when the scenario is handed over from elsewhere.
     profile_index = _load_profile_index(project_dir, diagnostics)
     if profile_index is None:
         return _empty_realization(diagnostics)
@@ -78,7 +98,7 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
-        project_dir,
+        content_root,
         config,
         diagnostics,
     )
@@ -93,11 +113,15 @@ def interpret_provisioning_plan(
     )
     append_network_topology_diagnostics(nodes, networks, diagnostics)
     acls = realize_acls(payload_resources, networks, diagnostics)
+    # Scenario content resolves against the bundle root, not the engine's
+    # checkout. They are the same directory for an in-tree scenario, so this is
+    # behaviour-preserving today and is the single point that changes when a
+    # scenario is handed over from somewhere else.
     placements = _realize_placements(
         payload_resources,
         _node_lookup(nodes),
         {node.address: node for node in nodes},
-        project_dir,
+        content_root,
         diagnostics,
     )
     generated_artifacts, persistent_volumes = realize_stateful_resources(
@@ -165,11 +189,16 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
-    project_dir: Path,
+    scenario_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
-    """Realize node and network resources before resolving placements."""
+    """Realize node and network resources before resolving placements.
+
+    ``scenario_root`` anchors anything the scenario declares, including a
+    component's build context. It is the bundle root, not the engine checkout;
+    the two coincide only for a scenario that still lives in-tree.
+    """
 
     nodes: list[NodeRealization] = []
     networks: list[NetworkRealization] = []
@@ -181,7 +210,7 @@ def _realize_nodes_and_networks(
                 resource,
                 payload,
                 profile_index,
-                project_dir,
+                scenario_root,
                 config,
                 diagnostics,
             )
@@ -300,7 +329,7 @@ def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
-    project_dir: Path,
+    scenario_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> NodeRealization:
@@ -347,7 +376,7 @@ def _realize_node(
         image=resolve_node_image(
             resource=resource,
             payload=payload,
-            project_dir=project_dir,
+            project_dir=scenario_root,
             service_name=service_name,
             diagnostics=diagnostics,
         ),
@@ -385,70 +414,6 @@ def _node_runtime(node_spec: Mapping[str, Any] | None) -> RuntimeConfiguration |
         return RuntimeConfiguration.model_validate(dict(raw))
     except (ValueError, TypeError):
         return None
-
-
-def _is_raes_conformance_probe_node(
-    resource: PlannedResource,
-    payload: Mapping[str, Any],
-) -> bool:
-    """Return whether a node is RAES' backend-neutral live probe."""
-
-    spec = _mapping(payload.get("spec"))
-    node_spec = _mapping(spec.get("node")) if spec else None
-    infra_spec = _mapping(spec.get("infrastructure")) if spec else None
-    return (
-        _has_raes_conformance_probe_identity(resource, payload)
-        and _has_empty_raes_probe_node_spec(node_spec)
-        and _has_empty_raes_probe_infra_spec(infra_spec)
-    )
-
-
-def _has_raes_conformance_probe_identity(
-    resource: PlannedResource,
-    payload: Mapping[str, Any],
-) -> bool:
-    """Return whether resource identity matches RAES' generic VM probe."""
-
-    return (
-        resource.address,
-        str(payload.get("name", "")),
-        str(payload.get("node_name", "")),
-        str(payload.get("node_type", "")),
-        str(payload.get("os_family", "")),
-    ) == ("provision.node.vm", "vm", "vm", "vm", "linux")
-
-
-def _has_empty_raes_probe_node_spec(
-    node_spec: Mapping[str, Any] | None,
-) -> bool:
-    """Return whether the generic probe has no concrete service source."""
-
-    return (
-        bool(node_spec)
-        and node_spec.get("source") is None
-        and not _service_names(node_spec)
-    )
-
-
-def _has_empty_raes_probe_infra_spec(
-    infra_spec: Mapping[str, Any] | None,
-) -> bool:
-    """Return whether the generic probe has no scenario network intent."""
-
-    return not _network_names(infra_spec) and not _static_addresses(infra_spec)
-
-
-def _conformance_probe_services(
-    profile_index: ComposeProfileIndex,
-    config: AptlConfig,
-) -> frozenset[str]:
-    """Bind RAES' generic probe to one enabled APTL service, if available."""
-
-    for profile in public_start_profiles(config):
-        for service_name, service in sorted(profile_index.services.items()):
-            if profile in service.profiles:
-                return frozenset({service_name})
-    return frozenset()
 
 
 def _container_name(

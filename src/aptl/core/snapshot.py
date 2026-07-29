@@ -54,6 +54,12 @@ class ContainerSnapshot(object):
     networks: dict[str, str] = field(default_factory=dict)
     ports: list[str] = field(default_factory=list)
     image_digest: str = ""
+    # Docker restart policy name ("no", "always", "unless-stopped", ...). This
+    # distinguishes a run-to-completion container (restart "no", exits and stays
+    # exited by design) from a long-running service (which must stay up). It is a
+    # compose realization fact APTL itself authored, so recording it here is not
+    # scenario knowledge.
+    restart_policy: str = ""
 
 
 @dataclass
@@ -249,7 +255,29 @@ def _row_to_snapshot(
         labels=row.get("labels", {}),
         networks=container_networks(backend, name),
         ports=row.get("ports", []),
+        restart_policy=container_restart_policy(backend, name),
     )
+
+
+def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
+    """Return a container's Docker restart-policy name, or empty on failure.
+
+    Read from ``HostConfig.RestartPolicy.Name``. A run-to-completion helper is
+    created with ``restart: "no"`` and legitimately exits; a service is created
+    with ``always``/``unless-stopped`` and must stay up. Readiness needs to tell
+    those apart without an allowance list naming particular containers.
+    """
+    try:
+        info = backend.container_inspect(name)
+    except Exception:  # noqa: BLE001 - inspect shells out; absence is not fatal
+        return ""
+    host_config = info.get("HostConfig") if isinstance(info, dict) else None
+    if not isinstance(host_config, dict):
+        return ""
+    policy = host_config.get("RestartPolicy")
+    if not isinstance(policy, dict):
+        return ""
+    return str(policy.get("Name", ""))
 
 
 def _get_container_snapshots(

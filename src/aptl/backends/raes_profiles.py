@@ -154,15 +154,51 @@ def load_compose_profile_index(project_dir: Path) -> ComposeProfileIndex:
     services = _load_compose_services(project_dir)
     alias_to_profiles: dict[str, set[str]] = {}
     alias_to_services: dict[str, set[str]] = {}
+    identity_aliases: dict[str, set[str]] = {}
+    source_aliases: dict[str, frozenset[str]] = {}
     service_infos: dict[str, ComposeServiceInfo] = {}
     for service_name, service_def in services.items():
         info = _service_info(str(service_name), service_def)
         if info is None:
             continue
         service_infos[info.name] = info
+        for alias in _identity_aliases(str(service_name), service_def):
+            identity_aliases.setdefault(alias, set()).add(info.name)
+        source_aliases[info.name] = _source_aliases(service_def)
         for alias in info.aliases:
             alias_to_services.setdefault(alias, set()).add(info.name)
             alias_to_profiles.setdefault(alias, set()).update(info.profiles)
+    # An alias derived from a service's *source* — its image repository or its
+    # build-context directory — records where the image came from, not which
+    # service this is. Two services may share one build context (webapp-proxy
+    # and kali-ssh-proxy both build ./containers/kali-ssh-proxy), so that
+    # directory name is not evidence about either one.
+    #
+    # When some service is actually *named* by that alias, its claim wins and
+    # the source-only claimants drop out. Without this, declaring a node named
+    # after the shared context left it ambiguous against a service it has
+    # nothing to do with, and the node could not be realized at all.
+    #
+    # Deliberately narrow: only source-derived claims yield. A name-derived
+    # alias (a service key, or the same name with APTL's prefix stripped) still
+    # collides normally, so a genuinely ambiguous dependency is still rejected
+    # rather than silently resolved to one of the candidates.
+    for alias, owners in identity_aliases.items():
+        claimants = alias_to_services.get(alias)
+        if claimants is None or claimants <= owners:
+            continue
+        surviving = {
+            name
+            for name in claimants
+            if name in owners or alias not in source_aliases.get(name, frozenset())
+        }
+        if surviving and surviving != claimants:
+            alias_to_services[alias] = surviving
+            alias_to_profiles[alias] = {
+                profile
+                for name in surviving
+                for profile in service_infos[name].profiles
+            }
     return ComposeProfileIndex(
         alias_to_profiles={
             alias: frozenset(profiles)
@@ -383,6 +419,37 @@ def _service_aliases(
     aliases.update(_image_aliases(service_def))
     aliases.update(_build_aliases(service_def))
     return aliases
+
+
+def _identity_aliases(service_name: str, service_def: Mapping[str, object]) -> set[str]:
+    """Return the aliases that actually name this service.
+
+    These are the names Compose gives one specific service — its key, its
+    container name, its hostname, and APTL's curated equivalents. Unlike aliases
+    derived from an image repository or a build context, they cannot be shared
+    with another service, so they stay authoritative even when a source alias
+    has to be pruned for ambiguity.
+    """
+
+    aliases = {service_name}
+    aliases.update(APTL_SERVICE_ALIASES.get(service_name, frozenset()))
+    for alias_key in ("container_name", "hostname"):
+        value = service_def.get(alias_key)
+        if isinstance(value, str) and value.strip():
+            aliases.add(value)
+    return {alias for alias in map(normalize_identifier, aliases) if alias}
+
+
+def _source_aliases(service_def: Mapping[str, object]) -> frozenset[str]:
+    """Return aliases that describe where a service's image came from.
+
+    An image repository or a build-context directory can be shared by several
+    services, so these names are provenance rather than identity and must yield
+    to a service that is genuinely named by them.
+    """
+
+    raw = _image_aliases(service_def) | _build_aliases(service_def)
+    return frozenset(alias for alias in map(normalize_identifier, raw) if alias)
 
 
 def _service_container_name(service_def: Mapping[str, object]) -> str | None:

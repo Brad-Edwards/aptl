@@ -18,6 +18,12 @@ nodes:
   redteam-net:
     type: switch
     description: Red-team operations network.
+  control-net:
+    type: switch
+    description: >-
+      Control network carrying operator access to the range: the Kali SSH proxy
+      and the web application proxy attach here alongside their range-facing
+      networks. Not internal, so the host can reach the published proxy ports.
 
   wazuh-manager:
     type: vm
@@ -940,6 +946,32 @@ nodes:
     type: vm
     os: linux
     services: []
+  kali-ssh-proxy:
+    type: vm
+    os: linux
+    description: >-
+      Operator SSH entry point into the red-team network. Bridges the control
+      network to Kali's SSH service so the range's SSH port is reachable without
+      attaching the operator's host to the red-team network directly.
+    services:
+      - {name: ssh, port: 2023, protocol: tcp}
+  webapp-proxy:
+    type: vm
+    os: linux
+    description: >-
+      Operator HTTP entry point to the customer portal. Bridges the control
+      network to the webapp's service port on the DMZ so the portal is reachable
+      from the host while the DMZ itself stays internal.
+    services:
+      - {name: http, port: 8080, protocol: tcp}
+  cortex-index-init:
+    type: vm
+    os: linux
+    description: >-
+      One-shot initializer that creates Cortex's Elasticsearch index against
+      thehive-es before Cortex starts, then exits. It is a short-lived member of
+      the range, not a long-running host, and is declared because it starts.
+    services: []
 
   aptl-otel-collector:
     type: vm
@@ -1024,6 +1056,8 @@ infrastructure:
     properties: {cidr: 172.20.2.0/24, gateway: 172.20.2.1, internal: true}
   redteam-net:
     properties: {cidr: 172.20.4.0/24, gateway: 172.20.4.1, internal: true}
+  control-net:
+    properties: {cidr: 172.20.5.0/24, gateway: 172.20.5.1, internal: false}
 
   wazuh-manager:
     links: [security-net, dmz-net, internal-net]
@@ -1218,6 +1252,104 @@ persistent_volumes:
         access_mode: read_write
     ordering_dependencies: [persistent_volumes.wazuh-manager-etc]
 
+  ad_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: ad, mount_destination: /var/lib/samba, access_mode: read_write}
+  ad_logs:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: ad, mount_destination: /var/log/samba, access_mode: read_write}
+  cortex_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: cortex, mount_destination: /opt/cortex/jobs, access_mode: read_write}
+  grafana_otel_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: aptl-grafana-otel, mount_destination: /var/lib/grafana, access_mode: read_write}
+  kali_captures:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: kali-capture, mount_destination: /var/log/aptl/captures, access_mode: read_write}
+  misp_config:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: misp, mount_destination: /var/www/MISP/app/Config, access_mode: read_write}
+  misp_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: misp, mount_destination: /var/www/MISP/app/files, access_mode: read_write}
+  misp_db_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: misp-db, mount_destination: /var/lib/mysql, access_mode: read_write}
+  shuffle_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: shuffle-backend, mount_destination: /shuffle-database, access_mode: read_write}
+  shuffle_opensearch_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: shuffle-opensearch, mount_destination: /usr/share/opensearch/data, access_mode: read_write}
+  suricata_config_seed:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: suricata, mount_destination: /seed, access_mode: read_only}
+  suricata_logs:
+    lifecycle: retain
+    access_mode: read_write_once
+      # Suricata writes eve.json here and the Wazuh sidecar tails it read-only:
+      # this volume is the telemetry hand-off between detection and shipping.
+    consumers:
+      - {node: suricata, mount_destination: /var/log/suricata, access_mode: read_write}
+      - {node: wazuh-sidecar-suricata, mount_destination: /logs, access_mode: read_only}
+  tempo_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: aptl-tempo, mount_destination: /var/tempo, access_mode: read_write}
+  thehive_cassandra_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: thehive-cassandra, mount_destination: /var/lib/cassandra, access_mode: read_write}
+  thehive_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: thehive, mount_destination: /opt/thp/thehive/data, access_mode: read_write}
+  thehive_es_data:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: thehive-es, mount_destination: /usr/share/elasticsearch/data, access_mode: read_write}
+  thehive_index:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: thehive, mount_destination: /opt/thp/thehive/index, access_mode: read_write}
+  wazuh-dashboard-config:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: wazuh-dashboard, mount_destination: /usr/share/wazuh-dashboard/data/wazuh/config, access_mode: read_write}
+  wazuh-dashboard-custom:
+    lifecycle: retain
+    access_mode: read_write_once
+    consumers:
+      - {node: wazuh-dashboard, mount_destination: /usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom, access_mode: read_write}
 features:
   techvault-webapp-service:
     type: service

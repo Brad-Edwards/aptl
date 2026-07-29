@@ -4004,3 +4004,64 @@ def test_apply_provisioning_accepts_constrained_concern_realized_in_bounds(tmp_p
         for entry in result.snapshot.realization_provenance
     }
     assert by_kind["os-family"] == ExplicitnessProvenance.BACKEND_REALIZED
+
+
+def test_shared_build_context_does_not_shadow_the_service_it_names(tmp_path):
+    """A shared build context must not make the service it is named after ambiguous.
+
+    ``webapp-proxy`` builds from ``./containers/kali-ssh-proxy``, so the
+    directory name was registered as an alias of *both* services. The node
+    actually named ``kali-ssh-proxy`` then matched two services and could not be
+    realized at all — the range ran a container the scenario was unable to
+    declare.
+
+    A build context records where an image came from, not which service this is,
+    so the service genuinely named by it wins.
+    """
+
+    from aptl.backends.raes_profiles import (
+        load_compose_profile_index,
+        normalize_identifier,
+    )
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n"
+        "  kali-ssh-proxy:\n"
+        "    build: {context: ./containers/kali-ssh-proxy}\n"
+        "    container_name: aptl-kali-ssh-proxy\n"
+        "  webapp-proxy:\n"
+        "    build: {context: ./containers/kali-ssh-proxy}\n"
+        "    container_name: aptl-webapp-proxy\n"
+    )
+    index = load_compose_profile_index(tmp_path)
+
+    assert index.service_names_for_aliases(
+        {normalize_identifier("kali-ssh-proxy")}
+    ) == frozenset({"kali-ssh-proxy"})
+    # The other service keeps its own identity and is not absorbed.
+    assert index.service_names_for_aliases(
+        {normalize_identifier("webapp-proxy")}
+    ) == frozenset({"webapp-proxy"})
+
+
+def test_a_name_derived_alias_collision_is_still_ambiguous(tmp_path):
+    """Only *source* claims yield; a real name collision must still be rejected.
+
+    Narrowness is the point: if the fix above let any identity alias win
+    outright, two distinct services differing only by APTL's prefix would
+    silently resolve to one of them instead of being reported.
+    """
+
+    from aptl.backends.raes_profiles import (
+        load_compose_profile_index,
+        normalize_identifier,
+    )
+
+    (tmp_path / "docker-compose.yml").write_text(
+        "services:\n  db:\n    image: postgres:16\n  aptl-db:\n    image: postgres:16\n"
+    )
+    index = load_compose_profile_index(tmp_path)
+
+    assert index.service_names_for_aliases({normalize_identifier("db")}) == frozenset(
+        {"db", "aptl-db"}
+    )

@@ -41,13 +41,14 @@ class ParticipantQualificationReport:
     covered_action_contracts: tuple[str, ...]
     checks: tuple[ParticipantQualificationCheck, ...]
     installed_provider: str | None = None
+    installed_model: str | None = None
     official_capture_started: bool = False
 
     def to_payload(self) -> dict[str, object]:
         """Serialize the secret-free qualification report."""
 
         return {
-            "schema": "aptl.participant-agency-qualification/v1",
+            "schema": "aptl.participant-agency-qualification/v2",
             "passed": self.passed,
             "run_id": self.run_id,
             "scenario_source_sha256": self.scenario_source_sha256,
@@ -55,6 +56,7 @@ class ParticipantQualificationReport:
             "covered_action_contracts": list(self.covered_action_contracts),
             "checks": [check.to_payload() for check in self.checks],
             "installed_provider": self.installed_provider,
+            "installed_model": self.installed_model,
             "official_capture_started": self.official_capture_started,
         }
 
@@ -71,6 +73,7 @@ class ParticipantQualificationReport:
             f"compiled model sha256: {self.compiled_model_sha256}",
             f"action coverage: {len(self.covered_action_contracts)}/26",
             f"installed provider: {self.installed_provider or 'not requested'}",
+            f"installed model: {self.installed_model or 'not applicable'}",
             "official capture: not started",
         ]
         lines.extend(

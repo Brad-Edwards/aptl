@@ -150,7 +150,7 @@ class DeploymentBackend(Protocol):
         Operational fact only: implementations must not pull, build, tag, or
         otherwise mutate state here, and must not decide admission. The result
         feeds the RAES artifact availability context, which the planner uses to
-        admit or reject an authored artifact requirement (ADR-050).
+        admit or reject an authored artifact requirement (ADR-051).
 
         Args:
             image_ref: Digest-pinned artifact reference to check.

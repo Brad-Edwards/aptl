@@ -2,7 +2,7 @@
 
 This note fixes the repository-wide design boundaries for restoring honest
 component behavior under dynamic RAES composition. It is architecture guidance,
-not an implementation plan. [ADR-050](../adrs/adr-050-component-level-raes-realization.md)
+not an implementation plan. [ADR-051](../adrs/adr-051-component-level-raes-realization.md)
 is the binding source-selection decision.
 
 The parity baseline is `docker-compose.yml` at commit

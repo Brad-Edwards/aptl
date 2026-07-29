@@ -2088,13 +2088,71 @@ def _write_run_record(ctx: _LabStartContext) -> None:
     store.write_json(run_id, "manifest.json", record)
     log.info("REP-001: Run record written to run archive (run_id=%s)", run_id)
 
+    # REP-003: publish the PROVISIONAL run-scoped provenance beside the
+    # REP-001 record. Startup has configuration, detection content, and a
+    # range snapshot, but no admitted trial plan, realized participants, or
+    # execution outcome — so it cannot produce the canonical ready-to-seal
+    # record, and must not occupy that path.
+    _publish_run_provenance(
+        store=store,
+        run_id=run_id,
+        project_dir=ctx.project_dir,
+        config=ctx.config,
+        snapshot=snapshot,
+    )
+
     # OBS-002: layer the correlation-identity + clock-context projection over
-    # the now-sealed run archive so an action can be traced end-to-end and
-    # every source's clock is disclosed. Best-effort by contract — an audit
-    # projection must never turn a successful run into a failed one.
+    # the run archive so an action can be traced end-to-end and every source's
+    # clock is disclosed. Best-effort by contract — an audit projection must
+    # never turn a successful run into a failed one. (The archive is not
+    # sealed here; issue #444 owns sealing.)
     from aptl.core.correlation.persistence import persist_run_correlation_best_effort
 
     persist_run_correlation_best_effort(run_id=run_id, run_store=store)
+
+
+def _publish_run_provenance(
+    *,
+    store: object,
+    run_id: str,
+    project_dir: Path,
+    config: object,
+    snapshot: object,
+) -> None:
+    """Collect and publish REP-003 PROVISIONAL run provenance (issue #452).
+
+    Startup is not a seal boundary. It has no admitted trial plan, no realized
+    participant apparatus, and no execution outcome, so it publishes the
+    provisional artifact at its own path. The canonical ready-to-seal record
+    stays available for the collector that owns the admitted and executed run
+    context; because publication is create-once, writing the canonical record
+    here would permanently foreclose that later write.
+
+    Best-effort by contract, exactly like the REP-001 record and the OBS-002
+    correlation projection above: the lab is already running by the time this
+    executes, so a provenance failure is reported and recorded but never
+    converts a successful start into a failure.
+    """
+    from aptl.core.provenance.record import publish_provisional_provenance_record
+    from aptl.core.provenance.registrations import collect_run_provenance
+
+    try:
+        collection = collect_run_provenance(
+            project_dir=project_dir, config=config, snapshot=snapshot
+        )
+        publish_provisional_provenance_record(
+            store=store,  # type: ignore[arg-type]
+            run_id=run_id,
+            collection=collection,
+        )
+    except Exception:
+        log.exception("REP-003: Run provenance publication failed (non-fatal)")
+        return
+    log.info(
+        "REP-003: Provisional run provenance written (run_id=%s, limitations=%d)",
+        run_id,
+        len(collection.limitations),
+    )
 
 
 # Evidence artifact subtrees scanned for the REP-001 record (GAP 3). Each

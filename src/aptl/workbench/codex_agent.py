@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from aptl.core.config import validate_installed_participant_model_id
+from aptl.utils.pathsafe import (
+    PathContainmentError,
+    create_exclusive_nofollow,
+    read_contained_nofollow,
+)
 from aptl.utils.placeholders import contains_placeholder
-from aptl.workbench.agent import _admitted_executable, _prepare_work_dir
+from aptl.workbench.agent import (
+    _admitted_executable,
+    _prepare_work_dir,
+)
+from aptl.workbench.decision_schema import admit_decision_response_schema
 from aptl.workbench.process import (
     AgentExecutionError,
     BoundedProcessRunner,
@@ -21,6 +33,7 @@ _BASE_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
     "NO_COLOR": "1",
 }
+_SCHEMA_SEAL_ERROR = "agent output schema could not be sealed"
 
 
 @dataclass
@@ -67,6 +80,12 @@ class CodexManagedAgentAdapter:
 
         if not isinstance(launch, DecisionAgentLaunch):
             raise AgentExecutionError("Codex adapter supports decision-only launches")
+        if launch.provider != "codex":
+            raise AgentExecutionError("agent launch provider does not match adapter")
+        try:
+            validate_installed_participant_model_id(launch.provider, launch.model)
+        except ValueError as exc:
+            raise AgentExecutionError("agent model selection is invalid") from exc
         credential = credentials.get(_MODEL_CREDENTIAL)
         if not credential or contains_placeholder(credential):
             raise AgentExecutionError("agent credential lease is incomplete")
@@ -89,18 +108,31 @@ class CodexManagedAgentAdapter:
         active.ready = True
         return {}
 
-    def respond(self, handle: object, message: str) -> str:
+    def respond(
+        self,
+        handle: object,
+        message: str,
+        *,
+        response_schema: Mapping[str, object] | None = None,
+    ) -> str:
         """Obtain one bounded structured decision from the installed provider."""
 
         active = _require_handle(handle)
         if active.closed or not active.ready:
             raise AgentExecutionError("agent profile is not ready")
+        schema_json = admit_decision_response_schema(
+            active.launch,
+            response_schema,
+        )
+        if schema_json is None:
+            raise AgentExecutionError("agent response schema is required")
+        schema_path = self._sealed_output_schema(schema_json)
         if not message or len(message) > self._max_prompt_chars:
             raise AgentExecutionError(
                 "participant message exceeds the configured limit"
             )
         result = self._runner.run(
-            self._argv(self._executable),
+            self._argv(self._executable, active, schema_path),
             env=dict(active.environment),
             cwd=self._work_dir,
             stdin=message.encode(),
@@ -108,8 +140,33 @@ class CodexManagedAgentAdapter:
             max_output_bytes=self._max_output_bytes,
         )
         if result.returncode != 0:
-            raise AgentExecutionError("agent request failed")
+            raise AgentExecutionError(_classify_failed_request(result.stdout))
         return _parse_codex_result(result.stdout)
+
+    def _sealed_output_schema(self, schema_json: str) -> Path:
+        """Create or verify one private schema file keyed by its exact bytes."""
+
+        schema_bytes = (schema_json + "\n").encode()
+        schema_name = (
+            "participant-selection-"
+            f"{hashlib.sha256(schema_bytes).hexdigest()}.schema.json"
+        )
+        try:
+            create_exclusive_nofollow(
+                self._work_dir,
+                schema_name,
+                schema_bytes,
+            )
+        except FileExistsError:
+            try:
+                existing = read_contained_nofollow(self._work_dir, schema_name)
+            except PathContainmentError as exc:
+                raise AgentExecutionError(_SCHEMA_SEAL_ERROR) from exc
+            if not hmac.compare_digest(existing, schema_bytes):
+                raise AgentExecutionError(_SCHEMA_SEAL_ERROR)
+        except PathContainmentError as exc:
+            raise AgentExecutionError(_SCHEMA_SEAL_ERROR) from exc
+        return self._work_dir / schema_name
 
     @staticmethod
     def close(handle: object) -> None:
@@ -121,12 +178,18 @@ class CodexManagedAgentAdapter:
         active.closed = True
 
     @staticmethod
-    def _argv(executable: Path) -> tuple[str, ...]:
+    def _argv(
+        executable: Path,
+        handle: _CodexHandle,
+        response_schema_path: Path,
+    ) -> tuple[str, ...]:
         """Build the tool-disabled Codex invocation."""
 
         return (
             str(executable),
             "exec",
+            "--model",
+            handle.launch.model,
             "--disable",
             "shell_tool",
             "--disable",
@@ -152,6 +215,8 @@ class CodexManagedAgentAdapter:
             "--ephemeral",
             "--color",
             "never",
+            "--output-schema",
+            str(response_schema_path),
             "--json",
             "-",
         )
@@ -185,6 +250,36 @@ def _parse_codex_result(stdout: bytes) -> str:
     if final_message is None:
         raise AgentExecutionError("agent returned an invalid result")
     return final_message
+
+
+def _classify_failed_request(stdout: bytes) -> str:
+    """Map known hostile provider failures to stable, secret-free diagnostics."""
+
+    try:
+        events = [
+            json.loads(raw_line)
+            for raw_line in stdout.decode("utf-8").splitlines()
+            if raw_line
+        ]
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "agent request failed"
+    messages: list[str] = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            continue
+        if isinstance(event.get("message"), str):
+            messages.append(event["message"])
+        item = event.get("item")
+        if isinstance(item, Mapping) and isinstance(item.get("message"), str):
+            messages.append(item["message"])
+    if any(
+        "does not have access to model" in message.lower()
+        or "model_not_found" in message.lower()
+        or "model not found" in message.lower()
+        for message in messages
+    ):
+        return "agent model is unavailable"
+    return "agent request failed"
 
 
 __all__ = ("CodexManagedAgentAdapter",)

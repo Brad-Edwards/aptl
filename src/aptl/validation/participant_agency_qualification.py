@@ -51,6 +51,8 @@ class _SequentialSelectionProvider:
 
     implementation_name = "aptl-deterministic-sequence-fixture"
     implementation_version = "1.0.0"
+    provider_name = "deterministic"
+    model = None
 
     def __init__(self) -> None:
         """Initialize one fresh authored-sequence cursor."""
@@ -99,6 +101,11 @@ def validate_participant_agency_qualification(
     """Run the complete readiness contract without starting study capture."""
 
     _validate_qualification_options(installed_provider, installed_turns)
+    installed_model = (
+        getattr(config.experiment.participant_models, installed_provider)
+        if installed_provider is not None
+        else None
+    )
     selected_run_id = run_id or f"participant-qualification-{uuid4().hex}"
     run_store.create_run(selected_run_id)
     deployment = backend or get_backend(config, project_dir)
@@ -125,7 +132,13 @@ def validate_participant_agency_qualification(
     if not checks[0].passed:
         return _persist_qualification_report(
             run_store,
-            _qualification_report(context, checks, set(), installed_provider),
+            _qualification_report(
+                context,
+                checks,
+                set(),
+                installed_provider,
+                installed_model,
+            ),
         )
     positive_checks, covered_actions = _positive_trajectory_checks(context)
     checks.extend(positive_checks)
@@ -153,6 +166,7 @@ def validate_participant_agency_qualification(
         checks,
         covered_actions,
         installed_provider,
+        installed_model,
     )
     return _persist_qualification_report(run_store, report)
 
@@ -301,6 +315,7 @@ def _installed_provider_checks(
                     _ACTION_EVIDENCE_PATH,
                 ),
                 details={
+                    "model": trajectory.model,
                     "completed_turns": trajectory.completed_turns,
                     "terminal_statuses": [
                         outcome["status"] for outcome in trajectory.terminal_outcomes
@@ -316,6 +331,7 @@ def _qualification_report(
     checks: list[ParticipantQualificationCheck],
     covered_actions: set[str],
     installed_provider: str | None,
+    installed_model: str | None,
 ) -> ParticipantQualificationReport:
     """Build the complete secret-free qualification report."""
 
@@ -327,6 +343,7 @@ def _qualification_report(
         covered_action_contracts=tuple(sorted(covered_actions)),
         checks=tuple(checks),
         installed_provider=installed_provider,
+        installed_model=installed_model,
     )
 
 

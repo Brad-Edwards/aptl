@@ -99,6 +99,8 @@ def prepare_challenge_context(
             participant_address=participant_address,
             implementation_name="aptl-controlled-challenge-fixture",
             implementation_version="1.0.0",
+            provider_name="deterministic",
+            model=None,
             run_id=run_id,
         ),
         run_store=run_store,

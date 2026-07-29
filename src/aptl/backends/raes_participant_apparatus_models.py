@@ -21,6 +21,8 @@ class ParticipantApparatus:
     manifest_ref: str
     manifest: ParticipantImplementationManifestModel
     selection: ParticipantImplementationSelectionModel
+    provider: str
+    model: str | None
 
 
 @dataclass(frozen=True)

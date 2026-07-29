@@ -97,7 +97,11 @@ def project_participant_turn(
             context.visible_context_refs,
         ),
         observation_history=_render_observation_history(context.history),
-        candidates=candidate_selections(delivered, runtime_model),
+        candidates=candidate_selections(
+            delivered,
+            runtime_model,
+            completed_action_sequence=_completed_action_sequence(context.history),
+        ),
         apparatus=replace(apparatus, selection=exact_selection),
     )
 
@@ -395,3 +399,17 @@ def _render_observation_history(
             }
         )
     return tuple(rendered)
+
+
+def _completed_action_sequence(
+    history: tuple[ParticipantBehaviorHistoryEvent, ...],
+) -> tuple[str, ...]:
+    """Return successful observed actions in episode order."""
+
+    return tuple(
+        event.action_contract_address
+        for event in history
+        if event.event_type.value == "observation_emitted"
+        and event.action_result is not None
+        and event.action_result.to_payload()["status"] == "succeeded"
+    )

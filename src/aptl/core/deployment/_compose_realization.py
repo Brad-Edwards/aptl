@@ -101,7 +101,7 @@ class ComposeRealizationMixin(
         """Realize a typed scenario deployment through Docker Compose."""
 
         # Route from per-node facts, never a whole-graph flag. A mixed graph is
-        # normal (ADR-050): some nodes come from a pinned artifact, some are
+        # normal (ADR-051): some nodes come from a pinned artifact, some are
         # built from a specification, some are composed from declared state. The
         # only whole-graph question left is whether Compose has anything to
         # start.

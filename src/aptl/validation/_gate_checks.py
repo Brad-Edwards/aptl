@@ -76,7 +76,7 @@ class _NoStartBackend(object):
 
     project_name = "aptl"
 
-    # Artifact-facing operations the deployment protocol requires (ADR-050).
+    # Artifact-facing operations the deployment protocol requires (ADR-051).
     # The stub simulates realization offline, so it reports every declared
     # artifact as obtainable and materializes nothing: the static gate proves
     # the typed contract can be represented, never that bytes were fetched or

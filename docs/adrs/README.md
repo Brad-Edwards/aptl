@@ -69,6 +69,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [045](adr-045-ephemeral-lifecycle-policy-enforcement.md) | Ephemeral Lifecycle Policy Enforcement | accepted | 2026-06-28 |
 | [046](adr-046-dynamic-raes-scenario-realization.md) | Dynamic RAES Scenario Realization (Image Realization Addendum superseded by ADR-048) | accepted (amended) | 2026-06-29 |
 | [047](adr-047-raes-experiment-admission-and-trial-plan-boundary.md) | RAES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
-| [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | superseded in part by ADR-050 | 2026-07-20 |
+| [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | superseded in part by ADR-051 | 2026-07-20 |
 | [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | accepted | 2026-07-25 |
-| [050](adr-050-component-level-raes-realization.md) | Component-Level RAES Realization | accepted | 2026-07-28 |
+| [050](adr-050-terminal-attempt-archival-and-atomic-seal.md) | Terminal Attempt Archival And Atomic Seal Boundary | accepted | 2026-07-28 |
+| [051](adr-051-component-level-raes-realization.md) | Component-Level RAES Realization | accepted | 2026-07-28 |

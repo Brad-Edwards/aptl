@@ -209,7 +209,7 @@ def _plan_scenario(
     )
     manager = RuntimeManager(target)
     # Artifact availability is a trusted input to planning, gathered at the
-    # backend trust boundary before the single admitted plan() call (ADR-050).
+    # backend trust boundary before the single admitted plan() call (ADR-051).
     # It is a no-op for a scenario that authors no artifact_requirement.
     # The scenario's own inputs — including a component build context — anchor
     # to the bundle, which is the project directory only while the scenario

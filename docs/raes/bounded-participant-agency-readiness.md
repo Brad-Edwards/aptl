@@ -80,6 +80,31 @@ root report lists their stable run IDs and evidence paths.
 
 ## Installed Provider Qualification
 
+Installed providers do not inherit a product default model. Freeze the exact
+non-secret provider selection in `aptl.json`:
+
+```json
+{
+  "experiment": {
+    "participant_models": {
+      "claude": "claude-sonnet-4-5-20250929",
+      "codex": "gpt-5-nano-2025-08-07"
+    }
+  }
+}
+```
+
+The selected model is passed explicitly to the provider process. Missing,
+invalid, unsupported, or inaccessible selections fail closed; APTL does not
+fall back to another model. Credentials remain separate from this
+configuration. For every solicitation, both installed adapters bind the same
+exact response schema using their provider-native structured-output mechanism:
+one integer `candidate`, bounded from zero through the final candidate alias
+delivered for that state cut, with no additional properties. Codex receives
+each distinct range schema from a private, create-once file inside the run
+directory. APTL still parses the result independently and resolves the alias
+only against the complete delivered solicitation.
+
 The installed-provider modes use one provider-specific, non-placeholder
 credential lease:
 
@@ -89,18 +114,21 @@ credential lease:
 The child receives no action tools, MCP servers, shell, Docker, SSH, browser,
 or backend handle. It only chooses one complete candidate from the delivered
 RAES decision surface. APTL presents the installed provider with a bounded,
-numbered transport view containing every action identity and governed argument
-map. The number is a transient alias for one delivered `proposal_ref`; APTL
-resolves it to the unchanged full selection before RAES admission. The complete
+numbered transport view containing every action identity whose declared
+prerequisites hold at that exact state cut, with every governed argument map.
+The number is a transient alias for one delivered `proposal_ref`; APTL resolves
+it to the unchanged full selection before RAES admission. The complete
 delivered solicitation remains the evidence authority.
 
-Each finite governed choice is represented by a distinct proposal, and the
-selected values materially determine the native semantic operation and
-independent readback. RAES re-resolves the exact state cut, delivery,
-apparatus, proposal, and governed arguments before APTL can execute a closed
-realization. Missing, malformed, duplicate, or out-of-range transport choices
-fail before admission. Installed-provider prompts remain bounded to 32,768
-characters.
+While an action is eligible, each finite governed choice is represented by a
+distinct proposal, and the selected values materially determine the native
+semantic operation and independent readback. Projection and realization
+admission independently enforce successful-observation prerequisites; a
+sign-out requires a fresh authentication after any earlier sign-out. RAES
+re-resolves the exact state cut, delivery, apparatus, proposal, and governed
+arguments before APTL can execute a closed realization. Missing, malformed,
+duplicate, stale, or out-of-range transport choices fail before admission.
+Installed-provider prompts remain bounded to 32,768 characters.
 
 Run each implementation separately:
 
@@ -122,6 +150,16 @@ Each command repeats the deterministic qualification and adds bounded green,
 red, and blue episodes for that installed implementation. Missing or unsafe
 executables, credentials, malformed output, timeouts, and out-of-surface
 selections fail with redacted readiness evidence.
+
+The root `aptl.participant-readiness-suite-report/v2` identifies the installed
+provider and model. Each child
+`aptl.participant-readiness-report/v2` does the same, including failures before
+the first turn. Successful and rejected solicitations write
+`aptl.participant-control-evidence/v2` records that join the provider/model pair
+to the RAES implementation manifest, implementation selection, and canonical
+configuration ref/digest. These records are the proof that the qualified CLI
+implementation actually used the configured model under the selected RAES
+apparatus.
 
 ## Single-Trajectory Diagnostics
 

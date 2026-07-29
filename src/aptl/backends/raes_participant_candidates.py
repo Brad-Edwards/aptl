@@ -20,11 +20,23 @@ _MAX_CANDIDATE_VARIANTS_PER_ACTION = 4096
 def candidate_selections(
     surface: ParticipantDecisionSurfaceV2Model,
     runtime_model: object,
+    *,
+    completed_action_sequence: tuple[str, ...],
 ) -> tuple[ParticipantDecisionSurfaceSelectionV2Model, ...]:
-    """Resolve selections for the bounded participant workflow."""
+    """Resolve choices whose native prerequisites hold at this state cut."""
+
+    from aptl.backends.raes_participant_realizations import (
+        unmet_required_prior_actions,
+    )
+
     assert surface.delivery is not None
     candidates: list[ParticipantDecisionSurfaceSelectionV2Model] = []
     for entry in surface.participant_view.action_entries:
+        if unmet_required_prior_actions(
+            entry.action_contract_address,
+            completed_action_sequence,
+        ):
+            continue
         contract = runtime_model.action_contracts[entry.action_contract_address]
         for arguments in _governed_argument_variants(contract.argument_definitions):
             variant_digest = hashlib.sha256(rfc8785.dumps(arguments)).hexdigest()[:16]

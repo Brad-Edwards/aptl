@@ -16,5 +16,11 @@
   "run_storage": {
     "backend": "local",
     "local_path": "./runs"
+  },
+  "experiment": {
+    "participant_models": {
+      "claude": "claude-sonnet-4-5-20250929",
+      "codex": "gpt-5-nano-2025-08-07"
+    }
   }
 }

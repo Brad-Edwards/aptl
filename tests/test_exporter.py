@@ -59,15 +59,19 @@ class TestExportLocal:
             assert "test-run/wazuh/alerts.json" in names
             assert "test-run/checksums.sha256" in names
 
-    def test_export_checksums_file(self, tmp_path):
+    def test_export_checksums_travel_in_archive_without_mutating_run(self, tmp_path):
+        # ADR-050: export is read-only over the run archive. The checksum
+        # manifest lives inside the tarball; the source run directory is never
+        # mutated (a sealed archive is immutable).
         store = self._make_run(tmp_path)
         output_dir = tmp_path / "export"
 
-        export_local(store, "test-run", output_dir)
+        archive = export_local(store, "test-run", output_dir)
 
-        checksums_path = store.get_run_path("test-run") / "checksums.sha256"
-        assert checksums_path.exists()
-        content = checksums_path.read_text()
+        assert not (store.get_run_path("test-run") / "checksums.sha256").exists()
+
+        with tarfile.open(archive, "r:gz") as tar:
+            content = tar.extractfile("test-run/checksums.sha256").read().decode()
         assert "manifest.json" in content
         assert "data.txt" in content
         # Each line should have a 64-char hash + two spaces + filename
@@ -81,6 +85,36 @@ class TestExportLocal:
         import pytest
         with pytest.raises(FileNotFoundError):
             export_local(store, "nonexistent", tmp_path / "export")
+
+    def test_sealed_run_exports_exactly_the_verified_inventory(self, tmp_path):
+        # A sealed run is packaged as exactly its verified seal inventory; a
+        # non-inventory file left in the run dir does not travel.
+        import json
+        import tarfile as _tarfile
+
+        from tests.archival_fixtures import completed_context
+        from aptl.core.archival.coordinator import finalize_terminal_attempt
+        from aptl.core.archival.layout import RUN_MANIFEST_RELPATH, SEAL_MARKER_RELPATH
+
+        store = LocalRunStore(tmp_path / "runs")
+        context = completed_context()
+        finalize_terminal_attempt(context, store=store)
+        # A stray non-inventory file (not part of the seal).
+        (store.get_run_path(context.attempt_id) / "stray.txt").write_text("not sealed")
+
+        archive = export_local(store, context.attempt_id, tmp_path / "export")
+        with _tarfile.open(archive, "r:gz") as tar:
+            names = set(tar.getnames())
+            marker = json.loads(
+                tar.extractfile(f"{context.attempt_id}/{SEAL_MARKER_RELPATH}").read()
+            )
+        expected = {f"{context.attempt_id}/{RUN_MANIFEST_RELPATH}",
+                    f"{context.attempt_id}/{SEAL_MARKER_RELPATH}",
+                    f"{context.attempt_id}/checksums.sha256"}
+        for entry in marker["inventory"]:
+            expected.add(f"{context.attempt_id}/{entry['path']}")
+        assert names == expected
+        assert f"{context.attempt_id}/stray.txt" not in names
 
     def test_export_creates_output_dir(self, tmp_path):
         store = self._make_run(tmp_path)

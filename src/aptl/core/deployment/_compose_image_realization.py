@@ -63,7 +63,7 @@ class ComposeRealizationImageMixin:
         """Whether one immutable artifact reference can be obtained.
 
         This is the backend half of the RAES artifact availability trust
-        boundary (ADR-050). It reports an operational fact only; it never
+        boundary (ADR-051). It reports an operational fact only; it never
         pulls, tags, or otherwise mutates state, and it never decides
         admission. The caller partitions the answer by compiled address and
         hands it to RAES planning as trusted facts.

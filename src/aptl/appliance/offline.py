@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import secrets
@@ -13,6 +12,11 @@ from pathlib import Path
 from typing import BinaryIO
 
 from aptl.appliance.versioning import aptl_wheel_version, is_appliance_version
+from aptl.utils.deterministic_archive import (
+    deterministic_tarinfo,
+    hash_file_nofollow,
+    open_nofollow,
+)
 
 _ALLOWED_TOP_LEVEL = frozenset(
     {
@@ -119,31 +123,20 @@ def _validate_staging(staging: Path) -> list[Path]:
 def _tar_info(path: Path, relative: str) -> tarfile.TarInfo:
     """Create reproducible metadata for one staged tar member."""
 
-    info = tarfile.TarInfo(relative)
-    path_info = path.stat(follow_symlinks=False)
-    info.uid = 0
-    info.gid = 0
-    info.uname = "root"
-    info.gname = "root"
-    info.mtime = 0
-    if path.is_dir():
-        info.type = tarfile.DIRTYPE
-        info.mode = 0o755
-        info.size = 0
+    is_dir = path.is_dir()
+    if is_dir:
+        mode = 0o755
+        size = 0
     else:
-        info.type = tarfile.REGTYPE
-        info.mode = 0o755 if relative == "aptl-appliance-first-boot" else 0o644
-        info.size = path_info.st_size
-    return info
+        mode = 0o755 if relative == "aptl-appliance-first-boot" else 0o644
+        size = path.stat(follow_symlinks=False).st_size
+    return deterministic_tarinfo(relative, is_dir=is_dir, size=size, mode=mode)
 
 
 def _open_nofollow(path: Path) -> BinaryIO:
     """Open one regular payload path without following its final symlink."""
 
-    flags = os.O_RDONLY | os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    return os.fdopen(os.open(path, flags), "rb")
+    return open_nofollow(path)
 
 
 def _write_tar(staging: Path, paths: list[Path], candidate: Path) -> None:
@@ -176,13 +169,7 @@ def _add_tar_member(
 def _hash_file(path: Path) -> tuple[str, int]:
     """Return the streaming SHA-256 identity and byte count for a file."""
 
-    digest = hashlib.sha256()
-    size = 0
-    with _open_nofollow(path) as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-            size += len(chunk)
-    return f"sha256:{digest.hexdigest()}", size
+    return hash_file_nofollow(path)
 
 
 def _remove_candidate(path: Path) -> None:

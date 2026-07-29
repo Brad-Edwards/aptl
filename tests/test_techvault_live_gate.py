@@ -19,7 +19,7 @@ from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
-from aptl.validation import _live_gate_semantic as lgs
+from aptl.validation import techvault_live_gate as tlg
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
@@ -225,11 +225,16 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
             "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, True
         )
 
-    def reachability(*, project_dir, config, state):
-        return LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True)
-
-    def telemetry(*, project_dir, config, options, state):
-        return LiveGateCheck("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True)
+    def semantic(ctx, state):
+        # Semantic verification runs through the plugin seam now; the orchestrator
+        # reaches it at one call site. Stub that site so this test stays about
+        # composition, not discovery (the seam has its own tests).
+        return [
+            LiveGateCheck("kali_reachability", CATEGORY_KALI_REACHABILITY, True),
+            LiveGateCheck(
+                "telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, True
+            ),
+        ]
 
     def archive(
         scenario_path, *, project_dir, config, run_store, run_id, state, prior_checks
@@ -245,8 +250,7 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
     monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
-    monkeypatch.setattr(lgs, "check_kali_reachability", reachability)
-    monkeypatch.setattr(lgs, "check_telemetry_evidence_path", telemetry)
+    monkeypatch.setattr(tlg, "_semantic_checks", semantic)
     monkeypatch.setattr(lgc, "check_run_archive_manifest", archive)
     monkeypatch.setattr(lgc, "check_scenario_variation", variation)
     report = validate_live_deployment(
@@ -810,262 +814,6 @@ def test_readiness_tolerates_unreported_health_when_node_declares_none():
 
 
 # --------------------------------------------------------------------------- #
-# 4. Kali reachability.
-# --------------------------------------------------------------------------- #
-
-
-def _reach_state(containers):
-    state = LiveGateState()
-    state.snapshot = {"containers": containers}
-    return state
-
-
-def test_reachability_passes_when_shared_targets_reachable(monkeypatch):
-    monkeypatch.setattr(lgs, "get_backend", lambda c, p: _Backend(returncode=0))
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgs.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert check.passed
-    assert state.evidence["kali_reachability_targets"] == ["aptl-webapp"]
-
-
-def test_reachability_fails_when_target_unreachable(monkeypatch):
-    monkeypatch.setattr(lgs, "get_backend", lambda c, p: _Backend(returncode=1))
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgs.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("cannot reach" in d for d in check.diagnostics)
-
-
-def test_reachability_fails_without_kali():
-    state = _reach_state([_container("aptl-webapp", networks={"n": "1.2.3.4"})])
-    check = lgs.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("Kali container not present" in d for d in check.diagnostics)
-
-
-def test_reachability_fails_without_shared_network():
-    state = _reach_state(
-        [
-            _container("aptl-kali", networks={"aptl-redteam-net": "172.30.0.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    )
-    check = lgs.check_kali_reachability(
-        project_dir=PROJECT_ROOT, config=_config(), state=state
-    )
-    assert not check.passed
-    assert any("share a network" in d for d in check.diagnostics)
-
-
-# --------------------------------------------------------------------------- #
-# 5. Telemetry / evidence path.
-# --------------------------------------------------------------------------- #
-
-
-def _telemetry_state():
-    state = LiveGateState()
-    state.snapshot = {
-        "containers": [
-            _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
-            _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
-        ]
-    }
-    return state
-
-
-def _telemetry_env(_path):
-    return {
-        "INDEXER_USERNAME": "live-indexer-user",
-        "INDEXER_PASSWORD": "live-indexer-password",
-        "API_USERNAME": "live-api-user",
-        "API_PASSWORD": "live-api-password",
-        "APTL_HP_WAZUH_INDEXER_9200": "19200",
-    }
-
-
-def _patch_collect_no_sleep(monkeypatch):
-    """Drive the evidence poll loop with an injected no-op sleep.
-
-    Binds the real ``_collect_until_evidence`` with ``sleep_fn`` set to a no-op
-    via its explicit dependency boundary, rather than patching ``time.sleep`` on
-    the module. The poll loop still runs its iterations and collector calls.
-    """
-    monkeypatch.setattr(
-        lgt,
-        "_collect_until_evidence",
-        functools.partial(lgp._collect_until_evidence, sleep_fn=lambda _: None),
-    )
-
-
-def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "alert"}, {"event_type": "flow"}],
-    )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    telemetry = state.evidence["telemetry"]
-    assert telemetry["suricata_traffic_event_count"] == 2
-    assert telemetry["suricata_event_types"] == {"alert": 1, "flow": 1}
-    assert telemetry["wazuh_alert_count"] == 0
-    assert any("Wazuh alert" in d for d in check.diagnostics)
-
-
-def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "flow"}],
-    )
-    collector_kwargs = {}
-
-    def collect_wazuh(start, end, **kwargs):
-        collector_kwargs.update(kwargs)
-        return [
-            {
-                "rule": {"id": "5710"},
-                "agent": {"name": "manager"},
-                "@timestamp": "2026-07-17T10:00:00+00:00",
-                "full_log": "Invalid user aptl-live-gate-invalid from 172.20.4.30",
-            }
-        ]
-
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
-    state = _telemetry_state()
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert check.passed
-    telemetry = state.evidence["telemetry"]
-    assert telemetry["wazuh_alert_count"] == 1
-    assert telemetry["wazuh_correlated_alert_count"] == 1
-    assert telemetry["wazuh_correlation"]["rule_id"] == "5710"
-    assert len(telemetry["wazuh_correlation"]["sha256"]) == 64
-    assert "full_log" not in telemetry["wazuh_correlation"]
-    assert collector_kwargs == {
-        "indexer_url": "https://localhost:19200",
-        "auth": ("live-indexer-user", "live-indexer-password"),
-    }
-
-
-def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(
-        lgp,
-        "collect_wazuh_alerts",
-        lambda s, e, **kwargs: [
-            {
-                "rule": {"id": "1002"},
-                "full_log": "Unrelated periodic service event",
-            }
-        ],
-    )
-    state = _telemetry_state()
-
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-
-    assert not check.passed
-    assert state.evidence["telemetry"]["wazuh_alert_count"] == 1
-    assert state.evidence["telemetry"]["wazuh_correlated_alert_count"] == 0
-
-
-def test_telemetry_fails_on_stats_only_events(monkeypatch):
-    # Suricata emits `stats` regardless of traffic; the check must not pass on
-    # them alone (otherwise it would pass on any quiet lab).
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(
-        lgp,
-        "collect_suricata_eve",
-        lambda s, e, b: [{"event_type": "stats"}, {"event_type": "stats"}],
-    )
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    assert state.evidence["telemetry"]["suricata_traffic_event_count"] == 0
-    assert any("stats-only" in d for d in check.diagnostics)
-
-
-def test_telemetry_fails_when_no_evidence(monkeypatch):
-    monkeypatch.setattr(lgt, "get_backend", lambda c, p: _Backend())
-    _patch_collect_no_sleep(monkeypatch)
-    monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
-    monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
-    state = _telemetry_state()
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(event_window_seconds=10),
-        state=state,
-        env_loader=_telemetry_env,
-    )
-    assert not check.passed
-    assert any("no correlated post-trigger Wazuh alert" in d for d in check.diagnostics)
-
-
-def test_telemetry_fails_without_target(monkeypatch):
-    state = LiveGateState()
-    state.snapshot = {
-        "containers": [_container("aptl-kali", networks={"n": "1.1.1.1"})]
-    }
-    check = lgs.check_telemetry_evidence_path(
-        project_dir=PROJECT_ROOT,
-        config=_config(),
-        options=LiveGateOptions(),
-        state=state,
-    )
-    assert not check.passed
-
-
-# --------------------------------------------------------------------------- #
 # 6. Run-archive manifest.
 # --------------------------------------------------------------------------- #
 
@@ -1554,14 +1302,17 @@ def test_structural_half_of_the_gate_holds_no_scenario_answer_key():
     assert not offenders, f"scenario answer keys leaked back into core: {offenders}"
 
 
-def test_the_semantic_boundary_is_the_only_scenario_reach():
-    """The orchestrator must reach scenario knowledge at exactly one call site.
+def test_semantic_verification_runs_only_through_the_plugin_seam():
+    """The orchestrator must reach scenario knowledge only via discovery (#879).
 
-    #878 replaces that reach with plugin discovery. If the orchestrator grew a
-    second import of the semantic module, discovery would have to be wired in
-    two places and one of them would eventually be missed.
+    Semantic verification is now an installed plugin found through
+    ``scenario_verification_discovery``. The orchestrator must not also import a
+    scenario-specific check module or name an attacker/defensive-stack constant:
+    if it did, the seam it stands on would be decorative and a second scenario
+    would need core edits.
     """
 
+    import re
     from pathlib import Path
 
     source = (
@@ -1572,10 +1323,9 @@ def test_the_semantic_boundary_is_the_only_scenario_reach():
         / "techvault_live_gate.py"
     ).read_text()
 
-    imports = [
-        line
-        for line in source.splitlines()
-        if "_live_gate_semantic" in line and line.lstrip().startswith(("from ", "import "))
-    ]
-
-    assert len(imports) == 1, imports
+    # The discovery seam is reached, and the retired in-core scenario module is
+    # gone entirely.
+    assert "scenario_verification_discovery" in source
+    assert "_live_gate_semantic" not in source
+    # No scenario answer key is named in the orchestrator itself.
+    assert not re.search(r"aptl-kali|_KALI_CONTAINER", source)

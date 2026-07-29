@@ -280,12 +280,15 @@ def test_the_techvault_verifier_is_a_separate_distribution():
 
 
 def test_core_holds_no_techvault_answer_key_behind_the_seam():
-    """The point of extracting: core must not know who the attacker is.
+    """The point of extracting (#879): core must not know who the attacker is.
 
-    ``_live_gate_semantic`` still holds the pre-seam implementation and is
-    excluded — it is the thing #879 retires. Everything the seam itself is built
-    from must already be scenario-neutral, or the plugin quadrant leaks back into
-    core the moment someone reads the framework for an example.
+    The seam and the operations surface it hands a plugin are both
+    scenario-neutral by construction. If a scenario constant -- the attacker
+    node, the defensive stack's product names -- appeared in either, the plugin
+    quadrant would have leaked back into core, and a second scenario would need
+    core edits rather than a second installed plugin. The in-core semantic module
+    that used to hold these answer keys is now deleted; the TechVault knowledge
+    lives only in aptl-techvault-verifier.
     """
 
     import re
@@ -294,6 +297,7 @@ def test_core_holds_no_techvault_answer_key_behind_the_seam():
     seam_modules = (
         "scenario_verification.py",
         "scenario_verification_discovery.py",
+        "_live_gate_operations.py",
     )
     answer_keys = re.compile(r"aptl-kali|wazuh|suricata|thehive|misp", re.I)
     root = Path(__file__).resolve().parent.parent / "src" / "aptl" / "validation"
@@ -305,3 +309,6 @@ def test_core_holds_no_techvault_answer_key_behind_the_seam():
     }
 
     assert not offenders, f"scenario knowledge leaked into the seam: {offenders}"
+
+    # And the retired in-core scenario module is gone, not merely bypassed.
+    assert not (root / "_live_gate_semantic.py").exists()

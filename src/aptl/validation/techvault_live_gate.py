@@ -294,12 +294,12 @@ def _run_live_checks(
     results.append(checks.check_defensive_stack_readiness(state=state))
 
     # 4–5. Semantic verification — which node is the attacker, what the
-    #      defensive stack is, and what proves detection traversed it. These
-    #      depend on *which* scenario this is, so they are reached through the
-    #      one boundary in ``_live_gate_semantic`` rather than named here (#877).
-    #      #878 turns that boundary into an installed-plugin seam and #879 moves
-    #      the content out of core behind it; core's control flow already stops
-    #      enumerating any scenario's answer keys.
+    #      defensive stack is, and what proves detection traversed it. That
+    #      knowledge lives in an installed verifier plugin, discovered through the
+    #      seam (#878/#879); core builds a scenario-neutral context and an
+    #      operations surface and maps the plugin's report back. With no plugin
+    #      installed the seam returns ``blocked`` and these checks fail, so core
+    #      holds no scenario answer key of its own.
     results.extend(_semantic_checks(ctx, state))
 
     # 6. Scenario variation — the same interpreter path realizes distinct
@@ -319,30 +319,113 @@ def _run_live_checks(
     results.append(_archive_manifest(checks, ctx, state, results))
 
 
+# A discovered verifier's check id maps to the live gate's own check name and
+# failure category, so the report taxonomy and run archive stay stable no matter
+# which plugin ran. A check id the map does not cover is surfaced under evidence
+# capture rather than dropped.
+_PLUGIN_CHECK_CATEGORY: dict[str, tuple[str, str]] = {
+    "attacker-reachability": ("kali_reachability", CATEGORY_KALI_REACHABILITY),
+    "detection-traversal": ("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE),
+}
+
+
 def _semantic_checks(
     ctx: "_RunContext",
     state: LiveGateState,
 ) -> list[LiveGateCheck]:
-    """Run the scenario-specific checks behind the single semantic boundary.
+    """Run scenario-specific verification through the installed-plugin seam (#879).
 
-    Imported here rather than at module scope so the dependency direction is
-    visible: the orchestrator reaches *out* to scenario knowledge at one call
-    site, and replacing that reach with plugin discovery (#878) touches this
-    function alone.
+    Core holds no scenario answer key: it builds a scenario-neutral context and
+    an operations surface, discovers the one compatible verifier, and maps its
+    report back onto the gate's check taxonomy. With no verifier installed the
+    seam returns ``blocked`` and both semantic checks fail with that reason --
+    honest, because a range whose semantic verification could not run has not
+    been verified.
     """
-    from aptl.validation import _live_gate_semantic as semantic
+    import hashlib
 
-    return [
-        semantic.check_kali_reachability(
-            project_dir=ctx.project_dir, config=ctx.config, state=state
-        ),
-        semantic.check_telemetry_evidence_path(
+    from aptl.backends.raes_manifest import create_aptl_manifest
+    from aptl.validation._live_gate_operations import LiveGateOperations
+    from aptl.validation.scenario_verification import (
+        BackendIdentity,
+        ScenarioIdentity,
+        VerificationContext,
+    )
+    from aptl.validation.scenario_verification_discovery import verify_scenario
+
+    identity = ctx.scenario_path.name.removesuffix(".yaml").removesuffix(".sdl")
+    digest = "sha256:" + hashlib.sha256(ctx.scenario_path.read_bytes()).hexdigest()
+    manifest = create_aptl_manifest()
+    scenario = ScenarioIdentity(
+        identity=identity, content_digest=digest, source_kind="project-tree"
+    )
+    backend = BackendIdentity(
+        target_name=manifest.name,
+        target_version=str(getattr(manifest, "version", "")),
+        profile=ctx.options.profile,
+    )
+    containers = [
+        str(c.get("name", ""))
+        for c in (state.snapshot or {}).get("containers", [])
+        if c.get("name")
+    ]
+    context = VerificationContext(
+        run_id=ctx.run_id,
+        attempt_id=ctx.run_id,
+        scenario=scenario,
+        backend=backend,
+        deadline_seconds=ctx.options.event_window_seconds,
+        operations=LiveGateOperations(
             project_dir=ctx.project_dir,
             config=ctx.config,
             options=ctx.options,
             state=state,
         ),
-    ]
+        observations={"containers": containers},
+    )
+    return _map_verification_report(verify_scenario(context))
+
+
+def _map_verification_report(report: object) -> list[LiveGateCheck]:
+    """Map a verifier's report onto the live gate's named checks.
+
+    A passed/failed semantic check keeps its natural category. A ``blocked``
+    report -- no verifier installed, or a plugin that could not run -- fails both
+    semantic checks with the blocking reason, so verification that could not
+    happen never reads as verification that passed.
+    """
+    from aptl.validation.scenario_verification import (
+        VerificationReport,
+        VerificationStatus,
+    )
+
+    if not isinstance(report, VerificationReport):
+        return [
+            LiveGateCheck(
+                name,
+                category,
+                False,
+                ("scenario verification returned no usable report",),
+            )
+            for name, category in _PLUGIN_CHECK_CATEGORY.values()
+        ]
+
+    if report.status is VerificationStatus.BLOCKED:
+        reason = "; ".join(report.diagnostics) or "scenario verification was blocked"
+        return [
+            LiveGateCheck(name, category, False, (f"blocked: {reason}",))
+            for name, category in _PLUGIN_CHECK_CATEGORY.values()
+        ]
+
+    results: list[LiveGateCheck] = []
+    for check in report.checks:
+        name, category = _PLUGIN_CHECK_CATEGORY.get(
+            check.check_id, (check.check_id, CATEGORY_EVIDENCE_CAPTURE)
+        )
+        passed = check.status is VerificationStatus.PASSED
+        diagnostics = () if passed else (check.diagnostic or "semantic check failed",)
+        results.append(LiveGateCheck(name, category, passed, diagnostics))
+    return results
 
 
 def _archive_manifest(

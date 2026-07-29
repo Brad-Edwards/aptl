@@ -135,9 +135,10 @@ class TechVaultVerifier(object):
     def _checks(self, context: "VerificationContext") -> list[VerificationCheck]:
         """Return the semantic verdicts for this scenario.
 
-        The operations surface is scenario-neutral: this asks for detection
-        evidence in a bounded window, and the framework owns how that window is
-        polled and how evidence is captured.
+        Both checks name the attacker node -- the one scenario constant -- and
+        ask the operations surface a scenario-neutral question. The framework
+        owns how a host is reached, how the window is polled, and how evidence is
+        captured; this owns which node attacks and what proves the SOC saw it.
         """
 
         operations = context.operations
@@ -150,30 +151,46 @@ class TechVaultVerifier(object):
                 )
             ]
 
-        evidence = operations.detection_evidence(
-            origin=ATTACKER_NODE, deadline_seconds=context.deadline_seconds
-        )
-        if evidence:
-            return [
-                VerificationCheck(
-                    check_id="detection-traversal",
-                    status=VerificationStatus.PASSED,
-                    diagnostic=(
-                        "attack traffic from the attacker node produced defensive-stack "
-                        "evidence within the window"
-                    ),
-                )
-            ]
-        return [
+        checks: list[VerificationCheck] = []
+
+        reachability = operations.reachability_from(ATTACKER_NODE)
+        checks.append(
             VerificationCheck(
-                check_id="detection-traversal",
-                status=VerificationStatus.FAILED,
+                check_id="attacker-reachability",
+                status=(
+                    VerificationStatus.PASSED
+                    if reachability.reached
+                    else VerificationStatus.FAILED
+                ),
                 diagnostic=(
-                    "no defensive-stack evidence for attack traffic from the attacker "
-                    "node within the window"
+                    "the attacker node reaches every host on its shared networks"
+                    if reachability.reached
+                    else "; ".join(reachability.diagnostics)
                 ),
             )
-        ]
+        )
+
+        detection = operations.detection_evidence(
+            ATTACKER_NODE, context.deadline_seconds
+        )
+        checks.append(
+            VerificationCheck(
+                check_id="detection-traversal",
+                status=(
+                    VerificationStatus.PASSED
+                    if detection.observed
+                    else VerificationStatus.FAILED
+                ),
+                diagnostic=(
+                    "attack traffic from the attacker node produced defensive-stack "
+                    "evidence within the window"
+                    if detection.observed
+                    else "; ".join(detection.diagnostics)
+                    or "no defensive-stack evidence within the window"
+                ),
+            )
+        )
+        return checks
 
 
 #: The entry-point target. A module-level instance keeps loading side-effect

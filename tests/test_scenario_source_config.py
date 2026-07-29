@@ -48,13 +48,15 @@ def test_an_operator_can_select_a_scenario_and_its_root(tmp_path):
 def test_unknown_scenario_keys_are_rejected(tmp_path):
     """ADR-025: aptl.json is strict at every level, so typos fail loudly."""
 
+    config_path = _write(tmp_path, {"scenario": {"identiy": "typo"}})
     with pytest.raises(ValueError):
-        load_config(_write(tmp_path, {"scenario": {"identiy": "typo"}}))
+        load_config(config_path)
 
 
 def test_an_empty_identity_is_rejected(tmp_path):
+    config_path = _write(tmp_path, {"scenario": {"identity": "  "}})
     with pytest.raises(ValueError):
-        load_config(_write(tmp_path, {"scenario": {"identity": "  "}}))
+        load_config(config_path)
 
 
 @pytest.mark.parametrize(
@@ -63,8 +65,9 @@ def test_an_empty_identity_is_rejected(tmp_path):
 def test_a_root_that_escapes_the_project_is_refused(tmp_path, hostile):
     """A configured root is operator input and is treated as untrusted."""
 
+    config_path = _write(tmp_path, {"scenario": {"root": hostile}})
     with pytest.raises(ValueError):
-        load_config(_write(tmp_path, {"scenario": {"root": hostile}}))
+        load_config(config_path)
 
 
 def test_the_configured_scenario_is_what_the_start_path_resolves(tmp_path):

@@ -15,121 +15,40 @@ the remote daemon and behave identically to local Docker Compose.
 import hashlib
 import sys
 import time
-from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.snapshot_models import (
+    ContainerSnapshot,
+    NetworkSnapshot,
+    RangeSnapshot,
+    SSHEndpoint,
+    ServiceEndpoint,
+    SoftwareVersions,
+    WazuhRulesSnapshot,
+)
 from aptl.utils.logging import get_logger
-from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
     from aptl.core.deployment import DeploymentBackend
 
 log = get_logger("snapshot")
 
-
-@dataclass
-class SoftwareVersions(object):
-    """Versions of key software components."""
-
-    python_version: str = ""
-    docker_version: str = ""
-    compose_version: str = ""
-    wazuh_manager_version: str = ""
-    wazuh_indexer_version: str = ""
-    aptl_version: str = ""
-    raes_version: str = ""
-
-
-@dataclass
-class ContainerSnapshot(object):
-    """State of a single Docker container."""
-
-    name: str = ""
-    image: str = ""
-    image_id: str = ""
-    status: str = ""
-    health: str = ""
-    labels: dict[str, str] = field(default_factory=dict)
-    networks: dict[str, str] = field(default_factory=dict)
-    ports: list[str] = field(default_factory=list)
-    image_digest: str = ""
-    # Docker restart policy name ("no", "always", "unless-stopped", ...). This
-    # distinguishes a run-to-completion container (restart "no", exits and stays
-    # exited by design) from a long-running service (which must stay up). It is a
-    # compose realization fact APTL itself authored, so recording it here is not
-    # scenario knowledge.
-    restart_policy: str = ""
-
-
-@dataclass
-class WazuhRulesSnapshot(object):
-    """Summary of Wazuh rule configuration."""
-
-    total_rules: int = 0
-    custom_rules: int = 0
-    custom_rule_files: list[str] = field(default_factory=list)
-    total_decoders: int = 0
-    custom_decoders: int = 0
-
-
-@dataclass
-class NetworkSnapshot(object):
-    """State of a Docker network."""
-
-    name: str = ""
-    subnet: str = ""
-    gateway: str = ""
-    containers: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ServiceEndpoint(object):
-    """A host-accessible service endpoint."""
-
-    name: str = ""
-    url: str = ""
-    host: str = "localhost"
-    port: int = 0
-    protocol: str = ""
-    credentials: str = ""
-
-
-@dataclass
-class SSHEndpoint(object):
-    """An SSH-accessible container."""
-
-    name: str = ""
-    host: str = "localhost"
-    port: int = 0
-    user: str = ""
-    key_path: str = "~/.ssh/aptl_lab_key"
-    command: str = ""
-
-
-@dataclass
-class RangeSnapshot(object):
-    """Complete point-in-time snapshot of the lab range."""
-
-    timestamp: str = ""
-    software: SoftwareVersions = field(default_factory=SoftwareVersions)
-    containers: list[ContainerSnapshot] = field(default_factory=list)
-    wazuh_rules: WazuhRulesSnapshot = field(default_factory=WazuhRulesSnapshot)
-    networks: list[NetworkSnapshot] = field(default_factory=list)
-    config_hashes: dict[str, str] = field(default_factory=dict)
-    services: list[ServiceEndpoint] = field(default_factory=list)
-    ssh: list[SSHEndpoint] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to a JSON-serializable dictionary.
-
-        Sensitive fields (service credentials, API tokens, etc.) are
-        redacted at this boundary so every caller — `aptl lab status
-        --json`, `--output`, future archive writers — gets the same safe
-        shape. See ADR-012 § Security Guardrail.
-        """
-        return redact(asdict(self))
+__all__ = [
+    "ContainerSnapshot",
+    "NetworkSnapshot",
+    "RangeSnapshot",
+    "SSHEndpoint",
+    "ServiceEndpoint",
+    "SoftwareVersions",
+    "WazuhRulesSnapshot",
+    "capture_snapshot",
+    "container_networks",
+    "container_restart_policy",
+    "detection_content_digest",
+    "list_container_snapshots",
+]
 
 
 def _backend_exec(
@@ -270,12 +189,11 @@ def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
     """
     try:
         info = backend.container_inspect(name)
-    except Exception:  # noqa: BLE001 - inspect shells out; absence is not fatal
+    # inspect shells out; absence is not fatal.
+    except Exception:
         return ""
     host_config = info.get("HostConfig") if isinstance(info, dict) else None
-    if not isinstance(host_config, dict):
-        return ""
-    policy = host_config.get("RestartPolicy")
+    policy = host_config.get("RestartPolicy") if isinstance(host_config, dict) else None
     if not isinstance(policy, dict):
         return ""
     return str(policy.get("Name", ""))

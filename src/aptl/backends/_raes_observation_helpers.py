@@ -231,10 +231,8 @@ def container_realized(info: Mapping[str, Any]) -> bool:
         return False
     if container_completed_one_shot(info):
         return True
-    if not container_running(info):
-        return False
     health = container_health(info)
-    return not health or health == "healthy"
+    return container_running(info) and (not health or health == "healthy")
 
 
 def observed_content_type(

@@ -83,21 +83,26 @@ class _NoStartBackend(object):
     # built. Digests are deterministic per reference so the disclosure the
     # provisioner builds is stable across runs.
 
+    @staticmethod
     def artifact_available(
-        self, image_ref: str, *, allow_remote: bool | None = None
+        image_ref: str, *, allow_remote: bool | None = None
     ) -> bool:
         """Report every declared artifact as obtainable in the offline gate."""
 
+        del image_ref, allow_remote
         return True
 
+    @staticmethod
     def materialize_component_image(
-        self, image_ref: str, dockerfile_path: str, context_path: str
+        image_ref: str, dockerfile_path: str, context_path: str
     ) -> str | None:
         """Return a deterministic stand-in digest without building anything."""
 
+        del dockerfile_path, context_path
         return _simulated_digest(image_ref)
 
-    def container_image_digest(self, container_name: str) -> str | None:
+    @staticmethod
+    def container_image_digest(container_name: str) -> str | None:
         """Return the digest the stub simulated for this container's image."""
 
         return _simulated_digest(container_name)

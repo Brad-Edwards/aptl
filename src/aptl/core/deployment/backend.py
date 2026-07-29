@@ -18,6 +18,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.deployment.backend_host_inventory import HostInventoryBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentContentRealization,
@@ -42,11 +43,14 @@ from aptl.core.seed_spec import NamedVolumeSeed
 # introspection.
 
 
-class DeploymentBackend(Protocol):
+class DeploymentBackend(HostInventoryBackend, Protocol):
     """Protocol for lab deployment backends.
 
     Backends manage the deployment lifecycle (start, stop, status, kill,
-    pull) and container interaction (list, logs, shell, exec, inspect).
+    pull) and container interaction (list, logs, shell, exec, inspect). The
+    host-inventory operations (``host_versions``, ``host_list_lab_containers``,
+    ``host_list_lab_networks``, ``host_list_networks``, ``host_inspect_network``)
+    are inherited from :class:`HostInventoryBackend`.
     """
 
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
@@ -451,50 +455,5 @@ class DeploymentBackend(Protocol):
         s6-supervise gets stuck reporting EACCES on executable service
         `run` scripts and no wazuh daemon ever spawns — a docker-level
         restart clears the state.
-        """
-        ...
-
-    # Host inventory (CLI-004 / ADR-023) ----------------------------------
-    #
-    # These return parsed host-level information instead of exposing a
-    # generic argv passthrough. Future non-Docker backends implement
-    # them in their own terms; today both backends back them with the
-    # docker CLI but the Protocol stays Docker-shape-agnostic.
-
-    def host_versions(self) -> dict[str, str]:
-        """Return parsed daemon-side software versions.
-
-        Returns:
-            Dict with keys ``docker`` and ``compose``. Each value is the
-            version string as reported by the daemon, or empty string
-            on probe failure (missing binary, daemon down, etc.).
-        """
-        ...
-
-    def host_list_lab_containers(self) -> list[dict[str, Any]]:
-        """Enumerate ``aptl-*`` containers visible to the daemon.
-
-        Each row carries ``name``, ``image``, ``id``, ``status``,
-        ``labels`` (dict), and ``ports`` (list of port-mapping strings).
-        Catches containers outside the current compose project that
-        nevertheless follow the lab's naming convention.
-        """
-        ...
-
-    def host_list_lab_networks(self, name_prefix: str) -> list[str]:
-        """List network names whose names start with ``name_prefix``."""
-        ...
-
-    def host_list_networks(self) -> list[str]:
-        """List every network name visible to the deployment backend."""
-        ...
-
-    def host_inspect_network(self, name: str) -> dict[str, Any]:
-        """Return parsed network metadata.
-
-        Returns:
-            Dict with keys ``name``, ``subnet``, ``gateway``,
-            ``containers`` (sorted list of attached container names).
-            Empty dict on any failure.
         """
         ...

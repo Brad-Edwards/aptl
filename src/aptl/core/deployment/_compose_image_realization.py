@@ -157,6 +157,32 @@ class ComposeRealizationImageMixin:
         image_id = container.stdout.strip()
         if not image_id:
             return None
+        return self._image_manifest_digest(image_id)
+
+    def _image_manifest_digest(self, image_id: str) -> str | None:
+        """Return an image's registry manifest digest, or its id as a fallback.
+
+        A pulled image is identified by the manifest digest carried in
+        ``RepoDigests``, which is what an authored exact pin names. A locally
+        built image has no such digest, so its identity is the image id itself.
+        """
+
+        references = self._repo_digest_references(image_id)
+        if references is None:
+            return None
+        digest = next(
+            (
+                reference.rsplit("@", 1)[1]
+                for reference in references
+                if isinstance(reference, str) and "@sha256:" in reference
+            ),
+            None,
+        )
+        return digest or (image_id if image_id.startswith("sha256:") else None)
+
+    def _repo_digest_references(self, image_id: str) -> list[object] | None:
+        """Return an image's ``RepoDigests`` list, or None when it is unreadable."""
+
         repo_digests = self._run(
             [
                 "docker",
@@ -174,15 +200,7 @@ class ComposeRealizationImageMixin:
             references = yaml.safe_load(repo_digests.stdout.strip()) or []
         except yaml.YAMLError:
             return None
-        if not isinstance(references, list):
-            return None
-        for reference in references:
-            if isinstance(reference, str) and "@sha256:" in reference:
-                return reference.rsplit("@", 1)[1]
-        # A locally built image has no registry manifest digest, so its identity
-        # is the image id. A pulled image is identified by the manifest digest
-        # above, which is what an authored exact pin names.
-        return image_id if image_id.startswith("sha256:") else None
+        return references if isinstance(references, list) else None
 
     def _verify_staged_image(
         self,
@@ -210,19 +228,27 @@ class ComposeRealizationImageMixin:
         if image.mode == "pull":
             return self._pull_realization_image(image)
         if image.mode == "build":
-            if image.policy_rule == "authored-materialization-specification":
-                # Already materialized during backend preparation, which is the
-                # timing the per-component build profile declares. Rebuilding
-                # here would produce a second image whose digest may differ from
-                # the one that entered the verified integrity set, so the
-                # satisfaction disclosure would no longer match. Verify presence
-                # instead: exactly one build per artifact.
-                return self._verify_staged_image(image)
-            return self._build_realization_image(image)
+            return self._realize_build_image(image)
         return LabResult(
             success=False,
             error=f"Unsupported image realization mode for RAES node {image.address}.",
         )
+
+    def _realize_build_image(
+        self,
+        image: DeploymentImageRealization,
+    ) -> LabResult | None:
+        """Build one image, or verify a component already materialized upstream."""
+
+        if image.policy_rule == "authored-materialization-specification":
+            # Already materialized during backend preparation, which is the
+            # timing the per-component build profile declares. Rebuilding
+            # here would produce a second image whose digest may differ from
+            # the one that entered the verified integrity set, so the
+            # satisfaction disclosure would no longer match. Verify presence
+            # instead: exactly one build per artifact.
+            return self._verify_staged_image(image)
+        return self._build_realization_image(image)
 
     def _pull_realization_image(
         self,

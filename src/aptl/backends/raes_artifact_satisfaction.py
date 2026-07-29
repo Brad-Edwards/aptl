@@ -37,7 +37,7 @@ from aptl.backends.raes_artifact_mechanisms import (
     materialization_provenance_ref,
 )
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from raes.artifact_requirements import ArtifactRequirement
     from raes_backend_protocols.capabilities import BackendManifest
 
@@ -129,14 +129,30 @@ def satisfaction_payload(
     route = select_route(contract, manifest, requirement_kind=requirement_kind)
     if route is None:
         return None
-    exact = contract.exact_artifact
-    if exact is None:
+    if contract.exact_artifact is None:
         return _materialized_payload(
             contract, manifest, route=route, realized_digest=realized_digest
         )
-    if realized_digest != exact.digest:
-        # The backend realized something other than what the author pinned.
-        # Disclosing it anyway would be the silent approximation I2 forbids.
+    return _exact_payload(
+        contract, manifest, route=route, realized_digest=realized_digest
+    )
+
+
+def _exact_payload(
+    contract: ArtifactRequirement,
+    manifest: BackendManifest,
+    *,
+    route: ArtifactSatisfactionRoute,
+    realized_digest: str,
+) -> dict[str, object] | None:
+    """Return the disclosure for an exactly-pinned artifact, if the digest matches.
+
+    Returns None when the observed digest is not the one the author pinned:
+    disclosing it anyway would be the silent approximation I2 forbids.
+    """
+
+    exact = contract.exact_artifact
+    if exact is None or realized_digest != exact.digest:
         return None
     return {
         "requirement_id": contract.requirement_id,

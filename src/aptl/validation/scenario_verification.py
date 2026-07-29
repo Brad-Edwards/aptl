@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 #: The single entry-point group a scenario verifier registers under. Core
@@ -145,7 +145,7 @@ class VerificationContext(object):
     operations: object | None = None
     #: Narrow, already-redacted facts the framework observed while booting, for
     #: a plugin to read rather than rediscover. Never credentials.
-    observations: "Mapping[str, object]" = field(default_factory=dict)
+    observations: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -212,11 +212,11 @@ class ScenarioVerifier(Protocol):
     scenario_identity: str
     #: Admitted content digests this verifier accepts. Empty means the plugin
     #: has not pinned content, which is allowed but recorded.
-    scenario_content_digests: "Sequence[str]"
+    scenario_content_digests: Sequence[str]
     #: RAES target name this verifier supports.
     backend_target_name: str
     #: Backend capability profiles this verifier supports.
-    backend_profiles: "Sequence[str]"
+    backend_profiles: Sequence[str]
 
     def run(self, context: VerificationContext) -> VerificationReport:
         """Evaluate the scenario's semantic expectations against a live range."""

@@ -27,7 +27,7 @@ from aptl.validation._live_gate_probes import (
 )
 from aptl.validation._live_gate_telemetry import telemetry_diagnostics
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
     from aptl.validation.techvault_live_gate import LiveGateOptions, LiveGateState
 
@@ -84,15 +84,18 @@ class LiveGateOperations(object):
                 False, (), (f"origin {origin!r} not present in the booted range",)
             )
         networks = set((origin_container.get("networks") or {}).keys())
-        if not networks:
-            return ReachabilityResult(
-                False, (), (f"origin {origin!r} has no network attachments",)
-            )
-        targets = _shared_network_targets(origin_container, containers, networks)
+        targets = (
+            _shared_network_targets(origin_container, containers, networks)
+            if networks
+            else []
+        )
         if not targets:
-            return ReachabilityResult(
-                False, (), (f"no host shares a network with {origin!r} to test",)
+            reason = (
+                f"origin {origin!r} has no network attachments"
+                if not networks
+                else f"no host shares a network with {origin!r} to test"
             )
+            return ReachabilityResult(False, (), (reason,))
         backend = get_backend(self._config, self._project_dir)
         diagnostics = [
             f"{origin} cannot reach {name} ({ip}) on shared network"
@@ -114,6 +117,10 @@ class LiveGateOperations(object):
         observed at all.
         """
 
+        # The collection window is framework-owned and taken from the run's
+        # options; ``deadline_seconds`` is accepted for surface symmetry with a
+        # plugin's own deadline, which is already that same window.
+        del deadline_seconds
         containers = (self._state.snapshot or {}).get("containers", [])
         origin_container = _find_container(containers, origin)
         if origin_container is None:

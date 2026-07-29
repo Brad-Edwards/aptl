@@ -49,7 +49,7 @@ from aptl.backends.raes_artifact_mechanisms import (
 # path table is needed and no authored value can escape the root.
 _CONTEXT_ROOT = "containers"
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from raes.artifact_requirements import ArtifactRequirement
     from raes_processor.semantics.realization import CompiledRealizationRequirement
 
@@ -94,9 +94,12 @@ def _context_dockerfile(scenario_root: Path, specification_id: str) -> Path | No
     unavailable rather than reaching outside the project.
     """
 
-    if not specification_id or "/" in specification_id or "\\" in specification_id:
-        return None
-    if specification_id in {".", ".."}:
+    if (
+        not specification_id
+        or "/" in specification_id
+        or "\\" in specification_id
+        or specification_id in {".", ".."}
+    ):
         return None
     root = (scenario_root / _CONTEXT_ROOT).resolve()
     candidate = (root / specification_id / "Dockerfile").resolve()
@@ -170,8 +173,13 @@ def _materialized_specifications(
 
 def _source_artifact_requirements(
     scenario: object,
-) -> list[CompiledRealizationRequirement]:
-    """Return every compiled requirement that carries artifact demand."""
+) -> list[tuple[CompiledRealizationRequirement, ArtifactRequirement]]:
+    """Return each compiled requirement paired with its artifact requirement.
+
+    Pairing the two here keeps the non-null artifact requirement narrowed for
+    every caller, so no downstream code re-checks a value the filter already
+    guaranteed.
+    """
 
     # Artifact demand is authored on node/content/feature sources, so a value
     # carrying no ``nodes`` section cannot declare any. Checking first keeps the
@@ -181,9 +189,9 @@ def _source_artifact_requirements(
         return []
     model = compile_runtime_model(scenario)
     return [
-        requirement
-        for requirement in model.realization_requirements
-        if requirement.artifact_requirement is not None
+        (compiled, compiled.artifact_requirement)
+        for compiled in model.realization_requirements
+        if compiled.artifact_requirement is not None
     ]
 
 
@@ -213,57 +221,88 @@ def artifact_availability_for_scenario(
         missing-address ambiguity.
     """
 
-    entries: list[ArtifactRequirementAvailability] = []
     materialized: dict[str, str] = {}
-    for compiled in _source_artifact_requirements(scenario):
-        requirement = compiled.artifact_requirement
-        if requirement is None:  # pragma: no cover - filtered above
-            continue
-        digests: list[str] = []
-        specifications: list[str] = []
-        verified_inputs: list[str] = []
-        provenance: list[str] = []
-        if requirement.materialization_specifications:
-            specifications, digests = _materialized_specifications(
-                requirement, probe, scenario_root, materialized
-            )
-            # A locked input is verified when its immutable base artifact is
-            # genuinely obtainable; an unobtainable base means the build cannot
-            # be reproduced from what the author pinned.
-            verified_inputs = [
-                locked.input_id
-                for locked in requirement.locked_inputs
-                if locked.artifact is not None
-                and probe.artifact_available(
-                    f"{locked.artifact.artifact_id}@{locked.artifact.digest}",
-                    allow_remote=allow_remote,
-                )
-            ]
-            if specifications:
-                provenance.append(materialization_provenance_ref())
-        if requirement.explicitness is ExplicitnessClass.EXACT:
-            reference = _artifact_reference(requirement)
-            exact = requirement.exact_artifact
-            if (
-                reference is not None
-                and exact is not None
-                and probe.artifact_available(reference, allow_remote=allow_remote)
-            ):
-                digests.append(exact.digest)
-                provenance.append(exact_artifact_provenance_ref())
-        # The digest APTL confirmed obtainable is exactly the integrity fact it
-        # can vouch for, and the runtime gate requires the realized digest to be
-        # disclosed as an integrity ref drawn from this verified set. Nothing
-        # else is claimed: authenticity, admission, provenance, and evidence
-        # remain empty until a trust policy actually verifies them.
-        entries.append(
-            ArtifactRequirementAvailability(
-                address=compiled.address,
-                available_artifact_digests=digests,
-                verified_integrity_refs=list(digests),
-                verified_provenance_refs=provenance,
-                available_materialization_specification_digests=specifications,
-                verified_locked_input_ids=verified_inputs,
-            )
+    entries = [
+        _availability_entry(
+            compiled,
+            requirement,
+            probe,
+            allow_remote=allow_remote,
+            scenario_root=scenario_root,
+            materialized=materialized,
         )
+        for compiled, requirement in _source_artifact_requirements(scenario)
+    ]
     return ArtifactAvailabilityContext(requirements=entries)
+
+
+def _availability_entry(
+    compiled: CompiledRealizationRequirement,
+    requirement: ArtifactRequirement,
+    probe: ArtifactProbe,
+    *,
+    allow_remote: bool | None,
+    scenario_root: Path | None,
+    materialized: dict[str, str],
+) -> ArtifactRequirementAvailability:
+    """Return the availability facts for one compiled address.
+
+    The digest APTL confirmed obtainable is exactly the integrity fact it can
+    vouch for, and the runtime gate requires the realized digest to be disclosed
+    as an integrity ref drawn from this verified set. Nothing else is claimed:
+    authenticity, admission, and evidence remain empty until a trust policy
+    actually verifies them.
+    """
+
+    digests: list[str] = []
+    specifications: list[str] = []
+    verified_inputs: list[str] = []
+    provenance: list[str] = []
+    if requirement.materialization_specifications:
+        specifications, digests = _materialized_specifications(
+            requirement, probe, scenario_root, materialized
+        )
+        verified_inputs = _verified_locked_inputs(requirement, probe, allow_remote)
+        if specifications:
+            provenance.append(materialization_provenance_ref())
+    if requirement.explicitness is ExplicitnessClass.EXACT:
+        reference = _artifact_reference(requirement)
+        exact = requirement.exact_artifact
+        if (
+            reference is not None
+            and exact is not None
+            and probe.artifact_available(reference, allow_remote=allow_remote)
+        ):
+            digests.append(exact.digest)
+            provenance.append(exact_artifact_provenance_ref())
+    return ArtifactRequirementAvailability(
+        address=compiled.address,
+        available_artifact_digests=digests,
+        verified_integrity_refs=list(digests),
+        verified_provenance_refs=provenance,
+        available_materialization_specification_digests=specifications,
+        verified_locked_input_ids=verified_inputs,
+    )
+
+
+def _verified_locked_inputs(
+    requirement: ArtifactRequirement,
+    probe: ArtifactProbe,
+    allow_remote: bool | None,
+) -> list[str]:
+    """Return the locked inputs whose immutable base artifact is obtainable.
+
+    A locked input is verified when its base artifact is genuinely obtainable;
+    an unobtainable base means the build cannot be reproduced from what the
+    author pinned.
+    """
+
+    return [
+        locked.input_id
+        for locked in requirement.locked_inputs
+        if locked.artifact is not None
+        and probe.artifact_available(
+            f"{locked.artifact.artifact_id}@{locked.artifact.digest}",
+            allow_remote=allow_remote,
+        )
+    ]

@@ -12,46 +12,17 @@ from typing import Any
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
-from aptl.backends.raes_diagnostics import diagnostic
-from aptl.core.deployment.realization import DeploymentImageRealization
-
-_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_SAFE_TAG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
-_COMPOSE_SOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-_PROJECT_DOCKERFILE_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
-
-_ALLOWED_SOURCE_IMAGE_REFS = {
-    ("postgres", "16"): "postgres:16-alpine",
-    ("postgres", "16-alpine"): "postgres:16-alpine",
-    ("wazuh-manager", "4.x"): "wazuh/wazuh-manager:4.12.0",
-    ("wazuh-indexer", "4.x"): "wazuh/wazuh-indexer:4.12.0",
-    ("wazuh-dashboard", "4.x"): "wazuh/wazuh-dashboard:4.12.0",
-}
-
-_ALLOWED_DIGEST_SOURCE_NAMES = frozenset(
-    {
-        "cassandra",
-        "docker.elastic.co/elasticsearch/elasticsearch",
-        "ghcr.io/docker-mailserver/docker-mailserver",
-        "ghcr.io/misp/misp-docker/misp-core",
-        "ghcr.io/shuffle/shuffle-backend",
-        "ghcr.io/shuffle/shuffle-frontend",
-        "ghcr.io/shuffle/shuffle-orborus",
-        "grafana/grafana",
-        "grafana/tempo",
-        "jasonish/suricata",
-        "mariadb",
-        "opensearchproject/opensearch",
-        "otel/opentelemetry-collector-contrib",
-        "postgres",
-        "redis",
-        "strangebee/thehive",
-        "thehiveproject/cortex",
-        "wazuh/wazuh-dashboard",
-        "wazuh/wazuh-indexer",
-        "wazuh/wazuh-manager",
-    }
+from aptl.backends._raes_image_policy import (
+    _ALLOWED_DIGEST_SOURCE_NAMES,
+    _ALLOWED_SOURCE_IMAGE_REFS,
+    _COMPOSE_SOURCE_NAME_RE,
+    _DIGEST_RE,
+    _PROJECT_DOCKERFILE_PATH_RE,
+    _SAFE_TAG_RE,
+    _policy_diagnostic,
+    _provenance_counts,
 )
+from aptl.core.deployment.realization import DeploymentImageRealization
 
 
 @dataclass(frozen=True)
@@ -231,11 +202,9 @@ def _materialized_component_image(
         if actual == digest:
             chosen = (identifier, digest)
             break
-    if chosen is None:
+    if chosen is None or not _safe_image_name(chosen[0]):
         return None
     identifier, digest = chosen
-    if not _safe_image_name(identifier):
-        return None
     return DeploymentImageRealization(
         address=resource.address,
         service_name=service_name,
@@ -269,9 +238,12 @@ def _specification_digest(specification: object) -> str:
 def _contained_context_dockerfile(project_dir: Path, identifier: str) -> Path | None:
     """Return the contained Dockerfile for one specification id, or nothing."""
 
-    if not identifier or "/" in identifier or "\\" in identifier:
-        return None
-    if identifier in {".", ".."}:
+    if (
+        not identifier
+        or "/" in identifier
+        or "\\" in identifier
+        or identifier in {".", ".."}
+    ):
         return None
     root = (project_dir / "containers").resolve()
     candidate = (root / identifier / "Dockerfile").resolve()
@@ -499,27 +471,3 @@ def _safe_image_name(value: str) -> bool:
     return all(part not in {"", ".", ".."} for part in re.split(r"[/:]", value))
 
 
-def _provenance_counts(build: object) -> dict[str, int] | None:
-    """Return non-secret provenance list sizes for realization details."""
-
-    if not isinstance(build, Mapping):
-        return None
-    counts = {
-        key: len(value)
-        for key in ("instructions", "layers", "source_inputs")
-        if isinstance((value := build.get(key)), list)
-    }
-    return counts or None
-
-
-def _policy_diagnostic(address: str, reason_code: str) -> Diagnostic:
-    """Build a policy diagnostic without exposing rejected source values."""
-
-    return diagnostic(
-        "aptl.provisioner.image-policy-rejected",
-        address,
-        (
-            "RAES node image source was rejected by the APTL image policy "
-            f"(reason={reason_code})."
-        ),
-    )

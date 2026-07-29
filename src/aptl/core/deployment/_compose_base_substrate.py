@@ -154,7 +154,8 @@ class ComposeBaseSubstrateMixin(object):
 
         try:
             info = self.container_inspect(spec.container_name)
-        except Exception:  # noqa: BLE001 - inspect shells out; treat any error as absent
+        # inspect shells out; treat any error as the container being absent.
+        except Exception:
             return False
         if not isinstance(info, dict):
             return False

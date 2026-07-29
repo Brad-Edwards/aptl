@@ -37,9 +37,11 @@ from aptl.validation._live_gate_probes import (
     _check_to_dict,
     _compute_realization,
     _default_run_store,
-    _distinct_profile_nodes,
     _missing_manifest_keys,
     _scenario_name,
+)
+from aptl.validation._live_gate_variation import (
+    _distinct_profile_nodes,
     _single_node_plan,
     _variation_diagnostics,
 )

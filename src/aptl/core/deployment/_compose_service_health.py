@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Sequence
+from itertools import islice
 from typing import TYPE_CHECKING, Any
 
 from aptl.core.services import wait_for_service
@@ -215,6 +216,6 @@ def _await_all_settled(
     log.warning(
         "realized services did not become healthy within %ss: %s",
         timeout,
-        "; ".join(reasons[:5]),
+        "; ".join(islice(reasons, 5)),
     )
     return reasons

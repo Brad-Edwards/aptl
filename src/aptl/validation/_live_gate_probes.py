@@ -19,13 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from raes_contracts.planning import (
-    ChangeAction,
-    PlannedResource,
-    ProvisioningPlan,
-    ProvisionOp,
-    RuntimeDomain,
-)
 from raes_runtime.manager import RuntimeManager
 from raes.scenario import Scenario
 
@@ -455,66 +448,3 @@ def _default_run_store(project_dir: Path, config: "AptlConfig") -> LocalRunStore
     return LocalRunStore(local_path)
 
 
-def _distinct_profile_nodes(
-    nodes: Sequence[Mapping[str, Any]],
-) -> tuple[str, str] | None:
-    """Pick two node names whose realized profiles differ."""
-    seen: list[tuple[str, frozenset[str]]] = []
-    for node in nodes:
-        name = _node_primary_name(node)
-        profiles = frozenset(node.get("profiles", ()))
-        if not name or not profiles:
-            continue
-        for other_name, other_profiles in seen:
-            if other_profiles != profiles:
-                return other_name, name
-        seen.append((name, profiles))
-    return None
-
-
-def _node_primary_name(node: Mapping[str, Any]) -> str:
-    """Return a usable node name from the realization node record."""
-    aliases = node.get("aliases") or ()
-    return str(aliases[0]) if aliases else str(node.get("name", ""))
-
-
-def _variation_diagnostics(
-    first: "AptlRealization", second: "AptlRealization"
-) -> list[str]:
-    """Confirm two interpretations are error-free and distinct."""
-    diagnostics: list[str] = []
-    for label, realization in (("first", first), ("second", second)):
-        errors = [d for d in realization.diagnostics if _severity(d) == "error"]
-        if errors:
-            diagnostics.append(f"{label} variation node failed to realize")
-    if not diagnostics and first.details() == second.details():
-        diagnostics.append("distinct declared nodes collapsed to one realization")
-    return diagnostics
-
-
-def _single_node_plan(node_name: str) -> ProvisioningPlan:
-    """Build a single-node RAES provisioning plan for ``node_name``."""
-    address = f"provision.node.{node_name}"
-    resource = PlannedResource(
-        address=address,
-        domain=RuntimeDomain.PROVISIONING,
-        resource_type="node",
-        payload={
-            "name": node_name,
-            "node_name": node_name,
-            "node_type": "vm",
-            "os_family": "linux",
-            "spec": {"node": {"name": node_name}, "infrastructure": {}},
-        },
-    )
-    return ProvisioningPlan(
-        resources={address: resource},
-        operations=[
-            ProvisionOp(
-                action=ChangeAction.CREATE,
-                address=address,
-                resource_type="node",
-                payload=resource.payload,
-            )
-        ],
-    )

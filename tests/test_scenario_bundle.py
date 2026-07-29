@@ -75,8 +75,9 @@ def test_a_symlink_out_of_the_bundle_is_refused(tmp_path):
     inner.mkdir()
     (inner / "leak").symlink_to(outside)
 
+    bundle = _bundle(inner)
     with pytest.raises(PathContainmentError):
-        _bundle(inner).read_asset("leak")
+        bundle.read_asset("leak")
 
 
 def test_details_carry_identity_not_location():

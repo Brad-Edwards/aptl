@@ -31,7 +31,7 @@ from aptl.validation.scenario_verification import (
     VerificationStatus,
 )
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     from collections.abc import Sequence
 
 log = get_logger("scenario-verification")
@@ -78,7 +78,7 @@ def _blocked(
     )
 
 
-def _entry_points() -> "Sequence[metadata.EntryPoint]":
+def _entry_points() -> Sequence[metadata.EntryPoint]:
     """Return every entry point registered in the verifier group."""
 
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
@@ -94,28 +94,31 @@ def _load(entry_point: metadata.EntryPoint) -> DiscoveredVerifier | None:
 
     try:
         target = entry_point.load()
-    except Exception as exc:  # noqa: BLE001 - any import failure is a load failure
+    # Any import failure means the plugin is unusable; treat it as absent.
+    except Exception as exc:
         log.warning(
             "scenario verifier %r failed to load: %s", entry_point.name, redact(str(exc))
         )
-        return None
+        target = None
     # A factory is allowed so a distribution need not construct its verifier at
     # import time; the result is what must satisfy the protocol.
     if callable(target) and not isinstance(target, ScenarioVerifier):
         try:
             target = target()
-        except Exception as exc:  # noqa: BLE001
+        # A factory that raises leaves nothing usable behind.
+        except Exception as exc:
             log.warning(
                 "scenario verifier factory %r failed: %s",
                 entry_point.name,
                 redact(str(exc)),
             )
-            return None
+            target = None
     if not isinstance(target, ScenarioVerifier):
-        log.warning(
-            "scenario verifier %r does not satisfy the extension contract",
-            entry_point.name,
-        )
+        if target is not None:
+            log.warning(
+                "scenario verifier %r does not satisfy the extension contract",
+                entry_point.name,
+            )
         return None
     distribution = ""
     distribution_version = ""
@@ -151,26 +154,47 @@ def _incompatibility(
             f"{getattr(verifier, 'extension_api_version', '')!r}, "
             f"core provides {EXTENSION_API_VERSION!r}"
         )
+    # Not for this scenario at all; not an error, just no match.
     if str(getattr(verifier, "scenario_identity", "")) != scenario.identity:
-        return ""  # Not for this scenario at all; not an error, just no match.
+        return ""
+    return _capability_mismatch(discovered, scenario, backend)
+
+
+def _capability_mismatch(
+    discovered: DiscoveredVerifier,
+    scenario: ScenarioIdentity,
+    backend: BackendIdentity,
+) -> str:
+    """Return why a name-matched verifier still does not fit, or an empty string.
+
+    Content, backend target, and profile are each matched exactly; the first
+    dimension that does not line up is the reported reason.
+    """
+
+    verifier = discovered.verifier
     digests = tuple(getattr(verifier, "scenario_content_digests", ()) or ())
-    if digests and scenario.content_digest not in digests:
-        return (
+    profiles = tuple(getattr(verifier, "backend_profiles", ()) or ())
+    checks = (
+        (
+            bool(digests) and scenario.content_digest not in digests,
             f"plugin {discovered.plugin_id!r} is pinned to different scenario "
-            "content than the admitted scenario"
-        )
-    if str(getattr(verifier, "backend_target_name", "")) != backend.target_name:
-        return (
+            "content than the admitted scenario",
+        ),
+        (
+            str(getattr(verifier, "backend_target_name", "")) != backend.target_name,
             f"plugin {discovered.plugin_id!r} supports backend "
             f"{getattr(verifier, 'backend_target_name', '')!r}, "
-            f"range was realized by {backend.target_name!r}"
-        )
-    profiles = tuple(getattr(verifier, "backend_profiles", ()) or ())
-    if profiles and backend.profile not in profiles:
-        return (
+            f"range was realized by {backend.target_name!r}",
+        ),
+        (
+            bool(profiles) and backend.profile not in profiles,
             f"plugin {discovered.plugin_id!r} does not support backend profile "
-            f"{backend.profile!r}"
-        )
+            f"{backend.profile!r}",
+        ),
+    )
+    for failed, reason in checks:
+        if failed:
+            return reason
     return ""
 
 
@@ -224,10 +248,23 @@ def verify_scenario(context: VerificationContext) -> VerificationReport:
     discovered, reason = select_verifier(context.scenario, context.backend)
     if discovered is None:
         return _blocked(context, reason)
+    return _run_verifier(discovered, context)
+
+
+def _run_verifier(
+    discovered: DiscoveredVerifier, context: VerificationContext
+) -> VerificationReport:
+    """Run one discovered verifier and normalize its result.
+
+    Any exception the plugin raises, or any non-report it returns, becomes a
+    stable ``blocked`` report: a raw exception must not become report text, and a
+    broken plugin must not read as a broken range.
+    """
 
     try:
         report = discovered.verifier.run(context)
-    except Exception as exc:  # noqa: BLE001 - plugin code is not trusted to be total
+    # Plugin code is not trusted to be total, so any failure is contained here.
+    except Exception as exc:
         log.warning(
             "scenario verifier %r raised: %s", discovered.plugin_id, redact(str(exc))
         )

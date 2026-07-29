@@ -124,9 +124,18 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
             ),
         ),
     )
-    # Not the whole-scenario image_free flag; this proves the per-node
-    # dispatch materializes the runtime: node even when it is False.
-    assert spec.image_free is False
+    # Routing is per-node, not a whole-spec flag (the flag was removed): the
+    # runtime-only node is materialized, the image node stays a Compose service,
+    # and because a Compose node remains the mixed path runs.
+    from aptl.core.deployment._compose_image_free_realization import (
+        _image_free_node_addresses,
+    )
+    from aptl.core.deployment._compose_realization import _needs_compose
+
+    image_free = _image_free_node_addresses(spec)
+    assert free_node.address in image_free
+    assert image_node.address not in image_free
+    assert _needs_compose(spec) is True
 
     try:
         result = backend.realize(spec, build=False)

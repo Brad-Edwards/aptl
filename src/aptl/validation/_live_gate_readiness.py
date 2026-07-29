@@ -2,11 +2,13 @@
 
 Extracted from ``_live_gate_probes`` (SCN-010F / #323) to keep both modules
 under the file-size budget. These helpers compare the realized RAES node
-surface against the booted range's container snapshot: every realized node in a
-started profile must map to a live container, and any container carrying a
-healthcheck must actually report healthy.
+surface against the booted range's container snapshot in **both** directions:
+every realized node in a started profile must map to a live container, any
+container carrying a healthcheck must actually report healthy, and every running
+container must be accounted for by a declared node.
 ``_live_gate_checks.check_defensive_stack_readiness`` imports
-``_node_readiness_diagnostics`` and ``_warn_unhealthy_infra`` from here.
+``_node_readiness_diagnostics`` and ``_undeclared_container_diagnostics``
+from here.
 """
 
 from __future__ import annotations
@@ -47,17 +49,32 @@ def _node_readiness_diagnostics(
     return diagnostics, matched_names
 
 
-def _warn_unhealthy_infra(
+def _undeclared_container_diagnostics(
     containers: Sequence[Mapping[str, Any]], matched_names: set[str]
-) -> None:
-    """Log unhealthy non-node infra containers as informational notes only."""
-    for container in containers:
-        if container.get("name", "") in matched_names:
-            continue
-        if container.get("health") == "unhealthy":
-            log.warning(
-                "non-node infra container unhealthy: %s", container.get("name", "?")
-            )
+) -> list[str]:
+    """Return a hard failure for every running container the graph never declared.
+
+    The other half of ADR-048 parity. Comparing declared-to-realized catches a
+    node that failed to start; only comparing realized-to-declared catches the
+    opposite and more dangerous case — something running in the range that the
+    admitted graph does not account for. A scenario that cannot name what is
+    running has not described the range, and an operator reading it would be
+    misled about what an attacker can reach.
+
+    This was previously a ``log.warning``, which meant an undeclared container
+    could never fail a run. It is now a failure, deliberately with no allowance
+    list: an exception for "infrastructure" or for the engine's own containers is
+    exactly the silent approximation SEM-218 I2 forbids, and openness has to be
+    declared rather than assumed (I3). If something legitimately belongs in the
+    range, the scenario declares it.
+    """
+
+    return [
+        f"container {container.get('name', '?')!r} is running but no declared node "
+        "accounts for it"
+        for container in containers
+        if container.get("name", "") not in matched_names
+    ]
 
 
 def _container_health_diagnostics(

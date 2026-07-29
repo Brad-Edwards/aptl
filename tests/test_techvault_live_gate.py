@@ -603,18 +603,44 @@ def test_readiness_fails_on_stopped_node_container():
     assert any("not running" in d for d in check.diagnostics)
 
 
-def test_readiness_tolerates_unhealthy_non_node_infra():
+def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
+    """ADR-048 parity runs both ways: nothing may run that nothing declares.
+
+    This previously asserted the opposite -- an undeclared container was
+    tolerated and merely logged, so range content could drift away from the
+    scenario without ever failing a run. The rule is now absolute and carries no
+    allowance list, because an exception for "infrastructure" is precisely the
+    silent approximation SEM-218 I2 forbids.
+
+    The observability collector here is a real example: it is a genuine part of
+    the range, and the correct response is for the scenario to declare it, which
+    techvault-operational now does.
+    """
+
     state = _readiness_state(
         [_node("webapp", ["dmz"])],
         [
             _container("aptl-webapp"),
-            _container(
-                "aptl-otel-collector", status="Up 1m (unhealthy)", health="unhealthy"
-            ),
+            _container("aptl-otel-collector"),
         ],
     )
     check = lgc.check_defensive_stack_readiness(state=state)
-    assert check.passed
+
+    assert not check.passed
+    assert any("aptl-otel-collector" in d for d in check.diagnostics)
+    assert any("no declared node accounts for it" in d for d in check.diagnostics)
+
+
+def test_readiness_passes_when_every_container_maps_to_a_declared_node():
+    """The other side of the same rule: full parity is what passing means."""
+
+    state = _readiness_state(
+        [_node("webapp", ["dmz"]), _node("otel-collector", ["dmz"])],
+        [_container("aptl-webapp"), _container("aptl-otel-collector")],
+    )
+    check = lgc.check_defensive_stack_readiness(state=state)
+
+    assert check.passed, check.diagnostics
 
 
 def test_readiness_skips_nodes_in_unselected_profiles():

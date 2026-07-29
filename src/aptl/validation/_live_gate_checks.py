@@ -45,7 +45,7 @@ from aptl.validation._live_gate_probes import (
 )
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
-    _warn_unhealthy_infra,
+    _undeclared_container_diagnostics,
 )
 from aptl.validation.techvault_gate import GateOptions, validate_scenario
 from aptl.validation.techvault_live_gate import (
@@ -225,7 +225,10 @@ def check_defensive_stack_readiness(
     diagnostics, matched_names = _node_readiness_diagnostics(
         nodes, containers, selected
     )
-    _warn_unhealthy_infra(containers, matched_names)
+    # Parity runs both ways (ADR-048): a declared node that never started, and a
+    # container running that nothing declared. The second direction is what
+    # catches range content the scenario has drifted away from describing.
+    diagnostics.extend(_undeclared_container_diagnostics(containers, matched_names))
     return _check(
         "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, diagnostics
     )

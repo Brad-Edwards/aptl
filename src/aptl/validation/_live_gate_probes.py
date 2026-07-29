@@ -446,5 +446,3 @@ def _default_run_store(project_dir: Path, config: "AptlConfig") -> LocalRunStore
     if not local_path.is_absolute():
         local_path = project_dir / local_path
     return LocalRunStore(local_path)
-
-

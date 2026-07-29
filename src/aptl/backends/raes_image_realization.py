@@ -469,5 +469,3 @@ def _safe_image_name(value: str) -> bool:
     if not value or value.startswith(("-", ".")) or value.endswith(("/", ":")):
         return False
     return all(part not in {"", ".", ".."} for part in re.split(r"[/:]", value))
-
-

@@ -925,6 +925,132 @@ nodes:
         # would need a daemon-reload the materializer does not run. A fresh unit
         # file loads on start (like webapp.service) with no sandboxing.
         - {unit_id: aptl-rsyslog, unit_name: aptl-rsyslog.service, enabled_state: enabled, active_state: active}
+      applications:
+        - application_id: techvault-portal
+          service: http
+          protocol: http
+          name: TechVault customer portal
+          framework: flask
+          base_path: /
+          description: The internet-facing business application. Its weaknesses are the scenario content an attacker is meant to find.
+          routes:
+            - route_id: index
+              path: /
+              methods:
+                - GET
+              auth_required: false
+              description: Public landing page.
+            - route_id: login
+              path: /login
+              methods:
+                - GET
+                - POST
+              auth_required: false
+              description: Login form.
+              vulnerability_refs:
+                - webapp-sqli-login
+                - webapp-verbose-errors
+            - route_id: logout
+              path: /logout
+              methods:
+                - GET
+              auth_required: true
+              description: Ends the session.
+            - route_id: dashboard
+              path: /dashboard
+              methods:
+                - GET
+              auth_required: true
+              description: Authenticated user dashboard.
+            - route_id: admin
+              path: /admin
+              methods:
+                - GET
+              auth_required: true
+              description: Administrative view over stored backup configuration.
+              vulnerability_refs:
+                - webapp-missing-authz-admin
+            - route_id: upload
+              path: /upload
+              methods:
+                - GET
+                - POST
+              auth_required: true
+              description: File upload.
+              vulnerability_refs:
+                - webapp-unrestricted-upload
+            - route_id: api-file
+              path: /api/v1/files/<int:file_id>
+              methods:
+                - GET
+              auth_required: true
+              description: Fetch one file record.
+              vulnerability_refs:
+                - webapp-idor-files
+            - route_id: api-user
+              path: /api/v1/users/<int:user_id>
+              methods:
+                - GET
+              auth_required: true
+              description: Fetch one user record.
+              vulnerability_refs:
+                - webapp-idor-users
+            - route_id: api-customers
+              path: /api/v1/customers
+              methods:
+                - GET
+              auth_required: true
+              description: List customers.
+            - route_id: api-token
+              path: /api/v1/token
+              methods:
+                - POST
+              auth_required: false
+              description: Issue a bearer token.
+              vulnerability_refs:
+                - webapp-weak-jwt
+                - webapp-hardcoded-secrets
+            - route_id: ping-tool
+              path: /tools/ping
+              methods:
+                - GET
+                - POST
+              auth_required: true
+              description: Network diagnostic helper.
+              vulnerability_refs:
+                - webapp-cmdi-ping
+            - route_id: search
+              path: /search
+              methods:
+                - GET
+              auth_required: true
+              description: Search users by name, email, or department.
+              vulnerability_refs:
+                - webapp-sqli-search
+                - webapp-xss-reflected
+            - route_id: comment
+              path: /comment
+              methods:
+                - POST
+              auth_required: true
+              description: Post a comment.
+              vulnerability_refs:
+                - webapp-xss-stored
+            - route_id: debug
+              path: /debug
+              methods:
+                - GET
+              auth_required: false
+              description: Debug information endpoint.
+              vulnerability_refs:
+                - webapp-debug-endpoint
+                - webapp-env-disclosure
+            - route_id: robots
+              path: /robots.txt
+              methods:
+                - GET
+              auth_required: false
+              description: Robots file.
   ad:
     type: vm
     os: linux
@@ -989,6 +1115,47 @@ nodes:
       service_manager_units:
         - {unit_id: postgresql, unit_name: postgresql.service, enabled_state: enabled, active_state: active}
         - {unit_id: db-bootstrap, unit_name: db-bootstrap.service, enabled_state: enabled, active_state: active}
+      database_services:
+        - database_service_id: techvault-db
+          engine: postgresql
+          protocol: postgresql
+          service: postgres
+          description: The customer database. Its tables are what the web application exposes and what the SQL-injection path reaches.
+          listeners:
+            - address: 0.0.0.0
+              port: 5432
+          databases:
+            - database_id: techvault
+              name: techvault
+              origin: scenario
+              schemas:
+                - schema_id: public
+                  name: public
+                  origin: scenario
+                  tables:
+                    - table_id: users
+                      name: users
+                    - table_id: customers
+                      name: customers
+                    - table_id: files
+                      name: files
+                    - table_id: api_keys
+                      name: api_keys
+                    - table_id: audit_log
+                      name: audit_log
+                    - table_id: backup_config
+                      name: backup_config
+                    - table_id: sessions
+                      name: sessions
+                    - table_id: comments
+                      name: comments
+          roles:
+            - role_id: techvault
+              name: techvault
+              role_type: application
+              origin: scenario
+              can_login: true
+              description: Application login the web tier authenticates as.
   workstation:
     type: vm
     os: linux
@@ -1095,6 +1262,79 @@ nodes:
         - {unit_id: smbd, unit_name: smbd.service, enabled_state: enabled, active_state: active}
         # Per-boot CTF flags (#581 parity; see aptl-flaggen.sh content below).
         - {unit_id: aptl-flaggen, unit_name: aptl-flaggen.service, enabled_state: enabled, active_state: active}
+      file_services:
+        - file_service_id: techvault-fileshare
+          protocol: smb
+          service: smb
+          description: Departmental SMB shares. Guest-readable shares and group-gated ones sit side by side, which is what makes lateral discovery meaningful here.
+          shares:
+            - share_id: public
+              name: Public
+              kind: disk
+              backing_path: /srv/shares/public
+              read_only: false
+              browseable: true
+              guest_ok: true
+            - share_id: engineering
+              name: Engineering
+              kind: disk
+              backing_path: /srv/shares/engineering
+              read_only: false
+              browseable: true
+              guest_ok: false
+              valid_groups:
+                - Engineering
+            - share_id: finance
+              name: Finance
+              kind: disk
+              backing_path: /srv/shares/finance
+              read_only: false
+              browseable: true
+              guest_ok: false
+              valid_groups:
+                - Finance
+            - share_id: hr
+              name: HR
+              kind: disk
+              backing_path: /srv/shares/hr
+              read_only: false
+              browseable: true
+              guest_ok: false
+              valid_groups:
+                - HR
+            - share_id: it-backups
+              name: IT-Backups
+              kind: disk
+              backing_path: /srv/shares/it-backups
+              read_only: false
+              browseable: false
+              guest_ok: false
+              valid_groups:
+                - IT-Admins
+            - share_id: shared
+              name: Shared
+              kind: disk
+              backing_path: /srv/shares/shared
+              read_only: false
+              browseable: true
+              guest_ok: true
+          principals:
+            - principal_id: group-engineering
+              kind: group
+              name: Engineering
+              origin: provisioned
+            - principal_id: group-finance
+              kind: group
+              name: Finance
+              origin: provisioned
+            - principal_id: group-hr
+              kind: group
+              name: HR
+              origin: provisioned
+            - principal_id: group-it-admins
+              kind: group
+              name: IT-Admins
+              origin: provisioned
   dns:
     type: vm
     os: linux
@@ -1155,6 +1395,26 @@ nodes:
           - {container_port: 53, protocol: udp, host_port: 5353, host_ip: "0.0.0.0"}
       service_manager_units:
         - {unit_id: named, unit_name: named.service, enabled_state: enabled, active_state: active}
+      dns_services:
+        - dns_service_id: techvault-dns
+          implementation: bind
+          service: dns
+          description: Authoritative DNS for the range, forward and reverse.
+          roles:
+            - authoritative
+          zones:
+            - zone_id: techvault-local
+              name: techvault.local
+              kind: primary
+              purpose: forward
+              provenance: zone_file
+              description: Forward zone naming the enterprise hosts.
+            - zone_id: reverse-172-20
+              name: 20.172.in-addr.arpa
+              kind: primary
+              purpose: reverse
+              provenance: zone_file
+              description: Reverse zone for the range address space.
   victim:
     type: vm
     os: linux
@@ -1699,6 +1959,71 @@ vulnerabilities:
 # `fileshare` node, whose Compose service mounts the `fileshare_data`
 # named volume the APTL content realization backend seeds at
 # `aptl lab start`.
+  webapp-sqli-search:
+    name: SQL injection in search
+    description: The /search query parameter is interpolated into SQL. This is the path the range's detection chain exercises.
+    technical: true
+    class: CWE-89
+  webapp-cmdi-ping:
+    name: Command injection in the ping tool
+    description: The /tools/ping host parameter reaches a shell without sanitization.
+    technical: true
+    class: CWE-78
+  webapp-xss-reflected:
+    name: Reflected XSS in search results
+    description: The search query is rendered back into the page unescaped.
+    technical: true
+    class: CWE-79
+  webapp-xss-stored:
+    name: Stored XSS in comments
+    description: Comment bodies are stored and rendered without sanitization.
+    technical: true
+    class: CWE-79
+  webapp-idor-files:
+    name: IDOR on the file API
+    description: /api/v1/files/<id> performs no ownership check.
+    technical: true
+    class: CWE-639
+  webapp-idor-users:
+    name: IDOR on the user API
+    description: /api/v1/users/<id> performs no authorization check and returns an API key.
+    technical: true
+    class: CWE-639
+  webapp-missing-authz-admin:
+    name: Missing role check on the admin page
+    description: /admin is reachable by any authenticated user and exposes stored cloud credentials.
+    technical: true
+    class: CWE-862
+  webapp-weak-jwt:
+    name: Weak JWT secret with no expiry
+    description: Tokens are signed with a guessable secret and never expire.
+    technical: true
+    class: CWE-330
+  webapp-hardcoded-secrets:
+    name: Hardcoded application secrets
+    description: The Flask session key and JWT secret are literals in the application source.
+    technical: true
+    class: CWE-798
+  webapp-unrestricted-upload:
+    name: Unrestricted file upload
+    description: Uploads are neither type- nor size-checked, and the filename allows traversal.
+    technical: true
+    class: CWE-434
+  webapp-debug-endpoint:
+    name: Debug endpoint exposed
+    description: /debug is reachable in the running application.
+    technical: true
+    class: CWE-489
+  webapp-env-disclosure:
+    name: Environment file disclosure
+    description: The application serves its own .env content.
+    technical: true
+    class: CWE-538
+  webapp-verbose-errors:
+    name: Verbose error disclosure
+    description: Error responses reveal internal detail.
+    technical: true
+    class: CWE-209
 content:
   misp-suricata-sync-pyproject:
     type: file

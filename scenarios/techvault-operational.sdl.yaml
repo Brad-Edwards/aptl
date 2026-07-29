@@ -52,6 +52,147 @@ nodes:
       - {name: agent-events, port: 1514, protocol: tcp}
       - {name: agent-enrollment, port: 1515, protocol: tcp}
       - {name: syslog, port: 514, protocol: udp}
+    runtime:
+      security_monitoring_managers:
+        - security_monitoring_manager_id: wazuh-manager
+          implementation: wazuh
+          manager_kind: siem
+          version: 4.12.0
+          name: TechVault SIEM
+          description: The scenario's SIEM. Agents enroll here, ship events here, and the analysis engine evaluates them against the rule corpora below.
+          listeners:
+            - listener_id: agent-events
+              service: agent-events
+              role: agent_event_ingestion
+              protocol: tcp
+              auth_required: true
+              tls_enabled: false
+            - listener_id: agent-enrollment
+              service: agent-enrollment
+              role: agent_enrollment
+              protocol: tcp
+              auth_required: true
+              tls_enabled: true
+            - listener_id: syslog
+              service: syslog
+              role: syslog_ingestion
+              protocol: udp
+              auth_required: false
+              tls_enabled: false
+            - listener_id: wazuh-api
+              service: wazuh-api
+              role: api
+              protocol: tcp
+              auth_required: true
+              tls_enabled: true
+          components:
+            - component_id: analysisd
+              kind: analysis_engine
+              name: wazuh-analysisd
+              enabled: true
+            - component_id: remoted
+              kind: agent_ingestion
+              name: wazuh-remoted
+              enabled: true
+            - component_id: authd
+              kind: agent_enrollment
+              name: wazuh-authd
+              enabled: true
+            - component_id: apid
+              kind: api
+              name: wazuh-apid
+              enabled: true
+            - component_id: indexer-forwarder
+              kind: indexer_forwarder
+              name: filebeat
+              enabled: true
+          agents:
+            - agent_id: suricata-agent
+              name: aptl-suricata-agent
+              node_ref: wazuh-sidecar-suricata
+              description: Ships Suricata EVE events; see that node's forwarding agent.
+            - agent_id: db-agent
+              name: aptl-db-agent
+              node_ref: wazuh-sidecar-db
+              description: Ships PostgreSQL logs; see that node's forwarding agent.
+          content_sets:
+            - content_id: webapp-rules
+              kind: rule_corpus
+              format: wazuh_rule_xml
+              name: webapp_rules.xml
+              file_count: 11
+              loaded: true
+              description: Web-application attack rules, including the SQL-injection detections the range exercises.
+            - content_id: suricata-rules
+              kind: rule_corpus
+              format: wazuh_rule_xml
+              name: suricata_rules.xml
+              file_count: 12
+              loaded: true
+              description: Rules that fire on Suricata EVE events arriving from the network sensor.
+            - content_id: ad-rules
+              kind: rule_corpus
+              format: wazuh_rule_xml
+              name: ad_rules.xml
+              file_count: 11
+              loaded: true
+              description: Active Directory authentication and abuse rules.
+            - content_id: database-rules
+              kind: rule_corpus
+              format: wazuh_rule_xml
+              name: database_rules.xml
+              file_count: 7
+              loaded: true
+              description: Customer-database access and abuse rules.
+            - content_id: falco-rules
+              kind: rule_corpus
+              format: wazuh_rule_xml
+              name: falco_rules.xml
+              file_count: 8
+              loaded: true
+              description: Container runtime rules.
+            - content_id: postgresql-decoders
+              kind: decoder_corpus
+              format: wazuh_decoder_xml
+              name: postgresql_decoders.xml
+              file_count: 2
+              loaded: true
+              description: Decoders that make PostgreSQL log lines parseable by the rules.
+            - content_id: samba-decoders
+              kind: decoder_corpus
+              format: wazuh_decoder_xml
+              name: samba_decoders.xml
+              file_count: 2
+              loaded: true
+              description: Decoders for Samba file-share activity.
+          detection_definitions:
+            - definition_id: sqli-special-characters
+              engine: wazuh
+              definition_kind: rule
+              native_id: '302011'
+              content_set_ref: webapp-rules
+              level: 8
+              enabled: true
+              loaded: true
+              name: 'Potential SQL injection: special characters in URL'
+              description: The detection the range's SQL-injection path is expected to trigger. Named here because the scenario depends on it firing, not merely on the corpus being loaded.
+              groups:
+                - webapp
+                - sqli
+                - web_attack
+            - definition_id: sqli-union-select
+              engine: wazuh
+              definition_kind: rule
+              native_id: '302010'
+              content_set_ref: webapp-rules
+              level: 10
+              enabled: true
+              loaded: true
+              name: SQL injection attempt detected in URL
+              groups:
+                - webapp
+                - sqli
+                - web_attack
   wazuh-indexer:
     type: vm
     os: linux
@@ -124,6 +265,93 @@ nodes:
             acquisition: pull
             timing: backend-preparation
     services: []
+    runtime:
+      network_sensors:
+        - network_sensor_id: suricata-sensor
+          implementation: suricata
+          sensor_kind: ids
+          monitoring_posture: passive
+          capture_mode: af_packet
+          capture_interfaces:
+            - any
+          monitored_network_refs:
+            - security-net
+            - dmz-net
+            - internal-net
+            - redteam-net
+          name: TechVault network sensor
+          description: Watches range traffic passively. Its EVE output is what the Wazuh sidecar tails, so this is where network visibility enters the SOC.
+      network_detection_engines:
+        - network_detection_engine_id: suricata-engine
+          implementation: suricata
+          engine_kind: ids
+          sensor_ref: suricata-sensor
+          name: TechVault detection engine
+          description: Evaluates captured traffic against its rule sources and writes EVE events. MISP-derived rules are reloaded here over the command socket.
+          app_layer_protocols:
+            - http
+            - tls
+            - dns
+            - ssh
+            - smb
+            - smtp
+            - ftp
+          rule_sources:
+            - source_id: suricata-builtin
+              kind: built_in
+              format: suricata_rule
+              name: suricata.rules
+              loaded: true
+              description: Ruleset shipped with the engine image.
+            - source_id: techvault-local
+              kind: local
+              format: suricata_rule
+              name: local.rules
+              rule_count: 16
+              loaded: true
+              description: Scenario-authored rules for TechVault-specific activity.
+            - source_id: misp-iocs
+              kind: ioc
+              format: suricata_rule
+              name: misp/misp-iocs.rules
+              loaded: true
+              generated_by: nodes.misp-suricata-sync.runtime.forwarding_agents.misp-ioc-to-suricata
+              description: Written by the MISP sync agent, not authored here. This is the threat-intelligence feed becoming live detection content.
+          network_sets:
+            - set_id: home-net
+              kind: home_net
+              name: HOME_NET
+              selector_values:
+                - 172.20.0.0/16
+              network_refs:
+                - security-net
+                - dmz-net
+                - internal-net
+                - redteam-net
+                - control-net
+              description: The range itself; everything outside it is EXTERNAL_NET.
+          output_streams:
+            - stream_id: eve-json
+              format: eve_json
+              path: /var/log/suricata/eve.json
+              event_types:
+                - alert
+                - http
+                - dns
+                - tls
+                - ssh
+                - flow
+                - stats
+              enabled: true
+              description: The file the Wazuh sidecar tails off the shared suricata_logs volume. This path is the detection-to-SIEM hand-off.
+          control_channels:
+            - channel_id: command-socket
+              kind: unix_socket
+              path: /var/run/suricata/suricata-command.socket
+              capabilities:
+                - rule_reload
+              auth_required: false
+              description: Where the MISP sync agent drives a reload after writing rules.
   misp:
     type: vm
     os: linux
@@ -254,6 +482,25 @@ nodes:
       mounts:
         - {target: /var/run/suricata, source: suricata_command_socket, source_kind: volume}
         - {target: /var/lib/suricata/rules/misp, source: suricata_misp_rules, source_kind: volume}
+      forwarding_agents:
+        - forwarding_agent_id: misp-ioc-to-suricata
+          implementation: misp_suricata_sync
+          agent_kind: content_sync
+          description: Pulls tagged indicators from MISP, renders them into Suricata rules, and drives Suricata's command socket to reload. This is how threat intelligence becomes active network detection content.
+          sources:
+            - source_id: misp-attributes
+              kind: api_pull
+              location: https://misp
+              parse_format: misp_json
+              selector: aptl:enforce
+          transforms:
+            - transform_id: ioc-to-suricata-rules
+              kind: ioc_to_rule
+              sid_namespace: '3000000'
+          reload_channels:
+            - reload_channel_id: suricata-command-socket
+              target_ref: suricata
+              kind: unix_socket
   thehive:
     type: vm
     os: linux
@@ -474,6 +721,31 @@ nodes:
             acquisition: none
             timing: backend-preparation
     services: []
+    runtime:
+      forwarding_agents:
+        - forwarding_agent_id: db-postgres-forwarder
+          implementation: wazuh_agent
+          agent_kind: log_forwarder
+          name: aptl-db-agent
+          description: Tails the customer database's PostgreSQL log off the shared db_data volume and ships it to the Wazuh manager, so database activity reaches the SIEM.
+          sources:
+            - source_id: postgres-log
+              kind: tailed_path
+              location: /logs/pg_log/postgresql.log
+              parse_format: syslog
+          transforms:
+            - transform_id: postgres-parse
+              kind: parse
+          buffer_policy:
+            buffer_policy_id: db-postgres-forwarder-buffer
+            crypto: aes
+          ship_targets:
+            - target_id: db-postgres-forwarder-manager
+              target_node_ref: wazuh-manager
+              ingestion_port: 1514
+              enrollment_port: 1515
+              protocol: tcp
+              enrollment_identity_classification: operator_secret
   wazuh-sidecar-suricata:
     type: vm
     os: linux
@@ -501,6 +773,31 @@ nodes:
             acquisition: none
             timing: backend-preparation
     services: []
+    runtime:
+      forwarding_agents:
+        - forwarding_agent_id: suricata-eve-forwarder
+          implementation: wazuh_agent
+          agent_kind: log_forwarder
+          name: aptl-suricata-agent
+          description: Tails Suricata's EVE output off the shared suricata_logs volume and ships it to the Wazuh manager. This is the hand-off that makes network detections visible to the SIEM.
+          sources:
+            - source_id: suricata-eve
+              kind: tailed_path
+              location: /logs/eve.json
+              parse_format: eve_json
+          transforms:
+            - transform_id: eve-parse
+              kind: parse
+          buffer_policy:
+            buffer_policy_id: suricata-eve-forwarder-buffer
+            crypto: aes
+          ship_targets:
+            - target_id: suricata-eve-forwarder-manager
+              target_node_ref: wazuh-manager
+              ingestion_port: 1514
+              enrollment_port: 1515
+              protocol: tcp
+              enrollment_identity_classification: operator_secret
 
   webapp:
     type: vm

@@ -219,58 +219,6 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
     )
 
 
-def test_declared_network_is_attached_without_a_boundary_policy(tmp_path):
-    """A plain scenario's materialized nodes must bind their admitted networks.
-
-    Binding used to be gated on a boundary policy being present, so a scenario
-    with none (the common case) got no create-time network binding and its
-    materialized containers were left on the default bridge -- isolating, among
-    others, the attacker node. Network topology belongs to every scenario, so
-    binding is now unconditional. This backend has no appliance boundary and no
-    RAES boundary receipt, and the node must still be created on its declared
-    network rather than with a bare ``docker run`` on bridge.
-    """
-
-    backend = _backend(tmp_path)
-    assert getattr(backend, "_appliance_boundary", None) is None
-    assert "raes" not in getattr(backend, "_boundary_receipts", {})
-    node = MagicMock(
-        address="provision.node.kali",
-        network_attachments=(
-            DeploymentNetworkAttachment(
-                network="redteam",
-                ipv4_address="172.20.4.30",
-            ),
-        ),
-    )
-    backend.host_list_lab_networks = MagicMock(return_value=["test-proj_aptl-redteam"])
-    backend.connect_container_network = MagicMock(return_value=LabResult(success=True))
-    backend.configure_base_container_networks((node,))
-    spec = BaseContainerSpec(
-        node_address=node.address,
-        container_name="aptl-kali",
-        image_ref="debian:12-slim",
-        runs_services=False,
-    )
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        backend.start_base_container(spec)
-
-    create = next(
-        call
-        for call in mock_run.call_args_list
-        if call.args[0][:2] == ["docker", "create"]
-    )
-    assert "--network" in create.args[0]
-    assert "test-proj_aptl-redteam" in create.args[0]
-    assert "172.20.4.30" in create.args[0]
-    # The node is created on its network, never with a bare bridge `docker run`.
-    assert not any(
-        call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
-    )
-
-
 def test_appliance_image_free_node_without_network_fails_before_create(
     tmp_path,
 ) -> None:

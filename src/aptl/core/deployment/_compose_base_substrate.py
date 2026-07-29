@@ -358,28 +358,14 @@ class ComposeBaseSubstrateMixin(object):
         )
 
     def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:
-        """Bind image-free nodes to admitted networks before they are created.
+        """Bind image-free nodes to admitted networks before they are created."""
 
-        Every base-substrate node binds its admitted networks at ``docker
-        create`` time, regardless of whether a boundary policy is in force. This
-        used to be gated on a ``strict`` flag (appliance boundary present, or a
-        RAES boundary receipt recorded), so a plain scenario with no boundary
-        policy got no create-time binding at all: its materialized containers
-        were created on the default bridge, and only the post-compose
-        ``_reconcile_realization_networks`` pass could attach them.
-
-        That reconcile runs only after a *successful* compose start, so on a boot
-        where compose-up fails and retries -- routine for the heavy SOC stack on
-        a cold cache -- some materialized nodes never reached it and were left
-        stranded on bridge (the attacker among them, isolating it from its
-        targets). Network topology is a property of every scenario, not only
-        boundary-enforced ones, so binding is now unconditional. The networks are
-        always created first (``_ensure_realization_networks`` runs before
-        materialization in both the mixed and fully-image-free paths), so they
-        are observable here; boundary *enforcement* remains a separate concern
-        realized by ``_realize_authority_boundaries``.
-        """
-
+        strict = getattr(
+            self, "_appliance_boundary", None
+        ) is not None or "raes" in getattr(self, "_boundary_receipts", {})
+        if not strict:
+            self._base_networks_by_address = {}
+            return
         managed = set(self.host_list_lab_networks(self._project_name))
         bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
         for node in nodes:

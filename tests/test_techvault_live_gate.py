@@ -19,6 +19,7 @@ from aptl.core.config import AptlConfig
 from aptl.core.lab_types import LabResult, StartupOutcome
 from aptl.core.runstore import LocalRunStore
 from aptl.validation import _live_gate_checks as lgc
+from aptl.validation import _live_gate_semantic as lgs
 from aptl.validation import _live_gate_probes as lgp
 from aptl.validation import _live_gate_telemetry as lgt
 from aptl.validation.techvault_live_gate import (
@@ -238,8 +239,8 @@ def test_validate_live_deployment_composes_all_checks(monkeypatch):
     monkeypatch.setattr(lgc, "check_boot_inputs_match_public_path", inputs)
     monkeypatch.setattr(lgc, "check_raes_driven_boot", boot)
     monkeypatch.setattr(lgc, "check_defensive_stack_readiness", readiness)
-    monkeypatch.setattr(lgc, "check_kali_reachability", reachability)
-    monkeypatch.setattr(lgc, "check_telemetry_evidence_path", telemetry)
+    monkeypatch.setattr(lgs, "check_kali_reachability", reachability)
+    monkeypatch.setattr(lgs, "check_telemetry_evidence_path", telemetry)
     monkeypatch.setattr(lgc, "check_run_archive_manifest", archive)
     monkeypatch.setattr(lgc, "check_scenario_variation", variation)
     report = validate_live_deployment(
@@ -718,14 +719,14 @@ def _reach_state(containers):
 
 
 def test_reachability_passes_when_shared_targets_reachable(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend(returncode=0))
+    monkeypatch.setattr(lgs, "get_backend", lambda c, p: _Backend(returncode=0))
     state = _reach_state(
         [
             _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
         ]
     )
-    check = lgc.check_kali_reachability(
+    check = lgs.check_kali_reachability(
         project_dir=PROJECT_ROOT, config=_config(), state=state
     )
     assert check.passed
@@ -733,14 +734,14 @@ def test_reachability_passes_when_shared_targets_reachable(monkeypatch):
 
 
 def test_reachability_fails_when_target_unreachable(monkeypatch):
-    monkeypatch.setattr(lgc, "get_backend", lambda c, p: _Backend(returncode=1))
+    monkeypatch.setattr(lgs, "get_backend", lambda c, p: _Backend(returncode=1))
     state = _reach_state(
         [
             _container("aptl-kali", networks={"aptl-dmz-net": "172.20.1.30"}),
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
         ]
     )
-    check = lgc.check_kali_reachability(
+    check = lgs.check_kali_reachability(
         project_dir=PROJECT_ROOT, config=_config(), state=state
     )
     assert not check.passed
@@ -749,7 +750,7 @@ def test_reachability_fails_when_target_unreachable(monkeypatch):
 
 def test_reachability_fails_without_kali():
     state = _reach_state([_container("aptl-webapp", networks={"n": "1.2.3.4"})])
-    check = lgc.check_kali_reachability(
+    check = lgs.check_kali_reachability(
         project_dir=PROJECT_ROOT, config=_config(), state=state
     )
     assert not check.passed
@@ -763,7 +764,7 @@ def test_reachability_fails_without_shared_network():
             _container("aptl-webapp", networks={"aptl-dmz-net": "172.20.1.10"}),
         ]
     )
-    check = lgc.check_kali_reachability(
+    check = lgs.check_kali_reachability(
         project_dir=PROJECT_ROOT, config=_config(), state=state
     )
     assert not check.passed
@@ -820,7 +821,7 @@ def test_telemetry_fails_when_only_suricata_traffic_is_collected(monkeypatch):
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
@@ -858,7 +859,7 @@ def test_telemetry_passes_when_post_trigger_wazuh_alert_is_collected(monkeypatch
 
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", collect_wazuh)
     state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
@@ -894,7 +895,7 @@ def test_telemetry_rejects_unrelated_post_trigger_wazuh_alert(monkeypatch):
     )
     state = _telemetry_state()
 
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
@@ -919,7 +920,7 @@ def test_telemetry_fails_on_stats_only_events(monkeypatch):
     )
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
@@ -937,7 +938,7 @@ def test_telemetry_fails_when_no_evidence(monkeypatch):
     monkeypatch.setattr(lgp, "collect_suricata_eve", lambda s, e, b: [])
     monkeypatch.setattr(lgp, "collect_wazuh_alerts", lambda s, e, **kwargs: [])
     state = _telemetry_state()
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(event_window_seconds=10),
@@ -953,7 +954,7 @@ def test_telemetry_fails_without_target(monkeypatch):
     state.snapshot = {
         "containers": [_container("aptl-kali", networks={"n": "1.1.1.1"})]
     }
-    check = lgc.check_telemetry_evidence_path(
+    check = lgs.check_telemetry_evidence_path(
         project_dir=PROJECT_ROOT,
         config=_config(),
         options=LiveGateOptions(),
@@ -1414,3 +1415,65 @@ def test_target_order_is_stable_when_nothing_listens(monkeypatch):
     monkeypatch.setattr(probes, "_ssh_reachable_from_kali", lambda _b, _ip: False)
 
     assert probes._prioritise_ssh_targets(object(), targets) == targets
+
+
+def test_structural_half_of_the_gate_holds_no_scenario_answer_key():
+    """#877: core's structural checks must carry no scenario-derived constant.
+
+    The point of the split is that the modules deciding *whether the range
+    matches the admitted graph* work for any scenario. If a TechVault name leaks
+    back into them the boundary has been reopened, and the plugin seam built on
+    top of it (#878/#879) would be resting on nothing.
+
+    ``techvault_live_gate`` itself is excluded: it is the orchestrator and is
+    named for the scenario that proved it, which #878 renames along with the
+    report. The check is on the modules that make structural decisions.
+    """
+
+    import re
+    from pathlib import Path
+
+    structural = (
+        "_live_gate_checks.py",
+        "_live_gate_readiness.py",
+    )
+    # Scenario answer keys, not merely the string "techvault": a docstring may
+    # legitimately mention the proving scenario, but a *constant* naming the
+    # attacker node or the defensive stack is an answer key.
+    answer_keys = re.compile(r"aptl-kali|wazuh|suricata|_KALI_CONTAINER", re.I)
+    root = Path(__file__).resolve().parent.parent / "src" / "aptl" / "validation"
+
+    offenders = {
+        name: sorted(set(answer_keys.findall((root / name).read_text())))
+        for name in structural
+        if answer_keys.search((root / name).read_text())
+    }
+
+    assert not offenders, f"scenario answer keys leaked back into core: {offenders}"
+
+
+def test_the_semantic_boundary_is_the_only_scenario_reach():
+    """The orchestrator must reach scenario knowledge at exactly one call site.
+
+    #878 replaces that reach with plugin discovery. If the orchestrator grew a
+    second import of the semantic module, discovery would have to be wired in
+    two places and one of them would eventually be missed.
+    """
+
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "aptl"
+        / "validation"
+        / "techvault_live_gate.py"
+    ).read_text()
+
+    imports = [
+        line
+        for line in source.splitlines()
+        if "_live_gate_semantic" in line and line.lstrip().startswith(("from ", "import "))
+    ]
+
+    assert len(imports) == 1, imports

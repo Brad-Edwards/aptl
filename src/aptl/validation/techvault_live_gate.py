@@ -293,24 +293,14 @@ def _run_live_checks(
     #    plus the SOC readiness probes the issue enumerates.
     results.append(checks.check_defensive_stack_readiness(state=state))
 
-    # 4. Kali reachability — DMZ/internal hosts reachable via declared
-    #    DNS/host mappings and network attachments from the realization.
-    results.append(
-        checks.check_kali_reachability(
-            project_dir=ctx.project_dir, config=ctx.config, state=state
-        )
-    )
-
-    # 5. Telemetry/evidence path — at least one artifact traverses the
-    #    defensive stack and is reflected in the run archive.
-    results.append(
-        checks.check_telemetry_evidence_path(
-            project_dir=ctx.project_dir,
-            config=ctx.config,
-            options=ctx.options,
-            state=state,
-        )
-    )
+    # 4–5. Semantic verification — which node is the attacker, what the
+    #      defensive stack is, and what proves detection traversed it. These
+    #      depend on *which* scenario this is, so they are reached through the
+    #      one boundary in ``_live_gate_semantic`` rather than named here (#877).
+    #      #878 turns that boundary into an installed-plugin seam and #879 moves
+    #      the content out of core behind it; core's control flow already stops
+    #      enumerating any scenario's answer keys.
+    results.extend(_semantic_checks(ctx, state))
 
     # 6. Scenario variation — the same interpreter path realizes distinct
     #    declared content distinctly (#324 / SCN-010G live diagnostic). Run
@@ -327,6 +317,32 @@ def _run_live_checks(
     #    validation evidence (all prior checks) + snapshot, written through the
     #    redacting boundary as the final step.
     results.append(_archive_manifest(checks, ctx, state, results))
+
+
+def _semantic_checks(
+    ctx: "_RunContext",
+    state: LiveGateState,
+) -> list[LiveGateCheck]:
+    """Run the scenario-specific checks behind the single semantic boundary.
+
+    Imported here rather than at module scope so the dependency direction is
+    visible: the orchestrator reaches *out* to scenario knowledge at one call
+    site, and replacing that reach with plugin discovery (#878) touches this
+    function alone.
+    """
+    from aptl.validation import _live_gate_semantic as semantic
+
+    return [
+        semantic.check_kali_reachability(
+            project_dir=ctx.project_dir, config=ctx.config, state=state
+        ),
+        semantic.check_telemetry_evidence_path(
+            project_dir=ctx.project_dir,
+            config=ctx.config,
+            options=ctx.options,
+            state=state,
+        ),
+    ]
 
 
 def _archive_manifest(

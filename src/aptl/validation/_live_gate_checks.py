@@ -22,7 +22,6 @@ check branch without a live lab. The boot / telemetry probes that live in
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,25 +30,19 @@ from raes.scenario import Scenario
 
 from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.core.deployment import get_backend
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
-    _KALI_CONTAINER,
     _boot_lab,
     _check,
     _check_to_dict,
     _compute_realization,
     _default_run_store,
     _distinct_profile_nodes,
-    _find_container,
     _missing_manifest_keys,
-    _ping_from_kali,
     _scenario_name,
-    _shared_network_targets,
     _single_node_plan,
     _variation_diagnostics,
 )
-from aptl.validation._live_gate_telemetry import telemetry_diagnostics
 from aptl.validation._live_gate_readiness import (
     _node_readiness_diagnostics,
     _warn_unhealthy_infra,
@@ -61,7 +54,6 @@ from aptl.validation.techvault_live_gate import (
     CATEGORY_BACKEND_INTERPRETATION,
     CATEGORY_DEFENSIVE_STACK_READINESS,
     CATEGORY_EVIDENCE_CAPTURE,
-    CATEGORY_KALI_REACHABILITY,
     DEFAULT_PROFILE,
     LiveGateCheck,
 )
@@ -237,112 +229,6 @@ def check_defensive_stack_readiness(
     return _check(
         "defensive_stack_readiness", CATEGORY_DEFENSIVE_STACK_READINESS, diagnostics
     )
-
-
-# --------------------------------------------------------------------------- #
-# 4. Kali reachability.
-# --------------------------------------------------------------------------- #
-
-
-def check_kali_reachability(
-    *,
-    project_dir: Path,
-    config: "AptlConfig",
-    state: "LiveGateState",
-) -> LiveGateCheck:
-    """From Kali, reach every lab host it shares a declared network with.
-
-    Reachability targets are derived from network co-membership in the live
-    snapshot (the realized network attachments), not a hardcoded host list.
-    """
-    snapshot = state.snapshot or {}
-    containers = snapshot.get("containers", [])
-    kali = _find_container(containers, _KALI_CONTAINER)
-    if kali is None:
-        return _check(
-            "kali_reachability",
-            CATEGORY_KALI_REACHABILITY,
-            ["Kali container not present in the booted range"],
-        )
-
-    kali_networks = set((kali.get("networks") or {}).keys())
-    targets = _shared_network_targets(kali, containers, kali_networks)
-    diagnostics = _reachability_diagnostics(
-        kali_networks, targets, config, project_dir, state
-    )
-    return _check("kali_reachability", CATEGORY_KALI_REACHABILITY, diagnostics)
-
-
-def _reachability_diagnostics(
-    kali_networks: set[str],
-    targets: list[tuple[str, str]],
-    config: "AptlConfig",
-    project_dir: Path,
-    state: "LiveGateState",
-) -> list[str]:
-    """Probe each shared-network target from Kali and record the tested set."""
-    if not kali_networks:
-        return ["Kali container has no network attachments in the snapshot"]
-    if not targets:
-        return ["no lab hosts share a network with Kali to test reachability"]
-
-    backend = get_backend(config, project_dir)
-    diagnostics: list[str] = []
-    for name, ip in targets:
-        if not _ping_from_kali(backend, ip):
-            diagnostics.append(f"Kali cannot reach {name} ({ip}) on shared network")
-    state.evidence = {"kali_reachability_targets": [t[0] for t in targets]}
-    return diagnostics
-
-
-# --------------------------------------------------------------------------- #
-# 5. Telemetry / evidence path.
-# --------------------------------------------------------------------------- #
-
-
-def check_telemetry_evidence_path(
-    *,
-    project_dir: Path,
-    config: "AptlConfig",
-    options: "LiveGateOptions",
-    state: "LiveGateState",
-    env_loader: Callable[[Path], dict[str, str]] | None = None,
-) -> LiveGateCheck:
-    """Generate one representative event and confirm it traverses the defensive stack.
-
-    Drives traffic from Kali at a reachable DMZ host, then collects Suricata EVE
-    and Wazuh alerts in the bounded post-trigger window. A Wazuh alert is
-    mandatory; Suricata evidence is recorded as supporting evidence but cannot
-    satisfy the realized-Wazuh proof by itself.
-    """
-    snapshot = state.snapshot or {}
-    containers = snapshot.get("containers", [])
-    kali = _find_container(containers, _KALI_CONTAINER)
-    if kali is None:
-        return _check(
-            "telemetry_evidence_path",
-            CATEGORY_EVIDENCE_CAPTURE,
-            ["Kali container not present; cannot generate a representative event"],
-        )
-
-    kali_networks = set((kali.get("networks") or {}).keys())
-    targets = _shared_network_targets(kali, containers, kali_networks)
-    if not targets:
-        return _check(
-            "telemetry_evidence_path",
-            CATEGORY_EVIDENCE_CAPTURE,
-            ["no reachable target to generate defensive-stack telemetry"],
-        )
-
-    diagnostics = telemetry_diagnostics(
-        targets,
-        config,
-        project_dir,
-        options,
-        state,
-        env_loader=env_loader,
-    )
-    return _check("telemetry_evidence_path", CATEGORY_EVIDENCE_CAPTURE, diagnostics)
 
 
 # --------------------------------------------------------------------------- #

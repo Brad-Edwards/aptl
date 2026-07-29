@@ -217,6 +217,45 @@ nodes:
             timing: backend-preparation
     services:
       - {name: indexer-api, port: 9200, protocol: tcp}
+    runtime:
+      datastore_services:
+        - datastore_service_id: wazuh-indexer
+          engine: opensearch
+          data_model: search_index
+          version: 4.12.0
+          description: Alert store for the SIEM. Alert indices are created on first ingest; the templates that shape them exist from boot.
+          partitions:
+            - partition_id: kibana
+              kind: index
+              name: .kibana_1
+              shard_count: 1
+              replica_count: 0
+            - partition_id: security
+              kind: index
+              name: .opendistro_security
+              shard_count: 1
+              replica_count: 0
+            - partition_id: observability
+              kind: index
+              name: .opensearch-observability
+              shard_count: 1
+              replica_count: 0
+            - partition_id: ml-config
+              kind: index
+              name: .plugins-ml-config
+              shard_count: 1
+              replica_count: 0
+          templates:
+            - template_id: wazuh-agent
+              name: wazuh-agent
+            - template_id: wazuh-statistics
+              name: wazuh-statistics
+          mappings:
+            - mapping_id: kibana-objects
+              name: .kibana_1
+              partition_ref: kibana
+              top_level_field_count: 28
+              description: Saved-object mapping for the dashboard tier.
   wazuh-dashboard:
     type: vm
     os: linux
@@ -376,6 +415,7 @@ nodes:
             timing: backend-preparation
     services:
       - {name: https, port: 443, protocol: tcp}
+    runtime: {}
   misp-db:
     type: vm
     os: linux
@@ -549,6 +589,19 @@ nodes:
             timing: backend-preparation
     services:
       - {name: cassandra, port: 9042, protocol: tcp}
+    runtime:
+      datastore_services:
+        - datastore_service_id: thehive-cassandra
+          engine: cassandra
+          data_model: wide_column
+          version: '4.1'
+          description: Primary case store.
+          partitions:
+            - partition_id: thehive
+              kind: keyspace
+              name: thehive
+              replication_strategy: simple_strategy
+              replication_factor: 1
   thehive-es:
     type: vm
     os: linux
@@ -573,6 +626,30 @@ nodes:
             timing: backend-preparation
     services:
       - {name: elasticsearch, port: 9200, protocol: tcp}
+    runtime:
+      datastore_services:
+        - datastore_service_id: thehive-es
+          engine: elasticsearch
+          data_model: search_index
+          version: 7.17.2
+          description: Search backend for case management, and host of the Cortex job index.
+          partitions:
+            - partition_id: cortex
+              kind: index
+              name: cortex_6
+              shard_count: 1
+              replica_count: 1
+            - partition_id: geoip
+              kind: index
+              name: .geoip_databases
+              shard_count: 1
+              replica_count: 0
+          mappings:
+            - mapping_id: cortex-jobs
+              name: cortex_6
+              partition_ref: cortex
+              top_level_field_count: 3
+              description: Job index mapping pre-created so key, relations, and status stay keyword-typed.
   cortex:
     type: vm
     os: linux
@@ -716,6 +793,70 @@ nodes:
     services:
       - {name: opensearch-rest, port: 9200, protocol: tcp}
       - {name: opensearch-transport, port: 9300, protocol: tcp}
+    runtime:
+      datastore_services:
+        - datastore_service_id: shuffle-opensearch
+          engine: opensearch
+          data_model: search_index
+          version: 2.14.0
+          description: Backing store for SOAR workflows, environments, and execution state.
+          partitions:
+            - partition_id: workflowqueue
+              kind: index
+              name: workflowqueue-shuffle
+              shard_count: 1
+              replica_count: 1
+            - partition_id: notifications
+              kind: index
+              name: notifications-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: platform_health
+              kind: index
+              name: platform_health
+              shard_count: 1
+              replica_count: 1
+            - partition_id: workflowexecution
+              kind: index
+              name: workflowexecution-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: environments
+              kind: index
+              name: environments-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: workflowapp
+              kind: index
+              name: workflowapp-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: users
+              kind: index
+              name: users
+              shard_count: 1
+              replica_count: 1
+            - partition_id: shuffle_logs
+              kind: index
+              name: shuffle_logs-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: datastore_ngram
+              kind: index
+              name: datastore_ngram-000001
+              shard_count: 3
+              replica_count: 1
+            - partition_id: openapi3
+              kind: index
+              name: openapi3
+              shard_count: 1
+              replica_count: 1
+          mappings:
+            - mapping_id: users-mapping
+              name: users
+              partition_ref: users
+              top_level_field_count: 30
+              description: SOAR user record mapping.
   wazuh-sidecar-db:
     type: vm
     os: linux

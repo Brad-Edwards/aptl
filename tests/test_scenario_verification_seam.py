@@ -252,3 +252,56 @@ def test_blocked_is_distinct_from_both_other_outcomes(status):
     """Three states, never collapsed to two."""
 
     assert VerificationStatus.BLOCKED is not status
+
+
+def test_the_techvault_verifier_is_a_separate_distribution():
+    """"Core ships zero adapters" has to be checkable, not just asserted.
+
+    The TechVault verifier lives in this repository for now, but it builds and
+    installs as its own distribution. If it were ever folded into ``aptl-labs``,
+    every scenario would silently gain a verifier nobody installed and the
+    blocked outcome would stop meaning anything — so the distribution boundary is
+    the thing worth testing, not the file layout.
+    """
+
+    from importlib import metadata
+
+    entry_points = {
+        entry_point.name: entry_point
+        for entry_point in metadata.entry_points(group=ENTRY_POINT_GROUP)
+    }
+    techvault = entry_points.get("techvault-operational")
+    if techvault is None:
+        pytest.skip("aptl-techvault-verifier is not installed in this environment")
+
+    assert techvault.dist is not None
+    assert techvault.dist.name == "aptl-techvault-verifier"
+    assert techvault.dist.name not in {"aptl", "aptl-labs"}
+
+
+def test_core_holds_no_techvault_answer_key_behind_the_seam():
+    """The point of extracting: core must not know who the attacker is.
+
+    ``_live_gate_semantic`` still holds the pre-seam implementation and is
+    excluded — it is the thing #879 retires. Everything the seam itself is built
+    from must already be scenario-neutral, or the plugin quadrant leaks back into
+    core the moment someone reads the framework for an example.
+    """
+
+    import re
+    from pathlib import Path
+
+    seam_modules = (
+        "scenario_verification.py",
+        "scenario_verification_discovery.py",
+    )
+    answer_keys = re.compile(r"aptl-kali|wazuh|suricata|thehive|misp", re.I)
+    root = Path(__file__).resolve().parent.parent / "src" / "aptl" / "validation"
+
+    offenders = {
+        name: sorted(set(answer_keys.findall((root / name).read_text())))
+        for name in seam_modules
+        if answer_keys.search((root / name).read_text())
+    }
+
+    assert not offenders, f"scenario knowledge leaked into the seam: {offenders}"

@@ -132,7 +132,8 @@ class VerificationContext(object):
 
     ``operations`` is the capability surface the plugin actually works through.
     It is scenario-neutral by construction: adding a second scenario must not
-    require a new Wazuh-, SSH-, or container-specific method here.
+    require a method here named after any particular product, protocol, or
+    detection technology. If one is ever needed, the surface is wrong.
     """
 
     run_id: str

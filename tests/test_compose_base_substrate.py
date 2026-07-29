@@ -219,6 +219,72 @@ def test_declared_network_is_attached_before_image_free_node_starts(tmp_path):
     )
 
 
+def test_materialization_is_idempotent_for_an_already_running_node(tmp_path):
+    """A retry must not tear down a node that already materialized correctly.
+
+    `aptl lab start` retries a single SOC backend-start failure by re-running the
+    whole admitted plan, re-entering node materialization. If it recreated an
+    already-good base container, the container would come back on the default
+    bridge and lose the project networks the post-start reconcile attached --
+    stranding the node (the attacker among them) when the retry then fails before
+    its own reconcile runs. So an existing, running container on the expected
+    image is left in place.
+    """
+
+    backend = _backend(tmp_path)
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:12-slim",
+        runs_services=False,
+    )
+    backend.container_inspect = MagicMock(
+        return_value={"State": {"Running": True}, "Config": {"Image": "debian:12-slim"}}
+    )
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        backend.start_base_container(spec)
+
+    # No teardown, no recreate: the running container keeps its networks.
+    assert not any(
+        call.args[0][:2] in (["docker", "rm"], ["docker", "run"], ["docker", "create"])
+        for call in mock_run.call_args_list
+    )
+
+
+def test_materialization_recreates_a_stopped_or_wrong_image_node(tmp_path):
+    """Idempotency is narrow: a stopped or wrong-image container is recreated.
+
+    The skip only applies to a container that is genuinely up on the exact image
+    the spec calls for. A crashed node, or one left from a different image, must
+    be torn down and rebuilt rather than trusted.
+    """
+
+    backend = _backend(tmp_path)
+    spec = BaseContainerSpec(
+        node_address="provision.node.kali",
+        container_name="aptl-kali",
+        image_ref="debian:12-slim",
+        runs_services=False,
+    )
+    # Present but not running -> must recreate.
+    backend.container_inspect = MagicMock(
+        return_value={"State": {"Running": False}, "Config": {"Image": "debian:12-slim"}}
+    )
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        backend.start_base_container(spec)
+
+    assert any(
+        call.args[0][:2] == ["docker", "rm"] for call in mock_run.call_args_list
+    )
+    assert any(
+        call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
+    )
+
+
 def test_appliance_image_free_node_without_network_fails_before_create(
     tmp_path,
 ) -> None:

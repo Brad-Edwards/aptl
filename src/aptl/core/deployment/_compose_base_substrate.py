@@ -120,13 +120,49 @@ class ComposeBaseSubstrateMixin(object):
         the RAES `LabResult` envelope.
         """
 
-        self._run(["docker", "rm", "-f", spec.container_name])
         network_bindings = getattr(self, "_base_networks_by_address", {}).get(
             spec.node_address
         )
+        if self._base_container_already_realized(spec):
+            # Idempotent: a node that already materialized correctly is left in
+            # place. `aptl lab start` retries a single SOC backend-start failure
+            # by re-running the whole admitted plan, which re-enters node
+            # materialization. Tearing the container down and recreating it would
+            # drop the project networks the post-start reconcile
+            # (_reconcile_realization_networks) attached -- the container is
+            # recreated on the default bridge -- and if that retry then fails or
+            # times out before its own reconcile runs, the node is left stranded
+            # on bridge with no scenario network (the attacker among them). The
+            # retry only fires after materialization already succeeded, so the
+            # existing container is known-good; the caller's remaining
+            # materialization ops run against it idempotently.
+            return
+        self._run(["docker", "rm", "-f", spec.container_name])
         argv = self._base_container_create_command(spec, network_bindings)
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
+
+    def _base_container_already_realized(self, spec: "BaseContainerSpec") -> bool:
+        """Return whether this node's base container is already up on its image.
+
+        True only when a container of the exact name is running the exact image
+        the spec calls for. A stopped, missing, or wrong-image container returns
+        False so it is recreated cleanly. Network attachments are deliberately
+        not part of the test: the post-start reconcile owns them, and a preserved
+        container keeps whatever it already had.
+        """
+
+        try:
+            info = self.container_inspect(spec.container_name)
+        except Exception:  # noqa: BLE001 - inspect shells out; treat any error as absent
+            return False
+        if not isinstance(info, dict):
+            return False
+        state = info.get("State")
+        running = isinstance(state, dict) and bool(state.get("Running"))
+        config = info.get("Config")
+        image = config.get("Image") if isinstance(config, dict) else None
+        return running and image == spec.image_ref
 
     def _base_container_create_command(
         self,

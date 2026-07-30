@@ -1192,8 +1192,9 @@ services:
 
     def test_stop_tears_down_by_project_identity_not_a_filesystem_model(self, tmp_path):
         """Teardown is scenario-agnostic (#874): ``down`` runs by project identity
-        and volumes are discovered by the Compose project label, never by reading
-        a scenario Compose model that may belong to a different bundle root."""
+        and volumes are discovered by the ``<project>_`` name prefix, never by
+        reading a scenario Compose model that may belong to a different bundle
+        root."""
         backend = self._make_backend(tmp_path)
 
         with patch("subprocess.run") as mock_run:
@@ -1206,11 +1207,13 @@ services:
         # No scenario -f compose model is consulted for teardown.
         assert "-f" not in down_cmd
         assert down_cmd[2:4] == ["-p", "test"]
-        # Volumes are discovered by the Compose project label.
+        # Volume discovery lists all volumes (scoped by prefix in Python); it
+        # reads no compose file and does not use a project-label filter, which
+        # would miss seeder-created volumes.
         ls_cmd = next(cmd for cmd in commands if cmd[:3] == ["docker", "volume", "ls"])
-        assert any("label=com.docker.compose.project=test" in a for a in ls_cmd)
+        assert not any("--filter" in a or "label=" in a for a in ls_cmd)
 
-    def test_stop_with_volumes_removes_only_project_labeled_leftovers(
+    def test_stop_with_volumes_removes_only_prefix_scoped_leftovers(
         self, tmp_path
     ):
         backend = self._make_backend(tmp_path)
@@ -1218,12 +1221,8 @@ services:
         def fake_run(cmd, **kwargs):
             del kwargs
             if cmd[:3] == ["docker", "volume", "ls"]:
-                # The label-filtered inventory returns only this project's
-                # volumes; the unfiltered leftover check also sees a global one.
-                if any("label=com.docker.compose.project=test" in a for a in cmd):
-                    return MagicMock(
-                        returncode=0, stdout="test_seeded_data\n", stderr=""
-                    )
+                # A seeder-created project volume (no compose label) alongside a
+                # differently-scoped global volume.
                 return MagicMock(
                     returncode=0, stdout="test_seeded_data\nglobal-data\n", stderr=""
                 )
@@ -1235,7 +1234,7 @@ services:
         assert result.success is True
         commands = [call.args[0] for call in mock_run.call_args_list]
         assert ["docker", "volume", "rm", "test_seeded_data"] in commands
-        # A global volume that does not carry this project's label is untouched.
+        # A global volume outside this project's name prefix is untouched.
         assert all("global-data" not in command for command in commands)
 
     def test_stop_with_volumes_fails_when_seeded_volume_cannot_be_removed(

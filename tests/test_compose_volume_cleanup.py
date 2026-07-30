@@ -12,17 +12,27 @@ from aptl.core.deployment._compose_volume_cleanup import (
 )
 
 
-def test_project_scoped_volume_names_returns_labeled_project_volumes(mocker):
-    """Volumes are discovered by Compose project label, not a filesystem model.
+def test_project_scoped_volume_names_returns_prefix_scoped_project_volumes(mocker):
+    """Volumes are discovered by the ``<project>_`` name prefix, not a filesystem
+    model and not the Compose project label.
 
-    Teardown is scenario-agnostic (issue #874): it must find the running range's
+    Teardown is scenario-agnostic (issue #874): it finds the running range's
     volumes by project-scoped Docker identity so it works regardless of which
-    bundle root the scenario was realized from.
+    bundle root the scenario was realized from. It must use the name prefix, not
+    the Compose project label — APTL's ADR-043 content seeder creates named
+    volumes directly (before ``compose up`` references them), so they carry no
+    Compose label but do carry the project prefix; a label filter would silently
+    leave every seeded data volume behind.
     """
 
     run = mocker.Mock(
         return_value=CompletedProcess(
-            [], 0, stdout="test_seeded_data\ntest_certs\n", stderr=""
+            [],
+            0,
+            # test_seeded_data carries no compose label in reality; global-data
+            # is a different scope and must not be swept.
+            stdout="test_seeded_data\ntest_certs\nglobal-data\n",
+            stderr="",
         )
     )
 
@@ -30,10 +40,10 @@ def test_project_scoped_volume_names_returns_labeled_project_volumes(mocker):
 
     assert error == ""
     assert names == {"test_seeded_data", "test_certs"}
-    # Discovery is by the Compose project label, never by reading a compose file.
+    # Discovery lists all volumes and scopes by prefix — no filesystem model and
+    # no Compose label filter (which would miss seeder-created volumes).
     (command,), _ = run.call_args
-    assert command[:3] == ["docker", "volume", "ls"]
-    assert "label=com.docker.compose.project=test" in command
+    assert command == ["docker", "volume", "ls", "--format", "{{.Name}}"]
 
 
 def test_project_scoped_volume_names_reports_list_failure(mocker):
@@ -47,9 +57,11 @@ def test_project_scoped_volume_names_reports_list_failure(mocker):
     assert "Failed to list project volumes for cleanup" in error
 
 
-def test_project_scoped_volume_names_ignores_blank_lines(mocker):
+def test_project_scoped_volume_names_ignores_blank_lines_and_other_projects(mocker):
     run = mocker.Mock(
-        return_value=CompletedProcess([], 0, stdout="test_data\n\n", stderr="")
+        return_value=CompletedProcess(
+            [], 0, stdout="test_data\n\nother_data\n", stderr=""
+        )
     )
 
     names, error = project_scoped_volume_names("test", run, timeout=30)

@@ -20,9 +20,23 @@ from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 from aptl.core.config import AptlConfig
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFORMANCE_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-defensive-min.sdl.yaml"
+
+
+def _bundle(root: Path) -> ScenarioBundle:
+    """Return the in-tree bundle anchored to *root*.
+
+    Realization resolves every scenario-declared input against the bundle root
+    rather than the engine checkout (issue #874). These tests stage their
+    scenario content under the same directory they hand the component as
+    ``project_dir``, so the in-tree resolver anchored there keeps behaviour
+    identical to the pre-bundle call sites.
+    """
+
+    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
 
 def _write_compose(project_dir: Path, services: dict[str, list[str]]) -> None:
@@ -357,7 +371,7 @@ def _diagnostic_codes_for_resources(
     _write_compose(tmp_path, {"kali": ["kali"], "victim": ["victim"]})
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(*resources),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(
             lab={"name": "test"},
             containers={"kali": True, "victim": True},
@@ -394,6 +408,7 @@ def test_create_runtime_target_accepts_aptl_manifest_shape(tmp_path):
 
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
     )
@@ -451,7 +466,7 @@ def test_realization_accepts_core_otel_as_public_start_profile(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_nodes("aptl-otel-collector"),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
     )
 
@@ -730,6 +745,7 @@ def test_aptl_target_passes_provisioning_only_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -757,6 +773,7 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -791,6 +808,7 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=backend,
     )
@@ -827,6 +845,7 @@ def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
     )
@@ -882,6 +901,7 @@ def test_legacy_participant_smoke_action_requires_explicit_admission(tmp_path):
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
     )
@@ -972,6 +992,7 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     )
     plan_target = create_aptl_runtime_target(
         project_dir=project_root,
+        bundle=_bundle(project_root),
         config=config,
         backend=MagicMock(),
     )
@@ -979,11 +1000,12 @@ def test_paper_participant_action_uses_compiled_addresses_and_boundary_markers(
     participant_action_specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=project_root,
+        bundle=_bundle(project_root),
         config=config,
     )
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
         participant_action_specs=participant_action_specs,
@@ -1067,6 +1089,7 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
     scenario = parse_sdl_file(project_root / "scenarios" / "paper-agent-loop.sdl.yaml")
     target = create_aptl_runtime_target(
         project_dir=project_root,
+        bundle=_bundle(project_root),
         config=config,
         backend=MagicMock(),
     )
@@ -1076,7 +1099,7 @@ def test_runtime_model_without_paper_artifacts_registers_no_paper_action():
         participant_action_specs_from_runtime_model(
             EmptyModel(),
             provisioning_plan=plan.provisioning,
-            project_dir=project_root,
+            bundle=_bundle(project_root),
             config=config,
         )
         == {}
@@ -1163,6 +1186,7 @@ def _compile_paper_model_plan_config():
     )
     target = create_aptl_runtime_target(
         project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
         backend=MagicMock(),
     )
@@ -1191,7 +1215,7 @@ def test_valid_binding_yields_participant_spec_baseline():
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
     assert _PAPER_PARTICIPANT_ADDRESS in specs
@@ -1211,7 +1235,7 @@ def test_participant_binding_uses_the_approved_apparatus_timeout_default():
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=configured,
     )
 
@@ -1281,7 +1305,7 @@ def test_malformed_binding_is_dropped_fail_closed(mutate):
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
+        bundle=_bundle(PROJECT_ROOT),
         config=config,
     )
     assert _PAPER_PARTICIPANT_ADDRESS not in specs
@@ -1357,7 +1381,7 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
     model = object()
     scenario = object()
     provisioning_plan = object()
-    project_dir = Path(__file__).resolve().parents[1]
+    bundle = _bundle(Path(__file__).resolve().parents[1])
     config = AptlConfig(lab={"name": "test"})
     compile_mock = mocker.patch(
         "aptl.backends.raes_participant_actions.compile_runtime_model",
@@ -1373,7 +1397,7 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
         participant_action_specs_for_scenario(
             scenario,
             provisioning_plan=provisioning_plan,
-            project_dir=project_dir,
+            bundle=bundle,
             config=config,
         )
         == expected
@@ -1382,7 +1406,7 @@ def test_start_helper_returns_specs_from_compiled_scenario(mocker):
     spec_mock.assert_called_once_with(
         model,
         provisioning_plan=provisioning_plan,
-        project_dir=project_dir,
+        bundle=bundle,
         config=config,
     )
 
@@ -1514,6 +1538,7 @@ def _aptl_runtime_and_control_plane(tmp_path):
 
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         backend=MagicMock(),
     )
@@ -1747,7 +1772,9 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     planned_specs.assert_called_once_with(
         planned_model,
         provisioning_plan=ANY,
-        project_dir=tmp_path,
+        bundle=project_tree_bundle(
+            tmp_path, tmp_path / "scenarios" / "techvault-operational.sdl.yaml"
+        ),
         config=config,
     )
 
@@ -2136,7 +2163,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             )
 
     def fake_create_target(
-        *, project_dir, config, backend, participant_action_specs=None, bundle=None
+        *, project_dir, config, backend, participant_action_specs=None, bundle
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2145,6 +2172,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             manifest=raes.create_aptl_manifest(),
             provisioner=raes.AptlProvisioner(
                 project_dir=project_dir,
+                bundle=bundle,
                 config=config,
                 deployment_backend=backend,
             ),
@@ -2258,6 +2286,7 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2286,6 +2315,7 @@ def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):
     config = AptlConfig(lab={"name": "test"}, containers={"kali": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2323,6 +2353,7 @@ def test_provisioner_captures_failure_diagnostics_for_handoff(tmp_path):
     config = AptlConfig(lab={"name": "test"}, containers={"kali": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2410,7 +2441,7 @@ def test_realization_preserves_network_static_address_assignments(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node, dmz, redteam),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
     )
 
@@ -2564,7 +2595,7 @@ def test_realization_rejects_static_address_outside_declared_network(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node, dmz),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"kali": True}),
     )
 
@@ -2588,7 +2619,7 @@ def test_realization_resolves_digest_pinned_source_image(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2621,7 +2652,7 @@ def test_realization_uses_allowed_source_when_upstream_build_path_is_note(tmp_pa
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"wazuh": True}),
     )
 
@@ -2660,7 +2691,7 @@ def test_realization_resolves_project_build_provenance(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2694,7 +2725,7 @@ def test_realization_rejects_untrusted_source_without_value_leakage(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2723,7 +2754,7 @@ def test_realization_rejects_digest_ref_outside_allowed_source_policy(tmp_path):
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2752,7 +2783,7 @@ def test_realization_rejects_unresolved_source_without_default_fallback(tmp_path
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2776,7 +2807,7 @@ def test_realization_accepts_compose_owned_reference_source_without_override(tmp
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"enterprise": True}),
     )
 
@@ -2810,7 +2841,7 @@ def test_realization_prefers_unique_node_alias_over_shared_source_alias(tmp_path
 
     realization = interpret_provisioning_plan(
         plan=_plan_for_resources(node),
-        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}, containers={"wazuh": True}),
     )
 
@@ -2839,6 +2870,7 @@ def test_provisioner_closes_subset_dependency_profiles_before_start(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2874,6 +2906,7 @@ def test_provisioner_treats_compose_network_dependency_as_network_support(tmp_pa
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2912,6 +2945,7 @@ def test_provisioner_rejects_disabled_dependency_profile(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2958,6 +2992,7 @@ def test_provisioner_rejects_invalid_compose_project(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -2989,6 +3024,7 @@ def test_provisioner_rejects_missing_declared_dependency(tmp_path):
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -3021,6 +3057,7 @@ def test_provisioner_rejects_missing_compose_dependency(tmp_path):
     config = AptlConfig(lab={"name": "test"}, containers={"enterprise": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -3058,6 +3095,7 @@ def test_provisioner_rejects_ambiguous_declared_dependency(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -3094,6 +3132,7 @@ def test_provisioner_realization_details_follow_distinct_plan_content(tmp_path):
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=backend,
     )
@@ -3135,6 +3174,7 @@ def test_provisioner_rejects_missing_node_realization_even_with_techvault_metada
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3168,6 +3208,7 @@ def test_provisioner_rejects_supported_placement_without_declared_target(tmp_pat
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3285,6 +3326,7 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3383,9 +3425,11 @@ def test_account_lowering_preserves_disabled_explicitness():
         return account
 
     omitted = _resolve({"username": "u", "node": "scenario.ad"})
-    assert omitted is not None and omitted.disabled is None
+    assert omitted is not None
+    assert omitted.disabled is None
     authored = _resolve({"username": "u", "node": "scenario.ad", "disabled": False})
-    assert authored is not None and authored.disabled is False
+    assert authored is not None
+    assert authored.disabled is False
 
 
 def test_manifest_account_features_match_realized_dto_fields():
@@ -3415,6 +3459,7 @@ def _apply_single_content_placement(tmp_path, *, spec_overrides: dict) -> tuple:
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3494,6 +3539,7 @@ def test_content_placement_destination_without_backing_mount_fails_closed(tmp_pa
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3525,6 +3571,7 @@ def test_generic_content_cannot_target_wazuh_configuration_volume(tmp_path):
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3554,6 +3601,7 @@ def test_content_placement_on_kali_operations_volume_realizes(tmp_path):
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3588,6 +3636,7 @@ def test_content_placement_absolute_path_rejects_on_content_capable_service(tmp_
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3616,6 +3665,7 @@ def test_account_placement_target_without_provisioner_fails_closed(tmp_path):
     backend.realize.return_value = LabResult(success=True, message="ok")
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         deployment_backend=backend,
     )
@@ -3790,6 +3840,7 @@ def _apply_disclosure_scenario(tmp_path, backend, execution_plan=None):
     config = AptlConfig(lab={"name": "test"})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         backend=backend,
     )
@@ -3815,6 +3866,7 @@ def _apply_content_disclosure_scenario(tmp_path, observed_content_type):
     _write_compose(tmp_path, {"fileshare": ["otel"]})
     target = create_aptl_runtime_target(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=AptlConfig(lab={"name": "test"}),
         backend=backend,
     )
@@ -3834,6 +3886,7 @@ def test_apply_provisioning_populates_realization_and_profiles(tmp_path):
     config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
     provisioner = AptlProvisioner(
         project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
         config=config,
         deployment_backend=_RealizedBackend(containers=("victim",)),
     )

@@ -10,6 +10,7 @@ mixed-realization paths dispatch through.
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 from typing import cast
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
@@ -94,6 +95,7 @@ def _realize_node_subset(
     backend: object,
     nodes: tuple[object, ...],
     content: tuple[object, ...],
+    scenario_root: Path,
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
@@ -158,4 +160,5 @@ def _realize_node_subset(
         nodes,
         backend,
         {addr: tuple(ops) for addr, ops in content_by_node.items()},
+        scenario_root=scenario_root,
     )

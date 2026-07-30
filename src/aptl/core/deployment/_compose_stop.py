@@ -7,7 +7,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
-from aptl.core.credentials import PathContainmentError
 from aptl.core.deployment._compose_volume_cleanup import (
     project_scoped_volume_names,
     remove_leftover_project_volumes,
@@ -42,11 +41,6 @@ class _ComposeStopBackend(Protocol):
 
         ...
 
-    def _stateful_teardown_compose_files(self) -> tuple[Path, ...] | None:
-        """Return validated Compose inputs for stateful teardown."""
-
-        ...
-
     def remove_project_networks(self) -> list[str]:
         """Remove leftover project-scoped realization networks."""
 
@@ -67,18 +61,16 @@ def stop_compose_lab(
 ) -> LabResult:
     """Stop Compose services and clean project-scoped networks and volumes."""
 
-    volume_names, discovery_error = _volume_inventory(backend, remove_volumes)
-    try:
-        compose_files = backend._stateful_teardown_compose_files()
-    except PathContainmentError:
-        return LabResult(
-            success=False,
-            error="Stateful teardown model failed containment validation.",
-        )
+    volume_names, discovery_error = _volume_inventory(backend, remove_volumes, timeout)
+    # Teardown is scenario-agnostic and resolves the running range by project
+    # identity, not by a filesystem Compose model that may belong to a different
+    # root than the scenario started from. ``docker compose -p <project> down``
+    # removes the project's containers/networks by label; project-scoped volume
+    # cleanup below owns the volumes (issue #874).
     return _run_stop(
         backend,
         profiles,
-        compose_files,
+        None,
         remove_volumes,
         volume_names,
         discovery_error,
@@ -87,12 +79,12 @@ def stop_compose_lab(
 
 
 def _volume_inventory(
-    backend: _ComposeStopBackend, remove_volumes: bool
+    backend: _ComposeStopBackend, remove_volumes: bool, timeout: int
 ) -> tuple[set[str], str]:
-    """Discover project volumes only for destructive cleanup."""
+    """Discover project volumes only for destructive cleanup, by runtime label."""
 
     return (
-        project_scoped_volume_names(backend.project_dir, backend.project_name)
+        project_scoped_volume_names(backend.project_name, backend._run, timeout=timeout)
         if remove_volumes
         else (set(), "")
     )

@@ -22,21 +22,21 @@ LEGACY_IMPORT_ROOTS = frozenset(
 )
 
 
-def test_project_depends_on_exact_raes_2_0_release() -> None:
+def test_project_depends_on_exact_raes_3_0_release() -> None:
     """The qualified backend and semantic freeze use the same RAES release."""
 
     project = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text())
 
-    assert "raes==2.0.0" in project["project"]["dependencies"]
+    assert "raes==3.0.0" in project["project"]["dependencies"]
     assert all(
         not dependency.startswith("aces-sdl")
         for dependency in project["project"]["dependencies"]
     )
-    assert raes.__version__ == "2.0.0"
+    assert raes.__version__ == "3.0.0"
 
 
 def test_runtime_and_tests_do_not_import_removed_aces_packages() -> None:
-    """RAES 2.0 ships no compatibility aliases for the old Python packages."""
+    """RAES 3.0 ships no compatibility aliases for the old Python packages."""
 
     offenders: list[str] = []
     for root in (PROJECT_ROOT / "src", PROJECT_ROOT / "tests"):

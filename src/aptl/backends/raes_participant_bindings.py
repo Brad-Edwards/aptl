@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from raes_contracts.planning import ProvisioningPlan
 
 from aptl.backends.raes_profiles import (
@@ -16,6 +15,7 @@ from aptl.backends.raes_profiles import (
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle
 
 _BINDING_SCHEMA = "aptl-participant-runtime-binding/v1"
 _BINDING_EXTENSION_KEY = "x-aptl:participant-runtime-binding"
@@ -108,19 +108,24 @@ def participant_action_specs_from_runtime_model(
     model: object,
     *,
     provisioning_plan: ProvisioningPlan,
-    project_dir: Path,
+    bundle: ScenarioBundle,
     config: AptlConfig,
     spec_factory: Callable[..., object],
 ) -> dict[str, object]:
-    """Build participant action specs from compiled runtime binding content."""
+    """Build participant action specs from compiled runtime binding content.
+
+    ``bundle`` anchors the same scenario-declared Compose model the start path
+    realizes; participant binding is a realization path and must not resolve
+    against the engine checkout (issue #874).
+    """
 
     context = _BindingContext(
         realization=interpret_provisioning_plan(
             plan=provisioning_plan,
-            project_dir=project_dir,
             config=config,
+            bundle=bundle,
         ),
-        profile_index=load_compose_profile_index(project_dir),
+        profile_index=load_compose_profile_index(bundle.root),
         provisioning_plan=provisioning_plan,
     )
     specs: dict[str, object] = {}

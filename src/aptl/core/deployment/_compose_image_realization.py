@@ -41,8 +41,13 @@ class ComposeRealizationImageMixin:
     def _prepare_realization_images(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> tuple[LabResult | None, tuple[Path, ...] | None]:
-        """Run typed pull/build image operations and write a compose override."""
+        """Run typed pull/build image operations and write a compose override.
+
+        The base Compose file and the generated image override are
+        scenario-declared inputs anchored to ``scenario_root`` (issue #874).
+        """
 
         if not realization.images:
             return None, None
@@ -54,8 +59,8 @@ class ComposeRealizationImageMixin:
             )
             if result is not None:
                 return result, None
-        override_path = self._write_image_override(realization.images)
-        return None, (self._project_dir / "docker-compose.yml", override_path)
+        override_path = self._write_image_override(realization.images, scenario_root)
+        return None, (scenario_root / "docker-compose.yml", override_path)
 
     def artifact_available(
         self, image_ref: str, *, allow_remote: bool | None = None
@@ -306,13 +311,18 @@ class ComposeRealizationImageMixin:
             else None
         )
 
+    @staticmethod
     def _write_image_override(
-        self,
         images: tuple[DeploymentImageRealization, ...],
+        scenario_root: Path,
     ) -> Path:
-        """Write a contained Compose override for scenario-resolved images."""
+        """Write a contained Compose override for scenario-resolved images.
 
-        override_path = self._project_dir / _IMAGE_OVERRIDE_RELATIVE_PATH
+        The override is a scenario-local generated artifact, written under
+        ``scenario_root`` (the bundle root).
+        """
+
+        override_path = scenario_root / _IMAGE_OVERRIDE_RELATIVE_PATH
         override_path.parent.mkdir(parents=True, exist_ok=True)
         services = {
             image.service_name: {"image": image.image_ref, "build": _ResetValue()}
@@ -336,10 +346,13 @@ class ComposeRealizationImageMixin:
         build: bool,
         compose_files: tuple[Path, ...],
         exclude_services: tuple[str, ...] = (),
+        scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services using a generated realization override."""
 
-        cmd = self._build_command("up", profiles, compose_files=compose_files)
+        cmd = self._build_command(
+            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
+        )
         build = build and not self._offline_staged
         if build:
             cmd.append("--build")
@@ -360,19 +373,27 @@ class ComposeRealizationImageMixin:
         build: bool,
         compose_files: tuple[Path, ...] | None,
         exclude_services: tuple[str, ...] = (),
+        scenario_root: Path,
     ) -> LabResult:
         """Start services with the generated override when one exists.
 
         ``exclude_services`` (ADR-048 mixed realization) scales those Compose
         service names to zero: they were already realized directly by the
         generic materializer and must not also start as Compose containers.
+        ``scenario_root`` is the bundle root Compose resolves against.
         """
 
         if compose_files is None:
-            return self.start(profiles, build=build, exclude_services=exclude_services)
+            return self.start(
+                profiles,
+                build=build,
+                exclude_services=exclude_services,
+                scenario_root=scenario_root,
+            )
         return self._start_with_compose_files(
             profiles,
             build=build,
             compose_files=compose_files,
             exclude_services=exclude_services,
+            scenario_root=scenario_root,
         )

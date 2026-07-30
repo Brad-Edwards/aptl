@@ -67,30 +67,27 @@ from aptl.utils.redaction import redact
 def interpret_provisioning_plan(
     *,
     plan: ProvisioningPlan,
-    project_dir: Path,
     config: AptlConfig,
-    bundle: ScenarioBundle | None = None,
+    bundle: ScenarioBundle,
 ) -> AptlRealization:
     """Interpret RAES provisioning resources as an APTL realization plan.
 
-    ``bundle`` supplies the root scenario content is anchored to. It defaults to
-    a bundle over the project directory, which is exactly today's behaviour, so
-    a caller that does not yet resolve a bundle is unaffected.
-
-    The distinction matters because ``project_dir`` is the *engine's* checkout
-    while the bundle root is the *scenario's*. Anchoring content to the engine
-    is what currently makes a scenario inseparable from it; once a resolver
-    hands back a staged bundle root instead, realization needs no change.
+    ``bundle`` supplies the root every scenario-declared input is anchored to.
+    It is required: interpretation never falls back to the engine checkout. The
+    engine's ``project_dir`` is operator/control-plane state (``aptl.json``,
+    ``.env``, run storage) and is not a scenario-input root, so it has no place
+    here. For an in-tree scenario ``bundle.root == project_dir.resolve()``, which
+    is what keeps an unmoved scenario behaviourally unchanged (issue #874).
     """
 
-    content_root = bundle.root if bundle is not None else project_dir.resolve()
+    content_root = bundle.root
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
-    # The profile index reads APTL's own derived Compose file, which is engine
-    # infrastructure rather than scenario content, so it stays anchored to the
-    # project directory even when the scenario is handed over from elsewhere.
-    profile_index = _load_profile_index(project_dir, diagnostics)
+    # The Compose model binds scenario nodes to concrete services and profiles,
+    # so it is scenario-bundle input, not engine infrastructure: index it from
+    # the bundle root. The two roots coincide only for an in-tree scenario.
+    profile_index = _load_profile_index(content_root, diagnostics)
     if profile_index is None:
         return _empty_realization(diagnostics)
 
@@ -149,13 +146,18 @@ def interpret_provisioning_plan(
 
 
 def _load_profile_index(
-    project_dir: Path,
+    content_root: Path,
     diagnostics: list[Diagnostic],
 ) -> ComposeProfileIndex | None:
-    """Load the compose profile index and record redacted load failures."""
+    """Load the compose profile index and record redacted load failures.
+
+    ``content_root`` is the scenario bundle root — the Compose model is a
+    scenario-declared input, so it is read from the bundle, never the engine
+    checkout.
+    """
 
     try:
-        return load_compose_profile_index(project_dir)
+        return load_compose_profile_index(content_root)
     except (OSError, ValueError, yaml.YAMLError) as exc:
         diagnostics.append(
             diagnostic(

@@ -167,7 +167,13 @@ run_plan: {{}}
         try:
             parse_experiment_spec(self._leaking_yaml())
         except ExperimentSpecValidationError as exc:
-            assert SECRET in str(exc)  # sanity: the wrapped str() DOES leak it
+            # RAES 3.0.0's ExperimentSpecValidationError.__str__ renders loc +
+            # error-type only, so str(exc) is now value-safe. The rejected value
+            # still lives in the pydantic __cause__ the normalizer reaches
+            # through (ADR-047 gotcha) — that is the leak vector it must scrub.
+            assert SECRET not in str(exc)  # raes 3.0.0 str() no longer leaks
+            assert exc.__cause__ is not None
+            assert SECRET in str(exc.__cause__)  # but the cause it reads still does
 
             result = normalize_raes_failure(
                 exc, address="root", code="aptl.experiment-admission.root-invalid"

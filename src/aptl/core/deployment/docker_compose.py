@@ -4,6 +4,7 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
+import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
@@ -13,6 +14,7 @@ from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMix
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
+from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
@@ -46,6 +48,7 @@ class DockerComposeBackend(
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeImageFetchMixin,
 ):
     """Docker Compose deployment backend.
 
@@ -95,6 +98,7 @@ class DockerComposeBackend(
         profiles: list[str],
         *,
         compose_files: Sequence[Path] | None = None,
+        scenario_root: Path | None = None,
     ) -> list[str]:
         """Build a docker compose command with profile flags.
 
@@ -104,11 +108,29 @@ class DockerComposeBackend(
         Args:
             action: The compose action (up, down, ps, kill, etc.).
             profiles: List of docker compose profiles to activate.
+            scenario_root: When realizing a scenario, the bundle root Compose
+                must use as its effective project directory. Relative build
+                contexts, binds, includes, and ``env_file`` entries resolve
+                against it, never the caller cwd. The operator secret source
+                stays the control-plane ``project_dir/.env``, bound explicitly
+                so a bundle-local ``.env`` cannot override it (issue #874).
+                ``None`` is the legacy direct path over the engine's own compose.
 
         Returns:
             Command as a list of strings suitable for subprocess.run().
         """
         cmd = ["docker", "compose", "-p", self._project_name]
+        if scenario_root is not None:
+            cmd.extend(["--project-directory", str(scenario_root)])
+            # Always bind an explicit control-plane env source. With
+            # --project-directory pointing at the bundle root, Compose would
+            # otherwise auto-discover <scenario_root>/.env and let the bundle
+            # control interpolation. Bind the operator .env when present, else an
+            # empty source (os.devnull) — never the bundle-local .env (#874).
+            env_file = self._project_dir / ".env"
+            cmd.extend(
+                ["--env-file", str(env_file if env_file.is_file() else os.devnull)]
+            )
         for compose_file in compose_files or ():
             cmd.extend(["-f", str(compose_file)])
 
@@ -211,6 +233,7 @@ class DockerComposeBackend(
         *,
         build: bool = True,
         exclude_services: tuple[str, ...] = (),
+        scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services via docker compose up.
 
@@ -221,13 +244,18 @@ class DockerComposeBackend(
                 mixed realization): everything else in the active profiles
                 starts normally, but a node the generic materializer already
                 realized directly must not also start as a Compose container.
+            scenario_root: Bundle root the scenario's Compose model and build
+                contexts resolve against (issue #874). ``None`` is the legacy
+                direct path over the engine's own in-tree compose.
 
         Returns:
             LabResult indicating success or failure.
         """
         build = build and not self._offline_staged
-        compose_files = self._start_compose_files(build=build)
-        cmd = self._build_command("up", profiles, compose_files=compose_files)
+        compose_files = self._start_compose_files(build=build, scenario_root=scenario_root)
+        cmd = self._build_command(
+            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
+        )
         if build:
             cmd.append("--build")
         if self._offline_staged:
@@ -248,12 +276,20 @@ class DockerComposeBackend(
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
 
-    def _start_compose_files(self, *, build: bool) -> tuple[Path, ...] | None:
-        """Return Compose files for startup, adding build dedupe when needed."""
+    def _start_compose_files(
+        self, *, build: bool, scenario_root: Path | None = None
+    ) -> tuple[Path, ...] | None:
+        """Return Compose files for startup, adding build dedupe when needed.
 
-        override = write_duplicate_build_override(self._project_dir) if build else None
+        The base ``docker-compose.yml`` and the build-dedupe override are
+        scenario-declared inputs; they resolve against ``scenario_root`` (the
+        bundle root) when realizing a scenario, else the engine's own tree.
+        """
+
+        root = scenario_root if scenario_root is not None else self._project_dir
+        override = write_duplicate_build_override(root) if build else None
         return (
-            (self._project_dir / "docker-compose.yml", override)
+            (root / "docker-compose.yml", override)
             if override is not None
             else None
         )
@@ -323,59 +359,6 @@ class DockerComposeBackend(
             Tuple of (success, error_message).
         """
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)
-
-    def pull_images(self, images: list[str]) -> list[str]:
-        """Pre-pull container images via docker pull.
-
-        Args:
-            images: List of image references to pull.
-
-        Returns:
-            List of warning messages for images that failed to pull
-            (non-fatal).
-        """
-        warnings: list[str] = []
-        for image in images:
-            try:
-                action = self._image_fetch_action(image)
-                result = self._run(action)
-                if result.returncode != 0:
-                    warnings.append(self._image_fetch_failure(image, result.stderr))
-                else:
-                    log.info(
-                        "%s %s",
-                        "Verified staged image" if self._offline_staged else "Pulled",
-                        image,
-                    )
-            except OSError as exc:
-                msg = self._image_fetch_exception(image, exc)
-                log.warning(msg)
-                warnings.append(msg)
-        return warnings
-
-    def _image_fetch_action(self, image: str) -> list[str]:
-        """Return the staged inspection or online pull command for one image."""
-
-        if self._offline_staged:
-            return ["docker", "image", "inspect", image]
-        return ["docker", "pull", image]
-
-    def _image_fetch_failure(self, image: str, stderr: str) -> str:
-        """Return and log one bounded image verification failure."""
-
-        if self._offline_staged:
-            message = f"Required staged image is missing: {image}"
-        else:
-            message = f"Failed to pull {image}: {stderr.strip()}"
-        log.warning(message)
-        return message
-
-    def _image_fetch_exception(self, image: str, exc: OSError) -> str:
-        """Return one image operation failure caused by a local tool error."""
-
-        if self._offline_staged:
-            return f"Required staged image could not be inspected: {image}"
-        return f"Failed to pull {image}: {exc}"
 
     def seed_named_volumes(
         self,

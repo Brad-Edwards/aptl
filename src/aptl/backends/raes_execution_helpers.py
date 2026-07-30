@@ -38,8 +38,8 @@ def interpret_realization(
     if isinstance(provisioner, AptlProvisioner):
         realization = interpret_provisioning_plan(
             plan=execution_plan.provisioning,
-            project_dir=provisioner.project_dir,
             config=provisioner.config,
+            bundle=provisioner.bundle,
         )
         details = realization.details()
         profiles = select_backend_profiles(

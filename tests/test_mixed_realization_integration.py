@@ -138,7 +138,7 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     assert _needs_compose(spec) is True
 
     try:
-        result = backend.realize(spec, build=False)
+        result = backend.realize(spec, build=False, scenario_root=tmp_path)
         assert result.success, result.error
 
         # Exactly one container for the runtime: node - Compose was told to
@@ -175,7 +175,8 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
             if pg_ready.returncode == 0:
                 break
             time.sleep(1)
-        assert pg_ready is not None and pg_ready.returncode == 0, pg_ready.stdout
+        assert pg_ready is not None, pg_ready.stdout
+        assert pg_ready.returncode == 0, pg_ready.stdout
 
         # The generic materializer's directly-run container is connected to
         # the declared scenario network with its declared static IP, exactly

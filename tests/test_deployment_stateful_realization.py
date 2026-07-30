@@ -404,10 +404,12 @@ def test_old_compose_is_rejected_before_artifact_mutation(
     monkeypatch.setattr(
         backend,
         "_realize_stateful_prerequisites",
-        lambda spec: pytest.fail("artifact mutation ran before version rejection"),
+        lambda spec, scenario_root: pytest.fail(
+            "artifact mutation ran before version rejection"
+        ),
     )
 
-    result = backend.realize(_spec())
+    result = backend.realize(_spec(), scenario_root=tmp_path)
 
     assert result.success is False
     assert "2.24.4 or later" in result.error
@@ -423,7 +425,7 @@ def test_ssh_backend_fails_before_any_docker_side_effect(
         lambda *args, **kwargs: pytest.fail("Docker must not run before rejection"),
     )
 
-    result = backend.realize(_spec())
+    result = backend.realize(_spec(), scenario_root=tmp_path)
 
     assert result.success is False
     assert "remote Docker daemon" in result.error
@@ -447,7 +449,9 @@ def test_certificate_materialization_rejects_symlinked_output_before_docker(
         ),
     )
 
-    result = backend._realize_certificate_bundle(_spec().generated_artifacts[0])
+    result = backend._realize_certificate_bundle(
+        _spec().generated_artifacts[0], tmp_path
+    )
 
     assert result is not None
     assert result.success is False
@@ -472,7 +476,7 @@ def test_missing_declared_certificate_output_blocks_before_image_side_effect(
     monkeypatch.setattr(
         backend,
         "_prepare_realization_images",
-        lambda realization: pytest.fail(
+        lambda realization, scenario_root: pytest.fail(
             "image side effect ran before artifact validation"
         ),
     )
@@ -486,7 +490,7 @@ def test_missing_declared_certificate_output_blocks_before_image_side_effect(
         ),
     )
 
-    result = backend.realize(_spec())
+    result = backend.realize(_spec(), scenario_root=tmp_path)
 
     assert result.success is False
     assert "missing declared output" in result.error.lower()
@@ -510,7 +514,7 @@ def test_rendered_config_materializes_at_canonical_contained_path(
     )
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
 
-    result = backend._realize_stateful_prerequisites(_rendered_config_spec())
+    result = backend._realize_stateful_prerequisites(_rendered_config_spec(), tmp_path)
 
     assert result is None
     rendered = tmp_path / ".aptl/config/wazuh_cluster/wazuh_manager.conf"
@@ -581,12 +585,18 @@ def test_generated_compose_model_is_validated_before_up(
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     commands: list[list[str]] = []
-    monkeypatch.setattr(backend, "_realize_stateful_prerequisites", lambda spec: None)
     monkeypatch.setattr(
-        backend, "_prepare_realization_images", lambda spec: (None, None)
+        backend,
+        "_realize_stateful_prerequisites",
+        lambda spec, scenario_root: None,
+    )
+    monkeypatch.setattr(
+        backend,
+        "_prepare_realization_images",
+        lambda spec, scenario_root: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
-    monkeypatch.setattr(backend, "_realize_content", lambda spec: None)
+    monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)
     spec = _spec()
 
     def run(cmd, **kwargs):
@@ -610,7 +620,7 @@ def test_generated_compose_model_is_validated_before_up(
         lambda start_result, spec: start_result,
     )
 
-    result = backend.realize(spec, build=False)
+    result = backend.realize(spec, build=False, scenario_root=tmp_path)
 
     assert result.success is True
     config_index = next(i for i, cmd in enumerate(commands) if "config" in cmd)
@@ -638,12 +648,18 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
             "read_only": True,
         }
     )
-    monkeypatch.setattr(backend, "_realize_stateful_prerequisites", lambda spec: None)
     monkeypatch.setattr(
-        backend, "_prepare_realization_images", lambda spec: (None, None)
+        backend,
+        "_realize_stateful_prerequisites",
+        lambda spec, scenario_root: None,
+    )
+    monkeypatch.setattr(
+        backend,
+        "_prepare_realization_images",
+        lambda spec, scenario_root: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
-    monkeypatch.setattr(backend, "_realize_content", lambda spec: None)
+    monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)
     monkeypatch.setattr(
         backend,
         "_run",
@@ -654,7 +670,7 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
         ),
     )
 
-    result = backend.realize(spec, build=False)
+    result = backend.realize(spec, build=False, scenario_root=tmp_path)
 
     assert result.success is False
     assert "unexpected mounts" in result.error
@@ -663,12 +679,18 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
 def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     commands: list[list[str]] = []
-    monkeypatch.setattr(backend, "_realize_stateful_prerequisites", lambda spec: None)
     monkeypatch.setattr(
-        backend, "_prepare_realization_images", lambda spec: (None, None)
+        backend,
+        "_realize_stateful_prerequisites",
+        lambda spec, scenario_root: None,
+    )
+    monkeypatch.setattr(
+        backend,
+        "_prepare_realization_images",
+        lambda spec, scenario_root: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
-    monkeypatch.setattr(backend, "_realize_content", lambda spec: None)
+    monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)
 
     def run(cmd, **kwargs):
         commands.append(cmd)
@@ -680,7 +702,7 @@ def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) 
 
     monkeypatch.setattr(backend, "_run", run)
 
-    result = backend.realize(_spec(), build=False)
+    result = backend.realize(_spec(), build=False, scenario_root=tmp_path)
 
     assert result.success is False
     assert result.error == "Generated Compose model validation failed."

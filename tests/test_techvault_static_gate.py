@@ -36,17 +36,21 @@ from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
+from aptl.validation import _gate_raes_cli as gcli
 from aptl.validation._account_parity import check_account_provisioner_parity
+from aptl.validation._gate_raes_cli import (
+    _cli_detail,
+    conformance_cli_diagnostics,
+    verify_imports_diagnostics,
+)
 from aptl.validation._gate_checks import (
     _NoStartBackend,
-    _cli_detail,
-    _conformance_cli_diagnostics,
     _outcome,
     _severity,
     _target_conformance_diagnostics,
-    _verify_imports_diagnostics,
     check_backend_conformance,
     check_compile,
     check_import_lock,
@@ -65,6 +69,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
+
+
+def _bundle(root, sdl_path=None):
+    """Bundle for an in-tree scenario rooted at ``root`` (issue #874).
+
+    Every call below previously passed ``root`` as ``project_dir``; anchoring
+    the bundle to the same directory keeps these gates behaviourally identical.
+    """
+    return project_tree_bundle(root, sdl_path or root / "scenarios" / "demo.sdl.yaml")
 
 
 # --------------------------------------------------------------------------- #
@@ -129,11 +142,14 @@ def test_operational_scenario_passes_the_realization_declaration_gate():
     """
     config = load_config(PROJECT_ROOT / "aptl.json")
     backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
+    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
     plan = RuntimeManager(
-        create_aptl_runtime_target(project_dir=PROJECT_ROOT, config=config, backend=backend)
+        create_aptl_runtime_target(
+            project_dir=PROJECT_ROOT, config=config, backend=backend, bundle=bundle
+        )
     ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
     realization = interpret_provisioning_plan(
-        plan=plan.provisioning, project_dir=PROJECT_ROOT, config=config
+        plan=plan.provisioning, config=config, bundle=bundle
     )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
     assert_image_free(realization.deployment_spec([]))  # raises with every violation
@@ -176,17 +192,19 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -245,17 +263,19 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, PAPER_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -284,7 +304,10 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
 
     config = AptlConfig(lab={"name": "techvault"})
     target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT, config=config, backend=_NoStartBackend()
+        project_dir=PROJECT_ROOT,
+        config=config,
+        backend=_NoStartBackend(),
+        bundle=_bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO),
     )
     report = run_target_conformance(
         target,
@@ -458,10 +481,10 @@ def test_distinct_scenarios_yield_distinct_realization(tmp_path):
     config = AptlConfig(lab={"name": "t"})
 
     first = interpret_provisioning_plan(
-        plan=_node_plan("kali"), project_dir=tmp_path, config=config
+        plan=_node_plan("kali"), config=config, bundle=_bundle(tmp_path)
     )
     second = interpret_provisioning_plan(
-        plan=_node_plan("victim"), project_dir=tmp_path, config=config
+        plan=_node_plan("victim"), config=config, bundle=_bundle(tmp_path)
     )
 
     assert not [d for d in first.diagnostics if _is_error(d)]
@@ -478,7 +501,7 @@ def test_realization_rejects_unrealizable_node_even_named_techvault(tmp_path):
     # A node with no compose-profile mapping cannot be realized, regardless of
     # the lab being named "techvault".
     realization = interpret_provisioning_plan(
-        plan=_node_plan("totally-unknown-node"), project_dir=tmp_path, config=config
+        plan=_node_plan("totally-unknown-node"), config=config, bundle=_bundle(tmp_path)
     )
     assert [d for d in realization.diagnostics if _is_error(d)]
 
@@ -576,9 +599,9 @@ def test_outcome_packs_diagnostics():
 
 
 def test_verify_imports_diagnostics():
-    assert _verify_imports_diagnostics(None)
-    assert _verify_imports_diagnostics(_proc(1, stderr="stale"))
-    assert _verify_imports_diagnostics(_proc(0)) == []
+    assert verify_imports_diagnostics(None)
+    assert verify_imports_diagnostics(_proc(1, stderr="stale"))
+    assert verify_imports_diagnostics(_proc(0)) == []
 
 
 def test_target_conformance_diagnostics():
@@ -599,12 +622,12 @@ def test_target_conformance_diagnostics():
 
 
 def test_conformance_cli_diagnostics(monkeypatch):
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
-    assert _conformance_cli_diagnostics("provisioning-only", None, None)
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(1, stderr="x"))
-    assert _conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(0))
-    assert _conformance_cli_diagnostics("provisioning-only", None, None) == []
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: None)
+    assert conformance_cli_diagnostics("provisioning-only", None, None)
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(1, stderr="x"))
+    assert conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(0))
+    assert conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
 def test_cli_detail_json_and_plain():
@@ -630,14 +653,16 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     scenario = _scenario_with_imports("local:mod.sdl.yaml")
 
     check = check_import_lock(path, scenario)
-    assert not check.passed and any(
+    assert not check.passed
+    assert any(
         "missing import lockfile" in d for d in check.diagnostics
     )
 
     (tmp_path / LOCKFILE_NAME).write_text("{}")
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
+    monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
-    assert not check.passed and any("not found on PATH" in d for d in check.diagnostics)
+    assert not check.passed
+    assert any("not found on PATH" in d for d in check.diagnostics)
 
 
 def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
@@ -674,7 +699,8 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "t"}),
     )
-    assert details is None and not check.passed
+    assert details is None
+    assert not check.passed
 
 
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
@@ -756,8 +782,10 @@ def test_operational_scenario_content_and_accounts_are_honest():
     account_placements = [
         p for p in placements if p["resource_type"] == "account-placement"
     ]
-    assert content_placements and all("content" in p for p in content_placements)
-    assert account_placements and all("account" in p for p in account_placements)
+    assert content_placements
+    assert all("content" in p for p in content_placements)
+    assert account_placements
+    assert all("account" in p for p in account_placements)
 
 
 def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):

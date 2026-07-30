@@ -80,10 +80,19 @@ class _StubSoftware:
 class _RealisticSnapshot:
     """A snapshot whose ``to_dict()`` includes the volatile fields the real one does."""
 
-    def __init__(self, *, timestamp="2026-01-01T00:00:00Z", status="running", health="healthy"):
+    def __init__(
+        self,
+        *,
+        timestamp="2026-01-01T00:00:00Z",
+        status="running",
+        health="healthy",
+        names=("aptl-victim",),
+    ):
         self.timestamp = timestamp
         self.software = _StubSoftware()
-        self.containers = [_Container(status=status, health=health)]
+        self.containers = [
+            _Container(name=name, status=status, health=health) for name in names
+        ]
 
     def to_dict(self):
         return {
@@ -103,8 +112,8 @@ class _RealisticSnapshot:
 
 
 class _Container:
-    def __init__(self, *, status="running", health="healthy"):
-        self.name = "aptl-victim"
+    def __init__(self, *, name="aptl-victim", status="running", health="healthy"):
+        self.name = name
         self.image = "img:tag"
         self.image_id = "volatile-id"
         self.image_digest = "sha256:" + "f" * 64
@@ -236,6 +245,38 @@ class TestStableRangeIdentity:
             _context("runtime-facts")
         )
         assert "range_snapshot_observation" in result.payload
+
+    def test_a_multi_container_range_still_projects(self):
+        """A range with two or more containers must still collect.
+
+        The stable projection sorts the per-container facts, but they are dicts,
+        which are unorderable: a keyless sort raised ``TypeError`` the moment a
+        range had a second container and silently degraded the entire run's
+        reproducibility record. A single-container fixture never compares, so it
+        cannot see this — every real multi-container lab hit it.
+        """
+
+        result = RuntimeFactsProvider(
+            _RealisticSnapshot(
+                names=["aptl-victim", "aptl-kali", "aptl-wazuh-manager"]
+            )
+        ).collect(_context("runtime-facts"))
+
+        assert result.status is ProvenanceStatus.COLLECTED
+        assert "range_snapshot_identity" in result.payload
+        assert result.payload["container_count"] == 3
+
+    def test_the_range_projection_is_order_independent(self):
+        """Container discovery order must not perturb the stable identity."""
+
+        forward = RuntimeFactsProvider(
+            _RealisticSnapshot(names=["aptl-a", "aptl-b", "aptl-c"])
+        ).collect(_context("runtime-facts"))
+        reversed_ = RuntimeFactsProvider(
+            _RealisticSnapshot(names=["aptl-c", "aptl-b", "aptl-a"])
+        ).collect(_context("runtime-facts"))
+
+        assert forward.leaves == reversed_.leaves
 
 
 class TestDetectionAllowlistIsExplicit:

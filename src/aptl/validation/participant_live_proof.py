@@ -35,7 +35,8 @@ except ImportError:
     # Older RAES locks predate the participant shared-state snapshot contract.
     iter_participant_shared_state_snapshot_violations = None
 
-from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO, create_aptl_runtime_target
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.backends.raes_participant_actions import (
     PARTICIPANT_ACTION_ADDRESS,
     PARTICIPANT_ACTION_CONTRACT_ADDRESS,
@@ -199,8 +200,13 @@ def _participant_control_plane(
     """Create the RAES control plane backed by the configured APTL backend."""
 
     backend = backend_factory(config, project_dir)
+    # Participant actions run against the booted in-tree lab; the bundle root is
+    # the project directory.
     target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+        bundle=project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO),
     )
     return RuntimeControlPlane(target), target, backend
 

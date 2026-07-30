@@ -15,6 +15,7 @@ Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 
 import subprocess
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
@@ -70,6 +71,7 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         realization: DeploymentRealizationSpec,
         *,
         build: bool = True,
+        scenario_root: Path,
     ) -> LabResult:
         """Realize a typed scenario deployment through the backend.
 
@@ -81,6 +83,10 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
             realization: Typed deployment realization emitted from RAES plan
                 resources.
             build: If True, rebuild images before starting.
+            scenario_root: Bundle root every scenario-declared filesystem input
+                resolves against; request-scoped, never cached on the backend.
+                The operator ``.env`` stays the control-plane ``project_dir``
+                boundary (issue #874).
 
         Returns:
             LabResult indicating success or failure.
@@ -259,6 +265,7 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         content: Sequence[DeploymentContentRealization],
         *,
         seeder_image: str,
+        scenario_root: Path,
     ) -> None:
         """Materialize typed RAES content placements (issue #689).
 

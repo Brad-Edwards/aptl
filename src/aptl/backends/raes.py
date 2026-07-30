@@ -70,9 +70,14 @@ def create_aptl_runtime_target(
     backend: "DeploymentBackend",
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
     participant_plan_authority: ParticipantPlanAuthority | None = None,
-    bundle: ScenarioBundle | None = None,
+    bundle: ScenarioBundle,
 ) -> RuntimeTarget:
-    """Build APTL's canonical ``full-remote-control-plane`` runtime target."""
+    """Build APTL's canonical ``full-remote-control-plane`` runtime target.
+
+    ``bundle`` is required: the target realizes exactly one scenario, and every
+    scenario-declared input resolves against ``bundle.root``. Callers resolve it
+    once at ingress with ``project_tree_bundle`` (issue #874).
+    """
 
     provisioner = AptlProvisioner(
         project_dir=project_dir,
@@ -232,7 +237,7 @@ def _plan_scenario(
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,
         provisioning_plan=execution_plan.provisioning,
-        project_dir=project_dir,
+        bundle=bundle,
         config=config,
     )
     target = create_aptl_runtime_target(
@@ -296,17 +301,18 @@ def selected_profiles_for_scenario(
     if not resolved_scenario.is_absolute():
         resolved_scenario = project_dir / resolved_scenario
     scenario = parse_sdl_file(resolved_scenario)
+    bundle = project_tree_bundle(project_dir, resolved_scenario)
     target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend
+        project_dir=project_dir, config=config, backend=backend, bundle=bundle
     )
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=project_dir
+            scenario, backend, scenario_root=bundle.root
         ),
     )
     realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning, project_dir=project_dir, config=config
+        plan=execution_plan.provisioning, config=config, bundle=bundle
     )
     return select_backend_profiles(config, realization.profiles)
 
@@ -330,13 +336,14 @@ def admitted_stateful_artifact_ownership(
     if not resolved_scenario.is_absolute():
         resolved_scenario = project_dir / resolved_scenario
     scenario = parse_sdl_file(resolved_scenario)
+    bundle = project_tree_bundle(project_dir, resolved_scenario)
     target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend
+        project_dir=project_dir, config=config, backend=backend, bundle=bundle
     )
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=project_dir
+            scenario, backend, scenario_root=bundle.root
         ),
     )
     blocking = [
@@ -346,8 +353,8 @@ def admitted_stateful_artifact_ownership(
         raise ValueError(render_raes_diagnostics(blocking))
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=project_dir,
         config=config,
+        bundle=bundle,
     )
     blocking = [
         diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
@@ -360,8 +367,8 @@ def admitted_stateful_artifact_ownership(
             artifact.generator,
             consumer.service_name,
             consumer.mount_destination,
-            artifact_source_path(project_dir, artifact)
-            .relative_to(project_dir.resolve())
+            artifact_source_path(bundle.root, artifact)
+            .relative_to(bundle.root)
             .as_posix(),
         )
         for artifact in realization.generated_artifacts

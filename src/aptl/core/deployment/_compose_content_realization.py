@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 
 from aptl.core.content_seed import build_content_volume_seeds
 from aptl.core.deployment.realization import DeploymentContentRealization
@@ -36,12 +37,17 @@ class ComposeRealizationContentMixin:
         content: Sequence[DeploymentContentRealization],
         *,
         seeder_image: str,
+        scenario_root: Path,
     ) -> None:
-        """Materialize typed content placements via the ADR-043 seed seam."""
+        """Materialize typed content placements via the ADR-043 seed seam.
+
+        Content sources are scenario-declared inputs; they resolve against
+        ``scenario_root`` (the bundle root), not the engine checkout (#874).
+        """
 
         if not content:
             return
-        seeds = build_content_volume_seeds(self._project_dir, content)
+        seeds = build_content_volume_seeds(scenario_root, content)
         self.seed_named_volumes(seeds, seeder_image=seeder_image)
 
     def observe_content_type(

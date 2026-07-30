@@ -39,9 +39,19 @@ from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.realization import DeploymentContentRealization
+from aptl.core.scenario_bundle import project_tree_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
+
+
+def _bundle():
+    """The in-tree bundle for the paper scenario (issue #874).
+
+    Its root is the project directory these calls previously passed as
+    ``project_dir``, so the gate's realization is unchanged.
+    """
+    return project_tree_bundle(PROJECT_ROOT, PAPER_SCENARIO)
 
 
 def _paper_plan():
@@ -55,6 +65,7 @@ def _paper_plan():
         project_dir=PROJECT_ROOT,
         config=config,
         backend=MagicMock(),
+        bundle=_bundle(),
     )
     return scenario, model, RuntimeManager(target).plan(scenario), config
 
@@ -125,8 +136,8 @@ def test_paper_scenario_content_surface_realizes_with_no_rejection():
 
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=_bundle(),
     )
 
     # #691: every remaining content placement must lower to a typed
@@ -201,7 +212,7 @@ def test_paper_observation_boundary_hides_evaluator_and_negative_surfaces():
     specs = participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
+        bundle=_bundle(),
         config=config,
     )
     spec = specs["participant.behavior.paper-agent"]

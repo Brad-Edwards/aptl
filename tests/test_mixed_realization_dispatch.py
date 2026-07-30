@@ -10,6 +10,8 @@ test_mixed_realization_integration.py for the real-Docker proof.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from raes.runtime_configuration import RuntimeConfiguration, ServiceManagerUnit
 
 from aptl.core.deployment._compose_realization import (
@@ -19,6 +21,7 @@ from aptl.core.deployment._compose_realization import (
     _strip_image_free_published_ports,
 )
 from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
     DeploymentNodeRealization,
     DeploymentPublishedPort,
     DeploymentRealizationSpec,
@@ -40,8 +43,25 @@ def _node(
     )
 
 
-def _spec(nodes: tuple[DeploymentNodeRealization, ...]) -> DeploymentRealizationSpec:
-    return DeploymentRealizationSpec(profiles=(), nodes=nodes, networks=())
+def _spec(
+    nodes: tuple[DeploymentNodeRealization, ...],
+    images: tuple[DeploymentImageRealization, ...] = (),
+) -> DeploymentRealizationSpec:
+    return DeploymentRealizationSpec(
+        profiles=(), nodes=nodes, networks=(), images=images
+    )
+
+
+def _image(address: str, service_name: str) -> DeploymentImageRealization:
+    return DeploymentImageRealization(
+        address=address,
+        service_name=service_name,
+        source_name="wazuh",
+        source_version="wazuh@sha256:abc",
+        image_ref="wazuh/wazuh-manager:latest",
+        mode="pull",
+        policy_rule="digest-pinned",
+    )
 
 
 class TestImageFreeNodeAddresses:
@@ -54,6 +74,22 @@ class TestImageFreeNodeAddresses:
     def test_empty_when_nothing_declares_runtime(self):
         legacy = _node("provision.node.legacy", runtime=None)
         assert _image_free_node_addresses(_spec((legacy,))) == frozenset()
+
+    def test_runtime_node_with_a_backing_image_stays_compose_managed(self):
+        """A node declaring runtime that also resolves to a real backing image
+        must NOT be scaled to zero: its Compose service (e.g. wazuh-manager)
+        has to start rather than be replaced by a bare-OS sleep stub. This is
+        the ``address not in imaged`` exclusion — dropping it turns declared
+        security tooling off."""
+
+        node = _node(
+            "provision.node.wazuh",
+            runtime=RuntimeConfiguration(),
+            service_name="wazuh-manager",
+        )
+        spec = _spec((node,), images=(_image("provision.node.wazuh", "wazuh-manager"),))
+
+        assert _image_free_node_addresses(spec) == frozenset()
 
 
 class TestImageFreeServiceNames:
@@ -193,7 +229,7 @@ class TestRealizeNodeSubsetEnsuresGenericBaseImages:
         )
         backend = _FakeBaseImageBackend(build_failures={})
 
-        result = _realize_node_subset(backend, (webapp, dns), ())
+        result = _realize_node_subset(backend, (webapp, dns), (), Path("/tmp"))
 
         assert result is None
         assert backend.ensure_calls == ["aptl/generic-systemd-base-debian:latest"]
@@ -214,7 +250,7 @@ class TestRealizeNodeSubsetEnsuresGenericBaseImages:
             }
         )
 
-        result = _realize_node_subset(backend, (db,), ())
+        result = _realize_node_subset(backend, (db,), (), Path("/tmp"))
 
         assert result is not None
         assert result.success is False

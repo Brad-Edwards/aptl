@@ -27,11 +27,21 @@ from aptl.backends.raes_participant_realizations import (
     validate_participant_realizations,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
 
 PROJECT_ROOT = Path(__file__).parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios/bounded-participant-agency-techvault.sdl.yaml"
 SOURCE_SHA256 = "9683f2539bdefbd99635924d2a6fce27b144e12f382cd74d2f3e10d10ecb7616"
 COMPILED_SHA256 = "099209f578da193ce88e201cc86887ae8ca4587a6b9c6b1a570ed195047d4c8c"
+
+
+def _bundle() -> ScenarioBundle:
+    """The in-tree bundle for the frozen research scenario (issue #874).
+
+    Rooted at the project directory these calls previously passed as
+    ``project_dir``, so realization is unchanged.
+    """
+    return project_tree_bundle(PROJECT_ROOT, SCENARIO)
 
 
 def test_selected_scenario_is_the_exact_research_freeze() -> None:
@@ -83,8 +93,8 @@ def test_selected_scenario_has_no_blocking_backend_diagnostics() -> None:
     assert [diagnostic for diagnostic in plan.diagnostics if diagnostic.is_error] == []
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=_bundle(),
     )
     assert [
         diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
@@ -118,6 +128,7 @@ def test_backend_manifest_truthfully_declares_the_research_surface() -> None:
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "test"}),
         backend=MagicMock(),
+        bundle=_bundle(),
     )
     capability = target.manifest.participant_runtime
     assert capability is not None
@@ -241,6 +252,7 @@ def test_episode_initialization_is_lifecycle_only() -> None:
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "test"}),
         backend=backend,
+        bundle=_bundle(),
     )
     control_plane = RuntimeControlPlane(target)
 

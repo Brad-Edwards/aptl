@@ -22,8 +22,9 @@ from typing import TYPE_CHECKING, Any
 from raes_runtime.manager import RuntimeManager
 from raes.scenario import Scenario
 
-from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO, create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
 from aptl.core.lab import clean_boot_lab
@@ -89,12 +90,14 @@ def _compute_realization(
     """Interpret the scenario's provisioning plan, returning (realization, diags)."""
     try:
         backend = get_backend(config, project_dir)
+        # Live probe over the in-tree scenario: bundle root is the project dir.
+        bundle = project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO)
         target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=backend
+            project_dir=project_dir, config=config, backend=backend, bundle=bundle
         )
         execution_plan = RuntimeManager(target).plan(scenario)
         realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning, project_dir=project_dir, config=config
+            plan=execution_plan.provisioning, config=config, bundle=bundle
         )
     # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:

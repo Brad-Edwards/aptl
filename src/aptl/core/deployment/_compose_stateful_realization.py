@@ -77,11 +77,16 @@ class ComposeStatefulRealizationMixin:
     def _write_stateful_realization_override(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> Path | None:
-        """Persist the stateful Compose override when resources require one."""
+        """Persist the stateful Compose override when resources require one.
+
+        The generated override is scenario-local; it is written under
+        ``scenario_root`` (the bundle root).
+        """
 
         return write_stateful_override(
-            self._project_dir,
+            scenario_root,
             self.project_name,
             realization,
         )
@@ -103,29 +108,23 @@ class ComposeStatefulRealizationMixin:
             error="Docker Compose 2.24.4 or later is required for stateful service ownership.",
         )
 
-    def _stateful_teardown_compose_files(self) -> tuple[Path, ...] | None:
-        """Return the persisted generated model so ``down -v`` owns its volumes."""
-
-        override = _canonical_generated_path(
-            self._project_dir,
-            STATEFUL_OVERRIDE_RELPATH,
-        )
-        if not override.is_file():
-            return None
-        return (self._project_dir / "docker-compose.yml", override)
-
     def _realize_stateful_prerequisites(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Materialize and verify every declared generated artifact."""
+        """Materialize and verify every declared generated artifact.
+
+        Generated artifacts land under ``scenario_root`` (the bundle root); the
+        operator credential source stays the control-plane ``project_dir/.env``.
+        """
 
         failure: LabResult | None = None
         for artifact in realization.generated_artifacts:
             failure = (
-                self._realize_certificate_bundle(artifact)
+                self._realize_certificate_bundle(artifact, scenario_root)
                 if artifact.generator == "certificate_bundle"
-                else self._realize_rendered_config(artifact)
+                else self._realize_rendered_config(artifact, scenario_root)
             )
             if failure is not None:
                 break
@@ -223,8 +222,14 @@ class ComposeStatefulRealizationMixin:
     def _realize_rendered_config(
         self,
         artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Render the admitted manager config through ADR-028's writer."""
+        """Render the admitted manager config through ADR-028's writer.
+
+        The rendered config is a scenario-local generated artifact written under
+        ``scenario_root``; the credential key comes from the control-plane
+        ``project_dir/.env``.
+        """
 
         unsupported_binding = (
             artifact.provenance != "config/wazuh_cluster/wazuh_manager.conf"
@@ -256,7 +261,7 @@ class ComposeStatefulRealizationMixin:
             else:
                 try:
                     output = sync_manager_config(
-                        self._project_dir,
+                        scenario_root,
                         env.wazuh_cluster_key,
                     )
                 except (OSError, ValueError) as exc:
@@ -279,12 +284,17 @@ class ComposeStatefulRealizationMixin:
     def _realize_certificate_bundle(
         self,
         artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
     ) -> LabResult | None:
-        """Generate and cryptographically validate a certificate bundle."""
+        """Generate and cryptographically validate a certificate bundle.
+
+        The bundle is a scenario-local generated artifact: it is produced under
+        ``scenario_root`` and read back from there (issue #874).
+        """
 
         failure: LabResult | None = None
         try:
-            _canonical_generated_path(self._project_dir, CERTIFICATE_ROOT_RELPATH)
+            _canonical_generated_path(scenario_root, CERTIFICATE_ROOT_RELPATH)
         except ValueError:
             failure = LabResult(
                 success=False,
@@ -293,7 +303,7 @@ class ComposeStatefulRealizationMixin:
         result = None
         if failure is None:
             result = ensure_ssl_certs(
-                self._project_dir,
+                scenario_root,
                 run_command=self._run_certificate_command,
             )
             if not result.success:
@@ -319,7 +329,7 @@ class ComposeStatefulRealizationMixin:
             errors = validate_certificate_bundle(
                 result.certs_dir,
                 artifact.outputs,
-                self._project_dir / artifact.provenance,
+                scenario_root / artifact.provenance,
             )
             if errors:
                 failure = LabResult(success=False, error=errors[0])
@@ -340,21 +350,25 @@ class ComposeStatefulRealizationMixin:
 
 
 def write_stateful_override(
-    project_dir: Path,
+    scenario_root: Path,
     project_name: str,
     realization: DeploymentRealizationSpec,
 ) -> Path | None:
-    """Atomically write the contained Compose stateful-resource override."""
+    """Atomically write the contained Compose stateful-resource override.
+
+    The override is a scenario-local generated artifact, written under
+    ``scenario_root`` (the bundle root), not the engine checkout (issue #874).
+    """
 
     override_path: Path | None = None
     if realization.generated_artifacts or realization.persistent_volumes:
-        payload = stateful_override_payload(project_dir, project_name, realization)
+        payload = stateful_override_payload(scenario_root, project_name, realization)
         override_path = _canonical_generated_path(
-            project_dir,
+            scenario_root,
             STATEFUL_OVERRIDE_RELPATH,
         )
         _ensure_secure_dir(override_path.parent)
-        _canonical_generated_path(project_dir, STATEFUL_OVERRIDE_RELPATH)
+        _canonical_generated_path(scenario_root, STATEFUL_OVERRIDE_RELPATH)
         _atomic_write_secure(
             override_path,
             yaml.dump(payload, Dumper=StatefulDumper, sort_keys=True),

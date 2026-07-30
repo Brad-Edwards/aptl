@@ -23,14 +23,14 @@ from aptl.core.deployment.realization import (
 
 
 def stateful_override_payload(
-    project_dir: Path,
+    scenario_root: Path,
     project_name: str,
     realization: DeploymentRealizationSpec,
 ) -> dict[str, object]:
     """Return the complete generated stateful Compose model."""
 
-    services = wazuh_service_definitions(project_dir, realization)
-    _append_artifact_mounts(services, project_dir, realization)
+    services = wazuh_service_definitions(scenario_root, realization)
+    _append_artifact_mounts(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
     if volumes:
@@ -40,7 +40,7 @@ def stateful_override_payload(
 
 def effective_stateful_model_errors(
     payload: object,
-    project_dir: Path,
+    scenario_root: Path,
     project_name: str,
     realization: DeploymentRealizationSpec,
 ) -> list[str]:
@@ -51,14 +51,14 @@ def effective_stateful_model_errors(
     observed_services = payload.get("services")
     if not isinstance(observed_services, Mapping):
         return ["Effective Compose model has no services mapping."]
-    expected = stateful_override_payload(project_dir, project_name, realization)
+    expected = stateful_override_payload(scenario_root, project_name, realization)
     expected_services = expected["services"]
     assert isinstance(expected_services, Mapping)
     errors = _effective_service_errors(expected_services, observed_services)
     errors.extend(
         _certificate_exposure_errors(
             observed_services,
-            project_dir,
+            scenario_root,
             realization,
         )
     )
@@ -67,28 +67,33 @@ def effective_stateful_model_errors(
 
 
 def artifact_source_path(
-    project_dir: Path,
+    scenario_root: Path,
     artifact: DeploymentGeneratedArtifactRealization,
 ) -> Path:
-    """Return the canonical host source for a supported artifact provider."""
+    """Return the canonical host source for a supported artifact provider.
+
+    A generated artifact is scenario-local: it is produced and read back under
+    the scenario bundle root, not the engine checkout. For an in-tree scenario
+    the two coincide (issue #874).
+    """
 
     relative = (
         CERTIFICATE_ROOT_RELPATH
         if artifact.generator == "certificate_bundle"
         else RENDERED_MANAGER_RELPATH
     )
-    return project_dir.resolve() / relative
+    return scenario_root.resolve() / relative
 
 
 def _append_artifact_mounts(
     services: dict[str, dict[str, object]],
-    project_dir: Path,
+    scenario_root: Path,
     realization: DeploymentRealizationSpec,
 ) -> None:
     """Append every declared generated-artifact bind mount."""
 
     for artifact in realization.generated_artifacts:
-        source = artifact_source_path(project_dir, artifact)
+        source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
             if artifact.generator == "certificate_bundle":
                 _append_certificate_mounts(services, source, artifact, consumer)
@@ -267,12 +272,12 @@ def _normalized_dependencies(value: object) -> dict[str, str]:
 
 def _certificate_exposure_errors(
     services: Mapping[object, object],
-    project_dir: Path,
+    scenario_root: Path,
     realization: DeploymentRealizationSpec,
 ) -> list[str]:
     """Return errors for certificate mounts beyond the declared output set."""
 
-    cert_root = str(project_dir.resolve() / CERTIFICATE_ROOT_RELPATH)
+    cert_root = str(scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH)
     expected = _expected_certificate_mounts(cert_root, realization)
     return [
         f"Effective stateful service {service_name} exposes undeclared "

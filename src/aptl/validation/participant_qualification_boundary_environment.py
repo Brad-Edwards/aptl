@@ -15,6 +15,7 @@ from aptl.backends.raes_participant_apparatus import build_participant_apparatus
 from aptl.backends.raes_participant_driver import AptlParticipantControlPlane
 from aptl.backends.raes_participant_fixture import participant_episode_state_dir
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation.participant_agency_readiness import (
     BEHAVIOR_ADDRESSES,
     SCENARIO_RELATIVE_PATH,
@@ -48,19 +49,21 @@ def prepare_challenge_context(
     """Prepare an isolated, exact-state participant episode."""
 
     run_store.create_run(run_id)
+    scenario_path = project_dir / SCENARIO_RELATIVE_PATH
     target, plan = _plan_scenario(
         project_dir,
         config,
         backend,
-        project_dir / SCENARIO_RELATIVE_PATH,
+        scenario_path,
         None,
     )
     if any(diagnostic.is_error for diagnostic in plan.diagnostics):
         raise ValueError("boundary challenge scenario planning failed")
+    bundle = project_tree_bundle(project_dir, scenario_path)
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,
-        project_dir=project_dir,
         config=config,
+        bundle=bundle,
     )
     if _verify_live_materialization(backend, realization):
         raise ValueError("boundary challenge lab materialization is unavailable")

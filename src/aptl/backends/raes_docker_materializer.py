@@ -75,14 +75,14 @@ class DockerMaterializationExecutor:
         container_for: Callable[[str], str],
         start_base: Callable[[str, str], None],
         copy_in: Callable[[str, str, str, bool], None] | None = None,
-        project_dir: Path | None = None,
+        scenario_root: Path | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._run = run
         self._container_for = container_for
         self._start_base = start_base
         self._copy_in = copy_in
-        self._project_dir = project_dir
+        self._scenario_root = scenario_root
         self._sleep = sleep
 
     # -- mutations -------------------------------------------------------
@@ -138,12 +138,12 @@ class DockerMaterializationExecutor:
     def place_project_content(
         self, node_address: str, op: PlaceProjectContentOp
     ) -> None:
-        if self._project_dir is None or self._copy_in is None:
+        if self._scenario_root is None or self._copy_in is None:
             raise MaterializationCommandError(
                 f"project content placement needs a project dir on {node_address}"
             )
-        root = self._project_dir.resolve()
-        source = (self._project_dir / op.source_relpath).resolve()
+        root = self._scenario_root.resolve()
+        source = (self._scenario_root / op.source_relpath).resolve()
         if source != root and root not in source.parents:
             raise MaterializationCommandError(
                 f"project content source escapes the project root on {node_address}"

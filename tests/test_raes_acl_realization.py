@@ -1,12 +1,18 @@
 """Generic RAES ACL lowering for the APP-1 materialization surface."""
 
 import json
+from pathlib import Path
 
 import pytest
 from raes_contracts.planning import PlannedResource, ProvisioningPlan, RuntimeDomain
 
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
+
+
+def _bundle(root: Path) -> ScenarioBundle:
+    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
 
 def _resource(
@@ -97,8 +103,8 @@ def test_acl_lowering_preserves_raes_identity_order_and_semantics(tmp_path) -> N
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, quartz, sentinel),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert [item.code for item in realization.diagnostics] == []
@@ -162,8 +168,8 @@ def test_acl_lowering_rejects_unsupported_semantics_before_backend(tmp_path) -> 
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, sentinel),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert {item.code for item in realization.diagnostics} == {
@@ -204,8 +210,8 @@ def test_acl_lowering_rejects_out_of_range_ports(tmp_path) -> None:
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, sentinel),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert "aptl.provisioner.acl-ports-invalid" in {
@@ -258,8 +264,8 @@ def test_acl_lowering_rejects_unenforceable_endpoint_forms(
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, sentinel),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert code in {item.code for item in realization.diagnostics}
@@ -294,8 +300,8 @@ def test_acl_lowering_preserves_an_authored_wildcard_endpoint(tmp_path) -> None:
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, sentinel),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert [item.code for item in realization.diagnostics] == []
@@ -330,8 +336,8 @@ def test_network_owned_acl_is_preserved_as_network_policy(tmp_path) -> None:
 
     realization = interpret_provisioning_plan(
         plan=_plan(orchard, quartz),
-        project_dir=tmp_path,
         config=AptlConfig(lab={"name": "synthetic"}, containers={"victim": True}),
+        bundle=_bundle(tmp_path),
     )
 
     assert not [

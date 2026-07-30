@@ -15,6 +15,11 @@ from raes_contracts.planning import (
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
+
+
+def _bundle(root: Path) -> ScenarioBundle:
+    return project_tree_bundle(root, root / "scenarios" / "demo.sdl.yaml")
 
 
 def _resource(
@@ -134,8 +139,8 @@ def test_interpreter_lowers_stateful_resources_into_deployment_spec(tmp_path: Pa
 
     realization = interpret_provisioning_plan(
         plan=_plan(_node("wazuh-indexer"), _node("wazuh-manager"), artifact, volume),
-        project_dir=tmp_path,
         config=_config(),
+        bundle=_bundle(tmp_path),
     )
 
     assert [item.code for item in realization.diagnostics] == []
@@ -180,8 +185,8 @@ def test_interpreter_rejects_unknown_stateful_consumer_before_backend(tmp_path: 
 
     realization = interpret_provisioning_plan(
         plan=_plan(_node("wazuh-indexer"), artifact),
-        project_dir=tmp_path,
         config=_config(),
+        bundle=_bundle(tmp_path),
     )
 
     assert realization.generated_artifacts == ()

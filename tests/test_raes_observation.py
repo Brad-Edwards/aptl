@@ -163,7 +163,7 @@ def _node_realization(name="vm", container="aptl-vm"):
     )
 
 
-def test_running_healthy_node_is_realized_with_concerns():
+def test_running_healthy_node_is_realized_with_concerns(tmp_path):
     address, plan = _node_plan()
     realization = AptlRealization(
         profiles=frozenset(),
@@ -172,7 +172,9 @@ def test_running_healthy_node_is_realized_with_concerns():
         placements=(),
         diagnostics=(),
     )
-    obs = observe_realization(_Backend(containers=("aptl-vm",)), realization, plan)
+    obs = observe_realization(
+        _Backend(containers=("aptl-vm",)), realization, plan, scenario_root=tmp_path
+    )
     assert obs[address].realized is True
     assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
 
@@ -229,18 +231,20 @@ def _domain_realization():
     )
 
 
-def test_domain_topology_attested_when_live_domain_matches():
+def test_domain_topology_attested_when_live_domain_matches(tmp_path):
     address, plan = _domain_node_plan()
     backend = _Backend(
         containers=("aptl-ad",),
         exec_results={"aptl-ad": (0, _SAMBA_DOMAIN_INFO)},
     )
-    obs = observe_realization(backend, _domain_realization(), plan)
+    obs = observe_realization(
+        backend, _domain_realization(), plan, scenario_root=tmp_path
+    )
     assert obs[address].realized is True
     assert obs[address].concerns[("domain_topology",)] == _DECLARED_TOPOLOGY
 
 
-def test_domain_topology_omitted_when_live_domain_differs():
+def test_domain_topology_omitted_when_live_domain_differs(tmp_path):
     address, plan = _domain_node_plan()
     backend = _Backend(
         containers=("aptl-ad",),
@@ -248,31 +252,37 @@ def test_domain_topology_omitted_when_live_domain_differs():
             "aptl-ad": (0, _SAMBA_DOMAIN_INFO.replace("TECHVAULT", "OTHERCORP"))
         },
     )
-    obs = observe_realization(backend, _domain_realization(), plan)
+    obs = observe_realization(
+        backend, _domain_realization(), plan, scenario_root=tmp_path
+    )
     assert obs[address].realized is True
     assert ("domain_topology",) not in obs[address].concerns
 
 
-def test_domain_topology_probe_failure_fails_closed():
+def test_domain_topology_probe_failure_fails_closed(tmp_path):
     address, plan = _domain_node_plan()
     backend = _Backend(
         containers=("aptl-ad",),
         exec_results={"aptl-ad": (1, "")},
     )
-    obs = observe_realization(backend, _domain_realization(), plan)
+    obs = observe_realization(
+        backend, _domain_realization(), plan, scenario_root=tmp_path
+    )
     assert obs[address].realized is True
     assert ("domain_topology",) not in obs[address].concerns
 
 
-def test_domain_topology_exec_timeout_fails_closed_not_crash():
+def test_domain_topology_exec_timeout_fails_closed_not_crash(tmp_path):
     address, plan = _domain_node_plan()
     backend = _Backend(containers=("aptl-ad",), exec_raises=True)
-    obs = observe_realization(backend, _domain_realization(), plan)
+    obs = observe_realization(
+        backend, _domain_realization(), plan, scenario_root=tmp_path
+    )
     assert obs[address].realized is True
     assert ("domain_topology",) not in obs[address].concerns
 
 
-def test_starting_node_settles_before_judgment(monkeypatch):
+def test_starting_node_settles_before_judgment(monkeypatch, tmp_path):
     """A transiently 'starting' container is waited out, not failed.
 
     Wazuh manager/indexer restart themselves once during first boot, so a
@@ -295,7 +305,7 @@ def test_starting_node_settles_before_judgment(monkeypatch):
         containers=("aptl-vm",),
         health_sequence=["starting", "starting", "healthy"],
     )
-    obs = observe_realization(backend, realization, plan)
+    obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
     assert obs[address].concerns[("node_type",)] == "vm"
 
@@ -322,7 +332,7 @@ def test_settle_deadline_returns_transitional_info_instead_of_hanging(monkeypatc
     assert helpers.container_realized(info) is False
 
 
-def test_stopped_node_fails_immediately_without_settling(monkeypatch):
+def test_stopped_node_fails_immediately_without_settling(monkeypatch, tmp_path):
     from aptl.backends import _raes_observation_helpers as helpers
 
     def _no_sleep(_s):
@@ -338,12 +348,15 @@ def test_stopped_node_fails_immediately_without_settling(monkeypatch):
         diagnostics=(),
     )
     obs = observe_realization(
-        _Backend(containers=("aptl-vm",), running=False), realization, plan
+        _Backend(containers=("aptl-vm",), running=False),
+        realization,
+        plan,
+        scenario_root=tmp_path,
     )
     assert obs[address].realized is False
 
 
-def test_node_without_declared_topology_is_never_probed():
+def test_node_without_declared_topology_is_never_probed(tmp_path):
     address, plan = _node_plan()
     realization = AptlRealization(
         profiles=frozenset(),
@@ -354,12 +367,12 @@ def test_node_without_declared_topology_is_never_probed():
     )
     # No exec_results configured: the fake asserts if container_exec is called.
     backend = _Backend(containers=("aptl-vm",))
-    obs = observe_realization(backend, realization, plan)
+    obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
     assert obs[address].concerns == {("node_type",): "vm", ("os_family",): "linux"}
 
 
-def test_non_running_node_is_not_realized():
+def test_non_running_node_is_not_realized(tmp_path):
     address, plan = _node_plan()
     realization = AptlRealization(
         profiles=frozenset(),
@@ -369,10 +382,15 @@ def test_non_running_node_is_not_realized():
         diagnostics=(),
     )
     backend = _Backend(containers=("aptl-vm",), running=False)
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
-def test_unhealthy_node_is_not_realized():
+def test_unhealthy_node_is_not_realized(tmp_path):
     address, plan = _node_plan()
     realization = AptlRealization(
         profiles=frozenset(),
@@ -382,10 +400,15 @@ def test_unhealthy_node_is_not_realized():
         diagnostics=(),
     )
     backend = _Backend(containers=("aptl-vm",), health="unhealthy")
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
-def test_inspect_timeout_fails_closed_not_crash():
+def test_inspect_timeout_fails_closed_not_crash(tmp_path):
     """A transient ``docker inspect`` failure reads as absent, not realized."""
     address, plan = _node_plan()
     realization = AptlRealization(
@@ -397,10 +420,15 @@ def test_inspect_timeout_fails_closed_not_crash():
     )
     backend = _Backend(containers=("aptl-vm",), inspect_raises=True)
     # Must not raise, and the unobservable node must not be reported realized.
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
-def test_same_named_container_from_another_project_is_not_realized():
+def test_same_named_container_from_another_project_is_not_realized(tmp_path):
     """A foreign container name cannot satisfy this project's node concern."""
     address, plan = _node_plan()
     realization = AptlRealization(
@@ -412,10 +440,15 @@ def test_same_named_container_from_another_project_is_not_realized():
     )
     backend = _Backend(containers=("aptl-vm",), project_owned=False)
 
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
-def test_switch_network_realized_under_project_prefixed_name():
+def test_switch_network_realized_under_project_prefixed_name(tmp_path):
     """A switch's network is recognized under Compose's real prefixed name."""
     address = "provision.network.redteam-net"
     resource = PlannedResource(
@@ -447,12 +480,12 @@ def test_switch_network_realized_under_project_prefixed_name():
         diagnostics=(),
     )
     backend = _Backend(networks=("redteam-net",))
-    obs = observe_realization(backend, realization, plan)
+    obs = observe_realization(backend, realization, plan, scenario_root=tmp_path)
     assert obs[address].realized is True
     assert obs[address].concerns == {("node_type",): "switch"}
 
 
-def test_network_list_timeout_fails_closed():
+def test_network_list_timeout_fails_closed(tmp_path):
     """A transient network-listing failure reads switches as not realized."""
     address = "provision.network.redteam-net"
     resource = PlannedResource(
@@ -484,10 +517,15 @@ def test_network_list_timeout_fails_closed():
         diagnostics=(),
     )
     backend = _Backend(networks=("redteam-net",), networks_raise=True)
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
-def test_feature_binding_placement_resolves_via_target_address():
+def test_feature_binding_placement_resolves_via_target_address(tmp_path):
     """A feature-binding (no ``target_address`` in payload) resolves via the
     already-resolved placement target and reads realized when its node is up."""
     address = "provision.feature.x"
@@ -519,14 +557,17 @@ def test_feature_binding_placement_resolves_via_target_address():
         diagnostics=(),
     )
     assert (
-        observe_realization(_Backend(containers=("aptl-vm",)), realization, plan)[
-            address
-        ].realized
+        observe_realization(
+            _Backend(containers=("aptl-vm",)),
+            realization,
+            plan,
+            scenario_root=tmp_path,
+        )[address].realized
         is True
     )
 
 
-def test_placement_on_down_target_is_not_realized():
+def test_placement_on_down_target_is_not_realized(tmp_path):
     address = "provision.feature.x"
     resource = PlannedResource(
         address=address,
@@ -557,9 +598,9 @@ def test_placement_on_down_target_is_not_realized():
     )
     # container aptl-vm absent -> target node down -> placement not realized
     assert (
-        observe_realization(_Backend(containers=()), realization, plan)[
-            address
-        ].realized
+        observe_realization(
+            _Backend(containers=()), realization, plan, scenario_root=tmp_path
+        )[address].realized
         is False
     )
 
@@ -652,7 +693,9 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         },
     )
 
-    observed = observe_realization(backend, realization, plan)[address]
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -668,10 +711,20 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         }
     ]
     backend.authenticated_readiness = {}
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
     backend.authenticated_readiness = {"wazuh.indexer": True}
     certificate_evidence.return_value = None
-    assert observe_realization(backend, realization, plan)[address].realized is False
+    assert (
+        observe_realization(backend, realization, plan, scenario_root=tmp_path)[
+            address
+        ].realized
+        is False
+    )
 
 
 def test_rendered_config_observation_records_digest_not_content(tmp_path):
@@ -754,7 +807,10 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
     )
 
     observed = observe_realization(
-        backend, realization, ProvisioningPlan(resources={address: resource})
+        backend,
+        realization,
+        ProvisioningPlan(resources={address: resource}),
+        scenario_root=tmp_path,
     )[address]
 
     assert observed.realized is True
@@ -765,7 +821,7 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
     assert "must-not-enter-evidence" not in str(observed.evidence)
 
 
-def test_persistent_volume_is_observed_from_project_scoped_mount():
+def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
     address = "provision.persistent-volume.wazuh-indexer-data"
     spec = {
         "lifecycle": "retain",
@@ -826,7 +882,9 @@ def test_persistent_volume_is_observed_from_project_scoped_mount():
         },
     )
 
-    observed = observe_realization(backend, realization, plan)[address]
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observed.realized is True
     assert observed.concerns == {("spec",): spec}
@@ -844,9 +902,12 @@ def test_persistent_volume_is_observed_from_project_scoped_mount():
             }
         ],
     }
-    assert observe_realization(_Backend(containers=()), realization, plan)[
-        address
-    ].realized is False
+    assert (
+        observe_realization(
+            _Backend(containers=()), realization, plan, scenario_root=tmp_path
+        )[address].realized
+        is False
+    )
 
 
 def _content_placement_fixture():
@@ -900,7 +961,7 @@ def _content_placement_fixture():
     return address, plan, realization
 
 
-def test_content_type_comes_from_backend_probe_not_declared_payload():
+def test_content_type_comes_from_backend_probe_not_declared_payload(tmp_path):
     """A realized directory must not be echoed back as the planned file."""
     address, plan, realization = _content_placement_fixture()
     backend = _Backend(
@@ -908,18 +969,22 @@ def test_content_type_comes_from_backend_probe_not_declared_payload():
         content_types={address: "directory"},
     )
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.realized is True
     assert observation.concerns == {("spec", "type"): "directory"}
 
 
-def test_content_probe_timeout_omits_concern_without_echoing_plan():
+def test_content_probe_timeout_omits_concern_without_echoing_plan(tmp_path):
     """Unobservable exact content fails closed instead of becoming a file."""
     address, plan, realization = _content_placement_fixture()
     backend = _Backend(containers=("aptl-vm",), content_probe_raises=True)
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.realized is True
     assert observation.concerns == {}
@@ -981,7 +1046,7 @@ def _image_free_content_placement_fixture():
     return address, plan, realization
 
 
-def test_image_free_content_type_observed_via_container_exec_not_volume_probe():
+def test_image_free_content_type_observed_via_container_exec_not_volume_probe(tmp_path):
     """No named volume to probe (ADR-048) - read the destination back directly."""
     address, plan, realization = _image_free_content_placement_fixture()
     backend = _Backend(
@@ -989,42 +1054,50 @@ def test_image_free_content_type_observed_via_container_exec_not_volume_probe():
         exec_results={"aptl-vm": [(1, ""), (0, "")]},  # test -d fails, test -f succeeds
     )
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.realized is True
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_image_free_content_type_directory_observed_via_container_exec():
+def test_image_free_content_type_directory_observed_via_container_exec(tmp_path):
     address, plan, realization = _image_free_content_placement_fixture()
     backend = _Backend(
         containers=("aptl-vm",),
         exec_results={"aptl-vm": [(0, "")]},  # test -d succeeds; test -f never runs
     )
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.concerns == {("spec", "type"): "directory"}
 
 
-def test_image_free_content_missing_omits_concern_without_echoing_plan():
+def test_image_free_content_missing_omits_concern_without_echoing_plan(tmp_path):
     address, plan, realization = _image_free_content_placement_fixture()
     backend = _Backend(
         containers=("aptl-vm",),
         exec_results={"aptl-vm": [(1, ""), (1, "")]},  # neither -d nor -f
     )
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.realized is True
     assert observation.concerns == {}
 
 
-def test_image_free_content_exec_timeout_fails_closed_not_crash():
+def test_image_free_content_exec_timeout_fails_closed_not_crash(tmp_path):
     address, plan, realization = _image_free_content_placement_fixture()
     backend = _Backend(containers=("aptl-vm",), exec_raises=True)
 
-    observation = observe_realization(backend, realization, plan)[address]
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
 
     assert observation.realized is True
     assert observation.concerns == {}

@@ -60,7 +60,7 @@ def test_realization_receives_the_bundle_not_just_the_project(monkeypatch):
 
     seen: dict[str, object] = {}
 
-    def _capture(*, plan, project_dir, config, bundle=None):
+    def _capture(*, plan, config, bundle):
         seen["bundle"] = bundle
         raise RuntimeError("stop after capture")
 
@@ -83,14 +83,36 @@ def test_realization_receives_the_bundle_not_just_the_project(monkeypatch):
     assert seen["bundle"] is bundle
 
 
-def test_the_public_start_path_resolves_a_bundle():
-    """`start_raes_scenario`'s planning step must produce one, not None."""
+def test_the_public_start_path_resolves_a_bundle(monkeypatch, tmp_path):
+    """`_plan_scenario` must resolve a bundle and thread it into the target.
 
-    import inspect
+    Behavioral, not a source grep: it executes the planning step and asserts the
+    bundle actually handed to ``create_aptl_runtime_target`` is rooted where the
+    resolver puts it, so a regression that resolves a bundle then discards it
+    fails here.
+    """
+
+    import pytest
 
     from aptl.backends import raes
+    from aptl.core.scenario_bundle import project_tree_bundle
 
-    source = inspect.getsource(raes._plan_scenario)
-    assert "project_tree_bundle" in source, (
-        "the public start path does not resolve a scenario bundle"
-    )
+    # Unresolved project dir whose .resolve() differs, so threading the raw dir
+    # instead of the resolved bundle root would fail this test.
+    project_dir = tmp_path / ".." / tmp_path.name
+    scenario_path = tmp_path / "scenarios" / "demo.sdl.yaml"
+    seen: dict[str, object] = {}
+
+    def _capture(**kwargs):
+        seen["bundle"] = kwargs.get("bundle")
+        raise RuntimeError("stop after capture")
+
+    monkeypatch.setattr(raes, "parse_sdl_file", lambda path: object())
+    monkeypatch.setattr(raes, "create_aptl_runtime_target", _capture)
+
+    with pytest.raises(RuntimeError):
+        raes._plan_scenario(project_dir, AptlConfig(), MagicMock(), scenario_path, None)
+
+    assert seen["bundle"] is not None
+    assert seen["bundle"].root == project_tree_bundle(project_dir, scenario_path).root
+    assert seen["bundle"].root != project_dir

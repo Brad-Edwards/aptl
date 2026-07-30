@@ -97,8 +97,17 @@ class ComposeRealizationMixin(
         realization: DeploymentRealizationSpec,
         *,
         build: bool = True,
+        scenario_root: Path,
     ) -> LabResult:
-        """Realize a typed scenario deployment through Docker Compose."""
+        """Realize a typed scenario deployment through Docker Compose.
+
+        ``scenario_root`` is the bundle root every scenario-declared filesystem
+        input (Compose model, build contexts, generated-artifact locations)
+        resolves against. It is required and request-scoped: the backend never
+        caches it. The operator ``.env`` stays the control-plane
+        ``project_dir/.env``. For an in-tree scenario ``scenario_root`` is the
+        project directory, so behaviour is unchanged (issue #874).
+        """
 
         # Route from per-node facts, never a whole-graph flag. A mixed graph is
         # normal (ADR-051): some nodes come from a pinned artifact, some are
@@ -106,14 +115,17 @@ class ComposeRealizationMixin(
         # only whole-graph question left is whether Compose has anything to
         # start.
         if not _needs_compose(realization):
-            return self._realize_without_compose(realization)
-        return self._realize_mixed_or_legacy(realization, build=build)
+            return self._realize_without_compose(realization, scenario_root)
+        return self._realize_mixed_or_legacy(
+            realization, build=build, scenario_root=scenario_root
+        )
 
     def _realize_mixed_or_legacy(
         self,
         realization: DeploymentRealizationSpec,
         *,
         build: bool,
+        scenario_root: Path,
     ) -> LabResult:
         """Realize a spec with at least one still-Compose-managed node.
 
@@ -130,7 +142,7 @@ class ComposeRealizationMixin(
             # names excluded from `compose up` so neither side starts, skips,
             # or double-realizes the other's nodes.
             node_result = self._materialize_image_free_nodes(
-                realization, image_free_addresses
+                realization, image_free_addresses, scenario_root
             )
             if node_result is not None:
                 return node_result
@@ -158,7 +170,9 @@ class ComposeRealizationMixin(
             """Pull/build declared images and capture the resulting compose override."""
 
             nonlocal compose_files
-            result, compose_files = self._prepare_realization_images(realization)
+            result, compose_files = self._prepare_realization_images(
+                realization, scenario_root
+            )
             return result
 
         def _networks() -> LabResult | None:
@@ -173,9 +187,11 @@ class ComposeRealizationMixin(
             """Render and validate the generated Compose model."""
 
             nonlocal compose_files
-            compose_files = self._realization_compose_files(compose_files, realization)
+            compose_files = self._realization_compose_files(
+                compose_files, realization, scenario_root
+            )
             return self._validate_realization_compose_model(
-                profiles, compose_files, realization
+                profiles, compose_files, realization, scenario_root
             )
 
         def _start() -> LabResult:
@@ -186,6 +202,7 @@ class ComposeRealizationMixin(
                 build=build and not self._offline_staged,
                 compose_files=compose_files,
                 exclude_services=excluded_services,
+                scenario_root=scenario_root,
             )
             return self._realization_result(start_result, realization)
 
@@ -195,11 +212,11 @@ class ComposeRealizationMixin(
         steps = (
             lambda: self._validate_stateful_realization(realization),
             lambda: self._validate_stateful_compose_capability(realization),
-            lambda: self._realize_stateful_prerequisites(realization),
+            lambda: self._realize_stateful_prerequisites(realization, scenario_root),
             _images,
             lambda: self._realize_published_ports(realization),
             _networks,
-            lambda: self._realize_content(realization),
+            lambda: self._realize_content(realization, scenario_root),
             _compose_model,
             _start,
         )
@@ -213,6 +230,7 @@ class ComposeRealizationMixin(
         self,
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
+        scenario_root: Path,
     ) -> LabResult | None:
         """Materialize just the runtime:-declared node subset (ADR-048).
 
@@ -232,11 +250,12 @@ class ComposeRealizationMixin(
         content = tuple(
             item for item in realization.content if item.target_address in addresses
         )
-        return _realize_node_subset(self, nodes, content)
+        return _realize_node_subset(self, nodes, content, scenario_root)
 
     def _realize_without_compose(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> LabResult:
         """Realize a graph in which no node is Compose-managed.
 
@@ -255,7 +274,9 @@ class ComposeRealizationMixin(
         boundary_result = self._realize_authority_boundaries(realization)
         if boundary_result is not None:
             return boundary_result
-        node_result = _realize_node_subset(self, realization.nodes, realization.content)
+        node_result = _realize_node_subset(
+            self, realization.nodes, realization.content, scenario_root
+        )
         return node_result if node_result is not None else LabResult(success=True)
 
     def _realize_published_ports(
@@ -279,22 +300,31 @@ class ComposeRealizationMixin(
         self,
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> tuple[Path, ...] | None:
-        """Add generated realization overrides to the Compose file set."""
+        """Add generated realization overrides to the Compose file set.
 
-        port_override = write_port_override(self._project_dir, realization)
-        stateful_override = self._write_stateful_realization_override(realization)
+        The base ``docker-compose.yml`` and the generated overrides are
+        scenario-declared inputs, anchored to ``scenario_root`` (the bundle
+        root), not the engine checkout.
+        """
+
+        port_override = write_port_override(scenario_root, realization)
+        stateful_override = self._write_stateful_realization_override(
+            realization, scenario_root
+        )
         overrides = tuple(
             path for path in (port_override, stateful_override) if path is not None
         )
         if not overrides:
             return compose_files
-        base_files = compose_files or (self._project_dir / "docker-compose.yml",)
+        base_files = compose_files or (scenario_root / "docker-compose.yml",)
         return (*base_files, *overrides)
 
     def _realize_content(
         self,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> LabResult | None:
         """Materialize typed content placements; fail closed on any seed error.
 
@@ -306,7 +336,11 @@ class ComposeRealizationMixin(
         if not realization.content:
             return None
         try:
-            self.realize_content(realization.content, seeder_image=CONTENT_SEEDER_IMAGE)
+            self.realize_content(
+                realization.content,
+                seeder_image=CONTENT_SEEDER_IMAGE,
+                scenario_root=scenario_root,
+            )
         except (BackendSeedError, BackendTimeoutError) as exc:
             return LabResult(
                 success=False,
@@ -319,6 +353,7 @@ class ComposeRealizationMixin(
         profiles: list[str],
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> LabResult | None:
         """Render and inspect the effective generated model before startup."""
 
@@ -328,12 +363,13 @@ class ComposeRealizationMixin(
             "config",
             profiles,
             compose_files=compose_files,
+            scenario_root=scenario_root,
         )
         stateful = bool(
             realization.generated_artifacts or realization.persistent_volumes
         )
         error = (
-            self._effective_compose_model_error(command, realization)
+            self._effective_compose_model_error(command, realization, scenario_root)
             if stateful
             else self._compose_syntax_error(command)
         )
@@ -350,6 +386,7 @@ class ComposeRealizationMixin(
         self,
         command: list[str],
         realization: DeploymentRealizationSpec,
+        scenario_root: Path,
     ) -> str | None:
         """Render and validate a stateful model without interpolating secrets."""
 
@@ -363,7 +400,7 @@ class ComposeRealizationMixin(
             return _COMPOSE_MODEL_VALIDATION_ERROR
         errors = effective_stateful_model_errors(
             payload,
-            self._project_dir,
+            scenario_root,
             self.project_name,
             realization,
         )

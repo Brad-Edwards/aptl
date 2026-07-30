@@ -26,6 +26,7 @@ from aptl.backends.raes_participant_bindings import (
     participant_action_specs_from_runtime_model as _binding_action_specs,
 )
 from aptl.core.config import AptlConfig
+from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
@@ -133,7 +134,7 @@ def participant_action_specs_from_runtime_model(
     model: object,
     *,
     provisioning_plan: ProvisioningPlan,
-    project_dir: Path,
+    bundle: ScenarioBundle,
     config: AptlConfig,
 ) -> dict[str, ParticipantActionSpec]:
     """Return APTL action bindings declared by compiled runtime artifacts."""
@@ -143,7 +144,7 @@ def participant_action_specs_from_runtime_model(
         _binding_action_specs(
             model,
             provisioning_plan=provisioning_plan,
-            project_dir=project_dir,
+            bundle=bundle,
             config=config,
             spec_factory=ParticipantActionSpec,
         ),
@@ -154,7 +155,7 @@ def participant_action_specs_for_scenario(
     scenario: object,
     *,
     provisioning_plan: ProvisioningPlan,
-    project_dir: Path,
+    bundle: ScenarioBundle,
     config: AptlConfig,
 ) -> dict[str, ParticipantActionSpec]:
     """Best-effort participant bindings from compiled runtime artifacts."""
@@ -166,7 +167,7 @@ def participant_action_specs_for_scenario(
     return participant_action_specs_from_runtime_model(
         model,
         provisioning_plan=provisioning_plan,
-        project_dir=project_dir,
+        bundle=bundle,
         config=config,
     )
 

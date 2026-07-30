@@ -12,46 +12,50 @@ from aptl.core.deployment._compose_volume_cleanup import (
 )
 
 
-@pytest.mark.parametrize(
-    ("content", "message"),
-    [
-        ("volumes: [\n", "while parsing"),
-        ("- not-a-compose-mapping\n", "invalid Compose"),
-        ("volumes: [invalid]\n", "invalid volumes"),
-    ],
-)
-def test_project_scoped_volume_names_rejects_invalid_compose(
-    tmp_path, content, message
-):
-    (tmp_path / "docker-compose.yml").write_text(content, encoding="utf-8")
+def test_project_scoped_volume_names_returns_labeled_project_volumes(mocker):
+    """Volumes are discovered by Compose project label, not a filesystem model.
 
-    names, error = project_scoped_volume_names(tmp_path, "test")
+    Teardown is scenario-agnostic (issue #874): it must find the running range's
+    volumes by project-scoped Docker identity so it works regardless of which
+    bundle root the scenario was realized from.
+    """
 
-    assert names == set()
-    assert message in error
-
-
-def test_project_scoped_volume_names_reports_missing_compose(tmp_path):
-    names, error = project_scoped_volume_names(tmp_path, "test")
-
-    assert names == set()
-    assert "Failed to read project volumes for cleanup" in error
-
-
-def test_project_scoped_volume_names_excludes_global_and_invalid_names(tmp_path):
-    (tmp_path / "docker-compose.yml").write_text(
-        "volumes:\n"
-        "  1: {}\n"
-        "  seeded_data:\n"
-        "  shared_data: {external: true}\n"
-        "  explicit_data: {name: global-data}\n",
-        encoding="utf-8",
+    run = mocker.Mock(
+        return_value=CompletedProcess(
+            [], 0, stdout="test_seeded_data\ntest_certs\n", stderr=""
+        )
     )
 
-    names, error = project_scoped_volume_names(tmp_path, "test")
+    names, error = project_scoped_volume_names("test", run, timeout=30)
 
     assert error == ""
-    assert names == {"test_seeded_data"}
+    assert names == {"test_seeded_data", "test_certs"}
+    # Discovery is by the Compose project label, never by reading a compose file.
+    (command,), _ = run.call_args
+    assert command[:3] == ["docker", "volume", "ls"]
+    assert "label=com.docker.compose.project=test" in command
+
+
+def test_project_scoped_volume_names_reports_list_failure(mocker):
+    run = mocker.Mock(
+        return_value=CompletedProcess([], 1, stdout="", stderr="daemon down")
+    )
+
+    names, error = project_scoped_volume_names("test", run, timeout=30)
+
+    assert names == set()
+    assert "Failed to list project volumes for cleanup" in error
+
+
+def test_project_scoped_volume_names_ignores_blank_lines(mocker):
+    run = mocker.Mock(
+        return_value=CompletedProcess([], 0, stdout="test_data\n\n", stderr="")
+    )
+
+    names, error = project_scoped_volume_names("test", run, timeout=30)
+
+    assert error == ""
+    assert names == {"test_data"}
 
 
 def test_remove_leftover_project_volumes_skips_docker_when_none_expected(mocker):

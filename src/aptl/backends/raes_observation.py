@@ -79,8 +79,14 @@ def observe_realization(
     backend: "DeploymentBackend",
     realization: AptlRealization,
     plan: ProvisioningPlan,
+    scenario_root: Path,
 ) -> dict[str, ObservedResource]:
-    """Return, per planned address, what the backend actually realized."""
+    """Return, per planned address, what the backend actually realized.
+
+    ``scenario_root`` is the bundle root generated artifacts were produced
+    under; observation reads them back from the same root, never the engine
+    checkout (issue #874).
+    """
 
     observations: dict[str, ObservedResource] = {}
     node_containers = {
@@ -124,6 +130,7 @@ def observe_realization(
                 backend,
                 artifacts.get(address),
                 node_containers,
+                scenario_root,
             )
         elif resource.resource_type == "persistent-volume":
             observations[address] = _observe_persistent_volume(

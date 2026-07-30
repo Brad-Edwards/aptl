@@ -444,3 +444,7 @@ data/
 .tools/
 .vale/styles/*
 !.vale/styles/AptlProject/
+
+# Local Codex CLI runtime state created by the architecture-preflight and
+# review tooling; it is per-checkout and never part of a change.
+.codex/

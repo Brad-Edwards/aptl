@@ -138,7 +138,7 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     assert _needs_compose(spec) is True
 
     try:
-        result = backend.realize(spec, build=False)
+        result = backend.realize(spec, build=False, scenario_root=tmp_path)
         assert result.success, result.error
 
         # Exactly one container for the runtime: node - Compose was told to

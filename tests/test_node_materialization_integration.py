@@ -109,7 +109,7 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
 
     assert _needs_compose(spec) is False
     try:
-        result = backend.realize(spec)
+        result = backend.realize(spec, scenario_root=tmp_path)
         assert result.success, result.error
         assert "curl" in backend.container_exec(
             container, ["dpkg-query", "-W", "-f=${Package}\n", "curl"]

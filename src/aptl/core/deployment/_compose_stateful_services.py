@@ -33,7 +33,7 @@ StatefulDumper.add_representer(
 
 
 def wazuh_service_definitions(
-    project_dir: Path,
+    scenario_root: Path,
     realization: DeploymentRealizationSpec,
 ) -> dict[str, dict[str, object]]:
     """Build complete manager/indexer definitions from the admitted DTO graph."""
@@ -46,13 +46,13 @@ def wazuh_service_definitions(
     services: dict[str, dict[str, object]] = {}
     if WAZUH_INDEXER_SERVICE in owned:
         services[WAZUH_INDEXER_SERVICE] = _indexer_definition(
-            project_dir,
+            scenario_root,
             nodes[WAZUH_INDEXER_SERVICE],
             images[WAZUH_INDEXER_SERVICE],
         )
     if WAZUH_MANAGER_SERVICE in owned:
         services[WAZUH_MANAGER_SERVICE] = _manager_definition(
-            project_dir,
+            scenario_root,
             nodes[WAZUH_MANAGER_SERVICE],
             images[WAZUH_MANAGER_SERVICE],
             realization.nodes,
@@ -74,7 +74,7 @@ def _stateful_consumers(realization: DeploymentRealizationSpec) -> set[str]:
 
 
 def _indexer_definition(
-    project_dir: Path,
+    scenario_root: Path,
     node: DeploymentNodeRealization,
     image_ref: str,
 ) -> OverrideMapping:
@@ -95,12 +95,12 @@ def _indexer_definition(
             },
             "volumes": [
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_indexer/wazuh.indexer.yml",
                     "/usr/share/wazuh-indexer/opensearch.yml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_indexer/internal_users.yml",
                     "/usr/share/wazuh-indexer/opensearch-security/internal_users.yml",
                 ),
@@ -122,7 +122,7 @@ def _indexer_definition(
 
 
 def _manager_definition(
-    project_dir: Path,
+    scenario_root: Path,
     node: DeploymentNodeRealization,
     image_ref: str,
     nodes: tuple[DeploymentNodeRealization, ...],
@@ -154,12 +154,12 @@ def _manager_definition(
             },
             "volumes": [
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/filebeat_wazuh_module.yml",
                     "/run/filebeat-override.yml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/patch-rule-path.py",
                     "/docker-entrypoint-initdb.d/patch-rule-path.py",
                 ),
@@ -177,42 +177,42 @@ def _manager_definition(
                 # Docker mounts by path depth, so the more-specific bind
                 # overlays the volume and the files appear.
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/webapp_rules.xml",
                     "/var/ossec/etc/rules/webapp_rules.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/ad_rules.xml",
                     "/var/ossec/etc/rules/ad_rules.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/suricata_rules.xml",
                     "/var/ossec/etc/rules/suricata_rules.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/database_rules.xml",
                     "/var/ossec/etc/rules/database_rules.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/falco_rules.xml",
                     "/var/ossec/etc/rules/falco_rules.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/samba_decoders.xml",
                     "/var/ossec/etc/decoders/samba_decoders.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/postgresql_decoders.xml",
                     "/var/ossec/etc/decoders/postgresql_decoders.xml",
                 ),
                 _bind(
-                    project_dir,
+                    scenario_root,
                     "config/wazuh_cluster/custom-shuffle",
                     "/var/ossec/integrations/custom-shuffle",
                 ),
@@ -246,12 +246,12 @@ def _manager_entrypoint() -> str:
     )
 
 
-def _bind(project_dir: Path, source: str, target: str) -> dict[str, object]:
+def _bind(scenario_root: Path, source: str, target: str) -> dict[str, object]:
     """Return a read-only, project-rooted long-form bind mount."""
 
     return {
         "type": "bind",
-        "source": str(project_dir.resolve() / source),
+        "source": str(scenario_root.resolve() / source),
         "target": target,
         "read_only": True,
     }

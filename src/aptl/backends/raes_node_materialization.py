@@ -54,11 +54,14 @@ def realize_node(
     node: _MaterializableNode,
     backend: _NodeBackend,
     content: tuple[MaterializationOp, ...] = (),
+    scenario_root: Path | None = None,
 ) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
-    Returns ``None`` on fully-verified success, or a fail-closed
-    :class:`LabResult` naming the node and the unmet contract.
+    ``scenario_root`` is the bundle root scenario-declared content copied into
+    the node resolves against; ``None`` falls back to the backend's in-tree
+    project directory (issue #874). Returns ``None`` on fully-verified success,
+    or a fail-closed :class:`LabResult` naming the node and the unmet contract.
     """
 
     spec, ops = plan_node(
@@ -85,7 +88,11 @@ def realize_node(
         container_for=lambda _addr: container,
         start_base=start_base,
         copy_in=backend.copy_into_container,
-        project_dir=getattr(backend, "project_dir", None),
+        scenario_root=(
+            scenario_root
+            if scenario_root is not None
+            else getattr(backend, "project_dir", None)
+        ),
     )
     return materialize_node(node.address, ops, executor)
 
@@ -94,6 +101,7 @@ def realize_nodes(
     nodes: Iterable[_MaterializableNode],
     backend: _NodeBackend,
     content_by_node: dict[str, tuple[MaterializationOp, ...]] | None = None,
+    scenario_root: Path | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 
@@ -107,7 +115,12 @@ def realize_nodes(
     for node in nodes:
         if not node.os:
             continue
-        result = realize_node(node, backend, content_by_node.get(node.address, ()))
+        result = realize_node(
+            node,
+            backend,
+            content_by_node.get(node.address, ()),
+            scenario_root=scenario_root,
+        )
         if result is not None:
             return result
     return None

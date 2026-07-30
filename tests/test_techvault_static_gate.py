@@ -36,6 +36,7 @@ from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
 from aptl.validation._account_parity import check_account_provisioner_parity
@@ -65,6 +66,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
+
+
+def _bundle(root, sdl_path=None):
+    """Bundle for an in-tree scenario rooted at ``root`` (issue #874).
+
+    Every call below previously passed ``root`` as ``project_dir``; anchoring
+    the bundle to the same directory keeps these gates behaviourally identical.
+    """
+    return project_tree_bundle(root, sdl_path or root / "scenarios" / "demo.sdl.yaml")
 
 
 # --------------------------------------------------------------------------- #
@@ -129,11 +139,14 @@ def test_operational_scenario_passes_the_realization_declaration_gate():
     """
     config = load_config(PROJECT_ROOT / "aptl.json")
     backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
+    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
     plan = RuntimeManager(
-        create_aptl_runtime_target(project_dir=PROJECT_ROOT, config=config, backend=backend)
+        create_aptl_runtime_target(
+            project_dir=PROJECT_ROOT, config=config, backend=backend, bundle=bundle
+        )
     ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
     realization = interpret_provisioning_plan(
-        plan=plan.provisioning, project_dir=PROJECT_ROOT, config=config
+        plan=plan.provisioning, config=config, bundle=bundle
     )
     assert [d.message for d in realization.diagnostics if d.is_error] == []
     assert_image_free(realization.deployment_spec([]))  # raises with every violation
@@ -176,17 +189,19 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -245,17 +260,19 @@ def test_paper_scenario_lowers_same_wazuh_stateful_contract():
     assert scenario is not None
     assert parse_check.passed, parse_check.diagnostics
 
+    bundle = _bundle(PROJECT_ROOT, PAPER_SCENARIO)
     execution_plan = RuntimeManager(
         create_aptl_runtime_target(
             project_dir=PROJECT_ROOT,
             config=config,
             backend=_NoStartBackend(),
+            bundle=bundle,
         )
     ).plan(scenario)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=PROJECT_ROOT,
         config=config,
+        bundle=bundle,
     )
     details = realization.details()
 
@@ -284,7 +301,10 @@ def test_target_conformance_fails_loudly_on_missing_corpus(tmp_path):
 
     config = AptlConfig(lab={"name": "techvault"})
     target = create_aptl_runtime_target(
-        project_dir=PROJECT_ROOT, config=config, backend=_NoStartBackend()
+        project_dir=PROJECT_ROOT,
+        config=config,
+        backend=_NoStartBackend(),
+        bundle=_bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO),
     )
     report = run_target_conformance(
         target,
@@ -458,10 +478,10 @@ def test_distinct_scenarios_yield_distinct_realization(tmp_path):
     config = AptlConfig(lab={"name": "t"})
 
     first = interpret_provisioning_plan(
-        plan=_node_plan("kali"), project_dir=tmp_path, config=config
+        plan=_node_plan("kali"), config=config, bundle=_bundle(tmp_path)
     )
     second = interpret_provisioning_plan(
-        plan=_node_plan("victim"), project_dir=tmp_path, config=config
+        plan=_node_plan("victim"), config=config, bundle=_bundle(tmp_path)
     )
 
     assert not [d for d in first.diagnostics if _is_error(d)]
@@ -478,7 +498,7 @@ def test_realization_rejects_unrealizable_node_even_named_techvault(tmp_path):
     # A node with no compose-profile mapping cannot be realized, regardless of
     # the lab being named "techvault".
     realization = interpret_provisioning_plan(
-        plan=_node_plan("totally-unknown-node"), project_dir=tmp_path, config=config
+        plan=_node_plan("totally-unknown-node"), config=config, bundle=_bundle(tmp_path)
     )
     assert [d for d in realization.diagnostics if _is_error(d)]
 

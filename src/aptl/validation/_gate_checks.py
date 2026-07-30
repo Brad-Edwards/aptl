@@ -25,9 +25,10 @@ from raes import SDLError, parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes.scenario import Scenario
 
-from aptl.backends.raes import create_aptl_runtime_target
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO, create_aptl_runtime_target
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
@@ -114,10 +115,17 @@ class _NoStartBackend(object):
         self._content_paths: dict[str, Path] = {}
         self._image_free_destinations: dict[str, str] = {}
 
-    def realize(self, realization: object, *, build: bool = True) -> LabResult:
+    def realize(
+        self,
+        realization: object,
+        *,
+        build: bool = True,
+        scenario_root: Path | None = None,
+    ) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
-        # `build` is accepted for DeploymentBackend parity; nothing is built here.
-        del build
+        # `build` and `scenario_root` are accepted for DeploymentBackend parity;
+        # this offline backend builds nothing and reads no scenario filesystem.
+        del build, scenario_root
         self._container_names = {
             node.container_name
             for node in getattr(realization, "nodes", ())
@@ -329,8 +337,13 @@ def check_backend_conformance(
 ) -> GateCheck:
     """Confirm APTL's canonical manifest passes target + published-CLI conformance."""
     try:
+        # Conformance validates APTL's own in-tree configuration, so the bundle
+        # is the in-tree bundle (root == project_dir); only the manifest is read.
         target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=_NoStartBackend()
+            project_dir=project_dir,
+            config=config,
+            backend=_NoStartBackend(),
+            bundle=project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO),
         )
         report = run_target_conformance(
             target,
@@ -357,12 +370,18 @@ def check_provisioning_realization(
 ) -> tuple[Mapping[str, object] | None, GateCheck]:
     """Interpret the provisioning plan and confirm it realizes nodes/services/networks."""
     try:
+        # In-tree gate check: the scenario under test lives in project_dir, so
+        # the bundle root is the project directory.
+        bundle = project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO)
         target = create_aptl_runtime_target(
-            project_dir=project_dir, config=config, backend=_NoStartBackend()
+            project_dir=project_dir,
+            config=config,
+            backend=_NoStartBackend(),
+            bundle=bundle,
         )
         execution_plan = RuntimeManager(target).plan(scenario)
         realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning, project_dir=project_dir, config=config
+            plan=execution_plan.provisioning, config=config, bundle=bundle
         )
     # broad-except: RAES surfaces diverse errors
     except Exception as exc:

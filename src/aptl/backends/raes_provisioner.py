@@ -44,9 +44,11 @@ class AptlProvisioner(object):
     project_dir: Path
     config: AptlConfig
     deployment_backend: "DeploymentBackend"
-    # The scenario being realized, and the root its content is anchored to.
-    # None keeps the pre-bundle behaviour for a caller that has not resolved one.
-    bundle: ScenarioBundle | None = None
+    # The scenario being realized, and the root every scenario-declared input is
+    # anchored to. Required: realization never falls back to ``project_dir`` (the
+    # engine checkout). For an in-tree scenario the bundle root *is* the project
+    # directory, which is what keeps an unmoved scenario unchanged (issue #874).
+    bundle: ScenarioBundle
     # RAES's backend-call boundary replaces a failed apply's diagnostics with
     # its snapshot-contract / SEM-218 gate output (the gate reads the
     # never-realized snapshot, so every exact declaration looks unrealized).
@@ -124,7 +126,9 @@ class AptlProvisioner(object):
                 },
             )
         deployment_spec = realization.deployment_spec(selected_profiles)
-        start_result = self.deployment_backend.realize(deployment_spec)
+        start_result = self.deployment_backend.realize(
+            deployment_spec, scenario_root=self.bundle.root
+        )
         if not start_result.success:
             diagnostics.append(
                 diagnostic(
@@ -150,6 +154,7 @@ class AptlProvisioner(object):
             self.deployment_backend,
             realization,
             plan,
+            scenario_root=self.bundle.root,
         )
         realized_snapshot = self._with_artifact_satisfactions(
             plan, snapshot_after_apply(plan, snapshot, observations), realization
@@ -223,7 +228,7 @@ class AptlProvisioner(object):
         diagnostic instead of a raw Compose "undefined service" error.
         """
         try:
-            profile_index = load_compose_profile_index(self.project_dir)
+            profile_index = load_compose_profile_index(self.bundle.root)
         except (OSError, ValueError) as exc:
             return [
                 diagnostic(
@@ -252,7 +257,6 @@ class AptlProvisioner(object):
         """Interpret a RAES plan against APTL's supported contract."""
         return interpret_provisioning_plan(
             plan=plan,
-            project_dir=self.project_dir,
             config=self.config,
             bundle=self.bundle,
         )

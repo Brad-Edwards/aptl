@@ -44,13 +44,17 @@ def _observe_generated_artifact(
     backend: "DeploymentBackend",
     artifact: DeploymentGeneratedArtifactRealization | None,
     node_containers: dict[str, str],
+    scenario_root: Path,
 ) -> ObservedResource:
-    """Observe verified outputs and read-only bind mounts for one artifact."""
+    """Observe verified outputs and read-only bind mounts for one artifact.
 
-    project_dir = getattr(backend, "project_dir", None)
-    if artifact is None or not isinstance(project_dir, Path):
+    A generated artifact is read back from ``scenario_root`` (the bundle root)
+    where it was produced, never the engine checkout (issue #874).
+    """
+
+    if artifact is None or not isinstance(scenario_root, Path):
         return ObservedResource(realized=False)
-    source = artifact_source_path(project_dir, artifact)
+    source = artifact_source_path(scenario_root, artifact)
     outputs_present = _artifact_outputs_present(source, artifact)
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
         backend, artifact, node_containers, source
@@ -60,7 +64,9 @@ def _observe_generated_artifact(
     )
     realized = consumers_ready
     evidence = (
-        _artifact_evidence(backend, project_dir, source, artifact) if realized else {}
+        _artifact_evidence(backend, scenario_root, source, artifact)
+        if realized
+        else {}
     )
     realized = realized and (
         artifact.generator != "certificate_bundle" or "certificate" in evidence
@@ -139,7 +145,7 @@ def _observe_persistent_volume(
 
 def _artifact_evidence(
     backend: "DeploymentBackend",
-    project_dir: Path,
+    scenario_root: Path,
     source: Path,
     artifact: DeploymentGeneratedArtifactRealization,
 ) -> dict[str, object]:
@@ -167,7 +173,7 @@ def _artifact_evidence(
         certificate = certificate_bundle_evidence(
             source,
             artifact.outputs,
-            project_dir / artifact.provenance,
+            scenario_root / artifact.provenance,
         )
         if certificate is not None:
             evidence["certificate"] = certificate

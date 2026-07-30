@@ -4,48 +4,45 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable
-from pathlib import Path
-
-import yaml
 
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.redaction import redact
 
 DockerRun = Callable[..., subprocess.CompletedProcess[str]]
 
-
-def _declared_volumes(compose: object) -> tuple[dict[object, object] | None, str]:
-    """Validate and return the top-level Compose volume mapping."""
-    if not isinstance(compose, dict):
-        return None, "invalid Compose"
-    declared = compose.get("volumes") or {}
-    if not isinstance(declared, dict):
-        return None, "invalid volumes"
-    return declared, ""
+_COMPOSE_PROJECT_LABEL = "com.docker.compose.project"
 
 
 def project_scoped_volume_names(
-    project_dir: Path, project_name: str
+    project_name: str, run: DockerRun, *, timeout: int
 ) -> tuple[set[str], str]:
-    """Return implicit, non-external volume names scoped to one project."""
-    compose_path = project_dir / "docker-compose.yml"
-    try:
-        compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        return set(), f"Failed to read project volumes for cleanup: {exc}"
+    """Return the volumes Compose created for this project, by runtime label.
 
-    declared, error = _declared_volumes(compose)
-    if declared is None:
-        return set(), f"Failed to read project volumes for cleanup: {error}"
-
-    names = set()
-    for key, config in declared.items():
-        settings = config if isinstance(config, dict) else {}
-        if isinstance(key, str) and not (
-            settings.get("external") or settings.get("name")
-        ):
-            names.add(f"{project_name}_{key}")
-    return names, ""
+    Teardown is scenario-agnostic — ``aptl lab stop`` does not know which bundle
+    a running range was realized from — so it must discover its resources by
+    project-scoped Docker identity, never by re-reading a filesystem Compose
+    model that may belong to a different root than the one the scenario started
+    from (issue #874). Docker Compose labels every volume it creates with
+    ``com.docker.compose.project``, so that label is the authoritative,
+    root-independent scope.
+    """
+    listed, failures = _run_volume_command(
+        run,
+        [
+            "docker",
+            "volume",
+            "ls",
+            "--filter",
+            f"label={_COMPOSE_PROJECT_LABEL}={project_name}",
+            "--format",
+            "{{.Name}}",
+        ],
+        "Failed to list project volumes for cleanup",
+        timeout=timeout,
+    )
+    if listed is None:
+        return set(), failures[0] if failures else "Failed to list project volumes"
+    return {name for name in listed.stdout.splitlines() if name}, ""
 
 
 def _run_volume_command(

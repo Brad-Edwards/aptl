@@ -29,7 +29,9 @@ from raes import SDLError, parse_sdl_file
 from raes.scenario import Scenario
 
 from aptl.backends.raes_profiles import select_backend_profiles
+from aptl.backends.raes import DEFAULT_RAES_SCENARIO
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.utils.redaction import redact
 from aptl.validation._live_gate_probes import (
     _boot_lab,
@@ -352,11 +354,13 @@ def check_scenario_variation(
         )
 
     first_node, second_node = pair
+    # In-tree booted scenario: the bundle root is the project directory.
+    bundle = project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO)
     first = interpret_provisioning_plan(
-        plan=_single_node_plan(first_node), project_dir=project_dir, config=config
+        plan=_single_node_plan(first_node), config=config, bundle=bundle
     )
     second = interpret_provisioning_plan(
-        plan=_single_node_plan(second_node), project_dir=project_dir, config=config
+        plan=_single_node_plan(second_node), config=config, bundle=bundle
     )
     diagnostics = _variation_diagnostics(first, second)
     return _check("scenario_variation", CATEGORY_BACKEND_INTERPRETATION, diagnostics)

@@ -60,7 +60,7 @@ def test_offline_staged_realization_inspects_images_and_forbids_pull_or_build(
         return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
 
     with patch("subprocess.run", side_effect=fake_run):
-        result = backend.realize(_spec())
+        result = backend.realize(_spec(), scenario_root=tmp_path)
 
     assert result.success is True
     assert any(command[:3] == ["docker", "image", "inspect"] for command in commands)
@@ -90,7 +90,7 @@ def test_offline_staged_realization_fails_before_start_when_image_is_missing(
         )
 
     with patch("subprocess.run", side_effect=fake_run):
-        result = backend.realize(_spec())
+        result = backend.realize(_spec(), scenario_root=tmp_path)
 
     assert result.success is False
     assert result.error == "Staged image missing for RAES node provision.node.db."

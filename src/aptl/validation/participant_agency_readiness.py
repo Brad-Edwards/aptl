@@ -22,6 +22,7 @@ from aptl.backends.raes_participant_provider import (
     ParticipantSelectionProvider,
 )
 from aptl.backends.raes_realization import interpret_provisioning_plan
+from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.backends.raes_realization_model import AptlRealization
 from aptl.core.deployment import get_backend
 from aptl.validation.participant_readiness_materialization import (
@@ -171,19 +172,21 @@ def _prepare_readiness_context(
     """Plan, verify, bind, and initialize one exact participant episode."""
 
     deployment = request.backend or get_backend(request.config, request.project_dir)
+    scenario_path = request.project_dir / SCENARIO_RELATIVE_PATH
     target, execution_plan = _plan_scenario(
         request.project_dir,
         request.config,
         deployment,
-        request.project_dir / SCENARIO_RELATIVE_PATH,
+        scenario_path,
         None,
     )
     if any(diagnostic.is_error for diagnostic in execution_plan.diagnostics):
         raise _ReadinessFailure("bounded participant scenario planning failed")
+    bundle = project_tree_bundle(request.project_dir, scenario_path)
     realization = interpret_provisioning_plan(
         plan=execution_plan.provisioning,
-        project_dir=request.project_dir,
         config=request.config,
+        bundle=bundle,
     )
     if any(diagnostic.is_error for diagnostic in realization.diagnostics):
         raise _ReadinessFailure(

@@ -23,6 +23,7 @@ from aptl.backends.raes_node_materialization import realize_node
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.scenario_bundle import project_tree_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -45,10 +46,17 @@ def test_dns_node_boots_image_free_and_resolves():
 
     cfg = AptlConfig(lab={"name": "x"}, containers={})
     be = DockerComposeBackend(project_dir=repo, project_name="aptl")
+    bundle = project_tree_bundle(
+        repo, repo / "scenarios/techvault-operational.sdl.yaml"
+    )
     plan = RuntimeManager(
-        create_aptl_runtime_target(project_dir=repo, config=cfg, backend=be)
+        create_aptl_runtime_target(
+            project_dir=repo, config=cfg, backend=be, bundle=bundle
+        )
     ).plan(parse_sdl_file(repo / "scenarios/techvault-operational.sdl.yaml"))
-    real = interpret_provisioning_plan(plan=plan.provisioning, project_dir=repo, config=cfg)
+    real = interpret_provisioning_plan(
+        plan=plan.provisioning, config=cfg, bundle=bundle
+    )
     assert [x.message for x in real.diagnostics if x.is_error] == []
     spec = real.deployment_spec([])
 

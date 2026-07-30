@@ -4,6 +4,7 @@ Query, realization, and cleanup helpers live in focused sibling modules.
 """
 
 import json
+import os
 import subprocess
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
@@ -95,6 +96,7 @@ class DockerComposeBackend(
         profiles: list[str],
         *,
         compose_files: Sequence[Path] | None = None,
+        scenario_root: Path | None = None,
     ) -> list[str]:
         """Build a docker compose command with profile flags.
 
@@ -104,11 +106,29 @@ class DockerComposeBackend(
         Args:
             action: The compose action (up, down, ps, kill, etc.).
             profiles: List of docker compose profiles to activate.
+            scenario_root: When realizing a scenario, the bundle root Compose
+                must use as its effective project directory. Relative build
+                contexts, binds, includes, and ``env_file`` entries resolve
+                against it, never the caller cwd. The operator secret source
+                stays the control-plane ``project_dir/.env``, bound explicitly
+                so a bundle-local ``.env`` cannot override it (issue #874).
+                ``None`` is the legacy direct path over the engine's own compose.
 
         Returns:
             Command as a list of strings suitable for subprocess.run().
         """
         cmd = ["docker", "compose", "-p", self._project_name]
+        if scenario_root is not None:
+            cmd.extend(["--project-directory", str(scenario_root)])
+            # Always bind an explicit control-plane env source. With
+            # --project-directory pointing at the bundle root, Compose would
+            # otherwise auto-discover <scenario_root>/.env and let the bundle
+            # control interpolation. Bind the operator .env when present, else an
+            # empty source (os.devnull) — never the bundle-local .env (#874).
+            env_file = self._project_dir / ".env"
+            cmd.extend(
+                ["--env-file", str(env_file if env_file.is_file() else os.devnull)]
+            )
         for compose_file in compose_files or ():
             cmd.extend(["-f", str(compose_file)])
 
@@ -211,6 +231,7 @@ class DockerComposeBackend(
         *,
         build: bool = True,
         exclude_services: tuple[str, ...] = (),
+        scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services via docker compose up.
 
@@ -221,13 +242,18 @@ class DockerComposeBackend(
                 mixed realization): everything else in the active profiles
                 starts normally, but a node the generic materializer already
                 realized directly must not also start as a Compose container.
+            scenario_root: Bundle root the scenario's Compose model and build
+                contexts resolve against (issue #874). ``None`` is the legacy
+                direct path over the engine's own in-tree compose.
 
         Returns:
             LabResult indicating success or failure.
         """
         build = build and not self._offline_staged
-        compose_files = self._start_compose_files(build=build)
-        cmd = self._build_command("up", profiles, compose_files=compose_files)
+        compose_files = self._start_compose_files(build=build, scenario_root=scenario_root)
+        cmd = self._build_command(
+            "up", profiles, compose_files=compose_files, scenario_root=scenario_root
+        )
         if build:
             cmd.append("--build")
         if self._offline_staged:
@@ -248,12 +274,20 @@ class DockerComposeBackend(
         log.info("Lab started successfully")
         return LabResult(success=True, message="Lab started")
 
-    def _start_compose_files(self, *, build: bool) -> tuple[Path, ...] | None:
-        """Return Compose files for startup, adding build dedupe when needed."""
+    def _start_compose_files(
+        self, *, build: bool, scenario_root: Path | None = None
+    ) -> tuple[Path, ...] | None:
+        """Return Compose files for startup, adding build dedupe when needed.
 
-        override = write_duplicate_build_override(self._project_dir) if build else None
+        The base ``docker-compose.yml`` and the build-dedupe override are
+        scenario-declared inputs; they resolve against ``scenario_root`` (the
+        bundle root) when realizing a scenario, else the engine's own tree.
+        """
+
+        root = scenario_root if scenario_root is not None else self._project_dir
+        override = write_duplicate_build_override(root) if build else None
         return (
-            (self._project_dir / "docker-compose.yml", override)
+            (root / "docker-compose.yml", override)
             if override is not None
             else None
         )

@@ -150,11 +150,17 @@ def _stable_range_projection(snapshot: object) -> dict[str, object]:
     containers = tuple(getattr(snapshot, "containers", ()) or ())
     return {
         "containers": sorted(
-            {
-                "name": str(getattr(container, "name", "")),
-                "image_digest": str(getattr(container, "image_digest", "") or ""),
-            }
-            for container in containers
+            (
+                {
+                    "name": str(getattr(container, "name", "")),
+                    "image_digest": str(getattr(container, "image_digest", "") or ""),
+                }
+                for container in containers
+            ),
+            # Dicts are not orderable, so a keyless sort raises TypeError once the
+            # range has two containers and silently degrades the whole run's
+            # reproducibility record. Order by the stable identity fields.
+            key=lambda entry: (entry["name"], entry["image_digest"]),
         )
     }
 

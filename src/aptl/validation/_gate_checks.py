@@ -9,8 +9,6 @@ starts Docker.
 
 from __future__ import annotations
 
-import json
-import shutil
 import subprocess
 from collections.abc import Mapping, Sequence
 import hashlib
@@ -32,6 +30,11 @@ from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
+from aptl.validation._gate_raes_cli import (
+    conformance_cli_diagnostics,
+    run_raes,
+    verify_imports_diagnostics,
+)
 from aptl.validation.techvault_gate import GateCheck
 
 if TYPE_CHECKING:
@@ -45,8 +48,8 @@ if TYPE_CHECKING:
 # re-parses a scenario's whole module tree, which scales with that tree rather
 # than with the root document, so it gets a generous standalone timeout and runs
 # in a dedicated gate step rather than the fast per-test suite. It only runs for
-# scenarios that declare imports; the ones this repo ships today do not.
-_SUBPROCESS_TIMEOUT_S = 120
+# scenarios that declare imports; the ones this repo ships today do not. The
+# ``raes`` CLI invocations themselves live in ``_gate_raes_cli``.
 _IMPORT_LOCK_TIMEOUT_S = 600
 
 
@@ -306,10 +309,10 @@ def check_import_lock(scenario_path: Path, scenario: Scenario) -> GateCheck:
                 f"`raes sdl resolve {scenario_path}`",
             ),
         )
-    result = _run_raes(
+    result = run_raes(
         ["sdl", "verify-imports", str(scenario_path)], timeout=_IMPORT_LOCK_TIMEOUT_S
     )
-    return GateCheck("import_lock", *_outcome(_verify_imports_diagnostics(result)))
+    return GateCheck("import_lock", *_outcome(verify_imports_diagnostics(result)))
 
 
 def check_compile(scenario: Scenario) -> GateCheck:
@@ -360,7 +363,7 @@ def check_backend_conformance(
 
     diagnostics = _target_conformance_diagnostics(report)
     diagnostics.extend(
-        _conformance_cli_diagnostics(profile, fixtures_root, profiles_root)
+        conformance_cli_diagnostics(profile, fixtures_root, profiles_root)
     )
     return GateCheck("backend_conformance", *_outcome(diagnostics))
 
@@ -434,34 +437,6 @@ def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[st
     return diagnostics
 
 
-def _conformance_cli_diagnostics(
-    profile: str, fixtures_root: Path | None, profiles_root: Path | None
-) -> list[str]:
-    """Run the published ``raes conformance backend`` command and report failures."""
-    cli = ["conformance", "backend", "--profile", profile]
-    if fixtures_root is not None:
-        cli += ["--fixtures-root", str(fixtures_root)]
-    if profiles_root is not None:
-        cli += ["--profiles-root", str(profiles_root)]
-    result = _run_raes(cli)
-    if result is None:
-        return ["`raes` CLI not found on PATH; conformance command is unavailable"]
-    if result.returncode != 0:
-        return [redact(f"raes conformance backend exited non-zero: {_cli_detail(result)}")]
-    return []
-
-
-def _verify_imports_diagnostics(
-    result: subprocess.CompletedProcess[str] | None,
-) -> list[str]:
-    """Turn an ``raes sdl verify-imports`` run into gate diagnostics."""
-    if result is None:
-        return ["`raes` CLI not found on PATH; RAES import tooling is unavailable"]
-    if result.returncode != 0:
-        return [redact(f"raes sdl verify-imports failed: {_cli_detail(result)}")]
-    return []
-
-
 def _severity(diagnostic: Diagnostic) -> str:
     """Return a diagnostic's severity as a lowercase string."""
     severity = getattr(diagnostic, "severity", None)
@@ -471,43 +446,3 @@ def _severity(diagnostic: Diagnostic) -> str:
 def _outcome(diagnostics: list[str]) -> tuple[bool, tuple[str, ...]]:
     """Pack diagnostics into a ``(passed, diagnostics)`` pair for ``GateCheck``."""
     return (not diagnostics, tuple(diagnostics))
-
-
-def _run_raes(
-    args: Sequence[str], *, timeout: int = _SUBPROCESS_TIMEOUT_S
-) -> subprocess.CompletedProcess[str] | None:
-    """Run an ``raes`` subcommand, returning None when the CLI is unavailable."""
-    executable = shutil.which("raes")
-    if executable is None:
-        return None
-    # Fixed argv (resolved executable, subcommand, paths/profile), no shell;
-    # S603 is a false positive for this trusted, non-interpolated invocation.
-    return subprocess.run(
-        [executable, *args],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-
-
-def _cli_detail(result: subprocess.CompletedProcess[str]) -> str:
-    """Extract a concise, structured failure detail from a conformance run."""
-    payload = result.stdout.strip()
-    if payload:
-        try:
-            data = json.loads(payload)
-        except json.JSONDecodeError:
-            data = None
-        if isinstance(data, Mapping):
-            codes = sorted(
-                {
-                    d.get("code", "?")
-                    for d in data.get("diagnostics", [])
-                    if isinstance(d, Mapping)
-                }
-            )
-            if codes:
-                return f"exit={result.returncode} diagnostics={codes}"
-    tail = (result.stderr or result.stdout or "").strip().splitlines()
-    return f"exit={result.returncode} {tail[-1] if tail else ''}".strip()

@@ -39,15 +39,18 @@ from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
+from aptl.validation import _gate_raes_cli as gcli
 from aptl.validation._account_parity import check_account_provisioner_parity
+from aptl.validation._gate_raes_cli import (
+    _cli_detail,
+    conformance_cli_diagnostics,
+    verify_imports_diagnostics,
+)
 from aptl.validation._gate_checks import (
     _NoStartBackend,
-    _cli_detail,
-    _conformance_cli_diagnostics,
     _outcome,
     _severity,
     _target_conformance_diagnostics,
-    _verify_imports_diagnostics,
     check_backend_conformance,
     check_compile,
     check_import_lock,
@@ -596,9 +599,9 @@ def test_outcome_packs_diagnostics():
 
 
 def test_verify_imports_diagnostics():
-    assert _verify_imports_diagnostics(None)
-    assert _verify_imports_diagnostics(_proc(1, stderr="stale"))
-    assert _verify_imports_diagnostics(_proc(0)) == []
+    assert verify_imports_diagnostics(None)
+    assert verify_imports_diagnostics(_proc(1, stderr="stale"))
+    assert verify_imports_diagnostics(_proc(0)) == []
 
 
 def test_target_conformance_diagnostics():
@@ -619,12 +622,12 @@ def test_target_conformance_diagnostics():
 
 
 def test_conformance_cli_diagnostics(monkeypatch):
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
-    assert _conformance_cli_diagnostics("provisioning-only", None, None)
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(1, stderr="x"))
-    assert _conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: _proc(0))
-    assert _conformance_cli_diagnostics("provisioning-only", None, None) == []
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: None)
+    assert conformance_cli_diagnostics("provisioning-only", None, None)
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(1, stderr="x"))
+    assert conformance_cli_diagnostics("provisioning-only", Path("f"), Path("p"))
+    monkeypatch.setattr(gcli, "run_raes", lambda *a, **k: _proc(0))
+    assert conformance_cli_diagnostics("provisioning-only", None, None) == []
 
 
 def test_cli_detail_json_and_plain():
@@ -650,14 +653,16 @@ def test_check_import_lock_missing_and_unavailable(tmp_path, monkeypatch):
     scenario = _scenario_with_imports("local:mod.sdl.yaml")
 
     check = check_import_lock(path, scenario)
-    assert not check.passed and any(
+    assert not check.passed
+    assert any(
         "missing import lockfile" in d for d in check.diagnostics
     )
 
     (tmp_path / LOCKFILE_NAME).write_text("{}")
-    monkeypatch.setattr(gc, "_run_raes", lambda *a, **k: None)
+    monkeypatch.setattr(gc, "run_raes", lambda *a, **k: None)
     check = check_import_lock(path, scenario)
-    assert not check.passed and any("not found on PATH" in d for d in check.diagnostics)
+    assert not check.passed
+    assert any("not found on PATH" in d for d in check.diagnostics)
 
 
 def test_check_import_lock_passes_when_scenario_declares_no_imports(tmp_path):
@@ -694,7 +699,8 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
         project_dir=PROJECT_ROOT,
         config=AptlConfig(lab={"name": "t"}),
     )
-    assert details is None and not check.passed
+    assert details is None
+    assert not check.passed
 
 
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):
@@ -776,8 +782,10 @@ def test_operational_scenario_content_and_accounts_are_honest():
     account_placements = [
         p for p in placements if p["resource_type"] == "account-placement"
     ]
-    assert content_placements and all("content" in p for p in content_placements)
-    assert account_placements and all("account" in p for p in account_placements)
+    assert content_placements
+    assert all("content" in p for p in content_placements)
+    assert account_placements
+    assert all("account" in p for p in account_placements)
 
 
 def test_provisioning_realization_fails_on_unrealizable_content(tmp_path):

@@ -1790,7 +1790,9 @@ class TestDockerComposeBackendContainerInteraction:
             mock_run.return_value = MagicMock(returncode=0, stdout=line, stderr="")
             rows = backend.host_list_lab_containers()
         cmd = mock_run.call_args[0][0]
-        assert "docker" in cmd and "ps" in cmd and "-a" in cmd
+        assert "docker" in cmd
+        assert "ps" in cmd
+        assert "-a" in cmd
         assert any("name=aptl-" in arg for arg in cmd)
         # Scoping by compose project label keeps shared-daemon snapshots
         # from leaking other tenants' aptl-* containers.
@@ -3332,7 +3334,8 @@ class TestRealizeAccounts:
         account = _acct("former.employee", disabled=True)
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "provision.account-placement.former.employee" in (result.error or "")
 
     def test_mail_converged_on_existing_user_and_verified(self, tmp_path):
@@ -3381,7 +3384,8 @@ class TestRealizeAccounts:
         account = _acct("svc-sql", spn="MSSQLSvc/db.techvault.local:1433")
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "svc-sql" in (result.error or "")
 
     def test_mail_verification_is_exact_not_substring(self, tmp_path):
@@ -3399,7 +3403,8 @@ class TestRealizeAccounts:
         account = _acct("jessica.williams", mail="jessica.williams@techvault.local")
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
 
     def test_membership_verification_is_exact_not_whitespace_token(self, tmp_path):
         # A requested user 'Admin' must not be certified by a member 'Alice Admin'.
@@ -3417,7 +3422,8 @@ class TestRealizeAccounts:
         account = _acct("Admin", groups=("Engineering",))
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
 
     def test_failed_create_stops_before_membership_mutation(self, tmp_path):
         # If the user could not be created, no membership/attribute mutation may
@@ -3434,7 +3440,8 @@ class TestRealizeAccounts:
         account = _acct("ghost", groups=("Engineering",))
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert ad.cmds("samba-tool", "group", "addmembers") == []
 
     def test_batch_with_one_invalid_account_mutates_nothing(self, tmp_path):
@@ -3449,7 +3456,8 @@ class TestRealizeAccounts:
         )
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts(accounts, (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "invalid-username" in (result.error or "")
         assert ad.calls == []
 
@@ -3484,7 +3492,8 @@ class TestRealizeAccounts:
         account = _acct("jessica.williams", groups=("Sales",))
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
 
     def test_spn_is_added_and_verified(self, tmp_path):
         backend = self._backend(tmp_path)
@@ -3508,7 +3517,8 @@ class TestRealizeAccounts:
         account = _acct("x", target="scenario.node.db")
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (node,))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "provision.account-placement.x" in (result.error or "")
         assert "no-account-provider-for-service" in (result.error or "")
         assert ad.calls == []  # no mutation happened
@@ -3519,7 +3529,8 @@ class TestRealizeAccounts:
         account = _acct("bad\x00name")
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "invalid-username" in (result.error or "")
         assert ad.calls == []
 
@@ -3532,7 +3543,8 @@ class TestRealizeAccounts:
         account = _acct("jessica.williams", groups=("Sales",))
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "aptl-ad" in (result.error or "")
         # Readiness never passed, so no group/user mutation ran.
         assert ad.cmds("samba-tool", "group", "add") == []
@@ -3554,7 +3566,8 @@ class TestRealizeAccounts:
         account = _acct("jessica.williams", groups=("Sales",))
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert ad.cmds("samba-tool", "user", "create") == []
         assert ad.cmds("samba-tool", "group", "add") == []
 
@@ -3572,7 +3585,8 @@ class TestRealizeAccounts:
         account = _acct("ghost")
         with patch.object(backend, "container_exec", ad):
             result = backend.realize_accounts((account,), (_ad_node(),))
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "provision.account-placement.ghost" in (result.error or "")
         assert "internal detail leak" not in (result.error or "")
 
@@ -3620,7 +3634,8 @@ class TestComposeRealizeAccountsStep:
             accounts=(_acct("x", target="scenario.node.missing"),),
         )
         result = backend._realize_accounts_step(spec)
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "unresolved-target-node" in (result.error or "")
 
     def test_step_converts_backend_timeout_to_bounded_result(self, tmp_path):
@@ -3632,5 +3647,6 @@ class TestComposeRealizeAccountsStep:
             backend, "realize_accounts", side_effect=BackendTimeoutError("boom")
         ):
             result = backend._realize_accounts_step(spec)
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "timed out" in (result.error or "").lower()

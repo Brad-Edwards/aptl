@@ -14,6 +14,7 @@ from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMix
 from aptl.core.deployment._compose_build_dedupe import (
     write_duplicate_build_override,
 )
+from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
@@ -47,6 +48,7 @@ class DockerComposeBackend(
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeImageFetchMixin,
 ):
     """Docker Compose deployment backend.
 
@@ -357,59 +359,6 @@ class DockerComposeBackend(
             Tuple of (success, error_message).
         """
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)
-
-    def pull_images(self, images: list[str]) -> list[str]:
-        """Pre-pull container images via docker pull.
-
-        Args:
-            images: List of image references to pull.
-
-        Returns:
-            List of warning messages for images that failed to pull
-            (non-fatal).
-        """
-        warnings: list[str] = []
-        for image in images:
-            try:
-                action = self._image_fetch_action(image)
-                result = self._run(action)
-                if result.returncode != 0:
-                    warnings.append(self._image_fetch_failure(image, result.stderr))
-                else:
-                    log.info(
-                        "%s %s",
-                        "Verified staged image" if self._offline_staged else "Pulled",
-                        image,
-                    )
-            except OSError as exc:
-                msg = self._image_fetch_exception(image, exc)
-                log.warning(msg)
-                warnings.append(msg)
-        return warnings
-
-    def _image_fetch_action(self, image: str) -> list[str]:
-        """Return the staged inspection or online pull command for one image."""
-
-        if self._offline_staged:
-            return ["docker", "image", "inspect", image]
-        return ["docker", "pull", image]
-
-    def _image_fetch_failure(self, image: str, stderr: str) -> str:
-        """Return and log one bounded image verification failure."""
-
-        if self._offline_staged:
-            message = f"Required staged image is missing: {image}"
-        else:
-            message = f"Failed to pull {image}: {stderr.strip()}"
-        log.warning(message)
-        return message
-
-    def _image_fetch_exception(self, image: str, exc: OSError) -> str:
-        """Return one image operation failure caused by a local tool error."""
-
-        if self._offline_staged:
-            return f"Required staged image could not be inspected: {image}"
-        return f"Failed to pull {image}: {exc}"
 
     def seed_named_volumes(
         self,

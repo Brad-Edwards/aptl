@@ -311,8 +311,8 @@ class ComposeRealizationImageMixin:
             else None
         )
 
+    @staticmethod
     def _write_image_override(
-        self,
         images: tuple[DeploymentImageRealization, ...],
         scenario_root: Path,
     ) -> Path:

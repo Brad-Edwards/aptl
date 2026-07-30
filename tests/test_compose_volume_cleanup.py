@@ -75,7 +75,8 @@ def test_remove_leftover_project_volumes_reports_list_failure(mocker, failure):
 
     errors = remove_leftover_project_volumes({"test_data"}, run, timeout=30)
 
-    assert errors and "Failed to list project volumes for cleanup" in errors[0]
+    assert errors
+    assert "Failed to list project volumes for cleanup" in errors[0]
 
 
 def test_remove_leftover_project_volumes_skips_remove_when_absent(mocker):
@@ -97,4 +98,5 @@ def test_remove_leftover_project_volumes_reports_remove_exception(mocker):
 
     errors = remove_leftover_project_volumes({"test_data"}, run, timeout=30)
 
-    assert errors and "Failed to remove project volumes" in errors[0]
+    assert errors
+    assert "Failed to remove project volumes" in errors[0]

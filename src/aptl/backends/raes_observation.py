@@ -27,6 +27,7 @@ drift from the set of concerns the gate actually enforces.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raes_contracts.planning import PlannedResource, ProvisioningPlan

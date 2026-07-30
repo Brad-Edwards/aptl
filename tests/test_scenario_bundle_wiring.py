@@ -110,8 +110,10 @@ def test_the_public_start_path_resolves_a_bundle(monkeypatch, tmp_path):
     monkeypatch.setattr(raes, "parse_sdl_file", lambda path: object())
     monkeypatch.setattr(raes, "create_aptl_runtime_target", _capture)
 
+    config = AptlConfig()
+    mock = MagicMock()
     with pytest.raises(RuntimeError):
-        raes._plan_scenario(project_dir, AptlConfig(), MagicMock(), scenario_path, None)
+        raes._plan_scenario(project_dir, config, mock, scenario_path, None)
 
     assert seen["bundle"] is not None
     assert seen["bundle"].root == project_tree_bundle(project_dir, scenario_path).root

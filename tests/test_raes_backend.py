@@ -3425,9 +3425,11 @@ def test_account_lowering_preserves_disabled_explicitness():
         return account
 
     omitted = _resolve({"username": "u", "node": "scenario.ad"})
-    assert omitted is not None and omitted.disabled is None
+    assert omitted is not None
+    assert omitted.disabled is None
     authored = _resolve({"username": "u", "node": "scenario.ad", "disabled": False})
-    assert authored is not None and authored.disabled is False
+    assert authored is not None
+    assert authored.disabled is False
 
 
 def test_manifest_account_features_match_realized_dto_fields():

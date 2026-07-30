@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 

@@ -86,10 +86,12 @@ def test_interpret_provisioning_plan_indexes_the_bundle_root(monkeypatch):
         resources: dict = {}
         operations: list = []
 
+    plan = _Plan()
+    config = AptlConfig()
     with pytest.raises(RuntimeError):
         raes_realization.interpret_provisioning_plan(
-            plan=_Plan(),
-            config=AptlConfig(),
+            plan=plan,
+            config=config,
             bundle=bundle,
         )
 
@@ -154,9 +156,10 @@ def test_selected_profiles_path_threads_the_bundle_root_to_availability(
     seen: dict[str, object] = {}
     _capture_availability_root(monkeypatch, seen)
 
+    config = AptlConfig()
     with pytest.raises(RuntimeError):
         raes.selected_profiles_for_scenario(
-            project_dir, AptlConfig(), object(), scenario_path
+            project_dir, config, object(), scenario_path
         )
 
     assert seen["scenario_root"] == project_tree_bundle(project_dir, scenario_path).root
@@ -178,9 +181,10 @@ def test_admitted_stateful_ownership_path_threads_the_bundle_root_to_availabilit
     seen: dict[str, object] = {}
     _capture_availability_root(monkeypatch, seen)
 
+    config = AptlConfig()
     with pytest.raises(RuntimeError):
         raes.admitted_stateful_artifact_ownership(
-            project_dir, AptlConfig(), object(), scenario_path
+            project_dir, config, object(), scenario_path
         )
 
     assert seen["scenario_root"] == project_tree_bundle(project_dir, scenario_path).root

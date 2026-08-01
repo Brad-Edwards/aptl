@@ -22,7 +22,10 @@ from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends.raes_base_substrate import base_container_spec
-from aptl.backends.raes_image_realization import resolve_node_image
+from aptl.backends.raes_image_realization import (
+    node_source_is_dynamic_composition,
+    resolve_node_image,
+)
 from aptl.backends.raes_placement_realization import (
     placement_node_lookup as _node_lookup,
     realize_placements as _realize_placements,
@@ -386,6 +389,9 @@ def _realize_node(
         os=node_os,
         os_version=node_os_version,
         runtime=node_runtime,
+        dynamic_composition=node_source_is_dynamic_composition(
+            payload, resource.address
+        ),
     )
 
 

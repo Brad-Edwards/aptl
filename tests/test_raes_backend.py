@@ -2163,7 +2163,13 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
             )
 
     def fake_create_target(
-        *, project_dir, config, backend, participant_action_specs=None, bundle
+        *,
+        project_dir,
+        config,
+        backend,
+        participant_action_specs=None,
+        bundle,
+        artifact_availability=None,
     ):
         from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 
@@ -2175,6 +2181,7 @@ def test_start_raes_scenario_drives_workflows_after_registration(mocker, tmp_pat
                 bundle=bundle,
                 config=config,
                 deployment_backend=backend,
+                artifact_availability=artifact_availability,
             ),
             orchestrator=RecordingOrchestrator(),
             evaluator=raes.AptlEvaluator(),
@@ -2298,6 +2305,51 @@ def test_provisioner_profiles_are_derived_from_plan_content(tmp_path):
     assert second.success is True
     assert _realize_profiles(backend.realize.call_args_list[0]) == ["kali", "otel"]
     assert _realize_profiles(backend.realize.call_args_list[1]) == ["victim", "otel"]
+
+
+def test_provisioner_threads_availability_verified_substrate_digest_to_realize(tmp_path):
+    # Cycle-6 review: the address-scoped config id availability verified for a
+    # dynamic-composition node is carried into realize(), so the base start uses
+    # that exact id and never re-resolves the mutable tag. A non-route-3 node's
+    # digest (different provenance) is not carried.
+    from aptl.backends.raes import AptlProvisioner
+    from aptl.backends.raes_artifact_mechanisms import (
+        dynamic_composition_provenance_ref,
+        exact_artifact_provenance_ref,
+    )
+    from raes_contracts.contracts import (
+        ArtifactAvailabilityContext,
+        ArtifactRequirementAvailability,
+    )
+
+    verified = "sha256:" + "a" * 64
+    availability = ArtifactAvailabilityContext(
+        requirements=[
+            ArtifactRequirementAvailability(
+                address="provision.node.web",
+                available_artifact_digests=[verified],
+                verified_integrity_refs=[verified],
+                verified_provenance_refs=[dynamic_composition_provenance_ref()],
+            ),
+            ArtifactRequirementAvailability(
+                address="provision.node.db",
+                available_artifact_digests=["sha256:" + "b" * 64],
+                verified_integrity_refs=["sha256:" + "b" * 64],
+                verified_provenance_refs=[exact_artifact_provenance_ref()],
+            ),
+        ]
+    )
+    provisioner = AptlProvisioner(
+        project_dir=tmp_path,
+        bundle=_bundle(tmp_path),
+        config=AptlConfig(lab={"name": "test"}, containers={}),
+        deployment_backend=MagicMock(),
+        artifact_availability=availability,
+    )
+
+    assert provisioner._availability_substrate_digests() == {
+        "provision.node.web": verified
+    }
 
 
 def test_provisioner_passes_typed_realization_spec_to_backend(tmp_path):

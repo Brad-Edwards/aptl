@@ -47,6 +47,11 @@ class NodeRealization(object):
     os: str = ""
     os_version: str = ""
     runtime: RuntimeConfiguration | None = None
+    # ADR-051 route 3 (issue #876): the node authored an open dynamic-composition
+    # source, so it is realized image-free onto the generic substrate and its base
+    # container is started immutably from the verified config id. False for every
+    # exact/materialized/Compose-owned node.
+    dynamic_composition: bool = False
 
     def service_names(self) -> tuple[str, ...]:
         """Return the declared service names, for profile/alias matching."""
@@ -88,6 +93,8 @@ class NodeRealization(object):
             }
         if self.image is not None:
             details["image"] = self.image.details()
+        if self.dynamic_composition:
+            details["dynamic_composition"] = True
         return details
 
 
@@ -285,4 +292,5 @@ def _deployment_node_realization(
         os=node.os,
         os_version=node.os_version,
         runtime=node.runtime,
+        dynamic_composition=node.dynamic_composition,
     )

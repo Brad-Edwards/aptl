@@ -49,6 +49,7 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from raes_contracts.contracts import ArtifactAvailabilityContext
     from raes_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
@@ -71,12 +72,18 @@ def create_aptl_runtime_target(
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
     participant_plan_authority: ParticipantPlanAuthority | None = None,
     bundle: ScenarioBundle,
+    artifact_availability: ArtifactAvailabilityContext | None = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target.
 
     ``bundle`` is required: the target realizes exactly one scenario, and every
     scenario-declared input resolves against ``bundle.root``. Callers resolve it
     once at ingress with ``project_tree_bundle`` (issue #874).
+
+    ``artifact_availability`` carries the trusted availability facts to the
+    provisioner so realization starts each dynamic-composition node from the
+    substrate config id availability verified, never a second tag resolution
+    (issue #876 cycle-6 review).
     """
 
     provisioner = AptlProvisioner(
@@ -84,6 +91,7 @@ def create_aptl_runtime_target(
         config=config,
         deployment_backend=backend,
         bundle=bundle,
+        artifact_availability=artifact_availability,
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -173,12 +181,9 @@ def _resolve_scenario_path(
 
     Precedence is explicit selection, then configuration, then the historical
     in-tree default. A backend is handed a scenario rather than owning one, so
-    the operator chooses it before ``aptl lab start``; nothing here switches at
-    runtime.
-
-    A configured root anchors the scenario's own inputs. It is validated as a
-    contained relative path when the configuration is parsed, so joining it here
-    cannot escape the project.
+    the operator chooses it before ``aptl lab start``. A configured root anchors
+    the scenario's own inputs; it is validated as a contained relative path when
+    the configuration is parsed, so joining it here cannot escape the project.
     """
 
     if scenario_path is not None:
@@ -217,11 +222,10 @@ def _plan_scenario(
     )
     manager = RuntimeManager(target)
     # Artifact availability is a trusted input to planning, gathered at the
-    # backend trust boundary before the single admitted plan() call (ADR-051).
-    # It is a no-op for a scenario that authors no artifact_requirement.
-    # The scenario's own inputs — including a component build context — anchor
-    # to the bundle, which is the project directory only while the scenario
-    # still lives in-tree.
+    # backend trust boundary before the single admitted plan() call (ADR-051); a
+    # no-op for a scenario that authors no artifact_requirement. The scenario's
+    # own inputs (including a component build context) anchor to the bundle,
+    # which is the project directory only while the scenario still lives in-tree.
     availability = artifact_availability_for_scenario(
         scenario, backend, scenario_root=bundle.root
     )
@@ -246,6 +250,7 @@ def _plan_scenario(
         backend=backend,
         participant_action_specs=participant_action_specs,
         bundle=bundle,
+        artifact_availability=availability,
     )
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):
@@ -387,11 +392,10 @@ def _run_execution_plan(
     """Apply a planned RAES scenario through RAES's own runtime manager.
 
     Fail closed on every planner error. Scenario start routes provisioning,
-    orchestration (when the scenario carries workflows), and evaluation (when
-    the scenario carries observable evaluation resources) through the RAES
-    runtime manager, so APTL's published backend adapters record portable
-    contract state and RAES runs its own SEM-218 realization gate over the
-    result.
+    orchestration (when workflows are present), and evaluation (when observable
+    evaluation resources are present) through the RAES runtime manager, so APTL's
+    backend adapters record portable contract state and RAES runs its own SEM-218
+    realization gate over the result.
     """
     blocking = [diag for diag in execution_plan.diagnostics if diag.is_error]
     if blocking:
@@ -455,12 +459,9 @@ def _apply_execution_plan(
     ``RuntimeManager.apply`` is the only path that threads the compiled
     ``realization_requirements`` and the provisioning plan into the backend call
     boundary, so it is the only path on which RAES runs the SEM-218
-    non-approximation gate and attaches the realization-provenance ledger to the
-    returned snapshot. APTL used to submit each phase through
-    ``RuntimeControlPlane`` — which never passes those — and then hand-rolled a
-    second, parallel disclosure pass plus a snapshot write-back to compensate.
-    Going through the manager deletes that parallel path outright: the gate and
-    the provenance ledger are RAES's, not APTL's (issue #578, ADR-046).
+    non-approximation gate and attaches the realization-provenance ledger -- it
+    replaces the parallel disclosure/write-back pass APTL once hand-rolled around
+    ``RuntimeControlPlane`` (issue #578, ADR-046).
 
     Returns ``(failure | None, snapshot, retryable)``. Only the existing
     deployment-backend start diagnostic is retryable; deterministic admission,

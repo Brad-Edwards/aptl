@@ -9,6 +9,10 @@ notes/
 # at `aptl lab start` (ADR-028).
 .aptl/
 
+# Codex CLI local config written by the /implement architecture-preflight and
+# review steps — local tooling state, never committed.
+.codex/
+
 # Lab-managed CA + per-service certificates generated at `aptl lab start`
 # (SEC-006 / ADR-034). The CA private key and server private keys are
 # control-plane secrets under ADR-029 — never committed.

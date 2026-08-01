@@ -38,6 +38,7 @@ from raes_processor.semantics.realization import CompiledRealizationRequirement
 from aptl.backends.raes_artifact_mechanisms import (
     SOURCE_ARTIFACT_REQUIREMENT_KIND,
     aptl_artifact_mechanisms,
+    dynamic_composition_profile,
     exact_artifact_profile,
 )
 from aptl.backends.raes_manifest import create_aptl_manifest
@@ -81,6 +82,16 @@ def _exact_route() -> ArtifactSatisfactionRoute:
     )
 
 
+def _dynamic_composition_route() -> ArtifactSatisfactionRoute:
+    """Return a route matching APTL's declared dynamic-composition capability."""
+
+    return ArtifactSatisfactionRoute(
+        mechanism=dynamic_composition_profile(),
+        acquisition="local-lookup",
+        timing="realization",
+    )
+
+
 def _availability(digests: list[str]) -> ArtifactAvailabilityContext:
     """Return address-scoped availability facts carrying ``digests``."""
 
@@ -118,11 +129,15 @@ def test_manifest_declares_only_mechanisms_backed_by_readback():
     """SEM-218 I4: no mechanism is advertised before its readback exists."""
 
     declared = {c.mechanism.mechanism for c in aptl_artifact_mechanisms()}
-    assert declared == {"exact-artifact", "materialization-specification"}
-    # dynamic-composition remains unimplemented: generic runtime composition has
-    # no per-dimension readback yet, so advertising it would be the optimistic
-    # capability declaration I4 forbids.
-    assert "dynamic-composition" not in declared
+    assert declared == {
+        "exact-artifact",
+        "materialization-specification",
+        "dynamic-composition",
+    }
+    # dynamic-composition is backed now: raes 3.1.0 lowers the runtime concerns
+    # (RAESystem/rae#985) and APTL reads each declared dimension back off the
+    # realized container (issue #876), satisfying the I4 precondition.
+    assert "dynamic-composition" in declared
 
 
 def test_declared_routes_are_explicit_pairs_not_a_cartesian_product():
@@ -136,6 +151,20 @@ def test_declared_routes_are_explicit_pairs_not_a_cartesian_product():
     }
     # Nothing claims realization-time acquisition, which APTL does not do.
     assert all(r.timing != "realization" for r in capability.supported_routes)
+
+
+def test_dynamic_composition_declares_one_honest_local_lookup_realization_route():
+    """Generic composition is resolved locally and applied at realization time,
+    and claims no other acquisition/timing combination (issue #876)."""
+
+    capability = next(
+        c
+        for c in aptl_artifact_mechanisms()
+        if c.mechanism.mechanism == "dynamic-composition"
+    )
+    assert capability.mechanism.digest.startswith("sha256:")
+    pairs = {(r.acquisition, r.timing) for r in capability.supported_routes}
+    assert pairs == {("local-lookup", "realization")}
 
 
 def test_available_exact_artifact_is_admitted():
@@ -172,16 +201,17 @@ def test_unavailable_exact_artifact_is_rejected_not_substituted():
     assert "artifact.unavailable-exact-artifact" in _codes(requirement, _availability([]))
 
 
-def test_open_posture_is_refused_because_aptl_declares_constrained():
-    """SEM-218 I3: open realization needs explicit open-realization support."""
+def test_open_posture_is_admitted_now_that_dynamic_composition_is_supported():
+    """APTL declares open-realization support, so a dynamic-composition open
+    requirement is admitted rather than refused (issue #876)."""
 
     requirement = _requirement(
-        explicitness=ExplicitnessClass.OPEN, route=_exact_route()
+        explicitness=ExplicitnessClass.OPEN, route=_dynamic_composition_route()
     )
 
-    assert "artifact.unsupported-open-realization" in _codes(
-        requirement, _availability([])
-    )
+    codes = _codes(requirement, _availability([]))
+    assert "artifact.unsupported-open-realization" not in codes
+    assert "artifact.unsupported-backend-mechanism" not in codes
 
 
 def test_undeclared_mechanism_route_is_refused():
@@ -263,6 +293,7 @@ def test_manifest_still_serializes_under_the_published_v2_contract():
     declarations = payload["realization_support"]
     mechanisms = [m for d in declarations for m in d.get("artifact_mechanisms", [])]
     assert sorted(m["mechanism"]["mechanism"] for m in mechanisms) == [
+        "dynamic-composition",
         "exact-artifact",
         "materialization-specification",
     ]

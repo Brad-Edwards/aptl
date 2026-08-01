@@ -14,6 +14,8 @@ from aptl.core.lab_types import LabResult
 
 _IMAGE_REALIZATION_TIMEOUT = 600
 _IMAGE_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose-images.yml"
+# Digest domain prefix every locally read image id / manifest digest carries.
+_SHA256_PREFIX = "sha256:"
 
 
 class _ResetValue:
@@ -141,7 +143,7 @@ class ComposeRealizationImageMixin:
         if inspect.returncode != 0:
             return None
         digest = inspect.stdout.strip()
-        return digest if digest.startswith("sha256:") else None
+        return digest if digest.startswith(_SHA256_PREFIX) else None
 
     def container_image_digest(self, container_name: str) -> str | None:
         """Return the manifest digest of the image backing one container.
@@ -199,7 +201,7 @@ class ComposeRealizationImageMixin:
         if container.returncode != 0:
             return None
         image_id = container.stdout.strip()
-        return image_id if image_id.startswith("sha256:") else None
+        return image_id if image_id.startswith(_SHA256_PREFIX) else None
 
     def _image_manifest_digest(self, image_id: str) -> str | None:
         """Return an image's registry manifest digest, or its id as a fallback.
@@ -220,7 +222,7 @@ class ComposeRealizationImageMixin:
             ),
             None,
         )
-        return digest or (image_id if image_id.startswith("sha256:") else None)
+        return digest or (image_id if image_id.startswith(_SHA256_PREFIX) else None)
 
     def _repo_digest_references(self, image_id: str) -> list[object] | None:
         """Return an image's ``RepoDigests`` list, or None when it is unreadable."""

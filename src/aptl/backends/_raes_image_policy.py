@@ -82,3 +82,60 @@ def _policy_diagnostic(address: str, reason_code: str) -> Diagnostic:
             f"(reason={reason_code})."
         ),
     )
+
+
+def _local_build_ref(source_name: str, source_version: str) -> str | None:
+    """Return the local tag used for a trusted project build."""
+
+    if _is_digest_pinned_version(source_version):
+        tag = "local"
+    elif source_version not in {"", "*"} and _SAFE_TAG_RE.fullmatch(source_version):
+        tag = source_version
+    else:
+        tag = "local"
+    if not _safe_image_name(source_name):
+        return None
+    return f"{source_name}:{tag}"
+
+
+def _allowed_digest_pinned_ref(source_name: str, source_version: str) -> str | None:
+    """Return a digest-pinned pull ref only for allowed source names."""
+
+    image_ref = None
+    if source_name in _ALLOWED_DIGEST_SOURCE_NAMES:
+        if "@sha256:" in source_version:
+            image_name, digest = source_version.rsplit("@", 1)
+            if (
+                image_name == source_name
+                and _DIGEST_RE.fullmatch(digest)
+                and _safe_image_name(image_name)
+            ):
+                image_ref = source_version
+        elif _DIGEST_RE.fullmatch(source_version) and _safe_image_name(source_name):
+            image_ref = f"{source_name}@{source_version}"
+    return image_ref
+
+
+def _is_digest_pinned_version(source_version: str) -> bool:
+    """Return whether a version value carries a sha256 image digest."""
+
+    if "@sha256:" in source_version:
+        _, digest = source_version.rsplit("@", 1)
+        return _DIGEST_RE.fullmatch(digest) is not None
+    return _DIGEST_RE.fullmatch(source_version) is not None
+
+
+def _is_compose_owned_source(source_name: str, source_version: str) -> bool:
+    """Return whether Compose already owns the image binding for this source."""
+
+    return source_version in {"local", "reference"} and (
+        _COMPOSE_SOURCE_NAME_RE.fullmatch(source_name) is not None
+    )
+
+
+def _safe_image_name(value: str) -> bool:
+    """Return whether an image name is syntactically safe for generated tags."""
+
+    if not value or value.startswith(("-", ".")) or value.endswith(("/", ":")):
+        return False
+    return all(part not in {"", ".", ".."} for part in re.split(r"[/:]", value))

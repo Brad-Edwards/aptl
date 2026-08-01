@@ -277,33 +277,14 @@ def _availability_entry(
         verified_inputs = _verified_locked_inputs(requirement, probe, allow_remote)
         if specifications:
             provenance.append(materialization_provenance_ref())
-    if requirement.explicitness is ExplicitnessClass.EXACT:
-        reference = _artifact_reference(requirement)
-        exact = requirement.exact_artifact
-        if (
-            reference is not None
-            and exact is not None
-            and probe.artifact_available(reference, allow_remote=allow_remote)
-        ):
-            digests.append(exact.digest)
-            provenance.append(exact_artifact_provenance_ref())
-    if node is not None and is_dynamic_composition_requirement(requirement):
-        # Route 3: verify the generic substrate the node would compose onto is
-        # present on the target daemon (strict local-lookup, no pull), and record
-        # its digest + dynamic-composition provenance. RAES's trust checks require
-        # both the integrity ref and the provenance ref to be verified here, and
-        # the runtime gate then matches the container's realized digest against
-        # this set. An unresolvable substrate yields no verified claim.
-        substrate = resolve_substrate(
-            compiled.address,
-            os=str(getattr(node, "os", "") or ""),
-            os_version=str(getattr(node, "os_version", "") or ""),
-            runtime=getattr(node, "runtime", None),
-            probe=probe,
-        )
-        if substrate is not None:
-            digests.append(substrate.digest)
-            provenance.append(dynamic_composition_provenance_ref())
+    exact = _exact_digest_and_provenance(requirement, probe, allow_remote=allow_remote)
+    if exact is not None:
+        digests.append(exact[0])
+        provenance.append(exact[1])
+    substrate = _substrate_digest_and_provenance(compiled, requirement, probe, node)
+    if substrate is not None:
+        digests.append(substrate[0])
+        provenance.append(substrate[1])
     return ArtifactRequirementAvailability(
         address=compiled.address,
         available_artifact_digests=digests,
@@ -312,6 +293,57 @@ def _availability_entry(
         available_materialization_specification_digests=specifications,
         verified_locked_input_ids=verified_inputs,
     )
+
+
+def _exact_digest_and_provenance(
+    requirement: ArtifactRequirement,
+    probe: ArtifactProbe,
+    *,
+    allow_remote: bool | None,
+) -> tuple[str, str] | None:
+    """Return the ``(digest, provenance_ref)`` an EXACT requirement verifies, if any."""
+
+    if requirement.explicitness is not ExplicitnessClass.EXACT:
+        return None
+    reference = _artifact_reference(requirement)
+    exact = requirement.exact_artifact
+    if (
+        reference is not None
+        and exact is not None
+        and probe.artifact_available(reference, allow_remote=allow_remote)
+    ):
+        return exact.digest, exact_artifact_provenance_ref()
+    return None
+
+
+def _substrate_digest_and_provenance(
+    compiled: CompiledRealizationRequirement,
+    requirement: ArtifactRequirement,
+    probe: ArtifactProbe,
+    node: object,
+) -> tuple[str, str] | None:
+    """Return the ``(digest, provenance_ref)`` a route-3 substrate verifies, if any.
+
+    Route 3: verify the generic substrate the node would compose onto is present
+    on the target daemon (strict local-lookup, no pull), and record its digest +
+    dynamic-composition provenance. RAES's trust checks require both the integrity
+    ref and the provenance ref to be verified here, and the runtime gate then
+    matches the container's realized digest against this set. An unresolvable
+    substrate yields no verified claim.
+    """
+
+    if node is None or not is_dynamic_composition_requirement(requirement):
+        return None
+    substrate = resolve_substrate(
+        compiled.address,
+        os=str(getattr(node, "os", "") or ""),
+        os_version=str(getattr(node, "os_version", "") or ""),
+        runtime=getattr(node, "runtime", None),
+        probe=probe,
+    )
+    if substrate is None:
+        return None
+    return substrate.digest, dynamic_composition_provenance_ref()
 
 
 def _nodes_by_address(scenario: object) -> dict[str, object]:

@@ -36,6 +36,7 @@ from aptl.core.deployment._compose_network_realization import (
 from aptl.core.deployment._compose_image_free_realization import (
     _image_free_node_addresses,
     _image_free_service_names,
+    _needs_compose,
     _realize_node_subset,
     _strip_image_free_published_ports,
 )
@@ -62,27 +63,6 @@ __all__ = [
 _COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
 
 
-def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
-    """Whether any node is left for Compose to start.
-
-    Derived from the nodes themselves rather than a spec-level flag, so a graph
-    that mixes pinned artifacts, per-component builds and materialized nodes
-    routes correctly instead of falling into a whole-graph special case.
-
-    An empty graph keeps the Compose path: having no nodes is not the same as
-    having materialized them all, and the Compose pipeline still owns networks,
-    stateful prerequisites and validation.
-    """
-
-    if not realization.nodes:
-        return True
-    materialized = _image_free_node_addresses(realization)
-    return any(
-        node.address not in materialized and node.service_name
-        for node in realization.nodes
-    )
-
-
 class ComposeRealizationMixin(
     ComposeBoundaryRealizationMixin,
     ComposeRealizationImageMixin,
@@ -99,7 +79,7 @@ class ComposeRealizationMixin(
         *,
         build: bool = True,
         scenario_root: Path,
-        substrate_digests: "Mapping[str, str] | None" = None,
+        substrate_digests: Mapping[str, str] | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose.
 

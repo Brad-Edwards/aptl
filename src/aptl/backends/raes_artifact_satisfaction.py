@@ -91,7 +91,7 @@ def satisfaction_payload(
     *,
     requirement_kind: str,
     realized_digest: str,
-    resolve_substrate: "Callable[[], SubstrateIdentity | None] | None" = None,
+    resolve_substrate: Callable[[], SubstrateIdentity | None] | None = None,
 ) -> dict[str, object] | None:
     """Return the ``artifact_satisfaction`` payload for one realized resource.
 
@@ -117,20 +117,22 @@ def satisfaction_payload(
     # different profile or an acquisition/timing APTL never advertised (route 3).
     if route_is_dynamic_composition(route):
         substrate = resolve_substrate() if resolve_substrate is not None else None
-        return _dynamic_composition_payload(
+        payload = _dynamic_composition_payload(
             contract,
             manifest,
             route=route,
             realized_digest=realized_digest,
             substrate=substrate,
         )
-    if route.mechanism.mechanism == "exact-artifact":
-        return _exact_payload(
+    elif route.mechanism.mechanism == "exact-artifact":
+        payload = _exact_payload(
             contract, manifest, route=route, realized_digest=realized_digest
         )
-    return _materialized_payload(
-        contract, manifest, route=route, realized_digest=realized_digest
-    )
+    else:
+        payload = _materialized_payload(
+            contract, manifest, route=route, realized_digest=realized_digest
+        )
+    return payload
 
 
 def _exact_payload(
@@ -304,7 +306,7 @@ def _dynamic_composition_payload(
     *,
     route: ArtifactSatisfactionRoute,
     realized_digest: str,
-    substrate: "SubstrateIdentity | None",
+    substrate: SubstrateIdentity | None,
 ) -> dict[str, object] | None:
     """Return the disclosure for a generically composed node (ADR-051 route 3).
 
@@ -338,7 +340,7 @@ def _dynamic_composition_payload(
 def _realized_node_substrate(
     payload: object,
     realized_digest: str,
-) -> "SubstrateIdentity | None":
+) -> SubstrateIdentity | None:
     """Return the substrate identity for one node from its realized digest.
 
     Reads the node's typed OS and runtime out of the plan payload and pairs them

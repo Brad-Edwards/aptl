@@ -111,14 +111,16 @@ def _decode_hex_address(addr_hex: str) -> str | None:
 
     try:
         if len(addr_hex) == 8:
-            return socket.inet_ntop(socket.AF_INET, bytes.fromhex(addr_hex)[::-1])
-        if len(addr_hex) == 32:
+            decoded = socket.inet_ntop(socket.AF_INET, bytes.fromhex(addr_hex)[::-1])
+        elif len(addr_hex) == 32:
             words = [addr_hex[i : i + 8] for i in range(0, 32, 8)]
             packed = b"".join(bytes.fromhex(word)[::-1] for word in words)
-            return socket.inet_ntop(socket.AF_INET6, packed)
+            decoded = socket.inet_ntop(socket.AF_INET6, packed)
+        else:
+            decoded = None
     except (ValueError, OSError):
         return None
-    return None
+    return decoded
 
 
 def _parse_unix(text: str) -> set[str]:

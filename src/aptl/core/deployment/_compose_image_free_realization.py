@@ -18,6 +18,27 @@ from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.lab_types import LabResult
 
 
+def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
+    """Whether any node is left for Compose to start.
+
+    Derived from the nodes themselves rather than a spec-level flag, so a graph
+    that mixes pinned artifacts, per-component builds and materialized nodes
+    routes correctly instead of falling into a whole-graph special case.
+
+    An empty graph keeps the Compose path: having no nodes is not the same as
+    having materialized them all, and the Compose pipeline still owns networks,
+    stateful prerequisites and validation.
+    """
+
+    if not realization.nodes:
+        return True
+    materialized = _image_free_node_addresses(realization)
+    return any(
+        node.address not in materialized and node.service_name
+        for node in realization.nodes
+    )
+
+
 def _strip_image_free_published_ports(
     realization: DeploymentRealizationSpec, image_free_addresses: frozenset[str]
 ) -> DeploymentRealizationSpec:

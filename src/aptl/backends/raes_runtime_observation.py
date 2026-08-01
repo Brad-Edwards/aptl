@@ -66,7 +66,7 @@ requirement is rejected by the gate rather than handed a fabricated match.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from raes.runtime_configuration import RuntimeConfiguration
@@ -75,6 +75,19 @@ from raes_processor.semantics.realization import (
     project_realization_concern,
 )
 
+from aptl.backends._runtime_concern_excess import (
+    _INIT_CAPABILITY_BASELINE,
+    _STATEFUL_MOUNT_KINDS,
+    _capabilities_corroborate,
+    _has_undeclared_mounts,
+    _has_undeclared_network_listeners,
+    _has_undeclared_ports,
+    _normalized_capabilities,
+    _port_entry_matches,
+    _realized_scope_matches_declared,
+    _runs_init,
+    _sensitivity,
+)
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import LOOPBACK_HOST_IP
 from aptl.utils.logging import get_logger
@@ -95,56 +108,9 @@ _CAPABILITIES_PATH = CONCERN_PAYLOAD_PATH["linux-capabilities"]
 _PUBLISHED_PORTS_PATH = CONCERN_PAYLOAD_PATH["published-ports"]
 _SERVICE_LISTENERS_PATH = CONCERN_PAYLOAD_PATH["service-listeners"]
 
-_STATEFUL_MOUNT_KINDS = frozenset({"bind", "tmpfs"})
-# Docker reports an all-interfaces bind as an empty HostIp; ``ss`` reports it as
-# ``0.0.0.0`` / ``::``. Both are wildcards — broader than any concrete address.
-_WILDCARD_ADDRESSES = frozenset({"", "*", "0.0.0.0", "::", "[::]"})
-
-# The ONLY undeclared realized state APTL's own generic substrate contributes,
-# fixed and known (issue #876 cycle-7 review). The excess-detection below
-# subtracts exactly this baseline before rejecting a concern for undeclared
-# state, so a container carrying anything beyond declared-plus-baseline (a
-# leftover port from a reused container, a hostile extra listener, an
-# undeclared capability or bind mount) is refused rather than silently passed.
-#
-# Determined empirically against a booted container, not from static reading: a
-# plain node adds nothing (no CapAdd, no PortBindings, an empty ``Mounts``); a
-# systemd node adds exactly the init capabilities and the cgroup bind (its
-# ``--tmpfs`` mounts do not appear in ``Mounts`` at all). ``test_init_baseline_*``
-# guards these against drift from the substrate's own init requirements.
-_INIT_CAPABILITY_BASELINE = frozenset(
-    {"CAP_SYS_ADMIN", "CAP_SYS_NICE", "CAP_SYS_RESOURCE"}
-)
-_INIT_BIND_MOUNT_TARGETS = frozenset({"/sys/fs/cgroup"})
-
-
-def _runs_init(runtime: RuntimeConfiguration | None) -> bool:
-    """Whether the node runs APTL's systemd init (and so gets the init baseline)."""
-
-    return bool(runtime is not None and runtime.service_manager_units)
-
-
-def _address_is_wildcard(address: str) -> bool:
-    return address in _WILDCARD_ADDRESSES
-
-
-def _realized_scope_matches_declared(realized_address: str, declared_address: str) -> bool:
-    """Return whether a realized bind address EXACTLY matches the declared scope.
-
-    Both directions are a mismatch, not just one: a concrete declaration realized
-    on a wildcard is over-exposed (the original security concern), and a wildcard
-    declaration realized on a single interface is under-exposed -- an incomplete
-    runtime shape that must not be echoed back as an exact realization (issue #876
-    cycle-7 review). Wildcard spellings (empty HostIp from Docker, ``0.0.0.0`` /
-    ``::`` from ``ss``) are normalized so they compare equal; every other address
-    must match verbatim.
-    """
-
-    declared_wild = _address_is_wildcard(declared_address)
-    realized_wild = _address_is_wildcard(realized_address)
-    if declared_wild or realized_wild:
-        return declared_wild and realized_wild
-    return realized_address == declared_address
+# The excess-detection, scope, and init-baseline helpers this module's observers
+# rely on live in :mod:`aptl.backends._runtime_concern_excess`; they are imported
+# above so the disclosure and completeness logic stays in one place.
 
 
 def observe_runtime_concerns(
@@ -179,7 +145,7 @@ def observe_runtime_concerns(
 def _record(
     concerns: dict[tuple[str, ...], object],
     path: tuple[str, ...],
-    observe: Any,
+    observe: Callable[[], object | None],
 ) -> None:
     """Run one concern observation, failing closed on any error."""
 
@@ -275,9 +241,7 @@ def _observe_published_ports(
     network = runtime.network
     declared_ports = tuple(network.published_ports) if network is not None else ()
     bindings = _port_bindings(info)
-    if _has_undeclared_ports(bindings, declared_ports):
-        return None
-    if not declared_ports:
+    if _has_undeclared_ports(bindings, declared_ports) or not declared_ports:
         return None
     disclosed = [
         port.model_dump(mode="json", by_alias=True)
@@ -287,24 +251,6 @@ def _observe_published_ports(
     if not disclosed:
         return None
     return _disclose("published-ports", disclosed)
-
-
-def _has_undeclared_ports(
-    bindings: Mapping[str, Any], declared_ports: tuple[object, ...]
-) -> bool:
-    """Return whether the container host-publishes a port the contract omits."""
-
-    declared_keys = {
-        f"{getattr(port, 'container_port', '')}/{getattr(port, 'protocol', 'tcp')}"
-        for port in declared_ports
-    }
-    for key, entries in bindings.items():
-        # An entry present in PortBindings with actual host bindings is a real
-        # publication; a key mapped to an empty list is an exposed-but-unpublished
-        # port and carries no host reachability.
-        if isinstance(entries, Sequence) and entries and key not in declared_keys:
-            return True
-    return False
 
 
 def _port_bindings(info: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -330,16 +276,11 @@ def _port_binding_present(port: object, bindings: Mapping[str, Any]) -> bool:
     expected_ip = getattr(port, "host_ip", "") or LOOPBACK_HOST_IP
     host_port = getattr(port, "host_port", None)
     expected_port = str(host_port) if host_port is not None else None
-    for entry in entries:
-        if not isinstance(entry, Mapping):
-            continue
-        realized_ip = entry.get("HostIp") or ""
-        realized_port = entry.get("HostPort") or ""
-        ip_ok = _realized_scope_matches_declared(realized_ip, expected_ip)
-        port_ok = expected_port is None or realized_port == expected_port
-        if ip_ok and port_ok:
-            return True
-    return False
+    return any(
+        _port_entry_matches(entry, expected_ip, expected_port)
+        for entry in entries
+        if isinstance(entry, Mapping)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -370,36 +311,16 @@ def _observe_capabilities(
     host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
     granted = _normalized_capabilities(host_config.get("CapAdd") if isinstance(host_config, Mapping) else None)
     dropped = _normalized_capabilities(host_config.get("CapDrop") if isinstance(host_config, Mapping) else None)
-    declared_add = set(declared.get("add") or [])
-    declared_drop = set(declared.get("drop") or [])
-    # A declared drop the container actually grants (present in CapAdd) is not
-    # dropped at all -- certifying the authored drop would let a workload retain a
-    # powerful capability behind an echoed policy (issue #876 security review).
-    # The generic substrate adds init capabilities, so this overlap is realistic.
-    if declared_drop & granted:
-        return None
-    # Excess check (issue #876 cycle-7 review): every granted capability must be
-    # one the contract declared or one APTL's own init adds for a systemd node.
-    # A capability beyond that baseline is undeclared privilege and must not pass
-    # behind an echoed declared policy.
+    # Corroboration folds the three fail-closed checks together (issue #876
+    # security / cycle-7 review): a declared drop the container actually grants is
+    # not dropped at all; a granted capability beyond the declared set plus the
+    # known init baseline is undeclared privilege; and every declared add/drop
+    # must be realized. The generic substrate adds the init capabilities, so a
+    # systemd node subtracts exactly that baseline before the excess check.
     baseline = _INIT_CAPABILITY_BASELINE if _runs_init(runtime) else frozenset()
-    if not granted <= (declared_add | baseline):
+    if not _capabilities_corroborate(declared, granted, dropped, baseline):
         return None
-    if declared_add <= granted and declared_drop <= dropped:
-        return _disclose("linux-capabilities", declared)
-    return None
-
-
-def _normalized_capabilities(values: object) -> set[str]:
-    """Return container capabilities in RAES's canonical ``CAP_*`` upper form."""
-
-    normalized: set[str] = set()
-    if isinstance(values, Sequence) and not isinstance(values, (str, bytes)):
-        for value in values:
-            if isinstance(value, str) and value.strip():
-                name = value.strip().upper().replace("-", "_")
-                normalized.add(name if name.startswith("CAP_") else f"CAP_{name}")
-    return normalized
+    return _disclose("linux-capabilities", declared)
 
 
 # --------------------------------------------------------------------------- #
@@ -424,9 +345,7 @@ def _observe_mounts(
     declared = [mount for mount in runtime.mounts if _mount_kind(mount) in _STATEFUL_MOUNT_KINDS]
     realized = info.get("Mounts") if isinstance(info, Mapping) else None
     realized_mounts = realized if isinstance(realized, list) else []
-    if _has_undeclared_mounts(realized_mounts, declared, runtime):
-        return None
-    if not declared:
+    if _has_undeclared_mounts(realized_mounts, declared, runtime) or not declared:
         return None
     disclosed = [
         mount.model_dump(mode="json", by_alias=True)
@@ -438,27 +357,9 @@ def _observe_mounts(
     return _disclose("runtime-mounts", disclosed)
 
 
-def _has_undeclared_mounts(
-    realized_mounts: Sequence[object],
-    declared: list,
-    runtime: RuntimeConfiguration,
-) -> bool:
-    """Return whether the container carries an undeclared bind/tmpfs mount."""
-
-    allowed_targets = {getattr(mount, "target", "") for mount in declared}
-    if _runs_init(runtime):
-        allowed_targets |= _INIT_BIND_MOUNT_TARGETS
-    for realized in realized_mounts:
-        if not isinstance(realized, Mapping):
-            continue
-        if realized.get("Type") not in _STATEFUL_MOUNT_KINDS:
-            continue
-        if realized.get("Destination") not in allowed_targets:
-            return True
-    return False
-
-
 def _mount_kind(mount: object) -> str:
+    """Return a declared mount's source kind (``bind`` / ``tmpfs`` / ...)."""
+
     source_kind = getattr(mount, "source_kind", None)
     return str(getattr(source_kind, "value", source_kind) or "")
 
@@ -471,24 +372,41 @@ def _mount_present(mount: object, realized_mounts: Sequence[object]) -> bool:
     protected = _sensitivity(getattr(mount, "source_sensitivity", "")) in _PROTECTED
     source = getattr(mount, "source", "")
     read_only = bool(getattr(mount, "read_only", False))
-    for realized in realized_mounts:
-        if not isinstance(realized, Mapping):
-            continue
-        if realized.get("Type") != kind or realized.get("Destination") != target:
-            continue
-        if kind == "bind" and source and not protected and realized.get("Source") != source:
-            continue
-        # Read-only state is a declared access-contract field for both bind and
-        # tmpfs mounts; a realized RW that contradicts the declaration is a
-        # material mismatch, not a match (issue #876 core review).
-        if kind in ("bind", "tmpfs") and "RW" in realized and read_only == bool(realized.get("RW")):
-            continue
-        return True
-    return False
+    return any(
+        _mount_entry_matches(
+            realized,
+            kind=kind,
+            target=target,
+            source=source,
+            protected=protected,
+            read_only=read_only,
+        )
+        for realized in realized_mounts
+        if isinstance(realized, Mapping)
+    )
 
 
-def _sensitivity(value: object) -> str:
-    return str(getattr(value, "value", value) or "")
+def _mount_entry_matches(
+    realized: Mapping[str, Any],
+    *,
+    kind: str,
+    target: str,
+    source: str,
+    protected: bool,
+    read_only: bool,
+) -> bool:
+    """Return whether one realized mount entry corroborates the declared mount."""
+
+    if realized.get("Type") != kind or realized.get("Destination") != target:
+        return False
+    if kind == "bind" and source and not protected and realized.get("Source") != source:
+        return False
+    # Read-only state is a declared access-contract field for both bind and
+    # tmpfs mounts; a realized RW that contradicts the declaration is a
+    # material mismatch, not a match (issue #876 core review).
+    if kind in ("bind", "tmpfs") and "RW" in realized and read_only == bool(realized.get("RW")):
+        return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -513,24 +431,24 @@ def _observe_service_listeners(
     if not declared:
         return None
     observed = backend.observe_container_listeners(container_name)
-    if observed is None:
-        return None
+    result: object | None = None
     # Excess check (issue #876 cycle-7 review): the base substrate opens no
     # network listener of its own, so a realized tcp/udp socket the contract does
     # not declare is a hostile or leftover exposure and must not pass behind an
     # echoed declaration. Unix sockets are deliberately not excess-checked -- a
     # systemd node's own init opens many internal ones -- so only network
     # exposure is bounded here.
-    if _has_undeclared_network_listeners(observed.sockets, declared):
-        return None
-    disclosed = [
-        listener.model_dump(mode="json", by_alias=True)
-        for listener in declared
-        if _listener_present(listener, observed)
-    ]
-    if not disclosed:
-        return None
-    return _disclose("service-listeners", disclosed)
+    if observed is not None and not _has_undeclared_network_listeners(
+        observed.sockets, declared
+    ):
+        disclosed = [
+            listener.model_dump(mode="json", by_alias=True)
+            for listener in declared
+            if _listener_present(listener, observed)
+        ]
+        if disclosed:
+            result = _disclose("service-listeners", disclosed)
+    return result
 
 
 def _listener_present(listener: object, observed: "ContainerListeners") -> bool:
@@ -540,6 +458,14 @@ def _listener_present(listener: object, observed: "ContainerListeners") -> bool:
     if protocol == "unix":
         socket_path = getattr(listener, "socket_path", "")
         return bool(socket_path) and socket_path in observed.unix_socket_paths
+    return _network_listener_present(listener, protocol, observed)
+
+
+def _network_listener_present(
+    listener: object, protocol: str, observed: "ContainerListeners"
+) -> bool:
+    """Return whether a trusted observation corroborates a declared tcp/udp listener."""
+
     port = getattr(listener, "port", None)
     if port is None:
         return False
@@ -551,6 +477,7 @@ def _listener_present(listener: object, observed: "ContainerListeners") -> bool:
     # symbolic declaration (issue #876 cycle-7 review).
     if declared_address.startswith("$"):
         return False
+    present = False
     for socket_protocol, socket_address, socket_port in observed.sockets:
         if socket_protocol != protocol or socket_port != declared_port:
             continue
@@ -558,23 +485,9 @@ def _listener_present(listener: object, observed: "ContainerListeners") -> bool:
         # a wildcard is over-exposed and a wildcard declaration realized on one
         # interface is under-exposed -- neither corroborates (issue #876 review).
         if _realized_scope_matches_declared(socket_address, declared_address):
-            return True
-    return False
-
-
-def _has_undeclared_network_listeners(
-    sockets: tuple[tuple[str, str, int], ...],
-    declared: Sequence[object],
-) -> bool:
-    """Return whether the container serves a tcp/udp listener no declaration covers."""
-
-    declared_keys = {
-        (_sensitivity(getattr(listener, "protocol", "")), int(getattr(listener, "port")))
-        for listener in declared
-        if _sensitivity(getattr(listener, "protocol", "")) != "unix"
-        and getattr(listener, "port", None) is not None
-    }
-    return any((protocol, port) not in declared_keys for protocol, _address, port in sockets)
+            present = True
+            break
+    return present
 
 
 __all__ = ["observe_runtime_concerns"]

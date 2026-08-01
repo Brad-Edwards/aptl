@@ -5,10 +5,9 @@ implements lifecycle operations (start, stop, status, kill, pull) and
 container interaction (list, logs, shell, exec, inspect) for a specific
 deployment target (Docker Compose, SSH remote, Kubernetes, etc.).
 
-Container interaction methods were added under CLI-004 (see ADR-023);
-this lets local and SSH backends present a uniform surface so the same
-CLI commands and core helpers (snapshot, flags, collectors) work without
-caring whether the daemon is local or remote.
+Container interaction (CLI-004, ADR-023) lets local and SSH backends present a
+uniform surface so the same CLI commands and core helpers (snapshot, flags,
+collectors) work whether the daemon is local or remote.
 
 Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
@@ -36,13 +35,9 @@ from aptl.core.appliance_boundary import (
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
-# ``aptl.core.lab``. Pre-#266 the import landed on lab.py directly,
-# which created a load-order cycle (lab.py -> snapshot ->
-# deployment.__init__ -> backend.py -> lab.py-mid-load) when lab.py
-# was the first module loaded fresh. The leaf module has no back-edges,
-# so the import is safe at runtime — keeping the names resolvable for
-# ``typing.get_type_hints(DeploymentBackend.start)`` and other runtime
-# introspection.
+# ``aptl.core.lab``: a direct lab.py import created a load-order cycle pre-#266
+# (lab.py -> snapshot -> deployment.__init__ -> backend.py -> lab.py). The leaf
+# has no back-edges, so the names stay resolvable for ``typing.get_type_hints``.
 
 
 class DeploymentBackend(HostInventoryBackend, Protocol):
@@ -93,8 +88,7 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
                 availability pass verified for dynamic-composition nodes (ADR-051
                 route 3, issue #876). A route-3 node's base container starts from
                 exactly this config id with ``--pull=never``, so the mutable tag
-                is never re-resolved at apply and a substrate changed since
-                availability produces no container rather than the wrong bytes.
+                is never re-resolved at apply.
 
         Returns:
             LabResult indicating success or failure.
@@ -269,14 +263,12 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """Materialize checked-in source into Compose named volumes (ADR-043).
 
         For each seed, a root (``--user 0:0``) one-off container copies the
-        spec's files from the read-only source bind into the
-        project-scoped named volume, overwriting any prior content so the
-        operation is idempotent regardless of the existing owner. When a
-        seed carries a ``legacy_retire_path`` that still exists, a narrow
-        root container removes that one canonical path first.
-
-        Implementations route Docker through their own runner — this is a
-        narrow, typed operation, not a generic argv passthrough.
+        spec's files from the read-only source bind into the project-scoped
+        named volume, overwriting prior content so the operation is idempotent
+        regardless of the existing owner. A seed carrying a still-present
+        ``legacy_retire_path`` has that one canonical path removed first.
+        Implementations route Docker through their own runner -- a narrow typed
+        operation, not a generic argv passthrough.
 
         Args:
             seeds: The volume seed specs to materialize, in order.
@@ -298,14 +290,12 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
     ) -> None:
         """Materialize typed RAES content placements (issue #689).
 
-        Mirrors :meth:`seed_named_volumes`: each realized content item is
-        lowered into a project-scoped named-volume seed (inline text is
-        rendered into the ignored ``.aptl/content/`` state tree first;
-        project-contained sources are bound read-only from their resolved,
-        containment-checked location) and materialized by the same
-        root one-off seed container mechanism, so content realization gets
-        the identical idempotency, project-scoping, and redaction behavior
-        as ADR-043 volume seeding without a second Docker-copy mechanism.
+        Mirrors :meth:`seed_named_volumes`: each realized content item is lowered
+        into a project-scoped named-volume seed (inline text rendered into the
+        ignored ``.aptl/content/`` tree first; project-contained sources bound
+        read-only from their containment-checked location) and materialized by
+        the same root one-off seed mechanism, so it inherits ADR-043 seeding's
+        idempotency, project-scoping, and redaction without a second mechanism.
 
         Args:
             content: The typed content realizations to materialize, in

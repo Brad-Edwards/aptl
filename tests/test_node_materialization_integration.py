@@ -139,7 +139,8 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
             text=True,
         ).stdout.strip()
         # Started from the config id, not the declared tag.
-        assert config_image and config_image != spec.image_ref
+        assert config_image
+        assert config_image != spec.image_ref
         assert _bare(config_image) == _bare(config_id)
 
         # The declared runtime still materialized onto that immutable substrate.

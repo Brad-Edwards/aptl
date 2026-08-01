@@ -188,7 +188,7 @@ def _observe_node(
     backend: "DeploymentBackend",
     container_name: str | None,
     declared_domain_topology: Mapping[str, object] | None = None,
-    declared_runtime: "RuntimeConfiguration | None" = None,
+    declared_runtime: RuntimeConfiguration | None = None,
 ) -> ObservedResource:
     """Observe one RAES node through the container the backend realized for it."""
 

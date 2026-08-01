@@ -294,7 +294,7 @@ def _mechanism_key(mechanism: object) -> tuple[str, str, str, str]:
 
 def select_route_over_mechanisms(
     requirement: "ArtifactRequirement",
-    mechanisms: "Iterable[ArtifactMechanismCapability]",
+    mechanisms: Iterable[ArtifactMechanismCapability],
     *,
     requirement_kind: str,
 ) -> "ArtifactSatisfactionRoute | None":

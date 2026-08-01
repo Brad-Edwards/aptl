@@ -65,7 +65,7 @@ class AptlProvisioner(object):
     # dynamic-composition node was verified against, so realization starts that
     # exact id rather than resolving the mutable tag a second time at apply
     # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
-    artifact_availability: "ArtifactAvailabilityContext | None" = None
+    artifact_availability: ArtifactAvailabilityContext | None = None
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""

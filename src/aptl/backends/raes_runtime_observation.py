@@ -306,8 +306,14 @@ def _observe_capabilities(
     if policy is None:
         return None
     declared = policy.model_dump(mode="json", by_alias=True)
-    if declared.get("required") or declared.get("effective") or declared.get("process_overrides"):
-        return None
+    # ``required`` / ``effective`` / ``process_overrides`` are assertions or
+    # process-runtime facts APTL does not realize through docker capability flags,
+    # so a policy asserting any of them is not corroborable and is dropped.
+    unrealizable = bool(
+        declared.get("required")
+        or declared.get("effective")
+        or declared.get("process_overrides")
+    )
     host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
     granted = _normalized_capabilities(host_config.get("CapAdd") if isinstance(host_config, Mapping) else None)
     dropped = _normalized_capabilities(host_config.get("CapDrop") if isinstance(host_config, Mapping) else None)
@@ -318,9 +324,10 @@ def _observe_capabilities(
     # must be realized. The generic substrate adds the init capabilities, so a
     # systemd node subtracts exactly that baseline before the excess check.
     baseline = _INIT_CAPABILITY_BASELINE if _runs_init(runtime) else frozenset()
-    if not _capabilities_corroborate(declared, granted, dropped, baseline):
-        return None
-    return _disclose("linux-capabilities", declared)
+    corroborated = not unrealizable and _capabilities_corroborate(
+        declared, granted, dropped, baseline
+    )
+    return _disclose("linux-capabilities", declared) if corroborated else None
 
 
 # --------------------------------------------------------------------------- #
@@ -399,14 +406,18 @@ def _mount_entry_matches(
 
     if realized.get("Type") != kind or realized.get("Destination") != target:
         return False
-    if kind == "bind" and source and not protected and realized.get("Source") != source:
-        return False
-    # Read-only state is a declared access-contract field for both bind and
-    # tmpfs mounts; a realized RW that contradicts the declaration is a
+    source_mismatch = bool(
+        kind == "bind" and source and not protected and realized.get("Source") != source
+    )
+    # Read-only is a declared access-contract field; a realized RW state equal to
+    # the declared read_only flag is contradictory (they are inverse), i.e. a
     # material mismatch, not a match (issue #876 core review).
-    if kind in ("bind", "tmpfs") and "RW" in realized and read_only == bool(realized.get("RW")):
-        return False
-    return True
+    rw_mismatch = (
+        kind in ("bind", "tmpfs")
+        and "RW" in realized
+        and read_only == bool(realized.get("RW"))
+    )
+    return not source_mismatch and not rw_mismatch
 
 
 # --------------------------------------------------------------------------- #

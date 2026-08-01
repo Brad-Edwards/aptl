@@ -306,23 +306,16 @@ def _observe_capabilities(
     if policy is None:
         return None
     declared = policy.model_dump(mode="json", by_alias=True)
-    # ``required`` / ``effective`` / ``process_overrides`` are assertions or
-    # process-runtime facts APTL does not realize through docker capability flags,
-    # so a policy asserting any of them is not corroborable and is dropped.
-    unrealizable = bool(
-        declared.get("required")
-        or declared.get("effective")
-        or declared.get("process_overrides")
-    )
+    # ``required``/``effective``/``process_overrides`` are non-realizable
+    # assertions, so a policy asserting any of them is dropped.
+    unrealizable = bool(declared.get("required") or declared.get("effective") or declared.get("process_overrides"))
     host_config = info.get("HostConfig") if isinstance(info, Mapping) else None
     granted = _normalized_capabilities(host_config.get("CapAdd") if isinstance(host_config, Mapping) else None)
     dropped = _normalized_capabilities(host_config.get("CapDrop") if isinstance(host_config, Mapping) else None)
-    # Corroboration folds the three fail-closed checks together (issue #876
-    # security / cycle-7 review): a declared drop the container actually grants is
-    # not dropped at all; a granted capability beyond the declared set plus the
-    # known init baseline is undeclared privilege; and every declared add/drop
-    # must be realized. The generic substrate adds the init capabilities, so a
-    # systemd node subtracts exactly that baseline before the excess check.
+    # Corroboration folds three fail-closed checks (issue #876 cycle-7 review): a
+    # declared drop actually granted is not dropped; a grant beyond the declared
+    # set plus the init baseline is undeclared privilege; every declared add/drop
+    # must be realized. A systemd node subtracts exactly its init capabilities.
     baseline = _INIT_CAPABILITY_BASELINE if _runs_init(runtime) else frozenset()
     corroborated = not unrealizable and _capabilities_corroborate(
         declared, granted, dropped, baseline

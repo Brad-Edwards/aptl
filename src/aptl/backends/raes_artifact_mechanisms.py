@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from raes.artifact_requirements import ArtifactMechanismProfile
 
@@ -35,6 +35,14 @@ from raes_contracts.contracts import (
     ArtifactAcquisitionTimingModel,
     ArtifactMechanismCapability,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from raes.artifact_requirements import (
+        ArtifactRequirement,
+        ArtifactSatisfactionRoute,
+    )
 
 # The compiled requirement kind that ``Source.artifact_requirement`` lowers to.
 # See ``raes_processor.compiler.realization_requirements``.
@@ -79,6 +87,32 @@ _MATERIALIZATION_PROFILE_BODY: dict[str, Any] = {
     "context_selector": "specification_id",
     "integrity": "sha256 of the context Dockerfile equals the specification digest",
     "inputs": "every declared locked input must be an immutable pinned base",
+    "substitution": "forbidden",
+}
+
+
+# Generic runtime composition (ADR-051 route 3, RAESystem/rae#985). APTL composes
+# a node's declared runtime shape onto a pinned generic OS substrate and proves
+# the composition by independently reading every declared runtime realization
+# concern back off the realized container. raes 3.1.0 lowers runtime-environment,
+# runtime-mounts, linux-capabilities, published-ports, forwarding-agents, and
+# service-listeners as realization concerns; RAES's non-approximation gate then
+# compares each observed value against the author's declaration. The substrate is
+# obtained locally during backend preparation; the composition is applied and
+# read back at realization, so no artifact is fetched at composition time.
+_DYNAMIC_COMPOSITION_PROFILE_BODY: dict[str, Any] = {
+    "mechanism": "dynamic-composition",
+    "profile": "aptl-generic-substrate-composition",
+    "version": _PROFILE_VERSION,
+    "description": (
+        "Compose an authored node's complete runtime contract onto a pinned "
+        "generic OS substrate through the APTL deployment backend, then verify "
+        "every declared runtime realization concern by independent "
+        "read-after-write against the realized container."
+    ),
+    "substrate": "pinned generic OS image",
+    "composition": "authored RuntimeConfiguration concerns lowered by RAES",
+    "verification": "per-concern read-after-write via typed DeploymentBackend inspection",
     "substitution": "forbidden",
 }
 
@@ -179,13 +213,161 @@ def exact_artifact_capability() -> ArtifactMechanismCapability:
     )
 
 
+def dynamic_composition_profile() -> ArtifactMechanismProfile:
+    """Return APTL's digest-bound generic runtime-composition profile."""
+
+    body = _DYNAMIC_COMPOSITION_PROFILE_BODY
+    return ArtifactMechanismProfile(
+        mechanism=body["mechanism"],
+        profile=body["profile"],
+        version=body["version"],
+        digest=_profile_digest(body),
+    )
+
+
+def dynamic_composition_provenance_ref() -> str:
+    """Return the provenance reference for a generically composed node.
+
+    Like the other mechanisms, the provenance APTL vouches for is *how* the node
+    was obtained — its digest-bound composition profile — never a registry
+    location (ADR-098 §5).
+    """
+
+    profile = dynamic_composition_profile()
+    return f"{profile.mechanism}:{profile.profile}@{profile.digest}"
+
+
+def dynamic_composition_capability() -> ArtifactMechanismCapability:
+    """Return the backend capability entry for generic runtime composition.
+
+    Acquisition is ``local-lookup``: the generic substrate is resolved from what
+    backend preparation already staged, nothing is fetched for the composition
+    itself. Timing is ``realization``: the runtime shape is composed and read
+    back when the node is realized. No other acquisition or timing combination is
+    claimed.
+    """
+
+    return ArtifactMechanismCapability(
+        mechanism=dynamic_composition_profile(),
+        supported_requirement_kinds=[SOURCE_ARTIFACT_REQUIREMENT_KIND],
+        supported_routes=[
+            ArtifactAcquisitionTimingModel(
+                acquisition="local-lookup", timing="realization"
+            )
+        ],
+    )
+
+
+def route_is_dynamic_composition(route: "ArtifactSatisfactionRoute") -> bool:
+    """Whether a satisfaction route IS APTL's declared dynamic-composition route.
+
+    Matches the complete mechanism/profile/version/digest + acquisition + timing
+    tuple, never the mechanism name alone: the name could appear with a different
+    profile or an acquisition/timing APTL never advertised. This is the route
+    ``select_route`` selects, so availability, image realization, and satisfaction
+    all agree on which nodes are route 3.
+    """
+
+    capability = dynamic_composition_capability()
+    supported = capability.supported_routes[0]
+    mechanism = capability.mechanism
+    return (
+        route.mechanism.mechanism == mechanism.mechanism
+        and route.mechanism.profile == mechanism.profile
+        and route.mechanism.version == mechanism.version
+        and route.mechanism.digest == mechanism.digest
+        and route.acquisition == supported.acquisition
+        and route.timing == supported.timing
+    )
+
+
+def _mechanism_key(mechanism: object) -> tuple[str, str, str, str]:
+    """Return the comparable identity of one mechanism profile."""
+
+    return (
+        getattr(mechanism, "mechanism", ""),
+        getattr(mechanism, "profile", ""),
+        getattr(mechanism, "version", ""),
+        getattr(mechanism, "digest", ""),
+    )
+
+
+def select_route_over_mechanisms(
+    requirement: "ArtifactRequirement",
+    mechanisms: "Iterable[ArtifactMechanismCapability]",
+    *,
+    requirement_kind: str,
+) -> "ArtifactSatisfactionRoute | None":
+    """Return the single route the permitted-vs-supported intersection selects.
+
+    The one deterministic selection algorithm every seam shares: satisfaction
+    runs it over the manifest's advertised mechanisms (via ``select_route``),
+    availability and image realization run it over APTL's own
+    ``aptl_artifact_mechanisms()`` (via :func:`is_dynamic_composition_requirement`).
+    Because both select from the same intersection with the same content-keyed
+    ``min``, they cannot disagree about which route -- and therefore whether route
+    3 -- a multi-route requirement resolves to (issue #876 core review).
+    """
+
+    supported = {
+        (_mechanism_key(capability.mechanism), route.acquisition, route.timing)
+        for capability in mechanisms
+        if requirement_kind in capability.supported_requirement_kinds
+        for route in capability.supported_routes
+    }
+    eligible = [
+        route
+        for route in requirement.permitted_routes
+        if (_mechanism_key(route.mechanism), route.acquisition, route.timing)
+        in supported
+    ]
+    if not eligible:
+        return None
+    return min(
+        eligible,
+        key=lambda route: (
+            *_mechanism_key(route.mechanism),
+            route.acquisition,
+            route.timing,
+        ),
+    )
+
+
+def is_dynamic_composition_requirement(requirement: "ArtifactRequirement") -> bool:
+    """Whether the route APTL SELECTS for this requirement is its route 3.
+
+    Not "permits" but "selects": RAES route selection intersects the full
+    profile/acquisition/timing tuple and can pick a different permitted route, so
+    a requirement that merely lists dynamic-composition among its permitted routes
+    -- while its selected route is exact or materialized -- is NOT route 3.
+    Availability, image realization, and satisfaction all key on this selected
+    route (satisfaction through ``select_route``, which shares
+    ``select_route_over_mechanisms``), so they cannot diverge for a multi-route
+    requirement (issue #876 core review). Because APTL's manifest advertises
+    exactly ``aptl_artifact_mechanisms()`` for the runtime-realization domain, the
+    set selected over here is identical to the one satisfaction selects over.
+    """
+
+    route = select_route_over_mechanisms(
+        requirement,
+        aptl_artifact_mechanisms(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+    return route is not None and route_is_dynamic_composition(route)
+
+
 def aptl_artifact_mechanisms() -> tuple[ArtifactMechanismCapability, ...]:
     """Return every artifact mechanism APTL can materialize and verify.
 
-    ``dynamic-composition`` (generic runtime composition) is deliberately absent
-    until its selection, materialization, and readback exist end to end. Adding
-    it here before that would be exactly the optimistic capability declaration
-    SEM-218 I4 forbids.
+    ``dynamic-composition`` is advertised now that raes 3.1.0 lowers the runtime
+    realization concerns (RAESystem/rae#985) and APTL composes a node onto a
+    generic substrate and reads every declared runtime concern back by
+    read-after-write (issue #876) — so the SEM-218 I4 precondition
+    "materialize *and* independently read back" holds for it.
     """
 
-    return (exact_artifact_capability(), materialization_capability())
+    return (
+        exact_artifact_capability(),
+        materialization_capability(),
+        dynamic_composition_capability(),
+    )

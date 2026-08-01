@@ -17,7 +17,10 @@ from aptl.backends.raes_diagnostics import (
     realized_changed_addresses,
     snapshot_after_apply,
 )
-from aptl.backends.raes_artifact_mechanisms import SOURCE_ARTIFACT_REQUIREMENT_KIND
+from aptl.backends.raes_artifact_mechanisms import (
+    SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    dynamic_composition_provenance_ref,
+)
 from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observation_evidence, observe_realization
@@ -33,6 +36,8 @@ from aptl.core.config import AptlConfig
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from raes_contracts.contracts import ArtifactAvailabilityContext
+
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
@@ -55,6 +60,12 @@ class AptlProvisioner(object):
     # Keep the last failed apply's own report here so the handoff can
     # re-attach the actionable failure (issue #677).
     last_failure_diagnostics: tuple[Diagnostic, ...] = ()
+    # The trusted availability facts gathered before planning (ADR-051). They
+    # carry the address-scoped immutable substrate config id each
+    # dynamic-composition node was verified against, so realization starts that
+    # exact id rather than resolving the mutable tag a second time at apply
+    # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
+    artifact_availability: "ArtifactAvailabilityContext | None" = None
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""
@@ -127,7 +138,9 @@ class AptlProvisioner(object):
             )
         deployment_spec = realization.deployment_spec(selected_profiles)
         start_result = self.deployment_backend.realize(
-            deployment_spec, scenario_root=self.bundle.root
+            deployment_spec,
+            scenario_root=self.bundle.root,
+            substrate_digests=self._availability_substrate_digests(),
         )
         if not start_result.success:
             diagnostics.append(
@@ -170,6 +183,37 @@ class AptlProvisioner(object):
                 "observation_evidence": observation_evidence(observations),
             },
         )
+
+    def _availability_substrate_digests(self) -> dict[str, str]:
+        """Return the address-scoped substrate config id availability verified.
+
+        For each dynamic-composition node the availability pass resolved the
+        generic substrate's immutable config id once and recorded it as a
+        verified integrity ref paired with the dynamic-composition provenance
+        ref. Threading that exact id into realization means the base container
+        starts the bytes availability verified, never a second resolution of the
+        mutable tag (issue #876 cycle-6 review). Empty when no node authored a
+        dynamic-composition source.
+        """
+
+        availability = self.artifact_availability
+        if availability is None:
+            return {}
+        provenance = dynamic_composition_provenance_ref()
+        digests: dict[str, str] = {}
+        for requirement in getattr(availability, "requirements", ()):
+            if provenance not in getattr(requirement, "verified_provenance_refs", ()):
+                continue
+            # A dynamic-composition node authors an open source with no exact or
+            # materialized artifact, so its verified integrity set is EXACTLY the
+            # one substrate digest. Require that: a multi-valued or empty set is
+            # ambiguous, and taking one arbitrarily could start an unrelated
+            # artifact, so it yields no verified digest and the start fails closed
+            # (issue #876 cycle-7 review).
+            refs = getattr(requirement, "verified_integrity_refs", ())
+            if len(refs) == 1:
+                digests[requirement.address] = refs[0]
+        return digests
 
     def _with_artifact_satisfactions(
         self,

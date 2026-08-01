@@ -290,7 +290,9 @@ def test_realize_threads_the_bundle_root_as_scenario_root(monkeypatch, tmp_path)
     seen: dict[str, object] = {}
     backend = MagicMock()
 
-    def _capture_realize(realization, *, build=True, scenario_root):
+    def _capture_realize(
+        realization, *, build=True, scenario_root, substrate_digests=None
+    ):
         seen["scenario_root"] = scenario_root
         return LabResult(success=True)
 

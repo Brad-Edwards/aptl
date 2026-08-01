@@ -51,11 +51,14 @@ from aptl.backends.raes_realization_model import (
     AptlRealization,
     ParticipantDatasetRealization,
 )
+from aptl.backends.raes_runtime_observation import observe_runtime_concerns
 from aptl.utils.logging import get_logger
 
 log = get_logger("realization-observe")
 
 if TYPE_CHECKING:
+    from raes.runtime_configuration import RuntimeConfiguration
+
     from aptl.core.deployment.backend import DeploymentBackend
     from aptl.core.deployment.realization import DeploymentContentRealization
 
@@ -95,6 +98,11 @@ def observe_realization(
         for node in realization.nodes
         if node.container_name
     }
+    node_runtimes = {
+        node.address: node.runtime
+        for node in realization.nodes
+        if node.runtime is not None
+    }
     network_names = {network.address: network.name for network in realization.networks}
     placement_targets = {
         placement.address: placement.target_address
@@ -121,6 +129,7 @@ def observe_realization(
                 backend,
                 node_containers.get(address),
                 declared_domain_topology=_declared_domain_topology(resource),
+                declared_runtime=node_runtimes.get(address),
             )
         elif resource.resource_type == "network":
             observations[address] = _observe_network(
@@ -179,6 +188,7 @@ def _observe_node(
     backend: "DeploymentBackend",
     container_name: str | None,
     declared_domain_topology: Mapping[str, object] | None = None,
+    declared_runtime: "RuntimeConfiguration | None" = None,
 ) -> ObservedResource:
     """Observe one RAES node through the container the backend realized for it."""
 
@@ -200,6 +210,9 @@ def _observe_node(
         )
         if topology is not None:
             concerns[_DOMAIN_TOPOLOGY_PATH] = topology
+    concerns.update(
+        observe_runtime_concerns(backend, container_name, info, declared_runtime)
+    )
     return ObservedResource(realized=True, concerns=concerns)
 
 

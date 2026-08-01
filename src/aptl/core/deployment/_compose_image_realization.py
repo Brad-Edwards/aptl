@@ -164,6 +164,43 @@ class ComposeRealizationImageMixin:
             return None
         return self._image_manifest_digest(image_id)
 
+    def substrate_image_identity(self, image_ref: str) -> tuple[str, str] | None:
+        """Return the ``(config-id digest, media_type)`` of a locally present ref.
+
+        Route-3 (dynamic-composition) availability is a strict local-lookup: it
+        verifies the generic substrate is on the target daemon and never pulls or
+        manifest-inspects a registry (ADR-051 route 3). The identity is the image
+        **config id** -- the one digest domain whose media type is locally
+        knowable and that exactly matches the container's ``{{.Image}}`` readback
+        (:meth:`container_image_config_id`), so availability and post-realization
+        satisfaction compare like with like. A registry RepoDigest is deliberately
+        not used: it may name a Docker (not OCI) manifest, and multiple
+        RepoDigests are ambiguous (issue #876 review).
+        """
+
+        image_id = self._image_digest(image_ref)
+        if image_id is None:
+            return None
+        return image_id, "application/vnd.oci.image.config.v1+json"
+
+    def container_image_config_id(self, container_name: str) -> str | None:
+        """Return the config-id digest of the image backing one container.
+
+        The same digest domain :meth:`substrate_image_identity` reports for an
+        image ref, so a dynamic-composition node's realized substrate is compared
+        like with like at the runtime gate. Returns None when it cannot be read (a
+        refused disclosure, not an assumed match).
+        """
+
+        container = self._run(
+            ["docker", "inspect", "--format", "{{.Image}}", container_name],
+            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        )
+        if container.returncode != 0:
+            return None
+        image_id = container.stdout.strip()
+        return image_id if image_id.startswith("sha256:") else None
+
     def _image_manifest_digest(self, image_id: str) -> str | None:
         """Return an image's registry manifest digest, or its id as a fallback.
 

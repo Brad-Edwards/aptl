@@ -170,6 +170,10 @@ class DeploymentNodeRealization(object):
     os: str = ""
     os_version: str = ""
     runtime: RuntimeConfiguration | None = None
+    # ADR-051 route 3 (issue #876): started immutably from the verified config id
+    # (never a pull, never a moved tag) when the node authored an open
+    # dynamic-composition source.
+    dynamic_composition: bool = False
 
 
 ContentSourceKind = Literal[

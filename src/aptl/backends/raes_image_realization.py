@@ -9,8 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from pydantic import ValidationError
+from raes.artifact_requirements import ArtifactRequirement
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
+
+from aptl.backends.raes_artifact_mechanisms import is_dynamic_composition_requirement
 
 from aptl.backends._raes_image_policy import (
     _ALLOWED_DIGEST_SOURCE_NAMES,
@@ -48,6 +52,13 @@ def resolve_node_image(
     image: DeploymentImageRealization | None = None
     source = _node_source(payload, resource.address, diagnostics)
     if source is not None:
+        if _is_dynamic_composition_source(source):
+            # An admitted dynamic-composition node is intentionally image-free
+            # (ADR-051 route 3): it composes onto the generic substrate and proves
+            # its runtime by readback, so it selects no container image. This must
+            # precede the unmapped-service / untrusted-image failures that exact
+            # and materialized sources keep.
+            return None
         if service_name is None:
             diagnostics.append(_policy_diagnostic(resource.address, "unmapped-service"))
         else:
@@ -70,6 +81,41 @@ def resolve_node_image(
                     _policy_diagnostic(resource.address, "untrusted-image")
                 )
     return image
+
+
+def node_source_is_dynamic_composition(
+    payload: Mapping[str, Any],
+    address: str,
+) -> bool:
+    """Whether a node payload authors an open dynamic-composition source.
+
+    The realization-time counterpart to :func:`resolve_node_image`'s own
+    dynamic-composition branch: it marks the node so its base substrate is
+    started immutably — ``--pull=never`` from the verified config id — under
+    ADR-051 route 3 (issue #876). A throwaway diagnostics sink is used so it
+    never double-reports a malformed source the image resolver already surfaces.
+    """
+
+    source = _node_source(payload, address, [])
+    return source is not None and _is_dynamic_composition_source(source)
+
+
+def _is_dynamic_composition_source(source: _NodeSource) -> bool:
+    """Whether a node's source authors an open dynamic-composition requirement.
+
+    Discriminated on the authored open explicitness plus a dynamic-composition
+    permitted route -- never on the mere absence of an exact identity, which a
+    constrained materialization also lacks.
+    """
+
+    raw = source.artifact_requirement
+    if not isinstance(raw, Mapping):
+        return False
+    try:
+        requirement = ArtifactRequirement.model_validate(dict(raw))
+    except ValidationError:
+        return False
+    return is_dynamic_composition_requirement(requirement)
 
 
 def _node_source(

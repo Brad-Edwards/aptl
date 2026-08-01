@@ -10,6 +10,11 @@ import subprocess
 import json
 from typing import Any
 
+from aptl.core.deployment._proc_net_listeners import (
+    PROC_NET_READER,
+    ContainerListeners,
+    parse_proc_net_listeners,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -18,6 +23,21 @@ log = get_logger("deployment.docker_compose")
 # (especially the SSH transport) must not hang `aptl lab status --json`
 # or the lab-start snapshot step indefinitely.
 _HOST_INVENTORY_TIMEOUT = 15
+# A single netns-joining sidecar read is a cheap kernel-table dump; bound it so a
+# stalled daemon cannot hang realization observation.
+_LISTENER_SIDECAR_TIMEOUT = 30
+# The listener observer runs from an APTL-pinned image, NEVER one derived from the
+# target container (issue #876 cycle-5 security review): a digest pin fixes the
+# exact bytes, so a workload -- which in a cyber range is expected to be hostile --
+# cannot substitute its own `sh`/`cat` to forge the readback. This is the same
+# pinned alpine base the network-boundary helper builds on, so any offline stage
+# that carries the boundary helper already carries this observer. The observer
+# only reads the kernel's per-netns socket tables; it needs no capabilities and
+# gets none.
+_LISTENER_OBSERVER_IMAGE = (
+    "alpine:3.22@sha256:"
+    "14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce"
+)
 
 
 def _parse_labels(labels_str: str) -> dict[str, str]:
@@ -374,3 +394,46 @@ class ComposeQueryMixin(object):
             )
             return {}
         return _decode_first_object(result.stdout)
+
+    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
+        """Read a container's listeners from OUTSIDE its own trust boundary (#876).
+
+        Launches a throwaway sidecar from an APTL-pinned observer image
+        (:data:`_LISTENER_OBSERVER_IMAGE`) that joins the target's network
+        namespace and reads the kernel's per-netns socket tables with ITS OWN
+        ``sh``/``cat`` -- never the target's, and never an image derived from the
+        target. The kernel tables are ground truth outside the container's
+        filesystem, and the observer's tooling is fixed by digest, so a workload
+        (expected to be hostile in a cyber range) cannot forge the readback. The
+        sidecar drops all capabilities, gains no new privileges, and runs
+        read-only: it only reads. Returns ``None`` when the read cannot be
+        completed, which the observer treats as a refused disclosure (a rejected
+        EXACT declaration) rather than an assumed match.
+        """
+
+        pull_never = bool(getattr(self, "_offline_staged", False))
+        result = self._run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                *(["--pull=never"] if pull_never else []),
+                "--network",
+                f"container:{name}",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges",
+                "--read-only",
+                "--entrypoint",
+                "sh",
+                _LISTENER_OBSERVER_IMAGE,
+                "-c",
+                PROC_NET_READER,
+            ],
+            timeout=_LISTENER_SIDECAR_TIMEOUT,
+        )
+        if result.returncode != 0:
+            log.debug(
+                "listener sidecar failed for %s: %s", name, result.stderr.strip()
+            )
+            return None
+        return parse_proc_net_listeners(result.stdout)

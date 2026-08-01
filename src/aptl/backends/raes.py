@@ -49,6 +49,7 @@ from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from raes_contracts.contracts import ArtifactAvailabilityContext
     from raes_processor.models import ExecutionPlan
 
     from aptl.core.deployment.backend import DeploymentBackend
@@ -71,12 +72,18 @@ def create_aptl_runtime_target(
     participant_action_specs: Mapping[str, ParticipantActionSpec] | None = None,
     participant_plan_authority: ParticipantPlanAuthority | None = None,
     bundle: ScenarioBundle,
+    artifact_availability: "ArtifactAvailabilityContext | None" = None,
 ) -> RuntimeTarget:
     """Build APTL's canonical ``full-remote-control-plane`` runtime target.
 
     ``bundle`` is required: the target realizes exactly one scenario, and every
     scenario-declared input resolves against ``bundle.root``. Callers resolve it
     once at ingress with ``project_tree_bundle`` (issue #874).
+
+    ``artifact_availability`` carries the trusted availability facts to the
+    provisioner so realization starts each dynamic-composition node from the
+    substrate config id availability verified, never a second tag resolution
+    (issue #876 cycle-6 review).
     """
 
     provisioner = AptlProvisioner(
@@ -84,6 +91,7 @@ def create_aptl_runtime_target(
         config=config,
         deployment_backend=backend,
         bundle=bundle,
+        artifact_availability=artifact_availability,
     )
     orchestrator = AptlOrchestrator()
     action_specs = dict(DEFAULT_PARTICIPANT_ACTIONS)
@@ -246,6 +254,7 @@ def _plan_scenario(
         backend=backend,
         participant_action_specs=participant_action_specs,
         bundle=bundle,
+        artifact_availability=availability,
     )
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):

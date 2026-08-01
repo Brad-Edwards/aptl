@@ -14,11 +14,12 @@ Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
 
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.deployment._proc_net_listeners import ContainerListeners
 from aptl.core.deployment.backend_host_inventory import HostInventoryBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -72,6 +73,7 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         *,
         build: bool = True,
         scenario_root: Path,
+        substrate_digests: Mapping[str, str] | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through the backend.
 
@@ -87,6 +89,12 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
                 resolves against; request-scoped, never cached on the backend.
                 The operator ``.env`` stays the control-plane ``project_dir``
                 boundary (issue #874).
+            substrate_digests: Address-scoped immutable substrate identities the
+                availability pass verified for dynamic-composition nodes (ADR-051
+                route 3, issue #876). A route-3 node's base container starts from
+                exactly this config id with ``--pull=never``, so the mutable tag
+                is never re-resolved at apply and a substrate changed since
+                availability produces no container rather than the wrong bytes.
 
         Returns:
             LabResult indicating success or failure.
@@ -193,6 +201,27 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         disclosure is built from this observed value, never from the planned
         one. Return None when the digest cannot be determined, so the caller
         refuses the disclosure instead of assuming a match.
+        """
+        ...
+
+    def substrate_image_identity(self, image_ref: str) -> tuple[str, str] | None:
+        """Return the ``(digest, media_type)`` of a locally present image ref.
+
+        The route-3 (dynamic-composition) availability check verifies the
+        generic substrate is already on the target daemon: a strict local-lookup
+        that never pulls (ADR-051 route 3). The digest is reported in the same
+        domain as ``container_image_digest`` so availability and post-realization
+        readback compare like with like. Returns None when the reference is not
+        locally present or its identity cannot be read.
+        """
+        ...
+
+    def container_image_config_id(self, container_name: str) -> str | None:
+        """Return the config-id digest of the image backing one container.
+
+        The same digest domain as ``substrate_image_identity``, used to read a
+        dynamic-composition node's realized substrate back for the runtime gate.
+        Returns None when it cannot be read.
         """
         ...
 
@@ -440,6 +469,17 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
             The first element of the ``docker inspect`` JSON array, or
             an empty dict on any failure (missing container, parse
             error, etc.).
+        """
+        ...
+
+    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
+        """Return a container's listeners read from outside its trust boundary.
+
+        The trusted half of service-listener readback (issue #876): the kernel's
+        per-netns socket tables, observed by a mechanism that executes no
+        container-provided binary, so a workload cannot under-report its bind
+        scope. Returns ``None`` when the listeners cannot be read, which the
+        observer treats as a refused disclosure rather than an assumed match.
         """
         ...
 

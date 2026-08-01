@@ -34,6 +34,12 @@ def _backend(tmp_path: Path) -> DockerComposeBackend:
     return DockerComposeBackend(project_dir=tmp_path, project_name="test-proj")
 
 
+# A stand-in for the substrate's image config id — the sha256 domain
+# `docker image inspect --format {{.Id}}` reports and `docker run <id>` records
+# as the container's ``Config.Image``.
+_CONFIG_ID = "sha256:" + "a" * 64
+
+
 class TestEnsureGenericBaseImage:
     """A fresh machine has none of the locally-built generic base images in
     its Docker cache — a developer's own long-lived cache silently masked
@@ -405,6 +411,110 @@ class TestStartBaseContainerVolumesAndPorts:
         )
         argv = run_call.args[0]
         assert "127.0.0.1:5353:53/udp" in argv
+
+
+class TestDynamicCompositionImmutableStart:
+    """ADR-051 route 3 (issue #876): a dynamic-composition node's base container
+    starts from the exact config id the AVAILABILITY pass verified for its
+    address -- carried in as ``realize()`` apply context -- with ``--pull=never``,
+    and NEVER by re-resolving the mutable tag at start (cycle-6 review). Starting
+    an immutable config id closes the availability-to-apply gap: a tag that moved
+    since cannot substitute other bytes, and a verified id that is gone produces
+    no container.
+    """
+
+    def _spec(self, **overrides) -> BaseContainerSpec:
+        base = dict(
+            node_address="provision.node.web",
+            container_name="aptl-web",
+            image_ref="debian:12-slim",
+            runs_services=False,
+            dynamic_composition=True,
+        )
+        base.update(overrides)
+        return BaseContainerSpec(**base)
+
+    @staticmethod
+    def _with_verified(backend, digest: str = _CONFIG_ID) -> None:
+        """Seed the apply context ``realize()`` derives from availability facts."""
+        backend._realization_substrate_digests = {"provision.node.web": digest}
+
+    def test_starts_from_the_availability_verified_digest_not_the_tag(self, tmp_path):
+        backend = _backend(tmp_path)
+        self._with_verified(backend)
+        spec = self._spec()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.start_base_container(spec)
+
+        run_call = next(
+            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+        )
+        argv = run_call.args[0]
+        # Never pulls, and runs the exact availability-verified config id -- the
+        # declared tag never appears as the image argument.
+        assert "--pull=never" in argv
+        assert argv[-3:] == [_CONFIG_ID, "sleep", "infinity"]
+        assert "debian:12-slim" not in argv
+        # The mutable tag is never resolved at start: no `docker image inspect`.
+        assert not any(
+            c.args[0][:4] == ["docker", "image", "inspect", "--format"]
+            for c in mock_run.call_args_list
+        )
+
+    def test_fails_closed_when_availability_did_not_verify_the_substrate(self, tmp_path):
+        # No verified digest for this address (the substrate was unobtainable at
+        # availability, or changed away since): refuse to resolve the tag and
+        # start nothing -- ADR-051's "a changed substrate produces no container".
+        backend = _backend(tmp_path)
+        spec = self._spec()  # apply context deliberately not seeded
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            with pytest.raises(BackendSeedError, match="not verified by availability"):
+                backend.start_base_container(spec)
+
+        assert not any(
+            c.args[0][:2] in (["docker", "run"], ["docker", "create"])
+            for c in mock_run.call_args_list
+        )
+
+    def test_idempotent_against_the_verified_digest_not_the_tag(self, tmp_path):
+        backend = _backend(tmp_path)
+        self._with_verified(backend)
+        spec = self._spec()
+        # Already up on the verified config id (what `docker run <id>` records as
+        # ``Config.Image``) -- a retry must leave it in place.
+        backend.container_inspect = MagicMock(
+            return_value={"State": {"Running": True}, "Config": {"Image": _CONFIG_ID}}
+        )
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.start_base_container(spec)
+
+        assert not any(
+            call.args[0][:2] in (["docker", "rm"], ["docker", "run"], ["docker", "create"])
+            for call in mock_run.call_args_list
+        )
+
+    def test_ordinary_node_runs_the_tag_and_never_forces_pull_never(self, tmp_path):
+        # Contrast: an ordinary (non route-3) node keeps the on-demand pull of its
+        # declared tag and consults no verified-digest apply context.
+        backend = _backend(tmp_path)
+        spec = self._spec(dynamic_composition=False)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            backend.start_base_container(spec)
+
+        run_call = next(
+            c for c in mock_run.call_args_list if c.args[0][:2] == ["docker", "run"]
+        )
+        argv = run_call.args[0]
+        assert "--pull=never" not in argv
+        assert argv[-3:] == ["debian:12-slim", "sleep", "infinity"]
 
 
 class TestRemoveGenericMaterializerContainers:

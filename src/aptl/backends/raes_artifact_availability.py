@@ -30,19 +30,24 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 from raes.explicitness import ExplicitnessClass
+from raes.nodes import NodeType
 from raes_contracts.contracts import (
     ArtifactAvailabilityContext,
     ArtifactRequirementAvailability,
 )
 from raes_processor.compiler import compile_runtime_model
+from raes_processor.compiler.addresses import _node_address
 
 import hashlib
 from pathlib import Path
 
 from aptl.backends.raes_artifact_mechanisms import (
+    dynamic_composition_provenance_ref,
     exact_artifact_provenance_ref,
+    is_dynamic_composition_requirement,
     materialization_provenance_ref,
 )
+from aptl.backends.raes_substrate import resolve_substrate
 
 # The build-context root the materialization profile declares. A specification
 # id names one directory beneath it and nothing else, so no scenario-specific
@@ -67,6 +72,10 @@ class ArtifactProbe(Protocol):
         self, image_ref: str, dockerfile_path: str, context_path: str
     ) -> str | None:
         """Build one component image and return its resulting digest."""
+        ...
+
+    def substrate_image_identity(self, image_ref: str) -> "tuple[str, str] | None":
+        """Return the ``(digest, media_type)`` of a locally present image ref."""
         ...
 
 
@@ -222,6 +231,7 @@ def artifact_availability_for_scenario(
     """
 
     materialized: dict[str, str] = {}
+    nodes_by_address = _nodes_by_address(scenario)
     entries = [
         _availability_entry(
             compiled,
@@ -230,6 +240,7 @@ def artifact_availability_for_scenario(
             allow_remote=allow_remote,
             scenario_root=scenario_root,
             materialized=materialized,
+            node=nodes_by_address.get(compiled.address),
         )
         for compiled, requirement in _source_artifact_requirements(scenario)
     ]
@@ -244,6 +255,7 @@ def _availability_entry(
     allow_remote: bool | None,
     scenario_root: Path | None,
     materialized: dict[str, str],
+    node: object = None,
 ) -> ArtifactRequirementAvailability:
     """Return the availability facts for one compiled address.
 
@@ -275,6 +287,23 @@ def _availability_entry(
         ):
             digests.append(exact.digest)
             provenance.append(exact_artifact_provenance_ref())
+    if node is not None and is_dynamic_composition_requirement(requirement):
+        # Route 3: verify the generic substrate the node would compose onto is
+        # present on the target daemon (strict local-lookup, no pull), and record
+        # its digest + dynamic-composition provenance. RAES's trust checks require
+        # both the integrity ref and the provenance ref to be verified here, and
+        # the runtime gate then matches the container's realized digest against
+        # this set. An unresolvable substrate yields no verified claim.
+        substrate = resolve_substrate(
+            compiled.address,
+            os=str(getattr(node, "os", "") or ""),
+            os_version=str(getattr(node, "os_version", "") or ""),
+            runtime=getattr(node, "runtime", None),
+            probe=probe,
+        )
+        if substrate is not None:
+            digests.append(substrate.digest)
+            provenance.append(dynamic_composition_provenance_ref())
     return ArtifactRequirementAvailability(
         address=compiled.address,
         available_artifact_digests=digests,
@@ -283,6 +312,25 @@ def _availability_entry(
         available_materialization_specification_digests=specifications,
         verified_locked_input_ids=verified_inputs,
     )
+
+
+def _nodes_by_address(scenario: object) -> dict[str, object]:
+    """Map each vm node's compiled address to its typed scenario node.
+
+    Built with RAES's canonical ``_node_address`` factory (never by parsing an
+    address), so the open-substrate resolution reads a node's typed OS and
+    runtime without a second compile pass. Switch nodes realize as networks, not
+    containers, so they carry no substrate.
+    """
+
+    nodes = getattr(scenario, "nodes", None)
+    if not nodes:
+        return {}
+    return {
+        _node_address(name): node
+        for name, node in nodes.items()
+        if getattr(node, "type", None) is not NodeType.SWITCH
+    }
 
 
 def _verified_locked_inputs(

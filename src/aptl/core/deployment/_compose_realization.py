@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -98,6 +99,7 @@ class ComposeRealizationMixin(
         *,
         build: bool = True,
         scenario_root: Path,
+        substrate_digests: "Mapping[str, str] | None" = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through Docker Compose.
 
@@ -107,8 +109,18 @@ class ComposeRealizationMixin(
         caches it. The operator ``.env`` stays the control-plane
         ``project_dir/.env``. For an in-tree scenario ``scenario_root`` is the
         project directory, so behaviour is unchanged (issue #874).
+
+        ``substrate_digests`` carries the address-scoped immutable substrate
+        identity the availability pass already verified for each
+        dynamic-composition node (issue #876 cycle-6 review). It is stored as
+        request-scoped apply context and consumed by ``start_base_container`` so a
+        route-3 node starts from exactly that config id, never a second
+        resolution of the mutable tag.
         """
 
+        # Request-scoped, like the network bindings below: the base start reads it
+        # by node address and never re-resolves the tag it was verified from.
+        self._realization_substrate_digests = dict(substrate_digests or {})
         # Route from per-node facts, never a whole-graph flag. A mixed graph is
         # normal (ADR-051): some nodes come from a pinned artifact, some are
         # built from a specification, some are composed from declared state. The

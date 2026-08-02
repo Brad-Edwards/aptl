@@ -17,15 +17,17 @@ from aptl.core.deployment.realization import (
     DeploymentStatefulConsumer,
     GeneratedArtifactKind,
     GeneratedArtifactLifecycle,
+    GeneratedArtifactOutputDisposition,
     ResourceSensitivity,
     StatefulConsumerAccessMode,
     VolumeAccessMode,
     VolumeLifecycle,
 )
 
-_GENERATORS = frozenset({"certificate_bundle", "rendered_config"})
+_GENERATORS = frozenset({"certificate_bundle", "rendered_config", "ssh_key_bundle"})
 _ARTIFACT_LIFECYCLES = frozenset({"regenerate_on_change", "reuse_valid"})
 _SENSITIVITIES = frozenset({"public", "restricted", "secret"})
+_DISPOSITIONS = frozenset({"consumer_selected", "producer_private"})
 _CONSUMER_ACCESS_MODES = frozenset({"read_only", "read_write"})
 _VOLUME_LIFECYCLES = frozenset({"retain", "ephemeral"})
 _VOLUME_ACCESS_MODES = frozenset(
@@ -91,6 +93,8 @@ def _generated_artifact(
     ):
         _append_invalid(resource, diagnostics)
         return None
+    if not _selection_valid(resource, outputs, consumers, diagnostics):
+        return None
     return DeploymentGeneratedArtifactRealization(
         address=resource.address,
         name=_resource_name(resource),
@@ -102,6 +106,36 @@ def _generated_artifact(
         ordering_dependencies=resource.ordering_dependencies,
         refresh_dependencies=resource.refresh_dependencies,
     )
+
+
+def _selection_valid(
+    resource: PlannedResource,
+    outputs: list[DeploymentGeneratedArtifactOutput],
+    consumers: list[DeploymentStatefulConsumer],
+    diagnostics: list[Diagnostic],
+) -> bool:
+    """Reject a consumer that selects an undeclared or producer-private output.
+
+    A ``producer_private`` output must never be mounted into any consumer, and a
+    consumer can only select an output the artifact declares. Either violation
+    fails closed before any key material is generated.
+    """
+
+    by_name = {output.name: output for output in outputs}
+    for consumer in consumers:
+        for name in consumer.selected_outputs:
+            output = by_name.get(name)
+            if output is None or output.disposition == "producer_private":
+                diagnostics.append(
+                    diagnostic(
+                        "aptl.provisioner.stateful-output-not-selectable",
+                        resource.address,
+                        "Consumer selects an undeclared or producer-private "
+                        "generated-artifact output.",
+                    )
+                )
+                return False
+    return True
 
 
 def _persistent_volume(
@@ -171,12 +205,19 @@ def _output(raw: object) -> DeploymentGeneratedArtifactOutput | None:
     name = _text(raw.get("name"))
     path = _text(raw.get("path"))
     sensitivity = _choice(raw, "sensitivity", _SENSITIVITIES)
+    # disposition defaults to consumer_selected when the SDL omits it (the RAES
+    # default), so certificate/rendered-config outputs authored before the
+    # disposition field keep lowering unchanged.
+    disposition = raw.get("disposition", "consumer_selected")
     if name is None or path is None or sensitivity is None:
+        return None
+    if disposition not in _DISPOSITIONS:
         return None
     return DeploymentGeneratedArtifactOutput(
         name=name,
         path=path,
         sensitivity=cast(ResourceSensitivity, sensitivity),
+        disposition=cast(GeneratedArtifactOutputDisposition, disposition),
     )
 
 
@@ -235,14 +276,37 @@ def _consumer(
     elif node_name is None or mount_destination is None or access_mode is None:
         _append_invalid(resource, diagnostics)
     else:
+        selected = _selected_outputs(raw.get("selected_outputs"))
+        if selected is None:
+            _append_invalid(resource, diagnostics)
+            return None
         return DeploymentStatefulConsumer(
             target_address=node.address,
             node_name=node_name,
             service_name=service_name,
             mount_destination=mount_destination,
             access_mode=cast(StatefulConsumerAccessMode, access_mode),
+            selected_outputs=selected,
         )
     return None
+
+
+def _selected_outputs(raw: object) -> tuple[str, ...] | None:
+    """Parse a consumer's ``selected_outputs`` (empty when absent)."""
+
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        return None
+    names: list[str] = []
+    for item in raw:
+        name = _text(item)
+        if name is None:
+            return None
+        names.append(name)
+    if len(set(names)) != len(names):
+        return None
+    return tuple(names)
 
 
 def _append_destination_conflicts(

@@ -116,24 +116,24 @@ def _consumer_output_names(
     ]
 
 
-def _image_free_consumer_addresses(
+def _non_compose_consumer_addresses(
     realization: DeploymentRealizationSpec,
 ) -> frozenset[str]:
-    """Return node addresses realized image-free by the generic materializer.
+    """Return node addresses that are not Compose services.
 
-    An image-free node (declared runtime, no backing image) is not a Compose
-    service, so its generated-artifact and volume consumption is delivered by
-    the generic materializer (file placement / docker mounts), not a Compose
-    bind. Its consumers must therefore be excluded from the Compose stateful
-    override, or the effective-model check flags a declared mount that no
-    Compose service can carry (issue #875).
+    Only a node with a backing image becomes a Compose service. An image-free
+    node (declared runtime, no image) is realized by the generic materializer,
+    and a node with neither image nor runtime is not realized as a container at
+    all — so neither can carry a Compose bind. Emitting one puts a mount-only
+    service with no image into the stateful override, which makes
+    ``docker compose config`` reject the whole project ("has neither an image
+    nor a build context"). Their consumers are therefore excluded from the
+    Compose stateful override (issue #875).
     """
 
     imaged = {image.address for image in realization.images}
     return frozenset(
-        node.address
-        for node in realization.nodes
-        if node.runtime is not None and node.address not in imaged
+        node.address for node in realization.nodes if node.address not in imaged
     )
 
 
@@ -144,7 +144,7 @@ def _append_artifact_mounts(
 ) -> None:
     """Append every declared generated-artifact bind mount for Compose nodes."""
 
-    image_free = _image_free_consumer_addresses(realization)
+    image_free = _non_compose_consumer_addresses(realization)
     for artifact in realization.generated_artifacts:
         source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
@@ -216,7 +216,7 @@ def _append_volume_mounts(
 ) -> dict[str, dict[str, object]]:
     """Append persistent-volume mounts and return their declarations."""
 
-    image_free = _image_free_consumer_addresses(realization)
+    image_free = _non_compose_consumer_addresses(realization)
     volumes: dict[str, dict[str, object]] = {}
     for volume in realization.persistent_volumes:
         volumes[volume.name] = {

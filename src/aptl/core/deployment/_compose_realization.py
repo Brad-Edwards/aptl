@@ -139,8 +139,16 @@ class ComposeRealizationMixin(
             )
             if node_result is not None:
                 return node_result
-            excluded_services = _image_free_service_names(
-                realization, image_free_addresses
+            # ``--scale <svc>=0`` keeps Compose from starting an image-free node's
+            # stub, but only when that stub exists. A static in-tree
+            # docker-compose.yml declares every node, so its image-free stubs must
+            # be scaled to zero; a generated env-pack base contains only image
+            # nodes, so scaling an absent service errors ("no such service")
+            # (issue #875).
+            excluded_services = (
+                _image_free_service_names(realization, image_free_addresses)
+                if (scenario_root / "docker-compose.yml").exists()
+                else ()
             )
             legacy_content = tuple(
                 item

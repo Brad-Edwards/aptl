@@ -147,6 +147,13 @@ def _generate_keypairs(by_name, staging_root: Path) -> str | None:
             continue
         private_key = staging_root / output.path
         private_key.parent.mkdir(parents=True, exist_ok=True)
+        if private_key.is_file() and Path(f"{private_key}.pub").is_file():
+            # Idempotent: a key already generated in this staging root is reused
+            # rather than regenerated. ssh-keygen refuses to overwrite an existing
+            # file non-interactively, so realizing the bundle twice (once to place
+            # it into an image-free consumer, once for the compose consumers) must
+            # not re-run keygen on a key that is already present.
+            continue
         error = _run_ssh_keygen(
             private_key, _KEYGEN_COMMENT.get(name, "aptl-ssh"), f"ssh-keygen ({name})"
         )

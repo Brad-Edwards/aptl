@@ -189,7 +189,7 @@ class ComposeRealizationMixin(
                 compose_files, realization, scenario_root, realization_root
             )
             return self._validate_realization_compose_model(
-                profiles, compose_files, realization, scenario_root
+                profiles, compose_files, realization, scenario_root, realization_root
             )
 
         def _start() -> LabResult:
@@ -438,9 +438,17 @@ class ComposeRealizationMixin(
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
         scenario_root: Path,
+        realization_root: Path | None = None,
     ) -> LabResult | None:
-        """Render and inspect the effective generated model before startup."""
+        """Render and inspect the effective generated model before startup.
 
+        ``scenario_root`` is Compose's ``--project-directory`` (relative-path
+        resolution); ``realization_root`` is where generated artifacts and their
+        mount sources actually live, so the *expected* mounts must be computed
+        against it, not the pristine pack (issue #875). They coincide in-tree.
+        """
+
+        realization_root = realization_root or scenario_root
         if compose_files is None:
             return None
         command = self._build_command(
@@ -453,7 +461,7 @@ class ComposeRealizationMixin(
             realization.generated_artifacts or realization.persistent_volumes
         )
         error = (
-            self._effective_compose_model_error(command, realization, scenario_root)
+            self._effective_compose_model_error(command, realization, realization_root)
             if stateful
             else self._compose_syntax_error(command)
         )
@@ -470,9 +478,14 @@ class ComposeRealizationMixin(
         self,
         command: list[str],
         realization: DeploymentRealizationSpec,
-        scenario_root: Path,
+        realization_root: Path,
     ) -> str | None:
-        """Render and validate a stateful model without interpolating secrets."""
+        """Render and validate a stateful model without interpolating secrets.
+
+        ``realization_root`` is where generated artifacts and their mount sources
+        live; the expected-mount set is computed against it so it matches the
+        override that was actually written (issue #875).
+        """
 
         command.extend(["--no-interpolate", "--format", "json"])
         result = self._run(command)
@@ -484,7 +497,7 @@ class ComposeRealizationMixin(
             return _COMPOSE_MODEL_VALIDATION_ERROR
         errors = effective_stateful_model_errors(
             payload,
-            scenario_root,
+            realization_root,
             self.project_name,
             realization,
         )

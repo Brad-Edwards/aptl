@@ -47,6 +47,7 @@ from aptl.backends.raes_content_source_policy import forbidden_source_reason
 from aptl.backends.raes_diagnostics import diagnostic
 from aptl.backends.raes_realization_model import ParticipantDatasetRealization
 from aptl.backends.raes_realization_values import (
+    content_source_exact_artifact as _content_source_exact_artifact,
     content_source_name as _content_source_name,
     content_text as _content_text,
     optional_string as _optional_string,
@@ -262,6 +263,13 @@ def _resolve_file_content(
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
         diagnostics = [_reject(resource.address, "unsafe-destination-path")]
     else:
+        placement = _ContentPlacement(
+            content_name=content_name,
+            target_address=target_address,
+            dest_relpath=dest_relpath,
+            volume_suffix=volume_suffix,
+            sensitive=_is_sensitive(spec),
+        )
         text = _content_text(spec)
         if text is not None:
             content = DeploymentContentRealization(
@@ -274,16 +282,17 @@ def _resolve_file_content(
                 inline_text=text,
                 sensitive=_is_sensitive(spec),
             )
+        elif _content_source_exact_artifact(spec) is not None:
+            content, diagnostics = _resolve_pack_artifact_content(
+                resource=resource,
+                spec=spec,
+                placement=placement,
+                source_kind="pack-file",
+            )
         else:
             content, diagnostics = _resolve_file_content_from_source(
                 resource=resource,
-                placement=_ContentPlacement(
-                    content_name=content_name,
-                    target_address=target_address,
-                    dest_relpath=dest_relpath,
-                    volume_suffix=volume_suffix,
-                    sensitive=_is_sensitive(spec),
-                ),
+                placement=placement,
                 source_name=source_name,
                 project_dir=project_dir,
             )
@@ -340,6 +349,19 @@ def _resolve_directory_content(
     diagnostics: list[Diagnostic] = []
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
         diagnostics = [_reject(resource.address, "unsafe-destination-path")]
+    elif _content_source_exact_artifact(spec) is not None:
+        content, diagnostics = _resolve_pack_artifact_content(
+            resource=resource,
+            spec=spec,
+            placement=_ContentPlacement(
+                content_name=content_name,
+                target_address=target_address,
+                dest_relpath=dest_relpath,
+                volume_suffix=volume_suffix,
+                sensitive=_is_sensitive(spec),
+            ),
+            source_kind="pack-directory",
+        )
     elif source_name is None:
         content = DeploymentContentRealization(
             address=resource.address,
@@ -394,6 +416,51 @@ def _resolve_directory_content_from_source(
                 sensitive=placement.sensitive,
             )
     return content, diagnostics
+
+
+_SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _resolve_pack_artifact_content(
+    *,
+    resource: PlannedResource,
+    spec: Mapping[str, Any],
+    placement: _ContentPlacement,
+    source_kind: str,
+) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+    """Lower content declared by an exact env-pack artifact identity + digest.
+
+    No host path is read here: the placement carries the opaque ``artifact_id``
+    and its ``sha256`` digest, and the backend seed resolves and byte-verifies
+    the bytes from the validated pack through ``resolve_pack_artifact``. A
+    directory artifact must be an ``application/x-tar`` archive (extracted at the
+    destination). Missing identity, a malformed digest, or a directory that is
+    not an archive fails closed before any side effect.
+    """
+
+    exact = _content_source_exact_artifact(spec) or {}
+    artifact_id = _optional_string(exact, "artifact_id")
+    digest = _optional_string(exact, "digest")
+    media_type = _optional_string(exact, "media_type")
+    if not artifact_id or not digest:
+        return None, [_reject(resource.address, "pack-artifact-missing-identity")]
+    if not _SHA256_DIGEST_RE.match(digest):
+        return None, [_reject(resource.address, "pack-artifact-invalid-digest")]
+    if source_kind == "pack-directory" and media_type != "application/x-tar":
+        return None, [_reject(resource.address, "pack-directory-not-archive")]
+    content = DeploymentContentRealization(
+        address=resource.address,
+        target_address=placement.target_address,
+        content_name=placement.content_name,
+        volume_suffix=placement.volume_suffix,
+        dest_relpath=placement.dest_relpath,
+        source_kind=source_kind,  # type: ignore[arg-type]
+        artifact_id=artifact_id,
+        artifact_digest=digest,
+        media_type=media_type,
+        sensitive=placement.sensitive,
+    )
+    return content, []
 
 
 def _resolve_project_source(

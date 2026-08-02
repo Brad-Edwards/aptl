@@ -127,7 +127,11 @@ def _realize_node_subset(
     """
 
     from aptl.backends.raes_base_substrate import base_container_spec
-    from aptl.backends.raes_materializer import PlaceFileOp, PlaceProjectContentOp
+    from aptl.backends.raes_materializer import (
+        PlaceFileOp,
+        PlacePackArtifactOp,
+        PlaceProjectContentOp,
+    )
     from aptl.backends.raes_node_materialization import realize_nodes
 
     # A fresh machine has none of the locally-built generic base images in
@@ -165,6 +169,17 @@ def _realize_node_subset(
         dest = "/" + item.dest_relpath.lstrip("/")
         if item.source_kind == "inline-text" and item.inline_text is not None:
             op: object = PlaceFileOp(path=dest, content=item.inline_text)
+        elif (
+            item.source_kind in ("pack-file", "pack-directory")
+            and item.artifact_id
+            and item.artifact_digest
+        ):
+            op = PlacePackArtifactOp(
+                dest_path=dest,
+                artifact_id=item.artifact_id,
+                artifact_digest=item.artifact_digest,
+                is_directory=item.source_kind == "pack-directory",
+            )
         elif (
             item.source_kind in ("project-file", "project-directory")
             and item.source_relpath

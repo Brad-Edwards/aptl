@@ -177,7 +177,12 @@ class DeploymentNodeRealization(object):
 
 
 ContentSourceKind = Literal[
-    "inline-text", "project-file", "project-directory", "empty-directory"
+    "inline-text",
+    "project-file",
+    "project-directory",
+    "empty-directory",
+    "pack-file",
+    "pack-directory",
 ]
 
 
@@ -187,11 +192,16 @@ class DeploymentContentRealization(object):
 
     ``source_kind`` records how the content is materialized: ``inline-text``
     (bounded text carried on the placement itself), ``project-file`` /
-    ``project-directory`` (a checked-in, project-contained source path), or
+    ``project-directory`` (a checked-in, project-contained source path),
     ``empty-directory`` (an explicit empty-directory declaration with no
-    source). ``source_relpath`` is project-relative and only set for the two
-    project-sourced kinds; ``inline_text`` is only set for ``inline-text``.
-    Both are mutually exclusive by construction in the interpreter.
+    source), or ``pack-file`` / ``pack-directory`` (bytes resolved from a
+    validated env-pack by opaque ``artifact_id`` + ``sha256`` ``artifact_digest``
+    through ``resolve_pack_artifact``; a ``pack-directory`` artifact is an
+    ``application/x-tar`` archive extracted at the destination). ``source_relpath``
+    is project-relative and only set for the two project-sourced kinds;
+    ``inline_text`` is only set for ``inline-text``; ``artifact_id`` /
+    ``artifact_digest`` / ``media_type`` are only set for the two pack kinds.
+    These are mutually exclusive by construction in the interpreter.
     """
 
     address: str
@@ -202,6 +212,9 @@ class DeploymentContentRealization(object):
     source_kind: ContentSourceKind
     source_relpath: str | None = None
     inline_text: str | None = None
+    artifact_id: str | None = None
+    artifact_digest: str | None = None
+    media_type: str | None = None
     sensitive: bool = False
 
     def details(self) -> dict[str, object]:
@@ -213,6 +226,8 @@ class DeploymentContentRealization(object):
             "dest_relpath": self.dest_relpath,
             "source_kind": self.source_kind,
             "source_relpath": self.source_relpath,
+            "artifact_id": self.artifact_id,
+            "artifact_digest": self.artifact_digest,
             "sensitive": self.sensitive,
         }
 

@@ -133,6 +133,22 @@ class PlaceProjectContentOp:
 
 
 @dataclass(frozen=True)
+class PlacePackArtifactOp:
+    """Copy an env-pack artifact's verified bytes into the node (#875).
+
+    The bytes are resolved by opaque ``artifact_id`` and byte-bound to
+    ``artifact_digest`` through ``resolve_pack_artifact`` at execution time — no
+    host path is read. A directory artifact is an ``application/x-tar`` archive
+    extracted at ``dest_path``. Ordered like project content.
+    """
+
+    dest_path: str
+    artifact_id: str
+    artifact_digest: str
+    is_directory: bool = False
+
+
+@dataclass(frozen=True)
 class InstallDependencyManifestOp:
     """Install a project's declared dependency manifest (ADR-048).
 
@@ -172,6 +188,7 @@ MaterializationOp = (
     | EnsureDirectoryOp
     | PlaceFileOp
     | PlaceProjectContentOp
+    | PlacePackArtifactOp
     | InstallDependencyManifestOp
     | EnableServiceUnitOp
     | StartServiceUnitOp

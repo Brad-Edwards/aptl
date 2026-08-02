@@ -129,8 +129,9 @@ def _capture_availability_root(monkeypatch, seen):
 
     from aptl.backends import raes
 
-    def _capture(scenario, backend, *, scenario_root=None):
+    def _capture(scenario, backend, *, scenario_root=None, component_root=None):
         seen["scenario_root"] = scenario_root
+        seen["component_root"] = component_root
         raise RuntimeError("stop after capture")
 
     monkeypatch.setattr(raes, "parse_sdl_file", lambda path: object())

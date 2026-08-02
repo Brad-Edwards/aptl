@@ -277,7 +277,7 @@ def _plan_scenario(
     # own inputs (including a component build context) anchor to the bundle,
     # which is the project directory only while the scenario still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, scenario_root=bundle.root
+        scenario, backend, scenario_root=bundle.root, component_root=project_dir
     )
     execution_plan = (
         manager.plan(
@@ -360,7 +360,10 @@ def selected_profiles_for_scenario(
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=bundle.root
+            scenario,
+            backend,
+            scenario_root=bundle.root,
+            component_root=project_dir,
         ),
     )
     realization = interpret_provisioning_plan(
@@ -392,7 +395,10 @@ def admitted_stateful_artifact_ownership(
     execution_plan = RuntimeManager(target).plan(
         scenario,
         artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=bundle.root
+            scenario,
+            backend,
+            scenario_root=bundle.root,
+            component_root=project_dir,
         ),
     )
     blocking = [

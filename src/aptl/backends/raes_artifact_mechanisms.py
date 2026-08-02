@@ -91,6 +91,33 @@ _MATERIALIZATION_PROFILE_BODY: dict[str, Any] = {
 }
 
 
+# Env-pack content copy (#875). Scenario content declared by an exact env-pack
+# artifact is resolved by opaque id + sha256 through env-packs' own resolver and
+# validators, copied into the range, and (for a directory artifact) extracted at
+# its destination. The body is byte-for-byte env-packs' canonical
+# ``raes-env-pack-exact-copy`` v1 profile (packs/*/profiles/exact-artifact-copy-v1.json),
+# so its canonical-JSON digest equals the digest the pack's content routes permit.
+# APTL performs exactly this: ``resolve_pack_artifact`` (digest-bound bytes) after
+# ``validate_pack`` / ``validate_pack_content_manifest`` at staging, then a
+# named-volume/materializer copy with directory extraction, and reads the placed
+# content back (SEM-218 I4). Substitution is forbidden — the declared digest must
+# match or the run fails closed.
+_ENV_PACK_COPY_PROFILE_BODY: dict[str, Any] = {
+    "acquisition": "copy",
+    "archive_semantics": "extract-members-at-declared-directory-destination",
+    "mechanism": "exact-artifact",
+    "profile": "raes-env-pack-exact-copy",
+    "resolver": "raes_env_packs.resolve_pack_artifact",
+    "substitution": "forbidden",
+    "timing": "pack-ingestion",
+    "validation": [
+        "raes_env_packs.validate_pack",
+        "raes_env_packs.validate_pack_content_manifest",
+    ],
+    "version": _PROFILE_VERSION,
+}
+
+
 # Generic runtime composition (ADR-051 route 3, RAESystem/rae#985). APTL composes
 # a node's declared runtime shape onto a pinned generic OS substrate and proves
 # the composition by independently reading every declared runtime realization
@@ -211,6 +238,44 @@ def exact_artifact_capability() -> ArtifactMechanismCapability:
             ),
         ],
     )
+
+
+def env_pack_copy_profile() -> ArtifactMechanismProfile:
+    """Return APTL's digest-bound env-pack content-copy mechanism profile."""
+
+    body = _ENV_PACK_COPY_PROFILE_BODY
+    return ArtifactMechanismProfile(
+        mechanism=body["mechanism"],
+        profile=body["profile"],
+        version=body["version"],
+        digest=_profile_digest(body),
+    )
+
+
+def env_pack_copy_capability() -> ArtifactMechanismCapability:
+    """Return the backend capability entry for env-pack content copy.
+
+    Acquisition is ``copy`` and timing is ``pack-ingestion``: the bytes are
+    resolved and copied from the staged, validated pack, not pulled from a
+    registry. No other acquisition/timing combination is claimed.
+    """
+
+    return ArtifactMechanismCapability(
+        mechanism=env_pack_copy_profile(),
+        supported_requirement_kinds=[SOURCE_ARTIFACT_REQUIREMENT_KIND],
+        supported_routes=[
+            ArtifactAcquisitionTimingModel(
+                acquisition="copy", timing="pack-ingestion"
+            )
+        ],
+    )
+
+
+def env_pack_copy_provenance_ref() -> str:
+    """Return the provenance reference for env-pack-copied content."""
+
+    profile = env_pack_copy_profile()
+    return f"{profile.mechanism}:{profile.profile}@{profile.digest}"
 
 
 def dynamic_composition_profile() -> ArtifactMechanismProfile:
@@ -370,4 +435,5 @@ def aptl_artifact_mechanisms() -> tuple[ArtifactMechanismCapability, ...]:
         exact_artifact_capability(),
         materialization_capability(),
         dynamic_composition_capability(),
+        env_pack_copy_capability(),
     )

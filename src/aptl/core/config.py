@@ -6,7 +6,7 @@ Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 import json
 import re
 from pathlib import Path, PurePosixPath
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
@@ -110,6 +110,12 @@ class ScenarioSourceConfig(BaseModel):
 
     identity: str = "techvault-operational"
     root: str | None = None
+    # ``project-tree`` resolves the scenario from the APTL checkout (the
+    # historical default). ``env-pack`` resolves it from the bundled
+    # ``raes-env-packs`` pack named by ``identity``, staged and validated before
+    # use (#875) — the operator selects the acquisition source, the backend never
+    # switches it at runtime.
+    source: Literal["project-tree", "env-pack"] = "project-tree"
 
     @field_validator("identity")
     @classmethod

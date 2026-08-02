@@ -42,7 +42,12 @@ from aptl.backends.raes_start_model import (
     AcesStartOutcome,
 )
 from aptl.core.config import AptlConfig
-from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
+from aptl.core.scenario_bundle import (
+    EnvPackError,
+    ScenarioBundle,
+    env_pack_bundle,
+    project_tree_bundle,
+)
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
@@ -133,11 +138,14 @@ def start_raes_scenario(
 
     resolved_scenario = _resolve_scenario_path(project_dir, scenario_path, config)
     try:
+        resolved_scenario = resolve_scenario_bundle(
+            project_dir, scenario_path, config
+        ).sdl_path
         target, execution_plan = _plan_scenario(
             project_dir,
             config,
             backend,
-            resolved_scenario,
+            scenario_path,
             parameters,
         )
         return _apply_with_backend_retry(
@@ -146,6 +154,17 @@ def start_raes_scenario(
             resolved_scenario,
             run_target,
             before_backend_retry,
+        )
+    except EnvPackError as exc:
+        return AcesStartOutcome(
+            lab_result=LabResult(
+                success=False,
+                error=redact(f"RAES scenario pack acquisition failed: {exc}"),
+            ),
+            final_snapshot=RuntimeSnapshot(),
+            realization_details={},
+            selected_profiles=[],
+            scenario_path=resolved_scenario,
         )
     except SDLInstantiationError:
         return AcesStartOutcome(
@@ -200,20 +219,51 @@ def _resolve_scenario_path(
     return project_dir / DEFAULT_RAES_SCENARIO
 
 
+_PACK_STAGING_RELPATH = Path(".aptl/staged-packs")
+
+
+def resolve_scenario_bundle(
+    project_dir: Path,
+    scenario_path: Path | None,
+    config: AptlConfig | None = None,
+) -> ScenarioBundle:
+    """Resolve the scenario bundle: a staged env-pack when selected, else in-tree.
+
+    An explicit ``scenario_path`` always wins (an operator overriding with a
+    local file), so the pack is used only for the default/configured selection
+    when ``config.scenario.source`` is ``env-pack``. Staging + validation happen
+    inside :func:`env_pack_bundle`; the pack is never read in place.
+    """
+
+    if (
+        scenario_path is None
+        and config is not None
+        and config.scenario.source == "env-pack"
+    ):
+        return env_pack_bundle(
+            project_dir / _PACK_STAGING_RELPATH, config.scenario.identity
+        )
+    return project_tree_bundle(
+        project_dir, _resolve_scenario_path(project_dir, scenario_path, config)
+    )
+
+
 def _plan_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    scenario_path: Path,
+    scenario_path: Path | None,
     parameters: Mapping[str, object] | None,
 ) -> tuple[RuntimeTarget, "ExecutionPlan"]:
     """Build one RAES plan and the target that consumes its concrete model."""
 
-    scenario = parse_sdl_file(scenario_path)
-    # Resolve the scenario bundle once, here, where the scenario itself is
-    # resolved. Everything downstream anchors its content to this rather than to
-    # the engine's checkout, so rehoming the scenario changes only the resolver.
-    bundle = project_tree_bundle(project_dir, scenario_path)
+    # Resolve the scenario bundle once, here, where the scenario is resolved: an
+    # explicit path (or in-tree config) yields the project tree; the configured
+    # env-pack yields a staged, validated pack. Everything downstream anchors to
+    # this rather than the engine's checkout, so rehoming changes only the
+    # resolver (issue #874 / #875).
+    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
@@ -256,7 +306,7 @@ def _plan_scenario(
     if isinstance(participant_runtime, AptlParticipantRuntime):
         participant_runtime.plan_authority = ParticipantPlanAuthority(
             execution_plan,
-            scenario_path,
+            bundle.sdl_path,
         )
     return target, execution_plan
 
@@ -302,11 +352,8 @@ def selected_profiles_for_scenario(
     scenario_path: Path | None = None,
 ) -> list[str]:
     """Return the Compose profiles selected by a scenario without side effects."""
-    resolved_scenario = scenario_path or DEFAULT_RAES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
-    scenario = parse_sdl_file(resolved_scenario)
-    bundle = project_tree_bundle(project_dir, resolved_scenario)
+    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend, bundle=bundle
     )
@@ -337,11 +384,8 @@ def admitted_stateful_artifact_ownership(
     beneath an owned directory is not owned by the artifact (issue #677).
     """
 
-    resolved_scenario = scenario_path or DEFAULT_RAES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
-    scenario = parse_sdl_file(resolved_scenario)
-    bundle = project_tree_bundle(project_dir, resolved_scenario)
+    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir, config=config, backend=backend, bundle=bundle
     )

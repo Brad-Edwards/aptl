@@ -85,3 +85,20 @@ def test_resolver_fails_closed_on_a_missing_pack(tmp_path: Path) -> None:
         env_pack_bundle(
             tmp_path / "staged", "nope", source_pack=tmp_path / "does-not-exist"
         )
+
+
+def test_scenario_selection_resolves_the_env_pack_when_configured(tmp_path: Path) -> None:
+    # config.scenario.source == "env-pack" selects the staged pack (default
+    # selection, no explicit --scenario-path override).
+    from aptl.backends.raes import resolve_scenario_bundle
+    from aptl.core.config import AptlConfig
+
+    config = AptlConfig(scenario={"identity": "techvault", "source": "env-pack"})
+    bundle = resolve_scenario_bundle(tmp_path, None, config)
+    assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
+    assert bundle.identity == "techvault"
+    assert bundle.sdl_path.is_file()
+    # An explicit path overrides the pack (operator override stays project-tree).
+    local = tmp_path / "scenarios" / "custom.sdl.yaml"
+    override = resolve_scenario_bundle(tmp_path, local, config)
+    assert override.source_kind is ScenarioSourceKind.PROJECT_TREE

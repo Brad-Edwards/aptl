@@ -151,14 +151,23 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
 
 
 def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
-    """Render one stateful consumer as a non-secret concern value."""
+    """Render one stateful consumer as a non-secret concern value.
 
-    return {
+    ``selected_outputs`` is rendered only when the consumer declares it (a
+    generated-artifact consumer), matching the authored spec: a persistent-volume
+    or select-all consumer carries none, so the observed value stays identical to
+    what RAES compiled.
+    """
+
+    spec: dict[str, object] = {
         "node": consumer.node_name,
         "mount_destination": consumer.mount_destination,
         "access_mode": consumer.access_mode,
         "target_address": consumer.target_address,
     }
+    if consumer.selected_outputs:
+        spec["selected_outputs"] = list(consumer.selected_outputs)
+    return spec
 
 
 def safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:

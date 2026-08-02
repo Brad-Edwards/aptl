@@ -614,7 +614,12 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         "lifecycle": "reuse_valid",
         "provenance": "config/certs.yml",
         "outputs": [
-            {"name": "root-ca", "path": "root-ca.pem", "sensitivity": "public"}
+            {
+                "name": "root-ca",
+                "path": "root-ca.pem",
+                "sensitivity": "public",
+                "disposition": "consumer_selected",
+            }
         ],
         "consumers": [
             {
@@ -738,6 +743,7 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
                 "name": "manager-config",
                 "path": "wazuh_manager.conf",
                 "sensitivity": "secret",
+                "disposition": "consumer_selected",
             }
         ],
         "consumers": [

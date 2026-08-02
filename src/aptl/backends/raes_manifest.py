@@ -35,8 +35,10 @@ from raes_backend_protocols.capabilities import (
 from raes_backend_protocols.manifest import backend_manifest_v2_model
 from raes_contracts.apparatus import (
     ConceptBinding,
+    RealizationObservationCapability,
     RealizationSupportDeclaration,
     RealizationSupportMode,
+    RealizationVerificationScope,
 )
 from raes_contracts.contracts import (
     BackendManifestV2Model,
@@ -48,6 +50,7 @@ from raes_contracts.contracts import (
 )
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
 from raes_contracts.vocabulary import (
+    ObservationStrength,
     ParticipantFeatureSupportLevel,
     WorkflowFeature,
     WorkflowStatePredicateFeature,
@@ -269,6 +272,21 @@ _REALIZATION_SUPPORT = (
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
+        # Per-concern observation capability (raes 3.3.0). Only concerns raes
+        # compiles with a non-null verification_scope need one; today that is
+        # forwarding-agents, whose scope is `configuration` when the agent
+        # declares any sources/transforms/ship_targets/reload_channels/settings.
+        # APTL corroborates it by reading the realized container's declared
+        # forwarding data-path footprint back off host-side `docker inspect`
+        # (daemon-observed), and discloses only corroborated agents — so this
+        # declaration is honest: it is backed by real readback
+        # (raes_runtime_observation._observe_forwarding_agents), not an echo.
+        observation_capabilities={
+            "forwarding-agents": RealizationObservationCapability(
+                verification_scope=RealizationVerificationScope.CONFIGURATION,
+                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+        },
         artifact_mechanisms=list(aptl_artifact_mechanisms()),
         constraints={},
     ),

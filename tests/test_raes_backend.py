@@ -3428,6 +3428,8 @@ def test_provisioner_records_supported_placement_realizations(tmp_path):
         "dest_relpath": "public/notice.txt",
         "source_kind": "inline-text",
         "source_relpath": None,
+        "artifact_id": None,
+        "artifact_digest": None,
         "sensitive": False,
     }
 

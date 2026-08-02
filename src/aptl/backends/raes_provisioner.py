@@ -303,6 +303,7 @@ class AptlProvisioner(object):
             plan=plan,
             config=self.config,
             bundle=self.bundle,
+            component_root=self.project_dir,
         )
 
     @staticmethod

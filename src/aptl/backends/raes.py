@@ -367,7 +367,10 @@ def selected_profiles_for_scenario(
         ),
     )
     realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning, config=config, bundle=bundle
+        plan=execution_plan.provisioning,
+        config=config,
+        bundle=bundle,
+        component_root=project_dir,
     )
     return select_backend_profiles(config, realization.profiles)
 
@@ -410,6 +413,7 @@ def admitted_stateful_artifact_ownership(
         plan=execution_plan.provisioning,
         config=config,
         bundle=bundle,
+        component_root=project_dir,
     )
     blocking = [
         diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error

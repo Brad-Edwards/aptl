@@ -73,18 +73,22 @@ def interpret_provisioning_plan(
     plan: ProvisioningPlan,
     config: AptlConfig,
     bundle: ScenarioBundle,
+    component_root: Path | None = None,
 ) -> AptlRealization:
     """Interpret RAES provisioning resources as an APTL realization plan.
 
-    ``bundle`` supplies the root every scenario-declared input is anchored to.
-    It is required: interpretation never falls back to the engine checkout. The
-    engine's ``project_dir`` is operator/control-plane state (``aptl.json``,
-    ``.env``, run storage) and is not a scenario-input root, so it has no place
-    here. For an in-tree scenario ``bundle.root == project_dir.resolve()``, which
-    is what keeps an unmoved scenario behaviourally unchanged (issue #874).
+    ``bundle`` supplies the root every scenario-declared *content* input is
+    anchored to (placements, seeds). ``component_root`` is the engine checkout
+    that supplies APTL's own component software — the ``containers/`` build
+    contexts a ``materialization-specification`` node builds from (ADR-051). A
+    pack ships no ``containers/``, so build contexts must resolve from the engine
+    tree, not the bundle. It defaults to ``bundle.root`` so an in-tree scenario
+    (where ``bundle.root == project_dir.resolve()``) is behaviourally unchanged
+    (issues #874, #875).
     """
 
     content_root = bundle.root
+    component_root = component_root if component_root is not None else bundle.root
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
@@ -99,7 +103,7 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
-        content_root,
+        component_root,
         config,
         diagnostics,
     )
@@ -195,15 +199,16 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
-    scenario_root: Path,
+    component_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
     """Realize node and network resources before resolving placements.
 
-    ``scenario_root`` anchors anything the scenario declares, including a
-    component's build context. It is the bundle root, not the engine checkout;
-    the two coincide only for a scenario that still lives in-tree.
+    ``component_root`` is the engine checkout a node's ``containers/`` build
+    context is resolved against (APTL component software, ADR-051), not the
+    scenario bundle. The two coincide only for a scenario that still lives
+    in-tree (issue #875).
     """
 
     nodes: list[NodeRealization] = []
@@ -216,7 +221,7 @@ def _realize_nodes_and_networks(
                 resource,
                 payload,
                 profile_index,
-                scenario_root,
+                component_root,
                 config,
                 diagnostics,
             )
@@ -335,11 +340,15 @@ def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
-    scenario_root: Path,
+    component_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> NodeRealization:
-    """Realize a node resource into APTL profile and runtime details."""
+    """Realize a node resource into APTL profile and runtime details.
+
+    ``component_root`` is the engine checkout a ``materialization-specification``
+    node's build context is resolved against (ADR-051), not the scenario bundle.
+    """
 
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
@@ -382,8 +391,11 @@ def _realize_node(
     if container_name is None:
         # Env-pack image node (issue #875): no static compose service to read a
         # container name from, so use APTL's ``aptl-<node>`` convention (the
-        # same one base_container_spec applies to image-free nodes).
-        container_name = f"aptl-{node_name}"
+        # same one base_container_spec applies to image-free nodes). A node
+        # whose own id already carries the prefix is not doubled.
+        container_name = (
+            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
+        )
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
@@ -399,7 +411,7 @@ def _realize_node(
         image=resolve_node_image(
             resource=resource,
             payload=payload,
-            project_dir=scenario_root,
+            project_dir=component_root,
             service_name=service_name,
             diagnostics=diagnostics,
         ),

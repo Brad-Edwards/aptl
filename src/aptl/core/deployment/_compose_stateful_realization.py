@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from aptl.core.certs import ensure_ssl_certs
+from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
     _atomic_write_secure,
@@ -16,10 +17,14 @@ from aptl.core.credentials import (
     sync_manager_config,
 )
 from aptl.core.deployment._compose_stateful_constants import (
+    CERTIFICATE_PROVENANCE,
     CERTIFICATE_ROOT_RELPATH,
     MIN_OVERRIDE_COMPOSE_VERSION,
+    SOC_CERT_PROFILE,
+    SOC_CERTS_ROOT_RELPATH,
     STATEFUL_OVERRIDE_RELPATH,
     WAZUH_INDEXER_SERVICE,
+    WAZUH_MANAGER_CONFIG_PROFILE,
     WAZUH_MANAGER_SERVICE,
 )
 from aptl.core.deployment._compose_stateful_graph import (
@@ -288,7 +293,11 @@ class ComposeStatefulRealizationMixin:
             return self._realize_flag_signing_keys(artifact, scenario_root)
 
         unsupported_binding = (
-            artifact.provenance != "config/wazuh_cluster/wazuh_manager.conf"
+            artifact.provenance
+            not in (
+                "config/wazuh_cluster/wazuh_manager.conf",
+                WAZUH_MANAGER_CONFIG_PROFILE,
+            )
             or len(artifact.outputs) != 1
             or artifact.outputs[0].path != RENDERED_MANAGER_RELPATH.name
         )
@@ -378,6 +387,9 @@ class ComposeStatefulRealizationMixin:
         ``scenario_root`` and read back from there (issue #874).
         """
 
+        if artifact.provenance == SOC_CERT_PROFILE:
+            return self._realize_soc_certificate_bundle(artifact, scenario_root)
+
         failure: LabResult | None = None
         try:
             _canonical_generated_path(scenario_root, CERTIFICATE_ROOT_RELPATH)
@@ -411,7 +423,17 @@ class ComposeStatefulRealizationMixin:
                     f"Generated artifact {artifact.address} is missing declared output."
                 ),
             )
-        if failure is None and result is not None:
+        # The cryptographic bundle validator reads the in-tree provenance file
+        # (config/certs.yml). An env-pack declares its bundle by profile identity
+        # (techvault:wazuh-*-certificate-profile/v1), not a provenance document,
+        # so it is validated by generator success + declared-output presence; the
+        # cert generator issues the material itself, it is not accepted from the
+        # pack (issue #875).
+        if (
+            failure is None
+            and result is not None
+            and artifact.provenance == CERTIFICATE_PROVENANCE
+        ):
             errors = validate_certificate_bundle(
                 result.certs_dir,
                 artifact.outputs,
@@ -420,6 +442,47 @@ class ComposeStatefulRealizationMixin:
             if errors:
                 failure = LabResult(success=False, error=errors[0])
         return failure
+
+    def _realize_soc_certificate_bundle(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the SOC CA + per-service certs (techvault:soc-certificate-profile/v1).
+
+        APTL issues the SOC CA and each service certificate through the same
+        ``ensure_soc_certs`` generator the in-tree lab uses (config/soc_certs);
+        nothing is accepted from the pack. Every declared output must be present
+        afterwards or the run fails closed (issue #875).
+        """
+
+        try:
+            _canonical_generated_path(scenario_root, SOC_CERTS_ROOT_RELPATH)
+        except ValueError:
+            return LabResult(
+                success=False,
+                error="SOC certificate path failed containment validation.",
+            )
+        result = ensure_soc_certs(scenario_root)
+        if not result.success:
+            return LabResult(
+                success=False,
+                error=f"SOC certificate generation failed: {result.error}",
+            )
+        missing = [
+            output.path
+            for output in artifact.outputs
+            if not (result.certs_dir / output.path).is_file()
+        ]
+        if missing:
+            return LabResult(
+                success=False,
+                error=(
+                    f"SOC certificate bundle {artifact.name} is missing declared "
+                    f"output(s): {missing}."
+                ),
+            )
+        return None
 
     def _run_certificate_command(
         self,

@@ -8,10 +8,18 @@ from typing import Any
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_PROVENANCE,
     OWNED_WAZUH_SERVICES,
+    SOC_CERT_PROFILE,
+    WAZUH_CERT_PROFILES,
     WAZUH_INDEXER_SERVICE,
     WAZUH_MANAGER_SERVICE,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+
+# Certificate-bundle provenances APTL can realize: the in-tree provenance file
+# and the env-pack producer profiles (issue #875).
+_SUPPORTED_CERTIFICATE_PROVENANCES = frozenset(
+    {CERTIFICATE_PROVENANCE, SOC_CERT_PROFILE, *WAZUH_CERT_PROFILES}
+)
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 
 
@@ -99,7 +107,7 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
     for artifact in realization.generated_artifacts:
         if (
             artifact.generator == "certificate_bundle"
-            and artifact.provenance != CERTIFICATE_PROVENANCE
+            and artifact.provenance not in _SUPPORTED_CERTIFICATE_PROVENANCES
         ):
             errors.append(
                 f"Generated artifact {artifact.address} has unsupported provenance."

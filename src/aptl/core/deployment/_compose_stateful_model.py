@@ -10,6 +10,8 @@ from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
     FLAG_SIGNING_ROOT_RELPATH,
+    SOC_CERT_PROFILE,
+    SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
     OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
@@ -80,6 +82,8 @@ def artifact_source_path(
     the two coincide (issue #874).
     """
 
+    if artifact.provenance == SOC_CERT_PROFILE:
+        return scenario_root.resolve() / SOC_CERTS_ROOT_RELPATH
     if artifact.generator == "certificate_bundle":
         return scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH
     if artifact.generator == "ssh_key_bundle":

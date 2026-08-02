@@ -21,6 +21,21 @@ FLAG_SIGNING_ROOT_RELPATH = Path(".aptl/realization/flag-signing")
 # provenance document. A producer whose bundle differs in any of those fails
 # validation regardless of where its root is found.
 CERTIFICATE_PROVENANCE = "config/certs.yml"
+# Env-pack producer profiles (issue #875). The pack declares generated artifacts
+# by profile identity rather than the in-tree provenance file paths; APTL maps
+# each to the generator that produces it. Wazuh node certs are all produced by a
+# single ``ensure_ssl_certs`` run (config/wazuh_indexer_ssl_certs); SOC service
+# certs by ``ensure_soc_certs`` (config/soc_certs).
+WAZUH_CERT_PROFILES = frozenset(
+    {
+        "techvault:wazuh-indexer-certificate-profile/v1",
+        "techvault:wazuh-manager-certificate-profile/v1",
+        "techvault:wazuh-dashboard-certificate-profile/v1",
+    }
+)
+SOC_CERT_PROFILE = "techvault:soc-certificate-profile/v1"
+WAZUH_MANAGER_CONFIG_PROFILE = "techvault:wazuh-manager-config-profile/v1"
+SOC_CERTS_ROOT_RELPATH = Path("config/soc_certs")
 REALIZATION_ADDRESS_LABEL = "org.aptl.realization.address"
 REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"
 REALIZATION_PROJECT_LABEL = "org.aptl.realization.project"

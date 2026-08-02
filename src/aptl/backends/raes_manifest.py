@@ -237,9 +237,12 @@ _PROVISIONER = ProvisionerCapabilities(
 # ``artifact_mechanisms`` declares which RAES artifact-satisfaction routes APTL
 # can admit (ADR-050, RAES ADR-098). It is deliberately narrow: a mechanism is
 # advertised only once APTL can both materialize it and read the result back
-# (SEM-218 I4). ``support_mode`` stays CONSTRAINED because APTL cannot honestly
-# realize an open artifact concern; an ``open`` requirement is refused with
-# ``artifact.unsupported-open-realization`` rather than silently chosen for.
+# (SEM-218 I4). ``support_mode`` is OPEN_REALIZATION because APTL now supports the
+# generic ``dynamic-composition`` route (issue #876): it composes a node's runtime
+# onto a pinned substrate and reads every declared runtime concern back off the
+# realized container (raes 3.1.0 lowers those concerns, RAESystem/rae#985). The
+# mode is the most-open posture for the domain; the exact and constrained branches
+# still apply independently through the per-kind support sets below.
 #
 # ``source-artifact`` appears on the mechanism's ``supported_requirement_kinds``
 # and on ``supported_constraint_kinds``, but deliberately NOT on
@@ -252,7 +255,7 @@ _PROVISIONER = ProvisionerCapabilities(
 _REALIZATION_SUPPORT = (
     RealizationSupportDeclaration(
         domain="runtime-realization",
-        support_mode=RealizationSupportMode.CONSTRAINED,
+        support_mode=RealizationSupportMode.OPEN_REALIZATION,
         supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
         supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
         disclosure_kinds=frozenset(

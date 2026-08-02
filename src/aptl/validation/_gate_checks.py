@@ -124,11 +124,13 @@ class _NoStartBackend(object):
         *,
         build: bool = True,
         scenario_root: Path | None = None,
+        substrate_digests: Mapping[str, str] | None = None,
     ) -> LabResult:
         """Record the typed realization as realized without starting Docker."""
-        # `build` and `scenario_root` are accepted for DeploymentBackend parity;
-        # this offline backend builds nothing and reads no scenario filesystem.
-        del build, scenario_root
+        # `build`, `scenario_root`, and `substrate_digests` are accepted for
+        # DeploymentBackend parity; this offline backend builds nothing, reads no
+        # scenario filesystem, and starts no base container.
+        del build, scenario_root, substrate_digests
         self._container_names = {
             node.container_name
             for node in getattr(realization, "nodes", ())

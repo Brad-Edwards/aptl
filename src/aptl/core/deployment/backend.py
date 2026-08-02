@@ -5,20 +5,20 @@ implements lifecycle operations (start, stop, status, kill, pull) and
 container interaction (list, logs, shell, exec, inspect) for a specific
 deployment target (Docker Compose, SSH remote, Kubernetes, etc.).
 
-Container interaction methods were added under CLI-004 (see ADR-023);
-this lets local and SSH backends present a uniform surface so the same
-CLI commands and core helpers (snapshot, flags, collectors) work without
-caring whether the daemon is local or remote.
+Container interaction (CLI-004, ADR-023) lets local and SSH backends present a
+uniform surface so the same CLI commands and core helpers (snapshot, flags,
+collectors) work whether the daemon is local or remote.
 
 Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
 
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.deployment._proc_net_listeners import ContainerListeners
 from aptl.core.deployment.backend_host_inventory import HostInventoryBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -35,13 +35,9 @@ from aptl.core.appliance_boundary import (
 from aptl.core.seed_spec import NamedVolumeSeed
 
 # Imported from ``aptl.core.lab_types`` (the leaf module) rather than
-# ``aptl.core.lab``. Pre-#266 the import landed on lab.py directly,
-# which created a load-order cycle (lab.py -> snapshot ->
-# deployment.__init__ -> backend.py -> lab.py-mid-load) when lab.py
-# was the first module loaded fresh. The leaf module has no back-edges,
-# so the import is safe at runtime — keeping the names resolvable for
-# ``typing.get_type_hints(DeploymentBackend.start)`` and other runtime
-# introspection.
+# ``aptl.core.lab``: a direct lab.py import created a load-order cycle pre-#266
+# (lab.py -> snapshot -> deployment.__init__ -> backend.py -> lab.py). The leaf
+# has no back-edges, so the names stay resolvable for ``typing.get_type_hints``.
 
 
 class DeploymentBackend(HostInventoryBackend, Protocol):
@@ -72,6 +68,7 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         *,
         build: bool = True,
         scenario_root: Path,
+        substrate_digests: Mapping[str, str] | None = None,
     ) -> LabResult:
         """Realize a typed scenario deployment through the backend.
 
@@ -87,6 +84,11 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
                 resolves against; request-scoped, never cached on the backend.
                 The operator ``.env`` stays the control-plane ``project_dir``
                 boundary (issue #874).
+            substrate_digests: Address-scoped immutable substrate identities the
+                availability pass verified for dynamic-composition nodes (ADR-051
+                route 3, issue #876). A route-3 node's base container starts from
+                exactly this config id with ``--pull=never``, so the mutable tag
+                is never re-resolved at apply.
 
         Returns:
             LabResult indicating success or failure.
@@ -196,6 +198,27 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """
         ...
 
+    def substrate_image_identity(self, image_ref: str) -> tuple[str, str] | None:
+        """Return the ``(digest, media_type)`` of a locally present image ref.
+
+        The route-3 (dynamic-composition) availability check verifies the
+        generic substrate is already on the target daemon: a strict local-lookup
+        that never pulls (ADR-051 route 3). The digest is reported in the same
+        domain as ``container_image_digest`` so availability and post-realization
+        readback compare like with like. Returns None when the reference is not
+        locally present or its identity cannot be read.
+        """
+        ...
+
+    def container_image_config_id(self, container_name: str) -> str | None:
+        """Return the config-id digest of the image backing one container.
+
+        The same digest domain as ``substrate_image_identity``, used to read a
+        dynamic-composition node's realized substrate back for the runtime gate.
+        Returns None when it cannot be read.
+        """
+        ...
+
     def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
         """Materialize one scenario-declared network.
 
@@ -240,14 +263,12 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """Materialize checked-in source into Compose named volumes (ADR-043).
 
         For each seed, a root (``--user 0:0``) one-off container copies the
-        spec's files from the read-only source bind into the
-        project-scoped named volume, overwriting any prior content so the
-        operation is idempotent regardless of the existing owner. When a
-        seed carries a ``legacy_retire_path`` that still exists, a narrow
-        root container removes that one canonical path first.
-
-        Implementations route Docker through their own runner — this is a
-        narrow, typed operation, not a generic argv passthrough.
+        spec's files from the read-only source bind into the project-scoped
+        named volume, overwriting prior content so the operation is idempotent
+        regardless of the existing owner. A seed carrying a still-present
+        ``legacy_retire_path`` has that one canonical path removed first.
+        Implementations route Docker through their own runner -- a narrow typed
+        operation, not a generic argv passthrough.
 
         Args:
             seeds: The volume seed specs to materialize, in order.
@@ -269,14 +290,12 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
     ) -> None:
         """Materialize typed RAES content placements (issue #689).
 
-        Mirrors :meth:`seed_named_volumes`: each realized content item is
-        lowered into a project-scoped named-volume seed (inline text is
-        rendered into the ignored ``.aptl/content/`` state tree first;
-        project-contained sources are bound read-only from their resolved,
-        containment-checked location) and materialized by the same
-        root one-off seed container mechanism, so content realization gets
-        the identical idempotency, project-scoping, and redaction behavior
-        as ADR-043 volume seeding without a second Docker-copy mechanism.
+        Mirrors :meth:`seed_named_volumes`: each realized content item is lowered
+        into a project-scoped named-volume seed (inline text rendered into the
+        ignored ``.aptl/content/`` tree first; project-contained sources bound
+        read-only from their containment-checked location) and materialized by
+        the same root one-off seed mechanism, so it inherits ADR-043 seeding's
+        idempotency, project-scoping, and redaction without a second mechanism.
 
         Args:
             content: The typed content realizations to materialize, in
@@ -440,6 +459,17 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
             The first element of the ``docker inspect`` JSON array, or
             an empty dict on any failure (missing container, parse
             error, etc.).
+        """
+        ...
+
+    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
+        """Return a container's listeners read from outside its trust boundary.
+
+        The trusted half of service-listener readback (issue #876): the kernel's
+        per-netns socket tables, observed by a mechanism that executes no
+        container-provided binary, so a workload cannot under-report its bind
+        scope. Returns ``None`` when the listeners cannot be read, which the
+        observer treats as a refused disclosure rather than an assumed match.
         """
         ...
 

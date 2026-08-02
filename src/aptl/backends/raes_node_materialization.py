@@ -48,6 +48,9 @@ class _MaterializableNode(Protocol):
     os: str
     os_version: str
     runtime: RuntimeConfiguration | None
+    # ADR-051 route 3 (issue #876): carried onto the base spec so a route-3
+    # node's substrate starts immutably from the verified config id.
+    dynamic_composition: bool
 
 
 def realize_node(
@@ -70,6 +73,7 @@ def realize_node(
         os_version=node.os_version,
         runtime=node.runtime,
         content=content,
+        dynamic_composition=node.dynamic_composition,
     )
     container = spec.container_name
 

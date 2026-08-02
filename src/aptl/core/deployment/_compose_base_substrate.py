@@ -123,7 +123,8 @@ class ComposeBaseSubstrateMixin(object):
         network_bindings = getattr(self, "_base_networks_by_address", {}).get(
             spec.node_address
         )
-        if self._base_container_already_realized(spec):
+        run_image_ref = self._resolve_base_run_image(spec)
+        if self._base_container_already_realized(spec, run_image_ref):
             # Idempotent: a node that already materialized correctly is left in
             # place. `aptl lab start` retries a single SOC backend-start failure
             # by re-running the whole admitted plan, which re-enters node
@@ -138,18 +139,52 @@ class ComposeBaseSubstrateMixin(object):
             # materialization ops run against it idempotently.
             return
         self._run(["docker", "rm", "-f", spec.container_name])
-        argv = self._base_container_create_command(spec, network_bindings)
+        argv = self._base_container_create_command(spec, network_bindings, run_image_ref)
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
 
-    def _base_container_already_realized(self, spec: "BaseContainerSpec") -> bool:
+    def _resolve_base_run_image(self, spec: "BaseContainerSpec") -> str:
+        """Return the exact image reference a node's base container runs from.
+
+        For an ordinary node that is the declared base image ref: `docker run`
+        resolves the tag and pulls it on demand. A dynamic-composition node
+        (ADR-051 route 3, issue #876) must instead run the precise config id the
+        AVAILABILITY pass already verified for this address, carried in as
+        request-scoped apply context (:meth:`realize`'s ``substrate_digests``).
+        Starting that immutable config id with ``--pull=never`` closes the
+        availability-to-apply gap the cycle-6 review flagged: the tag may have
+        moved since, but the bytes are addressed by digest, so the wrong image
+        can never start; if that digest is no longer present the start fails
+        closed (a changed substrate produces no container) rather than resolving
+        the mutable tag a second time.
+        """
+
+        if not spec.dynamic_composition:
+            return spec.image_ref
+        verified = getattr(self, "_realization_substrate_digests", {}).get(
+            spec.node_address
+        )
+        if not verified:
+            raise BackendSeedError(
+                "dynamic-composition substrate for node "
+                f"{spec.node_address} was not verified by availability; refusing "
+                "to resolve the mutable tag at start (ADR-051 route 3)"
+            )
+        return verified
+
+    def _base_container_already_realized(
+        self, spec: "BaseContainerSpec", run_image_ref: str
+    ) -> bool:
         """Return whether this node's base container is already up on its image.
 
         True only when a container of the exact name is running the exact image
-        the spec calls for. A stopped, missing, or wrong-image container returns
-        False so it is recreated cleanly. Network attachments are deliberately
-        not part of the test: the post-start reconcile owns them, and a preserved
-        container keeps whatever it already had.
+        the spec calls for — ``run_image_ref``, which for a dynamic-composition
+        node is the verified config id (the value ``docker run`` recorded as
+        ``Config.Image``), and for an ordinary node is the declared tag. A
+        stopped, missing, or wrong-image container returns False so it is
+        recreated cleanly. Network attachments are deliberately not part of the
+        test: the post-start reconcile owns them, and a preserved container keeps
+        whatever it already had.
         """
 
         try:
@@ -163,19 +198,31 @@ class ComposeBaseSubstrateMixin(object):
         running = isinstance(state, dict) and bool(state.get("Running"))
         config = info.get("Config")
         image = config.get("Image") if isinstance(config, dict) else None
-        return running and image == spec.image_ref
+        return running and image == run_image_ref
 
     def _base_container_create_command(
         self,
         spec: "BaseContainerSpec",
         network_bindings: (tuple[tuple[str, DeploymentNetworkAttachment], ...] | None),
+        run_image_ref: str,
     ) -> list[str]:
-        """Build a create/run command with exact declared network identity."""
+        """Build a create/run command with exact declared network identity.
+
+        ``run_image_ref`` is the resolved image the container starts from — the
+        declared tag for an ordinary node, the verified config id for a
+        dynamic-composition node (ADR-051 route 3, issue #876). A route-3 node
+        also carries ``--pull=never`` so Docker runs only the bytes availability
+        already verified are local, never a fresh fetch.
+        """
 
         argv = [
             "docker",
             "create" if network_bindings is not None else "run",
-            *(["--pull=never"] if self._offline_staged else []),
+            *(
+                ["--pull=never"]
+                if self._offline_staged or spec.dynamic_composition
+                else []
+            ),
             "--name",
             spec.container_name,
             "--label",
@@ -203,9 +250,9 @@ class ComposeBaseSubstrateMixin(object):
         if spec.init is not None:
             argv += _init_run_flags(spec.init)
             # The base image's own CMD runs systemd as init.
-            argv.append(spec.image_ref)
+            argv.append(run_image_ref)
         else:
-            argv += [spec.image_ref, "sleep", "infinity"]
+            argv += [run_image_ref, "sleep", "infinity"]
         return argv
 
     def _project_dotenv(self) -> dict[str, str]:

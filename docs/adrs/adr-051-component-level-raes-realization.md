@@ -101,6 +101,46 @@ an APTL-local `source_type` enum.
 Switch nodes are realized as networks through the existing network concern and
 do not select a container artifact.
 
+#### Route 3 realized artifact satisfaction
+
+A successful route-3 realization discloses the generic substrate, not a
+fictional image containing the composed node. The existing RAES
+`ArtifactSatisfactionDisclosureModel` carries:
+
+- an `ArtifactIdentity` for the selected generic-substrate policy variant whose
+  digest is the image identity verified on the target daemon;
+- `mechanism: dynamic_composition_profile()`;
+- `acquisition: local-lookup` and `timing: realization`;
+- `integrity_refs` containing exactly that verified substrate digest; and
+- `provenance_refs` containing
+  `dynamic_composition_provenance_ref()`.
+
+The artifact identity uses a stable generic-substrate policy identity and a
+truthful media type. It does not reuse `Source.name`, a Compose service, a node
+address, a registry/repository location, a mutable tag, or the scenario-bundle
+path as portable identity. The installed packages, configuration, identities,
+ports, mounts, capabilities, agents, and listeners remain separate runtime
+concerns proved through the ordinary concern registry; the substrate digest
+does not claim that those effects are baked into the image.
+
+Before planning, APTL resolves the same fixed base-substrate policy that
+`base_container_spec()` uses for realization and asks the typed deployment
+backend for the immutable identity and local start reference available on the
+target daemon. The address-scoped `ArtifactRequirementAvailability` verifies
+both the digest and the dynamic-composition provenance reference. Realization
+starts that immutable local identity, not the mutable selector used to find it.
+An absent, changed, malformed, ambiguous, wrong-platform, or otherwise
+unresolvable substrate yields no verified claim or container and must not fall
+through to a registry pull during the declared `local-lookup` route.
+
+Availability and post-realization readback use one digest domain. In
+particular, an OCI manifest digest and a Docker image/configuration ID are not
+interchangeable merely because both start with `sha256:`; the disclosed media
+type must describe the bytes the digest identifies. The runtime gate compares
+the digest observed from the container with the verified availability facts.
+The independent readback remains a defense-in-depth check: any backend mismatch
+fails closed and retains the baseline snapshot.
+
 ### Authored posture binds the backend
 
 Route selection is not an APTL policy choice. RAES `SEM-218` and ADR-098 make the
@@ -184,6 +224,27 @@ boolean, an optimistic manifest declaration, or a count of declared fields.
 Widening the RAES realization registry so these fields become enforceable demand is
 upstream work against `Brad-Edwards/aces`; until it lands, the ownership above is
 explicit rather than assumed.
+
+> **Update (2026-07-30, issue #876).** That upstream work has landed. raes 3.1.0
+> (RAESystem/rae#985) lowers `runtime.environment`, `runtime.mounts` (bind/tmpfs),
+> `runtime.linux_capabilities`, `runtime.network.published_ports`,
+> `runtime.forwarding_agents`, and `runtime.service_listeners` into the SEM-218
+> realization concern registry, so RAES now owns their admission
+> (`realization_support_diagnostics`) and their fail-closed non-approximation gate
+> (`realization_disclosure`). The backend-owned contract-completeness gate this
+> section describes is therefore superseded for those dimensions by the ordinary
+> observe-and-disclose path: APTL reads each declared concern off the realized
+> container through the typed `DeploymentBackend` and discloses the observed value
+> at the concern's payload path, projected through RAES's own registry projector
+> (with its secret-boundary value commitment); the observer is
+> `aptl.backends.raes_runtime_observation`. A declared concern APTL cannot observe
+> is omitted from the returned snapshot, so an EXACT declaration is still rejected;
+> the fail-closed outcome is unchanged, now enforced by RAES. APTL advertises the
+> `dynamic-composition` mechanism (`OPEN_REALIZATION`, `local-lookup`/`realization`)
+> on the strength of that readback. The route-3 *source-artifact* satisfaction
+> (disclosing the realized generic substrate digest) is implemented in the same
+> change, on top of the merged #874 / PR #891 realization roots, per the "Route 3
+> realized artifact satisfaction" section above.
 
 A running container, an installed package, an open port, or a matching name
 proves only that individual fact. Readiness requires all admitted facts and

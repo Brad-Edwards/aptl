@@ -182,7 +182,20 @@ def _observed_payload(
 
     payload = deepcopy(dict(planned_payload))
     concern_kinds = {
-        "node": ("node-type", "os-family", "domain-topology"),
+        "node": (
+            "node-type",
+            "os-family",
+            "domain-topology",
+            # raes 3.1.0 per-node runtime realization concerns (#876): observed
+            # off the realized container and written at their nested payload
+            # paths, or removed so an unrealized EXACT declaration is rejected.
+            "runtime-environment",
+            "runtime-mounts",
+            "linux-capabilities",
+            "published-ports",
+            "forwarding-agents",
+            "service-listeners",
+        ),
         "content-placement": ("content-type",),
         "generated-artifact": ("generated-artifact",),
         "persistent-volume": ("persistent-volume",),

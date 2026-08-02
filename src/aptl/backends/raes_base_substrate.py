@@ -118,6 +118,11 @@ class BaseContainerSpec:
     # operator secret is authored empty and supplied by the credential boundary,
     # so it cannot travel here.
     environment_defaults: tuple[tuple[str, str], ...] = ()
+    # ADR-051 route 3 (issue #876): the node authored an open dynamic-composition
+    # source, so it composes onto the generic substrate and proves its runtime by
+    # readback. Its base container must start immutably — never pull, and run the
+    # exact config id availability verified, not whatever a moved tag now names.
+    dynamic_composition: bool = False
 
 
 def _container_name(node_address: str) -> str:
@@ -135,11 +140,14 @@ def base_container_spec(
     os: str,
     os_version: str,
     runtime: RuntimeConfiguration | None,
+    dynamic_composition: bool = False,
 ) -> BaseContainerSpec:
     """Return the generic base-container decision for one node.
 
     Fails closed (`UnsupportedOsFamilyError`) when APTL has no generic base for
-    the declared OS family, rather than guessing an image.
+    the declared OS family, rather than guessing an image. ``dynamic_composition``
+    marks a route-3 node whose base container must start immutably from the
+    verified config id (ADR-051 / issue #876).
     """
 
     runs_services = bool(runtime is not None and runtime.service_manager_units)
@@ -155,6 +163,7 @@ def base_container_spec(
         volume_mounts=_volume_mounts(runtime),
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
+        dynamic_composition=dynamic_composition,
     )
 
 
@@ -278,6 +287,7 @@ def plan_node(
     os_version: str,
     runtime: RuntimeConfiguration | None,
     content: tuple[MaterializationOp, ...] = (),
+    dynamic_composition: bool = False,
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -285,11 +295,16 @@ def plan_node(
     container described by the returned :class:`BaseContainerSpec` (with an init
     when ``runs_services`` is set), then runs the returned operations through the
     materialization engine. Both halves are derived only from declared state, so
-    the substrate decision and the ops stay coherent.
+    the substrate decision and the ops stay coherent. ``dynamic_composition``
+    carries the route-3 immutable-start marker onto the spec (issue #876).
     """
 
     spec = base_container_spec(
-        node_address, os=os, os_version=os_version, runtime=runtime
+        node_address,
+        os=os,
+        os_version=os_version,
+        runtime=runtime,
+        dynamic_composition=dynamic_composition,
     )
     ops = plan_node_materialization(
         os=os, os_version=os_version, runtime=runtime, content=content

@@ -697,9 +697,9 @@ pyyaml==6.0.3 \
     #   aptl-labs
     #   raes
     #   uvicorn
-raes==3.0.0 \
-    --hash=sha256:8fe3e6cdfa9d53f7ff09e0faeaec54c8abe9518211f2a5c96ced55a0dc9bcbda \
-    --hash=sha256:c580c88447caf86643093dc7a39be8aa9983f0f10b81046221a4533ffbe9bcd5
+raes==3.1.0 \
+    --hash=sha256:1971de883276c8a45da038e8720af8b886bb0132f765d812f16b7736736f21b3 \
+    --hash=sha256:9b4d5213818910bfdd80ed736e7c909c4d85d917b99ac7907d860530dfa38284
     # via aptl-labs
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \

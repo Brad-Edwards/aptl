@@ -32,42 +32,27 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 from raes.artifact_requirements import ArtifactSatisfactionRoute
 
+from raes.runtime_configuration import RuntimeConfiguration
+
 from aptl.backends.raes_artifact_mechanisms import (
+    _mechanism_key,
+    dynamic_composition_provenance_ref,
     exact_artifact_provenance_ref,
     materialization_provenance_ref,
+    route_is_dynamic_composition,
+    select_route_over_mechanisms,
 )
+from aptl.backends.raes_substrate import realized_substrate_identity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from raes.artifact_requirements import ArtifactRequirement
     from raes_backend_protocols.capabilities import BackendManifest
 
+    from aptl.backends.raes_substrate import SubstrateIdentity
+
 _REALIZATION_DOMAIN = "runtime-realization"
-
-
-def _mechanism_key(mechanism: object) -> tuple[str, str, str, str]:
-    """Return the comparable identity of one mechanism profile."""
-
-    return (
-        getattr(mechanism, "mechanism", ""),
-        getattr(mechanism, "profile", ""),
-        getattr(mechanism, "version", ""),
-        getattr(mechanism, "digest", ""),
-    )
-
-
-def _supported_routes(
-    manifest: BackendManifest, requirement_kind: str
-) -> set[tuple[tuple[str, str, str, str], str, str]]:
-    """Return every (mechanism, acquisition, timing) the manifest advertises."""
-
-    return {
-        (_mechanism_key(capability.mechanism), route.acquisition, route.timing)
-        for declaration in manifest.realization_support
-        if declaration.domain == _REALIZATION_DOMAIN
-        for capability in declaration.artifact_mechanisms
-        if requirement_kind in capability.supported_requirement_kinds
-        for route in capability.supported_routes
-    }
 
 
 def select_route(
@@ -78,29 +63,25 @@ def select_route(
 ) -> ArtifactSatisfactionRoute | None:
     """Return the one route APTL will use, or None when none is admissible.
 
+    Delegates to the shared ``select_route_over_mechanisms`` so satisfaction,
+    availability, and image realization all select over the same intersection
+    with the same deterministic, content-keyed ``min`` -- here the supported set
+    is drawn from the manifest's advertised runtime-realization mechanisms, which
+    are exactly ``aptl_artifact_mechanisms()``.
+
     Returning None is not a fallback: the caller surfaces it as a refusal, and
     RAES's planner gate independently rejects the same requirement with
     ``artifact.unsupported-backend-mechanism``.
     """
 
-    supported = _supported_routes(manifest, requirement_kind)
-    eligible = [
-        route
-        for route in contract.permitted_routes
-        if (_mechanism_key(route.mechanism), route.acquisition, route.timing)
-        in supported
+    mechanisms = [
+        capability
+        for declaration in manifest.realization_support
+        if declaration.domain == _REALIZATION_DOMAIN
+        for capability in declaration.artifact_mechanisms
     ]
-    if not eligible:
-        return None
-    # Deterministic and content-keyed, so the same authored contract and the
-    # same manifest always select the same route on any machine.
-    return min(
-        eligible,
-        key=lambda route: (
-            *_mechanism_key(route.mechanism),
-            route.acquisition,
-            route.timing,
-        ),
+    return select_route_over_mechanisms(
+        contract, mechanisms, requirement_kind=requirement_kind
     )
 
 
@@ -110,6 +91,7 @@ def satisfaction_payload(
     *,
     requirement_kind: str,
     realized_digest: str,
+    resolve_substrate: Callable[[], SubstrateIdentity | None] | None = None,
 ) -> dict[str, object] | None:
     """Return the ``artifact_satisfaction`` payload for one realized resource.
 
@@ -129,13 +111,28 @@ def satisfaction_payload(
     route = select_route(contract, manifest, requirement_kind=requirement_kind)
     if route is None:
         return None
-    if contract.exact_artifact is None:
-        return _materialized_payload(
+    # Discriminate on the SELECTED route's complete identity, never on a partial
+    # marker: ``exact_artifact is None`` cannot tell a constrained materialization
+    # from open dynamic composition, and the mechanism name alone could carry a
+    # different profile or an acquisition/timing APTL never advertised (route 3).
+    if route_is_dynamic_composition(route):
+        substrate = resolve_substrate() if resolve_substrate is not None else None
+        payload = _dynamic_composition_payload(
+            contract,
+            manifest,
+            route=route,
+            realized_digest=realized_digest,
+            substrate=substrate,
+        )
+    elif route.mechanism.mechanism == "exact-artifact":
+        payload = _exact_payload(
             contract, manifest, route=route, realized_digest=realized_digest
         )
-    return _exact_payload(
-        contract, manifest, route=route, realized_digest=realized_digest
-    )
+    else:
+        payload = _materialized_payload(
+            contract, manifest, route=route, realized_digest=realized_digest
+        )
+    return payload
 
 
 def _exact_payload(
@@ -210,11 +207,21 @@ def satisfactions_for_plan(
     for address, resource in getattr(plan, "resources", {}).items():
         if getattr(resource, "resource_type", None) != "node":
             continue
-        contract = _authored_requirement(getattr(resource, "payload", None))
+        node_payload = getattr(resource, "payload", None)
+        contract = _authored_requirement(node_payload)
         container = container_names.get(address)
         if contract is None or not container:
             continue
-        realized = backend.container_image_digest(container)
+        route = select_route(contract, manifest, requirement_kind=requirement_kind)
+        if route is None:
+            continue
+        # A dynamic-composition node's realized substrate is read back in the
+        # config-id domain (matching the availability facts); every other route
+        # reads the backing image's manifest digest.
+        if route_is_dynamic_composition(route):
+            realized = backend.container_image_config_id(container)
+        else:
+            realized = backend.container_image_digest(container)
         if not realized:
             continue
         payload = satisfaction_payload(
@@ -222,6 +229,15 @@ def satisfactions_for_plan(
             manifest,
             requirement_kind=requirement_kind,
             realized_digest=realized,
+            # The substrate identity is built from the digest the container is
+            # ACTUALLY running (``realized``), never by re-resolving the mutable
+            # tag: the realized container is the substrate, so the tag being moved
+            # or removed after a correct start can no longer produce a false
+            # mismatch (issue #876 cycle-5 review). The gate still checks this
+            # digest against the availability-verified set.
+            resolve_substrate=lambda node_payload=node_payload, realized=realized: (
+                _realized_node_substrate(node_payload, realized)
+            ),
         )
         if payload is not None:
             disclosures[address] = payload
@@ -282,3 +298,70 @@ def _materialized_payload(
         "integrity_refs": [realized_digest],
         "provenance_refs": [materialization_provenance_ref()],
     }
+
+
+def _dynamic_composition_payload(
+    contract: ArtifactRequirement,
+    manifest: BackendManifest,
+    *,
+    route: ArtifactSatisfactionRoute,
+    realized_digest: str,
+    substrate: SubstrateIdentity | None,
+) -> dict[str, object] | None:
+    """Return the disclosure for a generically composed node (ADR-051 route 3).
+
+    The disclosed artifact is the generic *substrate*, never a fictional image of
+    the composed node: the node's declared packages, configuration, identities,
+    ports, mounts, capabilities, forwarding agents, and listeners are proved
+    separately as runtime concerns. The substrate's immutable identity was
+    resolved by strict local-lookup; a container not running that exact verified
+    substrate (a tag or cache change between planning and apply) discloses
+    nothing, so the runtime gate fails closed rather than pass an unverified
+    composition.
+    """
+
+    if substrate is None or realized_digest != substrate.digest:
+        return None
+    return {
+        "requirement_id": contract.requirement_id,
+        "artifact": substrate.artifact_identity(),
+        "mechanism": route.mechanism.model_dump(mode="json"),
+        "acquisition": route.acquisition,
+        "timing": route.timing,
+        "backend": {
+            "name": manifest.identity.name,
+            "version": manifest.identity.version,
+        },
+        "integrity_refs": [substrate.digest],
+        "provenance_refs": [dynamic_composition_provenance_ref()],
+    }
+
+
+def _realized_node_substrate(
+    payload: object,
+    realized_digest: str,
+) -> SubstrateIdentity | None:
+    """Return the substrate identity for one node from its realized digest.
+
+    Reads the node's typed OS and runtime out of the plan payload and pairs them
+    with the digest read back off the realized container, so the disclosure names
+    the substrate the container is actually running without a second lookup of the
+    mutable tag (issue #876 cycle-5 review).
+    """
+
+    spec = payload.get("spec") if isinstance(payload, Mapping) else None
+    node = spec.get("node") if isinstance(spec, Mapping) else None
+    if not isinstance(node, Mapping):
+        return None
+    runtime = None
+    runtime_raw = node.get("runtime")
+    if isinstance(runtime_raw, Mapping):
+        try:
+            runtime = RuntimeConfiguration.model_validate(dict(runtime_raw))
+        except (ValueError, TypeError):
+            runtime = None
+    return realized_substrate_identity(
+        os=str(node.get("os") or ""),
+        runtime=runtime,
+        digest=realized_digest,
+    )

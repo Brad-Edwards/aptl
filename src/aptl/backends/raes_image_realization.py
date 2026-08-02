@@ -3,24 +3,28 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from pydantic import ValidationError
+from raes.artifact_requirements import ArtifactRequirement
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
+from aptl.backends.raes_artifact_mechanisms import is_dynamic_composition_requirement
+
 from aptl.backends._raes_image_policy import (
-    _ALLOWED_DIGEST_SOURCE_NAMES,
     _ALLOWED_SOURCE_IMAGE_REFS,
-    _COMPOSE_SOURCE_NAME_RE,
     _DIGEST_RE,
     _PROJECT_DOCKERFILE_PATH_RE,
-    _SAFE_TAG_RE,
+    _allowed_digest_pinned_ref,
+    _is_compose_owned_source,
+    _local_build_ref,
     _policy_diagnostic,
     _provenance_counts,
+    _safe_image_name,
 )
 from aptl.core.deployment.realization import DeploymentImageRealization
 
@@ -48,6 +52,13 @@ def resolve_node_image(
     image: DeploymentImageRealization | None = None
     source = _node_source(payload, resource.address, diagnostics)
     if source is not None:
+        if _is_dynamic_composition_source(source):
+            # An admitted dynamic-composition node is intentionally image-free
+            # (ADR-051 route 3): it composes onto the generic substrate and proves
+            # its runtime by readback, so it selects no container image. This must
+            # precede the unmapped-service / untrusted-image failures that exact
+            # and materialized sources keep.
+            return None
         if service_name is None:
             diagnostics.append(_policy_diagnostic(resource.address, "unmapped-service"))
         else:
@@ -70,6 +81,41 @@ def resolve_node_image(
                     _policy_diagnostic(resource.address, "untrusted-image")
                 )
     return image
+
+
+def node_source_is_dynamic_composition(
+    payload: Mapping[str, Any],
+    address: str,
+) -> bool:
+    """Whether a node payload authors an open dynamic-composition source.
+
+    The realization-time counterpart to :func:`resolve_node_image`'s own
+    dynamic-composition branch: it marks the node so its base substrate is
+    started immutably — ``--pull=never`` from the verified config id — under
+    ADR-051 route 3 (issue #876). A throwaway diagnostics sink is used so it
+    never double-reports a malformed source the image resolver already surfaces.
+    """
+
+    source = _node_source(payload, address, [])
+    return source is not None and _is_dynamic_composition_source(source)
+
+
+def _is_dynamic_composition_source(source: _NodeSource) -> bool:
+    """Whether a node's source authors an open dynamic-composition requirement.
+
+    Discriminated on the authored open explicitness plus a dynamic-composition
+    permitted route -- never on the mere absence of an exact identity, which a
+    constrained materialization also lacks.
+    """
+
+    raw = source.artifact_requirement
+    if not isinstance(raw, Mapping):
+        return False
+    try:
+        requirement = ArtifactRequirement.model_validate(dict(raw))
+    except ValidationError:
+        return False
+    return is_dynamic_composition_requirement(requirement)
 
 
 def _node_source(
@@ -412,60 +458,3 @@ def _project_relative_file(project_dir: Path, raw_path: str) -> Path | None:
     except ValueError:
         return None
     return resolved
-
-
-def _local_build_ref(source_name: str, source_version: str) -> str | None:
-    """Return the local tag used for a trusted project build."""
-
-    if _is_digest_pinned_version(source_version):
-        tag = "local"
-    elif source_version not in {"", "*"} and _SAFE_TAG_RE.fullmatch(source_version):
-        tag = source_version
-    else:
-        tag = "local"
-    if not _safe_image_name(source_name):
-        return None
-    return f"{source_name}:{tag}"
-
-
-def _allowed_digest_pinned_ref(source_name: str, source_version: str) -> str | None:
-    """Return a digest-pinned pull ref only for allowed source names."""
-
-    image_ref = None
-    if source_name in _ALLOWED_DIGEST_SOURCE_NAMES:
-        if "@sha256:" in source_version:
-            image_name, digest = source_version.rsplit("@", 1)
-            if (
-                image_name == source_name
-                and _DIGEST_RE.fullmatch(digest)
-                and _safe_image_name(image_name)
-            ):
-                image_ref = source_version
-        elif _DIGEST_RE.fullmatch(source_version) and _safe_image_name(source_name):
-            image_ref = f"{source_name}@{source_version}"
-    return image_ref
-
-
-def _is_digest_pinned_version(source_version: str) -> bool:
-    """Return whether a version value carries a sha256 image digest."""
-
-    if "@sha256:" in source_version:
-        _, digest = source_version.rsplit("@", 1)
-        return _DIGEST_RE.fullmatch(digest) is not None
-    return _DIGEST_RE.fullmatch(source_version) is not None
-
-
-def _is_compose_owned_source(source_name: str, source_version: str) -> bool:
-    """Return whether Compose already owns the image binding for this source."""
-
-    return source_version in {"local", "reference"} and (
-        _COMPOSE_SOURCE_NAME_RE.fullmatch(source_name) is not None
-    )
-
-
-def _safe_image_name(value: str) -> bool:
-    """Return whether an image name is syntactically safe for generated tags."""
-
-    if not value or value.startswith(("-", ".")) or value.endswith(("/", ":")):
-        return False
-    return all(part not in {"", ".", ".."} for part in re.split(r"[/:]", value))

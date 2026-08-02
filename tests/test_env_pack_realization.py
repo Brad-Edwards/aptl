@@ -100,6 +100,43 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
+def test_operational_config_translates_declared_runtime_fields():
+    """command / environment / capabilities are translated from the SDL as-is."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "environment": [
+                {"name": "DISCOVERY_TYPE", "value": "single-node"},
+                {"name": "JVM_OPTS", "value": "-Xms512m"},
+            ],
+            "container": {"command": ["--secret", "abc", "--cql-hostnames", "cass"]},
+            "linux_capabilities": {"add": ["CAP_NET_ADMIN"]},
+        }
+    )
+
+    config = _operational_config(runtime)
+
+    assert config["environment"] == {
+        "DISCOVERY_TYPE": "single-node",
+        "JVM_OPTS": "-Xms512m",
+    }
+    assert config["command"] == ["--secret", "abc", "--cql-hostnames", "cass"]
+    # RAES CAP_* form is translated to Docker's cap_add form.
+    assert config["cap_add"] == ["NET_ADMIN"]
+
+
+def test_operational_config_is_empty_for_a_bare_node():
+    """A node with no declared runtime gets no operational Compose fields."""
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    assert _operational_config(None) == {}
+
+
 def test_component_build_nodes_resolve_their_image_from_the_engine_tree(tmp_path):
     """`materialization-specification` nodes (ad, wazuh-sidecar) resolve an image.
 

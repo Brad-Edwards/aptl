@@ -90,7 +90,64 @@ def _render_service(
     depends = _service_dependencies(node, service_names)
     if depends:
         service["depends_on"] = depends
+    service.update(_operational_config(node.runtime))
     return service
+
+
+def _truthy(value: object) -> bool:
+    """Return whether a ``bool | str | None`` RAES flag is enabled."""
+
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
+
+
+def _operational_config(runtime: object) -> dict:
+    """Translate a node's declared runtime desired-state into Compose fields.
+
+    APTL is a faithful translator here, not an authority: it emits only what the
+    SDL declared through RAES's own runtime vocabulary (``container`` command and
+    flags, ``environment`` variables, ``linux_capabilities``). It never supplies
+    implementation-specific defaults of its own, so a node runs exactly the
+    operational shape its pack declared (issue #875). Bare nodes declare no
+    runtime and get nothing here.
+    """
+
+    if runtime is None:
+        return {}
+    config: dict = {}
+    environment = {
+        variable.name: variable.value
+        for variable in getattr(runtime, "environment", ())
+        if getattr(variable, "name", "")
+    }
+    if environment:
+        config["environment"] = environment
+
+    container = getattr(runtime, "container", None)
+    if container is not None:
+        if getattr(container, "command", None):
+            config["command"] = list(container.command)
+        if getattr(container, "entrypoint", None):
+            config["entrypoint"] = list(container.entrypoint)
+        if _truthy(getattr(container, "privileged", None)):
+            config["privileged"] = True
+        if getattr(container, "shm_size", None):
+            config["shm_size"] = container.shm_size
+        if getattr(container, "security_opt", None):
+            config["security_opt"] = list(container.security_opt)
+        if getattr(container, "dns", None):
+            config["dns"] = list(container.dns)
+
+    capabilities = getattr(runtime, "linux_capabilities", None)
+    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
+    if added:
+        # RAES uses the kernel CAP_* form; Docker's cap_add wants it without
+        # the prefix (NET_ADMIN, not CAP_NET_ADMIN).
+        config["cap_add"] = [
+            capability.removeprefix("CAP_") for capability in added
+        ]
+    return config
 
 
 def _service_networks(node: DeploymentNodeRealization) -> dict:

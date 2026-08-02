@@ -220,6 +220,14 @@ _PROVISIONER = ProvisionerCapabilities(
     supports_acls=True,
     supports_accounts=True,
     supports_generated_artifacts=True,
+    # RAES 3.3 makes the generated-artifact kinds an explicit capability rather
+    # than an implicit "any". Manifest honesty (#577): declare only the kinds the
+    # backend actually materializes AND verifies by read-after-write today —
+    # certificate bundles (SOC/Wazuh TLS) and rendered config. ``ssh_key_bundle``
+    # is intentionally absent until its provider and independent readback exist.
+    supported_generated_artifact_kinds=frozenset(
+        {"certificate_bundle", "rendered_config"}
+    ),
     supports_persistent_volumes=True,
 )
 

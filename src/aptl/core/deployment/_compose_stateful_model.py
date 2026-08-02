@@ -216,9 +216,21 @@ def _append_volume_mounts(
 ) -> dict[str, dict[str, object]]:
     """Append persistent-volume mounts and return their declarations."""
 
-    image_free = _non_compose_consumer_addresses(realization)
+    non_compose = _non_compose_consumer_addresses(realization)
     volumes: dict[str, dict[str, object]] = {}
     for volume in realization.persistent_volumes:
+        compose_consumers = [
+            consumer
+            for consumer in volume.consumers
+            if consumer.target_address not in non_compose
+        ]
+        # A volume mounted only by non-Compose nodes (image-free or imageless)
+        # is delivered by the generic materializer, not Compose. Declaring it in
+        # the override would leave a top-level volume no Compose service mounts,
+        # which docker compose config prunes and the effective-model check then
+        # reports as a missing identity (issue #875).
+        if not compose_consumers:
+            continue
         volumes[volume.name] = {
             "labels": _expected_volume_labels(
                 volume.address,
@@ -226,9 +238,7 @@ def _append_volume_mounts(
                 project_name,
             )
         }
-        for consumer in volume.consumers:
-            if consumer.target_address in image_free:
-                continue
+        for consumer in compose_consumers:
             _mounts(services, consumer.service_name).append(
                 {
                     "type": "volume",
@@ -360,36 +370,47 @@ def _certificate_exposure_errors(
 ) -> list[str]:
     """Return errors for certificate mounts beyond the declared output set."""
 
-    cert_root = str(scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH)
-    expected = _expected_certificate_mounts(cert_root, realization)
+    cert_roots = {
+        str(artifact_source_path(scenario_root, artifact))
+        for artifact in realization.generated_artifacts
+        if artifact.generator == "certificate_bundle"
+    }
+    expected = _expected_certificate_mounts(scenario_root, realization)
     return [
         f"Effective stateful service {service_name} exposes undeclared "
         "certificate material."
         for service_name, allowed in expected.items()
         if _observed_certificate_mounts(
             services.get(service_name),
-            cert_root,
+            cert_roots,
         )
         != allowed
     ]
 
 
 def _expected_certificate_mounts(
-    cert_root: str,
+    scenario_root: Path,
     realization: DeploymentRealizationSpec,
 ) -> dict[str, set[tuple[str, str]]]:
-    """Return declared certificate source/target pairs by consumer service."""
+    """Return declared certificate source/target pairs by consumer service.
+
+    Each certificate bundle resolves its own source root (a wazuh bundle under
+    the indexer cert dir, the SOC bundle under ``config/soc_certs``), so a
+    consumer's expected mounts are keyed off that bundle's root, not one shared
+    directory (issue #875).
+    """
 
     expected: dict[str, set[tuple[str, str]]] = {}
     for artifact in realization.generated_artifacts:
         if artifact.generator != "certificate_bundle":
             continue
+        source = artifact_source_path(scenario_root, artifact)
         by_name = {output.name: output for output in artifact.outputs}
         for consumer in artifact.consumers:
             expected.setdefault(consumer.service_name, set()).update(
                 {
                     (
-                        str(Path(cert_root) / by_name[name].path),
+                        str(source / by_name[name].path),
                         str(
                             PurePosixPath(consumer.mount_destination)
                             / by_name[name].path
@@ -403,7 +424,7 @@ def _expected_certificate_mounts(
 
 def _observed_certificate_mounts(
     service: object,
-    cert_root: str,
+    cert_roots: set[str],
 ) -> set[tuple[str, str]]:
     """Return certificate-root mounts observed on one effective service."""
 
@@ -416,7 +437,10 @@ def _observed_certificate_mounts(
         (str(mount.get("source")), str(mount.get("target")))
         for mount in mounts
         if isinstance(mount, Mapping)
-        and _under_certificate_root(str(mount.get("source", "")), cert_root)
+        and any(
+            _under_certificate_root(str(mount.get("source", "")), cert_root)
+            for cert_root in cert_roots
+        )
     }
 
 
@@ -435,12 +459,25 @@ def _effective_volume_errors(
 
     if not realization.persistent_volumes:
         return []
+    non_compose = _non_compose_consumer_addresses(realization)
+    # Only volumes with a Compose consumer appear in the override (a volume used
+    # solely by a non-Compose node is delivered by the generic materializer).
+    compose_volumes = [
+        volume
+        for volume in realization.persistent_volumes
+        if any(
+            consumer.target_address not in non_compose
+            for consumer in volume.consumers
+        )
+    ]
+    if not compose_volumes:
+        return []
     observed = payload.get("volumes")
     if not isinstance(observed, Mapping):
         return ["Effective Compose model has no volumes mapping."]
     return [
         f"Effective persistent volume {volume.address} has unexpected identity."
-        for volume in realization.persistent_volumes
+        for volume in compose_volumes
         if not _effective_volume_matches(
             observed.get(volume.name),
             project_name,

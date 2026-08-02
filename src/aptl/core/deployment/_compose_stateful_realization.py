@@ -33,6 +33,10 @@ from aptl.core.deployment._compose_stateful_model import (
     stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_services import StatefulDumper
+from aptl.core.deployment._flag_signing_keys import (
+    FLAG_SIGNING_PROFILE_V2,
+    realize_flag_signing_keys,
+)
 from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
 from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
@@ -264,12 +268,16 @@ class ComposeStatefulRealizationMixin:
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
     ) -> LabResult | None:
-        """Render the admitted manager config through ADR-028's writer.
+        """Render an admitted ``rendered_config`` artifact, dispatched by provenance.
 
         The rendered config is a scenario-local generated artifact written under
-        ``scenario_root``; the credential key comes from the control-plane
-        ``project_dir/.env``.
+        ``scenario_root``. Two producer profiles are implemented: the wazuh
+        cluster manager config (ADR-028; credential from the control-plane
+        ``project_dir/.env``) and the per-node flag-signing keys (#875).
         """
+
+        if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
+            return self._realize_flag_signing_keys(artifact, scenario_root)
 
         unsupported_binding = (
             artifact.provenance != "config/wazuh_cluster/wazuh_manager.conf"
@@ -320,6 +328,36 @@ class ComposeStatefulRealizationMixin:
                 ),
             )
         return failure
+
+    def _realize_flag_signing_keys(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the per-node flag-signing keys under their staging root.
+
+        The staging root is the artifact's canonical source path; the mount
+        model binds only each consumer's own selected key, and the
+        producer-private seed is never mounted into a node.
+        """
+
+        staging_root = artifact_source_path(scenario_root, artifact)
+        try:
+            _canonical_generated_path(
+                scenario_root, staging_root.relative_to(scenario_root.resolve())
+            )
+        except ValueError:
+            return LabResult(
+                success=False,
+                error="Flag-signing key path failed containment validation.",
+            )
+        error = realize_flag_signing_keys(artifact, staging_root)
+        if error is not None:
+            return LabResult(
+                success=False,
+                error=f"Flag-signing key generation failed: {error}",
+            )
+        return None
 
     def _realize_certificate_bundle(
         self,

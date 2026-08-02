@@ -82,13 +82,14 @@ def artifact_source_path(
     the two coincide (issue #874).
     """
 
-    if artifact.provenance == SOC_CERT_PROFILE:
+    provenance = getattr(artifact, "provenance", None)
+    if provenance == SOC_CERT_PROFILE:
         return scenario_root.resolve() / SOC_CERTS_ROOT_RELPATH
     if artifact.generator == "certificate_bundle":
         return scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH
     if artifact.generator == "ssh_key_bundle":
         return scenario_root.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / artifact.name
-    if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
+    if provenance == FLAG_SIGNING_PROFILE_V2:
         return scenario_root.resolve() / FLAG_SIGNING_ROOT_RELPATH / artifact.name
     return scenario_root.resolve() / RENDERED_MANAGER_RELPATH
 

@@ -115,16 +115,40 @@ def _consumer_output_names(
     ]
 
 
+def _image_free_consumer_addresses(
+    realization: DeploymentRealizationSpec,
+) -> frozenset[str]:
+    """Return node addresses realized image-free by the generic materializer.
+
+    An image-free node (declared runtime, no backing image) is not a Compose
+    service, so its generated-artifact and volume consumption is delivered by
+    the generic materializer (file placement / docker mounts), not a Compose
+    bind. Its consumers must therefore be excluded from the Compose stateful
+    override, or the effective-model check flags a declared mount that no
+    Compose service can carry (issue #875).
+    """
+
+    imaged = {image.address for image in realization.images}
+    return frozenset(
+        node.address
+        for node in realization.nodes
+        if node.runtime is not None and node.address not in imaged
+    )
+
+
 def _append_artifact_mounts(
     services: dict[str, dict[str, object]],
     scenario_root: Path,
     realization: DeploymentRealizationSpec,
 ) -> None:
-    """Append every declared generated-artifact bind mount."""
+    """Append every declared generated-artifact bind mount for Compose nodes."""
 
+    image_free = _image_free_consumer_addresses(realization)
     for artifact in realization.generated_artifacts:
         source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
+            if consumer.target_address in image_free:
+                continue
             if _uses_per_output_mounts(artifact, consumer):
                 _append_selected_output_mounts(services, source, artifact, consumer)
             else:
@@ -191,6 +215,7 @@ def _append_volume_mounts(
 ) -> dict[str, dict[str, object]]:
     """Append persistent-volume mounts and return their declarations."""
 
+    image_free = _image_free_consumer_addresses(realization)
     volumes: dict[str, dict[str, object]] = {}
     for volume in realization.persistent_volumes:
         volumes[volume.name] = {
@@ -201,6 +226,8 @@ def _append_volume_mounts(
             )
         }
         for consumer in volume.consumers:
+            if consumer.target_address in image_free:
+                continue
             _mounts(services, consumer.service_name).append(
                 {
                     "type": "volume",

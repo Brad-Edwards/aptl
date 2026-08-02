@@ -171,6 +171,76 @@ def test_operational_config_translates_declared_runtime_fields():
     assert config["cap_add"] == ["NET_ADMIN"]
 
 
+def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():
+    """Image-free nodes get artifacts via the materializer, not Compose mounts.
+
+    A generated-artifact consumer on an image-free node has no Compose service to
+    bind into, so including it in the stateful override makes the effective-model
+    check flag a declared mount no service can carry. It must be excluded (#875).
+    """
+
+    from aptl.core.deployment._compose_stateful_model import stateful_override_payload
+    from aptl.core.deployment.realization import (
+        DeploymentGeneratedArtifactOutput,
+        DeploymentGeneratedArtifactRealization,
+        DeploymentImageRealization,
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+        DeploymentStatefulConsumer,
+    )
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    def _consumer(node: str):
+        return DeploymentStatefulConsumer(
+            target_address=f"provision.node.{node}",
+            node_name=node,
+            service_name=node,
+            mount_destination="/run/keys",
+            access_mode="read_only",
+            selected_outputs=("k",),
+        )
+
+    artifact = DeploymentGeneratedArtifactRealization(
+        address="provision.generated.k",
+        name="k",
+        generator="rendered_config",
+        lifecycle="regenerate_on_change",
+        provenance="techvault:flag-signing-profile/v2",
+        outputs=(
+            DeploymentGeneratedArtifactOutput(name="k", path="k", sensitivity="secret"),
+        ),
+        consumers=(_consumer("imagenode"), _consumer("freenode")),
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.imagenode", name="imagenode",
+                service_name="imagenode", container_name="aptl-imagenode",
+                networks=(),
+            ),
+            DeploymentNodeRealization(
+                address="provision.node.freenode", name="freenode",
+                service_name="freenode", container_name="aptl-freenode",
+                networks=(), runtime=RuntimeConfiguration(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.imagenode", service_name="imagenode",
+                source_name="x", source_version="1", image_ref="x:1",
+                mode="pull", policy_rule="allowed-source",
+            ),
+        ),
+        generated_artifacts=(artifact,),
+    )
+
+    services = stateful_override_payload(Path("/tmp"), "proj", spec)["services"]
+    assert "imagenode" in services  # image node keeps its Compose mount
+    assert "freenode" not in services  # image-free node does not
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 

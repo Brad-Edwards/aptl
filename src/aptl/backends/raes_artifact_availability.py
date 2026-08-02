@@ -42,10 +42,15 @@ import hashlib
 from pathlib import Path
 
 from aptl.backends.raes_artifact_mechanisms import (
+    SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    aptl_artifact_mechanisms,
     dynamic_composition_provenance_ref,
+    env_pack_copy_provenance_ref,
     exact_artifact_provenance_ref,
     is_dynamic_composition_requirement,
     materialization_provenance_ref,
+    route_is_env_pack_copy,
+    select_route_over_mechanisms,
 )
 from aptl.backends.raes_substrate import resolve_substrate
 
@@ -286,6 +291,11 @@ def _availability_entry(
         if specifications:
             provenance.append(materialization_provenance_ref())
     exact = _exact_digest_and_provenance(requirement, probe, allow_remote=allow_remote)
+    if exact is None:
+        # Content declared by an exact env-pack artifact is not obtainable from
+        # the deployment backend (it is not an OCI image); its availability is
+        # confirmed from the validated pack itself (ADR-051 content boundary).
+        exact = _env_pack_digest_and_provenance(requirement, scenario_root)
     if exact is not None:
         digests.append(exact[0])
         provenance.append(exact[1])
@@ -301,6 +311,46 @@ def _availability_entry(
         available_materialization_specification_digests=specifications,
         verified_locked_input_ids=verified_inputs,
     )
+
+
+def _env_pack_digest_and_provenance(
+    requirement: ArtifactRequirement,
+    scenario_root: Path | None,
+) -> tuple[str, str] | None:
+    """Return the ``(digest, provenance_ref)`` for a pack-resolved content artifact.
+
+    Availability of env-pack content is a fact about the pack, not the backend:
+    the artifact is obtainable exactly when its opaque id resolves to bytes whose
+    manifest digest equals the authored digest, through env-packs' own resolver
+    against the staged, validated pack. This confirms that (fail-closed on any
+    resolver error) rather than asking the Docker backend for an image it will
+    never have.
+    """
+
+    if (
+        requirement.explicitness is not ExplicitnessClass.EXACT
+        or scenario_root is None
+    ):
+        return None
+    exact = requirement.exact_artifact
+    if exact is None:
+        return None
+    route = select_route_over_mechanisms(
+        requirement,
+        aptl_artifact_mechanisms(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+    if route is None or not route_is_env_pack_copy(route):
+        return None
+    from raes_env_packs import PackDigestError, resolve_pack_artifact
+
+    try:
+        resolved = resolve_pack_artifact(str(scenario_root), exact.artifact_id)
+    except (PackDigestError, OSError, ValueError):
+        return None
+    if getattr(resolved.identity, "digest", None) != exact.digest:
+        return None
+    return exact.digest, env_pack_copy_provenance_ref()
 
 
 def _exact_digest_and_provenance(

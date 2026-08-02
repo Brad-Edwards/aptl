@@ -323,6 +323,27 @@ def dynamic_composition_capability() -> ArtifactMechanismCapability:
     )
 
 
+def route_is_env_pack_copy(route: "ArtifactSatisfactionRoute") -> bool:
+    """Whether a satisfaction route IS APTL's declared env-pack content-copy route.
+
+    Matches the full mechanism/profile/version/digest + acquisition + timing
+    tuple, so availability confirms pack content through the pack (not the Docker
+    backend) only for the exact route APTL advertises.
+    """
+
+    capability = env_pack_copy_capability()
+    supported = capability.supported_routes[0]
+    mechanism = capability.mechanism
+    return (
+        route.mechanism.mechanism == mechanism.mechanism
+        and route.mechanism.profile == mechanism.profile
+        and route.mechanism.version == mechanism.version
+        and route.mechanism.digest == mechanism.digest
+        and route.acquisition == supported.acquisition
+        and route.timing == supported.timing
+    )
+
+
 def route_is_dynamic_composition(route: "ArtifactSatisfactionRoute") -> bool:
     """Whether a satisfaction route IS APTL's declared dynamic-composition route.
 

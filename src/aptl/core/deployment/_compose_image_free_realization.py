@@ -117,13 +117,16 @@ def _realize_node_subset(
     nodes: tuple[object, ...],
     content: tuple[object, ...],
     scenario_root: Path,
+    extra_ops: dict[str, tuple[object, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
     Shared by the fully image-free path and the mixed-realization path
     (ADR-048); the only difference between them is which nodes/content are
     passed in. Lowers each content item to its placement op and dispatches
-    per node, verified by read-after-write.
+    per node, verified by read-after-write. ``extra_ops`` carries additional
+    per-node placement ops (a consumer's generated-artifact outputs, #875)
+    already keyed by node address.
     """
 
     from aptl.backends.raes_base_substrate import base_container_spec
@@ -192,6 +195,8 @@ def _realize_node_subset(
         else:
             continue
         content_by_node.setdefault(item.target_address, []).append(op)
+    for address, ops in (extra_ops or {}).items():
+        content_by_node.setdefault(address, []).extend(ops)
     return realize_nodes(
         nodes,
         backend,

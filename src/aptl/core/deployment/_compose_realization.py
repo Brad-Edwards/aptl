@@ -243,7 +243,76 @@ class ComposeRealizationMixin(
         content = tuple(
             item for item in realization.content if item.target_address in addresses
         )
-        return _realize_node_subset(self, nodes, content, scenario_root)
+        failure, extra_ops = self._image_free_generated_artifact_ops(
+            realization, addresses, scenario_root
+        )
+        if failure is not None:
+            return failure
+        return _realize_node_subset(self, nodes, content, scenario_root, extra_ops)
+
+    def _image_free_generated_artifact_ops(
+        self,
+        realization: DeploymentRealizationSpec,
+        addresses: frozenset[str],
+        scenario_root: Path,
+    ) -> tuple[LabResult | None, dict[str, tuple[object, ...]]]:
+        """Generate and lower each image-free consumer's generated-artifact outputs.
+
+        Compose nodes receive generated artifacts as bind mounts; an image-free
+        node has no Compose service to mount into, so its consumer's selected,
+        non-producer-private outputs are placed into the container as files
+        instead (issue #875). The artifact is generated once here (before the
+        node is materialized) so its outputs exist to place; the generators are
+        idempotent, so a later compose-side generation reuses the same material.
+        """
+
+        from pathlib import PurePosixPath
+
+        from aptl.backends.raes_materializer import PlaceFileOp
+        from aptl.core.deployment._compose_stateful_model import (
+            _consumer_output_names,
+            artifact_source_path,
+        )
+
+        ops_by_address: dict[str, list[object]] = {}
+        for artifact in realization.generated_artifacts:
+            consumers = [
+                consumer
+                for consumer in artifact.consumers
+                if consumer.target_address in addresses
+            ]
+            if not consumers:
+                continue
+            failure = self._realize_one_generated_artifact(artifact, scenario_root)
+            if failure is not None:
+                return failure, {}
+            source = artifact_source_path(scenario_root, artifact)
+            by_name = {output.name: output for output in artifact.outputs}
+            for consumer in consumers:
+                for name in _consumer_output_names(artifact, consumer):
+                    output = by_name[name]
+                    origin = source / output.path
+                    try:
+                        content = origin.read_text(encoding="utf-8")
+                    except OSError:
+                        return (
+                            LabResult(
+                                success=False,
+                                error=(
+                                    "Generated artifact output missing for image-free "
+                                    f"consumer {consumer.target_address}: {output.path}."
+                                ),
+                            ),
+                            {},
+                        )
+                    destination = str(
+                        PurePosixPath(consumer.mount_destination) / output.path
+                    )
+                    mode = "0600" if output.sensitivity == "secret" else "0644"
+                    ops_by_address.setdefault(consumer.target_address, []).append(
+                        PlaceFileOp(path=destination, content=content, mode=mode)
+                    )
+        return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
 
     def _realize_without_compose(
         self,
@@ -267,8 +336,14 @@ class ComposeRealizationMixin(
         boundary_result = self._realize_authority_boundaries(realization)
         if boundary_result is not None:
             return boundary_result
+        addresses = frozenset(node.address for node in realization.nodes)
+        failure, extra_ops = self._image_free_generated_artifact_ops(
+            realization, addresses, scenario_root
+        )
+        if failure is not None:
+            return failure
         node_result = _realize_node_subset(
-            self, realization.nodes, realization.content, scenario_root
+            self, realization.nodes, realization.content, scenario_root, extra_ops
         )
         return node_result if node_result is not None else LabResult(success=True)
 

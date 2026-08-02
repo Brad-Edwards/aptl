@@ -117,7 +117,7 @@ def _append_artifact_mounts(
     for artifact in realization.generated_artifacts:
         source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
-            if artifact.generator in ("certificate_bundle", "ssh_key_bundle"):
+            if _uses_per_output_mounts(artifact, consumer):
                 _append_selected_output_mounts(services, source, artifact, consumer)
             else:
                 _mounts(services, consumer.service_name).append(
@@ -128,6 +128,24 @@ def _append_artifact_mounts(
                         "read_only": True,
                     }
                 )
+
+
+def _uses_per_output_mounts(
+    artifact: DeploymentGeneratedArtifactRealization, consumer: object
+) -> bool:
+    """Whether a consumer must receive individual outputs, not the whole dir.
+
+    A whole-directory bind would expose every output, including any
+    ``producer_private`` one (the flag-signing seed), so per-output mounts are
+    required whenever the artifact keeps private material or the consumer
+    selected a subset. Certificate and SSH bundles always mount per output.
+    """
+
+    if artifact.generator in ("certificate_bundle", "ssh_key_bundle"):
+        return True
+    if getattr(consumer, "selected_outputs", ()):
+        return True
+    return any(output.disposition == "producer_private" for output in artifact.outputs)
 
 
 def _append_selected_output_mounts(

@@ -71,3 +71,32 @@ def test_flag_signing_seed_is_reused_on_a_second_run(tmp_path):
 def test_unsupported_profile_is_refused(tmp_path):
     error = realize_flag_signing_keys(_artifact(provenance="other:profile/v1"), tmp_path)
     assert error is not None and "Unsupported" in error
+
+
+def test_flag_signing_consumer_never_mounts_the_producer_private_seed():
+    """A flag-signing consumer gets per-output mounts, never a whole-dir bind.
+
+    A whole-directory bind would expose the producer-private signing seed to the
+    node; the seed must stay on the producer.
+    """
+
+    from aptl.core.deployment._compose_stateful_model import (
+        _consumer_output_names,
+        _uses_per_output_mounts,
+    )
+    from aptl.core.deployment.realization import DeploymentStatefulConsumer
+
+    artifact = _artifact()
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.victim",
+        node_name="victim",
+        service_name="victim",
+        mount_destination="/run/techvault/flag-signing",
+        access_mode="read_only",
+        selected_outputs=("victim-signing-key",),
+    )
+
+    assert _uses_per_output_mounts(artifact, consumer) is True
+    received = _consumer_output_names(artifact, consumer)
+    assert received == ["victim-signing-key"]
+    assert "signing-seed" not in received

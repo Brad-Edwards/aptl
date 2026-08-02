@@ -126,23 +126,31 @@ class ComposeStatefulRealizationMixin:
 
         failure: LabResult | None = None
         for artifact in realization.generated_artifacts:
-            if artifact.generator == "certificate_bundle":
-                failure = self._realize_certificate_bundle(artifact, scenario_root)
-            elif artifact.generator == "rendered_config":
-                failure = self._realize_rendered_config(artifact, scenario_root)
-            elif artifact.generator == "ssh_key_bundle":
-                failure = self._realize_ssh_key_bundle(artifact, scenario_root)
-            else:
-                failure = LabResult(
-                    success=False,
-                    error=(
-                        f"Generated artifact {artifact.address} has unsupported "
-                        f"generator {artifact.generator!r}."
-                    ),
-                )
+            failure = self._realize_one_generated_artifact(artifact, scenario_root)
             if failure is not None:
                 break
         return failure
+
+    def _realize_one_generated_artifact(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Materialize one generated artifact, dispatched by generator kind."""
+
+        if artifact.generator == "certificate_bundle":
+            return self._realize_certificate_bundle(artifact, scenario_root)
+        if artifact.generator == "rendered_config":
+            return self._realize_rendered_config(artifact, scenario_root)
+        if artifact.generator == "ssh_key_bundle":
+            return self._realize_ssh_key_bundle(artifact, scenario_root)
+        return LabResult(
+            success=False,
+            error=(
+                f"Generated artifact {artifact.address} has unsupported "
+                f"generator {artifact.generator!r}."
+            ),
+        )
 
     def _realize_ssh_key_bundle(
         self,

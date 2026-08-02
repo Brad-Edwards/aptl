@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
+    SSH_KEY_BUNDLE_ROOT_RELPATH,
     OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
     REALIZATION_LIFECYCLE_LABEL,
@@ -77,12 +78,33 @@ def artifact_source_path(
     the two coincide (issue #874).
     """
 
-    relative = (
-        CERTIFICATE_ROOT_RELPATH
-        if artifact.generator == "certificate_bundle"
-        else RENDERED_MANAGER_RELPATH
-    )
-    return scenario_root.resolve() / relative
+    if artifact.generator == "certificate_bundle":
+        return scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH
+    if artifact.generator == "ssh_key_bundle":
+        return scenario_root.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / artifact.name
+    return scenario_root.resolve() / RENDERED_MANAGER_RELPATH
+
+
+def _consumer_output_names(
+    artifact: DeploymentGeneratedArtifactRealization, consumer: object
+) -> list[str]:
+    """Return the output names one consumer receives, excluding producer-private.
+
+    A consumer that names ``selected_outputs`` gets exactly those; one that names
+    none gets every ``consumer_selected`` output (the pre-selection default a
+    certificate consumer relied on). A ``producer_private`` output is never
+    included, so it is never bind-mounted into any consumer.
+    """
+
+    selected = tuple(getattr(consumer, "selected_outputs", ()) or ())
+    by_name = {output.name: output for output in artifact.outputs}
+    if selected:
+        names = [name for name in selected if name in by_name]
+    else:
+        names = [output.name for output in artifact.outputs]
+    return [
+        name for name in names if by_name[name].disposition != "producer_private"
+    ]
 
 
 def _append_artifact_mounts(
@@ -95,8 +117,8 @@ def _append_artifact_mounts(
     for artifact in realization.generated_artifacts:
         source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
-            if artifact.generator == "certificate_bundle":
-                _append_certificate_mounts(services, source, artifact, consumer)
+            if artifact.generator in ("certificate_bundle", "ssh_key_bundle"):
+                _append_selected_output_mounts(services, source, artifact, consumer)
             else:
                 _mounts(services, consumer.service_name).append(
                     {
@@ -108,17 +130,24 @@ def _append_artifact_mounts(
                 )
 
 
-def _append_certificate_mounts(
+def _append_selected_output_mounts(
     services: dict[str, dict[str, object]],
     source: Path,
     artifact: DeploymentGeneratedArtifactRealization,
     consumer: object,
 ) -> None:
-    """Append declared certificate outputs for one typed consumer."""
+    """Append only a consumer's selected, non-producer-private outputs.
+
+    Each output is a separate read-only file bind, so a consumer physically
+    receives only the material it selected — a producer-private key never appears
+    in any consumer's mount set.
+    """
 
     service_name = str(getattr(consumer, "service_name"))
     destination = str(getattr(consumer, "mount_destination"))
-    for output in artifact.outputs:
+    by_name = {output.name: output for output in artifact.outputs}
+    for name in _consumer_output_names(artifact, consumer):
+        output = by_name[name]
         _mounts(services, service_name).append(
             {
                 "type": "bind",
@@ -301,14 +330,18 @@ def _expected_certificate_mounts(
     for artifact in realization.generated_artifacts:
         if artifact.generator != "certificate_bundle":
             continue
+        by_name = {output.name: output for output in artifact.outputs}
         for consumer in artifact.consumers:
             expected.setdefault(consumer.service_name, set()).update(
                 {
                     (
-                        str(Path(cert_root) / output.path),
-                        str(PurePosixPath(consumer.mount_destination) / output.path),
+                        str(Path(cert_root) / by_name[name].path),
+                        str(
+                            PurePosixPath(consumer.mount_destination)
+                            / by_name[name].path
+                        ),
                     )
-                    for output in artifact.outputs
+                    for name in _consumer_output_names(artifact, consumer)
                 }
             )
     return expected

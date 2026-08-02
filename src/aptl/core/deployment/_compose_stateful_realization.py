@@ -33,6 +33,7 @@ from aptl.core.deployment._compose_stateful_model import (
     stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_services import StatefulDumper
+from aptl.core.deployment._ssh_key_bundle import realize_ssh_key_bundle
 from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
@@ -121,14 +122,53 @@ class ComposeStatefulRealizationMixin:
 
         failure: LabResult | None = None
         for artifact in realization.generated_artifacts:
-            failure = (
-                self._realize_certificate_bundle(artifact, scenario_root)
-                if artifact.generator == "certificate_bundle"
-                else self._realize_rendered_config(artifact, scenario_root)
-            )
+            if artifact.generator == "certificate_bundle":
+                failure = self._realize_certificate_bundle(artifact, scenario_root)
+            elif artifact.generator == "rendered_config":
+                failure = self._realize_rendered_config(artifact, scenario_root)
+            elif artifact.generator == "ssh_key_bundle":
+                failure = self._realize_ssh_key_bundle(artifact, scenario_root)
+            else:
+                failure = LabResult(
+                    success=False,
+                    error=(
+                        f"Generated artifact {artifact.address} has unsupported "
+                        f"generator {artifact.generator!r}."
+                    ),
+                )
             if failure is not None:
                 break
         return failure
+
+    def _realize_ssh_key_bundle(
+        self,
+        artifact: DeploymentGeneratedArtifactRealization,
+        scenario_root: Path,
+    ) -> LabResult | None:
+        """Generate the declared SSH key bundle under its owner-only staging root.
+
+        The staging root is the artifact's canonical source path; only a
+        consumer's selected, non-producer-private outputs are bind-mounted from
+        it, so the generated control-plane key never reaches a node.
+        """
+
+        staging_root = artifact_source_path(scenario_root, artifact)
+        try:
+            _canonical_generated_path(
+                scenario_root, staging_root.relative_to(scenario_root.resolve())
+            )
+        except ValueError:
+            return LabResult(
+                success=False,
+                error="SSH key bundle path failed containment validation.",
+            )
+        error = realize_ssh_key_bundle(artifact, staging_root)
+        if error is not None:
+            return LabResult(
+                success=False,
+                error=f"SSH key bundle generation failed: {error}",
+            )
+        return None
 
     def _verify_stateful_authenticated_readiness(
         self,

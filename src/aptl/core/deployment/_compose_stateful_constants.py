@@ -4,6 +4,11 @@ from pathlib import Path
 
 STATEFUL_OVERRIDE_RELPATH = Path(".aptl/realization/compose.stateful.yml")
 CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
+# Owner-only staging root for ssh_key_bundle generated artifacts (gitignored,
+# under the scenario bundle root). Each declared output lands at its relative
+# path here; only a consumer's selected_outputs are bind-mounted from it, and a
+# producer_private output is never mounted.
+SSH_KEY_BUNDLE_ROOT_RELPATH = Path(".aptl/realization/ssh-key-bundles")
 # The one accepted certificate-bundle producer. Adding a second needs more than
 # a root path: the bundle validator in ``_stateful_certificates`` assumes this
 # producer's shape throughout — the root is named ``root-ca.pem``, a manager root

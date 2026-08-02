@@ -9,6 +9,11 @@ CERTIFICATE_ROOT_RELPATH = Path("config/wazuh_indexer_ssl_certs")
 # path here; only a consumer's selected_outputs are bind-mounted from it, and a
 # producer_private output is never mounted.
 SSH_KEY_BUNDLE_ROOT_RELPATH = Path(".aptl/realization/ssh-key-bundles")
+# Owner-only staging root for flag-signing rendered_config artifacts. Keyed by
+# artifact name so a flag-signing bundle never collides with the wazuh manager
+# rendered config (both are the ``rendered_config`` generator). Same mount
+# discipline as the ssh bundle: only a consumer's selected key is bound.
+FLAG_SIGNING_ROOT_RELPATH = Path(".aptl/realization/flag-signing")
 # The one accepted certificate-bundle producer. Adding a second needs more than
 # a root path: the bundle validator in ``_stateful_certificates`` assumes this
 # producer's shape throughout — the root is named ``root-ca.pem``, a manager root

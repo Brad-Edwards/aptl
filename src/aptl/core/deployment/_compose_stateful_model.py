@@ -6,8 +6,10 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import RENDERED_MANAGER_RELPATH
+from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_ROOT_RELPATH,
+    FLAG_SIGNING_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
     OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
@@ -82,6 +84,8 @@ def artifact_source_path(
         return scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH
     if artifact.generator == "ssh_key_bundle":
         return scenario_root.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / artifact.name
+    if artifact.provenance == FLAG_SIGNING_PROFILE_V2:
+        return scenario_root.resolve() / FLAG_SIGNING_ROOT_RELPATH / artifact.name
     return scenario_root.resolve() / RENDERED_MANAGER_RELPATH
 
 

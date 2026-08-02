@@ -135,7 +135,7 @@ class ComposeRealizationMixin(
             # names excluded from `compose up` so neither side starts, skips,
             # or double-realizes the other's nodes.
             node_result = self._materialize_image_free_nodes(
-                realization, image_free_addresses, scenario_root
+                realization, image_free_addresses, scenario_root, self._project_dir
             )
             if node_result is not None:
                 return node_result
@@ -158,13 +158,18 @@ class ComposeRealizationMixin(
 
         profiles = list(realization.profiles)
         compose_files: tuple[Path, ...] | None = None
+        # Generated realization output (base compose, overrides, generated
+        # artifacts) is written under the writable engine checkout, never under
+        # the pristine staged pack whose digest-validated inventory must not gain
+        # generated files (issue #875). In-tree the two roots coincide.
+        realization_root = self._project_dir
 
         def _images() -> LabResult | None:
             """Pull/build declared images and capture the resulting compose override."""
 
             nonlocal compose_files
             result, compose_files = self._prepare_realization_images(
-                realization, scenario_root
+                realization, scenario_root, realization_root
             )
             return result
 
@@ -181,7 +186,7 @@ class ComposeRealizationMixin(
 
             nonlocal compose_files
             compose_files = self._realization_compose_files(
-                compose_files, realization, scenario_root
+                compose_files, realization, scenario_root, realization_root
             )
             return self._validate_realization_compose_model(
                 profiles, compose_files, realization, scenario_root
@@ -205,7 +210,7 @@ class ComposeRealizationMixin(
         steps = (
             lambda: self._validate_stateful_realization(realization),
             lambda: self._validate_stateful_compose_capability(realization),
-            lambda: self._realize_stateful_prerequisites(realization, scenario_root),
+            lambda: self._realize_stateful_prerequisites(realization, realization_root),
             _images,
             lambda: self._realize_published_ports(realization),
             _networks,
@@ -224,15 +229,19 @@ class ComposeRealizationMixin(
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
         scenario_root: Path,
+        realization_root: Path | None = None,
     ) -> LabResult | None:
         """Materialize just the runtime:-declared node subset (ADR-048).
 
         Shares the same node materialization and content-op lowering as the
         fully image-free path, scoped to ``addresses`` so mixed-realization
         content meant for a Compose-managed node is never misinterpreted as
-        an image-free placement.
+        an image-free placement. Content is read from ``scenario_root`` (the
+        pack); generated artifacts are written under ``realization_root`` (the
+        writable engine checkout) — issue #875.
         """
 
+        realization_root = realization_root or scenario_root
         network_failures = self._ensure_realization_networks(realization)
         if network_failures:
             return LabResult(success=False, error="; ".join(network_failures[:5]))
@@ -244,7 +253,7 @@ class ComposeRealizationMixin(
             item for item in realization.content if item.target_address in addresses
         )
         failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, scenario_root
+            realization, addresses, realization_root
         )
         if failure is not None:
             return failure
@@ -254,16 +263,17 @@ class ComposeRealizationMixin(
         self,
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
-        scenario_root: Path,
+        realization_root: Path,
     ) -> tuple[LabResult | None, dict[str, tuple[object, ...]]]:
         """Generate and lower each image-free consumer's generated-artifact outputs.
 
         Compose nodes receive generated artifacts as bind mounts; an image-free
         node has no Compose service to mount into, so its consumer's selected,
         non-producer-private outputs are placed into the container as files
-        instead (issue #875). The artifact is generated once here (before the
-        node is materialized) so its outputs exist to place; the generators are
-        idempotent, so a later compose-side generation reuses the same material.
+        instead (issue #875). The artifact is generated under ``realization_root``
+        (never the pristine pack) once here, before the node is materialized, so
+        its outputs exist to place; the generators are idempotent, so a later
+        compose-side generation reuses the same material.
         """
 
         from pathlib import PurePosixPath
@@ -283,10 +293,10 @@ class ComposeRealizationMixin(
             ]
             if not consumers:
                 continue
-            failure = self._realize_one_generated_artifact(artifact, scenario_root)
+            failure = self._realize_one_generated_artifact(artifact, realization_root)
             if failure is not None:
                 return failure, {}
-            source = artifact_source_path(scenario_root, artifact)
+            source = artifact_source_path(realization_root, artifact)
             by_name = {output.name: output for output in artifact.outputs}
             for consumer in consumers:
                 for name in _consumer_output_names(artifact, consumer):
@@ -338,7 +348,7 @@ class ComposeRealizationMixin(
             return boundary_result
         addresses = frozenset(node.address for node in realization.nodes)
         failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, scenario_root
+            realization, addresses, self._project_dir
         )
         if failure is not None:
             return failure
@@ -369,24 +379,30 @@ class ComposeRealizationMixin(
         compose_files: tuple[Path, ...] | None,
         realization: DeploymentRealizationSpec,
         scenario_root: Path,
+        realization_root: Path | None = None,
     ) -> tuple[Path, ...] | None:
         """Add generated realization overrides to the Compose file set.
 
-        The base ``docker-compose.yml`` and the generated overrides are
-        scenario-declared inputs, anchored to ``scenario_root`` (the bundle
-        root), not the engine checkout.
+        A static in-tree ``docker-compose.yml`` is read from ``scenario_root``;
+        the generated base and overrides are written under ``realization_root``
+        (the writable engine checkout), never the pristine pack (issue #875).
+        ``realization_root`` defaults to ``scenario_root`` so in-tree, where the
+        two coincide, is unchanged.
         """
 
-        port_override = write_port_override(scenario_root, realization)
+        realization_root = realization_root or scenario_root
+        port_override = write_port_override(realization_root, realization)
         stateful_override = self._write_stateful_realization_override(
-            realization, scenario_root
+            realization, realization_root
         )
         overrides = tuple(
             path for path in (port_override, stateful_override) if path is not None
         )
         if not overrides:
             return compose_files
-        base_files = compose_files or (base_compose_file(realization, scenario_root),)
+        base_files = compose_files or (
+            base_compose_file(realization, scenario_root, realization_root),
+        )
         return (*base_files, *overrides)
 
     def _realize_content(

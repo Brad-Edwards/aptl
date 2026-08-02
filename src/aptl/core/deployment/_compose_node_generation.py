@@ -238,20 +238,25 @@ def write_realization_compose(
 
 
 def base_compose_file(
-    spec: DeploymentRealizationSpec, scenario_root: Path
+    spec: DeploymentRealizationSpec,
+    content_root: Path,
+    realization_root: Path | None = None,
 ) -> Path:
     """Return the base Compose file for a realization.
 
-    An in-tree scenario ships a hand-authored ``docker-compose.yml`` at the
-    scenario root and it is used as-is. An env-pack ships none, so the base is
-    generated from the realization (issue #875). Generation is behaviour-neutral
-    in-tree: the static file always wins when present.
+    An in-tree scenario ships a hand-authored ``docker-compose.yml`` at its
+    ``content_root`` and it is used as-is. An env-pack ships none, so the base is
+    generated from the realization (issue #875) and written under
+    ``realization_root`` — the writable engine checkout — never under the
+    pristine pack, whose digest-validated inventory must not gain generated
+    files. ``realization_root`` defaults to ``content_root`` so in-tree
+    (where the two coincide) is behaviour-neutral.
     """
 
-    static = scenario_root / "docker-compose.yml"
+    static = content_root / "docker-compose.yml"
     if static.exists():
         return static
-    return write_realization_compose(spec, scenario_root)
+    return write_realization_compose(spec, realization_root or content_root)
 
 
 class _Attachment:

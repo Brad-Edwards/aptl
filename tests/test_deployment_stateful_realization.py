@@ -476,7 +476,7 @@ def test_missing_declared_certificate_output_blocks_before_image_side_effect(
     monkeypatch.setattr(
         backend,
         "_prepare_realization_images",
-        lambda realization, scenario_root: pytest.fail(
+        lambda realization, scenario_root, realization_root=None: pytest.fail(
             "image side effect ran before artifact validation"
         ),
     )
@@ -593,7 +593,7 @@ def test_generated_compose_model_is_validated_before_up(
     monkeypatch.setattr(
         backend,
         "_prepare_realization_images",
-        lambda spec, scenario_root: (None, None),
+        lambda spec, scenario_root, realization_root=None: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
     monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)
@@ -656,7 +656,7 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
     monkeypatch.setattr(
         backend,
         "_prepare_realization_images",
-        lambda spec, scenario_root: (None, None),
+        lambda spec, scenario_root, realization_root=None: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
     monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)
@@ -687,7 +687,7 @@ def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(
         backend,
         "_prepare_realization_images",
-        lambda spec, scenario_root: (None, None),
+        lambda spec, scenario_root, realization_root=None: (None, None),
     )
     monkeypatch.setattr(backend, "_ensure_realization_networks", lambda spec: [])
     monkeypatch.setattr(backend, "_realize_content", lambda spec, scenario_root: None)

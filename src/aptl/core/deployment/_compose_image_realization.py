@@ -45,13 +45,18 @@ class ComposeRealizationImageMixin:
         self,
         realization: DeploymentRealizationSpec,
         scenario_root: Path,
+        realization_root: Path | None = None,
     ) -> tuple[LabResult | None, tuple[Path, ...] | None]:
         """Run typed pull/build image operations and write a compose override.
 
-        The base Compose file and the generated image override are
-        scenario-declared inputs anchored to ``scenario_root`` (issue #874).
+        A static in-tree ``docker-compose.yml`` is read from ``scenario_root``;
+        the generated base and image override are written under
+        ``realization_root`` (the writable engine checkout), never the pristine
+        pack (issue #875). ``realization_root`` defaults to ``scenario_root`` so
+        an in-tree scenario, where the two coincide, is unchanged.
         """
 
+        realization_root = realization_root or scenario_root
         if not realization.images:
             return None, None
         for image in realization.images:
@@ -62,8 +67,8 @@ class ComposeRealizationImageMixin:
             )
             if result is not None:
                 return result, None
-        override_path = self._write_image_override(realization.images, scenario_root)
-        base = base_compose_file(realization, scenario_root)
+        override_path = self._write_image_override(realization.images, realization_root)
+        base = base_compose_file(realization, scenario_root, realization_root)
         return None, (base, override_path)
 
     def artifact_available(

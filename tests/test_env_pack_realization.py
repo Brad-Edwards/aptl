@@ -100,6 +100,48 @@ def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
             assert dependency in defined
 
 
+def test_generated_base_compose_is_written_under_realization_root_not_the_pack(tmp_path):
+    """Generated output must never land inside the pristine staged pack.
+
+    Writing it under the pack root pollutes the pack's digest-validated inventory
+    so resolve_pack_artifact then rejects the pack (issue #875). The generated
+    base is written under the writable realization root instead.
+    """
+
+    from aptl.core.deployment._compose_node_generation import (
+        GENERATED_COMPOSE_RELPATH,
+        base_compose_file,
+    )
+    from aptl.core.deployment.realization import DeploymentRealizationSpec
+
+    content_root = tmp_path / "staged-pack"  # pristine, no docker-compose.yml
+    content_root.mkdir()
+    realization_root = tmp_path / "engine"
+    realization_root.mkdir()
+    spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
+
+    path = base_compose_file(spec, content_root, realization_root)
+
+    assert path == realization_root / GENERATED_COMPOSE_RELPATH
+    assert path.is_file()
+    # Nothing generated under the pristine pack root.
+    assert not (content_root / ".aptl").exists()
+
+
+def test_in_tree_base_compose_uses_the_static_file(tmp_path):
+    """When a docker-compose.yml is present (in-tree), it is used as-is."""
+
+    from aptl.core.deployment._compose_node_generation import base_compose_file
+    from aptl.core.deployment.realization import DeploymentRealizationSpec
+
+    root = tmp_path / "engine"
+    root.mkdir()
+    (root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    spec = DeploymentRealizationSpec(profiles=(), nodes=(), networks=())
+
+    assert base_compose_file(spec, root, root) == root / "docker-compose.yml"
+
+
 def test_operational_config_translates_declared_runtime_fields():
     """command / environment / capabilities are translated from the SDL as-is."""
 

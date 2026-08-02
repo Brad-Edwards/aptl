@@ -93,3 +93,7 @@ def test_realize_node_derives_profile_from_grouping_with_empty_index():
     )
 
     assert "soc" in node.profiles
+    # The node's own identity becomes its Compose service + container name, so
+    # image resolution no longer fails with unmapped-service (issue #875).
+    assert node.backend_services == ("thehive",)
+    assert node.container_name == "aptl-thehive"

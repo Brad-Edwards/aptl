@@ -362,6 +362,11 @@ def _realize_node(
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
+    if not backend_services:
+        # Env-pack path (issue #875): with no static compose to index, the
+        # node's own identity is its Compose service name. In-tree scenarios
+        # ship a compose file, so this fallback never fires there.
+        backend_services = frozenset({node_name})
     service_name = _single_or_none(tuple(sorted(backend_services)))
     node_os = _node_os(node_spec)
     node_os_version = _node_os_version(node_spec)
@@ -374,6 +379,11 @@ def _realize_node(
             os_version=node_os_version,
             runtime=node_runtime,
         ).container_name
+    if container_name is None:
+        # Env-pack image node (issue #875): no static compose service to read a
+        # container name from, so use APTL's ``aptl-<node>`` convention (the
+        # same one base_container_spec applies to image-free nodes).
+        container_name = f"aptl-{node_name}"
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),

@@ -18,10 +18,20 @@ authorizing exactly the public halves that make its declared access path work.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
-from aptl.core.ssh import _run_ssh_keygen, _set_public_key_mode, _with_trailing_newline
+from aptl.core.ssh import (
+    _KEY_NAME,
+    _harden_private_key,
+    _run_ssh_keygen,
+    _set_public_key_mode,
+    _with_trailing_newline,
+    ensure_ssh_keys,
+)
+
+_OPERATOR_OUTPUT = "operator-private-key"
 
 SSH_ACCESS_PROFILE_V1 = "techvault:ssh-access-profile/v1"
 
@@ -57,13 +67,17 @@ _KEYGEN_COMMENT = {
 
 
 def realize_ssh_key_bundle(
-    artifact: DeploymentGeneratedArtifactRealization, staging_root: Path
+    artifact: DeploymentGeneratedArtifactRealization,
+    staging_root: Path,
+    *,
+    host_ssh_dir: Path | None = None,
 ) -> str | None:
     """Generate the SSH key bundle under ``staging_root``; return an error or None.
 
     ``staging_root`` is the artifact's owner-only source directory (under the
-    scenario bundle root). Every declared output must exist afterwards or the run
-    fails closed.
+    scenario bundle root). ``host_ssh_dir`` is where APTL's persistent
+    control-plane key lives (``~/.ssh`` by default; injectable for tests). Every
+    declared output must exist afterwards or the run fails closed.
     """
 
     if artifact.provenance != SSH_ACCESS_PROFILE_V1:
@@ -72,7 +86,11 @@ def realize_ssh_key_bundle(
         )
     by_name = {output.name: output for output in artifact.outputs}
     staging_root.mkdir(parents=True, exist_ok=True)
+    host_ssh_dir = host_ssh_dir or (Path.home() / ".ssh")
 
+    error = _stage_operator_key(by_name, staging_root, host_ssh_dir)
+    if error is not None:
+        return error
     error = _generate_keypairs(by_name, staging_root)
     if error is not None:
         return error
@@ -90,10 +108,40 @@ def realize_ssh_key_bundle(
     return None
 
 
+def _stage_operator_key(by_name, staging_root: Path, host_ssh_dir: Path) -> str | None:
+    """Reuse APTL's persistent control-plane key as the producer-private output.
+
+    The operator/control-plane key is owned by ``aptl.core.ssh`` and used by the
+    control plane (terminal, MCP, red-team SSH) at ``~/.ssh``; it is *not* freshly
+    minted per scenario. ``ensure_ssh_keys`` generates it once (cross-platform:
+    ``ssh-keygen`` + NTFS/POSIX hardening) and reuses it thereafter. A
+    producer-private copy is placed at the declared output path so the output is
+    present and its public can be planted into the authorized-keys files — it is
+    never mounted into a node.
+    """
+
+    output = by_name.get(_OPERATOR_OUTPUT)
+    if output is None:
+        return None
+    result = ensure_ssh_keys(keys_dir=staging_root / "operator", host_ssh_dir=host_ssh_dir)
+    if not result.success:
+        return result.error or "control-plane key generation failed"
+    dest = staging_root / output.path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(host_ssh_dir / _KEY_NAME, dest)
+    shutil.copyfile(host_ssh_dir / f"{_KEY_NAME}.pub", Path(f"{dest}.pub"))
+    harden_error = _harden_private_key(dest)
+    if harden_error:
+        return harden_error
+    return _set_public_key_mode(Path(f"{dest}.pub")) or None
+
+
 def _generate_keypairs(by_name, staging_root: Path) -> str | None:
-    """Generate each declared keypair's private half (and its ``.pub``)."""
+    """Generate each declared scenario keypair's private half (and its ``.pub``)."""
 
     for name in _KEYPAIR_OUTPUTS:
+        if name == _OPERATOR_OUTPUT:
+            continue  # reused control-plane key, staged separately
         output = by_name.get(name)
         if output is None:
             continue
@@ -104,6 +152,11 @@ def _generate_keypairs(by_name, staging_root: Path) -> str | None:
         )
         if error:
             return error
+        # Restrict the private key to the current host user. Cross-platform:
+        # NTFS ACLs on Windows, POSIX mode elsewhere (aptl.core.ssh).
+        harden_error = _harden_private_key(private_key)
+        if harden_error:
+            return harden_error
     return None
 
 

@@ -1084,6 +1084,20 @@ def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
     return LabResult(success=False, error=f"{what} failed: {result.error}")
 
 
+def _scenario_is_env_pack(ctx: _LabStartContext) -> bool:
+    """Whether this run realizes a scenario from an env-pack (#875).
+
+    When it does, standup material the pack declares as generated artifacts
+    (SSH pivot keys, authorized-key projections, the SOC CA) is produced during
+    realization from the pack, not by the host-side lab-start steps.
+    """
+
+    return (
+        ctx.config is not None
+        and ctx.config.scenario.source == "env-pack"
+    )
+
+
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     """Ensure the host-side lab SSH key exists."""
     log.info("Step 3: Generating SSH keys...")
@@ -1096,6 +1110,14 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     if failure is not None:
         return failure
     ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
+
+    if _scenario_is_env_pack(ctx):
+        # The scenario's ssh_key_bundle generated artifact owns the pivot keys
+        # and authorized-key projections (generated + placed during realization);
+        # only the control-plane key above is host-side. Generating the legacy
+        # pivot/authorized-keys here would write dead files the pack never mounts.
+        log.info("Step 3: pivot/authorized keys come from the scenario pack; skipping host generation.")
+        return None
 
     # SEC #417: the kali pivot key is scenario content (kali -> targets),
     # separate from the control-plane key above. Generated into a gitignored
@@ -1395,6 +1417,11 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6c: Generating SOC stack lab CA + service certs...")
     # runtime guard above; this assert is for the type-checker.
     assert ctx.config is not None
+    if _scenario_is_env_pack(ctx):
+        # The pack declares the SOC CA + service certs as certificate_bundle
+        # generated artifacts, produced and validated during realization.
+        log.debug("SOC certs come from the scenario pack; skipping host generation.")
+        return None
     result: LabResult | None = None
     if not ctx.config.containers.soc:
         log.debug("SOC profile not enabled, skipping SOC CA generation")

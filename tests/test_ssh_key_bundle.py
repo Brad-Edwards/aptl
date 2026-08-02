@@ -79,7 +79,8 @@ def _artifact():
 def test_provider_generates_every_declared_output_as_real_material(tmp_path):
     artifact = _artifact()
     staging = tmp_path / "ssh"
-    assert realize_ssh_key_bundle(artifact, staging) is None
+    ssh_home = tmp_path / "ssh_home"  # never touch the real ~/.ssh in tests
+    assert realize_ssh_key_bundle(artifact, staging, host_ssh_dir=ssh_home) is None
     for output in artifact.outputs:
         assert (staging / output.path).is_file()
     # Private keys are real OpenSSH keys with owner-only permissions.
@@ -91,6 +92,10 @@ def test_provider_generates_every_declared_output_as_real_material(tmp_path):
     pivot_pub = (staging / "labadmin/.ssh/id_ed25519.pub").read_text().strip()
     target_authorized = (staging / "labadmin/.ssh/authorized_keys").read_text()
     assert pivot_pub in target_authorized
+    # The producer-private control-plane key is the reused ~/.ssh operator key,
+    # and its public is authorized on the targets.
+    operator_pub = (ssh_home / "aptl_lab_key.pub").read_text().strip()
+    assert operator_pub in target_authorized
 
 
 def test_unsupported_profile_fails_closed(tmp_path):
@@ -98,7 +103,10 @@ def test_unsupported_profile_fails_closed(tmp_path):
     bad = DeploymentGeneratedArtifactRealization(
         **{**artifact.__dict__, "provenance": "some-other-profile/v9"}
     )
-    assert realize_ssh_key_bundle(bad, tmp_path / "ssh") is not None
+    assert (
+        realize_ssh_key_bundle(bad, tmp_path / "ssh", host_ssh_dir=tmp_path / "h")
+        is not None
+    )
 
 
 def test_producer_private_key_is_never_mounted_into_a_consumer(tmp_path):

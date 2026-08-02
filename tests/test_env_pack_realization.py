@@ -68,6 +68,38 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     assert {"soc", "enterprise", "wazuh"} <= set(realization.profiles)
 
 
+def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
+    """The generated base compose renders image nodes, networks, and safe deps."""
+
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+
+    realization = _realize_pack(tmp_path)
+    spec = realization.deployment_spec(sorted(realization.profiles))
+    document = render_realization_compose(spec)
+
+    services = document["services"]
+    # Image-backed SOC nodes are emitted as services...
+    assert "misp" in services
+    assert services["misp"]["image"]
+    assert services["misp"]["container_name"] == "aptl-misp"
+    assert services["misp"]["profiles"] == ["soc"]
+    # ...image-free base-OS nodes are realized by the generic materializer, not here.
+    assert "webapp" not in services
+    assert "workstation" not in services
+
+    # Networks use the aptl-<stem> keys and carry ipam from the SDL.
+    networks = document["networks"]
+    assert "aptl-security" in networks
+    assert networks["aptl-security"]["ipam"]["config"][0]["subnet"] == "172.20.0.0/24"
+    assert networks["aptl-dmz"]["internal"] is True
+
+    # depends_on never references a service the document does not define.
+    defined = set(services)
+    for service in services.values():
+        for dependency in service.get("depends_on", []):
+            assert dependency in defined
+
+
 def test_component_build_nodes_resolve_their_image_from_the_engine_tree(tmp_path):
     """`materialization-specification` nodes (ad, wazuh-sidecar) resolve an image.
 

@@ -18,6 +18,7 @@ from aptl.core.deployment._compose_content_realization import (
 from aptl.core.deployment._compose_boundary_realization import (
     ComposeBoundaryRealizationMixin,
 )
+from aptl.core.deployment._compose_node_generation import base_compose_file
 from aptl.core.deployment._compose_port_realization import (
     published_port_conflicts,
     write_port_override,
@@ -310,7 +311,7 @@ class ComposeRealizationMixin(
         )
         if not overrides:
             return compose_files
-        base_files = compose_files or (scenario_root / "docker-compose.yml",)
+        base_files = compose_files or (base_compose_file(realization, scenario_root),)
         return (*base_files, *overrides)
 
     def _realize_content(

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from aptl.core.deployment._compose_node_generation import base_compose_file
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentRealizationSpec,
@@ -62,7 +63,8 @@ class ComposeRealizationImageMixin:
             if result is not None:
                 return result, None
         override_path = self._write_image_override(realization.images, scenario_root)
-        return None, (scenario_root / "docker-compose.yml", override_path)
+        base = base_compose_file(realization, scenario_root)
+        return None, (base, override_path)
 
     def artifact_available(
         self, image_ref: str, *, allow_remote: bool | None = None

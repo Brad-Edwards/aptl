@@ -11,6 +11,7 @@ from aptl.core.deployment._compose_stateful_constants import (
     WAZUH_INDEXER_SERVICE,
     WAZUH_MANAGER_SERVICE,
 )
+from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 
 
@@ -103,7 +104,13 @@ def _artifact_errors(realization: DeploymentRealizationSpec) -> list[str]:
             errors.append(
                 f"Generated artifact {artifact.address} has unsupported provenance."
             )
-        if artifact.generator == "rendered_config" and len(artifact.outputs) != 1:
+        if (
+            artifact.generator == "rendered_config"
+            and artifact.provenance != FLAG_SIGNING_PROFILE_V2
+            and len(artifact.outputs) != 1
+        ):
+            # The wazuh manager config renders a single file; the flag-signing
+            # profile legitimately renders a seed plus one key per node (#875).
             errors.append(
                 f"Rendered config {artifact.address} must declare exactly one output."
             )

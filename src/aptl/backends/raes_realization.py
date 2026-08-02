@@ -21,6 +21,7 @@ from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.backends._component_profiles import component_profiles
 from aptl.backends.raes_base_substrate import base_container_spec
 from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
@@ -343,10 +344,17 @@ def _realize_node(
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
     backend_services = profile_index.service_names_for_aliases(aliases)
+    node_name = resource.address.rsplit(".", 1)[-1]
+    # APTL operator packaging (issue #895): the component -> start-profile
+    # grouping. For an in-tree scenario this equals the profiles the static
+    # compose index already carries, so the union is idempotent. For an
+    # env-pack there is no compose file to index, so this is the only source
+    # of a node's profile membership (issue #875).
     profiles = (
         profile_hints
         | profile_index.profiles_for_aliases(aliases)
         | profile_index.profiles_for_services(set(backend_services))
+        | component_profiles(node_name)
     )
     if not profiles and _is_raes_conformance_probe_node(resource, payload):
         backend_services = _conformance_probe_services(profile_index, config)

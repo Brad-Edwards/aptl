@@ -41,6 +41,11 @@ REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"
 REALIZATION_PROJECT_LABEL = "org.aptl.realization.project"
 MIN_OVERRIDE_COMPOSE_VERSION = (2, 24, 4)
 
+# Canonical Wazuh appliance DNS names. These are the names the appliance's own
+# bundled config (filebeat output host, dashboard API URL) and certificates are
+# authored against, independent of the realized Compose service key; the graph
+# derives which realized node is the manager/indexer from declared semantics
+# (see ``_wazuh_identity``) and publishes these as network aliases when the
+# service key differs.
 WAZUH_INDEXER_SERVICE = "wazuh.indexer"
 WAZUH_MANAGER_SERVICE = "wazuh.manager"
-OWNED_WAZUH_SERVICES = frozenset({WAZUH_INDEXER_SERVICE, WAZUH_MANAGER_SERVICE})

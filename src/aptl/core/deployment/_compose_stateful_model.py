@@ -14,7 +14,6 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
     WAZUH_MANAGER_CONFIG_PROFILE,
-    OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
     REALIZATION_LIFECYCLE_LABEL,
     REALIZATION_PROJECT_LABEL,
@@ -22,6 +21,7 @@ from aptl.core.deployment._compose_stateful_constants import (
 from aptl.core.deployment._compose_stateful_services import (
     wazuh_service_definitions,
 )
+from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
@@ -67,7 +67,11 @@ def effective_stateful_model_errors(
     expected = stateful_override_payload(scenario_root, project_name, realization)
     expected_services = expected["services"]
     assert isinstance(expected_services, Mapping)
-    errors = _effective_service_errors(expected_services, observed_services)
+    errors = _effective_service_errors(
+        expected_services,
+        observed_services,
+        wazuh_cluster_identity(realization).services,
+    )
     errors.extend(
         _certificate_exposure_errors(
             observed_services,
@@ -280,6 +284,7 @@ def _mounts(
 def _effective_service_errors(
     expected_services: Mapping[object, object],
     observed_services: Mapping[object, object],
+    owned_wazuh_services: frozenset[str],
 ) -> list[str]:
     """Return model mismatches for generated and mount-only services."""
 
@@ -291,7 +296,7 @@ def _effective_service_errors(
             Mapping,
         ):
             errors.append(f"Effective stateful service {service_name} is absent.")
-        elif service_name in OWNED_WAZUH_SERVICES:
+        elif service_name in owned_wazuh_services:
             errors.extend(
                 _owned_service_model_errors(
                     str(service_name),

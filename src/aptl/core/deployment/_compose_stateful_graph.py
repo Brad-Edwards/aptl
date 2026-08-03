@@ -7,13 +7,11 @@ from typing import Any
 
 from aptl.core.deployment._compose_stateful_constants import (
     CERTIFICATE_PROVENANCE,
-    OWNED_WAZUH_SERVICES,
     SOC_CERT_PROFILE,
     WAZUH_CERT_PROFILES,
-    WAZUH_INDEXER_SERVICE,
-    WAZUH_MANAGER_SERVICE,
 )
 from aptl.core.deployment._flag_signing_keys import FLAG_SIGNING_PROFILE_V2
+from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 
 # Certificate-bundle provenances APTL can realize: the in-tree provenance file
 # and the env-pack producer profiles (issue #875).
@@ -45,6 +43,7 @@ def stateful_realization_errors(
 def owned_wazuh_services(realization: DeploymentRealizationSpec) -> set[str]:
     """Return Wazuh services whose stateful resources are graph-owned."""
 
+    services = wazuh_cluster_identity(realization).services
     return {
         consumer.service_name
         for resource in (
@@ -52,7 +51,7 @@ def owned_wazuh_services(realization: DeploymentRealizationSpec) -> set[str]:
             *realization.persistent_volumes,
         )
         for consumer in resource.consumers
-        if consumer.service_name in OWNED_WAZUH_SERVICES
+        if consumer.service_name in services
     }
 
 
@@ -88,11 +87,12 @@ def _wazuh_definition_errors(realization: DeploymentRealizationSpec) -> list[str
         f"Stateful service {service} has no trusted image realization."
         for service in sorted(owned - images)
     )
-    manager = nodes.get(WAZUH_MANAGER_SERVICE)
-    indexer = nodes.get(WAZUH_INDEXER_SERVICE)
+    identity = wazuh_cluster_identity(realization)
+    manager = nodes.get(identity.manager_service)
+    indexer = nodes.get(identity.indexer_service)
     dependency_missing = (
         manager is not None
-        and WAZUH_MANAGER_SERVICE in owned
+        and identity.manager_service in owned
         and (indexer is None or indexer.address not in manager.ordering_dependencies)
     )
     if dependency_missing:

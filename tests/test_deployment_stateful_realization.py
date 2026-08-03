@@ -317,6 +317,7 @@ def test_stateful_manager_carries_custom_detection_content(
     from aptl.core.deployment._compose_stateful_services import (
         _manager_definition,
     )
+    from aptl.core.deployment._wazuh_identity import WazuhClusterIdentity
 
     node = DeploymentNodeRealization(
         address="provision.node.wazuh-manager",
@@ -325,8 +326,11 @@ def test_stateful_manager_carries_custom_detection_content(
         container_name="aptl-wazuh-manager",
         networks=(),
     )
+    identity = WazuhClusterIdentity(
+        manager_service="wazuh.manager", indexer_service="wazuh.indexer"
+    )
     definition = _manager_definition(
-        tmp_path, node, "wazuh/wazuh-manager:4.12.0", (node,)
+        tmp_path, node, "wazuh/wazuh-manager:4.12.0", (node,), identity
     )
     mounts = definition["volumes"]
     seen = {

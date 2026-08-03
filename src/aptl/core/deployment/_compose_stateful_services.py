@@ -7,10 +7,9 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_realization_networks import _compose_network_key
-from aptl.core.deployment._compose_stateful_constants import (
-    OWNED_WAZUH_SERVICES,
-    WAZUH_INDEXER_SERVICE,
-    WAZUH_MANAGER_SERVICE,
+from aptl.core.deployment._wazuh_identity import (
+    WazuhClusterIdentity,
+    wazuh_cluster_identity,
 )
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
@@ -38,24 +37,27 @@ def wazuh_service_definitions(
 ) -> dict[str, dict[str, object]]:
     """Build complete manager/indexer definitions from the admitted DTO graph."""
 
-    owned = _stateful_consumers(realization) & OWNED_WAZUH_SERVICES
+    identity = wazuh_cluster_identity(realization)
+    owned = _stateful_consumers(realization) & identity.services
     if not owned:
         return {}
     nodes = {node.service_name: node for node in realization.nodes if node.service_name}
     images = {image.service_name: image.image_ref for image in realization.images}
     services: dict[str, dict[str, object]] = {}
-    if WAZUH_INDEXER_SERVICE in owned:
-        services[WAZUH_INDEXER_SERVICE] = _indexer_definition(
+    if identity.indexer_service in owned:
+        services[identity.indexer_service] = _indexer_definition(
             scenario_root,
-            nodes[WAZUH_INDEXER_SERVICE],
-            images[WAZUH_INDEXER_SERVICE],
+            nodes[identity.indexer_service],
+            images[identity.indexer_service],
+            identity,
         )
-    if WAZUH_MANAGER_SERVICE in owned:
-        services[WAZUH_MANAGER_SERVICE] = _manager_definition(
+    if identity.manager_service in owned:
+        services[identity.manager_service] = _manager_definition(
             scenario_root,
-            nodes[WAZUH_MANAGER_SERVICE],
-            images[WAZUH_MANAGER_SERVICE],
+            nodes[identity.manager_service],
+            images[identity.manager_service],
             realization.nodes,
+            identity,
         )
     return services
 
@@ -77,6 +79,7 @@ def _indexer_definition(
     scenario_root: Path,
     node: DeploymentNodeRealization,
     image_ref: str,
+    identity: WazuhClusterIdentity,
 ) -> OverrideMapping:
     """Return the complete graph-owned Wazuh Indexer service definition."""
 
@@ -84,7 +87,7 @@ def _indexer_definition(
         {
             "profiles": ["wazuh"],
             "container_name": node.container_name,
-            "hostname": WAZUH_INDEXER_SERVICE,
+            "hostname": identity.indexer_dns,
             "image": image_ref,
             "restart": "always",
             "ports": ["127.0.0.1:${APTL_HP_WAZUH_INDEXER_9200:-9200}:9200"],
@@ -116,7 +119,7 @@ def _indexer_definition(
                 "start_period": "180s",
             },
             "deploy": {"resources": {"limits": {"memory": "2g"}}},
-            "networks": _service_networks(node),
+            "networks": _service_networks(node, identity),
         }
     )
 
@@ -126,6 +129,7 @@ def _manager_definition(
     node: DeploymentNodeRealization,
     image_ref: str,
     nodes: tuple[DeploymentNodeRealization, ...],
+    identity: WazuhClusterIdentity,
 ) -> OverrideMapping:
     """Return the complete graph-owned Wazuh Manager service definition."""
 
@@ -133,12 +137,12 @@ def _manager_definition(
         {
             "profiles": ["wazuh"],
             "container_name": node.container_name,
-            "hostname": WAZUH_MANAGER_SERVICE,
+            "hostname": identity.manager_dns,
             "image": image_ref,
             "restart": "always",
             "ports": _manager_ports(node),
             "environment": [
-                f"INDEXER_URL=https://{WAZUH_INDEXER_SERVICE}:9200",
+                f"INDEXER_URL=https://{identity.indexer_dns}:9200",
                 "INDEXER_USERNAME=${INDEXER_USERNAME}",
                 "INDEXER_PASSWORD=${INDEXER_PASSWORD}",
                 "FILEBEAT_SSL_VERIFICATION_MODE=full",
@@ -230,7 +234,7 @@ def _manager_definition(
             },
             "deploy": {"resources": {"limits": {"memory": "1g"}}},
             "depends_on": _service_dependencies(node, nodes),
-            "networks": _service_networks(node),
+            "networks": _service_networks(node, identity),
         }
     )
 
@@ -257,17 +261,40 @@ def _bind(scenario_root: Path, source: str, target: str) -> dict[str, object]:
     }
 
 
-def _service_networks(node: DeploymentNodeRealization) -> dict[str, object]:
-    """Return Compose network attachments for one admitted node."""
+def _service_networks(
+    node: DeploymentNodeRealization,
+    identity: WazuhClusterIdentity,
+) -> dict[str, object]:
+    """Return Compose network attachments for one admitted node.
 
+    When the realized service key differs from the canonical appliance DNS name
+    (an env-pack realizes ``wazuh-indexer``, not ``wazuh.indexer``), publish the
+    canonical name as a network alias so the appliance's own config and
+    certificates — authored against ``wazuh.indexer``/``wazuh.manager`` — resolve
+    to this container (issue #875).
+    """
+
+    dns = identity.dns_for(node.service_name)
+    alias = [dns] if dns and dns != node.service_name else []
     return {
-        _compose_network_key(attachment.network): (
-            {"ipv4_address": attachment.ipv4_address}
-            if attachment.ipv4_address
-            else None
+        _compose_network_key(attachment.network): _attachment_options(
+            attachment.ipv4_address, alias
         )
         for attachment in node.network_attachments
     }
+
+
+def _attachment_options(
+    ipv4_address: str | None, aliases: list[str]
+) -> dict[str, object] | None:
+    """Return one network attachment's options, or ``None`` when it carries none."""
+
+    options: dict[str, object] = {}
+    if ipv4_address:
+        options["ipv4_address"] = ipv4_address
+    if aliases:
+        options["aliases"] = aliases
+    return options or None
 
 
 def _service_dependencies(

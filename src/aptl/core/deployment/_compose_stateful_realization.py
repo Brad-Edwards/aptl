@@ -23,9 +23,11 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
     STATEFUL_OVERRIDE_RELPATH,
-    WAZUH_INDEXER_SERVICE,
     WAZUH_MANAGER_CONFIG_PROFILE,
-    WAZUH_MANAGER_SERVICE,
+)
+from aptl.core.deployment._wazuh_identity import (
+    WazuhClusterIdentity,
+    wazuh_cluster_identity,
 )
 from aptl.core.deployment._compose_stateful_graph import (
     compose_version,
@@ -193,11 +195,12 @@ class ComposeStatefulRealizationMixin:
     ) -> LabResult | None:
         """Authenticate to realized Wazuh APIs after container health settles."""
 
+        identity = wazuh_cluster_identity(realization)
         services = {
             consumer.service_name
             for artifact in realization.generated_artifacts
             for consumer in artifact.consumers
-            if consumer.service_name in {WAZUH_INDEXER_SERVICE, WAZUH_MANAGER_SERVICE}
+            if consumer.service_name in identity.services
         }
         results: dict[str, bool] = {}
         env: EnvVars | None = None
@@ -211,7 +214,9 @@ class ComposeStatefulRealizationMixin:
             )
         elif services and env is not None:
             nodes = {node.service_name: node for node in realization.nodes}
-            results = self._authenticated_readiness_results(services, nodes, env)
+            results = self._authenticated_readiness_results(
+                services, nodes, env, identity
+            )
         self._stateful_authenticated_readiness = results
         if failure is None and results and not all(results.values()):
             failure = LabResult(
@@ -225,12 +230,13 @@ class ComposeStatefulRealizationMixin:
         services: set[str],
         nodes: dict[str | None, DeploymentNodeRealization],
         env: EnvVars,
+        identity: WazuhClusterIdentity,
     ) -> dict[str, bool]:
         """Return authenticated readiness for each graph-owned Wazuh service."""
 
         checks = (
-            (WAZUH_INDEXER_SERVICE, 9200),
-            (WAZUH_MANAGER_SERVICE, 55000),
+            (identity.indexer_service, 9200),
+            (identity.manager_service, 55000),
         )
         return {
             service: self._authenticated_service_ready(
@@ -238,6 +244,7 @@ class ComposeStatefulRealizationMixin:
                 port,
                 nodes.get(service),
                 env,
+                identity,
             )
             for service, port in checks
             if service in services
@@ -249,6 +256,7 @@ class ComposeStatefulRealizationMixin:
         container_port: int,
         node: DeploymentNodeRealization | None,
         env: EnvVars,
+        identity: WazuhClusterIdentity,
     ) -> bool:
         """Probe one graph-owned Wazuh API with the configured credentials."""
 
@@ -262,7 +270,7 @@ class ComposeStatefulRealizationMixin:
         ready = False
         if port is not None:
             url = f"https://localhost:{port}"
-            if service == WAZUH_INDEXER_SERVICE:
+            if service == identity.indexer_service:
                 ready = check_indexer_ready(
                     url,
                     env.indexer_username,

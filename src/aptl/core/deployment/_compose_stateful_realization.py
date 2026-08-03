@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 from aptl.core.certs import ensure_ssl_certs
-from aptl.core.soc_ca import ensure_soc_certs
+from aptl.core.soc_ca import derive_soc_service_certs, ensure_soc_certs
 from aptl.core.credentials import (
     RENDERED_MANAGER_RELPATH,
     _atomic_write_secure,
@@ -471,7 +471,13 @@ class ComposeStatefulRealizationMixin:
                 success=False,
                 error="SOC certificate path failed containment validation.",
             )
-        result = ensure_soc_certs(scenario_root)
+        # Derive the service certificate set from the SDL-declared bundle outputs
+        # rather than a hardcoded registry, so APTL never decides the range's SOC
+        # service identity (issue #875, SDL-authority class remediation).
+        services = derive_soc_service_certs(
+            tuple(output.path for output in artifact.outputs)
+        )
+        result = ensure_soc_certs(scenario_root, services=services)
         if not result.success:
             return LabResult(
                 success=False,

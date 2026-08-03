@@ -511,3 +511,50 @@ def _padding_for(cert: x509.Certificate):
     if isinstance(pub, rsa.RSAPublicKey):
         return padding.PKCS1v15()
     pytest.fail(f"Unexpected key type {type(pub)} — extend the test helper")
+
+
+class TestDeriveSocServiceCerts:
+    """Issue #875: derive the SOC cert set from declared bundle outputs."""
+
+    def test_services_and_keystore_flags_come_from_output_paths(self):
+        from aptl.core.soc_ca import derive_soc_service_certs
+
+        outputs = (
+            "lab-ca.pem",  # the CA, root-level -> not a per-service leaf
+            "misp/server.pem",
+            "thehive/server.pem",
+            "thehive/keystore.p12",
+            "thehive/keystore.p12.password",
+            "shuffle-frontend/server.pem",
+        )
+
+        services = {s.name: s for s in derive_soc_service_certs(outputs)}
+
+        assert set(services) == {"misp", "thehive", "shuffle-frontend"}
+        # keystore requirement derived from the declared .p12 output
+        assert services["thehive"].needs_keystore is True
+        assert services["misp"].needs_keystore is False
+        # SANs derive from the service's own name plus host loopback
+        assert services["misp"].sans == ("misp", "localhost", "127.0.0.1")
+        assert services["misp"].subject_cn == "aptl-misp"
+
+    def test_empty_outputs_yield_no_services(self):
+        from aptl.core.soc_ca import derive_soc_service_certs
+
+        assert derive_soc_service_certs(("lab-ca.pem",)) == ()
+
+    def test_derived_set_generates_only_those_services(self, tmp_path):
+        from aptl.core.soc_ca import (
+            LAB_CA_RELDIR,
+            derive_soc_service_certs,
+            ensure_soc_certs,
+        )
+
+        services = derive_soc_service_certs(("misp/server.pem",))
+        result = ensure_soc_certs(tmp_path, services=services)
+
+        assert result.success
+        certs = tmp_path / LAB_CA_RELDIR
+        assert (certs / "misp" / "server.pem").is_file()
+        # a service not in the derived set is not generated
+        assert not (certs / "thehive").exists()

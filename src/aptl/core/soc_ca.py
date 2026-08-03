@@ -65,6 +65,7 @@ __all__ = (
     "PathContainmentError",
     "SOC_SERVICE_REGISTRY",
     "ServiceCert",
+    "derive_soc_service_certs",
     "ensure_soc_certs",
 )
 
@@ -102,6 +103,13 @@ class ServiceCert:  # NOSONAR python:S5663 - Python 3 dataclass; no need for exp
     needs_keystore: bool = False
 
 
+# Legacy in-tree fallback ONLY. An env-pack realization derives its SOC service
+# certificate set from the declared certificate-bundle *outputs* (see
+# ``derive_soc_service_certs``) so APTL never decides which services exist or
+# what identities they carry — that is authored in the SDL. This table is kept
+# solely for the in-tree ``aptl lab start`` path that has no realization spec to
+# derive from; it is never the primary decision source (issue #875, SDL-authority
+# class remediation).
 SOC_SERVICE_REGISTRY: tuple[ServiceCert, ...] = (
     ServiceCert(
         name="misp",
@@ -128,6 +136,46 @@ SOC_SERVICE_REGISTRY: tuple[ServiceCert, ...] = (
 )
 
 
+def derive_soc_service_certs(
+    output_paths: tuple[str, ...],
+) -> tuple[ServiceCert, ...]:
+    """Derive the SOC service certificate set from declared bundle outputs.
+
+    The SDL authors *which* SOC services get certificates and *what* each needs
+    as the certificate-bundle artifact's declared outputs — e.g.
+    ``misp/server.pem``, ``thehive/keystore.p12``. APTL derives the request set
+    from those paths instead of a hardcoded service registry, so it never decides
+    the range's service identity (issue #875):
+
+    - each first path segment names a service (root-level outputs like the CA's
+      ``lab-ca.pem`` are not a service);
+    - a ``.p12`` output for a service means it needs a PKCS#12 keystore;
+    - SANs are the service's own DNS name plus host-loopback for local access.
+
+    The subject CN is the conventional ``aptl-<service>`` (TLS verifies SANs, not
+    CN). The per-service PKCS#12 requirement is derived here from the declared
+    outputs; a first-class cert-request/keystore affordance is tracked upstream.
+    """
+
+    from pathlib import PurePosixPath
+
+    files_by_service: dict[str, set[str]] = {}
+    for raw in output_paths:
+        parts = PurePosixPath(raw).parts
+        if len(parts) < 2:
+            continue  # root-level output (the CA) is not a per-service leaf
+        files_by_service.setdefault(parts[0], set()).add(parts[-1])
+    return tuple(
+        ServiceCert(
+            name=service,
+            subject_cn=f"aptl-{service}",
+            sans=(service, "localhost", "127.0.0.1"),
+            needs_keystore=any(name.endswith(".p12") for name in files),
+        )
+        for service, files in sorted(files_by_service.items())
+    )
+
+
 @dataclass
 class CertResult:  # NOSONAR python:S5663 - Python 3 dataclass; no need for explicit `object` base
     """Outcome of :func:`ensure_soc_certs`.
@@ -148,8 +196,17 @@ class CertResult:  # NOSONAR python:S5663 - Python 3 dataclass; no need for expl
 # ---------------------------------------------------------------------------
 
 
-def ensure_soc_certs(project_dir: Path) -> CertResult:
+def ensure_soc_certs(
+    project_dir: Path,
+    services: tuple[ServiceCert, ...] = SOC_SERVICE_REGISTRY,
+) -> CertResult:
     """Generate the lab CA + service certificates if any are missing.
+
+    ``services`` is the set of per-service certificate requests to issue. An
+    env-pack realization passes the set derived from the SDL's declared bundle
+    outputs (:func:`derive_soc_service_certs`); the in-tree ``aptl lab start``
+    path, which has no realization spec, falls back to
+    :data:`SOC_SERVICE_REGISTRY` (issue #875).
 
     Returns a :class:`CertResult` with ``generated=False`` when every
     required artifact is already on disk; otherwise generates the missing
@@ -171,7 +228,7 @@ def ensure_soc_certs(project_dir: Path) -> CertResult:
         return _fail_containment(project_dir / LAB_CA_RELDIR, exc)
 
     if _all_artifacts_present_and_consistent(
-        output_dir, _CA_CERT_NAME, _CA_KEY_NAME, SOC_SERVICE_REGISTRY
+        output_dir, _CA_CERT_NAME, _CA_KEY_NAME, services
     ):
         log.info(
             "SOC stack lab CA already present and consistent at %s",
@@ -180,7 +237,7 @@ def ensure_soc_certs(project_dir: Path) -> CertResult:
         return CertResult(success=True, generated=False, certs_dir=output_dir)
 
     log.info("Generating SOC stack lab CA + service certificates at %s", output_dir)
-    return _generate_with_error_envelope(output_dir)
+    return _generate_with_error_envelope(output_dir, services)
 
 
 def _fail_containment(certs_dir: Path, exc: PathContainmentError) -> CertResult:
@@ -199,7 +256,9 @@ def _fail_containment(certs_dir: Path, exc: PathContainmentError) -> CertResult:
     )
 
 
-def _generate_with_error_envelope(output_dir: Path) -> CertResult:
+def _generate_with_error_envelope(
+    output_dir: Path, services: tuple[ServiceCert, ...]
+) -> CertResult:
     """Wrap :func:`_generate_all` in the ADR-029 error-envelope policy.
 
     The cryptography stack raises a heterogeneous tree of exception
@@ -215,7 +274,7 @@ def _generate_with_error_envelope(output_dir: Path) -> CertResult:
     phase + exception class only.
     """
     try:
-        _generate_all(output_dir)
+        _generate_all(output_dir, services)
     except PathContainmentError as exc:
         # Containment violation per-service subdir; the message itself
         # is safe (it names the rejected path, not key material).
@@ -269,7 +328,9 @@ def _classify_failure_layer(exc: BaseException) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _generate_all(output_dir: Path) -> None:
+def _generate_all(
+    output_dir: Path, services: tuple[ServiceCert, ...]
+) -> None:
     """Generate any missing CA + service certificates under *output_dir*.
 
     Permission contract (ADR-029 § Secret at rest):
@@ -296,7 +357,7 @@ def _generate_all(output_dir: Path) -> None:
 
     ca_key, ca_cert = _ensure_ca_pair(output_dir)
 
-    for svc in SOC_SERVICE_REGISTRY:
+    for svc in services:
         _ensure_service_pair(output_dir, svc, ca_key, ca_cert)
 
 

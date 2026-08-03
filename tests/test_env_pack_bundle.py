@@ -104,17 +104,17 @@ def test_scenario_selection_resolves_the_env_pack_when_configured(tmp_path: Path
     assert override.source_kind is ScenarioSourceKind.PROJECT_TREE
 
 
-def test_concurrent_staging_of_one_root_never_reads_a_half_copied_pack(
+def test_concurrent_staging_of_one_root_each_gets_a_valid_isolated_tree(
     tmp_path: Path,
 ) -> None:
-    """Concurrent staging to a shared root must not corrupt the staged tree.
+    """Concurrent staging to one root must give every caller a valid tree.
 
     Several suites stage the default pack under one shared root; under -n auto
-    two workers would rmtree + copytree + validate the same tree at once and one
-    would read a half-copied pack ("associated artifact manifest failed RAES
-    byte binding"). The per-identity lock plus same-source reuse serializes the
-    stage-or-reuse decision, so every concurrent caller gets a valid bundle
-    (issue #875).
+    two workers staging the same tree at once would otherwise rmtree/copytree
+    over each other and one would read a half-copied pack ("associated artifact
+    manifest failed RAES byte binding"). Per-invocation isolation gives each
+    caller its own fresh directory, so all concurrent stages succeed and none
+    share a tree another is copying (issue #875).
     """
 
     from concurrent.futures import ThreadPoolExecutor
@@ -127,10 +127,13 @@ def test_concurrent_staging_of_one_root_never_reads_a_half_copied_pack(
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = [f.result() for f in [pool.submit(_stage) for _ in range(16)]]
 
-    # Every concurrent stage returned the same valid staged SDL; none raised
-    # EnvPackError on a half-copied tree (a raise would surface as f.result()).
-    assert {p for p in results} == {(staging / "techvault" / "sdl" / "techvault.sdl.yaml")}
-    assert all(p.is_file() for p in results)
+    # Every concurrent stage returned a valid staged SDL (a raise on a
+    # half-copied tree would surface through f.result()), and each is its own
+    # isolated tree under the shared root.
+    assert len(results) == 16
+    assert len({p for p in results}) == 16
+    assert all(p.is_file() and p.name == "techvault.sdl.yaml" for p in results)
+    assert all(staging in p.parents for p in results)
 
 
 def test_a_changed_source_pack_is_restaged_not_reused(tmp_path: Path) -> None:

@@ -25,19 +25,15 @@ instead, and every consumer already asks the right question.
 from __future__ import annotations
 
 import importlib.resources as _resources
-import json
+import os
 import shutil
-from contextlib import contextmanager
+import time
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
-
-try:  # POSIX advisory locking; absent on Windows, where dev is single-process.
-    import fcntl as _fcntl
-except ImportError:  # pragma: no cover - exercised only on non-POSIX platforms
-    _fcntl = None
 
 _ENV_PACK_PACKAGE = "raes_env_packs"
 
@@ -169,52 +165,36 @@ def env_pack_bundle(
         return _stage_and_validate(Path(located), staging_root, identity)
 
 
-@contextmanager
-def _staging_lock(staging_root: Path, identity: str):
-    """Serialize concurrent staging of one identity under a shared root.
+_STAGING_SWEEP_AGE_SECONDS = 3600
 
-    Two concurrent invocations that share a staging root -- pytest-xdist workers
-    exercising the gate, or two ``aptl`` runs on one project -- would otherwise
-    rmtree + copytree + validate the *same* staged tree at once, and one would
-    read a half-copied pack ("associated artifact manifest failed RAES byte
-    binding"). An exclusive ``flock`` on a per-identity sentinel serializes the
-    whole stage-or-reuse decision. The sentinel is a zero-byte lock file, never
-    staged content, and never removed (unlinking a held lock file is itself a
-    race); it is created under the staging root the caller already owns.
+
+def _sweep_stale_stagings(staging_root: Path, identity: str) -> None:
+    """Best-effort removal of this identity's stale per-invocation staged trees.
+
+    Per-invocation staging (below) never reuses or deletes a tree another caller
+    might be reading, but that means finished invocations leave their tree
+    behind. Sweep siblings older than an hour -- long past any realization that
+    still needs its staged content -- so the staging root does not grow without
+    bound. A tree a live peer is still writing or reading is younger than the
+    threshold and is left alone; a concurrent sweeper losing the race to remove
+    one is expected and ignored.
     """
 
-    staging_root.mkdir(parents=True, exist_ok=True)
-    if _fcntl is None:
-        # No POSIX advisory lock (Windows): dev there is single-process, so the
-        # concurrent-staging race this guards against does not arise. The
-        # same-source reuse below still applies.
-        yield
-        return
-    lock_path = staging_root / f".{identity}.stage.lock"
-    with open(lock_path, "w", encoding="utf-8") as handle:
-        _fcntl.flock(handle, _fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            _fcntl.flock(handle, _fcntl.LOCK_UN)
-
-
-def _staging_set_digest(pack_root: Path) -> str | None:
-    """Return a pack's associated-artifacts set digest, or ``None`` if unreadable.
-
-    The set digest changes whenever any pack member changes, so it is the cheap
-    identity that distinguishes "the same pack, already staged" (safe to reuse)
-    from "a different pack release" (must re-stage). Any read/parse failure
-    yields ``None``, which forces a fresh stage rather than an unsafe reuse.
-    """
-
-    manifest = pack_root / "associated-artifacts.json"
+    prefix = f"{identity}."
     try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    digest = data.get("set_digest") if isinstance(data, dict) else None
-    return digest if isinstance(digest, str) and digest else None
+        entries = list(staging_root.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.name.startswith(prefix) or not entry.is_dir():
+            continue
+        try:
+            age = time.time() - entry.stat().st_mtime
+        except OSError:
+            continue
+        if age < _STAGING_SWEEP_AGE_SECONDS:
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
 
 
 def _stage_and_validate(
@@ -223,30 +203,27 @@ def _stage_and_validate(
     if not source_pack.is_dir():
         raise EnvPackError(f"env-pack source not found for {identity!r}: {source_pack}")
 
-    staged = staging_root / identity
-    with _staging_lock(staging_root, identity):
-        # Reuse an already-staged copy of the SAME source, matched by the pack's
-        # own associated-artifacts set digest, instead of rmtree + copytree on
-        # every call. Under the lock this makes concurrent staging safe: a second
-        # invocation of the same pack reuses the tree rather than deleting one a
-        # peer is about to read, while a changed source (a new pack release) is
-        # detected by a differing set digest and still re-staged from scratch.
-        source_digest = _staging_set_digest(source_pack)
-        staged_digest = _staging_set_digest(staged) if staged.is_dir() else None
-        if not (
-            staged.is_dir()
-            and source_digest is not None
-            and staged_digest == source_digest
-        ):
-            if staged.exists():
-                shutil.rmtree(staged)
-            # copytree copies file *contents* (not hardlinks), so every staged
-            # member is a singly-linked regular file.
-            shutil.copytree(source_pack, staged)
-        # Validate every time (read-only, so safe to run on a reused tree): the
-        # gate is what guarantees the staged bytes are the ones a later
-        # ``resolve_pack_artifact`` will byte-open.
-        _validate_staged_pack(staged, identity)
+    staging_root.mkdir(parents=True, exist_ok=True)
+    _sweep_stale_stagings(staging_root, identity)
+    # Each invocation stages into its own fresh directory. Two concurrent
+    # invocations (pytest-xdist workers exercising the gate, or two aptl runs on
+    # one project) therefore never share a tree, so none rmtrees or reads a tree
+    # a peer is copying, and no tree is ever reused after another test polluted
+    # it (e.g. __pycache__ written when a pack .py file is imported), which the
+    # env-packs exact-inventory gate would reject. A stable shared path with a
+    # lock cannot give both properties at once; isolation gives both (issue #875).
+    #
+    # The per-invocation token lands on the PARENT directory; the staged pack
+    # itself keeps the identity as its directory name, because env-packs'
+    # validate_pack checks the pack directory name against the pack's declared
+    # identity.
+    token = f"{identity}.{os.getpid()}-{uuid.uuid4().hex[:12]}"
+    staged = staging_root / token / identity
+    # copytree copies file *contents* (not hardlinks), so every staged member is
+    # a singly-linked regular file, and the tree is fresh, so its inventory is
+    # exactly the pack's.
+    shutil.copytree(source_pack, staged)
+    _validate_staged_pack(staged, identity)
 
     sdl_path = staged / "sdl" / f"{identity}.sdl.yaml"
     if not sdl_path.is_file():

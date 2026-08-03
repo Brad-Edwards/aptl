@@ -128,10 +128,13 @@ class BaseContainerSpec:
 def _container_name(node_address: str) -> str:
     """Derive the project-scoped container name from a node's address.
 
-    Never product-specific: the leaf of the address is the node's local name.
+    Never product-specific: the leaf of the address is the node's local name. A
+    node whose own name already carries the ``aptl-`` prefix is not doubled
+    (issue #875).
     """
 
-    return "aptl-" + node_address.rsplit(".", 1)[-1]
+    tail = node_address.rsplit(".", 1)[-1]
+    return tail if tail.startswith("aptl-") else f"aptl-{tail}"
 
 
 def base_container_spec(

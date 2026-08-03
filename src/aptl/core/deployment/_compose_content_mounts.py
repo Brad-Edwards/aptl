@@ -39,6 +39,10 @@ def image_node_content_override(
     image-free targets are delivered by the generic materializer elsewhere.
     """
 
+    # Bind sources must be absolute: Docker resolves a relative source against
+    # the Compose project directory (the staged pack), where the generated file
+    # does not exist, and would create the target as an empty directory (#875).
+    realization_root = realization_root.resolve()
     imaged = {image.address for image in realization.images}
     service_by_address = {
         node.address: node.service_name

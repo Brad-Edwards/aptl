@@ -296,9 +296,11 @@ def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(
     mount = mounts[0]
     assert mount["target"] == "/etc/tempo/tempo.yaml"
     assert mount["read_only"] is True
-    # Resolved under the engine root, not the pristine pack.
+    # Resolved under the engine root, not the pristine pack, and absolute so
+    # Docker never resolves it against the Compose project directory.
     source = mount["source"]
-    assert str(realization_root) in source
+    assert Path(source).is_absolute()
+    assert str(realization_root.resolve()) in source
     assert str(scenario_root) not in source
     assert (realization_root / ".aptl/realization/content/tempo-config/tempo.yaml").read_text()
 

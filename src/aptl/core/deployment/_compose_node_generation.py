@@ -84,9 +84,9 @@ def _render_service(
     networks = _service_networks(node)
     if networks:
         service["networks"] = networks
-    ports = _service_ports(node)
-    if ports:
-        service["ports"] = ports
+    # Published host ports are owned by the dedicated port override
+    # (write_port_override); declaring them here too would publish each host
+    # port twice and fail with "address already in use" (issue #875).
     depends = _service_dependencies(node, service_names)
     if depends:
         service["depends_on"] = depends
@@ -167,23 +167,6 @@ def _service_networks(node: DeploymentNodeRealization) -> dict:
             options["ipv4_address"] = address
         networks[key] = options
     return networks
-
-
-def _service_ports(node: DeploymentNodeRealization) -> list[str]:
-    """Return loopback-bound published port mappings for a node."""
-
-    ports: list[str] = []
-    for binding in node.published_ports:
-        host_port = binding.host_port or binding.container_port
-        mapping = (
-            f"{binding.host_ip}:{host_port}:{binding.container_port}"
-            if binding.host_ip
-            else f"{host_port}:{binding.container_port}"
-        )
-        if (binding.protocol or "tcp") != "tcp":
-            mapping = f"{mapping}/{binding.protocol}"
-        ports.append(mapping)
-    return ports
 
 
 def _service_dependencies(

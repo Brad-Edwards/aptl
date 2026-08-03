@@ -13,6 +13,7 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
+    WAZUH_MANAGER_CONFIG_PROFILE,
     OWNED_WAZUH_SERVICES,
     REALIZATION_ADDRESS_LABEL,
     REALIZATION_LIFECYCLE_LABEL,
@@ -24,6 +25,13 @@ from aptl.core.deployment._compose_stateful_services import (
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
+)
+
+
+# Rendered-config provenances that bind as a single whole file (source file ->
+# target file), not per output: the wazuh manager config, in-tree and env-pack.
+_WHOLE_FILE_RENDERED_CONFIG = frozenset(
+    {"config/wazuh_cluster/wazuh_manager.conf", WAZUH_MANAGER_CONFIG_PROFILE}
 )
 
 
@@ -176,6 +184,12 @@ def _uses_per_output_mounts(
 
     if artifact.generator in ("certificate_bundle", "ssh_key_bundle"):
         return True
+    if getattr(artifact, "provenance", None) in _WHOLE_FILE_RENDERED_CONFIG:
+        # The wazuh manager config is a single rendered file whose mount target
+        # is a file path (``.../etc/ossec.conf``). It must be bound whole-file
+        # (source file -> target file); a per-output bind would append the
+        # output name and mount the file as a directory (issue #875).
+        return False
     if getattr(consumer, "selected_outputs", ()):
         return True
     return any(output.disposition == "producer_private" for output in artifact.outputs)

@@ -19,8 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libcap2-bin \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY writer.py /usr/local/bin/writer.py
+COPY containers/kali-capture/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY containers/kali-capture/writer.py /usr/local/bin/writer.py
 RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/writer.py
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

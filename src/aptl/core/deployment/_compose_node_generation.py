@@ -82,9 +82,18 @@ def _render_service(
     profiles = component_profiles(node.name)
     if profiles:
         service["profiles"] = sorted(profiles)
-    networks = _service_networks(node)
-    if networks:
-        service["networks"] = networks
+    netns_container = _network_namespace_container(node)
+    if netns_container:
+        # This node joins another node's network namespace (OBS-003: the
+        # kali-capture sidecar shares Kali's netns so the abstract capture
+        # control socket is mutually visible). Compose forbids a per-service
+        # ``networks`` map alongside ``network_mode``; the joined stack owns all
+        # addressing and published ports, so this node declares neither.
+        service["network_mode"] = f"container:{netns_container}"
+    else:
+        networks = _service_networks(node)
+        if networks:
+            service["networks"] = networks
     # Published host ports are owned by the dedicated port override
     # (write_port_override); declaring them here too would publish each host
     # port twice and fail with "address already in use" (issue #875).
@@ -215,6 +224,29 @@ def _service_networks(node: DeploymentNodeRealization) -> dict:
             options["ipv4_address"] = address
         networks[key] = options
     return networks
+
+
+def _network_namespace_container(node: DeploymentNodeRealization) -> str | None:
+    """Return the container whose netns this node joins, or ``None``.
+
+    A node declaring ``runtime.container.namespaces.network.target_node_ref``
+    (RAES ``RuntimeNetworkNamespace``) shares another node's network namespace.
+    The target is an image-free node the generic materializer starts before
+    Compose runs (ADR-048 ordering), so Compose references it by container name
+    via ``network_mode: container:<name>``. The name derivation matches the
+    image-free substrate's (``aptl-<ref>``, not doubling an existing prefix) so
+    both sides agree on the container identity (issue #875 / #906).
+    """
+
+    runtime = node.runtime
+    container = getattr(runtime, "container", None) if runtime is not None else None
+    namespaces = getattr(container, "namespaces", None) if container is not None else None
+    network = getattr(namespaces, "network", None) if namespaces is not None else None
+    ref = getattr(network, "target_node_ref", None) if network is not None else None
+    if not ref:
+        return None
+    tail = ref.rsplit(".", 1)[-1]
+    return tail if tail.startswith("aptl-") else f"aptl-{tail}"
 
 
 def _service_dependencies(

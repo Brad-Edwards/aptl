@@ -171,6 +171,58 @@ def test_operational_config_translates_declared_runtime_fields():
     assert config["cap_add"] == ["NET_ADMIN"]
 
 
+def test_network_namespace_share_renders_network_mode_and_suppresses_networks():
+    """A netns-joining sidecar (OBS-003) gets network_mode, not its own networks.
+
+    ``runtime.container.namespaces.network.target_node_ref`` declares that this
+    node shares another node's network namespace. Compose expresses that as
+    ``network_mode: container:<name>`` and forbids a per-service ``networks`` map
+    alongside it, so the sidecar declares neither networks nor published ports of
+    its own -- the joined stack owns addressing (issue #875 / #906).
+    """
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+    from aptl.core.deployment.realization import (
+        DeploymentImageRealization,
+        DeploymentNetworkAttachment,
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    runtime = RuntimeConfiguration.model_validate(
+        {"container": {"namespaces": {"network": {"target_node_ref": "kali"}}}}
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.kali-capture", name="kali-capture",
+                service_name="kali-capture", container_name="aptl-kali-capture",
+                networks=("redteam-net",),
+                network_attachments=(
+                    DeploymentNetworkAttachment(network="redteam-net"),
+                ),
+                runtime=runtime,
+            ),
+        ),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.kali-capture", service_name="kali-capture",
+                source_name="aptl-kali-capture", source_version="local",
+                image_ref="kali-capture:local", mode="build",
+                policy_rule="contained-component-build",
+            ),
+        ),
+        networks=(),
+    )
+
+    service = render_realization_compose(spec)["services"]["kali-capture"]
+    assert service["network_mode"] == "container:aptl-kali"
+    assert "networks" not in service
+
+
 def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():
     """Image-free nodes get artifacts via the materializer, not Compose mounts.
 

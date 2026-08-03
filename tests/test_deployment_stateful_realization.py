@@ -728,3 +728,96 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
         "wazuh.indexer": True,
         "wazuh.manager": True,
     }
+
+
+def test_authenticated_readiness_polls_until_credentials_are_accepted(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A transient 401 right after health-settle is retried, not fatal.
+
+    The indexer's security index (loaded from internal_users.yml) and the
+    manager API keep initializing after the healthcheck first passes, so the
+    probe must poll rather than fail on the first 401 (issue #875).
+    """
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    (tmp_path / ".env").write_text(
+        "INDEXER_USERNAME=indexer-user\n"
+        "INDEXER_PASSWORD=indexer-password\n"
+        "API_USERNAME=api-user\n"
+        "API_PASSWORD=api-password\n"
+    )
+    monkeypatch.setattr(
+        backend,
+        "container_inspect",
+        lambda name: {
+            "NetworkSettings": {
+                "Ports": {
+                    "9200/tcp": [{"HostPort": "19200"}],
+                    "55000/tcp": [{"HostPort": "55001"}],
+                }
+            }
+        },
+    )
+    # The indexer rejects credentials on the first two probes, then accepts.
+    indexer_attempts = {"n": 0}
+
+    def _indexer_ready(url, username, password):
+        indexer_attempts["n"] += 1
+        return indexer_attempts["n"] >= 3
+
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_stateful_realization.check_indexer_ready",
+        _indexer_ready,
+    )
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_stateful_realization.check_manager_api_ready",
+        lambda url, username, password: True,
+    )
+    slept: list[float] = []
+    monkeypatch.setattr(
+        "aptl.core.deployment._compose_stateful_realization.time.sleep",
+        slept.append,
+    )
+
+    spec = _spec()
+    manager_consumer = _consumer(
+        node="wazuh-manager",
+        service="wazuh.manager",
+        destination="/etc/ssl/wazuh",
+    )
+    spec = DeploymentRealizationSpec(
+        profiles=spec.profiles,
+        nodes=(
+            *spec.nodes,
+            DeploymentNodeRealization(
+                address="provision.node.wazuh-manager",
+                name="wazuh-manager",
+                service_name="wazuh.manager",
+                container_name="aptl-wazuh-manager",
+                networks=(),
+            ),
+        ),
+        networks=(),
+        generated_artifacts=(
+            DeploymentGeneratedArtifactRealization(
+                **{
+                    **spec.generated_artifacts[0].__dict__,
+                    "consumers": (
+                        *spec.generated_artifacts[0].consumers,
+                        manager_consumer,
+                    ),
+                }
+            ),
+        ),
+    )
+
+    result = backend._verify_stateful_authenticated_readiness(spec)
+
+    assert result is None
+    assert indexer_attempts["n"] == 3
+    assert len(slept) == 2  # two retries before the third probe succeeded
+    assert backend.authenticated_readiness == {
+        "wazuh.indexer": True,
+        "wazuh.manager": True,
+    }

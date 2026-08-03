@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import subprocess
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -63,6 +65,14 @@ from aptl.core.services import check_indexer_ready, check_manager_api_ready
 
 artifact_source_path = _artifact_source_path
 effective_stateful_model_errors = _effective_stateful_model_errors
+
+# Budget for authenticated Wazuh readiness after container health settles. The
+# indexer's security index and the manager API keep initializing past the point
+# the healthcheck first reports healthy, so this polls rather than probing once.
+# 300s is a generous margin over the observed few-minutes gap on a loaded host;
+# a genuinely bad credential still fails closed after the budget (issue #875).
+_AUTHENTICATED_READINESS_TIMEOUT = 300
+_AUTHENTICATED_READINESS_INTERVAL = 5
 
 
 class ComposeStatefulRealizationMixin:
@@ -231,24 +241,49 @@ class ComposeStatefulRealizationMixin:
         nodes: dict[str | None, DeploymentNodeRealization],
         env: EnvVars,
         identity: WazuhClusterIdentity,
+        *,
+        timeout: int = _AUTHENTICATED_READINESS_TIMEOUT,
+        interval: int = _AUTHENTICATED_READINESS_INTERVAL,
+        time_source: Callable[[], float] | None = None,
+        sleep: Callable[[float], None] | None = None,
     ) -> dict[str, bool]:
-        """Return authenticated readiness for each graph-owned Wazuh service."""
+        """Poll authenticated readiness for each Wazuh service until ready.
 
-        checks = (
-            (identity.indexer_service, 9200),
-            (identity.manager_service, 55000),
-        )
-        return {
-            service: self._authenticated_service_ready(
-                service,
-                port,
-                nodes.get(service),
-                env,
-                identity,
+        A container reports healthy once its port listens, but accepting
+        credentials lags that: the indexer's security index (loaded by
+        securityadmin from internal_users.yml) and the manager API finish
+        initializing seconds-to-minutes after the healthcheck first passes. A
+        single probe right after health-settle races that window and sees a
+        transient 401. Poll on a generous budget so a genuinely misconfigured
+        credential still fails closed, just after the budget rather than before
+        it (issue #875).
+        """
+
+        checks = [
+            (service, port)
+            for service, port in (
+                (identity.indexer_service, 9200),
+                (identity.manager_service, 55000),
             )
-            for service, port in checks
             if service in services
-        }
+        ]
+        if not checks:
+            return {}
+        # Resolved at call time (not as default args) so a test monkeypatching
+        # the module's ``time`` intercepts the clock and sleep.
+        clock = time_source if time_source is not None else time.monotonic
+        pause = sleep if sleep is not None else time.sleep
+        deadline = clock() + timeout
+        while True:
+            results = {
+                service: self._authenticated_service_ready(
+                    service, port, nodes.get(service), env, identity
+                )
+                for service, port in checks
+            }
+            if all(results.values()) or clock() >= deadline:
+                return results
+            pause(interval)
 
     def _authenticated_service_ready(
         self,

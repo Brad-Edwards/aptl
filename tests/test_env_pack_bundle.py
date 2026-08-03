@@ -102,3 +102,82 @@ def test_scenario_selection_resolves_the_env_pack_when_configured(tmp_path: Path
     local = tmp_path / "scenarios" / "custom.sdl.yaml"
     override = resolve_scenario_bundle(tmp_path, local, config)
     assert override.source_kind is ScenarioSourceKind.PROJECT_TREE
+
+
+def test_concurrent_staging_of_one_root_never_reads_a_half_copied_pack(
+    tmp_path: Path,
+) -> None:
+    """Concurrent staging to a shared root must not corrupt the staged tree.
+
+    Several suites stage the default pack under one shared root; under -n auto
+    two workers would rmtree + copytree + validate the same tree at once and one
+    would read a half-copied pack ("associated artifact manifest failed RAES
+    byte binding"). The per-identity lock plus same-source reuse serializes the
+    stage-or-reuse decision, so every concurrent caller gets a valid bundle
+    (issue #875).
+    """
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    staging = tmp_path / "staged-packs"
+
+    def _stage() -> Path:
+        return env_pack_bundle(staging, "techvault").sdl_path
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = [f.result() for f in [pool.submit(_stage) for _ in range(16)]]
+
+    # Every concurrent stage returned the same valid staged SDL; none raised
+    # EnvPackError on a half-copied tree (a raise would surface as f.result()).
+    assert {p for p in results} == {(staging / "techvault" / "sdl" / "techvault.sdl.yaml")}
+    assert all(p.is_file() for p in results)
+
+
+def test_a_changed_source_pack_is_restaged_not_reused(tmp_path: Path) -> None:
+    """A new pack release (different set digest) re-stages; it is not reused.
+
+    Reuse keys on the pack's associated-artifacts set digest, so staging the
+    same identity from a source whose content changed must replace the staged
+    tree rather than serve the previous release's bytes (issue #875).
+    """
+
+    import json
+    import shutil
+
+    from aptl.core.scenario_bundle import env_pack_bundle as _bundle
+
+    # A first source, staged once.
+    src_a = tmp_path / "src-a" / "demo"
+    (src_a / "sdl").mkdir(parents=True)
+    (src_a / "sdl" / "demo.sdl.yaml").write_text("version: 1\n", encoding="utf-8")
+    (src_a / "associated-artifacts.json").write_text(
+        json.dumps({"set_digest": "sha256:aaaa"}), encoding="utf-8"
+    )
+    staging = tmp_path / "staged"
+
+    def _stage(source: Path):
+        # Bypass env-packs' full validator (the synthetic packs here are minimal);
+        # exercise only the stage/reuse decision in _stage_and_validate.
+        import aptl.core.scenario_bundle as sb
+
+        original = sb._validate_staged_pack
+        sb._validate_staged_pack = lambda *_a, **_k: None
+        try:
+            return _bundle(staging, "demo", source_pack=source)
+        finally:
+            sb._validate_staged_pack = original
+
+    first = _stage(src_a)
+    assert first.sdl_path.read_text(encoding="utf-8") == "version: 1\n"
+
+    # A second source at the same identity with different content + set digest.
+    src_b = tmp_path / "src-b" / "demo"
+    shutil.copytree(src_a, src_b)
+    (src_b / "sdl" / "demo.sdl.yaml").write_text("version: 2\n", encoding="utf-8")
+    (src_b / "associated-artifacts.json").write_text(
+        json.dumps({"set_digest": "sha256:bbbb"}), encoding="utf-8"
+    )
+
+    second = _stage(src_b)
+    # The changed source is realized, not the reused first-release bytes.
+    assert second.sdl_path.read_text(encoding="utf-8") == "version: 2\n"

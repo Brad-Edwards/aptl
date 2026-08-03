@@ -24,8 +24,11 @@ instead, and every consumer already asks the right question.
 
 from __future__ import annotations
 
+import fcntl
 import importlib.resources as _resources
+import json
 import shutil
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -162,6 +165,48 @@ def env_pack_bundle(
         return _stage_and_validate(Path(located), staging_root, identity)
 
 
+@contextmanager
+def _staging_lock(staging_root: Path, identity: str):
+    """Serialize concurrent staging of one identity under a shared root.
+
+    Two concurrent invocations that share a staging root -- pytest-xdist workers
+    exercising the gate, or two ``aptl`` runs on one project -- would otherwise
+    rmtree + copytree + validate the *same* staged tree at once, and one would
+    read a half-copied pack ("associated artifact manifest failed RAES byte
+    binding"). An exclusive ``flock`` on a per-identity sentinel serializes the
+    whole stage-or-reuse decision. The sentinel is a zero-byte lock file, never
+    staged content, and never removed (unlinking a held lock file is itself a
+    race); it is created under the staging root the caller already owns.
+    """
+
+    staging_root.mkdir(parents=True, exist_ok=True)
+    lock_path = staging_root / f".{identity}.stage.lock"
+    with open(lock_path, "w", encoding="utf-8") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _staging_set_digest(pack_root: Path) -> str | None:
+    """Return a pack's associated-artifacts set digest, or ``None`` if unreadable.
+
+    The set digest changes whenever any pack member changes, so it is the cheap
+    identity that distinguishes "the same pack, already staged" (safe to reuse)
+    from "a different pack release" (must re-stage). Any read/parse failure
+    yields ``None``, which forces a fresh stage rather than an unsafe reuse.
+    """
+
+    manifest = pack_root / "associated-artifacts.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    digest = data.get("set_digest") if isinstance(data, dict) else None
+    return digest if isinstance(digest, str) and digest else None
+
+
 def _stage_and_validate(
     source_pack: Path, staging_root: Path, identity: str
 ) -> ScenarioBundle:
@@ -169,16 +214,29 @@ def _stage_and_validate(
         raise EnvPackError(f"env-pack source not found for {identity!r}: {source_pack}")
 
     staged = staging_root / identity
-    if staged.exists():
-        # Immutable staging: every run starts from a fresh copy, never a tree a
-        # previous run (or anything else) may have mutated.
-        shutil.rmtree(staged)
-    staging_root.mkdir(parents=True, exist_ok=True)
-    # copytree copies file *contents* (not hardlinks), so every staged member is
-    # a singly-linked regular file.
-    shutil.copytree(source_pack, staged)
-
-    _validate_staged_pack(staged, identity)
+    with _staging_lock(staging_root, identity):
+        # Reuse an already-staged copy of the SAME source, matched by the pack's
+        # own associated-artifacts set digest, instead of rmtree + copytree on
+        # every call. Under the lock this makes concurrent staging safe: a second
+        # invocation of the same pack reuses the tree rather than deleting one a
+        # peer is about to read, while a changed source (a new pack release) is
+        # detected by a differing set digest and still re-staged from scratch.
+        source_digest = _staging_set_digest(source_pack)
+        staged_digest = _staging_set_digest(staged) if staged.is_dir() else None
+        if not (
+            staged.is_dir()
+            and source_digest is not None
+            and staged_digest == source_digest
+        ):
+            if staged.exists():
+                shutil.rmtree(staged)
+            # copytree copies file *contents* (not hardlinks), so every staged
+            # member is a singly-linked regular file.
+            shutil.copytree(source_pack, staged)
+        # Validate every time (read-only, so safe to run on a reused tree): the
+        # gate is what guarantees the staged bytes are the ones a later
+        # ``resolve_pack_artifact`` will byte-open.
+        _validate_staged_pack(staged, identity)
 
     sdl_path = staged / "sdl" / f"{identity}.sdl.yaml"
     if not sdl_path.is_file():

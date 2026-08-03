@@ -18,6 +18,7 @@ to start and be addressable.
 
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 
 import yaml
@@ -183,9 +184,66 @@ def _service_dependencies(
     return depends
 
 
+def _pinned_addresses_by_network(
+    spec: DeploymentRealizationSpec,
+) -> dict[str, set[str]]:
+    """Return, per network name, the set of statically-pinned node IPs.
+
+    A node pins an address by declaring ``ipv4_address`` on a network
+    attachment (SDL ``static_address_assignments``). These are the addresses
+    Docker's dynamic allocator must be kept away from.
+    """
+
+    pinned: dict[str, set[str]] = {}
+    for node in spec.nodes:
+        for attachment in node.network_attachments:
+            if attachment.ipv4_address:
+                pinned.setdefault(attachment.network, set()).add(
+                    attachment.ipv4_address
+                )
+    return pinned
+
+
+def _dynamic_ip_range(
+    cidr: str, gateway: str | None, pinned: set[str]
+) -> str | None:
+    """Return an IPAM ``ip_range`` confining dynamic allocation off the pins.
+
+    Docker assigns dynamic addresses from the bottom of the subnet and does not
+    reserve the static IPs of not-yet-started containers, so a dynamically-placed
+    node (a DNS-reachable SOC service) can seize an address another node pinned in
+    the SDL, and the pinned container then fails networking with "Address already
+    in use" (issue #875). Restricting the dynamic pool to the subnet's upper half
+    keeps it clear of the low, pinned addresses.
+
+    Returns ``None`` when no confinement is needed (nothing pinned). Raises when a
+    pinned address or the gateway falls in the upper half, rather than emitting a
+    range that would still collide — a loud signal that the split no longer holds
+    for this topology.
+    """
+
+    if not pinned:
+        return None
+    subnet = ipaddress.ip_network(cidr, strict=False)
+    upper = list(subnet.subnets(prefixlen_diff=1))[1]
+    intruders = sorted(
+        str(address)
+        for address in (*pinned, *( (gateway,) if gateway else ()))
+        if ipaddress.ip_address(address) in upper
+    )
+    if intruders:
+        raise ValueError(
+            f"network {cidr}: pinned/gateway address(es) {', '.join(intruders)} "
+            f"fall in the dynamic pool {upper}; the upper-half split no longer "
+            "isolates static addresses from dynamic allocation (issue #875)."
+        )
+    return str(upper)
+
+
 def _render_networks(spec: DeploymentRealizationSpec) -> dict:
     """Return the Compose ``networks`` section for the realized networks."""
 
+    pinned_by_network = _pinned_addresses_by_network(spec)
     networks: dict[str, dict] = {}
     for network in spec.networks:
         key = _compose_network_key(network.name)
@@ -197,6 +255,13 @@ def _render_networks(spec: DeploymentRealizationSpec) -> dict:
         ipam_config: dict = {}
         if network.cidr:
             ipam_config["subnet"] = network.cidr
+            ip_range = _dynamic_ip_range(
+                network.cidr,
+                network.gateway,
+                pinned_by_network.get(network.name, set()),
+            )
+            if ip_range:
+                ipam_config["ip_range"] = ip_range
         if network.gateway:
             ipam_config["gateway"] = network.gateway
         if ipam_config:

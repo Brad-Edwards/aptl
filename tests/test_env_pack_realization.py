@@ -305,6 +305,79 @@ def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(
     assert (realization_root / ".aptl/realization/content/tempo-config/tempo.yaml").read_text()
 
 
+def test_dynamic_ip_pool_is_confined_away_from_pinned_static_addresses():
+    """A network with pinned node IPs restricts the dynamic pool to the upper half.
+
+    Docker allocates dynamic addresses from the bottom of the subnet and does not
+    reserve a not-yet-started container's static IP, so a DNS-reachable dynamic
+    node would otherwise seize a low address another node pinned in the SDL and
+    the pinned container then fails with "Address already in use" (#875).
+    """
+
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+    from aptl.core.deployment.realization import (
+        DeploymentNetworkAttachment,
+        DeploymentNetworkRealization,
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.pinned", name="pinned",
+                service_name="pinned", container_name="aptl-pinned", networks=(),
+                network_attachments=(
+                    DeploymentNetworkAttachment(network="security-net", ipv4_address="172.20.0.10"),
+                ),
+            ),
+        ),
+        networks=(
+            DeploymentNetworkRealization(
+                name="security-net", cidr="172.20.0.0/24", gateway="172.20.0.1",
+            ),
+        ),
+    )
+
+    document = render_realization_compose(spec)
+    config = document["networks"]["aptl-security"]["ipam"]["config"][0]
+    assert config["subnet"] == "172.20.0.0/24"
+    assert config["ip_range"] == "172.20.0.128/25"
+
+
+def test_network_without_pinned_addresses_emits_no_ip_range():
+    """A fully-dynamic network needs no confinement and gets no ip_range."""
+
+    from aptl.core.deployment._compose_node_generation import render_realization_compose
+    from aptl.core.deployment.realization import (
+        DeploymentNetworkRealization,
+        DeploymentRealizationSpec,
+    )
+
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(),
+        networks=(
+            DeploymentNetworkRealization(
+                name="security-net", cidr="172.20.0.0/24", gateway="172.20.0.1",
+            ),
+        ),
+    )
+
+    config = render_realization_compose(spec)["networks"]["aptl-security"]["ipam"]["config"][0]
+    assert "ip_range" not in config
+
+
+def test_pinned_address_in_the_dynamic_half_fails_loudly():
+    """A pin that would still collide with the dynamic pool raises, not silently ships."""
+
+    from aptl.core.deployment._compose_node_generation import _dynamic_ip_range
+
+    with pytest.raises(ValueError, match="no longer isolates"):
+        _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 

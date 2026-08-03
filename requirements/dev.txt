@@ -913,9 +913,9 @@ raes==3.3.0 \
     # via
     #   aptl-labs
     #   raes-env-packs
-raes-env-packs==3.6.2 \
-    --hash=sha256:7fefc42e60a4dcd6dae20d935199be6d2214f19a4c2d74a05ef3a185daaf9172 \
-    --hash=sha256:bff9844745cf175ca747500bfdf55efb84a4da658485a71cb21d0c21a94a7d5b
+raes-env-packs==3.8.0 \
+    --hash=sha256:c3393f98d60110b90889804a0aa0ef1b00f5f1a9006d68654518f3f20b9121cb \
+    --hash=sha256:fd7236647609cf625fbb00bb880d61de5dadbba95ea22960f58d2f64727680cb
     # via aptl-labs
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \

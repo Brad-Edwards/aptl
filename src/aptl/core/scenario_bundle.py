@@ -24,7 +24,6 @@ instead, and every consumer already asks the right question.
 
 from __future__ import annotations
 
-import fcntl
 import importlib.resources as _resources
 import json
 import shutil
@@ -34,6 +33,11 @@ from enum import Enum
 from pathlib import Path
 
 from aptl.utils.pathsafe import PathContainmentError, read_contained_nofollow
+
+try:  # POSIX advisory locking; absent on Windows, where dev is single-process.
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - exercised only on non-POSIX platforms
+    _fcntl = None
 
 _ENV_PACK_PACKAGE = "raes_env_packs"
 
@@ -180,13 +184,19 @@ def _staging_lock(staging_root: Path, identity: str):
     """
 
     staging_root.mkdir(parents=True, exist_ok=True)
+    if _fcntl is None:
+        # No POSIX advisory lock (Windows): dev there is single-process, so the
+        # concurrent-staging race this guards against does not arise. The
+        # same-source reuse below still applies.
+        yield
+        return
     lock_path = staging_root / f".{identity}.stage.lock"
     with open(lock_path, "w", encoding="utf-8") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        _fcntl.flock(handle, _fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+            _fcntl.flock(handle, _fcntl.LOCK_UN)
 
 
 def _staging_set_digest(pack_root: Path) -> str | None:

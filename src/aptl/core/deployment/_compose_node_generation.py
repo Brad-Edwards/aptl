@@ -76,7 +76,6 @@ def _render_service(
     service: dict = {
         "image": image.image_ref,
         "container_name": node.container_name or f"aptl-{node.name}",
-        "hostname": node.name,
         "restart": "unless-stopped",
     }
     profiles = component_profiles(node.name)
@@ -86,11 +85,13 @@ def _render_service(
     if netns_container:
         # This node joins another node's network namespace (OBS-003: the
         # kali-capture sidecar shares Kali's netns so the abstract capture
-        # control socket is mutually visible). Compose forbids a per-service
-        # ``networks`` map alongside ``network_mode``; the joined stack owns all
-        # addressing and published ports, so this node declares neither.
+        # control socket is mutually visible). Docker rejects ``hostname``,
+        # a ``networks`` map, and published ports alongside
+        # ``network_mode: container:`` -- the joined container already owns the
+        # network identity, addressing, and ports -- so none are emitted here.
         service["network_mode"] = f"container:{netns_container}"
     else:
+        service["hostname"] = node.name
         networks = _service_networks(node)
         if networks:
             service["networks"] = networks

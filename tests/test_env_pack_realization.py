@@ -220,7 +220,9 @@ def test_network_namespace_share_renders_network_mode_and_suppresses_networks():
 
     service = render_realization_compose(spec)["services"]["kali-capture"]
     assert service["network_mode"] == "container:aptl-kali"
+    # Docker rejects each of these alongside network_mode: container:.
     assert "networks" not in service
+    assert "hostname" not in service
 
 
 def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():

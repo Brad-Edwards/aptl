@@ -13,7 +13,7 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
     SSH_KEY_BUNDLE_ROOT_RELPATH,
-    WAZUH_MANAGER_CONFIG_PROFILE,
+    WAZUH_MANAGER_CONFIG_PROVENANCES,
     REALIZATION_ADDRESS_LABEL,
     REALIZATION_LIFECYCLE_LABEL,
     REALIZATION_PROJECT_LABEL,
@@ -30,9 +30,9 @@ from aptl.core.deployment.realization import (
 
 # Rendered-config provenances that bind as a single whole file (source file ->
 # target file), not per output: the wazuh manager config, in-tree and env-pack.
-_WHOLE_FILE_RENDERED_CONFIG = frozenset(
-    {"config/wazuh_cluster/wazuh_manager.conf", WAZUH_MANAGER_CONFIG_PROFILE}
-)
+# Both declared producer identities live in one set so the realizer's dispatch
+# and this binding decision cannot drift apart (issue #875).
+_WHOLE_FILE_RENDERED_CONFIG = WAZUH_MANAGER_CONFIG_PROVENANCES
 
 
 def stateful_override_payload(

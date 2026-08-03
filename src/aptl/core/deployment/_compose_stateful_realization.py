@@ -23,7 +23,7 @@ from aptl.core.deployment._compose_stateful_constants import (
     SOC_CERT_PROFILE,
     SOC_CERTS_ROOT_RELPATH,
     STATEFUL_OVERRIDE_RELPATH,
-    WAZUH_MANAGER_CONFIG_PROFILE,
+    WAZUH_MANAGER_CONFIG_PROVENANCES,
 )
 from aptl.core.deployment._wazuh_identity import (
     WazuhClusterIdentity,
@@ -301,11 +301,7 @@ class ComposeStatefulRealizationMixin:
             return self._realize_flag_signing_keys(artifact, scenario_root)
 
         unsupported_binding = (
-            artifact.provenance
-            not in (
-                "config/wazuh_cluster/wazuh_manager.conf",
-                WAZUH_MANAGER_CONFIG_PROFILE,
-            )
+            artifact.provenance not in WAZUH_MANAGER_CONFIG_PROVENANCES
             or len(artifact.outputs) != 1
             or artifact.outputs[0].path != RENDERED_MANAGER_RELPATH.name
         )

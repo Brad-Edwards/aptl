@@ -35,6 +35,17 @@ WAZUH_CERT_PROFILES = frozenset(
 )
 SOC_CERT_PROFILE = "techvault:soc-certificate-profile/v1"
 WAZUH_MANAGER_CONFIG_PROFILE = "techvault:wazuh-manager-config-profile/v1"
+# Legacy in-tree provenance path for the wazuh manager rendered config. The
+# in-tree scenario declares this producer as a config file path; an env-pack
+# declares the same producer as WAZUH_MANAGER_CONFIG_PROFILE. Both are *declared
+# producer identities* the generator dispatch maps to sync_manager_config; the
+# generated-artifact realizer and the effective-model whole-file-binding check
+# key off this single set instead of repeating the literals (issue #875). The
+# in-tree path entry retires with the in-tree scenarios (task #8).
+WAZUH_MANAGER_CONFIG_IN_TREE_PROVENANCE = "config/wazuh_cluster/wazuh_manager.conf"
+WAZUH_MANAGER_CONFIG_PROVENANCES = frozenset(
+    {WAZUH_MANAGER_CONFIG_IN_TREE_PROVENANCE, WAZUH_MANAGER_CONFIG_PROFILE}
+)
 SOC_CERTS_ROOT_RELPATH = Path("config/soc_certs")
 REALIZATION_ADDRESS_LABEL = "org.aptl.realization.address"
 REALIZATION_LIFECYCLE_LABEL = "org.aptl.realization.lifecycle"

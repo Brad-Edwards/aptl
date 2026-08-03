@@ -418,6 +418,28 @@ def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
     assert env["DB_PASSWORD"] == "changeme123"
 
 
+def test_operational_config_marks_autoremove_node_as_run_once():
+    """A one-shot (autoremove) node gets restart: no, not the default policy.
+
+    Compose has no --rm, so an autoremove node (an init job that runs to
+    completion and exits) is expressed as restart: "no"; otherwise the base
+    unless-stopped policy restarts the finished job forever (issue #875).
+    """
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    runtime = RuntimeConfiguration.model_validate(
+        {"container": {"autoremove": True, "entrypoint": ["/bin/sh", "/init.sh"]}}
+    )
+
+    config = _operational_config(runtime)
+
+    assert config["restart"] == "no"
+    assert config["entrypoint"] == ["/bin/sh", "/init.sh"]
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 

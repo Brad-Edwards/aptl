@@ -173,6 +173,13 @@ def _operational_config(runtime: object) -> dict:
             config["entrypoint"] = list(container.entrypoint)
         if _truthy(getattr(container, "privileged", None)):
             config["privileged"] = True
+        if _truthy(getattr(container, "autoremove", None)):
+            # A node declaring autoremove is a one-shot (an init job that runs to
+            # completion and exits, e.g. an index bootstrap). Compose has no --rm,
+            # so the run-once intent is expressed as restart: "no"; without this
+            # the base "unless-stopped" policy restarts the finished job forever
+            # (issue #875).
+            config["restart"] = "no"
         if getattr(container, "shm_size", None):
             config["shm_size"] = container.shm_size
         if getattr(container, "security_opt", None):

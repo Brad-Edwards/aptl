@@ -17,7 +17,7 @@ from raes_contracts.planning import (
 )
 from raes_contracts.runtime_state import ApplyResult, RuntimeSnapshot
 
-from aptl.core.config import AptlConfig
+from aptl.core.config import AptlConfig, ScenarioSourceConfig
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult
 from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
@@ -1626,6 +1626,11 @@ def test_start_raes_scenario_uses_parser_runtime_manager_and_backend(
     config = AptlConfig(
         lab={"name": "test"},
         containers={"wazuh": True, "kali": True, "victim": False},
+        # This exercises project-tree default resolution to the SDL
+        # ``_write_compose`` staged in the tmp project (#875).
+        scenario=ScenarioSourceConfig(
+            source="project-tree", identity="techvault-operational"
+        ),
     )
 
     result = raes.start_raes_scenario(tmp_path, config, backend)
@@ -1764,7 +1769,13 @@ def test_start_raes_scenario_uses_planned_runtime_model_for_participant_actions(
     )
     backend = MagicMock()
     backend.realize.return_value = LabResult(success=True, message="ok")
-    config = AptlConfig(lab={"name": "test"}, containers={"victim": True})
+    config = AptlConfig(
+        lab={"name": "test"},
+        containers={"victim": True},
+        scenario=ScenarioSourceConfig(
+            source="project-tree", identity="techvault-operational"
+        ),
+    )
 
     result = raes.start_raes_scenario(tmp_path, config, backend)
 
@@ -1844,7 +1855,13 @@ def test_start_raes_scenario_retries_soc_apply_without_replanning(mocker, tmp_pa
 
     result = raes.start_raes_scenario(
         tmp_path,
-        AptlConfig(lab={"name": "test"}, containers={"soc": True}),
+        AptlConfig(
+            lab={"name": "test"},
+            containers={"soc": True},
+            scenario=ScenarioSourceConfig(
+                source="project-tree", identity="techvault-operational"
+            ),
+        ),
         backend,
         parameters={"victim_os": "linux"},
         before_backend_retry=before_retry,

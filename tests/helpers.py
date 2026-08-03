@@ -509,3 +509,20 @@ def wait_for_alert(
         time.sleep(poll_interval)
 
     pytest.fail(f"Alert not found within {timeout}s: {json.dumps(query, indent=2)}")
+
+
+# --------------------------------------------------------------------------- #
+# Default TechVault scenario (issue #875): the in-tree techvault-operational.sdl
+# was retired in favour of the bundled env-pack. Tests that parse/plan/realize
+# "the default TechVault scenario" resolve its staged SDL through this helper.
+# --------------------------------------------------------------------------- #
+def techvault_scenario_bundle(staging_root: Path):
+    """Stage + return the default TechVault env-pack bundle under ``staging_root``."""
+    from aptl.core.scenario_bundle import env_pack_bundle
+
+    return env_pack_bundle(Path(staging_root) / ".aptl" / "staged-packs", "techvault")
+
+
+def techvault_scenario_path(staging_root: Path) -> Path:
+    """Staged SDL path of the default TechVault env-pack scenario (#875)."""
+    return techvault_scenario_bundle(staging_root).sdl_path

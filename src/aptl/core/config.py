@@ -54,7 +54,7 @@ class ContainerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Defaults match the full DEFAULT_RAES_SCENARIO (techvault-operational) that
+    # Defaults match the full TechVault env-pack scenario that
     # `aptl lab start` provisions when no scenario is given, so a plain
     # `aptl lab init` + `aptl lab start` brings up the complete lab the
     # walkthrough documents. With soc/enterprise/dns/fileshare off, Compose only
@@ -108,14 +108,14 @@ class ScenarioSourceConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    identity: str = "techvault-operational"
+    identity: str = "techvault"
     root: str | None = None
-    # ``project-tree`` resolves the scenario from the APTL checkout (the
-    # historical default). ``env-pack`` resolves it from the bundled
-    # ``raes-env-packs`` pack named by ``identity``, staged and validated before
-    # use (#875) — the operator selects the acquisition source, the backend never
-    # switches it at runtime.
-    source: Literal["project-tree", "env-pack"] = "project-tree"
+    # ``env-pack`` (the default since #875) resolves the scenario from the
+    # bundled ``raes-env-packs`` pack named by ``identity``, staged and validated
+    # before use, with no host paths in the document. ``project-tree`` is the
+    # legacy path that resolves it from the APTL checkout and requires an explicit
+    # scenario. The operator selects the source; the backend never switches it.
+    source: Literal["project-tree", "env-pack"] = "env-pack"
 
     @field_validator("identity")
     @classmethod

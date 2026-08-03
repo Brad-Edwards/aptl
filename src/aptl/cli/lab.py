@@ -383,7 +383,7 @@ def validate_live(
     scenario: Optional[Path] = typer.Option(
         None,
         "--scenario",
-        help="RAES SDL scenario (default: scenarios/techvault-operational.sdl.yaml).",
+        help="RAES SDL scenario (default: the configured scenario, the bundled TechVault env-pack).",
     ),
     profile: str = typer.Option(
         "full-remote-control-plane",

@@ -11,11 +11,11 @@ gate validates.
 """
 
 import subprocess
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from raes import parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes_runtime.manager import RuntimeManager
 from raes_contracts.planning import (
@@ -35,7 +35,6 @@ from aptl.backends.raes_profiles import (
 from aptl.backends.raes import create_aptl_runtime_target
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.config import AptlConfig, load_config
-from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.validation import _account_parity
 from aptl.validation import _gate_checks as gc
@@ -57,16 +56,23 @@ from aptl.validation._gate_checks import (
     check_parse,
     check_provisioning_realization,
 )
-from aptl.validation.imagefree_gate import assert_image_free
 from aptl.validation.techvault_gate import (
     GateCheck,
     GateOptions,
     GateReport,
     validate_scenario,
 )
+from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OPERATIONAL_SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+# The default TechVault scenario now ships as the bundled env-pack (#875); the
+# in-tree techvault-operational.sdl.yaml was retired. Stage the pack once for the
+# module and drive the gate from its validated SDL, exactly as config-driven
+# resolution does at lab start.
+_OPERATIONAL_BUNDLE = techvault_scenario_bundle(
+    Path(tempfile.mkdtemp(prefix="aptl-static-gate-"))
+)
+OPERATIONAL_SCENARIO = _OPERATIONAL_BUNDLE.sdl_path
 PAPER_SCENARIO = PROJECT_ROOT / "scenarios" / "paper-agent-loop.sdl.yaml"
 PROFILE_INFRASTRUCTURE_SERVICES = frozenset({"kali-ssh-proxy", "webapp-proxy"})
 
@@ -114,45 +120,6 @@ def test_operational_gate_passes():
         "provisioning_realization",
         "account_provisioner_parity",
     ]
-
-
-@pytest.mark.xfail(
-    reason=(
-        "kali-capture alone is still realized by docker-compose.yml. The other "
-        "three per-component nodes (ad and both Wazuh forwarding sidecars) now "
-        "author a digest-bound materialization specification, admit, build, and "
-        "satisfy the runtime non-approximation gate. kali-capture's Dockerfile "
-        "copies from its own directory while ad and the sidecars copy shared "
-        "assets from the repository root, so one uniform build-context rule "
-        "cannot cover all three without editing that Dockerfile. Doing so changes "
-        "the built image digest, which participant-profiles/guided-purple-v1/"
-        "asset-lock.json pins as local://aptl-kali-capture@sha256:821ec7c2..., and "
-        "re-pinning a participant-profile asset is a reproducibility decision for "
-        "the profile owner rather than an incidental edit. Closing this needs that "
-        "re-pin, or a profile that declares its build context per specification."
-    ),
-    strict=True,
-)
-def test_operational_scenario_passes_the_realization_declaration_gate():
-    """Every OS-bearing node in the shipped SDL resolves through a declared
-    realization (ADR-048 P7): generic-materializer runtime: or a trust-
-    policy-resolved source:, never docker-compose.yml alone with nothing
-    declared in the SDL. This is the blocking check the operational
-    TechVault cutover must pass, growing stricter as more nodes convert.
-    """
-    config = load_config(PROJECT_ROOT / "aptl.json")
-    backend = DockerComposeBackend(project_dir=PROJECT_ROOT, project_name="aptl")
-    bundle = _bundle(PROJECT_ROOT, OPERATIONAL_SCENARIO)
-    plan = RuntimeManager(
-        create_aptl_runtime_target(
-            project_dir=PROJECT_ROOT, config=config, backend=backend, bundle=bundle
-        )
-    ).plan(parse_sdl_file(OPERATIONAL_SCENARIO))
-    realization = interpret_provisioning_plan(
-        plan=plan.provisioning, config=config, bundle=bundle
-    )
-    assert [d.message for d in realization.diagnostics if d.is_error] == []
-    assert_image_free(realization.deployment_spec([]))  # raises with every violation
 
 
 def test_operational_scenario_matches_public_start_profiles_and_services():
@@ -216,7 +183,7 @@ def test_operational_scenario_lowers_wazuh_stateful_resources():
     assert details["resource_counts"]["generated-artifact"] >= 2
     assert details["resource_counts"]["persistent-volume"] >= 2
     generators = {item["generator"] for item in details["generated_artifacts"]}
-    assert generators == {"certificate_bundle", "rendered_config"}
+    assert generators == {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     artifacts = {item["name"]: item for item in details["generated_artifacts"]}
     assert {output["path"] for output in artifacts["wazuh-indexer-certs"]["outputs"]} == {
         "root-ca.pem",

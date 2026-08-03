@@ -22,9 +22,8 @@ from typing import TYPE_CHECKING, Any
 from raes_runtime.manager import RuntimeManager
 from raes.scenario import Scenario
 
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO, create_aptl_runtime_target
+from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
 from aptl.core.lab import clean_boot_lab
@@ -91,7 +90,7 @@ def _compute_realization(
     try:
         backend = get_backend(config, project_dir)
         # Live probe over the in-tree scenario: bundle root is the project dir.
-        bundle = project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO)
+        bundle = resolve_scenario_bundle(project_dir, None, config)
         target = create_aptl_runtime_target(
             project_dir=project_dir, config=config, backend=backend, bundle=bundle
         )

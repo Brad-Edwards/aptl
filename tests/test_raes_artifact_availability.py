@@ -174,20 +174,19 @@ def test_facts_are_scoped_to_the_declaring_address(tmp_path):
     assert "artifact.unavailable-exact-artifact" in _codes(scenario, availability)
 
 
-def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node():
-    """The shipped scenario now pins each image-backed node to an exact artifact."""
+def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_path):
+    """The shipped scenario pins each artifact-bearing address to an exact artifact."""
 
-    scenario = parse_sdl_file(
-        Path(__file__).resolve().parents[1]
-        / "scenarios"
-        / "techvault-operational.sdl.yaml"
-    )
+    from tests.helpers import techvault_scenario_path
+
+    scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
     probe = _Probe(set())
 
     context = artifact_availability_for_scenario(scenario, probe)
 
-    # One address per image-backed node, each probed by digest-pinned reference.
-    assert len(context.requirements) == 21
+    # One address per artifact-bearing address — every image-backed node and
+    # every digest-pinned content placement in the full TechVault env-pack.
+    assert len(context.requirements) == 44
     # Exact pins are probed by digest-pinned reference; materialized components
     # probe their locked base input the same way.
     assert all(ref.count("@sha256:") == 1 for ref, _ in probe.calls)

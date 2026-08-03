@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
 DEFAULT_PROFILE = "full-remote-control-plane"
-DEFAULT_SCENARIO = Path("scenarios") / "techvault-operational.sdl.yaml"
 
 
 @dataclass(frozen=True)

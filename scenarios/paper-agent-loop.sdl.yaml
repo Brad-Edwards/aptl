@@ -66,8 +66,8 @@ nodes:
     type: vm
     os: linux
     source:
-      name: wazuh-manager
-      version: 4.x
+      name: wazuh/wazuh-manager
+      version: 4.12.0
     resources:
       ram: 1 GiB
       cpu: 1
@@ -92,8 +92,8 @@ nodes:
     type: vm
     os: linux
     source:
-      name: wazuh-indexer
-      version: 4.x
+      name: wazuh/wazuh-indexer
+      version: 4.12.0
     resources:
       ram: 1 GiB
       cpu: 1

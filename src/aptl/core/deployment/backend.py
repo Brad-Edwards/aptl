@@ -219,12 +219,17 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """
         ...
 
-    def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
+    def create_network(
+        self,
+        network: DeploymentNetworkRealization,
+        ip_range: str | None = None,
+    ) -> LabResult:
         """Materialize one scenario-declared network.
 
         Implementations choose the concrete backend network name, but must keep
         it scoped to this deployment project and honor CIDR, gateway, and
-        internal-egress settings when present.
+        internal-egress settings when present. ``ip_range`` optionally confines
+        dynamic allocation off statically-pinned node addresses (issue #875).
         """
         ...
 

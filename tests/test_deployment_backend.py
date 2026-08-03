@@ -578,6 +578,9 @@ services:
             "172.20.1.0/24",
             "--gateway",
             "172.20.1.1",
+            # dynamic pool confined off the pinned 172.20.1.20 (issue #875)
+            "--ip-range",
+            "172.20.1.128/25",
             "test_aptl-dmz",
         ]
         assert create_command in commands

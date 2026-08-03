@@ -8,6 +8,10 @@ from aptl.core.deployment._compose_network_conflicts import (
     _network_subnet_conflicts,
     _planned_networks_to_create,
 )
+from aptl.core.deployment._compose_node_generation import (
+    _dynamic_ip_range,
+    _pinned_addresses_by_network,
+)
 from aptl.core.deployment._compose_realization_networks import (
     _COMPOSE_NETWORK_LABEL,
     _COMPOSE_PROJECT_LABEL,
@@ -60,6 +64,13 @@ class ComposeRealizationNetworkMixin:
         )
         if conflicts:
             return conflicts
+        # Confine each network's dynamic allocation pool off the statically
+        # pinned node addresses, the SAME split the generated compose file uses
+        # (_render_networks). Docker ignores the compose ip_range when APTL has
+        # already created the network, so it must be applied at creation here or
+        # a dynamically-placed node seizes a pinned address and the pinned
+        # container fails with "Address already in use" (issue #875).
+        pinned = _pinned_addresses_by_network(realization)
         failures: list[str] = []
         for network in realization.networks:
             match = _match_managed_network(
@@ -72,7 +83,14 @@ class ComposeRealizationNetworkMixin:
                     self._realization_network_reuse_failures(match, network)
                 )
                 continue
-            result = self.create_network(network)
+            ip_range = (
+                _dynamic_ip_range(
+                    network.cidr, network.gateway, pinned.get(network.name, set())
+                )
+                if network.cidr
+                else None
+            )
+            result = self.create_network(network, ip_range=ip_range)
             if result.success:
                 managed_networks.add(
                     _concrete_network_name(network.name, self._project_name)
@@ -311,8 +329,18 @@ class ComposeRealizationNetworkMixin:
                 )
         return failures
 
-    def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
-        """Create one project-scoped Docker bridge network."""
+    def create_network(
+        self,
+        network: DeploymentNetworkRealization,
+        ip_range: str | None = None,
+    ) -> LabResult:
+        """Create one project-scoped Docker bridge network.
+
+        ``ip_range`` confines dynamic address allocation to a sub-range so
+        statically-pinned node addresses stay collision-free; it must be applied
+        at creation because Docker ignores the compose file's ip_range once the
+        network already exists (issue #875).
+        """
 
         concrete_name = _concrete_network_name(network.name, self._project_name)
         compose_key = _compose_network_key(network.name)
@@ -337,6 +365,8 @@ class ComposeRealizationNetworkMixin:
             cmd.extend(["--subnet", network.cidr])
         if network.gateway:
             cmd.extend(["--gateway", network.gateway])
+        if ip_range:
+            cmd.extend(["--ip-range", ip_range])
         cmd.append(concrete_name)
         result = self._run(cmd, timeout=_REALIZATION_TIMEOUT)
         if result.returncode != 0:

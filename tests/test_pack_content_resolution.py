@@ -146,3 +146,65 @@ def test_seed_fails_closed_on_declared_digest_mismatch(tmp_path):
     )
     with pytest.raises(ValueError):
         build_content_volume_seeds(bundle.root, (tampered,))
+
+
+def test_image_node_content_is_admitted_without_runtime():
+    """Issue #875: an image node that declares content but no other runtime.
+
+    Content placement must route to the literal-destination (image-free) path
+    for any realized node -- image-free OR image-backed -- not only nodes that
+    declare a runtime. Before the fix, an image node with content but no runtime
+    fell through to the legacy named-volume check and was rejected with
+    'destination-without-backing-mount', so its config never reached the range.
+    """
+    from raes_contracts.planning import PlannedResource, RuntimeDomain
+
+    from aptl.backends.raes_placement_realization import _realize_placement_resource
+    from aptl.backends.raes_realization_model import NodeRealization
+    from aptl.core.deployment.realization import DeploymentImageRealization
+
+    target = "provision.node.aptl-otel-collector"
+    node = NodeRealization(
+        address=target,
+        name="aptl-otel-collector",
+        aliases=(),
+        profiles=(),
+        backend_services=(),
+        container_name="aptl-otel-collector",
+        services=(),
+        networks=(),
+        static_addresses=(),
+        os="linux",
+        runtime=None,  # image node with content but no other runtime
+        image=DeploymentImageRealization(
+            address=target,
+            service_name="aptl-otel-collector",
+            source_name="otel/opentelemetry-collector-contrib",
+            source_version="1",
+            image_ref="otel/opentelemetry-collector-contrib:1",
+            mode="pull",
+            policy_rule="allowed-source",
+        ),
+    )
+    payload = {
+        "content_name": "otel-config",
+        "spec": {
+            "type": "file",
+            "path": "/etc/otelcol-contrib/config.yaml",
+            "text": "service: {}\n",
+        },
+    }
+    resource = PlannedResource(
+        address="provision.content-placement.otel-config",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload=payload,
+    )
+
+    content, dataset, account, diagnostics = _realize_placement_resource(
+        resource, payload, target, {target: node}, Path(".")
+    )
+
+    assert diagnostics == [], [d.code for d in diagnostics]
+    assert content is not None
+    assert content.dest_relpath.endswith("etc/otelcol-contrib/config.yaml")

@@ -182,10 +182,14 @@ def _realize_placement_resource(
             not is_dataset
             and target_node is not None
             and target_node.os
-            and target_node.runtime is not None
+            and (target_node.runtime is not None or target_node.image is not None)
         ):
-            # Image-free node: the materializer places content directly into the
-            # container, no compose service / named volume required.
+            # Any realized node — an image-free node the materializer places
+            # content into, or an image (compose) node whose content is bound in
+            # (issue #875) — takes its content at the authored literal
+            # destination. Only the legacy named-volume path below still needs a
+            # registered backing mount; an image node that declares content but
+            # no other runtime must not fall through to it and be rejected.
             resolved_content, diagnostics = resolve_image_free_content_placement(
                 resource, payload, target_address
             )

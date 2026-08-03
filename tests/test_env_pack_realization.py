@@ -378,6 +378,46 @@ def test_pinned_address_in_the_dynamic_half_fails_loudly():
         _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
 
 
+def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
+    """An operator_secret env var becomes NAME=${NAME}, not its empty SDL value.
+
+    A real deployment credential is authored empty and supplied by the operator
+    .env; the image-node path must emit a Compose interpolation reference so
+    Docker resolves it at up time, while planted secret_fixture credentials keep
+    their authored value as content (issue #875).
+    """
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment._compose_node_generation import _operational_config
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "environment": [
+                {"name": "INDEXER_URL", "value": "https://wazuh.indexer:9200"},
+                {
+                    "name": "INDEXER_PASSWORD",
+                    "value": "",
+                    "value_classification": "operator_secret",
+                },
+                {
+                    "name": "DB_PASSWORD",
+                    "value": "changeme123",
+                    "value_classification": "secret_fixture",
+                },
+            ]
+        }
+    )
+
+    env = _operational_config(runtime)["environment"]
+
+    assert env["INDEXER_URL"] == "https://wazuh.indexer:9200"
+    # operator secret -> interpolation reference, resolved from the operator .env
+    assert env["INDEXER_PASSWORD"] == "${INDEXER_PASSWORD}"
+    # planted range credential -> authored value carried as content
+    assert env["DB_PASSWORD"] == "changeme123"
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 

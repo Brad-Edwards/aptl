@@ -103,6 +103,35 @@ def _truthy(value: object) -> bool:
     return isinstance(value, str) and value.strip().lower() in {"true", "1", "yes"}
 
 
+_OPERATOR_SECRET_CLASSIFICATION = "operator_secret"
+
+
+def _environment_config(runtime: object) -> dict:
+    """Return the Compose ``environment`` map from a node's declared env.
+
+    A variable classified ``operator_secret`` carries no value in the SDL (a real
+    deployment credential is authored empty and supplied by the operator, never
+    baked into the pack); it is emitted as a Compose interpolation reference
+    ``NAME=${NAME}`` so Docker resolves it from the operator ``.env`` at up time,
+    exactly as the graph-owned Wazuh services already did. Every other
+    classification — including the planted range credentials classified
+    ``secret_fixture`` — carries its authored value as content (issue #875).
+    """
+
+    environment: dict[str, str] = {}
+    for variable in getattr(runtime, "environment", ()):
+        name = getattr(variable, "name", "")
+        if not name:
+            continue
+        raw = getattr(variable, "value_classification", "")
+        classification = str(getattr(raw, "value", raw) or "")
+        if classification == _OPERATOR_SECRET_CLASSIFICATION:
+            environment[name] = f"${{{name}}}"
+        else:
+            environment[name] = variable.value
+    return environment
+
+
 def _operational_config(runtime: object) -> dict:
     """Translate a node's declared runtime desired-state into Compose fields.
 
@@ -117,11 +146,7 @@ def _operational_config(runtime: object) -> dict:
     if runtime is None:
         return {}
     config: dict = {}
-    environment = {
-        variable.name: variable.value
-        for variable in getattr(runtime, "environment", ())
-        if getattr(variable, "name", "")
-    }
+    environment = _environment_config(runtime)
     if environment:
         config["environment"] = environment
 

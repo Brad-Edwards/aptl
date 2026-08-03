@@ -241,6 +241,68 @@ def test_image_free_consumers_are_excluded_from_the_compose_stateful_override():
     assert "freenode" not in services  # image-free node does not
 
 
+def test_image_node_content_is_delivered_as_a_bind_mount_under_realization_root(tmp_path):
+    """Config content for an image node is bound in, resolved under the engine root.
+
+    Image-free nodes get content via the generic materializer; an image node is a
+    Compose service, so its declared content is delivered as a read-only bind
+    mount of the resolved file, written under realization_root, never the pack
+    (issue #875).
+    """
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+    from aptl.core.deployment.realization import (
+        DeploymentContentRealization,
+        DeploymentImageRealization,
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    scenario_root = tmp_path / "pack"
+    scenario_root.mkdir()
+    realization_root = tmp_path / "engine"
+    realization_root.mkdir()
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.tempo", name="tempo",
+                service_name="tempo", container_name="aptl-tempo", networks=(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.tempo", service_name="tempo",
+                source_name="grafana/tempo", source_version="1", image_ref="grafana/tempo:1",
+                mode="pull", policy_rule="allowed-source",
+            ),
+        ),
+        content=(
+            DeploymentContentRealization(
+                address="provision.content.tempo-config",
+                target_address="provision.node.tempo",
+                content_name="tempo-config", volume_suffix="tempo_config",
+                dest_relpath="etc/tempo/tempo.yaml", source_kind="inline-text",
+                inline_text="storage:\n  trace:\n    backend: local\n",
+            ),
+        ),
+    )
+
+    override = image_node_content_override(spec, scenario_root, realization_root)
+
+    mounts = override["services"]["tempo"]["volumes"]
+    assert len(mounts) == 1
+    mount = mounts[0]
+    assert mount["target"] == "/etc/tempo/tempo.yaml"
+    assert mount["read_only"] is True
+    # Resolved under the engine root, not the pristine pack.
+    source = mount["source"]
+    assert str(realization_root) in source
+    assert str(scenario_root) not in source
+    assert (realization_root / ".aptl/realization/content/tempo-config/tempo.yaml").read_text()
+
+
 def test_operational_config_is_empty_for_a_bare_node():
     """A node with no declared runtime gets no operational Compose fields."""
 

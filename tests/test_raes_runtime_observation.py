@@ -254,6 +254,27 @@ def test_environment_operator_secret_is_presence_only():
     assert "value_commitment" not in disclosed[0]
 
 
+def test_environment_undeclared_operator_value_is_rejected():
+    # The contract declares the variable with no value, so "realized" means
+    # realized empty. A value arriving out of band -- an operator `.env` entry
+    # the scenario never authored -- is undeclared range content, and the gate
+    # must reject it rather than treat the declaration as a wildcard.
+    runtime = _env_runtime("", classification="plain")
+    backend = _Backend({_CONTAINER: _inspect(env=["FOO=false"])})
+    codes, _provenance, _observations = _gate(runtime, backend, "runtime-environment")
+    assert _GATE_REJECT in codes
+
+
+def test_environment_declared_valueless_realized_empty_passes():
+    # The same declaration realized as the contract states it -- present and
+    # empty -- is the honest match, so nothing is rejected.
+    runtime = _env_runtime("", classification="plain")
+    backend = _Backend({_CONTAINER: _inspect(env=["FOO="])})
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-environment")
+    assert codes == []
+    assert observations[_ADDRESS].concerns[_ENV_PATH][0]["value_present"] is False
+
+
 def test_environment_probe_missing_config_fails_closed():
     runtime = _env_runtime("bar")
     inspect = _inspect(env=["FOO=bar"])
@@ -972,6 +993,22 @@ def test_forwarding_agent_without_realized_footprint_is_dropped_and_rejected():
     # so the agent is not corroborated: the concern is dropped and the EXACT
     # requirement is rejected rather than handed a fabricated match.
     runtime = _log_forwarder_runtime()
+    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
+    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_log_forwarder_on_node_declaring_no_mounts_is_dropped_and_rejected():
+    # A sidecar that declares a tailed source but no mount to carry it cannot
+    # reach that path: nothing in the contract delivers the file and nothing in
+    # the container corroborates it. The concern is dropped and the requirement
+    # rejected, so an agent tailing a path that does not exist is never reported
+    # as realized SIEM coverage.
+    runtime = _runtime(
+        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")["forwarding_agents"]
+    )
+    assert not runtime.mounts
     backend = _Backend({_CONTAINER: _inspect(mounts=[])})
     codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert _FORWARDING_PATH not in observations[_ADDRESS].concerns

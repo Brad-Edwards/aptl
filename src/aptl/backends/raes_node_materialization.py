@@ -26,7 +26,7 @@ _MAX_MATERIALIZATION_WORKERS = 8
 
 from raes.runtime_configuration import RuntimeConfiguration
 
-from aptl.backends.raes_base_substrate import BaseContainerSpec, plan_node
+from aptl.backends.raes_base_substrate import BaseContainerSpec, VolumeMount, plan_node
 from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
 from aptl.backends.raes_materializer import MaterializationOp
 from aptl.backends.raes_materializer_engine import materialize_node
@@ -68,6 +68,7 @@ def realize_node(
     backend: _NodeBackend,
     content: tuple[MaterializationOp, ...] = (),
     scenario_root: Path | None = None,
+    extra_volume_mounts: tuple[VolumeMount, ...] = (),
 ) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
@@ -84,6 +85,7 @@ def realize_node(
         runtime=node.runtime,
         content=content,
         dynamic_composition=node.dynamic_composition,
+        extra_volume_mounts=extra_volume_mounts,
     )
     container = spec.container_name
 
@@ -116,6 +118,7 @@ def realize_nodes(
     backend: _NodeBackend,
     content_by_node: dict[str, tuple[MaterializationOp, ...]] | None = None,
     scenario_root: Path | None = None,
+    volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 
@@ -128,6 +131,7 @@ def realize_nodes(
     """
 
     content_by_node = content_by_node or {}
+    volume_mounts_by_node = volume_mounts_by_node or {}
     materializable = [node for node in nodes if node.os]
     if not materializable:
         return None
@@ -139,6 +143,9 @@ def realize_nodes(
             backend,
             content_by_node.get(materializable[0].address, ()),
             scenario_root=scenario_root,
+            extra_volume_mounts=volume_mounts_by_node.get(
+                materializable[0].address, ()
+            ),
         )
 
     results: dict[str, LabResult | None] = {}
@@ -150,6 +157,7 @@ def realize_nodes(
                 backend,
                 content_by_node.get(node.address, ()),
                 scenario_root=scenario_root,
+                extra_volume_mounts=volume_mounts_by_node.get(node.address, ()),
             ): node
             for node in materializable
         }

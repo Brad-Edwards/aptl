@@ -172,8 +172,10 @@ class ComposeRealizationMixin(
         # Generated realization output (base compose, overrides, generated
         # artifacts) is written under the writable engine checkout, never under
         # the pristine staged pack whose digest-validated inventory must not gain
-        # generated files (issue #875). In-tree the two roots coincide.
-        realization_root = self._project_dir
+        # generated files (issue #875). In-tree the two roots coincide. This is
+        # the backend's published root so realization observation reads the
+        # artifacts back from the same place they were written.
+        realization_root = self.realization_root
 
         def _images() -> LabResult | None:
             """Pull/build declared images and capture the resulting compose override."""
@@ -268,7 +270,14 @@ class ComposeRealizationMixin(
         )
         if failure is not None:
             return failure
-        return _realize_node_subset(self, nodes, content, scenario_root, extra_ops)
+        return _realize_node_subset(
+            self,
+            nodes,
+            content,
+            scenario_root,
+            extra_ops,
+            persistent_volumes=realization.persistent_volumes,
+        )
 
     def _image_free_generated_artifact_ops(
         self,
@@ -359,12 +368,17 @@ class ComposeRealizationMixin(
             return boundary_result
         addresses = frozenset(node.address for node in realization.nodes)
         failure, extra_ops = self._image_free_generated_artifact_ops(
-            realization, addresses, self._project_dir
+            realization, addresses, self.realization_root
         )
         if failure is not None:
             return failure
         node_result = _realize_node_subset(
-            self, realization.nodes, realization.content, scenario_root, extra_ops
+            self,
+            realization.nodes,
+            realization.content,
+            scenario_root,
+            extra_ops,
+            persistent_volumes=realization.persistent_volumes,
         )
         return node_result if node_result is not None else LabResult(success=True)
 

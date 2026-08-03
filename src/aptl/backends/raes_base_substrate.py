@@ -144,13 +144,18 @@ def base_container_spec(
     os_version: str,
     runtime: RuntimeConfiguration | None,
     dynamic_composition: bool = False,
+    extra_volume_mounts: tuple[VolumeMount, ...] = (),
 ) -> BaseContainerSpec:
     """Return the generic base-container decision for one node.
 
     Fails closed (`UnsupportedOsFamilyError`) when APTL has no generic base for
     the declared OS family, rather than guessing an image. ``dynamic_composition``
     marks a route-3 node whose base container must start immutably from the
-    verified config id (ADR-051 / issue #876).
+    verified config id (ADR-051 / issue #876). ``extra_volume_mounts`` carries
+    named-volume mounts the node consumes that are not authored on
+    ``runtime.mounts`` -- specifically its ``persistent_volumes`` consumer mounts,
+    which the Compose override deliberately defers to the generic materializer for
+    an image-free consumer (issue #875).
     """
 
     runs_services = bool(runtime is not None and runtime.service_manager_units)
@@ -163,7 +168,7 @@ def base_container_spec(
         runs_services=runs_services,
         init=_init_requirements(runtime) if runs_services else None,
         published_ports=_published_ports(runtime),
-        volume_mounts=_volume_mounts(runtime),
+        volume_mounts=_volume_mounts(runtime) + tuple(extra_volume_mounts),
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
         dynamic_composition=dynamic_composition,
@@ -291,6 +296,7 @@ def plan_node(
     runtime: RuntimeConfiguration | None,
     content: tuple[MaterializationOp, ...] = (),
     dynamic_composition: bool = False,
+    extra_volume_mounts: tuple[VolumeMount, ...] = (),
 ) -> tuple[BaseContainerSpec, tuple[MaterializationOp, ...]]:
     """Plan one node: its generic base container plus its materialization ops.
 
@@ -308,6 +314,7 @@ def plan_node(
         os_version=os_version,
         runtime=runtime,
         dynamic_composition=dynamic_composition,
+        extra_volume_mounts=extra_volume_mounts,
     )
     ops = plan_node_materialization(
         os=os, os_version=os_version, runtime=runtime, content=content

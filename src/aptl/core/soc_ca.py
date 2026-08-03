@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
 
@@ -67,6 +67,7 @@ __all__ = (
     "ServiceCert",
     "derive_soc_service_certs",
     "ensure_soc_certs",
+    "soc_bundle_evidence",
 )
 
 # ---------------------------------------------------------------------------
@@ -174,6 +175,42 @@ def derive_soc_service_certs(
         )
         for service, files in sorted(files_by_service.items())
     )
+
+
+def soc_bundle_evidence(
+    certs_dir: Path,
+    output_paths: tuple[str, ...],
+) -> dict[str, object] | None:
+    """Return non-secret proof that a realized SOC bundle is consistent, or None.
+
+    The SOC bundle is not the Wazuh ``root-ca.pem`` + ``*-key.pem`` shape -- it
+    carries its own CA name, ``.key`` private keys, and PKCS#12 keystores with
+    passphrase files -- so the Wazuh bundle validator cannot read it. Rather than
+    let a certificate bundle be reported realized on file presence alone, this
+    reuses the same chain check ``ensure_soc_certs`` uses: every leaf verifies
+    against the on-disk CA, every key derives its cert's public key, and every
+    keystore unlocks to a cert with the matching fingerprint (issue #875).
+
+    Only the CA's public fingerprint leaves this boundary; no key material, no
+    passphrase, and no path.
+    """
+
+    if not _all_artifacts_present_and_consistent(
+        certs_dir,
+        _CA_CERT_NAME,
+        _CA_KEY_NAME,
+        derive_soc_service_certs(output_paths),
+    ):
+        return None
+    try:
+        root = x509.load_pem_x509_certificate((certs_dir / _CA_CERT_NAME).read_bytes())
+    except (OSError, ValueError):
+        return None
+    return {
+        "public_root_sha256": root.fingerprint(hashes.SHA256()).hex(),
+        "chain_valid": True,
+        "san_valid": True,
+    }
 
 
 @dataclass

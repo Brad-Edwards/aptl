@@ -327,6 +327,31 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """
         ...
 
+    def observe_bind_source_type(self, source: str) -> str | None:
+        """Read back the filesystem kind of one realized bind-mount source.
+
+        Content delivered to an image node is a read-only bind of a host path,
+        so the destination's kind *is* the source's kind. Implementations
+        classify the path on the Docker host — never by executing anything from
+        the observed container's image, which may be distroless or already
+        exited — and return only the governed RAES kind (``file`` or
+        ``directory``). A missing, ambiguous, or failed observation returns
+        ``None``; bytes and raw probe output never cross this boundary.
+        """
+        ...
+
+    @property
+    def realization_root(self) -> Path:
+        """The writable root the backend writes generated realization output to.
+
+        Generated artifacts, rendered content, and generated Compose overrides
+        are written here, never into the pristine staged scenario bundle whose
+        digest-validated inventory must not gain generated files (issue #875).
+        Realization observation reads them back from this same root, so the two
+        cannot drift. In-tree it coincides with the bundle root.
+        """
+        ...
+
     def realize_accounts(
         self,
         accounts: Sequence[DeploymentAccountRealization],

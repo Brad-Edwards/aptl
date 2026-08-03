@@ -118,6 +118,7 @@ def _realize_node_subset(
     content: tuple[object, ...],
     scenario_root: Path,
     extra_ops: dict[str, tuple[object, ...]] | None = None,
+    persistent_volumes: tuple[object, ...] = (),
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
@@ -126,16 +127,36 @@ def _realize_node_subset(
     passed in. Lowers each content item to its placement op and dispatches
     per node, verified by read-after-write. ``extra_ops`` carries additional
     per-node placement ops (a consumer's generated-artifact outputs, #875)
-    already keyed by node address.
+    already keyed by node address. ``persistent_volumes`` carries the
+    realization's persistent volumes so an image-free node that consumes one
+    mounts it: the Compose override defers non-Compose consumers to this
+    materializer rather than declaring a mount no Compose service carries
+    (issue #875).
     """
 
-    from aptl.backends.raes_base_substrate import base_container_spec
+    from aptl.backends.raes_base_substrate import VolumeMount, base_container_spec
     from aptl.backends.raes_materializer import (
         PlaceFileOp,
         PlacePackArtifactOp,
         PlaceProjectContentOp,
     )
     from aptl.backends.raes_node_materialization import realize_nodes
+
+    node_addresses = {node.address for node in nodes}
+    volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]] = {}
+    for volume in persistent_volumes:
+        for consumer in getattr(volume, "consumers", ()):
+            address = consumer.target_address
+            if address not in node_addresses:
+                continue
+            volume_mounts_by_node.setdefault(address, ())
+            volume_mounts_by_node[address] += (
+                VolumeMount(
+                    target=consumer.mount_destination,
+                    source=volume.name,
+                    read_only=consumer.access_mode == "read_only",
+                ),
+            )
 
     # A fresh machine has none of the locally-built generic base images in
     # its Docker cache (issue #581 - a developer's existing cache had
@@ -202,4 +223,5 @@ def _realize_node_subset(
         backend,
         {addr: tuple(ops) for addr, ops in content_by_node.items()},
         scenario_root=scenario_root,
+        volume_mounts_by_node=volume_mounts_by_node,
     )

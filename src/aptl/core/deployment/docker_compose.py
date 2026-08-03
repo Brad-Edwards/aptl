@@ -87,6 +87,17 @@ class DockerComposeBackend(
         return self._project_name
 
     @property
+    def realization_root(self) -> Path:
+        """The writable root generated realization output is written under.
+
+        The engine checkout, never the pristine staged pack (issue #875).
+        Realization observation reads generated artifacts back from here, so the
+        write side and the read-back side share one authority and cannot drift.
+        """
+
+        return self._project_dir
+
+    @property
     def supports_local_artifacts(self) -> bool:
         """Return whether bind sources are visible to the Docker daemon."""
 

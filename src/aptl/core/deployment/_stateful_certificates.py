@@ -30,9 +30,18 @@ _INVALID_PEM_ERROR = "Certificate bundle contains an invalid PEM output."
 def validate_certificate_bundle(
     certs_dir: Path,
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...],
-    provenance_path: Path,
+    provenance_path: Path | None,
 ) -> list[str]:
-    """Validate declared PEM outputs without exposing paths or key material."""
+    """Validate declared PEM outputs without exposing paths or key material.
+
+    ``provenance_path`` is the in-tree provenance document (``config/certs.yml``)
+    naming the identity each certificate must carry. An env-pack declares its
+    bundle by profile identity instead and ships no such document (issue #875);
+    pass ``None`` for that shape. Every cryptographic relationship -- valid
+    self-signed root, consistent authorities, matching key pairs, issuer chain --
+    is still enforced. Only the identity-versus-document comparison, which has
+    no document to compare against, is skipped.
+    """
 
     paths = {output.path: certs_dir / output.path for output in outputs}
     error = _certificate_path_error(certs_dir, paths.values())
@@ -84,7 +93,7 @@ def _load_certificate_bundle(
 
 def _loaded_bundle_error(
     certs_dir: Path,
-    provenance_path: Path,
+    provenance_path: Path | None,
     certificates: dict[str, x509.Certificate],
     private_keys: dict[str, PrivateKeyTypes],
 ) -> str | None:
@@ -100,7 +109,7 @@ def _loaded_bundle_error(
         error = "Certificate bundle contains a key/certificate mismatch."
     elif not _chains_to_root(certificates, root):
         error = "Certificate bundle contains an invalid issuer chain."
-    else:
+    elif provenance_path is not None:
         expected = _expected_identities(provenance_path)
         if expected is None or not _identities_match(certificates, expected):
             error = "Certificate bundle identity does not match its provenance."
@@ -137,7 +146,7 @@ def _manager_root_matches(
 def certificate_bundle_evidence(
     certs_dir: Path,
     outputs: tuple[DeploymentGeneratedArtifactOutput, ...],
-    provenance_path: Path,
+    provenance_path: Path | None,
 ) -> dict[str, object] | None:
     """Return non-secret certificate proof only after full validation."""
 

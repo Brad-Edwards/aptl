@@ -466,6 +466,38 @@ def test_certificate_bundle_validates_pair_chain_san_and_permissions(
     assert len(evidence["public_root_sha256"]) == 64
 
 
+def test_certificate_bundle_without_a_provenance_document_still_validates_crypto(
+    tmp_path: Path,
+) -> None:
+    """An env-pack bundle has no provenance document, only a profile identity.
+
+    Realization already scopes the document check that way; observation must
+    too, or a correctly issued pack bundle validates as "identity does not match
+    its provenance", loses its evidence, and the SEM-218 gate rejects
+    certificates APTL just issued (issue #875). Every cryptographic
+    relationship is still enforced -- only the comparison that has no document
+    to compare against is skipped.
+    """
+
+    certs_dir, outputs = _write_certificate_bundle(tmp_path)
+
+    assert validate_certificate_bundle(certs_dir, outputs, None) == []
+    evidence = certificate_bundle_evidence(certs_dir, outputs, None)
+    assert evidence is not None
+    assert len(evidence["public_root_sha256"]) == 64
+
+
+def test_certificate_bundle_without_a_provenance_document_still_rejects_bad_keys(
+    tmp_path: Path,
+) -> None:
+    certs_dir, outputs = _write_certificate_bundle(tmp_path, leaf_key_matches=False)
+
+    assert validate_certificate_bundle(certs_dir, outputs, None) == [
+        "Certificate bundle contains a key/certificate mismatch."
+    ]
+    assert certificate_bundle_evidence(certs_dir, outputs, None) is None
+
+
 def test_certificate_bundle_rejects_private_key_mismatch(tmp_path: Path) -> None:
     certs_dir, outputs = _write_certificate_bundle(tmp_path, leaf_key_matches=False)
 

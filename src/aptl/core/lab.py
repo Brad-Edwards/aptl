@@ -1865,7 +1865,13 @@ def _probe_ssh_target(ctx: _LabStartContext, name: str, user: str) -> None:
             user=user,
             key_path=ctx.ssh_key_path,
         ),
-        timeout=60,
+        # Generous ceiling: on a full first boot the generic-base SSH targets
+        # (image-free apt installs of openssh-server started under systemd) can
+        # take well past a minute to have sshd accepting connections while ~30
+        # other containers initialize concurrently. The wait returns as soon as
+        # SSH answers, so a quick target costs nothing; the ceiling only governs
+        # how long a genuinely slow first boot is given before the warning.
+        timeout=180,
         interval=5,
         service_name=f"SSH ({name})",
         progress=ctx.progress,

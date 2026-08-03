@@ -97,7 +97,7 @@ def _render_service(
 
 
 # Minimal deployment ulimits every image node receives. RuntimeContainer has no
-# ulimits affordance yet (tracked upstream in OpenRAE/rae), and some images fail
+# ulimits affordance yet (tracked upstream in OpenRAE/rae#1066), and some images fail
 # a bootstrap check without a raised file-descriptor limit -- OpenSearch (the
 # Wazuh indexer, Shuffle's opensearch) refuses to start when nofile is below
 # 65535 and network.host is non-loopback. These are universally safe raises

@@ -21,7 +21,6 @@ from aptl.core.deployment._compose_stateful_constants import (
 from aptl.core.deployment._compose_stateful_services import (
     wazuh_service_definitions,
 )
-from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentRealizationSpec,
@@ -67,11 +66,7 @@ def effective_stateful_model_errors(
     expected = stateful_override_payload(scenario_root, project_name, realization)
     expected_services = expected["services"]
     assert isinstance(expected_services, Mapping)
-    errors = _effective_service_errors(
-        expected_services,
-        observed_services,
-        wazuh_cluster_identity(realization).services,
-    )
+    errors = _effective_service_errors(expected_services, observed_services)
     errors.extend(
         _certificate_exposure_errors(
             observed_services,
@@ -284,9 +279,15 @@ def _mounts(
 def _effective_service_errors(
     expected_services: Mapping[object, object],
     observed_services: Mapping[object, object],
-    owned_wazuh_services: frozenset[str],
 ) -> list[str]:
-    """Return model mismatches for generated and mount-only services."""
+    """Return model mismatches for generated mount-only services.
+
+    Every stateful service is now realized generically: the stateful override
+    contributes only mount merges (certs, rendered config, volumes) on top of the
+    generated base compose. The effective model is valid as long as every
+    declared mount is present in the observed service — the base compose owns the
+    rest of the definition (issue #875). Wazuh is no longer special-cased here.
+    """
 
     errors: list[str] = []
     for service_name, expected_service in expected_services.items():
@@ -296,59 +297,12 @@ def _effective_service_errors(
             Mapping,
         ):
             errors.append(f"Effective stateful service {service_name} is absent.")
-        elif service_name in owned_wazuh_services:
-            errors.extend(
-                _owned_service_model_errors(
-                    str(service_name),
-                    expected_service,
-                    observed_service,
-                )
-            )
         elif not _mount_contract(expected_service).issubset(
             _mount_contract(observed_service)
         ):
             errors.append(
                 f"Effective stateful service {service_name} is missing a declared mount."
             )
-    return errors
-
-
-def _owned_service_model_errors(
-    service_name: str,
-    expected: Mapping[str, object],
-    observed: Mapping[str, object],
-) -> list[str]:
-    """Return strict model mismatches for one graph-owned service."""
-
-    fields = (
-        "image",
-        "container_name",
-        "hostname",
-        "restart",
-        "profiles",
-        "ports",
-        "environment",
-        "ulimits",
-        "healthcheck",
-        "deploy",
-        "networks",
-    )
-    errors: list[str] = []
-    if any(observed.get(field) != expected.get(field) for field in fields):
-        errors.append(
-            f"Effective stateful service {service_name} does not match "
-            "its admitted definition."
-        )
-    if _normalized_dependencies(observed.get("depends_on")) != (
-        _normalized_dependencies(expected.get("depends_on"))
-    ):
-        errors.append(
-            f"Effective stateful service {service_name} has unexpected dependencies."
-        )
-    if _mount_contract(observed) != _mount_contract(expected):
-        errors.append(
-            f"Effective stateful service {service_name} has unexpected mounts."
-        )
     return errors
 
 
@@ -367,18 +321,6 @@ def _mount_contract(service: Mapping[str, object]) -> set[tuple[object, ...]]:
         )
         for mount in mounts
         if isinstance(mount, Mapping)
-    }
-
-
-def _normalized_dependencies(value: object) -> dict[str, str]:
-    """Normalize long-form Compose service dependencies for comparison."""
-
-    if not isinstance(value, Mapping):
-        return {}
-    return {
-        str(service): str(details.get("condition"))
-        for service, details in value.items()
-        if isinstance(details, Mapping)
     }
 
 

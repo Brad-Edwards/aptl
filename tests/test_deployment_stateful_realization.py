@@ -564,17 +564,27 @@ def test_generated_compose_model_is_validated_before_up(
     ]
 
 
-def test_effective_compose_model_rejects_inherited_stateful_mount(
+def test_effective_compose_model_rejects_undeclared_certificate_mount(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """An extra mount of cert material beyond the declared outputs is rejected.
+
+    Wazuh is realized generically now, so extra *non-cert* mounts from the
+    generated base compose are expected and allowed; the effective-model check no
+    longer strict-matches the whole service. But undeclared *certificate*
+    material must still be caught -- a mount whose source is under a cert bundle
+    root but is not a declared output leaks key material (issue #875).
+    """
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     spec = _spec()
     payload = _effective_payload(tmp_path, spec)
     payload["services"]["wazuh.indexer"]["volumes"].append(
         {
             "type": "bind",
-            "source": str(tmp_path / "unexpected"),
-            "target": "/unexpected",
+            "source": str(
+                tmp_path / "config/wazuh_indexer_ssl_certs/wazuh.indexer.pem"
+            ),
+            "target": "/usr/share/wazuh-indexer/certs/leaked.pem",
             "read_only": True,
         }
     )
@@ -603,7 +613,7 @@ def test_effective_compose_model_rejects_inherited_stateful_mount(
     result = backend.realize(spec, build=False, scenario_root=tmp_path)
 
     assert result.success is False
-    assert "unexpected mounts" in result.error
+    assert "undeclared certificate material" in result.error
 
 
 def test_invalid_generated_compose_model_blocks_up(tmp_path: Path, monkeypatch) -> None:

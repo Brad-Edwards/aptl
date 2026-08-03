@@ -17,8 +17,12 @@ from raes_contracts.planning import PlannedResource
 
 from aptl.backends.raes_image_realization import resolve_node_image
 
-_ALLOWLISTED_NAME = "wazuh-manager"
-_ALLOWLISTED_VERSION = "4.x"
+# A full image name from the allowed-source set plus a pinned tag. The backend
+# no longer substitutes a concrete image for a vague version (the retired
+# wazuh-manager/"4.x" -> wazuh/wazuh-manager:4.12.0 table); the SDL must declare
+# the real image, and the allow-check formats it verbatim (issue #875, Cluster D).
+_ALLOWLISTED_NAME = "wazuh/wazuh-manager"
+_ALLOWLISTED_VERSION = "4.12.0"
 _DIGEST = "sha256:" + "5" * 64
 
 

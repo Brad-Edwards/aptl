@@ -2692,8 +2692,11 @@ def test_realization_uses_allowed_source_when_upstream_build_path_is_note(tmp_pa
     _write_compose(tmp_path, {"wazuh-manager": ["wazuh"]})
     node = _node_resource("wazuh-manager")
     node.payload["spec"]["node"]["source"] = {
-        "name": "wazuh-manager",
-        "version": "4.x",
+        # Full image name + pinned tag: the backend no longer substitutes a
+        # concrete image for a vague version, so the allow-check resolves the
+        # SDL-declared image verbatim when the build path is unavailable (#875).
+        "name": "wazuh/wazuh-manager",
+        "version": "4.12.0",
         "build": {
             "dockerfile_path": (
                 "upstream Wazuh manager Dockerfile not present in APTL checkout"

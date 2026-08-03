@@ -92,7 +92,22 @@ def _render_service(
     if depends:
         service["depends_on"] = depends
     service.update(_operational_config(node.runtime))
+    service.setdefault("ulimits", _DEFAULT_IMAGE_NODE_ULIMITS)
     return service
+
+
+# Minimal deployment ulimits every image node receives. RuntimeContainer has no
+# ulimits affordance yet (tracked upstream in OpenRAE/rae), and some images fail
+# a bootstrap check without a raised file-descriptor limit -- OpenSearch (the
+# Wazuh indexer, Shuffle's opensearch) refuses to start when nofile is below
+# 65535 and network.host is non-loopback. These are universally safe raises
+# (unlimited memlock, 65536 file descriptors); they are an explicitly-flagged
+# APTL deployment default, not authored range content, and are superseded once
+# the SDL can declare per-node ulimits (issue #875, SDL-authority class).
+_DEFAULT_IMAGE_NODE_ULIMITS = {
+    "memlock": {"soft": -1, "hard": -1},
+    "nofile": {"soft": 65536, "hard": 65536},
+}
 
 
 def _truthy(value: object) -> bool:

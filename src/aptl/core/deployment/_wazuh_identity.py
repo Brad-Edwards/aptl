@@ -16,12 +16,10 @@ Shuffle's, by that dependency edge). A name-based fallback to the canonical
 appliance names keeps older specs and unit fixtures — which name the services
 canonically but may not carry the semantic families — working unchanged.
 
-The canonical appliance DNS names (``wazuh.indexer``/``wazuh.manager``) stay
-fixed regardless of the Compose service key: the appliance's own bundled config
-(filebeat ``output.elasticsearch.hosts``, the dashboard API URL) and its
-certificates are authored against them. When the realized service key differs,
-the cluster definitions publish the canonical name as a network alias so those
-references resolve.
+The identity is used only to route stateful resources and readiness probes to
+the right realized nodes; the cluster's run shape (image, env, entrypoint,
+config, certs, volumes) comes from the generic realization of its declared
+desired-state, not from this module (issue #875).
 """
 
 from __future__ import annotations
@@ -43,12 +41,10 @@ _OPENSEARCH_ENGINES = frozenset({"opensearch", "elasticsearch"})
 
 @dataclass(frozen=True)
 class WazuhClusterIdentity:
-    """The realized service keys and canonical DNS names of the Wazuh cluster."""
+    """The realized Compose service keys of the Wazuh cluster."""
 
     manager_service: str | None
     indexer_service: str | None
-    manager_dns: str = WAZUH_MANAGER_SERVICE
-    indexer_dns: str = WAZUH_INDEXER_SERVICE
 
     @property
     def services(self) -> frozenset[str]:
@@ -59,15 +55,6 @@ class WazuhClusterIdentity:
             for service in (self.manager_service, self.indexer_service)
             if service
         )
-
-    def dns_for(self, service: str) -> str | None:
-        """Return the canonical appliance DNS name for a realized service key."""
-
-        if service == self.manager_service:
-            return self.manager_dns
-        if service == self.indexer_service:
-            return self.indexer_dns
-        return None
 
 
 def _is_wazuh_manager(node: DeploymentNodeRealization) -> bool:

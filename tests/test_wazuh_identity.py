@@ -13,7 +13,6 @@ from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.core.deployment._wazuh_identity import wazuh_cluster_identity
 from aptl.core.deployment.realization import (
-    DeploymentNetworkAttachment,
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
@@ -110,9 +109,6 @@ def test_identity_is_derived_from_declared_semantics_not_the_service_name():
 
     assert identity.manager_service == "wazuh-manager"
     assert identity.indexer_service == "wazuh-indexer"
-    # Canonical appliance DNS names are fixed regardless of the service key.
-    assert identity.manager_dns == "wazuh.manager"
-    assert identity.indexer_dns == "wazuh.indexer"
     assert identity.services == frozenset({"wazuh-manager", "wazuh-indexer"})
 
 
@@ -121,13 +117,6 @@ def test_indexer_disambiguated_from_other_opensearch_datastores():
 
     identity = wazuh_cluster_identity(_cluster_spec("wazuh-indexer"))
     assert identity.indexer_service != "shuffle-opensearch"
-
-
-def test_dns_for_maps_service_keys_to_canonical_names():
-    identity = wazuh_cluster_identity(_cluster_spec("wazuh-indexer"))
-    assert identity.dns_for("wazuh-indexer") == "wazuh.indexer"
-    assert identity.dns_for("wazuh-manager") == "wazuh.manager"
-    assert identity.dns_for("shuffle-opensearch") is None
 
 
 def test_name_fallback_keeps_canonically_named_specs_working():
@@ -165,56 +154,3 @@ def test_no_wazuh_cluster_yields_empty_identity():
     assert identity.services == frozenset()
     assert identity.manager_service is None
     assert identity.indexer_service is None
-
-
-def test_service_definition_publishes_canonical_dns_alias_when_key_differs():
-    """When the service key differs from the appliance DNS name, an alias binds it."""
-
-    from aptl.core.deployment._compose_stateful_services import _service_networks
-    from aptl.core.deployment._wazuh_identity import WazuhClusterIdentity
-
-    identity = WazuhClusterIdentity(
-        manager_service="wazuh-manager", indexer_service="wazuh-indexer"
-    )
-    node = DeploymentNodeRealization(
-        address="provision.node.wazuh-indexer",
-        name="wazuh-indexer",
-        service_name="wazuh-indexer",
-        container_name="aptl-wazuh-indexer",
-        networks=(),
-        network_attachments=(
-            DeploymentNetworkAttachment(
-                network="security-net", ipv4_address="172.20.0.12"
-            ),
-        ),
-    )
-
-    networks = _service_networks(node, identity)
-    attachment = networks["aptl-security"]
-    assert attachment["aliases"] == ["wazuh.indexer"]
-    assert attachment["ipv4_address"] == "172.20.0.12"
-
-
-def test_service_definition_omits_alias_when_key_matches_dns():
-    """An in-tree service already named ``wazuh.indexer`` needs no alias."""
-
-    from aptl.core.deployment._compose_stateful_services import _service_networks
-    from aptl.core.deployment._wazuh_identity import WazuhClusterIdentity
-
-    identity = WazuhClusterIdentity(
-        manager_service="wazuh.manager", indexer_service="wazuh.indexer"
-    )
-    node = DeploymentNodeRealization(
-        address="provision.node.wazuh-indexer",
-        name="wazuh-indexer",
-        service_name="wazuh.indexer",
-        container_name="aptl-wazuh-indexer",
-        networks=(),
-        network_attachments=(
-            DeploymentNetworkAttachment(network="security-net"),
-        ),
-    )
-
-    networks = _service_networks(node, identity)
-    # No ipv4_address and no alias -> the attachment carries nothing.
-    assert networks["aptl-security"] is None

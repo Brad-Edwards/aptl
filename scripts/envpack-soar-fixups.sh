@@ -37,6 +37,21 @@ _net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks
 _image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
 _has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
 
+# Capture a container's labels into LBL_ARGS as `--label k=v` pairs BEFORE it is
+# removed, so the recreated container keeps its compose-project membership.
+# Without this the replacement is invisible to `docker compose down` and its live
+# endpoint blocks the NEXT boot's clean-state teardown ("network has active
+# endpoints").
+LBL_ARGS=()
+_capture_labels() {
+    LBL_ARGS=()
+    local l
+    while IFS= read -r l; do
+        [ -n "$l" ] && LBL_ARGS+=(--label "$l")
+    done < <(docker inspect "$1" \
+        --format '{{range $k,$v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' 2>/dev/null)
+}
+
 log() { echo "[envpack-soar-fixups] $*"; }
 
 # --- misp-redis: restore the password MISP expects --------------------------
@@ -49,8 +64,9 @@ fix_misp_redis() {
     log "misp-redis has no password; recreating with --requirepass"
     local img net
     img="$(_image aptl-misp-redis)"; net="$(_net aptl-misp-redis)"
+    _capture_labels aptl-misp-redis
     docker rm -f aptl-misp-redis >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp-redis --restart unless-stopped \
+    docker run -d --name aptl-misp-redis --restart unless-stopped "${LBL_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp-redis --network-alias misp-redis \
         "$img" redis-server --requirepass redispassword >/dev/null
 }
@@ -62,12 +78,13 @@ fix_misp() {
     log "MISP missing DB/admin env; recreating with working configuration"
     local img net
     img="$(_image aptl-misp)"; net="$(_net aptl-misp)"
+    _capture_labels aptl-misp
     docker rm -f aptl-misp >/dev/null 2>&1 || true
     # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
     docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
         -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
     docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
-    docker run -d --name aptl-misp --restart unless-stopped \
+    docker run -d --name aptl-misp --restart unless-stopped "${LBL_ARGS[@]}" \
         --network "$net" --network-alias aptl-misp --network-alias misp \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
         -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
@@ -85,8 +102,9 @@ fix_shuffle_backend() {
     log "shuffle-backend missing opensearch env; recreating with working configuration"
     local img net
     img="$(_image aptl-shuffle-backend)"; net="$(_net aptl-shuffle-backend)"
+    _capture_labels aptl-shuffle-backend
     docker rm -f aptl-shuffle-backend >/dev/null 2>&1 || true
-    docker run -d --name aptl-shuffle-backend --restart unless-stopped \
+    docker run -d --name aptl-shuffle-backend --restart unless-stopped "${LBL_ARGS[@]}" \
         --network "$net" --network-alias aptl-shuffle-backend --network-alias shuffle-backend \
         -e SHUFFLE_APP_SDK_TIMEOUT=120 \
         -e SHUFFLE_DEFAULT_USERNAME=admin -e SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024! \

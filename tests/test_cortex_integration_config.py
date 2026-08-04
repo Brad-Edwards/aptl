@@ -78,8 +78,13 @@ def test_cortex_seed_script_matches_thehive_fixture_key():
 
     assert f'CORTEX_API_KEY="${{CORTEX_API_KEY:-{fixture_key}}}"' in text
     assert '"roles": ["read", "analyze", "orgadmin"]' in text
-    assert 'CORTEX_INDEX="${CORTEX_INDEX:-cortex_6}"' in text
-    assert 'sh -s < "$SCRIPT_DIR/cortex-index-init.sh"' in text
+    # The env-pack host-publishes no Cortex port, so the seed reaches the API
+    # through the container rather than a host localhost:9001 binding.
+    assert 'docker exec "$CORTEX_CONTAINER" curl' in text
+    # cortex_6 is ADR-088 initial service state materialized on thehive-es
+    # (#889); the seed must never create, modify, or delete the owner-protected
+    # declared index, so it no longer runs the cortex-index-init mapping script.
+    assert "cortex-index-init.sh" not in text
     assert "/api/organization" in text
     assert "/api/user" in text
 

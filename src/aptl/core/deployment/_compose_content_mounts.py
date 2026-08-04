@@ -86,24 +86,35 @@ def _place_content(
     root = realization_root / CONTENT_MOUNT_ROOT_RELPATH / slug
     basename = PurePosixPath(item.dest_relpath).name or slug
 
+    placed: Path | None = None
     if item.source_kind == "inline-text" and item.inline_text is not None:
         root.mkdir(parents=True, exist_ok=True)
-        destination = root / basename
-        destination.write_text(item.inline_text, encoding="utf-8")
-        return destination
+        placed = root / basename
+        placed.write_text(item.inline_text, encoding="utf-8")
+    elif item.source_kind in ("pack-file", "pack-directory") and item.artifact_id:
+        placed = _place_pack_content(item, scenario_root, root, basename)
+    elif (
+        item.source_kind in ("project-file", "project-directory")
+        and item.source_relpath
+    ):
+        placed = _project_content_source(item, scenario_root)
+    return placed
 
-    if item.source_kind in ("pack-file", "pack-directory") and item.artifact_id:
-        return _place_pack_content(item, scenario_root, root, basename)
 
-    if item.source_kind == "project-file" and item.source_relpath:
-        source = (scenario_root / item.source_relpath).resolve()
+def _project_content_source(
+    item: DeploymentContentRealization,
+    scenario_root: Path,
+) -> Path | None:
+    """Return a project source path when it exists with its declared kind.
+
+    A declared ``project-file`` that resolves to a directory (or the reverse) is
+    not the content the scenario declared, so nothing is bound for it.
+    """
+
+    source = (scenario_root / item.source_relpath).resolve()
+    if item.source_kind == "project-file":
         return source if source.is_file() else None
-
-    if item.source_kind == "project-directory" and item.source_relpath:
-        source = (scenario_root / item.source_relpath).resolve()
-        return source if source.is_dir() else None
-
-    return None
+    return source if source.is_dir() else None
 
 
 def _place_pack_content(

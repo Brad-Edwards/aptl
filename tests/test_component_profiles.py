@@ -52,7 +52,7 @@ def test_grouping_matches_the_retiring_compose_profiles_column():
         node_name = container.removeprefix("aptl-")
         mapped = component_profile(node_name)
         assert mapped is not None, f"{service_name} ({node_name}) has no profile grouping"
-        assert {mapped} == set(declared), (
+        assert set(declared) == {mapped}, (
             f"{service_name}: grouping {mapped!r} != compose {declared!r}"
         )
 

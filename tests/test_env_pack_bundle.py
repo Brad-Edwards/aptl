@@ -58,7 +58,7 @@ def test_staged_pack_members_are_singly_linked_regular_files(tmp_path: Path) -> 
 
     result = validate_pack(str(bundle.root))
     assert getattr(result, "ok", None) is True
-    assert not (getattr(result, "diagnostics", []) or [])
+    assert not getattr(result, "diagnostics", [])
 
 
 def test_read_asset_is_contained_to_the_staged_root(tmp_path: Path) -> None:

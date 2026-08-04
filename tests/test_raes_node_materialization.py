@@ -217,6 +217,7 @@ def test_realize_nodes_returns_first_failure_in_declared_order():
     nodes = [_named_node("box-0"), _named_node("box-1")]
     result = realize_nodes(nodes, _SecondFailsFasterBackend())
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     # Deterministic: box-0 is first in declared order even though box-1 failed first.
     assert "techvault.box-0" in (result.error or "")

@@ -386,15 +386,14 @@ class TestPackArtifactPlacement:
         copied = []
         ex = self._executor_with_copy(tmp_path, copied)
 
+        op = PlacePackArtifactOp(
+            dest_path="/opt/flags/generate.sh",
+            artifact_id="flag-gen",
+            artifact_digest="sha256:" + "d" * 64,
+        )
+
         with pytest.raises(MaterializationCommandError, match="digest mismatch"):
-            ex.place_pack_artifact(
-                "provision.node.webapp",
-                PlacePackArtifactOp(
-                    dest_path="/opt/flags/generate.sh",
-                    artifact_id="flag-gen",
-                    artifact_digest="sha256:" + "d" * 64,
-                ),
-            )
+            ex.place_pack_artifact("provision.node.webapp", op)
 
         assert copied == []
 
@@ -407,10 +406,9 @@ class TestPackArtifactPlacement:
             start_base=lambda addr, image: None,
         )
 
+        op = PlacePackArtifactOp(
+            dest_path="/opt/x", artifact_id="a", artifact_digest="sha256:0"
+        )
+
         with pytest.raises(MaterializationCommandError, match="staged pack root"):
-            ex.place_pack_artifact(
-                "provision.node.webapp",
-                PlacePackArtifactOp(
-                    dest_path="/opt/x", artifact_id="a", artifact_digest="sha256:0"
-                ),
-            )
+            ex.place_pack_artifact("provision.node.webapp", op)

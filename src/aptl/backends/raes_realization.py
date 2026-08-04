@@ -22,6 +22,11 @@ from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
 from aptl.backends._component_profiles import component_profiles
+from aptl.backends._raes_realization_diagnostics import (
+    _append_node_profile_diagnostic,
+    _append_profile_diagnostics,
+    _invalid_payload_diagnostics,
+)
 from aptl.backends.raes_base_substrate import base_container_spec
 from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
@@ -36,7 +41,6 @@ from aptl.backends.raes_profiles import (
     explicit_compose_profile_hints,
     load_compose_profile_index,
     node_aliases,
-    public_start_profiles,
 )
 from aptl.backends.raes_realization_networks import (
     append_network_topology_diagnostics,
@@ -251,57 +255,6 @@ def _all_nodes_image_free(nodes: list[NodeRealization]) -> bool:
     return bool(os_nodes) and all(_is_materializable_node(node) for node in os_nodes)
 
 
-def _append_node_profile_diagnostic(
-    resource: PlannedResource,
-    diagnostics: list[Diagnostic],
-) -> None:
-    """Record a diagnostic for a node without an APTL profile mapping."""
-
-    diagnostics.append(
-        diagnostic(
-            "aptl.provisioner.node-profile-unresolved",
-            resource.address,
-            (
-                "RAES node resource does not declare content that "
-                "maps to an APTL compose profile."
-            ),
-        )
-    )
-
-
-def _append_profile_diagnostics(
-    profiles: set[str],
-    config: AptlConfig,
-    diagnostics: list[Diagnostic],
-) -> None:
-    """Record diagnostics for missing or disabled compose-profile matches."""
-
-    if not profiles:
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.profile-resolution-failed",
-                PROVISIONING_ADDRESS,
-                (
-                    "RAES provisioning plan contained no node resources "
-                    "that map to APTL compose profiles."
-                ),
-            )
-        )
-
-    start_profiles = public_start_profiles(config)
-    if start_profiles and not (set(start_profiles) & profiles):
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.no-configured-profile-matches",
-                PROVISIONING_ADDRESS,
-                (
-                    "RAES provisioning plan did not declare any node "
-                    "that maps to a public-start APTL compose profile."
-                ),
-            )
-        )
-
-
 def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
     """Build an empty realization that carries validation diagnostics."""
 
@@ -312,28 +265,6 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
         placements=(),
         diagnostics=tuple(diagnostics),
     )
-
-
-def _invalid_payload_diagnostics(
-    resources: list[PlannedResource],
-) -> list[Diagnostic]:
-    """Report supported resources whose payload cannot be interpreted."""
-
-    diagnostics: list[Diagnostic] = []
-    for resource in resources:
-        if isinstance(resource.payload, Mapping):
-            continue
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.invalid-resource-payload",
-                resource.address,
-                (
-                    "APTL provisioner expected RAES resource payload "
-                    f"'{resource.resource_type}' to be a mapping."
-                ),
-            )
-        )
-    return diagnostics
 
 
 def _realize_node(
@@ -380,22 +311,15 @@ def _realize_node(
     node_os = _node_os(node_spec)
     node_os_version = _node_os_version(node_spec)
     node_runtime = _node_runtime(node_spec)
-    container_name = _container_name(profile_index, backend_services)
-    if container_name is None and node_runtime is not None and node_os:
-        container_name = base_container_spec(
-            resource.address,
-            os=node_os,
-            os_version=node_os_version,
-            runtime=node_runtime,
-        ).container_name
-    if container_name is None:
-        # Env-pack image node (issue #875): no static compose service to read a
-        # container name from, so use APTL's ``aptl-<node>`` convention (the
-        # same one base_container_spec applies to image-free nodes). A node
-        # whose own id already carries the prefix is not doubled.
-        container_name = (
-            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
-        )
+    container_name = _resolved_container_name(
+        resource,
+        profile_index,
+        backend_services,
+        node_name,
+        node_os=node_os,
+        node_os_version=node_os_version,
+        node_runtime=node_runtime,
+    )
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
@@ -423,6 +347,42 @@ def _realize_node(
             payload, resource.address
         ),
     )
+
+
+def _resolved_container_name(
+    resource: PlannedResource,
+    profile_index: ComposeProfileIndex,
+    backend_services: frozenset[str],
+    node_name: str,
+    *,
+    node_os: str,
+    node_os_version: str,
+    node_runtime: RuntimeConfiguration | None,
+) -> str:
+    """Return the container name the node realizes to.
+
+    Preference order: the static compose service's own container name; then the
+    ``base_container_spec`` name derived from the node's declared runtime; and
+    finally APTL's ``aptl-<node>`` convention.
+    """
+
+    container_name = _container_name(profile_index, backend_services)
+    if container_name is None and node_runtime is not None and node_os:
+        container_name = base_container_spec(
+            resource.address,
+            os=node_os,
+            os_version=node_os_version,
+            runtime=node_runtime,
+        ).container_name
+    if container_name is None:
+        # Env-pack image node (issue #875): no static compose service to read a
+        # container name from, so use APTL's ``aptl-<node>`` convention (the
+        # same one base_container_spec applies to image-free nodes). A node
+        # whose own id already carries the prefix is not doubled.
+        container_name = (
+            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
+        )
+    return container_name
 
 
 def _node_os(node_spec: Mapping[str, Any] | None) -> str:

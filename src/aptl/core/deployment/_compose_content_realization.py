@@ -29,6 +29,21 @@ _CONTENT_DIRECTORY_EXIT = 11
 _CONTENT_MISSING_EXIT = 12
 
 
+def _host_path_kind(source: str) -> str | None:
+    """Return a host path's filesystem kind, or ``None`` when it does not exist.
+
+    A plain stat: the path is never created as a side effect of the observation,
+    so an unrealized bind source still discloses nothing.
+    """
+
+    host_path = Path(source)
+    if host_path.is_file():
+        return "file"
+    if host_path.is_dir():
+        return "directory"
+    return None
+
+
 class ComposeRealizationContentMixin:
     """Realize typed scenario content placements through Docker Compose."""
 
@@ -141,12 +156,7 @@ class ComposeRealizationContentMixin:
         # timed out the probe). A missing path returns None -- the stat never
         # creates it -- so an unrealized bind still discloses nothing.
         if getattr(self, "supports_local_artifacts", False):
-            host_path = Path(source)
-            if host_path.is_file():
-                return "file"
-            if host_path.is_dir():
-                return "directory"
-            return None
+            return _host_path_kind(source)
         script = (
             f'if [ -f "$1" ]; then exit {_CONTENT_FILE_EXIT}; fi; '
             f'if [ -d "$1" ]; then exit {_CONTENT_DIRECTORY_EXIT}; fi; '

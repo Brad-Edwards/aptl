@@ -21,7 +21,10 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from aptl.core.deployment.realization import DeploymentGeneratedArtifactRealization
+from aptl.core.deployment.realization import (
+    DeploymentGeneratedArtifactOutput,
+    DeploymentGeneratedArtifactRealization,
+)
 from aptl.core.ssh import (
     _KEY_NAME,
     _harden_private_key,
@@ -58,6 +61,8 @@ _AUTHORIZED_KEYS = {
     "kali-authorized-keys": ("operator-private-key",),
 }
 
+_OutputsByName = dict[str, DeploymentGeneratedArtifactOutput]
+
 _KEYGEN_COMMENT = {
     "operator-private-key": "aptl-control-plane",
     "workstation-dev-private-key": "aptl-workstation-dev",
@@ -88,15 +93,33 @@ def realize_ssh_key_bundle(
     staging_root.mkdir(parents=True, exist_ok=True)
     host_ssh_dir = host_ssh_dir or (Path.home() / ".ssh")
 
+    error = _stage_bundle(by_name, staging_root, host_ssh_dir)
+    if error is not None:
+        return error
+    return _missing_outputs_error(artifact, staging_root)
+
+
+def _stage_bundle(
+    by_name: _OutputsByName, staging_root: Path, host_ssh_dir: Path
+) -> str | None:
+    """Stage the operator key, the scenario keypairs and the authorized-keys files.
+
+    Returns the first stage's error, or ``None`` when every stage succeeded.
+    """
+
     error = _stage_operator_key(by_name, staging_root, host_ssh_dir)
     if error is not None:
         return error
     error = _generate_keypairs(by_name, staging_root)
     if error is not None:
         return error
-    error = _write_authorized_keys(by_name, staging_root)
-    if error is not None:
-        return error
+    return _write_authorized_keys(by_name, staging_root)
+
+
+def _missing_outputs_error(
+    artifact: DeploymentGeneratedArtifactRealization, staging_root: Path
+) -> str | None:
+    """Return an error naming any declared output the bundle did not produce."""
 
     missing = [
         output.path
@@ -108,7 +131,9 @@ def realize_ssh_key_bundle(
     return None
 
 
-def _stage_operator_key(by_name, staging_root: Path, host_ssh_dir: Path) -> str | None:
+def _stage_operator_key(
+    by_name: _OutputsByName, staging_root: Path, host_ssh_dir: Path
+) -> str | None:
     """Reuse APTL's persistent control-plane key as the producer-private output.
 
     The operator/control-plane key is owned by ``aptl.core.ssh`` and used by the
@@ -130,18 +155,18 @@ def _stage_operator_key(by_name, staging_root: Path, host_ssh_dir: Path) -> str 
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(host_ssh_dir / _KEY_NAME, dest)
     shutil.copyfile(host_ssh_dir / f"{_KEY_NAME}.pub", Path(f"{dest}.pub"))
-    harden_error = _harden_private_key(dest)
-    if harden_error:
-        return harden_error
-    return _set_public_key_mode(Path(f"{dest}.pub")) or None
+    return (
+        _harden_private_key(dest) or _set_public_key_mode(Path(f"{dest}.pub")) or None
+    )
 
 
-def _generate_keypairs(by_name, staging_root: Path) -> str | None:
+def _generate_keypairs(by_name: _OutputsByName, staging_root: Path) -> str | None:
     """Generate each declared scenario keypair's private half (and its ``.pub``)."""
 
     for name in _KEYPAIR_OUTPUTS:
+        # The reused control-plane key is staged separately.
         if name == _OPERATOR_OUTPUT:
-            continue  # reused control-plane key, staged separately
+            continue
         output = by_name.get(name)
         if output is None:
             continue
@@ -167,7 +192,7 @@ def _generate_keypairs(by_name, staging_root: Path) -> str | None:
     return None
 
 
-def _write_authorized_keys(by_name, staging_root: Path) -> str | None:
+def _write_authorized_keys(by_name: _OutputsByName, staging_root: Path) -> str | None:
     """Compose each declared authorized_keys file from the authorized public keys."""
 
     for name, authorized in _AUTHORIZED_KEYS.items():

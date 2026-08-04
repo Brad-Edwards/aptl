@@ -76,6 +76,34 @@ def _has_opensearch_datastore(node: DeploymentNodeRealization) -> bool:
     return any(getattr(store, "engine", None) in _OPENSEARCH_ENGINES for store in stores)
 
 
+def _resolve_indexer_service(
+    manager_node: DeploymentNodeRealization | None,
+    nodes: list[DeploymentNodeRealization],
+    by_name: dict[str, DeploymentNodeRealization],
+) -> str | None:
+    """Return the indexer service key: the manager's OpenSearch ordering dependency.
+
+    Falls back to the canonical appliance service name when the semantic edge is
+    absent (older specs and unit fixtures).
+    """
+
+    if manager_node is not None:
+        dependencies = set(manager_node.ordering_dependencies)
+        indexer_node = next(
+            (
+                node
+                for node in nodes
+                if node.address in dependencies and _has_opensearch_datastore(node)
+            ),
+            None,
+        )
+        if indexer_node is not None:
+            return indexer_node.service_name
+    if WAZUH_INDEXER_SERVICE in by_name:
+        return WAZUH_INDEXER_SERVICE
+    return None
+
+
 def wazuh_cluster_identity(
     realization: DeploymentRealizationSpec,
 ) -> WazuhClusterIdentity:
@@ -94,21 +122,7 @@ def wazuh_cluster_identity(
         manager_node = by_name.get(WAZUH_MANAGER_SERVICE)
     manager_service = manager_node.service_name if manager_node else None
 
-    indexer_service: str | None = None
-    if manager_node is not None:
-        dependencies = set(manager_node.ordering_dependencies)
-        indexer_node = next(
-            (
-                node
-                for node in nodes
-                if node.address in dependencies and _has_opensearch_datastore(node)
-            ),
-            None,
-        )
-        if indexer_node is not None:
-            indexer_service = indexer_node.service_name
-    if indexer_service is None and WAZUH_INDEXER_SERVICE in by_name:
-        indexer_service = WAZUH_INDEXER_SERVICE
+    indexer_service = _resolve_indexer_service(manager_node, nodes, by_name)
 
     return WazuhClusterIdentity(
         manager_service=manager_service, indexer_service=indexer_service

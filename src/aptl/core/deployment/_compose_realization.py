@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
-import yaml
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -14,21 +11,21 @@ from aptl.core.deployment._compose_account_realization import (
     ComposeRealizationAccountMixin,
 )
 from aptl.core.deployment._compose_content_realization import (
-    CONTENT_SEEDER_IMAGE,
     ComposeRealizationContentMixin,
 )
 from aptl.core.deployment._compose_boundary_realization import (
     ComposeBoundaryRealizationMixin,
 )
-from aptl.core.deployment._compose_node_generation import base_compose_file
-from aptl.core.deployment._compose_port_realization import (
-    published_port_conflicts,
-    write_port_override,
+from aptl.core.deployment._compose_model_realization import (
+    ComposeRealizationModelMixin,
 )
-from aptl.core.deployment._compose_service_health import wait_for_realized_health
+from aptl.core.deployment._compose_node_generation import STATIC_COMPOSE_FILENAME
+from aptl.core.deployment._compose_post_start import (
+    ComposeRealizationPostStartMixin,
+)
+from aptl.core.deployment._compose_port_realization import published_port_conflicts
 from aptl.core.deployment._compose_stateful_realization import (
     ComposeStatefulRealizationMixin,
-    effective_stateful_model_errors,
 )
 from aptl.core.deployment._compose_image_realization import (
     ComposeRealizationImageMixin,
@@ -48,7 +45,6 @@ from aptl.core.deployment._compose_realization_networks import (
     _network_name_candidates,
     _resolve_realization_networks,
 )
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
 
@@ -63,9 +59,6 @@ __all__ = [
     "_strip_image_free_published_ports",
 ]
 
-_COMPOSE_MODEL_VALIDATION_ERROR = "Generated Compose model validation failed."
-_CONTENT_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose.content.yml"
-
 
 class ComposeRealizationMixin(
     ComposeBoundaryRealizationMixin,
@@ -73,6 +66,8 @@ class ComposeRealizationMixin(
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
     ComposeRealizationAccountMixin,
+    ComposeRealizationModelMixin,
+    ComposeRealizationPostStartMixin,
     ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
@@ -150,7 +145,7 @@ class ComposeRealizationMixin(
             # (issue #875).
             excluded_services = (
                 _image_free_service_names(realization, image_free_addresses)
-                if (scenario_root / "docker-compose.yml").exists()
+                if (scenario_root / STATIC_COMPOSE_FILENAME).exists()
                 else ()
             )
             legacy_content = tuple(
@@ -186,14 +181,6 @@ class ComposeRealizationMixin(
             )
             return result
 
-        def _networks() -> LabResult | None:
-            """Ensure declared networks exist, or fail closed on the first error."""
-
-            network_failures = self._ensure_realization_networks(realization)
-            if network_failures:
-                return LabResult(success=False, error="; ".join(network_failures[:5]))
-            return self._realize_authority_boundaries(realization)
-
         def _compose_model() -> LabResult | None:
             """Render and validate the generated Compose model."""
 
@@ -226,7 +213,7 @@ class ComposeRealizationMixin(
             lambda: self._realize_stateful_prerequisites(realization, realization_root),
             _images,
             lambda: self._realize_published_ports(realization),
-            _networks,
+            lambda: self._realize_networks_and_boundaries(realization),
             lambda: self._realize_content(realization, scenario_root),
             _compose_model,
             _start,
@@ -236,6 +223,22 @@ class ComposeRealizationMixin(
             if result is not None:
                 return result
         return LabResult(success=True)
+
+    def _realize_networks_and_boundaries(
+        self,
+        realization: DeploymentRealizationSpec,
+    ) -> LabResult | None:
+        """Ensure declared networks exist, then realize authority boundaries.
+
+        Fails closed on the first network error rather than continuing into
+        boundary realization on a topology that was never brought up. Returns
+        ``None`` when both stages succeed, so callers chain on ``is not None``.
+        """
+
+        network_failures = self._ensure_realization_networks(realization)
+        if network_failures:
+            return LabResult(success=False, error="; ".join(network_failures[:5]))
+        return self._realize_authority_boundaries(realization)
 
     def _materialize_image_free_nodes(
         self,
@@ -255,12 +258,9 @@ class ComposeRealizationMixin(
         """
 
         realization_root = realization_root or scenario_root
-        network_failures = self._ensure_realization_networks(realization)
-        if network_failures:
-            return LabResult(success=False, error="; ".join(network_failures[:5]))
-        boundary_result = self._realize_authority_boundaries(realization)
-        if boundary_result is not None:
-            return boundary_result
+        substrate_failure = self._realize_networks_and_boundaries(realization)
+        if substrate_failure is not None:
+            return substrate_failure
         nodes = tuple(n for n in realization.nodes if n.address in addresses)
         content = tuple(
             item for item in realization.content if item.target_address in addresses
@@ -296,14 +296,6 @@ class ComposeRealizationMixin(
         compose-side generation reuses the same material.
         """
 
-        from pathlib import PurePosixPath
-
-        from aptl.backends.raes_materializer import PlaceFileOp
-        from aptl.core.deployment._compose_stateful_model import (
-            _consumer_output_names,
-            artifact_source_path,
-        )
-
         ops_by_address: dict[str, list[object]] = {}
         for artifact in realization.generated_artifacts:
             consumers = [
@@ -314,34 +306,12 @@ class ComposeRealizationMixin(
             if not consumers:
                 continue
             failure = self._realize_one_generated_artifact(artifact, realization_root)
+            if failure is None:
+                failure = _append_image_free_artifact_ops(
+                    ops_by_address, artifact, consumers, realization_root
+                )
             if failure is not None:
                 return failure, {}
-            source = artifact_source_path(realization_root, artifact)
-            by_name = {output.name: output for output in artifact.outputs}
-            for consumer in consumers:
-                for name in _consumer_output_names(artifact, consumer):
-                    output = by_name[name]
-                    origin = source / output.path
-                    try:
-                        content = origin.read_text(encoding="utf-8")
-                    except OSError:
-                        return (
-                            LabResult(
-                                success=False,
-                                error=(
-                                    "Generated artifact output missing for image-free "
-                                    f"consumer {consumer.target_address}: {output.path}."
-                                ),
-                            ),
-                            {},
-                        )
-                    destination = str(
-                        PurePosixPath(consumer.mount_destination) / output.path
-                    )
-                    mode = "0600" if output.sensitivity == "secret" else "0644"
-                    ops_by_address.setdefault(consumer.target_address, []).append(
-                        PlaceFileOp(path=destination, content=content, mode=mode)
-                    )
         return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
 
     def _realize_without_compose(
@@ -360,12 +330,9 @@ class ComposeRealizationMixin(
         reports success.
         """
 
-        network_failures = self._ensure_realization_networks(realization)
-        if network_failures:
-            return LabResult(success=False, error="; ".join(network_failures[:5]))
-        boundary_result = self._realize_authority_boundaries(realization)
-        if boundary_result is not None:
-            return boundary_result
+        substrate_failure = self._realize_networks_and_boundaries(realization)
+        if substrate_failure is not None:
+            return substrate_failure
         addresses = frozenset(node.address for node in realization.nodes)
         failure, extra_ops = self._image_free_generated_artifact_ops(
             realization, addresses, self.realization_root
@@ -399,271 +366,47 @@ class ComposeRealizationMixin(
             return None
         return LabResult(success=False, error="; ".join(conflicts[:5]))
 
-    def _realization_compose_files(
-        self,
-        compose_files: tuple[Path, ...] | None,
-        realization: DeploymentRealizationSpec,
-        scenario_root: Path,
-        realization_root: Path | None = None,
-    ) -> tuple[Path, ...] | None:
-        """Add generated realization overrides to the Compose file set.
 
-        A static in-tree ``docker-compose.yml`` is read from ``scenario_root``;
-        the generated base and overrides are written under ``realization_root``
-        (the writable engine checkout), never the pristine pack (issue #875).
-        ``realization_root`` defaults to ``scenario_root`` so in-tree, where the
-        two coincide, is unchanged.
-        """
+def _append_image_free_artifact_ops(
+    ops_by_address: dict[str, list[object]],
+    artifact: object,
+    consumers: list[object],
+    realization_root: Path,
+) -> LabResult | None:
+    """Lower one artifact's per-consumer outputs into placement ops.
 
-        realization_root = realization_root or scenario_root
-        port_override = write_port_override(realization_root, realization)
-        stateful_override = self._write_stateful_realization_override(
-            realization, realization_root
-        )
-        content_override = self._write_image_node_content_override(
-            realization, scenario_root, realization_root
-        )
-        overrides = tuple(
-            path
-            for path in (port_override, stateful_override, content_override)
-            if path is not None
-        )
-        if not overrides:
-            return compose_files
-        base_files = compose_files or (
-            base_compose_file(realization, scenario_root, realization_root),
-        )
-        return (*base_files, *overrides)
+    Each selected, non-producer-private output becomes a file placement under
+    the consumer's declared mount destination, with a secret output placed
+    owner-only. Returns a fail-closed result when a declared output was not
+    produced, so an image-free node never starts missing material it declared.
+    """
 
-    def _write_image_node_content_override(
-        self,
-        realization: DeploymentRealizationSpec,
-        scenario_root: Path,
-        realization_root: Path,
-    ) -> Path | None:
-        """Write a Compose override bind-mounting image nodes' declared content.
+    from pathlib import PurePosixPath
 
-        Content bytes are resolved from the pack (``scenario_root``) and written
-        under ``realization_root``; image-free content is delivered by the
-        generic materializer, not here (issue #875).
-        """
+    from aptl.backends.raes_materializer import PlaceFileOp
+    from aptl.core.deployment._compose_stateful_model import (
+        _consumer_output_names,
+        artifact_source_path,
+    )
 
-        from aptl.core.deployment._compose_content_mounts import (
-            image_node_content_override,
-        )
-
-        # In-tree, a static docker-compose.yml already bind-mounts image-node
-        # config and seed volumes deliver the rest, so no generated override is
-        # needed; only a generated (env-pack) base needs image-node content bound
-        # in (issue #875).
-        if (scenario_root / "docker-compose.yml").exists():
-            return None
-        payload = image_node_content_override(
-            realization, scenario_root, realization_root
-        )
-        if not payload["services"]:
-            return None
-        override_path = realization_root / _CONTENT_OVERRIDE_RELATIVE_PATH
-        override_path.parent.mkdir(parents=True, exist_ok=True)
-        override_path.write_text(
-            yaml.safe_dump(payload, sort_keys=True), encoding="utf-8", newline="\n"
-        )
-        return override_path
-
-    def _realize_content(
-        self,
-        realization: DeploymentRealizationSpec,
-        scenario_root: Path,
-    ) -> LabResult | None:
-        """Materialize typed content placements; fail closed on any seed error.
-
-        Returns ``None`` on success (or when there is nothing to realize) so
-        the caller's ``result is None`` chain continues to the next step,
-        matching the existing image/network step shape.
-        """
-
-        content = realization.content
-        # For a generated (env-pack) base, image-node content is delivered as
-        # Compose bind mounts, not seeded volumes, so it must not also be seeded
-        # here (which would re-resolve and stage bytes into the pristine pack).
-        # In-tree keeps the original seed path for every content item (issue #875).
-        if not (scenario_root / "docker-compose.yml").exists():
-            imaged = {image.address for image in realization.images}
-            content = tuple(
-                item for item in content if item.target_address not in imaged
-            )
-        if not content:
-            return None
-        try:
-            self.realize_content(
-                content,
-                seeder_image=CONTENT_SEEDER_IMAGE,
-                scenario_root=scenario_root,
-            )
-        except (BackendSeedError, BackendTimeoutError) as exc:
-            return LabResult(
-                success=False,
-                error=f"Content placement realization failed: {exc}",
-            )
-        return None
-
-    def _validate_realization_compose_model(
-        self,
-        profiles: list[str],
-        compose_files: tuple[Path, ...] | None,
-        realization: DeploymentRealizationSpec,
-        scenario_root: Path,
-        realization_root: Path | None = None,
-    ) -> LabResult | None:
-        """Render and inspect the effective generated model before startup.
-
-        ``scenario_root`` is Compose's ``--project-directory`` (relative-path
-        resolution); ``realization_root`` is where generated artifacts and their
-        mount sources actually live, so the *expected* mounts must be computed
-        against it, not the pristine pack (issue #875). They coincide in-tree.
-        """
-
-        realization_root = realization_root or scenario_root
-        if compose_files is None:
-            return None
-        command = self._build_command(
-            "config",
-            profiles,
-            compose_files=compose_files,
-            scenario_root=scenario_root,
-        )
-        stateful = bool(
-            realization.generated_artifacts or realization.persistent_volumes
-        )
-        error = (
-            self._effective_compose_model_error(command, realization, realization_root)
-            if stateful
-            else self._compose_syntax_error(command)
-        )
-        return LabResult(success=False, error=error) if error is not None else None
-
-    def _compose_syntax_error(self, command: list[str]) -> str | None:
-        """Return a bounded error when Compose rejects a stateless model."""
-
-        command.append("--quiet")
-        result = self._run(command)
-        return _COMPOSE_MODEL_VALIDATION_ERROR if result.returncode != 0 else None
-
-    def _effective_compose_model_error(
-        self,
-        command: list[str],
-        realization: DeploymentRealizationSpec,
-        realization_root: Path,
-    ) -> str | None:
-        """Render and validate a stateful model without interpolating secrets.
-
-        ``realization_root`` is where generated artifacts and their mount sources
-        live; the expected-mount set is computed against it so it matches the
-        override that was actually written (issue #875).
-        """
-
-        command.extend(["--no-interpolate", "--format", "json"])
-        result = self._run(command)
-        if result.returncode != 0:
-            return _COMPOSE_MODEL_VALIDATION_ERROR
-        try:
-            payload = json.loads(result.stdout)
-        except (TypeError, ValueError):
-            return _COMPOSE_MODEL_VALIDATION_ERROR
-        errors = effective_stateful_model_errors(
-            payload,
-            realization_root,
-            self.project_name,
-            realization,
-        )
-        return "; ".join(errors[:5]) if errors else None
-
-    def _realization_result(
-        self,
-        start_result: LabResult,
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult:
-        """Return the final result after start, network, health, and accounts.
-
-        Ordering is load-bearing: networks are reconciled, then services must be
-        observed healthy, then accounts are realized. Account realization execs
-        into the running node containers (``container_exec``), so it cannot run
-        until those containers are up and healthy — the health wait gates it.
-        """
-
-        if not start_result.success:
-            return start_result
-        return self._post_start_result(realization)
-
-    def _post_start_result(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult:
-        """Reconcile networks, await health, then realize accounts, in order.
-
-        The steps are sequential and short-circuit: a network failure returns
-        before the health wait runs, and accounts are realized only once the
-        services are observed healthy (account realization execs into the running
-        containers). First failure wins.
-        """
-
-        result: LabResult | None = None
-        network_failures = self._reconcile_realization_networks(realization)
-        if network_failures:
-            result = LabResult(
-                success=False,
-                error="; ".join(network_failures[:5]),
-            )
-        if result is None:
-            health_failures = self._await_realized_service_health(realization)
-            if health_failures:
-                result = LabResult(
+    source = artifact_source_path(realization_root, artifact)
+    by_name = {output.name: output for output in artifact.outputs}
+    for consumer in consumers:
+        for name in _consumer_output_names(artifact, consumer):
+            output = by_name[name]
+            try:
+                content = (source / output.path).read_text(encoding="utf-8")
+            except OSError:
+                return LabResult(
                     success=False,
-                    error="; ".join(health_failures[:5]),
+                    error=(
+                        "Generated artifact output missing for image-free "
+                        f"consumer {consumer.target_address}: {output.path}."
+                    ),
                 )
-        if result is None:
-            result = self._verify_stateful_authenticated_readiness(realization)
-        if result is None:
-            result = self._realize_accounts_step(realization) or LabResult(
-                success=True,
-                message="Lab realized",
+            destination = str(PurePosixPath(consumer.mount_destination) / output.path)
+            mode = "0600" if output.sensitivity == "secret" else "0644"
+            ops_by_address.setdefault(consumer.target_address, []).append(
+                PlaceFileOp(path=destination, content=content, mode=mode)
             )
-        return result
-
-    def _await_realized_service_health(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> list[str]:
-        """Wait for the declared services to actually come up.
-
-        ``compose up -d`` only proves the containers were *created*. A resource
-        counts as realized only once the backend has started and observed it
-        (ADR-046 runtime addendum), so the realization does not return success
-        until every realized container is running and every container carrying a
-        healthcheck reports healthy.
-        """
-
-        containers = [
-            node.container_name for node in realization.nodes if node.container_name
-        ]
-        return wait_for_realized_health(self, containers)
-
-    def _realize_accounts_step(
-        self,
-        realization: DeploymentRealizationSpec,
-    ) -> LabResult | None:
-        """Realize account placements post-start; fail closed on a backend timeout.
-
-        Returns ``None`` on success (or nothing to realize). Account readiness
-        and verification failures already arrive as a fail-closed
-        :class:`LabResult`; a mid-mutation ``BackendTimeoutError`` from
-        ``container_exec`` is converted into the same bounded envelope here.
-        """
-
-        try:
-            return self.realize_accounts(realization.accounts, realization.nodes)
-        except BackendTimeoutError as exc:
-            return LabResult(
-                success=False,
-                error=f"Account realization timed out: {exc}",
-            )
+    return None

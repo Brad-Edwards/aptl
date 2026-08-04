@@ -84,16 +84,19 @@ def _generated_artifact(
     provenance = _text(spec.get("provenance"))
     outputs = _outputs(resource, spec.get("outputs"), diagnostics)
     consumers = _consumers(resource, spec.get("consumers"), nodes, diagnostics)
-    if (
+    incomplete = (
         generator is None
         or lifecycle is None
         or provenance is None
         or not outputs
         or not consumers
-    ):
+    )
+    if incomplete:
         _append_invalid(resource, diagnostics)
-        return None
-    if not _selection_valid(resource, outputs, consumers, diagnostics):
+    # Selection is checked only for a complete declaration: an incomplete one is
+    # already rejected, and re-reporting it as a selection failure would
+    # double-count the same resource.
+    if incomplete or not _selection_valid(resource, outputs, consumers, diagnostics):
         return None
     return DeploymentGeneratedArtifactRealization(
         address=resource.address,
@@ -209,9 +212,12 @@ def _output(raw: object) -> DeploymentGeneratedArtifactOutput | None:
     # default), so certificate/rendered-config outputs authored before the
     # disposition field keep lowering unchanged.
     disposition = raw.get("disposition", "consumer_selected")
-    if name is None or path is None or sensitivity is None:
-        return None
-    if disposition not in _DISPOSITIONS:
+    if (
+        name is None
+        or path is None
+        or sensitivity is None
+        or disposition not in _DISPOSITIONS
+    ):
         return None
     return DeploymentGeneratedArtifactOutput(
         name=name,
@@ -279,15 +285,15 @@ def _consumer(
         selected = _selected_outputs(raw.get("selected_outputs"))
         if selected is None:
             _append_invalid(resource, diagnostics)
-            return None
-        return DeploymentStatefulConsumer(
-            target_address=node.address,
-            node_name=node_name,
-            service_name=service_name,
-            mount_destination=mount_destination,
-            access_mode=cast(StatefulConsumerAccessMode, access_mode),
-            selected_outputs=selected,
-        )
+        else:
+            return DeploymentStatefulConsumer(
+                target_address=node.address,
+                node_name=node_name,
+                service_name=service_name,
+                mount_destination=mount_destination,
+                access_mode=cast(StatefulConsumerAccessMode, access_mode),
+                selected_outputs=selected,
+            )
     return None
 
 
@@ -298,15 +304,16 @@ def _selected_outputs(raw: object) -> tuple[str, ...] | None:
         return ()
     if not isinstance(raw, list):
         return None
-    names: list[str] = []
-    for item in raw:
-        name = _text(item)
-        if name is None:
-            return None
-        names.append(name)
-    if len(set(names)) != len(names):
+    return _distinct_output_names(raw)
+
+
+def _distinct_output_names(raw: list[object]) -> tuple[str, ...] | None:
+    """Return the declared names, or None when one is malformed or repeated."""
+
+    names = [_text(item) for item in raw]
+    if any(name is None for name in names) or len(set(names)) != len(names):
         return None
-    return tuple(names)
+    return tuple(cast(str, name) for name in names)
 
 
 def _append_destination_conflicts(

@@ -962,9 +962,8 @@ def test_log_forwarder_with_realized_source_mount_is_corroborated():
     disclosures = [
         d for d in snapshot.realization_observations if d.requirement_kind == "forwarding-agents"
     ]
-    assert disclosures and disclosures[0].verification_scope is (
-        RealizationVerificationScope.CONFIGURATION
-    )
+    assert disclosures
+    assert disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
 
 
 def test_content_sync_reload_socket_mount_is_corroborated():

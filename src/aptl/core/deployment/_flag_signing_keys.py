@@ -66,6 +66,14 @@ def realize_flag_signing_keys(
         destination.write_text(key + "\n", encoding="utf-8")
         destination.chmod(0o600)
 
+    return _missing_outputs_error(artifact, staging_root)
+
+
+def _missing_outputs_error(
+    artifact: DeploymentGeneratedArtifactRealization, staging_root: Path
+) -> str | None:
+    """Return an error naming any declared output the generator did not produce."""
+
     missing = [
         output.path
         for output in artifact.outputs

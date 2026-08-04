@@ -128,7 +128,8 @@ def test_write_port_override_emits_long_form_entries(tmp_path):
         ]
     )
     path = write_port_override(tmp_path, spec)
-    assert path is not None and path.exists()
+    assert path is not None
+    assert path.exists()
     doc = yaml.safe_load(path.read_text())
     entry = doc["services"]["web-svc"]["ports"][0]
     assert entry["target"] == 80

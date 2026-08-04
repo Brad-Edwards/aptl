@@ -70,7 +70,8 @@ def test_flag_signing_seed_is_reused_on_a_second_run(tmp_path):
 
 def test_unsupported_profile_is_refused(tmp_path):
     error = realize_flag_signing_keys(_artifact(provenance="other:profile/v1"), tmp_path)
-    assert error is not None and "Unsupported" in error
+    assert error is not None
+    assert "Unsupported" in error
 
 
 def test_flag_signing_consumer_never_mounts_the_producer_private_seed():

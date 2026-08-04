@@ -60,9 +60,9 @@ _PACK_SOURCE_KINDS = ("pack-file", "pack-directory")
 
 def content_satisfactions_for_plan(
     plan: object,
-    content_by_address: Mapping[str, "DeploymentContentRealization"],
-    scenario_root: "Path",
-    manifest: "BackendManifest",
+    content_by_address: Mapping[str, DeploymentContentRealization],
+    scenario_root: Path,
+    manifest: BackendManifest,
     *,
     requirement_kind: str,
 ) -> dict[str, dict[str, object]]:
@@ -95,9 +95,9 @@ def content_satisfactions_for_plan(
 
 def _content_satisfaction(
     resource_payload: object,
-    content: "DeploymentContentRealization | None",
-    scenario_root: "Path",
-    manifest: "BackendManifest",
+    content: DeploymentContentRealization | None,
+    scenario_root: Path,
+    manifest: BackendManifest,
     *,
     requirement_kind: str,
     resolved_digests: dict[str, str | None],
@@ -107,6 +107,39 @@ def _content_satisfaction(
     contract = _authored_content_requirement(resource_payload)
     if contract is None or content is None:
         return None
+    realized = _realized_pack_digest(
+        contract,
+        content,
+        scenario_root,
+        manifest,
+        requirement_kind=requirement_kind,
+        resolved_digests=resolved_digests,
+    )
+    if realized is None:
+        return None
+    return satisfaction_payload(
+        contract,
+        manifest,
+        requirement_kind=requirement_kind,
+        realized_digest=realized,
+    )
+
+
+def _realized_pack_digest(
+    contract: ArtifactRequirement,
+    content: DeploymentContentRealization,
+    scenario_root: Path,
+    manifest: BackendManifest,
+    *,
+    requirement_kind: str,
+    resolved_digests: dict[str, str | None],
+) -> str | None:
+    """Return the digest the pack resolves for one placement, or None to refuse.
+
+    ``resolved_digests`` memoizes the per-artifact result so a pack shared by
+    several placements is opened once.
+    """
+
     if content.source_kind not in _PACK_SOURCE_KINDS or not content.artifact_id:
         return None
     route = select_route(contract, manifest, requirement_kind=requirement_kind)
@@ -120,18 +153,10 @@ def _content_satisfaction(
         resolved_digests[content.artifact_id] = _resolved_content_digest(
             scenario_root, content.artifact_id
         )
-    realized = resolved_digests[content.artifact_id]
-    if realized is None:
-        return None
-    return satisfaction_payload(
-        contract,
-        manifest,
-        requirement_kind=requirement_kind,
-        realized_digest=realized,
-    )
+    return resolved_digests[content.artifact_id]
 
 
-def _authored_content_requirement(payload: object) -> "ArtifactRequirement | None":
+def _authored_content_requirement(payload: object) -> ArtifactRequirement | None:
     """Return the artifact requirement authored on one planned content resource.
 
     Content authors its source directly at ``spec.source``; a node authors it one
@@ -145,7 +170,7 @@ def _authored_content_requirement(payload: object) -> "ArtifactRequirement | Non
     )
 
 
-def _resolved_content_digest(scenario_root: "Path", artifact_id: str) -> str | None:
+def _resolved_content_digest(scenario_root: Path, artifact_id: str) -> str | None:
     """Return the sha256 of the bytes the pack actually resolves for an artifact.
 
     Hashed here rather than read off ``resolved.identity``: the resolver's own

@@ -23,6 +23,7 @@ from aptl.core.deployment._compose_stateful_services import (
 )
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
+    DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
 )
 
@@ -41,7 +42,7 @@ def stateful_override_payload(
 ) -> dict[str, object]:
     """Return the complete generated stateful Compose model."""
 
-    services = wazuh_service_definitions(scenario_root, realization)
+    services = wazuh_service_definitions()
     _append_artifact_mounts(services, scenario_root, realization)
     volumes = _append_volume_mounts(services, project_name, realization)
     payload: dict[str, object] = {"services": services}
@@ -91,14 +92,16 @@ def artifact_source_path(
 
     provenance = getattr(artifact, "provenance", None)
     if provenance == SOC_CERT_PROFILE:
-        return scenario_root.resolve() / SOC_CERTS_ROOT_RELPATH
-    if artifact.generator == "certificate_bundle":
-        return scenario_root.resolve() / CERTIFICATE_ROOT_RELPATH
-    if artifact.generator == "ssh_key_bundle":
-        return scenario_root.resolve() / SSH_KEY_BUNDLE_ROOT_RELPATH / artifact.name
-    if provenance == FLAG_SIGNING_PROFILE_V2:
-        return scenario_root.resolve() / FLAG_SIGNING_ROOT_RELPATH / artifact.name
-    return scenario_root.resolve() / RENDERED_MANAGER_RELPATH
+        relative = Path(SOC_CERTS_ROOT_RELPATH)
+    elif artifact.generator == "certificate_bundle":
+        relative = Path(CERTIFICATE_ROOT_RELPATH)
+    elif artifact.generator == "ssh_key_bundle":
+        relative = Path(SSH_KEY_BUNDLE_ROOT_RELPATH) / artifact.name
+    elif provenance == FLAG_SIGNING_PROFILE_V2:
+        relative = Path(FLAG_SIGNING_ROOT_RELPATH) / artifact.name
+    else:
+        relative = Path(RENDERED_MANAGER_RELPATH)
+    return scenario_root.resolve() / relative
 
 
 def _consumer_output_names(
@@ -189,9 +192,9 @@ def _uses_per_output_mounts(
         # (source file -> target file); a per-output bind would append the
         # output name and mount the file as a directory (issue #875).
         return False
-    if getattr(consumer, "selected_outputs", ()):
-        return True
-    return any(output.disposition == "producer_private" for output in artifact.outputs)
+    return bool(getattr(consumer, "selected_outputs", ())) or any(
+        output.disposition == "producer_private" for output in artifact.outputs
+    )
 
 
 def _append_selected_output_mounts(
@@ -411,19 +414,17 @@ def _under_certificate_root(source: str, cert_root: str) -> bool:
     return source == cert_root or source.startswith(f"{cert_root}/")
 
 
-def _effective_volume_errors(
-    payload: Mapping[str, object],
-    project_name: str,
+def _compose_persistent_volumes(
     realization: DeploymentRealizationSpec,
-) -> list[str]:
-    """Return identity/label mismatches for effective persistent volumes."""
+) -> list[DeploymentPersistentVolumeRealization]:
+    """Return the persistent volumes at least one Compose service mounts.
 
-    if not realization.persistent_volumes:
-        return []
+    Only volumes with a Compose consumer appear in the override (a volume used
+    solely by a non-Compose node is delivered by the generic materializer).
+    """
+
     non_compose = _non_compose_consumer_addresses(realization)
-    # Only volumes with a Compose consumer appear in the override (a volume used
-    # solely by a non-Compose node is delivered by the generic materializer).
-    compose_volumes = [
+    return [
         volume
         for volume in realization.persistent_volumes
         if any(
@@ -431,6 +432,16 @@ def _effective_volume_errors(
             for consumer in volume.consumers
         )
     ]
+
+
+def _effective_volume_errors(
+    payload: Mapping[str, object],
+    project_name: str,
+    realization: DeploymentRealizationSpec,
+) -> list[str]:
+    """Return identity/label mismatches for effective persistent volumes."""
+
+    compose_volumes = _compose_persistent_volumes(realization)
     if not compose_volumes:
         return []
     observed = payload.get("volumes")

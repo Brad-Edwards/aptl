@@ -148,6 +148,26 @@ def realize_nodes(
             ),
         )
 
+    return _realize_nodes_concurrently(
+        materializable,
+        backend,
+        content_by_node,
+        scenario_root,
+        volume_mounts_by_node,
+        workers,
+    )
+
+
+def _realize_nodes_concurrently(
+    materializable: list[_MaterializableNode],
+    backend: _NodeBackend,
+    content_by_node: dict[str, tuple[MaterializationOp, ...]],
+    scenario_root: Path | None,
+    volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]],
+    workers: int,
+) -> LabResult | None:
+    """Materialize the nodes in a bounded pool, returning the first failure."""
+
     results: dict[str, LabResult | None] = {}
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {

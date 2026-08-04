@@ -200,6 +200,13 @@ def _sweep_stale_stagings(staging_root: Path, identity: str) -> None:
 def _stage_and_validate(
     source_pack: Path, staging_root: Path, identity: str
 ) -> ScenarioBundle:
+    """Stage an installed env-pack into an isolated tree and validate it.
+
+    Returns the bundle rooted at the staged copy. Raises ``EnvPackError`` when the
+    source is absent, the pack fails env-packs' own gates, or the staged pack
+    declares no SDL document.
+    """
+
     if not source_pack.is_dir():
         raise EnvPackError(f"env-pack source not found for {identity!r}: {source_pack}")
 
@@ -256,7 +263,8 @@ def _validate_staged_pack(staged: Path, identity: str) -> None:
     ``resolve_pack_artifact`` byte-open relies on.
     """
 
-    from raes_env_packs import (  # imported lazily to keep the seam import-light
+    # Imported lazily to keep the seam import-light.
+    from raes_env_packs import (
         PackDigestError,
         validate_pack,
         validate_pack_content_manifest,

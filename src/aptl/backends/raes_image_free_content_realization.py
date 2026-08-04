@@ -145,31 +145,12 @@ def _pack_artifact_image_free_placement(
     artifact_id = _optional_string(exact, "artifact_id")
     digest = _optional_string(exact, "digest")
     media_type = _optional_string(exact, "media_type")
-    if not artifact_id or not digest:
-        return None, [
-            diagnostic(
-                "aptl.provisioner.pack-artifact-missing-identity",
-                resource.address,
-                "pack content declares no artifact id + digest.",
-            )
-        ]
-    if not _SHA256_DIGEST_RE.match(digest):
-        return None, [
-            diagnostic(
-                "aptl.provisioner.pack-artifact-invalid-digest",
-                resource.address,
-                "pack content artifact digest is not a canonical sha256 digest.",
-            )
-        ]
     kind = "pack-directory" if content_type == "directory" else "pack-file"
-    if kind == "pack-directory" and media_type != "application/x-tar":
-        return None, [
-            diagnostic(
-                "aptl.provisioner.pack-directory-not-archive",
-                resource.address,
-                "pack directory content must be an application/x-tar archive.",
-            )
-        ]
+    rejection = _pack_artifact_rejection(
+        resource, artifact_id=artifact_id, digest=digest, media_type=media_type, kind=kind
+    )
+    if rejection is not None:
+        return None, rejection
     return (
         DeploymentContentRealization(
             address=resource.address,
@@ -185,6 +166,41 @@ def _pack_artifact_image_free_placement(
         ),
         [],
     )
+
+
+def _pack_artifact_rejection(
+    resource: PlannedResource,
+    *,
+    artifact_id: str | None,
+    digest: str | None,
+    media_type: str | None,
+    kind: str,
+) -> list[Diagnostic] | None:
+    """Return the diagnostics rejecting a malformed pack placement, else None.
+
+    Fails closed on the first fault in the order the identity is established:
+    an artifact id + digest must be declared, the digest must be a canonical
+    sha256, and directory content must arrive as a tar archive.
+    """
+
+    if not artifact_id or not digest:
+        code, message = (
+            "aptl.provisioner.pack-artifact-missing-identity",
+            "pack content declares no artifact id + digest.",
+        )
+    elif not _SHA256_DIGEST_RE.match(digest):
+        code, message = (
+            "aptl.provisioner.pack-artifact-invalid-digest",
+            "pack content artifact digest is not a canonical sha256 digest.",
+        )
+    elif kind == "pack-directory" and media_type != "application/x-tar":
+        code, message = (
+            "aptl.provisioner.pack-directory-not-archive",
+            "pack directory content must be an application/x-tar archive.",
+        )
+    else:
+        return None
+    return [diagnostic(code, resource.address, message)]
 
 
 def resolve_image_free_content_placement(

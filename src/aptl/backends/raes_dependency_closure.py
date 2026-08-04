@@ -39,9 +39,7 @@ def append_dependency_closure(
     # index lets node-to-node dependencies resolve against realized services
     # instead of only the static compose index.
     node_alias_index = _node_service_alias_index(nodes)
-    service_by_address = _service_by_node_address(
-        nodes, profile_index, node_alias_index, diagnostics
-    )
+    service_by_address = _service_by_node_address(nodes, profile_index, diagnostics)
     selected_node_addresses = {
         node.address
         for node in nodes
@@ -106,7 +104,6 @@ def _node_service_alias_index(
 def _service_by_node_address(
     nodes: list[NodeRealization],
     profile_index: ComposeProfileIndex,
-    node_alias_index: dict[str, set[str]],
     diagnostics: list[Diagnostic],
 ) -> dict[str, str]:
     """Return unambiguous Compose service matches for realized nodes."""

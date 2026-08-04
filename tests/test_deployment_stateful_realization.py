@@ -706,13 +706,13 @@ def test_stateful_wazuh_readiness_is_authenticated_and_observed(
     )
     checked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_realization.check_indexer_ready",
+        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
         lambda url, username, password: (
             checked.append((url, username, password)) or True
         ),
     )
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_realization.check_manager_api_ready",
+        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
         lambda url, username, password: (
             checked.append((url, username, password)) or True
         ),
@@ -799,16 +799,16 @@ def test_authenticated_readiness_polls_until_credentials_are_accepted(
         return indexer_attempts["n"] >= 3
 
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_realization.check_indexer_ready",
+        "aptl.core.deployment._compose_stateful_readiness.check_indexer_ready",
         _indexer_ready,
     )
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_realization.check_manager_api_ready",
+        "aptl.core.deployment._compose_stateful_readiness.check_manager_api_ready",
         lambda url, username, password: True,
     )
     slept: list[float] = []
     monkeypatch.setattr(
-        "aptl.core.deployment._compose_stateful_realization.time.sleep",
+        "aptl.core.deployment._compose_stateful_readiness.time.sleep",
         slept.append,
     )
 
@@ -940,7 +940,8 @@ def test_ssh_key_bundle_generation_failure_fails_the_realization_closed(
 
     result = backend._realize_one_generated_artifact(_ssh_artifact(), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "ssh-keygen unavailable" in result.error
 
 
@@ -961,7 +962,8 @@ def test_ssh_key_bundle_path_outside_the_scenario_root_is_refused(
 
     result = backend._realize_ssh_key_bundle(_ssh_artifact(), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "containment" in result.error.lower()
 
 
@@ -975,7 +977,8 @@ def test_an_unsupported_generator_kind_is_refused(tmp_path: Path) -> None:
 
     result = backend._realize_one_generated_artifact(artifact, tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "unsupported" in result.error
 
 
@@ -1069,7 +1072,8 @@ def test_a_generator_failure_stops_image_free_placement(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
-    assert failure is not None and failure.success is False
+    assert failure is not None
+    assert failure.success is False
     assert ops == {}
 
 
@@ -1093,7 +1097,8 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
-    assert failure is not None and failure.success is False
+    assert failure is not None
+    assert failure.success is False
     assert "missing for image-free consumer" in failure.error
     assert "labadmin/.ssh/authorized_keys" in failure.error
     assert ops == {}
@@ -1176,7 +1181,8 @@ def test_a_soc_bundle_missing_a_declared_output_fails_closed(
 
     result = backend._realize_one_generated_artifact(artifact, tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "thehive/keystore.p12" in result.error
 
 
@@ -1188,7 +1194,8 @@ def test_a_failed_soc_generator_fails_closed(tmp_path: Path, monkeypatch) -> Non
 
     result = backend._realize_one_generated_artifact(_soc_artifact(), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "no openssl" in result.error
 
 
@@ -1242,7 +1249,8 @@ def test_a_flag_signing_generation_failure_fails_closed(
 
     result = backend._realize_one_generated_artifact(_flag_artifact(), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "unsupported signing profile" in result.error
 
 
@@ -1275,7 +1283,8 @@ def test_a_generated_artifact_path_outside_the_bundle_is_refused(
 
     result = backend._realize_one_generated_artifact(artifact_factory(), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert result.error == expected
 
 
@@ -1458,7 +1467,8 @@ def test_a_seed_failure_fails_the_realization_closed(
 
     result = backend._realize_content(_seedable_spec(tmp_path), tmp_path)
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "seed container exited 1" in result.error
 
 

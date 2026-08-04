@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import yaml
 
-from aptl.core.deployment.realization import DeploymentRealizationSpec
-
 
 class OverrideMapping(dict):
     """A complete Compose service definition that replaces the base service.
@@ -40,10 +38,7 @@ StatefulDumper.add_representer(
 )
 
 
-def wazuh_service_definitions(
-    scenario_root: object,
-    realization: DeploymentRealizationSpec,
-) -> dict[str, dict[str, object]]:
+def wazuh_service_definitions() -> dict[str, dict[str, object]]:
     """Return no graph-owned service definitions.
 
     Wazuh is realized generically from its declared desired-state; the backend no

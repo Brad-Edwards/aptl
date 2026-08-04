@@ -33,8 +33,13 @@ from aptl.core.deployment.realization import (
 
 GENERATED_COMPOSE_RELPATH = Path(".aptl") / "realization" / "compose-base.yml"
 
+# The hand-authored base Compose file an in-tree scenario ships. Its presence at
+# a scenario root is what distinguishes in-tree (use it as-is) from an env-pack
+# (generate the base from the realization), so the two decisions cannot drift.
+STATIC_COMPOSE_FILENAME = "docker-compose.yml"
 
-def render_realization_compose(spec: DeploymentRealizationSpec) -> dict:
+
+def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, object]:
     """Return a Compose document for the spec's image-backed nodes and networks.
 
     Image-free nodes (no backing image) are omitted: the generic materializer
@@ -51,7 +56,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict:
     }
     service_names = set(emitted_services)
 
-    services: dict[str, dict] = {}
+    services: dict[str, dict[str, object]] = {}
     for node in spec.nodes:
         if not node.service_name or node.address not in image_by_address:
             continue
@@ -59,7 +64,7 @@ def render_realization_compose(spec: DeploymentRealizationSpec) -> dict:
             node, image_by_address[node.address], service_names
         )
 
-    document: dict = {"services": services}
+    document: dict[str, object] = {"services": services}
     networks = _render_networks(spec)
     if networks:
         document["networks"] = networks
@@ -70,10 +75,10 @@ def _render_service(
     node: DeploymentNodeRealization,
     image: DeploymentImageRealization,
     service_names: set[str],
-) -> dict:
+) -> dict[str, object]:
     """Render one image node into a Compose service definition."""
 
-    service: dict = {
+    service: dict[str, object] = {
         "image": image.image_ref,
         "container_name": node.container_name or f"aptl-{node.name}",
         "restart": "unless-stopped",
@@ -131,7 +136,7 @@ def _truthy(value: object) -> bool:
 _OPERATOR_SECRET_CLASSIFICATION = "operator_secret"
 
 
-def _environment_config(runtime: object) -> dict:
+def _environment_config(runtime: object) -> dict[str, str]:
     """Return the Compose ``environment`` map from a node's declared env.
 
     A variable classified ``operator_secret`` carries no value in the SDL (a real
@@ -157,7 +162,12 @@ def _environment_config(runtime: object) -> dict:
     return environment
 
 
-def _operational_config(runtime: object) -> dict:
+# RuntimeContainer sequence fields that translate one-to-one into the Compose
+# field of the same name, copied as a list.
+_CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "security_opt", "dns")
+
+
+def _operational_config(runtime: object) -> dict[str, object]:
     """Translate a node's declared runtime desired-state into Compose fields.
 
     APTL is a faithful translator here, not an authority: it emits only what the
@@ -170,56 +180,65 @@ def _operational_config(runtime: object) -> dict:
 
     if runtime is None:
         return {}
-    config: dict = {}
+    config: dict[str, object] = {}
     environment = _environment_config(runtime)
     if environment:
         config["environment"] = environment
-
-    container = getattr(runtime, "container", None)
-    if container is not None:
-        if getattr(container, "command", None):
-            config["command"] = list(container.command)
-        if getattr(container, "entrypoint", None):
-            config["entrypoint"] = list(container.entrypoint)
-        if _truthy(getattr(container, "privileged", None)):
-            config["privileged"] = True
-        if _truthy(getattr(container, "autoremove", None)):
-            # A node declaring autoremove is a one-shot (an init job that runs to
-            # completion and exits, e.g. an index bootstrap). Compose has no --rm,
-            # so the run-once intent is expressed as restart: "no"; without this
-            # the base "unless-stopped" policy restarts the finished job forever
-            # (issue #875).
-            config["restart"] = "no"
-        if getattr(container, "shm_size", None):
-            config["shm_size"] = container.shm_size
-        if getattr(container, "security_opt", None):
-            config["security_opt"] = list(container.security_opt)
-        if getattr(container, "dns", None):
-            config["dns"] = list(container.dns)
-
-    capabilities = getattr(runtime, "linux_capabilities", None)
-    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
-    if added:
-        # RAES uses the kernel CAP_* form; Docker's cap_add wants it without
-        # the prefix (NET_ADMIN, not CAP_NET_ADMIN).
-        config["cap_add"] = [
-            capability.removeprefix("CAP_") for capability in added
-        ]
+    config.update(_container_config(getattr(runtime, "container", None)))
+    capabilities = _capability_config(runtime)
+    if capabilities:
+        config["cap_add"] = capabilities
     return config
 
 
-def _service_networks(node: DeploymentNodeRealization) -> dict:
+def _container_config(container: object) -> dict[str, object]:
+    """Return the Compose fields a node's declared ``container`` runtime sets."""
+
+    if container is None:
+        return {}
+    config: dict[str, object] = {}
+    for field in _CONTAINER_SEQUENCE_FIELDS:
+        value = getattr(container, field, None)
+        if value:
+            config[field] = list(value)
+    if getattr(container, "shm_size", None):
+        config["shm_size"] = container.shm_size
+    if _truthy(getattr(container, "privileged", None)):
+        config["privileged"] = True
+    if _truthy(getattr(container, "autoremove", None)):
+        # A node declaring autoremove is a one-shot (an init job that runs to
+        # completion and exits, e.g. an index bootstrap). Compose has no --rm,
+        # so the run-once intent is expressed as restart: "no"; without this
+        # the base "unless-stopped" policy restarts the finished job forever
+        # (issue #875).
+        config["restart"] = "no"
+    return config
+
+
+def _capability_config(runtime: object) -> list[str]:
+    """Return the Compose ``cap_add`` list a node's declared runtime asks for.
+
+    RAES uses the kernel CAP_* form; Docker's cap_add wants it without the
+    prefix (NET_ADMIN, not CAP_NET_ADMIN).
+    """
+
+    capabilities = getattr(runtime, "linux_capabilities", None)
+    added = list(getattr(capabilities, "add", ()) or ()) if capabilities else []
+    return [capability.removeprefix("CAP_") for capability in added]
+
+
+def _service_networks(node: DeploymentNodeRealization) -> dict[str, dict[str, str]]:
     """Return the Compose ``networks`` attachment map for a node."""
 
     attachments = node.network_attachments or tuple(
         _Attachment(network) for network in node.networks
     )
-    networks: dict[str, dict] = {}
+    networks: dict[str, dict[str, str]] = {}
     for attachment in attachments:
         key = _compose_network_key(attachment.network)
         if not key:
             continue
-        options: dict = {}
+        options: dict[str, str] = {}
         address = getattr(attachment, "ipv4_address", None)
         if address:
             options["ipv4_address"] = address
@@ -320,19 +339,19 @@ def _dynamic_ip_range(
     return str(upper)
 
 
-def _render_networks(spec: DeploymentRealizationSpec) -> dict:
+def _render_networks(spec: DeploymentRealizationSpec) -> dict[str, dict[str, object]]:
     """Return the Compose ``networks`` section for the realized networks."""
 
     pinned_by_network = _pinned_addresses_by_network(spec)
-    networks: dict[str, dict] = {}
+    networks: dict[str, dict[str, object]] = {}
     for network in spec.networks:
         key = _compose_network_key(network.name)
         if not key:
             continue
-        definition: dict = {"driver": "bridge"}
+        definition: dict[str, object] = {"driver": "bridge"}
         if network.internal:
             definition["internal"] = True
-        ipam_config: dict = {}
+        ipam_config: dict[str, str] = {}
         if network.cidr:
             ipam_config["subnet"] = network.cidr
             ip_range = _dynamic_ip_range(
@@ -381,7 +400,7 @@ def base_compose_file(
     (where the two coincide) is behaviour-neutral.
     """
 
-    static = content_root / "docker-compose.yml"
+    static = content_root / STATIC_COMPOSE_FILENAME
     if static.exists():
         return static
     return write_realization_compose(spec, realization_root or content_root)

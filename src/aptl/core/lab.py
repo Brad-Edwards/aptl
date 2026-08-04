@@ -1119,14 +1119,22 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         log.info("Step 3: pivot/authorized keys come from the scenario pack; skipping host generation.")
         return None
 
-    # SEC #417: the kali pivot key is scenario content (kali -> targets),
-    # separate from the control-plane key above. Generated into a gitignored
-    # dir and bind-mounted (private -> kali, public -> targets). Targets
-    # (victim, workstation, ...) authorize both the control-plane key and
-    # this pivot key; the SDL places the combined file at
-    # ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
-    # and victim's own combined authorized_keys are the Prime scenario's
-    # separate workstation -> victim lateral-movement path (issue #581).
+    return _generate_host_side_pivot_keys(keys_dir, pivot_dir)
+
+
+def _generate_host_side_pivot_keys(keys_dir: Path, pivot_dir: Path) -> LabResult | None:
+    """Generate the in-tree scenario's pivot keys and authorized-key projections.
+
+    SEC #417: the kali pivot key is scenario content (kali -> targets),
+    separate from the host-side control-plane key. Generated into a gitignored
+    dir and bind-mounted (private -> kali, public -> targets). Targets
+    (victim, workstation, ...) authorize both the control-plane key and
+    this pivot key; the SDL places the combined file at
+    ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
+    and victim's own combined authorized_keys are the Prime scenario's
+    separate workstation -> victim lateral-movement path (issue #581).
+    """
+
     remaining_steps = (
         ("Pivot key generation", lambda: ensure_pivot_key(pivot_dir=pivot_dir)),
         (

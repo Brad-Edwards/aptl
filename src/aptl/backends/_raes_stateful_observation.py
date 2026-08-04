@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
@@ -317,20 +317,10 @@ def _artifact_consumer_realized(
     actually delivered it.
     """
 
-    container = node_containers.get(consumer.target_address)
-    if not container:
-        log.warning(
-            "artifact consumer %s has no realized container to observe",
-            consumer.target_address,
-        )
+    settled = _settled_consumer_container(backend, consumer, node_containers)
+    if settled is None:
         return False
-    info = _settled_inspect(backend, container)
-    if not _container_realized(info):
-        log.warning(
-            "artifact consumer container %s not settled/healthy for observation",
-            container,
-        )
-        return False
+    container, info = settled
     if image_free:
         return _placed_outputs_present(backend, artifact, consumer, container)
     return all(
@@ -345,6 +335,34 @@ def _artifact_consumer_realized(
             artifact, consumer, source
         )
     )
+
+
+def _settled_consumer_container(
+    backend: "DeploymentBackend",
+    consumer: DeploymentStatefulConsumer,
+    node_containers: dict[str, str],
+) -> tuple[str, dict[str, Any]] | None:
+    """Return a consumer's settled container name and inspect record, or None.
+
+    ``None`` means the consumer offers nothing observable — no realized container,
+    or one that never settled healthy — so the caller fails closed.
+    """
+
+    container = node_containers.get(consumer.target_address)
+    if not container:
+        log.warning(
+            "artifact consumer %s has no realized container to observe",
+            consumer.target_address,
+        )
+        return None
+    info = _settled_inspect(backend, container)
+    if not _container_realized(info):
+        log.warning(
+            "artifact consumer container %s not settled/healthy for observation",
+            container,
+        )
+        return None
+    return container, info
 
 
 def _expected_consumer_mounts(
@@ -397,29 +415,46 @@ def _placed_outputs_present(
             consumer.target_address,
         )
         return False
-    for name in names:
-        destination = str(
-            PurePosixPath(consumer.mount_destination) / by_name[name].path
+    return all(
+        _placed_output_present(
+            backend,
+            artifact,
+            consumer,
+            container,
+            str(PurePosixPath(consumer.mount_destination) / by_name[name].path),
         )
-        try:
-            placed = (
-                backend.container_exec(container, ["test", "-f", destination]).returncode
-                == 0
-            )
-        except (BackendTimeoutError, OSError) as exc:
-            log.warning(
-                "could not observe placed artifact output in %s (%s)",
-                container,
-                type(exc).__name__,
-            )
-            return False
-        if not placed:
-            log.warning(
-                "artifact %s output missing from image-free consumer %s",
-                artifact.address,
-                consumer.target_address,
-            )
-            return False
+        for name in names
+    )
+
+
+def _placed_output_present(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    consumer: DeploymentStatefulConsumer,
+    container: str,
+    destination: str,
+) -> bool:
+    """Return whether one placed output exists at ``destination`` in the container."""
+
+    try:
+        placed = (
+            backend.container_exec(container, ["test", "-f", destination]).returncode
+            == 0
+        )
+    except (BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe placed artifact output in %s (%s)",
+            container,
+            type(exc).__name__,
+        )
+        return False
+    if not placed:
+        log.warning(
+            "artifact %s output missing from image-free consumer %s",
+            artifact.address,
+            consumer.target_address,
+        )
+        return False
     return True
 
 

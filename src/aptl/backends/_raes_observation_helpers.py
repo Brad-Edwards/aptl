@@ -302,6 +302,21 @@ def _observed_placed_content_type(
     source = _bind_mount_source(info, destination)
     if source is not None:
         return _observed_bind_source_type(backend, content, source)
+    return _exec_probed_content_type(backend, container_name, content, destination)
+
+
+def _exec_probed_content_type(
+    backend: "DeploymentBackend",
+    container_name: str,
+    content: DeploymentContentRealization,
+    destination: str,
+) -> str | None:
+    """Classify a destination by ``test`` inside the container, or observe nothing.
+
+    A probe that cannot be completed (exec unavailable, timed out) yields
+    ``None`` so the SEM-218 gate rejects rather than assumes a kind.
+    """
+
     try:
         if backend.container_exec(container_name, ["test", "-d", destination]).returncode == 0:
             return "directory"

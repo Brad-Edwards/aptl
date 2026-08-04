@@ -15,6 +15,8 @@ leave the gate rejecting.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from raes.artifact_requirements import (
     ArtifactIdentity,
@@ -41,13 +43,12 @@ from aptl.backends.raes_artifact_mechanisms import (
     SOURCE_ARTIFACT_REQUIREMENT_KIND,
     env_pack_copy_profile,
     env_pack_copy_provenance_ref,
+    exact_artifact_profile,
 )
 from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.core.deployment.realization import DeploymentContentRealization
 from aptl.core.scenario_bundle import env_pack_bundle
-
-pytestmark = pytest.mark.integration
 
 _ADDRESS = "provision.content.misp-suricata-sync-readme"
 _FIELD_PATH = "content.misp-suricata-sync-readme.source.artifact_requirement"
@@ -196,6 +197,7 @@ def bundle_root(tmp_path_factory):
     return env_pack_bundle(tmp_path_factory.mktemp("staged"), "techvault").root
 
 
+@pytest.mark.integration
 def test_realized_pack_content_satisfies_the_runtime_gate(bundle_root):
     """The disclosed digest is the pack's own bytes, and the gate accepts it."""
 
@@ -225,12 +227,14 @@ def test_absent_disclosure_is_rejected_by_the_runtime_gate():
     assert provenance is None
 
 
+@pytest.mark.integration
 def test_content_the_backend_did_not_realize_gets_no_disclosure(bundle_root):
     """A placement the realization never lowered discloses nothing."""
 
     assert _disclosures(bundle_root, None) == {}
 
 
+@pytest.mark.integration
 def test_content_whose_pack_bytes_differ_from_the_pin_gets_no_disclosure(bundle_root):
     """A pin the pack's actual bytes do not match is a refusal, not an echo."""
 
@@ -239,12 +243,14 @@ def test_content_whose_pack_bytes_differ_from_the_pin_gets_no_disclosure(bundle_
     assert _disclosures(bundle_root, _content(), contract) == {}
 
 
+@pytest.mark.integration
 def test_unresolvable_artifact_id_gets_no_disclosure(bundle_root):
     """Content whose bytes the pack cannot resolve fails closed."""
 
     assert _disclosures(bundle_root, _content("techvault-not-in-this-pack")) == {}
 
 
+@pytest.mark.integration
 def test_non_pack_content_discloses_nothing(bundle_root):
     """Inline text carries no pack-resolved bytes, so there is nothing to claim."""
 
@@ -259,3 +265,237 @@ def test_non_pack_content_discloses_nothing(bundle_root):
     )
 
     assert _disclosures(bundle_root, inline) == {}
+
+
+# -- unit coverage of the disclosure logic, independent of a staged pack ------
+#
+# The tests above run the real gate against the real pack. These drive the same
+# module with the pack resolver replaced by an in-memory one, so the branches
+# that decide *whether* to disclose -- resolution failures, non-pack content,
+# an unadvertised route, several placements sharing one artifact -- are each
+# exercised against bytes the test controls, and the disclosed digest can be
+# checked against a hash the test computes itself.
+
+
+class _StubResolved(object):
+    """The shape ``resolve_pack_artifact`` returns: verified bytes + identity."""
+
+    def __init__(self, data: object) -> None:
+        self.data = data
+
+
+@pytest.fixture
+def stub_pack(monkeypatch):
+    """Replace the pack resolver with an in-memory artifact-id -> bytes store."""
+
+    from raes_env_packs import PackDigestError
+
+    store: dict[str, object] = {}
+    calls: list[str] = []
+
+    def _resolve(pack_root, artifact, **kwargs):
+        calls.append(str(artifact))
+        if artifact not in store:
+            raise PackDigestError("no such artifact in this pack")
+        return _StubResolved(store[artifact])
+
+    monkeypatch.setattr("raes_env_packs.resolve_pack_artifact", _resolve)
+    return store, calls
+
+
+def _digest_of(data: bytes) -> str:
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def _pack_contract(digest: str, routes: list | None = None) -> ArtifactRequirement:
+    contract = _contract(digest)
+    if routes is not None:
+        contract = ArtifactRequirement(
+            requirement_id=contract.requirement_id,
+            explicitness=contract.explicitness,
+            exact_artifact=contract.exact_artifact,
+            permitted_routes=routes,
+        )
+    return contract
+
+
+def test_the_disclosed_digest_is_the_hash_of_the_bytes_the_pack_resolved(stub_pack):
+    """The disclosure is an independent observation, not the author's own claim.
+
+    Hashing the resolved bytes here is what stops the gate comparing a
+    declaration against itself (issue #578): the digest is only disclosable
+    because the bytes really hash to it.
+    """
+
+    store, _calls = stub_pack
+    payload_bytes = b"# TechVault MISP sync\n"
+    store[_ARTIFACT_ID] = payload_bytes
+    digest = _digest_of(payload_bytes)
+
+    disclosures = _disclosures(Path("unused"), _content(), _pack_contract(digest))
+
+    assert disclosures[_ADDRESS]["integrity_refs"] == [digest]
+    assert disclosures[_ADDRESS]["provenance_refs"] == [env_pack_copy_provenance_ref()]
+
+
+def test_bytes_that_do_not_hash_to_the_pin_produce_no_disclosure(stub_pack):
+    """A pack whose bytes drifted from the pin is a refusal, not a disclosure."""
+
+    store, _calls = stub_pack
+    store[_ARTIFACT_ID] = b"these are not the authored bytes"
+
+    disclosures = _disclosures(
+        Path("unused"), _content(), _pack_contract(_digest_of(b"the authored bytes"))
+    )
+
+    assert disclosures == {}
+
+
+def test_one_artifact_shared_by_several_placements_is_resolved_once(stub_pack):
+    """Re-validating the pack per placement would buy nothing but wall time.
+
+    Several TechVault placements plant the same artifact, so the resolver is
+    keyed by artifact id; every sharing address must still get its own
+    disclosure.
+    """
+
+    store, calls = stub_pack
+    payload_bytes = b"shared artifact bytes"
+    store[_ARTIFACT_ID] = payload_bytes
+    contract = _pack_contract(_digest_of(payload_bytes))
+    second = "provision.content.misp-suricata-sync-readme-copy"
+    plan = _plan(contract)
+    plan.resources[second] = PlannedResource(
+        address=second,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload=plan.resources[_ADDRESS].payload,
+    )
+    content = _content()
+
+    disclosures = content_satisfactions_for_plan(
+        plan,
+        {_ADDRESS: content, second: content},
+        Path("unused"),
+        create_aptl_manifest(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+
+    assert set(disclosures) == {_ADDRESS, second}
+    assert calls == [_ARTIFACT_ID]  # opened once, not once per placement
+
+
+def test_a_plan_resource_that_is_not_a_content_placement_is_skipped(stub_pack):
+    """Node artifact demand is disclosed by the node path, not this one."""
+
+    store, calls = stub_pack
+    store[_ARTIFACT_ID] = b"bytes"
+    plan = _plan(_pack_contract(_digest_of(b"bytes")))
+    plan.resources[_ADDRESS] = PlannedResource(
+        address=_ADDRESS,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="node",
+        payload=plan.resources[_ADDRESS].payload,
+    )
+
+    disclosures = content_satisfactions_for_plan(
+        plan,
+        {_ADDRESS: _content()},
+        Path("unused"),
+        create_aptl_manifest(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+
+    assert disclosures == {}
+    assert calls == []  # the pack was never opened for a non-content resource
+
+
+def test_content_authoring_no_artifact_requirement_discloses_nothing(stub_pack):
+    """Only an authored EXACT requirement has anything to disclose against."""
+
+    store, _calls = stub_pack
+    store[_ARTIFACT_ID] = b"bytes"
+    plan = _plan(_pack_contract(_digest_of(b"bytes")))
+    plan.resources[_ADDRESS].payload["spec"].pop("source")
+
+    disclosures = content_satisfactions_for_plan(
+        plan,
+        {_ADDRESS: _content()},
+        Path("unused"),
+        create_aptl_manifest(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+
+    assert disclosures == {}
+
+
+def test_a_requirement_routed_somewhere_other_than_the_pack_discloses_nothing(
+    stub_pack,
+):
+    """A digest established in the wrong domain is worse than no disclosure.
+
+    Only the env-pack copy route resolves its bytes from the pack. A requirement
+    APTL would satisfy by pulling an OCI artifact has no pack digest to derive,
+    so this module discloses nothing and leaves it to the node path.
+    """
+
+    store, calls = stub_pack
+    store[_ARTIFACT_ID] = b"bytes"
+    pull_route = ArtifactSatisfactionRoute(
+        mechanism=exact_artifact_profile(),
+        acquisition="pull",
+        timing="backend-preparation",
+    )
+
+    disclosures = _disclosures(
+        Path("unused"),
+        _content(),
+        _pack_contract(_digest_of(b"bytes"), routes=[pull_route]),
+    )
+
+    assert disclosures == {}
+    assert calls == []  # refused before the bytes were ever opened
+
+
+def test_an_unresolvable_artifact_id_discloses_nothing(stub_pack):
+    """Fail closed: the gate then reports an unrealized requirement."""
+
+    # Nothing is registered in the stub pack, so resolution raises.
+    disclosures = _disclosures(
+        Path("unused"), _content(), _pack_contract(_digest_of(b"bytes"))
+    )
+
+    assert disclosures == {}
+
+
+def test_a_resolution_that_yields_no_bytes_discloses_nothing(stub_pack):
+    """A resolver result carrying no ``bytes`` is not something to hash."""
+
+    store, _calls = stub_pack
+    store[_ARTIFACT_ID] = None
+
+    disclosures = _disclosures(
+        Path("unused"), _content(), _pack_contract(_digest_of(b"bytes"))
+    )
+
+    assert disclosures == {}
+
+
+def test_inline_text_content_discloses_nothing_without_touching_the_pack(stub_pack):
+    """Inline text is not pack-resolved, so there is no artifact to claim."""
+
+    _store, calls = stub_pack
+    inline = DeploymentContentRealization(
+        address=_ADDRESS,
+        target_address="provision.node.misp-suricata-sync",
+        content_name="misp-suricata-sync-readme",
+        volume_suffix="",
+        dest_relpath="app/README.md",
+        source_kind="inline-text",
+        inline_text="not the pack's bytes",
+    )
+
+    assert _disclosures(Path("unused"), inline) == {}
+    assert calls == []

@@ -10,6 +10,7 @@ no Docker daemon is needed.
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +23,7 @@ from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    PlacePackArtifactOp,
 )
 
 
@@ -261,3 +263,154 @@ class TestServices:
         assert inactive.observe_service_unit_active("n.node", "u.service") is False
         enabled = _executor(_FakeExec(lambda c, a: (0, "enabled\n")))
         assert enabled.observe_service_unit_enabled("n.node", "u.service") is True
+
+
+class _StubIdentity:
+    def __init__(self, digest):
+        self.digest = digest
+
+
+class _StubResolved:
+    """The shape ``resolve_pack_artifact`` returns: verified bytes + identity."""
+
+    def __init__(self, data, digest):
+        self.data = data
+        self.identity = _StubIdentity(digest)
+
+
+def _tar_bytes(members):
+    import io
+    import tarfile
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for name, payload in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+@pytest.fixture
+def stub_pack(monkeypatch):
+    """Replace the pack resolver with an in-memory ``artifact_id -> resolved`` map."""
+
+    resolved = {}
+
+    def _resolve(pack_root, artifact, **kwargs):
+        return resolved[artifact]
+
+    monkeypatch.setattr("raes_env_packs.resolve_pack_artifact", _resolve)
+    return resolved
+
+
+class TestPackArtifactPlacement:
+    """Placing pack content into an image-free node (#875).
+
+    The bytes are resolved by opaque id and byte-bound to the declared digest at
+    execution time; no host path is read from the scenario. The executor stages
+    the verified bytes and hands the staged path to the backend's copy-in.
+    """
+
+    def _executor_with_copy(self, tmp_path, copied, exec_fn=None):
+        def _copy_in(container, src, dest, is_dir):
+            # Record what the staged source actually holds: the executor is
+            # responsible for the bytes it hands the backend's copy-in.
+            staged = (
+                sorted(child.name for child in Path(src).iterdir())
+                if is_dir
+                else Path(src).read_bytes()
+            )
+            copied.append((container, staged, dest, is_dir))
+
+        return DockerMaterializationExecutor(
+            run=exec_fn or _FakeExec(),
+            container_for=lambda addr: "aptl-" + addr.rsplit(".", 1)[-1],
+            start_base=lambda addr, image: None,
+            copy_in=_copy_in,
+            scenario_root=tmp_path,
+        )
+
+    def test_file_artifact_bytes_are_staged_and_copied_into_the_node(
+        self, tmp_path, stub_pack
+    ):
+        digest = "sha256:" + "a" * 64
+        stub_pack["flag-gen"] = _StubResolved(b"#!/bin/sh\n", digest)
+        copied = []
+        exec_fn = _FakeExec()
+        ex = self._executor_with_copy(tmp_path, copied, exec_fn)
+
+        ex.place_pack_artifact(
+            "provision.node.webapp",
+            PlacePackArtifactOp(
+                dest_path="/opt/flags/generate.sh",
+                artifact_id="flag-gen",
+                artifact_digest=digest,
+            ),
+        )
+
+        # The destination's parent is created inside the container first.
+        assert exec_fn.argvs() == [["mkdir", "-p", "/opt/flags"]]
+        assert copied == [
+            ("aptl-webapp", b"#!/bin/sh\n", "/opt/flags/generate.sh", False)
+        ]
+
+    def test_directory_artifact_is_extracted_before_being_copied_in(
+        self, tmp_path, stub_pack
+    ):
+        digest = "sha256:" + "b" * 64
+        stub_pack["src"] = _StubResolved(
+            _tar_bytes({"main.py": b"x\n", "README": b"y\n"}), digest
+        )
+        copied = []
+        ex = self._executor_with_copy(tmp_path, copied)
+
+        ex.place_pack_artifact(
+            "provision.node.webapp",
+            PlacePackArtifactOp(
+                dest_path="/opt/app",
+                artifact_id="src",
+                artifact_digest=digest,
+                is_directory=True,
+            ),
+        )
+
+        container, members, dest, is_dir = copied[0]
+        assert (container, dest, is_dir) == ("aptl-webapp", "/opt/app", True)
+        assert members == ["README", "main.py"]
+
+    def test_a_digest_mismatch_places_nothing(self, tmp_path, stub_pack):
+        """Bytes that are not what the scenario pinned never reach the node."""
+
+        stub_pack["flag-gen"] = _StubResolved(b"drifted\n", "sha256:" + "c" * 64)
+        copied = []
+        ex = self._executor_with_copy(tmp_path, copied)
+
+        with pytest.raises(MaterializationCommandError, match="digest mismatch"):
+            ex.place_pack_artifact(
+                "provision.node.webapp",
+                PlacePackArtifactOp(
+                    dest_path="/opt/flags/generate.sh",
+                    artifact_id="flag-gen",
+                    artifact_digest="sha256:" + "d" * 64,
+                ),
+            )
+
+        assert copied == []
+
+    def test_placement_without_a_staged_pack_root_fails_closed(self):
+        """No pack root means nothing can be resolved or verified."""
+
+        ex = DockerMaterializationExecutor(
+            run=_FakeExec(),
+            container_for=lambda addr: "aptl-x",
+            start_base=lambda addr, image: None,
+        )
+
+        with pytest.raises(MaterializationCommandError, match="staged pack root"):
+            ex.place_pack_artifact(
+                "provision.node.webapp",
+                PlacePackArtifactOp(
+                    dest_path="/opt/x", artifact_id="a", artifact_digest="sha256:0"
+                ),
+            )

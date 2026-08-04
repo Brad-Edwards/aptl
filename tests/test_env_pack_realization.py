@@ -517,3 +517,291 @@ def test_component_build_nodes_resolve_their_image_from_the_engine_tree(tmp_path
         node = by_name[name]
         assert node.image is not None, f"{name} did not resolve a component image"
         assert node.image.mode == "build"
+
+
+class _StubIdentity(object):
+    def __init__(self, digest):
+        self.digest = digest
+
+
+class _StubResolved(object):
+    """The shape ``resolve_pack_artifact`` returns: verified bytes + identity."""
+
+    def __init__(self, data, digest):
+        self.data = data
+        self.identity = _StubIdentity(digest)
+
+
+def _tar_bytes(members):
+    import io
+    import tarfile
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for name, payload in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+    return buffer.getvalue()
+
+
+@pytest.fixture
+def stub_pack(monkeypatch):
+    """Replace the pack resolver with an in-memory ``artifact_id -> resolved`` map."""
+
+    resolved = {}
+
+    def _resolve(pack_root, artifact, **kwargs):
+        return resolved[artifact]
+
+    monkeypatch.setattr("raes_env_packs.resolve_pack_artifact", _resolve)
+    return resolved
+
+
+def _content_spec(*, service="tempo", content=()):
+    from aptl.core.deployment.realization import (
+        DeploymentImageRealization,
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    address = f"provision.node.{service}"
+    return DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address=address, name=service, service_name=service,
+                container_name=f"aptl-{service}", networks=(),
+            ),
+        ),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address=address, service_name=service, source_name="img",
+                source_version="1", image_ref="img:1", mode="pull",
+                policy_rule="allowed-source",
+            ),
+        ),
+        content=content,
+    )
+
+
+def _content_item(source_kind, **fields):
+    from aptl.core.deployment.realization import DeploymentContentRealization
+
+    defaults = {
+        "address": "provision.content.cfg",
+        "target_address": "provision.node.tempo",
+        "content_name": "cfg",
+        "volume_suffix": "cfg",
+        "dest_relpath": "etc/app/config.yaml",
+        "source_kind": source_kind,
+    }
+    return DeploymentContentRealization(**{**defaults, **fields})
+
+
+def test_pack_file_content_for_an_image_node_is_bound_from_the_resolved_bytes(
+    tmp_path, stub_pack
+):
+    """An image node's pack-declared config is written out and bound read-only.
+
+    The bytes come from the digest-bound pack resolution, not a host path, and
+    land under the engine root so the pack's validated inventory is untouched.
+    """
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "a" * 64
+    stub_pack["tempo-config"] = _StubResolved(b"storage: local\n", digest)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-file", artifact_id="tempo-config", artifact_digest=digest
+            ),
+        )
+    )
+    scenario_root = tmp_path / "pack"
+    scenario_root.mkdir()
+
+    override = image_node_content_override(spec, scenario_root, tmp_path / "engine")
+
+    mount = override["services"]["tempo"]["volumes"][0]
+    assert mount["target"] == "/etc/app/config.yaml"
+    assert mount["read_only"] is True
+    assert Path(mount["source"]).read_bytes() == b"storage: local\n"
+    assert not (scenario_root / ".aptl").exists()
+
+
+def test_pack_directory_content_for_an_image_node_binds_the_extracted_tree(
+    tmp_path, stub_pack
+):
+    """A directory artifact is extracted and the tree itself is bound in."""
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    digest = "sha256:" + "b" * 64
+    stub_pack["rules"] = _StubResolved(_tar_bytes({"local.rules": b"alert\n"}), digest)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-directory",
+                dest_relpath="etc/suricata/rules",
+                artifact_id="rules",
+                artifact_digest=digest,
+            ),
+        )
+    )
+
+    override = image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
+
+    mount = override["services"]["tempo"]["volumes"][0]
+    assert mount["target"] == "/etc/suricata/rules"
+    assert (Path(mount["source"]) / "local.rules").read_bytes() == b"alert\n"
+
+
+def test_pack_content_whose_resolved_digest_differs_from_the_pin_fails_closed(
+    tmp_path, stub_pack
+):
+    """A pack that no longer holds the pinned bytes must not be mounted."""
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    stub_pack["tempo-config"] = _StubResolved(b"drifted\n", "sha256:" + "c" * 64)
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "pack-file",
+                artifact_id="tempo-config",
+                artifact_digest="sha256:" + "d" * 64,
+            ),
+        )
+    )
+
+    with pytest.raises(ValueError, match="digest mismatch"):
+        image_node_content_override(spec, tmp_path / "pack", tmp_path / "engine")
+
+
+def test_project_sourced_content_binds_the_checked_in_path_itself(tmp_path):
+    """An in-tree file/directory source is bound directly; nothing is copied."""
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    scenario_root = tmp_path / "pack"
+    (scenario_root / "config").mkdir(parents=True)
+    (scenario_root / "config/app.yaml").write_text("k: v\n")
+    spec = _content_spec(
+        content=(
+            _content_item(
+                "project-file", source_relpath="config/app.yaml"
+            ),
+            _content_item(
+                "project-directory",
+                address="provision.content.tree",
+                dest_relpath="etc/app/conf.d",
+                source_relpath="config",
+            ),
+        )
+    )
+
+    override = image_node_content_override(spec, scenario_root, tmp_path / "engine")
+
+    sources = [m["source"] for m in override["services"]["tempo"]["volumes"]]
+    assert sources == [
+        str((scenario_root / "config/app.yaml").resolve()),
+        str((scenario_root / "config").resolve()),
+    ]
+
+
+def test_content_with_no_resolvable_bytes_produces_no_mount(tmp_path):
+    """A source kind that carries nothing to bind is skipped, not bound empty.
+
+    Docker creates a missing bind source as an empty directory, which would
+    shadow the image's own file at that path (issue #875).
+    """
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+
+    spec = _content_spec(
+        content=(
+            _content_item("empty-directory"),
+            _content_item(
+                "project-file",
+                address="provision.content.absent",
+                source_relpath="config/missing.yaml",
+            ),
+            _content_item(
+                "project-directory",
+                address="provision.content.absent-dir",
+                dest_relpath="etc/app/conf.d",
+                source_relpath="config/missing",
+            ),
+        )
+    )
+    scenario_root = tmp_path / "pack"
+    scenario_root.mkdir()
+
+    override = image_node_content_override(spec, scenario_root, tmp_path / "engine")
+
+    assert override == {"services": {}}
+
+
+def test_content_targeting_an_image_free_node_is_left_to_the_materializer(tmp_path):
+    """Only image nodes get Compose bind mounts; image-free nodes get files.
+
+    Emitting a mount for a node with no Compose service would declare a mount no
+    service can carry, which the effective-model check then flags.
+    """
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+    from aptl.core.deployment.realization import (
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(
+            DeploymentNodeRealization(
+                address="provision.node.workstation", name="workstation",
+                service_name="workstation", container_name="aptl-workstation",
+                networks=(),
+            ),
+        ),
+        networks=(),
+        images=(),
+        content=(
+            _content_item(
+                "inline-text",
+                target_address="provision.node.workstation",
+                inline_text="x\n",
+            ),
+        ),
+    )
+
+    assert image_node_content_override(spec, tmp_path, tmp_path) == {"services": {}}
+
+
+def test_content_for_an_image_with_no_realized_service_produces_no_mount(tmp_path):
+    """A mount is only emitted for content whose target became a Compose service."""
+
+    from aptl.core.deployment._compose_content_mounts import image_node_content_override
+    from aptl.core.deployment.realization import (
+        DeploymentImageRealization,
+        DeploymentRealizationSpec,
+    )
+
+    spec = DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(),  # the image resolved, but no node realized a service for it
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.tempo", service_name="tempo",
+                source_name="img", source_version="1", image_ref="img:1",
+                mode="pull", policy_rule="allowed-source",
+            ),
+        ),
+        content=(_content_item("inline-text", inline_text="k: v\n"),),
+    )
+
+    assert image_node_content_override(spec, tmp_path, tmp_path) == {"services": {}}

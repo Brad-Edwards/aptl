@@ -15,16 +15,7 @@ from aptl.backends._raes_apply_helpers import (
     _drive_orchestrator_workflows,
     _with_backend_failure_diagnostics,
 )
-from aptl.backends._raes_scenario_queries import (
-    # Re-exported so the read-only scenario queries keep their historical
-    # ``aptl.backends.raes`` names after the split.
-    admitted_stateful_artifact_ownership as admitted_stateful_artifact_ownership,
-    selected_profiles_for_scenario as selected_profiles_for_scenario,
-)
 from aptl.backends._raes_scenario_resolution import (
-    # Re-exported so the scenario-selection seam keeps its historical
-    # ``aptl.backends.raes`` names after the split.
-    _PACK_STAGING_RELPATH as _PACK_STAGING_RELPATH,
     _resolve_scenario_path,
     resolve_scenario_bundle,
 )

@@ -156,7 +156,7 @@ def test_selected_profiles_for_scenario_matches_variant(variant: _Variant):
     This is the source of truth the post-start readiness checks scope to, so it
     must equal the variant's expected (content-derived) profile set.
     """
-    from aptl.backends.raes import selected_profiles_for_scenario
+    from aptl.backends._raes_scenario_queries import selected_profiles_for_scenario
     from aptl.validation._gate_checks import _NoStartBackend
 
     selected = selected_profiles_for_scenario(

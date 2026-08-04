@@ -44,16 +44,11 @@ from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
 from aptl.backends._raes_content_spec import (
-    # Re-exported so the shared spec primitives keep their historical
-    # ``raes_content_realization`` names after the split.
-    _SAFE_DEST_RELPATH as _SAFE_DEST_RELPATH,
     _is_sensitive,
     _reject,
     _safe_dest_relpath,
 )
 from aptl.backends._raes_dataset_content import (
-    _dataset_item_names as _dataset_item_names,
-    _dataset_tags as _dataset_tags,
     _resolve_dataset_content,
 )
 from aptl.backends.raes_content_source_policy import forbidden_source_reason

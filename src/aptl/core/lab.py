@@ -251,7 +251,7 @@ def admitted_stateful_artifact_ownership(
 ) -> frozenset[tuple[str, str, str, str]]:
     """Lazy RAES import for exact pre-mutation artifact ownership."""
 
-    from aptl.backends.raes import admitted_stateful_artifact_ownership as _load
+    from aptl.backends._raes_scenario_queries import admitted_stateful_artifact_ownership as _load
 
     return _load(project_dir, config, backend, scenario_path=scenario_path)
 

@@ -73,8 +73,8 @@ class ComposeRealizationModelMixin:
         )
         return (*base_files, *overrides)
 
+    @staticmethod
     def _write_image_node_content_override(
-        self,
         realization: DeploymentRealizationSpec,
         scenario_root: Path,
         realization_root: Path,

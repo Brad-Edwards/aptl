@@ -146,7 +146,7 @@ def test_selected_profiles_path_threads_the_bundle_root_to_availability(
     """The no-start selected-profile query executes and threads the resolved
     bundle root — not the raw project dir — to artifact availability (#874)."""
 
-    from aptl.backends import raes
+    from aptl.backends import _raes_scenario_queries
     from aptl.core.config import AptlConfig
     from aptl.core.scenario_bundle import project_tree_bundle
 
@@ -159,7 +159,7 @@ def test_selected_profiles_path_threads_the_bundle_root_to_availability(
 
     config = AptlConfig()
     with pytest.raises(RuntimeError):
-        raes.selected_profiles_for_scenario(
+        _raes_scenario_queries.selected_profiles_for_scenario(
             project_dir, config, object(), scenario_path
         )
 
@@ -173,7 +173,7 @@ def test_admitted_stateful_ownership_path_threads_the_bundle_root_to_availabilit
     """The admitted-stateful query executes and threads the resolved bundle root
     to artifact availability, not the raw project dir (#874)."""
 
-    from aptl.backends import raes
+    from aptl.backends import _raes_scenario_queries
     from aptl.core.config import AptlConfig
     from aptl.core.scenario_bundle import project_tree_bundle
 
@@ -184,7 +184,7 @@ def test_admitted_stateful_ownership_path_threads_the_bundle_root_to_availabilit
 
     config = AptlConfig()
     with pytest.raises(RuntimeError):
-        raes.admitted_stateful_artifact_ownership(
+        _raes_scenario_queries.admitted_stateful_artifact_ownership(
             project_dir, config, object(), scenario_path
         )
 

@@ -212,7 +212,14 @@ def validate_live_deployment(
     from aptl.validation import _live_gate_checks as checks
 
     opts = options or LiveGateOptions()
-    scenario_path = scenario_path or (project_dir / DEFAULT_RAES_SCENARIO)
+    # Resolve the scenario the same env-pack-aware way `aptl lab start` does: an
+    # explicit path uses the project tree, otherwise the configured env-pack is
+    # staged and its SDL is the scenario. Issue #875 moved TechVault into the
+    # `raes-env-packs` pack, so the in-tree DEFAULT_RAES_SCENARIO path no longer
+    # exists -- the gate must validate the same scenario the lab actually boots.
+    from aptl.backends.raes import resolve_scenario_bundle
+
+    scenario_path = resolve_scenario_bundle(project_dir, scenario_path, config).sdl_path
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
     results: list[LiveGateCheck] = []

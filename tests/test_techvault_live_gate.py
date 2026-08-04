@@ -647,22 +647,20 @@ def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
     assert any("no declared node accounts for it" in d for d in check.diagnostics)
 
 
-def test_readiness_treats_a_completed_one_shot_as_ready_not_failed():
-    """A run-to-completion container that exited 0 did its job; it is not down.
+def test_readiness_fails_an_exited_run_to_completion_container():
+    """A restart:"no" container that exited is a readiness failure, no exemption.
 
-    cortex-index-init creates an Elasticsearch index and stops by design
-    (restart: "no"). Requiring every declared node to be "Up" would flag it as a
-    readiness failure forever. The restart policy -- which APTL itself wrote into
-    compose -- is what distinguishes this from a service that died, so no
-    container is named in an allowance list.
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer, replaced by the native
+    service-search-index-schema materializer): every declared node must now be
+    running, restart policy notwithstanding.
     """
 
     state = _readiness_state(
-        [_node("webapp", ["dmz"]), _node("cortex-index-init", ["dmz"])],
+        [_node("webapp", ["dmz"])],
         [
-            _container("aptl-webapp"),
             _container(
-                "aptl-cortex-index-init",
+                "aptl-webapp",
                 status="Exited (0) 5 minutes ago",
                 health="",
                 restart_policy="no",
@@ -671,15 +669,11 @@ def test_readiness_treats_a_completed_one_shot_as_ready_not_failed():
     )
     check = lgc.check_defensive_stack_readiness(state=state)
 
-    assert check.passed, check.diagnostics
+    assert not check.passed
 
 
 def test_readiness_still_fails_a_service_that_exited():
-    """The one-shot exception must not mask a real service that died.
-
-    A container configured to stay up (unless-stopped) that has exited is a
-    genuine failure, exit code notwithstanding.
-    """
+    """A container configured to stay up (unless-stopped) that has exited fails."""
 
     state = _readiness_state(
         [_node("webapp", ["dmz"])],
@@ -689,26 +683,6 @@ def test_readiness_still_fails_a_service_that_exited():
                 status="Exited (0) 1 minute ago",
                 health="",
                 restart_policy="unless-stopped",
-            ),
-        ],
-    )
-    check = lgc.check_defensive_stack_readiness(state=state)
-
-    assert not check.passed
-
-
-def test_readiness_still_fails_a_one_shot_that_errored():
-    """A one-shot that exited non-zero failed its job and must be reported."""
-
-    state = _readiness_state(
-        [_node("webapp", ["dmz"]), _node("cortex-index-init", ["dmz"])],
-        [
-            _container("aptl-webapp"),
-            _container(
-                "aptl-cortex-index-init",
-                status="Exited (1) 5 minutes ago",
-                health="",
-                restart_policy="no",
             ),
         ],
     )

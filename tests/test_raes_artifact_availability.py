@@ -186,8 +186,11 @@ def test_shipped_scenario_declares_artifact_demand_for_every_imaged_node(tmp_pat
     context = artifact_availability_for_scenario(scenario, probe)
 
     # One address per artifact-bearing address — every image-backed node and
-    # every digest-pinned content placement in the full TechVault env-pack.
-    assert len(context.requirements) == 44
+    # every digest-pinned content placement in the full TechVault env-pack. The
+    # ADR-088 conversion (#889) removed the `cortex-index-init` image-backed node
+    # (its Cortex job index is now natively materialized initial service state,
+    # which pins no image), dropping the count from 44 to 43.
+    assert len(context.requirements) == 43
     # Exact pins are probed by digest-pinned reference; materialized components
     # probe their locked base input the same way.
     assert all(ref.count("@sha256:") == 1 for ref, _ in probe.calls)

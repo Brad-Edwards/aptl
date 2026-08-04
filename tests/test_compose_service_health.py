@@ -13,7 +13,6 @@ from aptl.core.deployment._compose_service_health import (
     container_health,
     container_running,
     container_settled,
-    container_completed_one_shot,
     unhealthy_container_reasons,
     wait_for_realized_health,
 )
@@ -146,47 +145,28 @@ def test_wait_times_out_with_reasons_when_never_healthy():
     assert "not 'healthy'" in " ".join(reasons)
 
 
-def _one_shot(*, status="exited", exit_code=0, restart="no"):
-    return _info(running=False, status=status, exit_code=exit_code, restart=restart)
+def test_an_exited_container_is_never_settled():
+    """A stopped container is a real failure, exit code and restart policy aside.
 
-
-def test_completed_one_shot_is_settled():
-    """A run-to-completion container (restart no, exit 0) is settled, not down.
-
-    The Cortex index initializer creates its index and exits by design. Before
-    this, the health wait treated its exited container as "not running" and never
-    succeeded -- forcing the admitted-plan retry on every single boot.
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer, replaced by the native
+    service-search-index-schema materializer), so a stopped container is always
+    an unrealized failure -- there is no longer a one-shot exemption.
     """
-    info = _one_shot()
-    assert container_completed_one_shot(info) is True
-    assert container_settled(info) is True
-
-
-def test_a_service_that_exited_is_not_a_completed_one_shot():
-    """A stay-up service that exited is a real failure, exit code notwithstanding."""
-    info = _info(running=False, status="exited", exit_code=0, restart="unless-stopped")
-    assert container_completed_one_shot(info) is False
+    info = _info(running=False, status="exited", exit_code=0, restart="no")
     assert container_settled(info) is False
 
 
-def test_a_one_shot_that_errored_is_not_settled():
-    """A one-shot that exited non-zero failed its job."""
-    info = _one_shot(exit_code=1)
-    assert container_completed_one_shot(info) is False
-    assert container_settled(info) is False
-
-
-def test_unhealthy_reasons_skips_a_completed_one_shot():
-    """A completed one-shot must not appear as a health failure reason."""
-    from aptl.core.deployment._compose_service_health import unhealthy_container_reasons
-
+def test_unhealthy_reasons_reports_a_stopped_container():
+    """A stopped container is always reported as a health failure reason."""
     class _Backend:
         def container_inspect(self, name):
-            if name == "aptl-cortex-index-init":
-                return _one_shot()
+            if name == "aptl-stopped":
+                return _info(running=False, status="exited", exit_code=0, restart="no")
             return _info(running=True)
 
     reasons = unhealthy_container_reasons(
-        _Backend(), ["aptl-cortex-index-init", "aptl-wazuh-manager"]
+        _Backend(), ["aptl-stopped", "aptl-wazuh-manager"]
     )
-    assert reasons == []
+    joined = " ".join(reasons)
+    assert "aptl-stopped" in joined and "not running" in joined

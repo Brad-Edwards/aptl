@@ -94,19 +94,12 @@ def _container_health_diagnostics(
     become healthy: it must reach ``healthy``. A container with no healthcheck
     reports nothing, and only has to be running.
 
-    A run-to-completion container is the exception, and the restart policy is how
-    it is told from a dead service. A container created ``restart: "no"`` that has
-    exited cleanly did its whole job -- an ES index initializer that creates its
-    index and stops is *ready*, not broken. A service (``always`` /
-    ``unless-stopped``) that has exited is a real failure. The signal is the
-    policy APTL itself wrote into compose, so this stays a general realization
-    rule rather than an allowance list of blessed container names.
+    A service (``always`` / ``unless-stopped``) that has exited is a real
+    failure, so a stopped container is always reported.
     """
     status = str(container.get("status", ""))
     health = str(container.get("health", ""))
-    if _completed_one_shot(container, status):
-        diag = ""
-    elif not status.startswith("Up"):
+    if not status.startswith("Up"):
         diag = f"node {node_name!r} container not running (status={status!r})"
     elif health and health != "healthy":
         diag = (
@@ -116,20 +109,6 @@ def _container_health_diagnostics(
     else:
         diag = ""
     return [diag] if diag else []
-
-
-def _completed_one_shot(container: Mapping[str, Any], status: str) -> bool:
-    """Return whether a container ran to completion by design.
-
-    True only for a container whose realized restart policy is ``no`` (or absent)
-    that has exited with code 0. A service configured to stay up never matches,
-    so a crashed or stopped service is still reported. Exit codes other than 0 do
-    not match either: an initializer that failed is a genuine readiness failure.
-    """
-    policy = str(container.get("restart_policy", "")).lower()
-    if policy not in ("", "no"):
-        return False
-    return status.startswith("Exited (0)")
 
 
 def _live_container_for_node(

@@ -77,6 +77,11 @@ class DockerComposeBackend(
         ) = None
         self._boundary_receipts: dict[str, dict[str, object]] = {}
         self._boundary_helper_image = DEFAULT_BOUNDARY_HELPER_IMAGE
+        # ADR-088 phased startup (issue #889): safe portable readback evidence
+        # from each proven service-search-index-schema materialization, keyed by
+        # content-placement address. Consumed by realization observation to
+        # disclose the concern only after real corroboration (SEM-218).
+        self._service_index_materialization_evidence: dict[str, dict[str, object]] = {}
 
     @property
     def project_dir(self) -> Path:
@@ -244,6 +249,7 @@ class DockerComposeBackend(
         *,
         build: bool = True,
         exclude_services: tuple[str, ...] = (),
+        only_services: tuple[str, ...] = (),
         scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services via docker compose up.
@@ -255,6 +261,13 @@ class DockerComposeBackend(
                 mixed realization): everything else in the active profiles
                 starts normally, but a node the generic materializer already
                 realized directly must not also start as a Compose container.
+            only_services: When non-empty, bring up only these Compose services
+                (and their ``depends_on`` closure), leaving the rest of the
+                active profiles unstarted. Used by the ADR-088 phased startup
+                (issue #889) to bring the materialization target service up and
+                prove its initial state before the general workload — which
+                consumes that state — is admitted. Do not race a materializer
+                against an unrestricted ``compose up``.
             scenario_root: Bundle root the scenario's Compose model and build
                 contexts resolve against (issue #874). ``None`` is the legacy
                 direct path over the engine's own in-tree compose.
@@ -274,6 +287,9 @@ class DockerComposeBackend(
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
+        # Positional service names must follow the options: `compose up -d <svc>`
+        # starts only the named services plus their depends_on closure.
+        cmd.extend(only_services)
 
         log.info("Starting lab with profiles: %s", profiles)
         log.debug("Command: %s", " ".join(cmd))

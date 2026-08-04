@@ -212,8 +212,10 @@ def test_image_node_content_is_admitted_without_runtime():
         payload=payload,
     )
 
-    content, dataset, account, diagnostics = _realize_placement_resource(
-        resource, payload, target, {target: node}, Path(".")
+    content, dataset, account, _service_index_schema, diagnostics = (
+        _realize_placement_resource(
+            resource, payload, target, {target: node}, Path(".")
+        )
     )
 
     assert diagnostics == [], [d.code for d in diagnostics]

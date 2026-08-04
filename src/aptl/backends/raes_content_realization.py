@@ -60,8 +60,15 @@ from aptl.backends.raes_realization_values import (
     optional_string as _optional_string,
     placement_spec as _placement_spec,
 )
+from aptl.backends.raes_service_index_schema import (
+    INTERFACE_PROFILE as _SEARCH_INDEX_SCHEMA_PROFILE,
+    native_field_type as _native_field_type,
+)
 from aptl.core.credentials import PathContainmentError, _resolve_within_project
-from aptl.core.deployment.realization import DeploymentContentRealization
+from aptl.core.deployment.realization import (
+    DeploymentContentRealization,
+    DeploymentServiceSearchIndexSchemaRealization,
+)
 
 # Backend services APTL knows how to plant content into, and the
 # project-scoped named-volume key (docker-compose.yml `volumes:` key,
@@ -106,7 +113,10 @@ def resolve_content_placement(
     target_service: str | None,
     project_dir: Path,
 ) -> tuple[
-    DeploymentContentRealization | ParticipantDatasetRealization | None,
+    DeploymentContentRealization
+    | ParticipantDatasetRealization
+    | DeploymentServiceSearchIndexSchemaRealization
+    | None,
     list[Diagnostic],
 ]:
     """Lower one content-placement resource or return fail-closed diagnostics."""
@@ -117,6 +127,25 @@ def resolve_content_placement(
         or _optional_string(payload, "name")
         or resource.address
     )
+
+    # ADR-088 service-target materialization (#889): a content-placement carrying
+    # a service_materialization binding is initial *service* state, not a node
+    # file/dataset placement. The search-index-schema profile lowers to a typed
+    # native materialization the backend realizes through the service's native
+    # interface and proves by fresh readback. Dispatch it before the ordinary
+    # file/dataset paths, which would otherwise reject its item-less dataset.
+    binding = payload.get("service_materialization")
+    if (
+        isinstance(binding, Mapping)
+        and binding.get("interface_profile") == _SEARCH_INDEX_SCHEMA_PROFILE
+    ):
+        return _resolve_service_search_index_schema(
+            resource=resource,
+            binding=binding,
+            content_name=content_name,
+            target_address=target_address,
+        )
+
     inputs, reason = _content_placement_inputs(spec, target_service)
 
     content: DeploymentContentRealization | ParticipantDatasetRealization | None = None
@@ -146,6 +175,56 @@ def resolve_content_placement(
             project_dir=project_dir,
         )
     return content, diagnostics
+
+
+def _resolve_service_search_index_schema(
+    *,
+    resource: PlannedResource,
+    binding: Mapping[str, Any],
+    content_name: str,
+    target_address: str,
+) -> tuple[DeploymentServiceSearchIndexSchemaRealization | None, list[Diagnostic]]:
+    """Lower a service-search-index-schema materialization binding to a typed DTO.
+
+    RAES admission already validated the closed contract and computed the
+    ``canonical_field_schema_digest`` before APTL sees the plan; APTL re-checks
+    only what it must materialize itself — portable field semantics it can
+    project to a native type, a resolvable target service, and a well-formed
+    digest — and fails closed on anything it cannot honestly realize rather than
+    inferring or approximating.
+    """
+
+    field_semantics_raw = binding.get("field_semantics")
+    if not isinstance(field_semantics_raw, Mapping) or not field_semantics_raw:
+        return None, [_reject(resource.address, "service-index-schema-field-semantics-invalid")]
+    field_semantics: dict[str, str] = {}
+    for name, semantic in field_semantics_raw.items():
+        if (
+            not isinstance(name, str)
+            or not name
+            or not isinstance(semantic, str)
+            or _native_field_type(semantic) is None
+        ):
+            return None, [_reject(resource.address, "service-index-schema-field-semantics-invalid")]
+        field_semantics[name] = semantic
+
+    target_service_address = binding.get("target_service_address")
+    if not isinstance(target_service_address, str) or not target_service_address:
+        return None, [_reject(resource.address, "service-index-schema-target-invalid")]
+
+    digest = binding.get("canonical_field_schema_digest")
+    if not isinstance(digest, str) or not digest:
+        return None, [_reject(resource.address, "service-index-schema-digest-invalid")]
+
+    realization = DeploymentServiceSearchIndexSchemaRealization(
+        address=resource.address,
+        target_address=target_address,
+        target_service_address=target_service_address,
+        content_name=content_name,
+        field_semantics=tuple(sorted(field_semantics.items())),
+        field_schema_digest=digest,
+    )
+    return realization, []
 
 
 def _content_placement_inputs(

@@ -1778,7 +1778,7 @@ class TestOrchestrateLabStart:
 
 
 class TestStatefulArtifactOwnership:
-    def test_real_scenario_populates_exact_admitted_ownership(self):
+    def test_real_scenario_populates_exact_admitted_ownership(self, tmp_path):
         from aptl.core.config import load_config
         from aptl.core.lab import (
             _LabStartContext,
@@ -1793,10 +1793,16 @@ class TestStatefulArtifactOwnership:
         # component image; a bare MagicMock would be treated as no digest and
         # the scenario would fail admission before artifact preparation.
         backend.materialize_component_image.return_value = "sha256:" + "e" * 64
+        # The default TechVault scenario now ships as the bundled env-pack
+        # (#875). Stage it and admit ownership from the staged SDL; anchoring to
+        # the project tree keeps the compose service-name mapping the exact
+        # admitted ownership below is expressed against.
+        from tests.helpers import techvault_scenario_path
+
         ctx = _LabStartContext(
             project_dir=project_root,
             skip_seed=False,
-            scenario_path=project_root / "scenarios/techvault-operational.sdl.yaml",
+            scenario_path=techvault_scenario_path(tmp_path),
             config=load_config(project_root / "aptl.json"),
             backend=backend,
         )
@@ -4378,7 +4384,7 @@ class TestGenerateSocCertsStep:
     """
 
     def _ctx(self, tmp_path: Path, *, soc: bool, backend=None):
-        from aptl.core.config import AptlConfig
+        from aptl.core.config import AptlConfig, ScenarioSourceConfig
         from aptl.core.env import EnvVars
         from aptl.core.lab import _LabStartContext
 
@@ -4392,7 +4398,14 @@ class TestGenerateSocCertsStep:
                 api_username="u",
                 api_password="p",
             ),
-            config=AptlConfig(lab={"name": "t"}, containers=containers),
+            # Host-side SOC-cert generation is the project-tree path; an env-pack
+            # scenario declares the SOC CA as a realization artifact and skips it
+            # (#875), so this suite selects the in-tree source explicitly.
+            config=AptlConfig(
+                lab={"name": "t"},
+                containers=containers,
+                scenario=ScenarioSourceConfig(source="project-tree"),
+            ),
             backend=backend or MagicMock(),
         )
 

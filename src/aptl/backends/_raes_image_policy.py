@@ -24,14 +24,6 @@ _SAFE_TAG_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _COMPOSE_SOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _PROJECT_DOCKERFILE_PATH_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 
-_ALLOWED_SOURCE_IMAGE_REFS = {
-    ("postgres", "16"): "postgres:16-alpine",
-    ("postgres", "16-alpine"): "postgres:16-alpine",
-    ("wazuh-manager", "4.x"): "wazuh/wazuh-manager:4.12.0",
-    ("wazuh-indexer", "4.x"): "wazuh/wazuh-indexer:4.12.0",
-    ("wazuh-dashboard", "4.x"): "wazuh/wazuh-dashboard:4.12.0",
-}
-
 _ALLOWED_DIGEST_SOURCE_NAMES = frozenset(
     {
         "cassandra",
@@ -96,6 +88,27 @@ def _local_build_ref(source_name: str, source_version: str) -> str | None:
     if not _safe_image_name(source_name):
         return None
     return f"{source_name}:{tag}"
+
+
+def _allowed_exact_tag_ref(source_name: str, source_version: str) -> str | None:
+    """Return a pull ref at the SDL-declared exact tag for an allowed source.
+
+    APTL allow-checks the source name and formats ``{name}:{tag}`` from the tag
+    the SDL declared, verbatim; it never substitutes a concrete patch version for
+    a vague one (the retired ``4.x`` -> ``4.12.0`` table). The SDL is responsible
+    for declaring a real, pinned tag; a bogus tag simply fails to pull, loudly,
+    rather than the backend silently choosing a version (issue #875).
+    """
+
+    if (
+        source_name in _ALLOWED_DIGEST_SOURCE_NAMES
+        and source_version not in {"", "*", "local", "reference"}
+        and not _is_digest_pinned_version(source_version)
+        and _SAFE_TAG_RE.fullmatch(source_version)
+        and _safe_image_name(source_name)
+    ):
+        return f"{source_name}:{source_version}"
+    return None
 
 
 def _allowed_digest_pinned_ref(source_name: str, source_version: str) -> str | None:

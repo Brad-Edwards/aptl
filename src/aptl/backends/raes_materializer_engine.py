@@ -29,6 +29,7 @@ from aptl.backends.raes_materializer import (
     InstallPackagesOp,
     MaterializationOp,
     PlaceFileOp,
+    PlacePackArtifactOp,
     PlaceProjectContentOp,
     StartServiceUnitOp,
 )
@@ -50,6 +51,7 @@ class MaterializationExecutor(Protocol):
     def ensure_directory(self, node_address: str, op: EnsureDirectoryOp) -> None: ...
     def place_file(self, node_address: str, path: str, content: str, mode: str) -> None: ...
     def place_project_content(self, node_address: str, op: PlaceProjectContentOp) -> None: ...
+    def place_pack_artifact(self, node_address: str, op: PlacePackArtifactOp) -> None: ...
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp
     ) -> None: ...
@@ -82,6 +84,7 @@ _EXECUTORS: dict[type, _Execute] = {
     EnsureDirectoryOp: lambda op, addr, ex: ex.ensure_directory(addr, op),
     PlaceFileOp: lambda op, addr, ex: ex.place_file(addr, op.path, op.content, op.mode),
     PlaceProjectContentOp: lambda op, addr, ex: ex.place_project_content(addr, op),
+    PlacePackArtifactOp: lambda op, addr, ex: ex.place_pack_artifact(addr, op),
     InstallDependencyManifestOp: lambda op, addr, ex: ex.install_dependency_manifest(addr, op),
     EnableServiceUnitOp: lambda op, addr, ex: ex.enable_service_unit(addr, op.unit_name),
     StartServiceUnitOp: lambda op, addr, ex: ex.start_service_unit(addr, op.unit_name),
@@ -141,6 +144,18 @@ def _verify_place_project_content(
     return None if ex.observe_file(addr, op.dest_path) else f"content not present: {op.dest_path}"
 
 
+def _verify_place_pack_artifact(
+    op: PlacePackArtifactOp, addr: str, ex: MaterializationExecutor
+) -> str | None:
+    """Verify the placed env-pack content is observed present in the node."""
+
+    return (
+        None
+        if ex.observe_file(addr, op.dest_path)
+        else f"pack content not present: {op.dest_path}"
+    )
+
+
 def _verify_install_dependency_manifest(
     op: InstallDependencyManifestOp, addr: str, ex: MaterializationExecutor
 ) -> str | None:
@@ -176,6 +191,7 @@ _VERIFIERS: dict[type, _Verify] = {
     EnsureDirectoryOp: _verify_ensure_directory,
     PlaceFileOp: _verify_place_file,
     PlaceProjectContentOp: _verify_place_project_content,
+    PlacePackArtifactOp: _verify_place_pack_artifact,
     InstallDependencyManifestOp: _verify_install_dependency_manifest,
     EnableServiceUnitOp: _verify_enable_service_unit,
     StartServiceUnitOp: _verify_start_service_unit,

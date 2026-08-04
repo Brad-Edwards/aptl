@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.lab_types import LabResult
+
+if TYPE_CHECKING:
+    from aptl.backends.raes_base_substrate import VolumeMount
 
 
 def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
@@ -117,25 +120,90 @@ def _realize_node_subset(
     nodes: tuple[object, ...],
     content: tuple[object, ...],
     scenario_root: Path,
+    extra_ops: dict[str, tuple[object, ...]] | None = None,
+    persistent_volumes: tuple[object, ...] = (),
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
     Shared by the fully image-free path and the mixed-realization path
     (ADR-048); the only difference between them is which nodes/content are
     passed in. Lowers each content item to its placement op and dispatches
-    per node, verified by read-after-write.
+    per node, verified by read-after-write. ``extra_ops`` carries additional
+    per-node placement ops (a consumer's generated-artifact outputs, #875)
+    already keyed by node address. ``persistent_volumes`` carries the
+    realization's persistent volumes so an image-free node that consumes one
+    mounts it: the Compose override defers non-Compose consumers to this
+    materializer rather than declaring a mount no Compose service carries
+    (issue #875).
+    """
+
+    from aptl.backends.raes_node_materialization import realize_nodes
+
+    volume_mounts_by_node = _volume_mounts_by_node(nodes, persistent_volumes)
+    image_build_failures = _ensure_generic_base_images(backend, nodes)
+    if image_build_failures:
+        return LabResult(success=False, error="; ".join(image_build_failures[:5]))
+    network_failure = _bind_base_container_networks(backend, nodes)
+    if network_failure is not None:
+        return network_failure
+
+    content_by_node = _content_ops_by_node(content)
+    for address, ops in (extra_ops or {}).items():
+        content_by_node.setdefault(address, []).extend(ops)
+    return realize_nodes(
+        nodes,
+        backend,
+        {addr: tuple(ops) for addr, ops in content_by_node.items()},
+        scenario_root=scenario_root,
+        volume_mounts_by_node=volume_mounts_by_node,
+    )
+
+
+def _volume_mounts_by_node(
+    nodes: tuple[object, ...],
+    persistent_volumes: tuple[object, ...],
+) -> dict[str, tuple[VolumeMount, ...]]:
+    """Return each node's declared persistent-volume mounts, keyed by address.
+
+    Consumers outside this node subset are skipped: a volume shared with a
+    Compose service is mounted there by the Compose override, not here.
+    """
+
+    from aptl.backends.raes_base_substrate import VolumeMount
+
+    node_addresses = {node.address for node in nodes}
+    mounts: dict[str, tuple[VolumeMount, ...]] = {}
+    for volume in persistent_volumes:
+        for consumer in getattr(volume, "consumers", ()):
+            address = consumer.target_address
+            if address not in node_addresses:
+                continue
+            mounts.setdefault(address, ())
+            mounts[address] += (
+                VolumeMount(
+                    target=consumer.mount_destination,
+                    source=volume.name,
+                    read_only=consumer.access_mode == "read_only",
+                ),
+            )
+    return mounts
+
+
+def _ensure_generic_base_images(
+    backend: object, nodes: tuple[object, ...]
+) -> list[str]:
+    """Build every generic base image this node subset needs, up front.
+
+    A fresh machine has none of the locally-built generic base images in
+    its Docker cache (issue #581 - a developer's existing cache had
+    silently masked this gap since ADR-048 shipped). Ensure every image
+    this node subset needs exists once, up front, rather than having each
+    node's own start_base_container discover it missing one at a time.
     """
 
     from aptl.backends.raes_base_substrate import base_container_spec
-    from aptl.backends.raes_materializer import PlaceFileOp, PlaceProjectContentOp
-    from aptl.backends.raes_node_materialization import realize_nodes
 
-    # A fresh machine has none of the locally-built generic base images in
-    # its Docker cache (issue #581 - a developer's existing cache had
-    # silently masked this gap since ADR-048 shipped). Ensure every image
-    # this node subset needs exists once, up front, rather than having each
-    # node's own start_base_container discover it missing one at a time.
-    image_build_failures: list[str] = []
+    failures: list[str] = []
     for image_ref in sorted(
         {
             base_container_spec(
@@ -147,39 +215,74 @@ def _realize_node_subset(
             for node in nodes
         }
     ):
-        image_build_failures.extend(backend.ensure_generic_base_image(image_ref))
-    if image_build_failures:
-        return LabResult(success=False, error="; ".join(image_build_failures[:5]))
-    configure_networks = getattr(backend, "configure_base_container_networks", None)
-    if callable(configure_networks):
-        try:
-            configure_networks(nodes)
-        except BackendSeedError:
-            return LabResult(
-                success=False,
-                error="Image-free network binding failed.",
-            )
+        failures.extend(backend.ensure_generic_base_image(image_ref))
+    return failures
 
-    content_by_node: dict[str, list[object]] = {}
+
+def _bind_base_container_networks(
+    backend: object, nodes: tuple[object, ...]
+) -> LabResult | None:
+    """Attach the node subset to its declared networks, if the backend can."""
+
+    configure_networks = getattr(backend, "configure_base_container_networks", None)
+    if not callable(configure_networks):
+        return None
+    try:
+        configure_networks(nodes)
+    except BackendSeedError:
+        return LabResult(
+            success=False,
+            error="Image-free network binding failed.",
+        )
+    return None
+
+
+def _content_ops_by_node(content: tuple[object, ...]) -> dict[str, list[object]]:
+    """Lower each content item to a placement op, keyed by target node address."""
+
+    by_node: dict[str, list[object]] = {}
     for item in content:
-        dest = "/" + item.dest_relpath.lstrip("/")
-        if item.source_kind == "inline-text" and item.inline_text is not None:
-            op: object = PlaceFileOp(path=dest, content=item.inline_text)
-        elif (
-            item.source_kind in ("project-file", "project-directory")
-            and item.source_relpath
-        ):
-            op = PlaceProjectContentOp(
-                dest_path=dest,
-                source_relpath=item.source_relpath,
-                is_directory=item.source_kind == "project-directory",
-            )
-        else:
-            continue
-        content_by_node.setdefault(item.target_address, []).append(op)
-    return realize_nodes(
-        nodes,
-        backend,
-        {addr: tuple(ops) for addr, ops in content_by_node.items()},
-        scenario_root=scenario_root,
+        op = _content_placement_op(item)
+        if op is not None:
+            by_node.setdefault(item.target_address, []).append(op)
+    return by_node
+
+
+def _content_placement_op(item: object) -> object | None:
+    """Return one content item's materializer placement op, or ``None``.
+
+    A source kind that carries nothing placeable (an incomplete pack reference,
+    an unset project path) lowers to ``None`` and is skipped.
+    """
+
+    from aptl.backends.raes_materializer import (
+        PlaceFileOp,
+        PlacePackArtifactOp,
+        PlaceProjectContentOp,
     )
+
+    dest = "/" + item.dest_relpath.lstrip("/")
+    op: object | None = None
+    if item.source_kind == "inline-text" and item.inline_text is not None:
+        op = PlaceFileOp(path=dest, content=item.inline_text)
+    elif (
+        item.source_kind in ("pack-file", "pack-directory")
+        and item.artifact_id
+        and item.artifact_digest
+    ):
+        op = PlacePackArtifactOp(
+            dest_path=dest,
+            artifact_id=item.artifact_id,
+            artifact_digest=item.artifact_digest,
+            is_directory=item.source_kind == "pack-directory",
+        )
+    elif (
+        item.source_kind in ("project-file", "project-directory")
+        and item.source_relpath
+    ):
+        op = PlaceProjectContentOp(
+            dest_path=dest,
+            source_relpath=item.source_relpath,
+            is_directory=item.source_kind == "project-directory",
+        )
+    return op

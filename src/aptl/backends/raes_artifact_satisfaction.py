@@ -37,9 +37,11 @@ from raes.runtime_configuration import RuntimeConfiguration
 from aptl.backends.raes_artifact_mechanisms import (
     _mechanism_key,
     dynamic_composition_provenance_ref,
+    env_pack_copy_provenance_ref,
     exact_artifact_provenance_ref,
     materialization_provenance_ref,
     route_is_dynamic_composition,
+    route_is_env_pack_copy,
     select_route_over_mechanisms,
 )
 from aptl.backends.raes_substrate import realized_substrate_identity
@@ -162,18 +164,36 @@ def _exact_payload(
             "version": manifest.identity.version,
         },
         "integrity_refs": [realized_digest],
-        "provenance_refs": [exact_artifact_provenance_ref()],
+        "provenance_refs": [_exact_provenance_ref(route)],
     }
 
 
-def _authored_requirement(payload: object) -> ArtifactRequirement | None:
-    """Return the artifact requirement authored on one planned node resource."""
+def _exact_provenance_ref(route: ArtifactSatisfactionRoute) -> str:
+    """Return the provenance reference for the exact route APTL actually took.
+
+    APTL's OCI pull and its env-pack content copy are both ``exact-artifact``
+    mechanisms, but they are distinct digest-bound profiles and availability
+    verifies a distinct provenance ref for each. Disclosing the pull's ref for
+    copied pack content would claim a provenance the verified set does not
+    contain — correctly rejected by the gate's ``disclosed ⊆ verified`` check,
+    because it is not how those bytes were obtained.
+    """
+
+    if route_is_env_pack_copy(route):
+        return env_pack_copy_provenance_ref()
+    return exact_artifact_provenance_ref()
+
+
+def authored_source_requirement(source: object) -> ArtifactRequirement | None:
+    """Return the artifact requirement authored on one compiled ``source`` mapping.
+
+    Shared by the node reader below and the content reader in
+    :mod:`aptl.backends.raes_content_satisfaction`: the two shapes differ only in
+    where ``source`` sits in the payload, never in how the requirement parses.
+    """
 
     from raes.artifact_requirements import ArtifactRequirement as _Requirement
 
-    spec = payload.get("spec") if isinstance(payload, Mapping) else None
-    node = spec.get("node") if isinstance(spec, Mapping) else None
-    source = node.get("source") if isinstance(node, Mapping) else None
     authored = source.get("artifact_requirement") if isinstance(source, Mapping) else None
     if authored is None:
         return None
@@ -184,6 +204,16 @@ def _authored_requirement(payload: object) -> ArtifactRequirement | None:
         # upstream. Producing no disclosure here makes the runtime gate reject
         # rather than letting a half-understood contract look satisfied.
         return None
+
+
+def _authored_requirement(payload: object) -> ArtifactRequirement | None:
+    """Return the artifact requirement authored on one planned node resource."""
+
+    spec = payload.get("spec") if isinstance(payload, Mapping) else None
+    node = spec.get("node") if isinstance(spec, Mapping) else None
+    return authored_source_requirement(
+        node.get("source") if isinstance(node, Mapping) else None
+    )
 
 
 def satisfactions_for_plan(

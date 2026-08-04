@@ -31,7 +31,7 @@
       "asset_id": "scenario-catalog",
       "kind": "project-file",
       "source": "scenarios/catalog.json",
-      "sha256": "dea09c81e1f8c16b3b0378cb3ff87687dba18fb9f43db1311bdee41d2b96e57d"
+      "sha256": "9e65c40e12e250f2a29725cc7899913f74004eac9485908c42fd10a13feb67c2"
     },
     {
       "asset_id": "workbench-registry",

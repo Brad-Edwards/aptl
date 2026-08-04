@@ -15,7 +15,7 @@ authorities match the approved pre-capture candidate:
 - authored source SHA-256:
   `9683f2539bdefbd99635924d2a6fce27b144e12f382cd74d2f3e10d10ecb7616`;
 - compiled model SHA-256:
-  `099209f578da193ce88e201cc86887ae8ca4587a6b9c6b1a570ed195047d4c8c`.
+  `7a29b45d3949ccf083ea048261421096ab81d94b4524a3ac37426a8ed09998f7`.
 
 The compiled digest covers the complete model in the versioned
 `aptl.raes-runtime-model-artifact/v1` envelope, serialized as RFC 8785

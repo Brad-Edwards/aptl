@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
@@ -25,13 +25,23 @@ from aptl.backends._raes_observation_helpers import (
     settled_inspect as _settled_inspect,
     volume_spec as _volume_spec,
 )
+from aptl.core.deployment._compose_stateful_constants import (
+    CERTIFICATE_PROVENANCE,
+    SOC_CERT_PROFILE,
+)
+from aptl.core.deployment._compose_stateful_model import (
+    _consumer_output_names,
+    _uses_per_output_mounts,
+)
 from aptl.core.deployment._compose_stateful_realization import artifact_source_path
 from aptl.core.deployment._stateful_certificates import certificate_bundle_evidence
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
 )
+from aptl.core.soc_ca import soc_bundle_evidence
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -44,27 +54,31 @@ def _observe_generated_artifact(
     backend: "DeploymentBackend",
     artifact: DeploymentGeneratedArtifactRealization | None,
     node_containers: dict[str, str],
-    scenario_root: Path,
+    realization_root: Path,
+    image_free_addresses: frozenset[str],
 ) -> ObservedResource:
-    """Observe verified outputs and read-only bind mounts for one artifact.
+    """Observe verified outputs and realized delivery for one artifact.
 
-    A generated artifact is read back from ``scenario_root`` (the bundle root)
-    where it was produced, never the engine checkout (issue #874).
+    A generated artifact is read back from ``realization_root`` -- the writable
+    root the backend produced it under -- never from the pristine scenario
+    bundle it was deliberately not written into (issue #875). In-tree the two
+    coincide. ``image_free_addresses`` names the consumers that receive their
+    outputs as placed files rather than Compose binds.
     """
 
-    if artifact is None or not isinstance(scenario_root, Path):
+    if artifact is None or not isinstance(realization_root, Path):
         return ObservedResource(realized=False)
-    source = artifact_source_path(scenario_root, artifact)
+    source = artifact_source_path(realization_root, artifact)
     outputs_present = _artifact_outputs_present(source, artifact)
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
-        backend, artifact, node_containers, source
+        backend, artifact, node_containers, source, image_free_addresses
     )
     consumers_ready = consumers_mounted and _authenticated_consumers_ready(
         backend, artifact.consumers
     )
     realized = consumers_ready
     evidence = (
-        _artifact_evidence(backend, scenario_root, source, artifact)
+        _artifact_evidence(backend, realization_root, source, artifact)
         if realized
         else {}
     )
@@ -145,7 +159,7 @@ def _observe_persistent_volume(
 
 def _artifact_evidence(
     backend: "DeploymentBackend",
-    scenario_root: Path,
+    realization_root: Path,
     source: Path,
     artifact: DeploymentGeneratedArtifactRealization,
 ) -> dict[str, object]:
@@ -170,14 +184,44 @@ def _artifact_evidence(
             source.read_bytes()
         ).hexdigest()
     elif artifact.generator == "certificate_bundle":
-        certificate = certificate_bundle_evidence(
-            source,
-            artifact.outputs,
-            scenario_root / artifact.provenance,
-        )
+        certificate = _certificate_evidence(realization_root, source, artifact)
         if certificate is not None:
             evidence["certificate"] = certificate
     return evidence
+
+
+def _certificate_evidence(
+    realization_root: Path,
+    source: Path,
+    artifact: DeploymentGeneratedArtifactRealization,
+) -> dict[str, object] | None:
+    """Validate a realized certificate bundle in the shape its generator issued.
+
+    Two bundle shapes exist and neither validator can read the other. The Wazuh
+    shape is ``root-ca.pem`` plus ``*-key.pem`` leaves; the SOC shape carries its
+    own CA name, ``.key`` private keys, and PKCS#12 keystores. Running one
+    validator over both reports a correctly issued bundle as invalid, which
+    strips its whole snapshot entry and makes the SEM-218 gate reject
+    certificates APTL had just generated and verified (issue #875).
+
+    Every shape is still cryptographically validated -- nothing is accepted on
+    file presence. Only the identity-versus-provenance-document comparison is
+    conditional, because only the in-tree bundle ships that document; an env-pack
+    declares its bundle by profile identity instead, which is the same carve-out
+    realization already makes before validating.
+    """
+
+    if artifact.provenance == SOC_CERT_PROFILE:
+        return soc_bundle_evidence(
+            source, tuple(output.path for output in artifact.outputs)
+        )
+    return certificate_bundle_evidence(
+        source,
+        artifact.outputs,
+        realization_root / artifact.provenance
+        if artifact.provenance == CERTIFICATE_PROVENANCE
+        else None,
+    )
 
 
 def _consumers_mounted(
@@ -238,55 +282,47 @@ def _artifact_consumers_mounted(
     artifact: DeploymentGeneratedArtifactRealization,
     node_containers: dict[str, str],
     source: Path,
+    image_free_addresses: frozenset[str],
 ) -> bool:
-    """Return whether every consumer sees only its declared artifact outputs."""
+    """Return whether every consumer received exactly its declared outputs."""
 
     return all(
-        _artifact_consumer_mounted(
+        _artifact_consumer_realized(
             backend,
             artifact,
             consumer,
             node_containers,
             source,
+            consumer.target_address in image_free_addresses,
         )
         for consumer in artifact.consumers
     )
 
 
-def _artifact_consumer_mounted(
+def _artifact_consumer_realized(
     backend: "DeploymentBackend",
     artifact: DeploymentGeneratedArtifactRealization,
     consumer: DeploymentStatefulConsumer,
     node_containers: dict[str, str],
     source: Path,
+    image_free: bool,
 ) -> bool:
-    """Return whether one artifact consumer has every declared bind mount."""
+    """Return whether one consumer received the artifact the way it was delivered.
 
-    container = node_containers.get(consumer.target_address)
-    if not container:
-        log.warning(
-            "artifact consumer %s has no realized container to observe",
-            consumer.target_address,
-        )
+    Delivery is not one shape: only a Compose service can carry a bind, so an
+    image-free node's outputs are placed into its container as files instead
+    (issue #875). Observing every consumer as if it were bind-mounted demands a
+    mount realization never emitted and reports a delivered artifact as
+    unrealized, so each consumer is read back through the mechanism that
+    actually delivered it.
+    """
+
+    settled = _settled_consumer_container(backend, consumer, node_containers)
+    if settled is None:
         return False
-    info = _settled_inspect(backend, container)
-    if not _container_realized(info):
-        log.warning(
-            "artifact consumer container %s not settled/healthy for observation",
-            container,
-        )
-        return False
-    expected = (
-        [
-            (
-                str(source / output.path),
-                str(PurePosixPath(consumer.mount_destination) / output.path),
-            )
-            for output in artifact.outputs
-        ]
-        if artifact.generator == "certificate_bundle"
-        else [(str(source), consumer.mount_destination)]
-    )
+    container, info = settled
+    if image_free:
+        return _placed_outputs_present(backend, artifact, consumer, container)
     return all(
         _mount_present(
             info,
@@ -295,8 +331,131 @@ def _artifact_consumer_mounted(
             source=mount_source,
             destination=destination,
         )
-        for mount_source, destination in expected
+        for mount_source, destination in _expected_consumer_mounts(
+            artifact, consumer, source
+        )
     )
+
+
+def _settled_consumer_container(
+    backend: "DeploymentBackend",
+    consumer: DeploymentStatefulConsumer,
+    node_containers: dict[str, str],
+) -> tuple[str, dict[str, Any]] | None:
+    """Return a consumer's settled container name and inspect record, or None.
+
+    ``None`` means the consumer offers nothing observable — no realized container,
+    or one that never settled healthy — so the caller fails closed.
+    """
+
+    container = node_containers.get(consumer.target_address)
+    if not container:
+        log.warning(
+            "artifact consumer %s has no realized container to observe",
+            consumer.target_address,
+        )
+        return None
+    info = _settled_inspect(backend, container)
+    if not _container_realized(info):
+        log.warning(
+            "artifact consumer container %s not settled/healthy for observation",
+            container,
+        )
+        return None
+    return container, info
+
+
+def _expected_consumer_mounts(
+    artifact: DeploymentGeneratedArtifactRealization,
+    consumer: DeploymentStatefulConsumer,
+    source: Path,
+) -> list[tuple[str, str]]:
+    """Return the (host source, container destination) binds realization emitted.
+
+    Derived from the same two functions the Compose stateful override is built
+    from, so the observed contract cannot drift from the realized one. A
+    consumer receives only its selected, non-``producer_private`` outputs -- a
+    whole-directory expectation would demand mounts of material realization
+    deliberately withheld from it.
+    """
+
+    if not _uses_per_output_mounts(artifact, consumer):
+        return [(str(source), consumer.mount_destination)]
+    by_name = {output.name: output for output in artifact.outputs}
+    return [
+        (
+            str(source / by_name[name].path),
+            str(PurePosixPath(consumer.mount_destination) / by_name[name].path),
+        )
+        for name in _consumer_output_names(artifact, consumer)
+    ]
+
+
+def _placed_outputs_present(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    consumer: DeploymentStatefulConsumer,
+    container: str,
+) -> bool:
+    """Return whether an image-free consumer holds every output placed into it.
+
+    The generic materializer writes each selected output as a file at
+    ``<mount_destination>/<output path>``, so the readback is the presence of
+    those exact paths in the container. Nothing is read out -- only existence is
+    observed -- and a probe that cannot be completed observes nothing, so the
+    SEM-218 gate rejects rather than assumes delivery.
+    """
+
+    by_name = {output.name: output for output in artifact.outputs}
+    names = _consumer_output_names(artifact, consumer)
+    if not names:
+        log.warning(
+            "artifact %s places no output into image-free consumer %s",
+            artifact.address,
+            consumer.target_address,
+        )
+        return False
+    return all(
+        _placed_output_present(
+            backend,
+            artifact,
+            consumer,
+            container,
+            str(PurePosixPath(consumer.mount_destination) / by_name[name].path),
+        )
+        for name in names
+    )
+
+
+def _placed_output_present(
+    backend: "DeploymentBackend",
+    artifact: DeploymentGeneratedArtifactRealization,
+    consumer: DeploymentStatefulConsumer,
+    container: str,
+    destination: str,
+) -> bool:
+    """Return whether one placed output exists at ``destination`` in the container."""
+
+    try:
+        placed = (
+            backend.container_exec(container, ["test", "-f", destination]).returncode
+            == 0
+        )
+    except (BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe placed artifact output in %s (%s)",
+            container,
+            type(exc).__name__,
+        )
+        return False
+    if not placed:
+        log.warning(
+            "artifact %s output missing from image-free consumer %s",
+            artifact.address,
+            consumer.target_address,
+        )
+        return False
+    return True
 
 
 def _authenticated_consumers_ready(

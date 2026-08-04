@@ -19,8 +19,11 @@ than embedding operator/scenario text into a shell string.
 
 from __future__ import annotations
 
+import io
 import re
-from collections.abc import Sequence
+import shutil
+import tarfile
+from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
 
 from aptl.core.credentials import (
@@ -62,13 +65,18 @@ def _seed_for_content(
     project_dir: Path, item: DeploymentContentRealization
 ) -> NamedVolumeSeed:
     """Build the named-volume seed for one typed content realization."""
-    if item.source_kind == "inline-text":
-        return _inline_text_seed(project_dir, item)
-    if item.source_kind in ("project-file", "project-directory"):
-        return _project_source_seed(project_dir, item)
-    # "empty-directory": an explicit empty-directory declaration has
-    # nothing to copy. The seed still runs (a harmless no-op `set -e`
-    # script) so the operation stays uniform for every content kind.
+    builder = _SEED_BUILDERS.get(item.source_kind, _empty_directory_seed)
+    return builder(project_dir, item)
+
+
+def _empty_directory_seed(
+    project_dir: Path, item: DeploymentContentRealization
+) -> NamedVolumeSeed:
+    """Seed an explicit empty-directory declaration, which has nothing to copy.
+
+    The seed still runs (a harmless no-op `set -e` script) so the operation
+    stays uniform for every content kind.
+    """
     return NamedVolumeSeed(
         volume_suffix=item.volume_suffix,
         source_dir=project_dir,
@@ -87,6 +95,60 @@ def _inline_text_seed(
     rendered_dir.mkdir(parents=True, exist_ok=True)
     rendered_file = rendered_dir / basename
     rendered_file.write_text(item.inline_text or "", encoding="utf-8")
+    return NamedVolumeSeed(
+        volume_suffix=item.volume_suffix,
+        source_dir=rendered_dir,
+        files=(SeedFile(src=basename, dest=item.dest_relpath),),
+    )
+
+
+def _pack_artifact_seed(
+    project_dir: Path, item: DeploymentContentRealization
+) -> NamedVolumeSeed:
+    """Resolve env-pack content by identity + digest and seed the verified bytes.
+
+    ``project_dir`` is the bundle root — the staged, validated pack for an
+    env-pack bundle. The bytes are opened once through
+    :func:`raes_env_packs.resolve_pack_artifact`, which byte-binds the returned
+    ``bytes`` to the pack manifest's ``sha256`` digest, so the content is
+    provably the declared artifact rather than whatever a host path happened to
+    hold. The declared digest is re-checked here as defence in depth; a mismatch
+    or an unresolvable id raises, failing the run closed before any seed
+    container runs. A ``pack-directory`` artifact is an ``application/x-tar``
+    archive extracted (data-filtered) under the rendered-content tree.
+    """
+
+    from raes_env_packs import resolve_pack_artifact
+
+    if not item.artifact_id or not item.artifact_digest:
+        raise PathContainmentError(
+            f"Pack content {item.address!r} declared no artifact identity."
+        )
+    resolved = resolve_pack_artifact(str(project_dir), item.artifact_id)
+    resolved_digest = getattr(resolved.identity, "digest", None)
+    if resolved_digest != item.artifact_digest:
+        raise ValueError(
+            f"Pack content {item.address!r} digest mismatch: declared "
+            f"{item.artifact_digest!r}, resolved {resolved_digest!r}."
+        )
+    rendered_dir = _canonical_generated_path(
+        project_dir, _RENDERED_CONTENT_ROOT / _content_slug(item.address)
+    )
+    if rendered_dir.exists():
+        shutil.rmtree(rendered_dir)
+    rendered_dir.mkdir(parents=True, exist_ok=True)
+    if item.source_kind == "pack-directory":
+        extracted = rendered_dir / "tree"
+        extracted.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
+            archive.extractall(extracted, filter="data")
+        return NamedVolumeSeed(
+            volume_suffix=item.volume_suffix,
+            source_dir=rendered_dir,
+            files=(SeedFile(src="tree", dest=item.dest_relpath),),
+        )
+    basename = PurePosixPath(item.dest_relpath).name
+    (rendered_dir / basename).write_bytes(resolved.data)
     return NamedVolumeSeed(
         volume_suffix=item.volume_suffix,
         source_dir=rendered_dir,
@@ -119,3 +181,16 @@ def _project_source_seed(
 def _content_slug(address: str) -> Path:
     """Return a filesystem-safe, code-defined subdirectory name for an address."""
     return Path(_SLUG_RE.sub("_", address))
+
+
+# The realization's declared source kind decides how its bytes reach the volume.
+# Any other kind (an explicit empty directory) seeds nothing.
+_SEED_BUILDERS: dict[
+    str, Callable[[Path, DeploymentContentRealization], NamedVolumeSeed]
+] = {
+    "inline-text": _inline_text_seed,
+    "pack-file": _pack_artifact_seed,
+    "pack-directory": _pack_artifact_seed,
+    "project-file": _project_source_seed,
+    "project-directory": _project_source_seed,
+}

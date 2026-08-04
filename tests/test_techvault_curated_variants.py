@@ -1,8 +1,8 @@
 """Static realization proof for the curated TechVault RAES SDL variants (#534).
 
 These exercise the small single-file scenarios registered in
-``scenarios/catalog.json`` alongside the default
-``scenarios/techvault-operational.sdl.yaml``. Each variant must parse through the
+``scenarios/catalog.json`` alongside the default TechVault env-pack (#875). Each
+variant must parse through the
 RAES parser, compile through the processor/runtime planner, and realize through
 APTL's ``interpret_provisioning_plan`` with no error-severity ``aptl.provisioner.*``
 diagnostics, selecting exactly the bounded Compose profile set implied by its
@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 from raes.parser import parse_sdl
 
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO
 from aptl.backends.raes_profiles import (
     load_compose_profile_index,
     public_start_profiles,
@@ -157,7 +156,7 @@ def test_selected_profiles_for_scenario_matches_variant(variant: _Variant):
     This is the source of truth the post-start readiness checks scope to, so it
     must equal the variant's expected (content-derived) profile set.
     """
-    from aptl.backends.raes import selected_profiles_for_scenario
+    from aptl.backends._raes_scenario_queries import selected_profiles_for_scenario
     from aptl.validation._gate_checks import _NoStartBackend
 
     selected = selected_profiles_for_scenario(
@@ -212,10 +211,17 @@ def test_variant_is_registered_and_resolvable(variant: _Variant):
     assert resolved == variant.path
 
 
-def test_catalog_default_and_operational_scenario_unchanged():
-    """The default public startup contract must remain techvault-operational."""
+def test_catalog_lists_curated_variants_and_default_is_the_env_pack():
+    """The retired in-tree ``techvault-operational`` is no longer a catalog entry.
+
+    The default public startup contract now resolves from the bundled TechVault
+    env-pack (#875), not a catalog scenario; the curated variants still register.
+    """
     catalog = load_scenario_catalog(PROJECT_ROOT)
     ids = [entry.id for entry in catalog.scenarios]
-    assert ids[0] == "techvault-operational"
+    assert "techvault-operational" not in ids
     assert set(VARIANTS_BY_ID).issubset(set(ids))
-    assert DEFAULT_RAES_SCENARIO == Path("scenarios") / "techvault-operational.sdl.yaml"
+
+    default_scenario = AptlConfig().scenario
+    assert default_scenario.source == "env-pack"
+    assert default_scenario.identity == "techvault"

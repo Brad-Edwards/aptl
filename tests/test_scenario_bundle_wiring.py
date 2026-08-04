@@ -60,7 +60,7 @@ def test_realization_receives_the_bundle_not_just_the_project(monkeypatch):
 
     seen: dict[str, object] = {}
 
-    def _capture(*, plan, config, bundle):
+    def _capture(*, plan, config, bundle, component_root=None):
         seen["bundle"] = bundle
         raise RuntimeError("stop after capture")
 

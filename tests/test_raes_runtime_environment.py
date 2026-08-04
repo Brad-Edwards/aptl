@@ -16,19 +16,21 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.backends.raes_base_substrate import BaseContainerSpec, _environment_names
-
-_SCENARIO = (
-    Path(__file__).resolve().parents[1]
-    / "scenarios"
-    / "techvault-operational.sdl.yaml"
-)
+from tests.helpers import techvault_scenario_path
 
 
-def _webapp_runtime():
-    return parse_sdl_file(_SCENARIO).nodes["webapp"].runtime
+@pytest.fixture(scope="module")
+def scenario_path(tmp_path_factory) -> Path:
+    """Staged SDL path of the default TechVault env-pack scenario (#875)."""
+    return techvault_scenario_path(tmp_path_factory.mktemp("raes-env"))
+
+
+def _webapp_runtime(scenario_path: Path):
+    return parse_sdl_file(scenario_path).nodes["webapp"].runtime
 
 
 def _backend(project_dir: Path):
@@ -59,10 +61,10 @@ def _spec(names: tuple[str, ...]) -> BaseContainerSpec:
     )
 
 
-def test_declared_environment_names_are_lowered():
+def test_declared_environment_names_are_lowered(scenario_path):
     """The webapp's restored database binding reaches the realization spec."""
 
-    names = _environment_names(_webapp_runtime())
+    names = _environment_names(_webapp_runtime(scenario_path))
 
     assert "DB_HOST" in names
     assert "DB_PASSWORD" in names
@@ -126,7 +128,7 @@ def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     assert _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path) == []
 
 
-def test_restored_named_volumes_are_lowered():
+def test_restored_named_volumes_are_lowered(scenario_path):
     """The persistent state the refactor dropped is declared and lowered again.
 
     Bind mounts of project keys and certificates are deliberately absent: they
@@ -136,7 +138,7 @@ def test_restored_named_volumes_are_lowered():
 
     from aptl.backends.raes_base_substrate import _volume_mounts
 
-    scenario = parse_sdl_file(_SCENARIO)
+    scenario = parse_sdl_file(scenario_path)
     lowered = {
         name: {(m.source, m.target) for m in _volume_mounts(node.runtime)}
         for name, node in scenario.nodes.items()
@@ -181,7 +183,7 @@ def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
     assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"
 
 
-def test_authored_defaults_are_bound():
+def test_authored_defaults_are_bound(scenario_path):
     """Values that were literals in Compose are authored, not lost.
 
     Without an authored default they would have no source at all and be silently
@@ -191,7 +193,7 @@ def test_authored_defaults_are_bound():
 
     from aptl.backends.raes_base_substrate import _environment_defaults
 
-    defaults = dict(_environment_defaults(_webapp_runtime()))
+    defaults = dict(_environment_defaults(_webapp_runtime(scenario_path)))
 
     assert defaults["DB_HOST"] == "172.20.2.11"
     assert defaults["DB_NAME"] == "techvault"
@@ -225,7 +227,7 @@ def test_credentials_and_operator_overrides_beat_authored_defaults(tmp_path, mon
     assert "DB_PORT=5432" in body
 
 
-def test_planted_range_credentials_are_authored_not_stripped():
+def test_planted_range_credentials_are_authored_not_stripped(scenario_path):
     """A range credential is scenario content and must be declared in the SDL.
 
     The pre-refactor compose file carried `POSTGRES_PASSWORD=techvault_db_pass`
@@ -238,7 +240,7 @@ def test_planted_range_credentials_are_authored_not_stripped():
 
     from aptl.backends.raes_base_substrate import _environment_defaults
 
-    scenario = parse_sdl_file(_SCENARIO)
+    scenario = parse_sdl_file(scenario_path)
 
     db = dict(_environment_defaults(scenario.nodes["db"].runtime))
     webapp = dict(_environment_defaults(scenario.nodes["webapp"].runtime))
@@ -249,22 +251,22 @@ def test_planted_range_credentials_are_authored_not_stripped():
     )
 
 
-def test_a_real_operator_secret_is_still_authored_empty():
+def test_a_real_operator_secret_is_still_authored_empty(scenario_path):
     """The distinction must cut both ways, or everything becomes a fixture."""
 
     from aptl.backends.raes_base_substrate import _environment_defaults
 
-    scenario = parse_sdl_file(_SCENARIO)
+    scenario = parse_sdl_file(scenario_path)
     sync = dict(_environment_defaults(scenario.nodes["misp-suricata-sync"].runtime))
 
     # MISP's API key is a real deployment credential, not planted range content.
     assert "MISP_API_KEY" not in sync
 
 
-def test_range_credentials_are_classified_as_fixtures_not_operator_secrets():
+def test_range_credentials_are_classified_as_fixtures_not_operator_secrets(scenario_path):
     """The classification carries the distinction, so tooling can tell them apart."""
 
-    scenario = parse_sdl_file(_SCENARIO)
+    scenario = parse_sdl_file(scenario_path)
 
     for node, name in (("db", "POSTGRES_PASSWORD"), ("webapp", "DB_PASSWORD")):
         variable = next(

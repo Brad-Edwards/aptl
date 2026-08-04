@@ -37,16 +37,24 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from raes_contracts.diagnostics import Diagnostic
 from raes_contracts.planning import PlannedResource
 
+from aptl.backends._raes_content_spec import (
+    _is_sensitive,
+    _reject,
+    _safe_dest_relpath,
+)
+from aptl.backends._raes_dataset_content import (
+    _resolve_dataset_content,
+)
 from aptl.backends.raes_content_source_policy import forbidden_source_reason
-from aptl.backends.raes_diagnostics import diagnostic
 from aptl.backends.raes_realization_model import ParticipantDatasetRealization
 from aptl.backends.raes_realization_values import (
+    content_source_exact_artifact as _content_source_exact_artifact,
     content_source_name as _content_source_name,
     content_text as _content_text,
     optional_string as _optional_string,
@@ -68,7 +76,6 @@ _CONTENT_REALIZABLE_SERVICES: dict[str, str] = {
 }
 
 _RUNTIME_OBSERVED_PREFIX = "runtime-observed:"
-_SAFE_DEST_RELPATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 
 
 @dataclass(frozen=True)
@@ -182,68 +189,6 @@ def _content_placement_inputs(
     return inputs, reason
 
 
-def _resolve_dataset_content(
-    *,
-    resource: PlannedResource,
-    spec: Mapping[str, Any],
-    content_name: str,
-    target_address: str,
-) -> tuple[ParticipantDatasetRealization | None, list[Diagnostic]]:
-    """Lower one empty logical evidence dataset into the run-store carrier."""
-
-    dataset: ParticipantDatasetRealization | None = None
-    diagnostics: list[Diagnostic] = []
-    forbidden_values = (
-        spec.get("source"),
-        spec.get("text"),
-        spec.get("path"),
-        spec.get("destination"),
-    )
-    if any(value not in (None, "") for value in forbidden_values):
-        diagnostics = [_reject(resource.address, "dataset-carries-materialization")]
-    else:
-        item_names = _dataset_item_names(spec.get("items"))
-        tags = _dataset_tags(spec.get("tags", []))
-        if item_names is None:
-            diagnostics = [_reject(resource.address, "dataset-items-invalid")]
-        elif tags is None:
-            diagnostics = [_reject(resource.address, "dataset-tags-invalid")]
-        else:
-            dataset = ParticipantDatasetRealization(
-                address=resource.address,
-                target_address=target_address,
-                content_name=content_name,
-                item_names=item_names,
-                tags=tags,
-                sensitive=_is_sensitive(spec),
-            )
-    return dataset, diagnostics
-
-
-def _dataset_item_names(raw_items: object) -> tuple[str, ...] | None:
-    """Validate and normalize the declared dataset item names."""
-
-    if not isinstance(raw_items, list) or not raw_items:
-        return None
-    item_names: list[str] = []
-    for item in raw_items:
-        name = item.get("name") if isinstance(item, Mapping) else None
-        if not isinstance(name, str) or not name or name in item_names:
-            return None
-        item_names.append(name)
-    return tuple(item_names)
-
-
-def _dataset_tags(raw_tags: object) -> tuple[str, ...] | None:
-    """Validate and normalize the declared dataset tags."""
-
-    if not isinstance(raw_tags, list) or any(
-        not isinstance(tag, str) or not tag for tag in raw_tags
-    ):
-        return None
-    return tuple(raw_tags)
-
-
 def _resolve_file_content(
     *,
     resource: PlannedResource,
@@ -262,6 +207,13 @@ def _resolve_file_content(
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
         diagnostics = [_reject(resource.address, "unsafe-destination-path")]
     else:
+        placement = _ContentPlacement(
+            content_name=content_name,
+            target_address=target_address,
+            dest_relpath=dest_relpath,
+            volume_suffix=volume_suffix,
+            sensitive=_is_sensitive(spec),
+        )
         text = _content_text(spec)
         if text is not None:
             content = DeploymentContentRealization(
@@ -274,16 +226,17 @@ def _resolve_file_content(
                 inline_text=text,
                 sensitive=_is_sensitive(spec),
             )
+        elif _content_source_exact_artifact(spec) is not None:
+            content, diagnostics = _resolve_pack_artifact_content(
+                resource=resource,
+                spec=spec,
+                placement=placement,
+                source_kind="pack-file",
+            )
         else:
             content, diagnostics = _resolve_file_content_from_source(
                 resource=resource,
-                placement=_ContentPlacement(
-                    content_name=content_name,
-                    target_address=target_address,
-                    dest_relpath=dest_relpath,
-                    volume_suffix=volume_suffix,
-                    sensitive=_is_sensitive(spec),
-                ),
+                placement=placement,
                 source_name=source_name,
                 project_dir=project_dir,
             )
@@ -340,6 +293,19 @@ def _resolve_directory_content(
     diagnostics: list[Diagnostic] = []
     if dest_relpath is None or not _safe_dest_relpath(dest_relpath):
         diagnostics = [_reject(resource.address, "unsafe-destination-path")]
+    elif _content_source_exact_artifact(spec) is not None:
+        content, diagnostics = _resolve_pack_artifact_content(
+            resource=resource,
+            spec=spec,
+            placement=_ContentPlacement(
+                content_name=content_name,
+                target_address=target_address,
+                dest_relpath=dest_relpath,
+                volume_suffix=volume_suffix,
+                sensitive=_is_sensitive(spec),
+            ),
+            source_kind="pack-directory",
+        )
     elif source_name is None:
         content = DeploymentContentRealization(
             address=resource.address,
@@ -396,6 +362,78 @@ def _resolve_directory_content_from_source(
     return content, diagnostics
 
 
+_SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _resolve_pack_artifact_content(
+    *,
+    resource: PlannedResource,
+    spec: Mapping[str, Any],
+    placement: _ContentPlacement,
+    source_kind: str,
+) -> tuple[DeploymentContentRealization | None, list[Diagnostic]]:
+    """Lower content declared by an exact env-pack artifact identity + digest.
+
+    No host path is read here: the placement carries the opaque ``artifact_id``
+    and its ``sha256`` digest, and the backend seed resolves and byte-verifies
+    the bytes from the validated pack through ``resolve_pack_artifact``. A
+    directory artifact must be an ``application/x-tar`` archive (extracted at the
+    destination). Missing identity, a malformed digest, or a directory that is
+    not an archive fails closed before any side effect.
+    """
+
+    exact = _content_source_exact_artifact(spec) or {}
+    artifact_id = _optional_string(exact, "artifact_id")
+    digest = _optional_string(exact, "digest")
+    media_type = _optional_string(exact, "media_type")
+    reason = _pack_artifact_reject_reason(
+        artifact_id=artifact_id,
+        digest=digest,
+        media_type=media_type,
+        source_kind=source_kind,
+    )
+    if reason is not None:
+        return None, [_reject(resource.address, reason)]
+    content = DeploymentContentRealization(
+        address=resource.address,
+        target_address=placement.target_address,
+        content_name=placement.content_name,
+        volume_suffix=placement.volume_suffix,
+        dest_relpath=placement.dest_relpath,
+        source_kind=source_kind,  # type: ignore[arg-type]
+        artifact_id=artifact_id,
+        artifact_digest=digest,
+        media_type=media_type,
+        sensitive=placement.sensitive,
+    )
+    return content, []
+
+
+def _pack_artifact_reject_reason(
+    *,
+    artifact_id: str | None,
+    digest: str | None,
+    media_type: str | None,
+    source_kind: str,
+) -> str | None:
+    """Return the rejection reason for a malformed pack identity, else None.
+
+    Checked in the order the identity is established: an artifact id + digest
+    must be declared, the digest must be a canonical sha256, and directory
+    content must arrive as a tar archive.
+    """
+
+    if not artifact_id or not digest:
+        reason = "pack-artifact-missing-identity"
+    elif not _SHA256_DIGEST_RE.match(digest):
+        reason = "pack-artifact-invalid-digest"
+    elif source_kind == "pack-directory" and media_type != "application/x-tar":
+        reason = "pack-directory-not-archive"
+    else:
+        reason = None
+    return reason
+
+
 def _resolve_project_source(
     address: str, source_name: str, project_dir: Path
 ) -> tuple[Path | None, list[Diagnostic]]:
@@ -409,32 +447,3 @@ def _resolve_project_source(
     except PathContainmentError:
         return None, [_reject(address, "source-path-escapes-project")]
     return resolved, []
-
-
-def _safe_dest_relpath(relpath: str) -> bool:
-    """Return whether a destination relpath is safe to embed in a seed script."""
-
-    return (
-        ".." not in PurePosixPath(relpath).parts
-        and _SAFE_DEST_RELPATH.match(relpath) is not None
-    )
-
-
-def _is_sensitive(spec: Mapping[str, Any]) -> bool:
-    """Return the Content spec's `sensitive` flag as a plain bool."""
-
-    value = spec.get("sensitive")
-    return bool(value) if isinstance(value, (bool, str)) else False
-
-
-def _reject(address: str, reason_code: str) -> Diagnostic:
-    """Build a fail-closed content realization diagnostic."""
-
-    return diagnostic(
-        "aptl.provisioner.content-placement-rejected",
-        address,
-        (
-            "RAES content placement was rejected by the APTL content "
-            f"realization policy (reason={reason_code})."
-        ),
-    )

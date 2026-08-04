@@ -292,8 +292,16 @@ def test_manifest_still_serializes_under_the_published_v2_contract():
     payload = json.loads(model.model_dump_json())
     declarations = payload["realization_support"]
     mechanisms = [m for d in declarations for m in d.get("artifact_mechanisms", [])]
+    # Two exact-artifact profiles: OCI pull (images) and env-pack copy (content).
     assert sorted(m["mechanism"]["mechanism"] for m in mechanisms) == [
         "dynamic-composition",
         "exact-artifact",
+        "exact-artifact",
         "materialization-specification",
+    ]
+    assert sorted(m["mechanism"]["profile"] for m in mechanisms) == [
+        "aptl-contained-component-build",
+        "aptl-generic-substrate-composition",
+        "aptl-oci-exact-pull",
+        "raes-env-pack-exact-copy",
     ]

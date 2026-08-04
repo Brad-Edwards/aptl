@@ -11,12 +11,22 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Protocol
 
+# Image-free nodes are materialized concurrently: each is an independent
+# container whose realization (start base, install packages, place content,
+# configure services) shells out to Docker, and the project networks are already
+# created before this step. Serial materialization made a full range's boot the
+# SUM of every node's runtime apt install (~1 min each); a bounded pool makes it
+# the slowest single node instead. The cap keeps concurrent apt/network load
+# sane on a laptop-class host (issue #875).
+_MAX_MATERIALIZATION_WORKERS = 8
+
 from raes.runtime_configuration import RuntimeConfiguration
 
-from aptl.backends.raes_base_substrate import BaseContainerSpec, plan_node
+from aptl.backends.raes_base_substrate import BaseContainerSpec, VolumeMount, plan_node
 from aptl.backends.raes_docker_materializer import DockerMaterializationExecutor
 from aptl.backends.raes_materializer import MaterializationOp
 from aptl.backends.raes_materializer_engine import materialize_node
@@ -58,6 +68,7 @@ def realize_node(
     backend: _NodeBackend,
     content: tuple[MaterializationOp, ...] = (),
     scenario_root: Path | None = None,
+    extra_volume_mounts: tuple[VolumeMount, ...] = (),
 ) -> LabResult | None:
     """Materialize one node's declared state onto its generic base container.
 
@@ -74,6 +85,7 @@ def realize_node(
         runtime=node.runtime,
         content=content,
         dynamic_composition=node.dynamic_composition,
+        extra_volume_mounts=extra_volume_mounts,
     )
     container = spec.container_name
 
@@ -106,25 +118,76 @@ def realize_nodes(
     backend: _NodeBackend,
     content_by_node: dict[str, tuple[MaterializationOp, ...]] | None = None,
     scenario_root: Path | None = None,
+    volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]] | None = None,
 ) -> LabResult | None:
     """Materialize every node that declares desired state, failing closed.
 
     Nodes with no declared `os` (switches, unaddressed nodes) are skipped: there
-    is nothing to materialize onto a substrate. The first node that fails to
-    materialize-and-verify returns its fail-closed `LabResult`; the rest are not
-    started, so a partial range never masquerades as realized.
+    is nothing to materialize onto a substrate. Nodes are materialized
+    concurrently (a bounded pool) since each is an independent container; if any
+    node fails to materialize-and-verify, its fail-closed `LabResult` is returned
+    (the first failure in declared node order, for a deterministic message) so a
+    partial range never masquerades as realized.
     """
 
     content_by_node = content_by_node or {}
-    for node in nodes:
-        if not node.os:
-            continue
-        result = realize_node(
-            node,
+    volume_mounts_by_node = volume_mounts_by_node or {}
+    materializable = [node for node in nodes if node.os]
+    if not materializable:
+        return None
+
+    workers = min(len(materializable), _MAX_MATERIALIZATION_WORKERS)
+    if workers <= 1:
+        return realize_node(
+            materializable[0],
             backend,
-            content_by_node.get(node.address, ()),
+            content_by_node.get(materializable[0].address, ()),
             scenario_root=scenario_root,
+            extra_volume_mounts=volume_mounts_by_node.get(
+                materializable[0].address, ()
+            ),
         )
+
+    return _realize_nodes_concurrently(
+        materializable,
+        backend,
+        content_by_node,
+        scenario_root,
+        volume_mounts_by_node,
+        workers,
+    )
+
+
+def _realize_nodes_concurrently(
+    materializable: list[_MaterializableNode],
+    backend: _NodeBackend,
+    content_by_node: dict[str, tuple[MaterializationOp, ...]],
+    scenario_root: Path | None,
+    volume_mounts_by_node: dict[str, tuple[VolumeMount, ...]],
+    workers: int,
+) -> LabResult | None:
+    """Materialize the nodes in a bounded pool, returning the first failure."""
+
+    results: dict[str, LabResult | None] = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(
+                realize_node,
+                node,
+                backend,
+                content_by_node.get(node.address, ()),
+                scenario_root=scenario_root,
+                extra_volume_mounts=volume_mounts_by_node.get(node.address, ()),
+            ): node
+            for node in materializable
+        }
+        for future, node in futures.items():
+            results[node.address] = future.result()
+
+    # Fail closed on the first failure in declared node order so the surfaced
+    # error is deterministic regardless of completion order.
+    for node in materializable:
+        result = results.get(node.address)
         if result is not None:
             return result
     return None

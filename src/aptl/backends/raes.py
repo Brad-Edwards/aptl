@@ -15,6 +15,10 @@ from aptl.backends._raes_apply_helpers import (
     _drive_orchestrator_workflows,
     _with_backend_failure_diagnostics,
 )
+from aptl.backends._raes_scenario_resolution import (
+    _resolve_scenario_path,
+    resolve_scenario_bundle,
+)
 from aptl.backends.raes_diagnostics import (
     render_raes_diagnostics,
 )
@@ -26,7 +30,6 @@ from aptl.backends.raes_artifact_availability import artifact_availability_for_s
 from aptl.backends.raes_manifest import APTL_RAES_TARGET_NAME, create_aptl_manifest
 from aptl.backends.raes_evaluator import AptlEvaluator
 from aptl.backends.raes_orchestrator import AptlOrchestrator
-from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_participant_actions import (
     DEFAULT_PARTICIPANT_ACTIONS,
     ParticipantActionSpec,
@@ -35,15 +38,18 @@ from aptl.backends.raes_participant_actions import (
 from aptl.backends.raes_participant_driver import ParticipantPlanAuthority
 from aptl.backends.raes_participant_runtime import AptlParticipantRuntime
 from aptl.backends.raes_provisioner import AptlProvisioner
-from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.backends.raes_start_model import (
-    DEFAULT_RAES_SCENARIO,
+    # ``DEFAULT_RAES_SCENARIO`` is re-exported: callers read the default
+    # scenario selection off this module.
+    DEFAULT_RAES_SCENARIO as DEFAULT_RAES_SCENARIO,
     AcesRunTarget,
     AcesStartOutcome,
 )
 from aptl.core.config import AptlConfig
-from aptl.core.scenario_bundle import ScenarioBundle, project_tree_bundle
-from aptl.core.deployment._compose_stateful_model import artifact_source_path
+from aptl.core.scenario_bundle import (
+    EnvPackError,
+    ScenarioBundle,
+)
 from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
@@ -133,11 +139,14 @@ def start_raes_scenario(
 
     resolved_scenario = _resolve_scenario_path(project_dir, scenario_path, config)
     try:
+        resolved_scenario = resolve_scenario_bundle(
+            project_dir, scenario_path, config
+        ).sdl_path
         target, execution_plan = _plan_scenario(
             project_dir,
             config,
             backend,
-            resolved_scenario,
+            scenario_path,
             parameters,
         )
         return _apply_with_backend_retry(
@@ -147,73 +156,60 @@ def start_raes_scenario(
             run_target,
             before_backend_retry,
         )
-    except SDLInstantiationError:
-        return AcesStartOutcome(
-            lab_result=LabResult(
-                success=False,
-                error=_INSTANTIATION_FAILURE_MESSAGE,
-            ),
-            final_snapshot=RuntimeSnapshot(),
-            realization_details={},
-            selected_profiles=[],
-            scenario_path=resolved_scenario,
-            retryable=False,
-        )
-    except (FileNotFoundError, SDLError, TypeError, ValueError) as exc:
-        return AcesStartOutcome(
-            lab_result=LabResult(
-                success=False,
-                error=redact(f"RAES runtime handoff failed: {exc}"),
-            ),
-            final_snapshot=RuntimeSnapshot(),
-            realization_details={},
-            selected_profiles=[],
-            scenario_path=resolved_scenario,
-        )
+    except (
+        EnvPackError,
+        SDLInstantiationError,
+        FileNotFoundError,
+        SDLError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        return _start_failure_outcome(exc, resolved_scenario)
 
 
-def _resolve_scenario_path(
-    project_dir: Path,
-    scenario_path: Path | None,
-    config: AptlConfig | None = None,
-) -> Path:
-    """Resolve which scenario to realize, and where its bytes come from.
+def _start_failure_outcome(
+    exc: Exception, resolved_scenario: Path
+) -> AcesStartOutcome:
+    """Map a scenario-start failure onto its unretryable failure outcome.
 
-    Precedence is explicit selection, then configuration, then the historical
-    in-tree default. A backend is handed a scenario rather than owning one, so
-    the operator chooses it before ``aptl lab start``. A configured root anchors
-    the scenario's own inputs; it is validated as a contained relative path when
-    the configuration is parsed, so joining it here cannot escape the project.
+    Each cause keeps the disclosure it always had: a pack acquisition failure and
+    a runtime handoff failure report the redacted exception, while a variable
+    binding failure reports the fixed instantiation message rather than the
+    binding it rejected.
     """
 
-    if scenario_path is not None:
-        return (
-            scenario_path
-            if scenario_path.is_absolute()
-            else project_dir / scenario_path
-        )
-    if config is not None:
-        selection = config.scenario
-        relative = Path(f"{selection.identity}.sdl.yaml")
-        base = Path(selection.root) if selection.root else Path("scenarios")
-        return project_dir / base / relative
-    return project_dir / DEFAULT_RAES_SCENARIO
+    if isinstance(exc, EnvPackError):
+        error = redact(f"RAES scenario pack acquisition failed: {exc}")
+    elif isinstance(exc, SDLInstantiationError):
+        error = _INSTANTIATION_FAILURE_MESSAGE
+    else:
+        error = redact(f"RAES runtime handoff failed: {exc}")
+    return AcesStartOutcome(
+        lab_result=LabResult(success=False, error=error),
+        final_snapshot=RuntimeSnapshot(),
+        realization_details={},
+        selected_profiles=[],
+        scenario_path=resolved_scenario,
+        retryable=False,
+    )
 
 
 def _plan_scenario(
     project_dir: Path,
     config: AptlConfig,
     backend: "DeploymentBackend",
-    scenario_path: Path,
+    scenario_path: Path | None,
     parameters: Mapping[str, object] | None,
 ) -> tuple[RuntimeTarget, "ExecutionPlan"]:
     """Build one RAES plan and the target that consumes its concrete model."""
 
-    scenario = parse_sdl_file(scenario_path)
-    # Resolve the scenario bundle once, here, where the scenario itself is
-    # resolved. Everything downstream anchors its content to this rather than to
-    # the engine's checkout, so rehoming the scenario changes only the resolver.
-    bundle = project_tree_bundle(project_dir, scenario_path)
+    # Resolve the scenario bundle once, here, where the scenario is resolved: an
+    # explicit path (or in-tree config) yields the project tree; the configured
+    # env-pack yields a staged, validated pack. Everything downstream anchors to
+    # this rather than the engine's checkout, so rehoming changes only the
+    # resolver (issue #874 / #875).
+    bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
+    scenario = parse_sdl_file(bundle.sdl_path)
     target = create_aptl_runtime_target(
         project_dir=project_dir,
         config=config,
@@ -227,7 +223,7 @@ def _plan_scenario(
     # own inputs (including a component build context) anchor to the bundle,
     # which is the project directory only while the scenario still lives in-tree.
     availability = artifact_availability_for_scenario(
-        scenario, backend, scenario_root=bundle.root
+        scenario, backend, scenario_root=bundle.root, component_root=project_dir
     )
     execution_plan = (
         manager.plan(
@@ -256,7 +252,7 @@ def _plan_scenario(
     if isinstance(participant_runtime, AptlParticipantRuntime):
         participant_runtime.plan_authority = ParticipantPlanAuthority(
             execution_plan,
-            scenario_path,
+            bundle.sdl_path,
         )
     return target, execution_plan
 
@@ -293,92 +289,6 @@ def _apply_with_backend_retry(
             run_id=run_id,
         )
     return outcome
-
-
-def selected_profiles_for_scenario(
-    project_dir: Path,
-    config: AptlConfig,
-    backend: "DeploymentBackend",
-    scenario_path: Path | None = None,
-) -> list[str]:
-    """Return the Compose profiles selected by a scenario without side effects."""
-    resolved_scenario = scenario_path or DEFAULT_RAES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
-    scenario = parse_sdl_file(resolved_scenario)
-    bundle = project_tree_bundle(project_dir, resolved_scenario)
-    target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend, bundle=bundle
-    )
-    execution_plan = RuntimeManager(target).plan(
-        scenario,
-        artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=bundle.root
-        ),
-    )
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning, config=config, bundle=bundle
-    )
-    return select_backend_profiles(config, realization.profiles)
-
-
-def admitted_stateful_artifact_ownership(
-    project_dir: Path,
-    config: AptlConfig,
-    backend: "DeploymentBackend",
-    scenario_path: Path | None = None,
-) -> frozenset[tuple[str, str, str, str, str]]:
-    """Return exact addressed artifact consumers from the admitted graph.
-
-    Each entry is ``(address, generator, service_name, mount_destination,
-    source_relpath)``. The canonical generated source travels with the
-    consumer so downstream exemptions (the bind-mount pre-flight) can match
-    a mount on both sides — a stray bind whose destination merely nests
-    beneath an owned directory is not owned by the artifact (issue #677).
-    """
-
-    resolved_scenario = scenario_path or DEFAULT_RAES_SCENARIO
-    if not resolved_scenario.is_absolute():
-        resolved_scenario = project_dir / resolved_scenario
-    scenario = parse_sdl_file(resolved_scenario)
-    bundle = project_tree_bundle(project_dir, resolved_scenario)
-    target = create_aptl_runtime_target(
-        project_dir=project_dir, config=config, backend=backend, bundle=bundle
-    )
-    execution_plan = RuntimeManager(target).plan(
-        scenario,
-        artifact_availability=artifact_availability_for_scenario(
-            scenario, backend, scenario_root=bundle.root
-        ),
-    )
-    blocking = [
-        diagnostic for diagnostic in execution_plan.diagnostics if diagnostic.is_error
-    ]
-    if blocking:
-        raise ValueError(render_raes_diagnostics(blocking))
-    realization = interpret_provisioning_plan(
-        plan=execution_plan.provisioning,
-        config=config,
-        bundle=bundle,
-    )
-    blocking = [
-        diagnostic for diagnostic in realization.diagnostics if diagnostic.is_error
-    ]
-    if blocking:
-        raise ValueError(render_raes_diagnostics(blocking))
-    return frozenset(
-        (
-            artifact.address,
-            artifact.generator,
-            consumer.service_name,
-            consumer.mount_destination,
-            artifact_source_path(bundle.root, artifact)
-            .relative_to(bundle.root)
-            .as_posix(),
-        )
-        for artifact in realization.generated_artifacts
-        for consumer in artifact.consumers
-    )
 
 
 def _run_execution_plan(

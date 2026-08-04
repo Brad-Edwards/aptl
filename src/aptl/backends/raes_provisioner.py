@@ -22,6 +22,7 @@ from aptl.backends.raes_artifact_mechanisms import (
     dynamic_composition_provenance_ref,
 )
 from aptl.backends.raes_artifact_satisfaction import satisfactions_for_plan
+from aptl.backends.raes_content_satisfaction import content_satisfactions_for_plan
 from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observation_evidence, observe_realization
 from aptl.backends.raes_realization import (
@@ -225,13 +226,17 @@ class AptlProvisioner(object):
 
         RAES's runtime non-approximation gate reads ``artifact_satisfaction``
         off each entry to prove the backend realized the artifact the author
-        pinned. The disclosure is derived from the digest read back off the
-        running container, so an address whose artifact cannot be read, or whose
-        realized digest differs from the pin, simply gets no disclosure and the
-        gate rejects the apply.
+        pinned. A node's disclosure is derived from the digest read back off the
+        running container; a content placement's is derived from the bytes the
+        pack resolved for it (issue #875), because copied content is not an OCI
+        image and has no container digest. Either way an address whose artifact
+        cannot be established, or whose realized digest differs from the pin,
+        simply gets no disclosure and the gate rejects the apply.
 
-        A scenario that authors no artifact requirement produces no disclosures
-        and the snapshot is returned unchanged.
+        Only addresses the observation pass reported realized have a snapshot
+        entry at all, so a disclosure can never outlive the realization it
+        describes. A scenario that authors no artifact requirement produces no
+        disclosures and the snapshot is returned unchanged.
         """
 
         container_names = {
@@ -239,13 +244,28 @@ class AptlProvisioner(object):
             for node in realization.nodes
             if node.container_name
         }
-        disclosures = satisfactions_for_plan(
-            plan,
-            container_names,
-            self.deployment_backend,
-            create_aptl_manifest(),
-            requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
-        )
+        content_by_address = {
+            placement.address: placement.content
+            for placement in realization.placements
+            if placement.content is not None
+        }
+        manifest = create_aptl_manifest()
+        disclosures = {
+            **satisfactions_for_plan(
+                plan,
+                container_names,
+                self.deployment_backend,
+                manifest,
+                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+            ),
+            **content_satisfactions_for_plan(
+                plan,
+                content_by_address,
+                self.bundle.root,
+                manifest,
+                requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+            ),
+        }
         if not disclosures:
             return realized
         entries = dict(realized.entries)
@@ -303,6 +323,7 @@ class AptlProvisioner(object):
             plan=plan,
             config=self.config,
             bundle=self.bundle,
+            component_root=self.project_dir,
         )
 
     @staticmethod

@@ -343,6 +343,26 @@ def content_source_name(spec: Mapping[str, Any]) -> str | None:
     return optional_string(source, "name") if source is not None else None
 
 
+def content_source_exact_artifact(
+    spec: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    """Return the ``source.artifact_requirement.exact_artifact`` mapping, if any.
+
+    Pack-backed content declares its bytes by opaque artifact identity rather
+    than a host path: ``source.name`` carries the artifact id and the exact
+    artifact requirement carries the ``sha256`` digest and media type used to
+    resolve and byte-verify the content through the env-pack manifest.
+    """
+
+    source = content_source(spec)
+    if source is None:
+        return None
+    requirement = mapping(source.get("artifact_requirement"))
+    if requirement is None:
+        return None
+    return mapping(requirement.get("exact_artifact"))
+
+
 def content_text(spec: Mapping[str, Any]) -> str | None:
     """Return the inline text declared on a Content spec, if any."""
 

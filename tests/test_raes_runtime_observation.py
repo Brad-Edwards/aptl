@@ -31,7 +31,10 @@ from raes_processor.semantics.realization import (
     realization_disclosure,
 )
 
+from raes_contracts.apparatus import RealizationVerificationScope
+
 from aptl.backends.raes_diagnostics import snapshot_after_apply
+from aptl.backends.raes_manifest import create_aptl_manifest
 from aptl.backends.raes_observation import observe_realization
 from aptl.backends.raes_realization_model import AptlRealization, NodeRealization
 from aptl.core.deployment.errors import BackendTimeoutError
@@ -249,6 +252,27 @@ def test_environment_operator_secret_is_presence_only():
     assert "super-secret-value" not in str(disclosed)
     assert disclosed[0]["value_present"] is True
     assert "value_commitment" not in disclosed[0]
+
+
+def test_environment_undeclared_operator_value_is_rejected():
+    # The contract declares the variable with no value, so "realized" means
+    # realized empty. A value arriving out of band -- an operator `.env` entry
+    # the scenario never authored -- is undeclared range content, and the gate
+    # must reject it rather than treat the declaration as a wildcard.
+    runtime = _env_runtime("", classification="plain")
+    backend = _Backend({_CONTAINER: _inspect(env=["FOO=false"])})
+    codes, _provenance, _observations = _gate(runtime, backend, "runtime-environment")
+    assert _GATE_REJECT in codes
+
+
+def test_environment_declared_valueless_realized_empty_passes():
+    # The same declaration realized as the contract states it -- present and
+    # empty -- is the honest match, so nothing is rejected.
+    runtime = _env_runtime("", classification="plain")
+    backend = _Backend({_CONTAINER: _inspect(env=["FOO="])})
+    codes, _provenance, observations = _gate(runtime, backend, "runtime-environment")
+    assert codes == []
+    assert observations[_ADDRESS].concerns[_ENV_PATH][0]["value_present"] is False
 
 
 def test_environment_probe_missing_config_fails_closed():
@@ -807,18 +831,229 @@ def test_init_capability_baseline_matches_the_substrate_init_requirements():
 
 
 # --------------------------------------------------------------------------- #
-# forwarding-agents (never realized by APTL's dynamic-composition path)
+# forwarding-agents: corroborated against the realized mount footprint (#875)
 # --------------------------------------------------------------------------- #
 
 _FORWARDING_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
 
 
-def test_forwarding_agent_is_never_disclosed_and_rejected():
-    runtime = _runtime(
-        forwarding_agents=[{"forwarding_agent_id": "wazuh.agent", "agent_kind": "unknown"}]
+def _log_forwarder_runtime():
+    """A log forwarder whose tailed source lives under a declared volume mount."""
+
+    return _runtime(
+        mounts=[
+            {"target": "/logs", "source": "db_data", "source_kind": "volume", "read_only": True}
+        ],
+        forwarding_agents=[
+            {
+                "forwarding_agent_id": "db-postgres-forwarder",
+                "implementation": "wazuh_agent",
+                "agent_kind": "log_forwarder",
+                "sources": [
+                    {
+                        "source_id": "postgres-log",
+                        "kind": "tailed_path",
+                        "location": "/logs/pg_log/postgresql.log",
+                        "parse_format": "syslog",
+                    }
+                ],
+                "ship_targets": [
+                    {
+                        "target_id": "manager",
+                        "target_node_ref": "wazuh-manager",
+                        "ingestion_port": 1514,
+                        "enrollment_port": 1515,
+                        "protocol": "tcp",
+                        "enrollment_identity_classification": "operator_secret",
+                    }
+                ],
+                "buffer_policy": {
+                    "buffer_policy_id": "db-postgres-forwarder-buffer",
+                    "crypto": "aes",
+                },
+            }
+        ],
     )
-    backend = _Backend({_CONTAINER: _inspect()})
-    codes, _provenance, observations = _gate(runtime, backend, "forwarding-agents")
+
+
+def _content_sync_runtime():
+    """A content sync whose unix-socket reload channel is served by a volume mount."""
+
+    return _runtime(
+        mounts=[
+            {
+                "target": "/var/run/suricata",
+                "source": "suricata_command_socket",
+                "source_kind": "volume",
+                "read_only": False,
+            }
+        ],
+        forwarding_agents=[
+            {
+                "forwarding_agent_id": "misp-ioc-to-suricata",
+                "implementation": "misp_suricata_sync",
+                "agent_kind": "content_sync",
+                "sources": [
+                    {
+                        "source_id": "misp-attributes",
+                        "kind": "api_pull",
+                        "location": "https://misp",
+                        "parse_format": "misp_json",
+                        "selector": "aptl:enforce",
+                    }
+                ],
+                "transforms": [
+                    {
+                        "transform_id": "ioc-to-suricata-rules",
+                        "kind": "ioc_to_rule",
+                        "sid_namespace": "3000000",
+                    }
+                ],
+                "reload_channels": [
+                    {
+                        "reload_channel_id": "suricata-command-socket",
+                        "target_ref": "suricata",
+                        "kind": "unix_socket",
+                    }
+                ],
+            }
+        ],
+    )
+
+
+def _forwarding_gate(runtime: RuntimeConfiguration, backend: _Backend):
+    """Drive the disclosure gate for the configuration-scope forwarding concern.
+
+    forwarding-agents is the one concern raes compiles with a non-null
+    verification scope, so the gate needs both the manifest (which declares the
+    corroboration APTL performs) and an EXACT requirement carrying the
+    ``configuration`` scope.
+    """
+
+    plan, observations = _observe(runtime, backend)
+    snapshot = snapshot_after_apply(plan, RuntimeSnapshot(), observations)
+    requirement = CompiledRealizationRequirement(
+        field_path="nodes.vm.runtime.forwarding_agents",
+        address=_ADDRESS,
+        domain=REALIZATION_DOMAIN,
+        requirement_kind="forwarding-agents",
+        explicitness=ExplicitnessClass.EXACT,
+        provenance=ExplicitnessProvenance.AUTHOR_DECLARED,
+        verification_scope=RealizationVerificationScope.CONFIGURATION,
+    )
+    diagnostics, _provenance = realization_disclosure(
+        (requirement,), plan, snapshot, manifest=create_aptl_manifest()
+    )
+    return [d.code for d in diagnostics], snapshot, observations
+
+
+def test_log_forwarder_with_realized_source_mount_is_corroborated():
+    runtime = _log_forwarder_runtime()
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[{"Type": "volume", "Source": "db_data", "Destination": "/logs", "RW": False}]
+            )
+        }
+    )
+    codes, snapshot, observations = _forwarding_gate(runtime, backend)
+    assert codes == []
+    assert _FORWARDING_PATH in observations[_ADDRESS].concerns
+    disclosures = [
+        d for d in snapshot.realization_observations if d.requirement_kind == "forwarding-agents"
+    ]
+    assert disclosures
+    assert disclosures[0].verification_scope is RealizationVerificationScope.CONFIGURATION
+
+
+def test_content_sync_reload_socket_mount_is_corroborated():
+    runtime = _content_sync_runtime()
+    backend = _Backend(
+        {
+            _CONTAINER: _inspect(
+                mounts=[
+                    {
+                        "Type": "volume",
+                        "Source": "suricata_command_socket",
+                        "Destination": "/var/run/suricata",
+                        "RW": True,
+                    }
+                ]
+            )
+        }
+    )
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
+    assert codes == []
+    assert _FORWARDING_PATH in observations[_ADDRESS].concerns
+
+
+def test_forwarding_agent_without_realized_footprint_is_dropped_and_rejected():
+    # The declared tailed source has no covering mount on the realized container,
+    # so the agent is not corroborated: the concern is dropped and the EXACT
+    # requirement is rejected rather than handed a fabricated match.
+    runtime = _log_forwarder_runtime()
+    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
+    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_log_forwarder_on_node_declaring_no_mounts_is_dropped_and_rejected():
+    # A sidecar that declares a tailed source but no mount to carry it cannot
+    # reach that path: nothing in the contract delivers the file and nothing in
+    # the container corroborates it. The concern is dropped and the requirement
+    # rejected, so an agent tailing a path that does not exist is never reported
+    # as realized SIEM coverage.
+    runtime = _runtime(
+        forwarding_agents=_log_forwarder_runtime().model_dump(mode="json")["forwarding_agents"]
+    )
+    assert not runtime.mounts
+    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
+    assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
+    assert _GATE_REJECT in codes
+
+
+def test_forwarding_agent_without_observable_footprint_is_dropped():
+    # A configuration-scope agent whose only source is a network pull with no
+    # unix-socket reload channel declares no host-observable mount footprint, so
+    # it cannot be corroborated: honest absence, rejected not fabricated.
+    runtime = _runtime(
+        forwarding_agents=[
+            {
+                "forwarding_agent_id": "misp-ioc-to-suricata",
+                "implementation": "misp_suricata_sync",
+                "agent_kind": "content_sync",
+                "sources": [
+                    {
+                        "source_id": "misp-attributes",
+                        "kind": "api_pull",
+                        "location": "https://misp",
+                        "parse_format": "misp_json",
+                        "selector": "aptl:enforce",
+                    }
+                ],
+                "transforms": [
+                    {
+                        "transform_id": "ioc-to-suricata-rules",
+                        "kind": "ioc_to_rule",
+                        "sid_namespace": "3000000",
+                    }
+                ],
+                "reload_channels": [
+                    {
+                        "reload_channel_id": "suricata-command-socket",
+                        "target_ref": "suricata",
+                        "kind": "unix_socket",
+                    }
+                ],
+            }
+        ]
+    )
+    # No suricata_command_socket mount is realized, so the reload channel's
+    # serving volume is absent from the container.
+    backend = _Backend({_CONTAINER: _inspect(mounts=[])})
+    codes, _snapshot, observations = _forwarding_gate(runtime, backend)
     assert _FORWARDING_PATH not in observations[_ADDRESS].concerns
     assert _GATE_REJECT in codes
 

@@ -12,13 +12,12 @@ collectors) work whether the daemon is local or remote.
 Follows the same Protocol pattern as RunStorageBackend in runstore.py.
 """
 
-import subprocess
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from aptl.core.lab_types import LabResult, LabStatus
-from aptl.core.deployment._proc_net_listeners import ContainerListeners
+from aptl.core.deployment.backend_container_ops import ContainerOpsBackend
 from aptl.core.deployment.backend_host_inventory import HostInventoryBackend
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
@@ -40,14 +39,16 @@ from aptl.core.seed_spec import NamedVolumeSeed
 # has no back-edges, so the names stay resolvable for ``typing.get_type_hints``.
 
 
-class DeploymentBackend(HostInventoryBackend, Protocol):
+class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
     """Protocol for lab deployment backends.
 
     Backends manage the deployment lifecycle (start, stop, status, kill,
     pull) and container interaction (list, logs, shell, exec, inspect). The
     host-inventory operations (``host_versions``, ``host_list_lab_containers``,
     ``host_list_lab_networks``, ``host_list_networks``, ``host_inspect_network``)
-    are inherited from :class:`HostInventoryBackend`.
+    are inherited from :class:`HostInventoryBackend`; the per-container
+    operations (``container_list``, ``container_logs``, ``container_exec``,
+    ``container_inspect``, ...) from :class:`ContainerOpsBackend`.
     """
 
     def start(self, profiles: list[str], *, build: bool = True) -> LabResult:
@@ -219,12 +220,17 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """
         ...
 
-    def create_network(self, network: DeploymentNetworkRealization) -> LabResult:
+    def create_network(
+        self,
+        network: DeploymentNetworkRealization,
+        ip_range: str | None = None,
+    ) -> LabResult:
         """Materialize one scenario-declared network.
 
         Implementations choose the concrete backend network name, but must keep
         it scoped to this deployment project and honor CIDR, gateway, and
-        internal-egress settings when present.
+        internal-egress settings when present. ``ip_range`` optionally confines
+        dynamic allocation off statically-pinned node addresses (issue #875).
         """
         ...
 
@@ -322,6 +328,31 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
         """
         ...
 
+    def observe_bind_source_type(self, source: str) -> str | None:
+        """Read back the filesystem kind of one realized bind-mount source.
+
+        Content delivered to an image node is a read-only bind of a host path,
+        so the destination's kind *is* the source's kind. Implementations
+        classify the path on the Docker host — never by executing anything from
+        the observed container's image, which may be distroless or already
+        exited — and return only the governed RAES kind (``file`` or
+        ``directory``). A missing, ambiguous, or failed observation returns
+        ``None``; bytes and raw probe output never cross this boundary.
+        """
+        ...
+
+    @property
+    def realization_root(self) -> Path:
+        """The writable root the backend writes generated realization output to.
+
+        Generated artifacts, rendered content, and generated Compose overrides
+        are written here, never into the pristine staged scenario bundle whose
+        digest-validated inventory must not gain generated files (issue #875).
+        Realization observation reads them back from this same root, so the two
+        cannot drift. In-tree it coincides with the bundle root.
+        """
+        ...
+
     def realize_accounts(
         self,
         accounts: Sequence[DeploymentAccountRealization],
@@ -354,143 +385,5 @@ class DeploymentBackend(HostInventoryBackend, Protocol):
 
         Raises:
             BackendTimeoutError: if a provider command exceeds its timeout.
-        """
-        ...
-
-    # Container interaction (CLI-004) -------------------------------------
-
-    def container_list(self, *, all_containers: bool = True) -> list[dict[str, Any]]:
-        """List containers managed by this deployment.
-
-        Args:
-            all_containers: If True (default), include stopped containers.
-
-        Returns:
-            List of container metadata dicts as returned by
-            ``docker compose ps --format json``. Empty on failure.
-        """
-        ...
-
-    def container_logs(
-        self,
-        name: str,
-        *,
-        follow: bool = False,
-        tail: int | None = None,
-    ) -> int:
-        """Stream a container's logs to the parent stdout/stderr.
-
-        Args:
-            name: Container name (as shown by container_list).
-            follow: If True, follow log output (-f).
-            tail: If set, show only the last N lines (--tail).
-
-        Returns:
-            The ``docker logs`` exit code.
-        """
-        ...
-
-    def container_logs_capture(
-        self,
-        name: str,
-        *,
-        since: str | None = None,
-        until: str | None = None,
-        timeout: int | None = None,
-    ) -> subprocess.CompletedProcess:
-        """Capture a container's logs (for programmatic consumption).
-
-        Args:
-            name: Container name.
-            since: Optional RFC3339 timestamp; only logs >= this point.
-            until: Optional RFC3339 timestamp; only logs <= this point.
-            timeout: Optional timeout in seconds. Set this for
-                archive collection so a stalled docker daemon doesn't
-                hang the run forever.
-
-        Returns:
-            CompletedProcess with captured stdout/stderr.
-        """
-        ...
-
-    def container_shell(self, name: str, *, shell: str | None = None) -> int:
-        """Open an interactive shell inside a running container.
-
-        Inherits the parent terminal's stdin/stdout/stderr so the user
-        gets a real TTY. When ``shell`` is None, tries ``/bin/bash``
-        first and falls back to ``/bin/sh`` if bash is unavailable
-        (exit code 126 or 127). An explicit ``shell`` skips the fallback.
-
-        Args:
-            name: Container name.
-            shell: Optional explicit shell path. If None, auto-detect.
-
-        Returns:
-            The shell's exit code.
-        """
-        ...
-
-    def container_exec(
-        self,
-        name: str,
-        cmd: list[str],
-        *,
-        timeout: int | None = None,
-    ) -> subprocess.CompletedProcess:
-        """Run a one-shot non-interactive command inside a container.
-
-        Args:
-            name: Container name.
-            cmd: Command and arguments to execute.
-            timeout: Optional timeout in seconds.
-
-        Returns:
-            CompletedProcess with captured stdout/stderr.
-        """
-        ...
-
-    def container_inspect(self, name: str) -> dict[str, Any]:
-        """Return parsed ``docker inspect`` output for a single container.
-
-        Args:
-            name: Container name.
-
-        Returns:
-            The first element of the ``docker inspect`` JSON array, or
-            an empty dict on any failure (missing container, parse
-            error, etc.).
-        """
-        ...
-
-    def observe_container_listeners(self, name: str) -> ContainerListeners | None:
-        """Return a container's listeners read from outside its trust boundary.
-
-        The trusted half of service-listener readback (issue #876): the kernel's
-        per-netns socket tables, observed by a mechanism that executes no
-        container-provided binary, so a workload cannot under-report its bind
-        scope. Returns ``None`` when the listeners cannot be read, which the
-        observer treats as a refused disclosure rather than an assumed match.
-        """
-        ...
-
-    def container_exists(self, name: str) -> bool:
-        """Return True if the container belongs to this project.
-
-        Cheap membership check that avoids enumerating every container
-        on the daemon. Used by CLI commands (``logs``/``shell``) before
-        executing into a user-supplied container name. Implementation
-        detail: backends typically use ``docker inspect <name>`` plus a
-        compose-project label check.
-        """
-        ...
-
-    def container_restart(self, name: str, *, timeout: int | None = None) -> None:
-        """Restart a running container (docker restart <name>).
-
-        Used by the wazuh-manager watchdog (#732) between compose retry
-        attempts on hosts (Colima on macOS is the reproducible case) where
-        s6-supervise gets stuck reporting EACCES on executable service
-        `run` scripts and no wazuh daemon ever spawns — a docker-level
-        restart clears the state.
         """
         ...

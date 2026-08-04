@@ -13,17 +13,16 @@ silent about the very behaviour the live gate verifies.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 import yaml
 
-SDL = Path(__file__).resolve().parent.parent / "scenarios" / "techvault-operational.sdl.yaml"
+from tests.helpers import techvault_scenario_path
 
 
 @pytest.fixture(scope="module")
-def scenario() -> dict:
-    return yaml.safe_load(SDL.read_text())
+def scenario(tmp_path_factory) -> dict:
+    sdl = techvault_scenario_path(tmp_path_factory.mktemp("techvault-spine"))
+    return yaml.safe_load(sdl.read_text())
 
 
 def _runtime(scenario: dict, node: str) -> dict:

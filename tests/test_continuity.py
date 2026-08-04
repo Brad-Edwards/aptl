@@ -979,7 +979,7 @@ class TestDefaultTargets:
             "aptl-dns",
         }
 
-    def test_every_default_target_has_net_admin(self) -> None:
+    def test_every_default_target_has_net_admin(self, tmp_path) -> None:
         # Drift guard: if anyone removes NET_ADMIN from one of the default
         # targets, this test fails before the audit silently breaks in
         # production. webapp/fileshare/dns are realized generically from
@@ -991,10 +991,10 @@ class TestDefaultTargets:
 
         from aptl.core.continuity import default_targets
 
+        from tests.helpers import techvault_scenario_path
+
         compose_text = (PROJECT_ROOT / "docker-compose.yml").read_text()
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+        scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
 
         for target in default_targets():
             node_name = target.removeprefix("aptl-")

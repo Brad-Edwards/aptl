@@ -9,7 +9,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import yaml
@@ -578,6 +578,9 @@ services:
             "172.20.1.0/24",
             "--gateway",
             "172.20.1.1",
+            # dynamic pool confined off the pinned 172.20.1.20 (issue #875)
+            "--ip-range",
+            "172.20.1.128/25",
             "test_aptl-dmz",
         ]
         assert create_command in commands
@@ -3027,6 +3030,77 @@ class TestObserveContentType:
             with pytest.raises(BackendSeedError):
                 backend.observe_content_type(item)
         run.assert_not_called()
+
+
+class TestObserveBindSourceType:
+    """Classify a bind-delivered destination without touching its container.
+
+    Content delivered to an image node is a read-only bind, so the kind at the
+    destination is the kind of the host source. When bind sources are visible to
+    the daemon (``supports_local_artifacts`` -- the local Docker case) that
+    source is a host path APTL wrote, so the kind is a direct host stat: no
+    throwaway container per bind, and no dependency on a heavy image starting
+    under a just-booted range's load (which timed the probe out). Only a backend
+    whose sources are not host-local falls back to the container probe -- the
+    only observation available for a distroless image (no ``test`` binary) or a
+    run-to-completion node that has already exited (issue #875).
+    """
+
+    def test_local_backend_classifies_by_host_stat(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        a_file = tmp_path / "config.yaml"
+        a_file.write_text("x", encoding="utf-8")
+        a_dir = tmp_path / "a-directory"
+        a_dir.mkdir()
+        with patch.object(backend, "_run") as run:
+            assert backend.observe_bind_source_type(str(a_file)) == "file"
+            assert backend.observe_bind_source_type(str(a_dir)) == "directory"
+            assert (
+                backend.observe_bind_source_type(str(tmp_path / "missing")) is None
+            )
+        # A local stat never spawns a probe container, so a missing source is
+        # observed as nothing without ever creating it.
+        run.assert_not_called()
+
+    def test_relative_source_is_never_probed(self, tmp_path):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        with patch.object(backend, "_run") as run:
+            assert backend.observe_bind_source_type("relative/path") is None
+        run.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("returncode", "expected"),
+        [(10, "file"), (11, "directory"), (12, None), (1, None), (125, None)],
+    )
+    def test_non_local_backend_falls_back_to_container_probe(
+        self, tmp_path, returncode, expected
+    ):
+        backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
+        source = "/remote/.aptl/realization/content/otel-collector-config/config.yaml"
+        with patch.object(
+            type(backend),
+            "supports_local_artifacts",
+            new_callable=PropertyMock,
+            return_value=False,
+        ), patch.object(backend, "_run") as run:
+            run.return_value = MagicMock(
+                returncode=returncode,
+                stdout="must-not-be-consumed",
+                stderr="must-not-be-consumed",
+            )
+            assert backend.observe_bind_source_type(source) == expected
+
+        cmd = run.call_args.args[0]
+        assert cmd[:3] == ["docker", "run", "--rm"]
+        assert cmd[-2:] == ["aptl-bind-source-probe", "/probe"]
+        # ``--mount`` (not ``-v``): -v would create a missing source as an empty
+        # directory and fabricate a ``directory`` observation.
+        assert "--mount" in cmd
+        assert cmd[cmd.index("--mount") + 1] == (
+            f"type=bind,src={source},dst=/probe,readonly"
+        )
+        assert "-v" not in cmd
+        assert run.call_args.kwargs["timeout"] > 0
 
 
 class TestComposeRealizeContentStep:

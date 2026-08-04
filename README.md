@@ -86,6 +86,7 @@ aptl kill -c      # emergency: kill MCP processes AND all lab containers
 
 - Docker + Docker Compose + Docker Buildx
 - Python 3.11+
+- OpenSSH client (`ssh-keygen` on `PATH`): generates the lab SSH keys at standup. Preinstalled on Linux and macOS; on Windows install the built-in "OpenSSH Client" optional feature (or Git for Windows / WSL2).
 - RAM: 8 GB runs the smaller curated scenarios; the full `techvault-operational` stack needs more than 20 GB
 - 20 GB+ disk
 - Linux, macOS, or Windows with Docker Desktop/WSL2

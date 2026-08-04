@@ -21,6 +21,12 @@ from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
+from aptl.backends._component_profiles import component_profiles
+from aptl.backends._raes_realization_diagnostics import (
+    _append_node_profile_diagnostic,
+    _append_profile_diagnostics,
+    _invalid_payload_diagnostics,
+)
 from aptl.backends.raes_base_substrate import base_container_spec
 from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
@@ -35,7 +41,6 @@ from aptl.backends.raes_profiles import (
     explicit_compose_profile_hints,
     load_compose_profile_index,
     node_aliases,
-    public_start_profiles,
 )
 from aptl.backends.raes_realization_networks import (
     append_network_topology_diagnostics,
@@ -72,18 +77,22 @@ def interpret_provisioning_plan(
     plan: ProvisioningPlan,
     config: AptlConfig,
     bundle: ScenarioBundle,
+    component_root: Path | None = None,
 ) -> AptlRealization:
     """Interpret RAES provisioning resources as an APTL realization plan.
 
-    ``bundle`` supplies the root every scenario-declared input is anchored to.
-    It is required: interpretation never falls back to the engine checkout. The
-    engine's ``project_dir`` is operator/control-plane state (``aptl.json``,
-    ``.env``, run storage) and is not a scenario-input root, so it has no place
-    here. For an in-tree scenario ``bundle.root == project_dir.resolve()``, which
-    is what keeps an unmoved scenario behaviourally unchanged (issue #874).
+    ``bundle`` supplies the root every scenario-declared *content* input is
+    anchored to (placements, seeds). ``component_root`` is the engine checkout
+    that supplies APTL's own component software — the ``containers/`` build
+    contexts a ``materialization-specification`` node builds from (ADR-051). A
+    pack ships no ``containers/``, so build contexts must resolve from the engine
+    tree, not the bundle. It defaults to ``bundle.root`` so an in-tree scenario
+    (where ``bundle.root == project_dir.resolve()``) is behaviourally unchanged
+    (issues #874, #875).
     """
 
     content_root = bundle.root
+    component_root = component_root if component_root is not None else bundle.root
 
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(unsupported_resource_diagnostics(plan))
@@ -98,7 +107,7 @@ def interpret_provisioning_plan(
     nodes, networks, profiles = _realize_nodes_and_networks(
         payload_resources,
         profile_index,
-        content_root,
+        component_root,
         config,
         diagnostics,
     )
@@ -194,15 +203,16 @@ def _payload_resources(
 def _realize_nodes_and_networks(
     payload_resources: list[PlannedResource],
     profile_index: ComposeProfileIndex,
-    scenario_root: Path,
+    component_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> tuple[list[NodeRealization], list[NetworkRealization], set[str]]:
     """Realize node and network resources before resolving placements.
 
-    ``scenario_root`` anchors anything the scenario declares, including a
-    component's build context. It is the bundle root, not the engine checkout;
-    the two coincide only for a scenario that still lives in-tree.
+    ``component_root`` is the engine checkout a node's ``containers/`` build
+    context is resolved against (APTL component software, ADR-051), not the
+    scenario bundle. The two coincide only for a scenario that still lives
+    in-tree (issue #875).
     """
 
     nodes: list[NodeRealization] = []
@@ -215,7 +225,7 @@ def _realize_nodes_and_networks(
                 resource,
                 payload,
                 profile_index,
-                scenario_root,
+                component_root,
                 config,
                 diagnostics,
             )
@@ -245,57 +255,6 @@ def _all_nodes_image_free(nodes: list[NodeRealization]) -> bool:
     return bool(os_nodes) and all(_is_materializable_node(node) for node in os_nodes)
 
 
-def _append_node_profile_diagnostic(
-    resource: PlannedResource,
-    diagnostics: list[Diagnostic],
-) -> None:
-    """Record a diagnostic for a node without an APTL profile mapping."""
-
-    diagnostics.append(
-        diagnostic(
-            "aptl.provisioner.node-profile-unresolved",
-            resource.address,
-            (
-                "RAES node resource does not declare content that "
-                "maps to an APTL compose profile."
-            ),
-        )
-    )
-
-
-def _append_profile_diagnostics(
-    profiles: set[str],
-    config: AptlConfig,
-    diagnostics: list[Diagnostic],
-) -> None:
-    """Record diagnostics for missing or disabled compose-profile matches."""
-
-    if not profiles:
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.profile-resolution-failed",
-                PROVISIONING_ADDRESS,
-                (
-                    "RAES provisioning plan contained no node resources "
-                    "that map to APTL compose profiles."
-                ),
-            )
-        )
-
-    start_profiles = public_start_profiles(config)
-    if start_profiles and not (set(start_profiles) & profiles):
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.no-configured-profile-matches",
-                PROVISIONING_ADDRESS,
-                (
-                    "RAES provisioning plan did not declare any node "
-                    "that maps to a public-start APTL compose profile."
-                ),
-            )
-        )
-
-
 def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
     """Build an empty realization that carries validation diagnostics."""
 
@@ -308,45 +267,34 @@ def _empty_realization(diagnostics: list[Diagnostic]) -> AptlRealization:
     )
 
 
-def _invalid_payload_diagnostics(
-    resources: list[PlannedResource],
-) -> list[Diagnostic]:
-    """Report supported resources whose payload cannot be interpreted."""
-
-    diagnostics: list[Diagnostic] = []
-    for resource in resources:
-        if isinstance(resource.payload, Mapping):
-            continue
-        diagnostics.append(
-            diagnostic(
-                "aptl.provisioner.invalid-resource-payload",
-                resource.address,
-                (
-                    "APTL provisioner expected RAES resource payload "
-                    f"'{resource.resource_type}' to be a mapping."
-                ),
-            )
-        )
-    return diagnostics
-
-
 def _realize_node(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     profile_index: ComposeProfileIndex,
-    scenario_root: Path,
+    component_root: Path,
     config: AptlConfig,
     diagnostics: list[Diagnostic],
 ) -> NodeRealization:
-    """Realize a node resource into APTL profile and runtime details."""
+    """Realize a node resource into APTL profile and runtime details.
+
+    ``component_root`` is the engine checkout a ``materialization-specification``
+    node's build context is resolved against (ADR-051), not the scenario bundle.
+    """
 
     aliases = node_aliases(resource.address, payload)
     profile_hints = explicit_compose_profile_hints(payload)
     backend_services = profile_index.service_names_for_aliases(aliases)
+    node_name = resource.address.rsplit(".", 1)[-1]
+    # APTL operator packaging (issue #895): the component -> start-profile
+    # grouping. For an in-tree scenario this equals the profiles the static
+    # compose index already carries, so the union is idempotent. For an
+    # env-pack there is no compose file to index, so this is the only source
+    # of a node's profile membership (issue #875).
     profiles = (
         profile_hints
         | profile_index.profiles_for_aliases(aliases)
         | profile_index.profiles_for_services(set(backend_services))
+        | component_profiles(node_name)
     )
     if not profiles and _is_raes_conformance_probe_node(resource, payload):
         backend_services = _conformance_probe_services(profile_index, config)
@@ -354,18 +302,24 @@ def _realize_node(
     spec = _mapping(payload.get("spec"))
     node_spec = _mapping(spec.get("node")) if spec else None
     infra_spec = _mapping(spec.get("infrastructure")) if spec else None
+    if not backend_services:
+        # Env-pack path (issue #875): with no static compose to index, the
+        # node's own identity is its Compose service name. In-tree scenarios
+        # ship a compose file, so this fallback never fires there.
+        backend_services = frozenset({node_name})
     service_name = _single_or_none(tuple(sorted(backend_services)))
     node_os = _node_os(node_spec)
     node_os_version = _node_os_version(node_spec)
     node_runtime = _node_runtime(node_spec)
-    container_name = _container_name(profile_index, backend_services)
-    if container_name is None and node_runtime is not None and node_os:
-        container_name = base_container_spec(
-            resource.address,
-            os=node_os,
-            os_version=node_os_version,
-            runtime=node_runtime,
-        ).container_name
+    container_name = _resolved_container_name(
+        resource,
+        profile_index,
+        backend_services,
+        node_name,
+        node_os=node_os,
+        node_os_version=node_os_version,
+        node_runtime=node_runtime,
+    )
     return NodeRealization(
         address=resource.address,
         name=_resource_name(resource.address, payload),
@@ -381,7 +335,7 @@ def _realize_node(
         image=resolve_node_image(
             resource=resource,
             payload=payload,
-            project_dir=scenario_root,
+            project_dir=component_root,
             service_name=service_name,
             diagnostics=diagnostics,
         ),
@@ -393,6 +347,42 @@ def _realize_node(
             payload, resource.address
         ),
     )
+
+
+def _resolved_container_name(
+    resource: PlannedResource,
+    profile_index: ComposeProfileIndex,
+    backend_services: frozenset[str],
+    node_name: str,
+    *,
+    node_os: str,
+    node_os_version: str,
+    node_runtime: RuntimeConfiguration | None,
+) -> str:
+    """Return the container name the node realizes to.
+
+    Preference order: the static compose service's own container name; then the
+    ``base_container_spec`` name derived from the node's declared runtime; and
+    finally APTL's ``aptl-<node>`` convention.
+    """
+
+    container_name = _container_name(profile_index, backend_services)
+    if container_name is None and node_runtime is not None and node_os:
+        container_name = base_container_spec(
+            resource.address,
+            os=node_os,
+            os_version=node_os_version,
+            runtime=node_runtime,
+        ).container_name
+    if container_name is None:
+        # Env-pack image node (issue #875): no static compose service to read a
+        # container name from, so use APTL's ``aptl-<node>`` convention (the
+        # same one base_container_spec applies to image-free nodes). A node
+        # whose own id already carries the prefix is not doubled.
+        container_name = (
+            node_name if node_name.startswith("aptl-") else f"aptl-{node_name}"
+        )
+    return container_name
 
 
 def _node_os(node_spec: Mapping[str, Any] | None) -> str:

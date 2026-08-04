@@ -23,10 +23,9 @@ from raes import SDLError, parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes.scenario import Scenario
 
-from aptl.backends.raes import DEFAULT_RAES_SCENARIO, create_aptl_runtime_target
+from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.core.scenario_bundle import project_tree_bundle
 from aptl.core.deployment._compose_realization_networks import _concrete_network_name
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
@@ -348,7 +347,7 @@ def check_backend_conformance(
             project_dir=project_dir,
             config=config,
             backend=_NoStartBackend(),
-            bundle=project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO),
+            bundle=resolve_scenario_bundle(project_dir, None, config),
         )
         report = run_target_conformance(
             target,
@@ -375,9 +374,12 @@ def check_provisioning_realization(
 ) -> tuple[Mapping[str, object] | None, GateCheck]:
     """Interpret the provisioning plan and confirm it realizes nodes/services/networks."""
     try:
-        # In-tree gate check: the scenario under test lives in project_dir, so
-        # the bundle root is the project directory.
-        bundle = project_tree_bundle(project_dir, DEFAULT_RAES_SCENARIO)
+        # Config-driven bundle: the configured env-pack when selected, else the
+        # in-tree scenario (issue #875). Scenario content anchors to the bundle
+        # root, but APTL's own component build contexts (``containers/``) always
+        # resolve from the engine checkout — a pack ships none — so component_root
+        # stays project_dir (ADR-051), matching the live start path.
+        bundle = resolve_scenario_bundle(project_dir, None, config)
         target = create_aptl_runtime_target(
             project_dir=project_dir,
             config=config,
@@ -386,7 +388,10 @@ def check_provisioning_realization(
         )
         execution_plan = RuntimeManager(target).plan(scenario)
         realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning, config=config, bundle=bundle
+            plan=execution_plan.provisioning,
+            config=config,
+            bundle=bundle,
+            component_root=project_dir,
         )
     # broad-except: RAES surfaces diverse errors
     except Exception as exc:

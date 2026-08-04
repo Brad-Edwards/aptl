@@ -23,12 +23,13 @@ def _write(tmp_path, payload):
     return path
 
 
-def test_default_selects_the_in_tree_scenario():
-    """Unconfigured behaviour is unchanged, so existing installs keep working."""
+def test_default_selects_the_techvault_env_pack():
+    """The default is the TechVault env-pack, resolved by identity + digest (#875)."""
 
     config = AptlConfig()
 
-    assert config.scenario.identity == "techvault-operational"
+    assert config.scenario.identity == "techvault"
+    assert config.scenario.source == "env-pack"
     assert config.scenario.root is None
 
 

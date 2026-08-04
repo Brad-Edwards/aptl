@@ -112,10 +112,10 @@ class TestBlockProjection:
         terminals = [b for b in detail.blocks if b.type == "terminal"]
         assert [t.container for t in terminals] == ["ssh-target"]
 
-    def test_infra_only_scenario_emits_no_objective_step_or_siem_blocks(self):
-        scenario = parse_sdl_file(
-            PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
-        )
+    def test_infra_only_scenario_emits_no_objective_step_or_siem_blocks(self, tmp_path):
+        from tests.helpers import techvault_scenario_path
+
+        scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
         detail = build_scenario_detail(
             _entry("techvault-operational"), scenario
         )

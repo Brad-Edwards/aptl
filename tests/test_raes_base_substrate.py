@@ -180,6 +180,37 @@ class TestBaseContainerSpec:
         spec_none = base_container_spec("n.node", os="linux", os_version="", runtime=None)
         assert spec_none.volume_mounts == ()
 
+    def test_extra_volume_mounts_extend_declared_mounts(self):
+        # An image-free node's persistent_volume consumer mounts arrive here as
+        # extra_volume_mounts (the Compose override defers non-Compose consumers
+        # to the generic materializer, issue #875), alongside runtime.mounts.
+        from raes.runtime_mounts import RuntimeMount
+
+        from aptl.backends.raes_base_substrate import VolumeMount
+
+        runtime = RuntimeConfiguration(
+            mounts=[
+                RuntimeMount(
+                    target="/var/lib/postgresql/data",
+                    source="db_data",
+                    source_kind="volume",
+                ),
+            ]
+        )
+        spec = base_container_spec(
+            "n.db",
+            os="linux",
+            os_version="",
+            runtime=runtime,
+            extra_volume_mounts=(
+                VolumeMount(
+                    target="/var/log/postgresql", source="db_logs", read_only=False
+                ),
+            ),
+        )
+        sources = {m.source for m in spec.volume_mounts}
+        assert sources == {"db_data", "db_logs"}
+
 
 class TestPlanNode:
     def test_spec_and_ops_are_coherent(self):

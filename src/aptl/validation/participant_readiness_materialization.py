@@ -10,6 +10,14 @@ from aptl.backends.raes_realization_model import AptlRealization
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
 
+# SDL-authority class remediation (issue #875): this fixed tuple bakes one
+# scenario's participant-action topology into the backend. The correct source is
+# the scenario's participant-action-node identity (which nodes participants act
+# on), which is NOT carried in AptlRealization today — deriving it requires
+# threading participant-behaviour data into this validator, tracked as follow-up
+# alongside the other genuine affordance gaps. Until then this stays a documented
+# fixed set; it is validation coupling only, never injected container content, and
+# does not gate `aptl lab start`.
 _REALIZED_NODES = (
     "webapp",
     "db",

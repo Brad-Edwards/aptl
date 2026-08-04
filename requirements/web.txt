@@ -700,10 +700,17 @@ pyyaml==6.0.3 \
     # via
     #   aptl-labs
     #   raes
+    #   raes-env-packs
     #   uvicorn
-raes==3.1.0 \
-    --hash=sha256:1971de883276c8a45da038e8720af8b886bb0132f765d812f16b7736736f21b3 \
-    --hash=sha256:9b4d5213818910bfdd80ed736e7c909c4d85d917b99ac7907d860530dfa38284
+raes==3.3.0 \
+    --hash=sha256:037cee182983121f330a2812a07a6f905bbf54d5d0be2c8799ecaa5535844e65 \
+    --hash=sha256:2a99a48a22a1c800f91d003d4089d7d4b73b1e0d32e57715ceb610f908274c74
+    # via
+    #   aptl-labs
+    #   raes-env-packs
+raes-env-packs==3.8.0 \
+    --hash=sha256:c3393f98d60110b90889804a0aa0ef1b00f5f1a9006d68654518f3f20b9121cb \
+    --hash=sha256:fd7236647609cf625fbb00bb880d61de5dadbba95ea22960f58d2f64727680cb
     # via aptl-labs
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \

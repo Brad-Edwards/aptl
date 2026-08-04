@@ -87,12 +87,16 @@ def observe_realization(
 ) -> dict[str, ObservedResource]:
     """Return, per planned address, what the backend actually realized.
 
-    ``scenario_root`` is the bundle root generated artifacts were produced
-    under; observation reads them back from the same root, never the engine
-    checkout (issue #874).
+    ``scenario_root`` is the bundle root the scenario's declared inputs resolve
+    against (issue #874). Generated artifacts are *produced* under the backend's
+    own writable realization root rather than written back into a pristine
+    staged pack, so they are read back from there (issue #875); in-tree the two
+    roots coincide.
     """
 
     observations: dict[str, ObservedResource] = {}
+    realization_root = _realization_root(backend, scenario_root)
+    image_free = _image_free_addresses(realization)
     node_containers = {
         node.address: node.container_name
         for node in realization.nodes
@@ -140,7 +144,8 @@ def observe_realization(
                 backend,
                 artifacts.get(address),
                 node_containers,
-                scenario_root,
+                realization_root,
+                image_free,
             )
         elif resource.resource_type == "persistent-volume":
             observations[address] = _observe_persistent_volume(
@@ -170,6 +175,34 @@ def observation_evidence(
         for address, observed in observations.items()
         if observed.realized and observed.evidence
     }
+
+
+def _realization_root(backend: "DeploymentBackend", scenario_root: Path) -> Path:
+    """Return the root the backend wrote its generated realization output to.
+
+    The backend publishes it so the write side and the read-back side share one
+    authority: reading generated artifacts back out of the pristine scenario
+    bundle they were deliberately *not* written into makes every one of them
+    look unrealized, and the SEM-218 gate then rejects an apply that succeeded
+    (issue #875). A backend that publishes no root realizes in place, so the
+    bundle root is the honest fallback.
+    """
+
+    root = getattr(backend, "realization_root", None)
+    return root if isinstance(root, Path) else scenario_root
+
+
+def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
+    """Return the node addresses that are not Compose services.
+
+    Only a node with a backing image becomes a Compose service and can carry a
+    Compose bind; an image-free node receives its generated-artifact outputs as
+    files placed into its container instead (issue #875). Observation has to
+    distinguish the two or it demands a bind mount that realization never
+    emitted.
+    """
+
+    return frozenset(node.address for node in realization.nodes if node.image is None)
 
 
 def _declared_domain_topology(
@@ -262,13 +295,14 @@ def _observe_placement(
         )
     else:
         container_name = node_containers.get(target_address) if target_address else None
-        if not container_name or not _container_realized(
-            _settled_inspect(backend, container_name)
-        ):
+        info = _settled_inspect(backend, container_name) if container_name else {}
+        if not container_name or not _container_realized(info):
             observed = ObservedResource(realized=False)
         else:
             concerns: dict[tuple[str, ...], object] = {}
-            content_type = _observed_content_type(backend, content, container_name)
+            content_type = _observed_content_type(
+                backend, content, container_name, info
+            )
             if content_type is not None:
                 concerns[_CONTENT_TYPE_PATH] = content_type
             observed = ObservedResource(realized=True, concerns=concerns)

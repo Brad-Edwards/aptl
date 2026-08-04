@@ -17,6 +17,7 @@ from aptl.core.deployment._compose_port_realization import (
     write_port_override,
 )
 from aptl.core.deployment.realization import (
+    DeploymentImageRealization,
     DeploymentNodeRealization,
     DeploymentPublishedPort,
     DeploymentRealizationSpec,
@@ -24,7 +25,25 @@ from aptl.core.deployment.realization import (
 
 
 def _spec(nodes):
-    return DeploymentRealizationSpec(profiles=(), nodes=tuple(nodes), networks=())
+    # Host ports are published by the port override only for image (compose)
+    # nodes; image-free nodes get theirs from the generic materializer. Mark
+    # every port-test node as image-backed so the override emits (issue #875).
+    images = tuple(
+        DeploymentImageRealization(
+            address=node.address,
+            service_name=node.service_name,
+            source_name=node.name,
+            source_version="1",
+            image_ref=f"{node.name}:1",
+            mode="pull",
+            policy_rule="allowed-source",
+        )
+        for node in nodes
+        if node.service_name
+    )
+    return DeploymentRealizationSpec(
+        profiles=(), nodes=tuple(nodes), networks=(), images=images
+    )
 
 
 def _node(name, service_name, ports):
@@ -109,7 +128,8 @@ def test_write_port_override_emits_long_form_entries(tmp_path):
         ]
     )
     path = write_port_override(tmp_path, spec)
-    assert path is not None and path.exists()
+    assert path is not None
+    assert path.exists()
     doc = yaml.safe_load(path.read_text())
     entry = doc["services"]["web-svc"]["ports"][0]
     assert entry["target"] == 80

@@ -2,7 +2,7 @@
 
 ## Status
 
-accepted (amended 2026-07-20)
+accepted (amended 2026-07-31)
 
 ## Date
 
@@ -10,7 +10,7 @@ accepted (amended 2026-07-20)
 
 ## Last Updated
 
-2026-07-20
+2026-07-31
 
 ## Context
 
@@ -727,12 +727,21 @@ and be either realized by `DeploymentRealizationSpec` / `DeploymentBackend` or
 explicitly rejected by a RAES diagnostic before side effects. A placement that
 is merely counted in `AptlRealization.details()` is not dynamic realization.
 
-Content in the honest operational SDL is limited to realizable content:
+Content in the honest operational SDL is limited to realizable content, as
+clarified by the
+[issue #875 preflight](../architecture/issue-875-scenario-content-declaration-preflight.md):
 
-- file content provided as bounded inline text;
-- file content sourced from a project-contained, checked-in path;
-- directories whose materialized contents are sourced from project-contained,
-  checked-in paths or explicit empty-directory declarations.
+- small file content provided as bounded inline text;
+- scenario-supplied bytes identified by exact RAES artifact requirements and
+  resolved from a validated, content-identified environment pack, never by an
+  engine-checkout or host path; and
+- explicit empty directories or portable exact owned-item sets. A source
+  directory is not an inventory and cannot authorize recursive copying.
+
+Component software and invariant startup mechanics use ADR-051's component
+source-artifact mechanisms. Standup-produced keys, certificates, rendered
+configuration, and comparable outputs use RAES generated artifacts. Neither is
+ordinary scenario content.
 
 Do not encode runtime-observed files, generated service config, mutable volume
 state, database rows, index contents, captured package manifests, or arbitrary

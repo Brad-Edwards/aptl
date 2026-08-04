@@ -151,14 +151,23 @@ def volume_spec(volume: DeploymentPersistentVolumeRealization) -> dict[str, obje
 
 
 def consumer_spec(consumer: DeploymentStatefulConsumer) -> dict[str, object]:
-    """Render one stateful consumer as a non-secret concern value."""
+    """Render one stateful consumer as a non-secret concern value.
 
-    return {
+    ``selected_outputs`` is rendered only when the consumer declares it (a
+    generated-artifact consumer), matching the authored spec: a persistent-volume
+    or select-all consumer carries none, so the observed value stays identical to
+    what RAES compiled.
+    """
+
+    spec: dict[str, object] = {
         "node": consumer.node_name,
         "mount_destination": consumer.mount_destination,
         "access_mode": consumer.access_mode,
         "target_address": consumer.target_address,
     }
+    if consumer.selected_outputs:
+        spec["selected_outputs"] = list(consumer.selected_outputs)
+    return spec
 
 
 def safe_inspect(backend: "DeploymentBackend", name: str) -> dict[str, Any]:
@@ -239,21 +248,22 @@ def observed_content_type(
     backend: "DeploymentBackend",
     content: DeploymentContentRealization | None,
     container_name: str | None = None,
+    info: Mapping[str, Any] | None = None,
 ) -> str | None:
     """Return the destination kind observed by the deployment provider.
 
     ``observe_content_type`` reads back a Compose-managed named volume - it
-    has nothing to inspect for image-free content (ADR-048), which the
-    generic materializer places directly into a node's container filesystem,
-    never a volume (``content.volume_suffix`` is empty for that shape). When
-    a container name is available for that case, read back the destination
-    directly instead of going through the volume-shaped provider probe.
+    has nothing to inspect for volume-free content, which is delivered either as
+    a read-only bind mount (an image node) or placed straight into the container
+    filesystem by the generic materializer (an image-free node, ADR-048). When a
+    container is available for that case, read the destination back off the
+    container instead of going through the volume-shaped provider probe.
     """
 
     if content is None:
         return None
     if not content.volume_suffix and container_name:
-        return _observed_image_free_content_type(backend, container_name, content)
+        return _observed_placed_content_type(backend, container_name, content, info)
     try:
         observed = backend.observe_content_type(content)
     except (BackendSeedError, BackendTimeoutError, OSError) as exc:
@@ -266,14 +276,47 @@ def observed_content_type(
     return observed if observed in ("file", "directory") else None
 
 
-def _observed_image_free_content_type(
+def _observed_placed_content_type(
     backend: "DeploymentBackend",
     container_name: str,
     content: DeploymentContentRealization,
+    info: Mapping[str, Any] | None,
 ) -> str | None:
-    """Read back an image-free content destination's kind via container_exec."""
+    """Read back a volume-free content destination's realized kind.
+
+    Bind-delivered content is corroborated from container inspection first: the
+    daemon's own record of a read-only bind at the declared destination is
+    stronger evidence than a ``test`` in the container, and it is the only
+    evidence available for the two shapes that cannot be exec'd at all - a
+    distroless image (no ``test`` binary) and a run-to-completion node that has
+    already exited. The kind then comes from classifying the bind source on the
+    Docker host, which is what the container sees at the destination.
+
+    Content the generic materializer placed into the container filesystem has no
+    bind mount to corroborate, so that shape still reads the destination back
+    through ``container_exec``. A destination neither corroborates observes
+    nothing, and the SEM-218 gate rejects it.
+    """
 
     destination = "/" + content.dest_relpath.lstrip("/")
+    source = _bind_mount_source(info, destination)
+    if source is not None:
+        return _observed_bind_source_type(backend, content, source)
+    return _exec_probed_content_type(backend, container_name, content, destination)
+
+
+def _exec_probed_content_type(
+    backend: "DeploymentBackend",
+    container_name: str,
+    content: DeploymentContentRealization,
+    destination: str,
+) -> str | None:
+    """Classify a destination by ``test`` inside the container, or observe nothing.
+
+    A probe that cannot be completed (exec unavailable, timed out) yields
+    ``None`` so the SEM-218 gate rejects rather than assumes a kind.
+    """
+
     try:
         if backend.container_exec(container_name, ["test", "-d", destination]).returncode == 0:
             return "directory"
@@ -281,11 +324,61 @@ def _observed_image_free_content_type(
             return "file"
     except (BackendTimeoutError, OSError) as exc:
         log.warning(
-            "could not observe image-free content type for %s (%s)",
+            "could not observe placed content type for %s (%s)",
             content.address,
             type(exc).__name__,
         )
     return None
+
+
+def _bind_mount_source(
+    info: Mapping[str, Any] | None,
+    destination: str,
+) -> str | None:
+    """Return the host source of the read-only bind realized at ``destination``.
+
+    Content is always delivered read-only, so a writable bind at the same path
+    is not the placement APTL realized and corroborates nothing.
+    """
+
+    mounts = info.get("Mounts") if isinstance(info, Mapping) else None
+    if not isinstance(mounts, list):
+        return None
+    for mount in mounts:
+        if not isinstance(mount, Mapping):
+            continue
+        source = mount.get("Source")
+        if (
+            mount.get("Type") == "bind"
+            and mount.get("Destination") == destination
+            and not mount.get("RW")
+            and isinstance(source, str)
+            and source
+        ):
+            return source
+    return None
+
+
+def _observed_bind_source_type(
+    backend: "DeploymentBackend",
+    content: DeploymentContentRealization,
+    source: str,
+) -> str | None:
+    """Classify a corroborated bind source through the backend's host probe."""
+
+    probe = getattr(backend, "observe_bind_source_type", None)
+    if probe is None:
+        return None
+    try:
+        observed = probe(source)
+    except (BackendSeedError, BackendTimeoutError, OSError) as exc:
+        log.warning(
+            "could not observe bind source type for %s (%s)",
+            content.address,
+            type(exc).__name__,
+        )
+        return None
+    return observed if observed in ("file", "directory") else None
 
 
 def observed_os_family(info: Mapping[str, Any]) -> str | None:

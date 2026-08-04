@@ -9,6 +9,7 @@ carries no ``volume_suffix``/``target_service`` and the authored
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ from raes_contracts.planning import PlannedResource
 from aptl.backends.raes_content_source_policy import forbidden_source_reason
 from aptl.backends.raes_diagnostics import diagnostic
 from aptl.backends.raes_realization_values import (
+    content_source_exact_artifact as _content_source_exact_artifact,
     content_source_name as _content_source_name,
     content_text as _content_text,
     optional_string as _optional_string,
@@ -28,6 +30,7 @@ from aptl.core.credentials import PathContainmentError, _resolve_within_project
 from aptl.core.deployment.realization import DeploymentContentRealization
 
 _RUNTIME_OBSERVED_PREFIX = "runtime-observed:"
+_SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 _ImageFreeResult = tuple[DeploymentContentRealization | None, list[Diagnostic]]
 
@@ -125,6 +128,81 @@ def _project_source_image_free_placement(
     )
 
 
+def _pack_artifact_image_free_placement(
+    resource: PlannedResource,
+    target_address: str,
+    *,
+    dest: str,
+    name: str,
+    content_type: str,
+    spec: Mapping[str, Any],
+) -> _ImageFreeResult | None:
+    """Lower an exact-artifact env-pack placement, or None if this spec is not one."""
+
+    exact = _content_source_exact_artifact(spec)
+    if exact is None or not dest:
+        return None
+    artifact_id = _optional_string(exact, "artifact_id")
+    digest = _optional_string(exact, "digest")
+    media_type = _optional_string(exact, "media_type")
+    kind = "pack-directory" if content_type == "directory" else "pack-file"
+    rejection = _pack_artifact_rejection(
+        resource, artifact_id=artifact_id, digest=digest, media_type=media_type, kind=kind
+    )
+    if rejection is not None:
+        return None, rejection
+    return (
+        DeploymentContentRealization(
+            address=resource.address,
+            target_address=target_address,
+            content_name=name,
+            volume_suffix="",
+            dest_relpath=dest.lstrip("/"),
+            source_kind=kind,  # type: ignore[arg-type]
+            artifact_id=artifact_id,
+            artifact_digest=digest,
+            media_type=media_type,
+            sensitive=spec.get("sensitive") is True,
+        ),
+        [],
+    )
+
+
+def _pack_artifact_rejection(
+    resource: PlannedResource,
+    *,
+    artifact_id: str | None,
+    digest: str | None,
+    media_type: str | None,
+    kind: str,
+) -> list[Diagnostic] | None:
+    """Return the diagnostics rejecting a malformed pack placement, else None.
+
+    Fails closed on the first fault in the order the identity is established:
+    an artifact id + digest must be declared, the digest must be a canonical
+    sha256, and directory content must arrive as a tar archive.
+    """
+
+    if not artifact_id or not digest:
+        code, message = (
+            "aptl.provisioner.pack-artifact-missing-identity",
+            "pack content declares no artifact id + digest.",
+        )
+    elif not _SHA256_DIGEST_RE.match(digest):
+        code, message = (
+            "aptl.provisioner.pack-artifact-invalid-digest",
+            "pack content artifact digest is not a canonical sha256 digest.",
+        )
+    elif kind == "pack-directory" and media_type != "application/x-tar":
+        code, message = (
+            "aptl.provisioner.pack-directory-not-archive",
+            "pack directory content must be an application/x-tar archive.",
+        )
+    else:
+        return None
+    return [diagnostic(code, resource.address, message)]
+
+
 def resolve_image_free_content_placement(
     resource: PlannedResource,
     payload: Mapping[str, Any],
@@ -156,6 +234,15 @@ def resolve_image_free_content_placement(
     result = _inline_text_image_free_placement(
         resource, target_address, dest=dest, name=name, text=_content_text(spec), spec=spec
     )
+    if result is None:
+        result = _pack_artifact_image_free_placement(
+            resource,
+            target_address,
+            dest=dest,
+            name=name,
+            content_type=_optional_string(spec, "type") or "",
+            spec=spec,
+        )
     if result is None:
         result = _project_source_image_free_placement(
             resource,

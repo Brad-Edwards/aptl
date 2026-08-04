@@ -29,6 +29,7 @@ from aptl.backends.raes_realization_model import (
 from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactOutput,
     DeploymentGeneratedArtifactRealization,
+    DeploymentImageRealization,
     DeploymentPersistentVolumeRealization,
     DeploymentStatefulConsumer,
 )
@@ -63,6 +64,9 @@ class _Backend:
         exec_results=None,
         exec_raises=False,
         health_sequence=None,
+        realization_root=None,
+        bind_source_types=None,
+        bind_probe_raises=False,
     ):
         self._containers = set(containers)
         self._networks = [
@@ -83,6 +87,9 @@ class _Backend:
         self._exec_raises = exec_raises
         self._health_sequence = list(health_sequence or [])
         self._exec_call_counts: dict[str, int] = {}
+        self.realization_root = realization_root
+        self._bind_source_types = bind_source_types or {}
+        self._bind_probe_raises = bind_probe_raises
 
     def container_exec(self, name, cmd, *, timeout=None):
         if self._exec_raises:
@@ -130,6 +137,11 @@ class _Backend:
             raise BackendTimeoutError("content probe timed out")
         return self._content_types.get(content.address)
 
+    def observe_bind_source_type(self, source):
+        if self._bind_probe_raises:
+            raise BackendTimeoutError("bind source probe timed out")
+        return self._bind_source_types.get(source)
+
 
 def _node_plan(name="vm"):
     address = f"provision.node.{name}"
@@ -149,9 +161,18 @@ def _node_plan(name="vm"):
     return address, ProvisioningPlan(resources={address: resource}, operations=[op])
 
 
-def _node_realization(name="vm", container="aptl-vm"):
+def _node_realization(name="vm", container="aptl-vm", *, imaged=False):
+    """Build one realized node.
+
+    ``imaged`` makes it a Compose service. Only a Compose service can carry a
+    bind mount, so it is what decides whether a generated artifact reaches this
+    node as a mount or as files the generic materializer placed into its
+    container (issue #875).
+    """
+
+    address = f"provision.node.{name}"
     return NodeRealization(
-        address=f"provision.node.{name}",
+        address=address,
         name=name,
         aliases=(),
         profiles=(),
@@ -160,6 +181,19 @@ def _node_realization(name="vm", container="aptl-vm"):
         services=(),
         networks=(),
         static_addresses=(),
+        image=(
+            DeploymentImageRealization(
+                address=address,
+                service_name=name,
+                source_name=name,
+                source_version="1",
+                image_ref=f"{name}:1",
+                mode="pull",
+                policy_rule="declared",
+            )
+            if imaged
+            else None
+        ),
     )
 
 
@@ -614,7 +648,12 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
         "lifecycle": "reuse_valid",
         "provenance": "config/certs.yml",
         "outputs": [
-            {"name": "root-ca", "path": "root-ca.pem", "sensitivity": "public"}
+            {
+                "name": "root-ca",
+                "path": "root-ca.pem",
+                "sensitivity": "public",
+                "disposition": "consumer_selected",
+            }
         ],
         "consumers": [
             {
@@ -649,7 +688,7 @@ def test_generated_artifact_is_observed_from_outputs_and_read_only_mount(
     )
     realization = AptlRealization(
         profiles=frozenset(),
-        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer"),),
+        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer", imaged=True),),
         networks=(),
         placements=(),
         diagnostics=(),
@@ -738,6 +777,7 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
                 "name": "manager-config",
                 "path": "wazuh_manager.conf",
                 "sensitivity": "secret",
+                "disposition": "consumer_selected",
             }
         ],
         "consumers": [
@@ -768,7 +808,7 @@ def test_rendered_config_observation_records_digest_not_content(tmp_path):
     )
     realization = AptlRealization(
         profiles=frozenset(),
-        nodes=(_node_realization("wazuh-manager", "aptl-wazuh-manager"),),
+        nodes=(_node_realization("wazuh-manager", "aptl-wazuh-manager", imaged=True),),
         networks=(),
         placements=(),
         diagnostics=(),
@@ -853,7 +893,7 @@ def test_persistent_volume_is_observed_from_project_scoped_mount(tmp_path):
     )
     realization = AptlRealization(
         profiles=frozenset(),
-        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer"),),
+        nodes=(_node_realization("wazuh-indexer", "aptl-wazuh-indexer", imaged=True),),
         networks=(),
         placements=(),
         diagnostics=(),
@@ -1094,6 +1134,401 @@ def test_image_free_content_missing_omits_concern_without_echoing_plan(tmp_path)
 def test_image_free_content_exec_timeout_fails_closed_not_crash(tmp_path):
     address, plan, realization = _image_free_content_placement_fixture()
     backend = _Backend(containers=("aptl-vm",), exec_raises=True)
+
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {}
+
+
+_SSH_OUTPUTS = (
+    DeploymentGeneratedArtifactOutput(
+        name="control-plane-key",
+        path="operator/control-plane-key",
+        sensitivity="secret",
+        disposition="producer_private",
+    ),
+    DeploymentGeneratedArtifactOutput(
+        name="labadmin-key",
+        path="labadmin/.ssh/id_ed25519",
+        sensitivity="secret",
+    ),
+    DeploymentGeneratedArtifactOutput(
+        name="kali-authorized-keys",
+        path="kali/.ssh/authorized_keys",
+        sensitivity="public",
+    ),
+)
+
+
+def _ssh_bundle_fixture(*, imaged, selected=("labadmin-key",)):
+    """One ``ssh_key_bundle`` artifact with a single output-selecting consumer."""
+
+    address = "provision.generated-artifact.techvault-ssh-keys"
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="generated-artifact",
+        payload={"name": "techvault-ssh-keys", "spec": {}},
+    )
+    plan = ProvisioningPlan(resources={address: resource})
+    consumer = DeploymentStatefulConsumer(
+        target_address="provision.node.workstation",
+        node_name="workstation",
+        service_name="workstation",
+        mount_destination="/home",
+        access_mode="read_only",
+        selected_outputs=tuple(selected),
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(
+            _node_realization("workstation", "aptl-workstation", imaged=imaged),
+        ),
+        networks=(),
+        placements=(),
+        diagnostics=(),
+        generated_artifacts=(
+            DeploymentGeneratedArtifactRealization(
+                address=address,
+                name="techvault-ssh-keys",
+                generator="ssh_key_bundle",
+                lifecycle="reuse_valid",
+                provenance="techvault:ssh-access-profile/v1",
+                outputs=_SSH_OUTPUTS,
+                consumers=(consumer,),
+            ),
+        ),
+    )
+    return address, plan, realization
+
+
+def _write_ssh_bundle(root):
+    """Materialize the bundle's declared outputs under a realization root."""
+
+    bundle = root / ".aptl/realization/ssh-key-bundles/techvault-ssh-keys"
+    for output in _SSH_OUTPUTS:
+        path = bundle / output.path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("key material fixture")
+    return bundle
+
+
+def test_generated_artifact_is_read_back_from_the_backend_realization_root(tmp_path):
+    """The artifact is read back where it was written, not from the pristine pack.
+
+    Generated output is written under the backend's writable realization root
+    precisely so a digest-validated staged pack does not gain generated files
+    (issue #875). Reading it back out of the bundle root instead found nothing,
+    stripped every generated-artifact entry, and made the SEM-218 gate reject an
+    apply whose artifacts were all correctly realized.
+    """
+
+    address, plan, realization = _ssh_bundle_fixture(imaged=True)
+    engine_root = tmp_path / "engine"
+    bundle_root = tmp_path / "pack"
+    bundle_root.mkdir()
+    bundle = _write_ssh_bundle(engine_root)
+    backend = _Backend(
+        containers=("aptl-workstation",),
+        realization_root=engine_root,
+        mounts={
+            "aptl-workstation": [
+                {
+                    "Type": "bind",
+                    "Source": str(bundle / "labadmin/.ssh/id_ed25519"),
+                    "Destination": "/home/labadmin/.ssh/id_ed25519",
+                    "RW": False,
+                }
+            ]
+        },
+    )
+
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=bundle_root
+    )[address]
+
+    assert observed.realized is True
+    assert ("spec",) in observed.concerns
+
+
+def test_a_consumer_is_never_expected_to_mount_material_withheld_from_it(tmp_path):
+    """Only the consumer's selected, non-private outputs are expected as mounts.
+
+    Realization mounts exactly what a consumer selected and never a
+    ``producer_private`` output. Expecting the whole bundle instead demanded
+    mounts of material deliberately withheld, so a correctly delivered artifact
+    read as unrealized (issue #875).
+    """
+
+    address, plan, realization = _ssh_bundle_fixture(imaged=True)
+    engine_root = tmp_path / "engine"
+    bundle = _write_ssh_bundle(engine_root)
+    backend = _Backend(
+        containers=("aptl-workstation",),
+        realization_root=engine_root,
+        mounts={
+            "aptl-workstation": [
+                {
+                    "Type": "bind",
+                    "Source": str(bundle / "labadmin/.ssh/id_ed25519"),
+                    "Destination": "/home/labadmin/.ssh/id_ed25519",
+                    "RW": False,
+                }
+            ]
+        },
+    )
+
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=engine_root
+    )[address]
+
+    assert observed.realized is True
+    # The producer-private control-plane key is on disk but must never be
+    # expected -- or observed -- in any consumer's mount set.
+    assert "control-plane-key" not in str(observed.evidence)
+
+
+def test_image_free_consumer_artifact_is_observed_from_its_placed_files(tmp_path):
+    """An image-free node has no Compose service, so no bind to observe.
+
+    Its selected outputs are placed into the container as files instead
+    (issue #875); demanding a bind mount reported every such artifact as
+    unrealized.
+    """
+
+    address, plan, realization = _ssh_bundle_fixture(imaged=False)
+    engine_root = tmp_path / "engine"
+    _write_ssh_bundle(engine_root)
+    backend = _Backend(
+        containers=("aptl-workstation",),
+        realization_root=engine_root,
+        exec_results={"aptl-workstation": [(0, "")]},
+    )
+
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=engine_root
+    )[address]
+
+    assert observed.realized is True
+
+
+def test_image_free_consumer_missing_its_placed_output_is_not_realized(tmp_path):
+    """An output that never reached the container fails the gate, as it must."""
+
+    address, plan, realization = _ssh_bundle_fixture(imaged=False)
+    engine_root = tmp_path / "engine"
+    _write_ssh_bundle(engine_root)
+    backend = _Backend(
+        containers=("aptl-workstation",),
+        realization_root=engine_root,
+        exec_results={"aptl-workstation": [(1, "")]},
+    )
+
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=engine_root
+    )[address]
+
+    assert observed.realized is False
+
+
+def test_image_free_consumer_exec_failure_is_not_read_as_delivery(tmp_path):
+    address, plan, realization = _ssh_bundle_fixture(imaged=False)
+    engine_root = tmp_path / "engine"
+    _write_ssh_bundle(engine_root)
+    backend = _Backend(
+        containers=("aptl-workstation",),
+        realization_root=engine_root,
+        exec_raises=True,
+    )
+
+    observed = observe_realization(
+        backend, realization, plan, scenario_root=engine_root
+    )[address]
+
+    assert observed.realized is False
+
+
+def _bind_content_placement_fixture(container="aptl-vm", dest="etc/otelcol/config.yaml"):
+    """A content placement delivered to an image node as a read-only bind.
+
+    An image node is a Compose service with a fixed image, so its config is
+    delivered by binding the rendered file at the declared destination -- there
+    is no named volume to probe and, for a distroless image or an exited
+    one-shot, nothing to exec either (issue #875).
+    """
+
+    address = "provision.content.collector-config"
+    target_address = "provision.node.vm"
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload={
+            "name": "collector-config",
+            "target_address": target_address,
+            "spec": {"type": "file", "path": f"/{dest}"},
+        },
+    )
+    plan = ProvisioningPlan(
+        resources={address: resource},
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address=address,
+                resource_type=resource.resource_type,
+                payload=resource.payload,
+            )
+        ],
+    )
+    placement = PlacementRealization(
+        address=address,
+        resource_type="content-placement",
+        name="collector-config",
+        target_address=target_address,
+        target_node="vm",
+        content=DeploymentContentRealization(
+            address=address,
+            target_address=target_address,
+            content_name="collector-config",
+            volume_suffix="",
+            dest_relpath=dest,
+            source_kind="inline-text",
+            inline_text="receivers: {}",
+        ),
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(_node_realization(container=container, imaged=True),),
+        networks=(),
+        placements=(placement,),
+        diagnostics=(),
+    )
+    return address, plan, realization
+
+
+_BIND_SOURCE = "/engine/.aptl/realization/content/collector-config/config.yaml"
+
+
+def _content_bind(destination, *, source=_BIND_SOURCE, read_write=False):
+    return {
+        "Type": "bind",
+        "Source": source,
+        "Destination": destination,
+        "RW": read_write,
+    }
+
+
+def test_bind_delivered_content_type_read_from_the_daemon_not_the_container(tmp_path):
+    """A distroless image has no ``test`` binary; the mount is still observable.
+
+    The OTel collector image ships no shell or coreutils, so ``container_exec
+    test -f`` exits 127 and the content-type concern went absent -- which the
+    SEM-218 gate reads as a silent omission and rejects, even though the config
+    is bound at the declared path (issue #875). Container inspection plus a host
+    probe of the bind source observes it without running anything in the image.
+    """
+
+    address, plan, realization = _bind_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        # No exec_results: the fake asserts if container_exec is called at all.
+        mounts={"aptl-vm": [_content_bind("/etc/otelcol/config.yaml")]},
+        bind_source_types={_BIND_SOURCE: "file"},
+    )
+
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {("spec", "type"): "file"}
+
+
+def test_bind_delivered_content_type_observed_on_an_exited_one_shot(tmp_path):
+    """An exited run-to-completion node cannot be exec'd but is still realized.
+
+    The Cortex index initializer places its script by bind mount and exits 0 by
+    design. Exec against a stopped container fails outright, so the only honest
+    readback is the daemon's own mount record (issue #875).
+    """
+
+    address, plan, realization = _bind_content_placement_fixture(
+        container="aptl-cortex-index-init", dest="usr/local/bin/cortex-index-init.sh"
+    )
+    backend = _Backend(
+        containers=("aptl-cortex-index-init",),
+        running=False,
+        health=None,
+        mounts={
+            "aptl-cortex-index-init": [
+                _content_bind("/usr/local/bin/cortex-index-init.sh")
+            ]
+        },
+        bind_source_types={_BIND_SOURCE: "file"},
+    )
+    backend.container_inspect = lambda name: {
+        "State": {"Running": False, "Status": "exited", "ExitCode": 0},
+        "HostConfig": {"RestartPolicy": {"Name": "no"}},
+        "Platform": "linux",
+        "Mounts": [_content_bind("/usr/local/bin/cortex-index-init.sh")],
+    }
+
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {("spec", "type"): "file"}
+
+
+def test_bind_delivered_directory_content_type_is_reported_as_directory(tmp_path):
+    address, plan, realization = _bind_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        mounts={"aptl-vm": [_content_bind("/etc/otelcol/config.yaml")]},
+        bind_source_types={_BIND_SOURCE: "directory"},
+    )
+
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
+
+    assert observation.concerns == {("spec", "type"): "directory"}
+
+
+def test_writable_bind_at_the_destination_corroborates_nothing(tmp_path):
+    """Content is always delivered read-only, so a RW bind is not the placement."""
+
+    address, plan, realization = _bind_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        mounts={
+            "aptl-vm": [_content_bind("/etc/otelcol/config.yaml", read_write=True)]
+        },
+        bind_source_types={_BIND_SOURCE: "file"},
+        exec_results={"aptl-vm": [(1, ""), (1, "")]},  # nothing at the destination
+    )
+
+    observation = observe_realization(
+        backend, realization, plan, scenario_root=tmp_path
+    )[address]
+
+    assert observation.realized is True
+    assert observation.concerns == {}
+
+
+def test_bind_source_probe_failure_omits_the_content_type(tmp_path):
+    """An unreadable bind source observes nothing rather than assuming a kind."""
+
+    address, plan, realization = _bind_content_placement_fixture()
+    backend = _Backend(
+        containers=("aptl-vm",),
+        mounts={"aptl-vm": [_content_bind("/etc/otelcol/config.yaml")]},
+        bind_probe_raises=True,
+    )
 
     observation = observe_realization(
         backend, realization, plan, scenario_root=tmp_path

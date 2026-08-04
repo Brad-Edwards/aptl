@@ -27,6 +27,7 @@ something else.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from raes.explicitness import ExplicitnessClass
@@ -42,10 +43,15 @@ import hashlib
 from pathlib import Path
 
 from aptl.backends.raes_artifact_mechanisms import (
+    SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    aptl_artifact_mechanisms,
     dynamic_composition_provenance_ref,
+    env_pack_copy_provenance_ref,
     exact_artifact_provenance_ref,
     is_dynamic_composition_requirement,
     materialization_provenance_ref,
+    route_is_env_pack_copy,
+    select_route_over_mechanisms,
 )
 from aptl.backends.raes_substrate import resolve_substrate
 
@@ -55,6 +61,7 @@ from aptl.backends.raes_substrate import resolve_substrate
 _CONTEXT_ROOT = "containers"
 
 if TYPE_CHECKING:
+    from raes._source import ArtifactIdentity
     from raes.artifact_requirements import ArtifactRequirement
     from raes_processor.semantics.realization import CompiledRealizationRequirement
 
@@ -94,7 +101,7 @@ def _artifact_reference(requirement: ArtifactRequirement) -> str | None:
     return f"{exact.artifact_id}@{exact.digest}"
 
 
-def _context_dockerfile(scenario_root: Path, specification_id: str) -> Path | None:
+def _context_dockerfile(component_root: Path, specification_id: str) -> Path | None:
     """Return the contained Dockerfile a specification names, if it is safe.
 
     The specification id is authored data, so it is treated as untrusted: it must
@@ -110,7 +117,7 @@ def _context_dockerfile(scenario_root: Path, specification_id: str) -> Path | No
         or specification_id in {".", ".."}
     ):
         return None
-    root = (scenario_root / _CONTEXT_ROOT).resolve()
+    root = (component_root / _CONTEXT_ROOT).resolve()
     candidate = (root / specification_id / "Dockerfile").resolve()
     try:
         candidate.relative_to(root)
@@ -122,7 +129,7 @@ def _context_dockerfile(scenario_root: Path, specification_id: str) -> Path | No
 def _materialized_specifications(
     requirement: ArtifactRequirement,
     probe: ArtifactProbe,
-    scenario_root: Path | None,
+    component_root: Path | None,
     materialized: dict[str, str],
 ) -> tuple[list[str], list[str]]:
     """Materialize each authored specification and report what it produced.
@@ -145,16 +152,16 @@ def _materialized_specifications(
 
     available: list[str] = []
     digests: list[str] = []
-    if scenario_root is None:
+    if component_root is None:
         return available, digests
     # The caller may pass a relative root; every path below is compared against
     # the resolved form so containment holds either way.
-    scenario_root = scenario_root.resolve()
+    component_root = component_root.resolve()
     for specification in sorted(
         requirement.materialization_specifications,
         key=lambda item: item.specification_id,
     ):
-        dockerfile = _context_dockerfile(scenario_root, specification.specification_id)
+        dockerfile = _context_dockerfile(component_root, specification.specification_id)
         if dockerfile is None:
             continue
         actual = "sha256:" + hashlib.sha256(dockerfile.read_bytes()).hexdigest()
@@ -170,8 +177,8 @@ def _materialized_specifications(
             continue
         realized = probe.materialize_component_image(
             f"{specification.specification_id}:local",
-            str(dockerfile.relative_to(scenario_root)),
-            str(scenario_root),
+            str(dockerfile.relative_to(component_root)),
+            str(component_root),
         )
         if isinstance(realized, str) and realized.startswith("sha256:"):
             materialized[specification.digest] = realized
@@ -210,6 +217,7 @@ def artifact_availability_for_scenario(
     *,
     allow_remote: bool | None = None,
     scenario_root: Path | None = None,
+    component_root: Path | None = None,
 ) -> ArtifactAvailabilityContext:
     """Return address-partitioned availability facts for ``scenario``.
 
@@ -218,10 +226,14 @@ def artifact_availability_for_scenario(
         probe: Deployment backend exposing ``artifact_available``.
         allow_remote: Whether registry-resolvable artifacts count as available.
             None lets the backend decide from its own staging mode.
-        scenario_root: Root the scenario's own inputs resolve against — the
-            bundle root, not the engine checkout. A component build context is
-            scenario content, so a scenario handed over from elsewhere must not
-            resolve one out of APTL's tree.
+        scenario_root: Root the scenario's own content resolves against — the
+            bundle root, not the engine checkout.
+        component_root: Root APTL's own component build contexts (``containers/``)
+            resolve against (ADR-051). Component software is APTL's, not scenario
+            content: a pack authors a component's materialization-spec digest from
+            APTL's Dockerfile and does not ship the context, so the build resolves
+            from the engine's own tree. Defaults to ``scenario_root`` (the in-tree
+            case where they coincide).
 
     Returns:
         Context carrying one entry per address with artifact demand. An address
@@ -230,16 +242,19 @@ def artifact_availability_for_scenario(
         missing-address ambiguity.
     """
 
-    materialized: dict[str, str] = {}
     nodes_by_address = _nodes_by_address(scenario)
+    inputs = _AvailabilityInputs(
+        probe=probe,
+        allow_remote=allow_remote,
+        scenario_root=scenario_root,
+        component_root=component_root if component_root is not None else scenario_root,
+        materialized={},
+    )
     entries = [
         _availability_entry(
             compiled,
             requirement,
-            probe,
-            allow_remote=allow_remote,
-            scenario_root=scenario_root,
-            materialized=materialized,
+            inputs,
             node=nodes_by_address.get(compiled.address),
         )
         for compiled, requirement in _source_artifact_requirements(scenario)
@@ -247,14 +262,26 @@ def artifact_availability_for_scenario(
     return ArtifactAvailabilityContext(requirements=entries)
 
 
+@dataclass(frozen=True)
+class _AvailabilityInputs:
+    """The run-wide inputs every per-address availability check shares.
+
+    ``materialized`` is the run's build-digest memo: it is deliberately mutable
+    so one address's materialization result is reused by the next.
+    """
+
+    probe: ArtifactProbe
+    allow_remote: bool | None
+    scenario_root: Path | None
+    component_root: Path | None
+    materialized: dict[str, str]
+
+
 def _availability_entry(
     compiled: CompiledRealizationRequirement,
     requirement: ArtifactRequirement,
-    probe: ArtifactProbe,
+    inputs: _AvailabilityInputs,
     *,
-    allow_remote: bool | None,
-    scenario_root: Path | None,
-    materialized: dict[str, str],
     node: object = None,
 ) -> ArtifactRequirementAvailability:
     """Return the availability facts for one compiled address.
@@ -272,16 +299,27 @@ def _availability_entry(
     provenance: list[str] = []
     if requirement.materialization_specifications:
         specifications, digests = _materialized_specifications(
-            requirement, probe, scenario_root, materialized
+            requirement, inputs.probe, inputs.component_root, inputs.materialized
         )
-        verified_inputs = _verified_locked_inputs(requirement, probe, allow_remote)
+        verified_inputs = _verified_locked_inputs(
+            requirement, inputs.probe, inputs.allow_remote
+        )
         if specifications:
             provenance.append(materialization_provenance_ref())
-    exact = _exact_digest_and_provenance(requirement, probe, allow_remote=allow_remote)
+    exact = _exact_digest_and_provenance(
+        requirement, inputs.probe, allow_remote=inputs.allow_remote
+    )
+    if exact is None:
+        # Content declared by an exact env-pack artifact is not obtainable from
+        # the deployment backend (it is not an OCI image); its availability is
+        # confirmed from the validated pack itself (ADR-051 content boundary).
+        exact = _env_pack_digest_and_provenance(requirement, inputs.scenario_root)
     if exact is not None:
         digests.append(exact[0])
         provenance.append(exact[1])
-    substrate = _substrate_digest_and_provenance(compiled, requirement, probe, node)
+    substrate = _substrate_digest_and_provenance(
+        compiled, requirement, inputs.probe, node
+    )
     if substrate is not None:
         digests.append(substrate[0])
         provenance.append(substrate[1])
@@ -293,6 +331,64 @@ def _availability_entry(
         available_materialization_specification_digests=specifications,
         verified_locked_input_ids=verified_inputs,
     )
+
+
+def _env_pack_digest_and_provenance(
+    requirement: ArtifactRequirement,
+    scenario_root: Path | None,
+) -> tuple[str, str] | None:
+    """Return the ``(digest, provenance_ref)`` for a pack-resolved content artifact.
+
+    Availability of env-pack content is a fact about the pack, not the backend:
+    the artifact is obtainable exactly when its opaque id resolves to bytes whose
+    manifest digest equals the authored digest, through env-packs' own resolver
+    against the staged, validated pack. This confirms that (fail-closed on any
+    resolver error) rather than asking the Docker backend for an image it will
+    never have.
+    """
+
+    if (
+        requirement.explicitness is not ExplicitnessClass.EXACT
+        or scenario_root is None
+    ):
+        return None
+    exact = requirement.exact_artifact
+    if (
+        exact is None
+        or not _selects_env_pack_copy(requirement)
+        or not _pack_resolves_authored_digest(scenario_root, exact)
+    ):
+        return None
+    return exact.digest, env_pack_copy_provenance_ref()
+
+
+def _selects_env_pack_copy(requirement: ArtifactRequirement) -> bool:
+    """Return whether the requirement's selected route is APTL's pack-copy route."""
+
+    route = select_route_over_mechanisms(
+        requirement,
+        aptl_artifact_mechanisms(),
+        requirement_kind=SOURCE_ARTIFACT_REQUIREMENT_KIND,
+    )
+    return route is not None and route_is_env_pack_copy(route)
+
+
+def _pack_resolves_authored_digest(
+    scenario_root: Path, exact: ArtifactIdentity
+) -> bool:
+    """Return whether the pack resolves the artifact id to the authored digest.
+
+    Fail-closed: an unresolvable id, a digest-bound resolution failure, or an
+    unreadable pack means the artifact is not confirmed obtainable.
+    """
+
+    from raes_env_packs import PackDigestError, resolve_pack_artifact
+
+    try:
+        resolved = resolve_pack_artifact(str(scenario_root), exact.artifact_id)
+    except (PackDigestError, OSError, ValueError):
+        return False
+    return getattr(resolved.identity, "digest", None) == exact.digest
 
 
 def _exact_digest_and_provenance(

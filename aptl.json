@@ -2,6 +2,10 @@
     "deployment": {
         "provider": "docker-compose"
     },
+    "scenario": {
+        "identity": "techvault",
+        "source": "env-pack"
+    },
     "containers": {
         "wazuh": true,
         "victim": true,

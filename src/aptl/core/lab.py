@@ -251,7 +251,7 @@ def admitted_stateful_artifact_ownership(
 ) -> frozenset[tuple[str, str, str, str]]:
     """Lazy RAES import for exact pre-mutation artifact ownership."""
 
-    from aptl.backends.raes import admitted_stateful_artifact_ownership as _load
+    from aptl.backends._raes_scenario_queries import admitted_stateful_artifact_ownership as _load
 
     return _load(project_dir, config, backend, scenario_path=scenario_path)
 
@@ -1084,6 +1084,20 @@ def _ssh_key_step_failure(result: SSHKeyResult, what: str) -> LabResult | None:
     return LabResult(success=False, error=f"{what} failed: {result.error}")
 
 
+def _scenario_is_env_pack(ctx: _LabStartContext) -> bool:
+    """Whether this run realizes a scenario from an env-pack (#875).
+
+    When it does, standup material the pack declares as generated artifacts
+    (SSH pivot keys, authorized-key projections, the SOC CA) is produced during
+    realization from the pack, not by the host-side lab-start steps.
+    """
+
+    return (
+        ctx.config is not None
+        and ctx.config.scenario.source == "env-pack"
+    )
+
+
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
     """Ensure the host-side lab SSH key exists."""
     log.info("Step 3: Generating SSH keys...")
@@ -1097,14 +1111,30 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         return failure
     ctx.ssh_key_path = ssh_result.key_path or (Path.home() / ".ssh" / "aptl_lab_key")
 
-    # SEC #417: the kali pivot key is scenario content (kali -> targets),
-    # separate from the control-plane key above. Generated into a gitignored
-    # dir and bind-mounted (private -> kali, public -> targets). Targets
-    # (victim, workstation, ...) authorize both the control-plane key and
-    # this pivot key; the SDL places the combined file at
-    # ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
-    # and victim's own combined authorized_keys are the Prime scenario's
-    # separate workstation -> victim lateral-movement path (issue #581).
+    if _scenario_is_env_pack(ctx):
+        # The scenario's ssh_key_bundle generated artifact owns the pivot keys
+        # and authorized-key projections (generated + placed during realization);
+        # only the control-plane key above is host-side. Generating the legacy
+        # pivot/authorized-keys here would write dead files the pack never mounts.
+        log.info("Step 3: pivot/authorized keys come from the scenario pack; skipping host generation.")
+        return None
+
+    return _generate_host_side_pivot_keys(keys_dir, pivot_dir)
+
+
+def _generate_host_side_pivot_keys(keys_dir: Path, pivot_dir: Path) -> LabResult | None:
+    """Generate the in-tree scenario's pivot keys and authorized-key projections.
+
+    SEC #417: the kali pivot key is scenario content (kali -> targets),
+    separate from the host-side control-plane key. Generated into a gitignored
+    dir and bind-mounted (private -> kali, public -> targets). Targets
+    (victim, workstation, ...) authorize both the control-plane key and
+    this pivot key; the SDL places the combined file at
+    ~labadmin/.ssh/authorized_keys (issue #581). The workstation pivot key
+    and victim's own combined authorized_keys are the Prime scenario's
+    separate workstation -> victim lateral-movement path (issue #581).
+    """
+
     remaining_steps = (
         ("Pivot key generation", lambda: ensure_pivot_key(pivot_dir=pivot_dir)),
         (
@@ -1395,6 +1425,11 @@ def _step_generate_soc_certs(ctx: _LabStartContext) -> LabResult | None:
     log.info("Step 6c: Generating SOC stack lab CA + service certs...")
     # runtime guard above; this assert is for the type-checker.
     assert ctx.config is not None
+    if _scenario_is_env_pack(ctx):
+        # The pack declares the SOC CA + service certs as certificate_bundle
+        # generated artifacts, produced and validated during realization.
+        log.debug("SOC certs come from the scenario pack; skipping host generation.")
+        return None
     result: LabResult | None = None
     if not ctx.config.containers.soc:
         log.debug("SOC profile not enabled, skipping SOC CA generation")
@@ -1838,7 +1873,15 @@ def _probe_ssh_target(ctx: _LabStartContext, name: str, user: str) -> None:
             user=user,
             key_path=ctx.ssh_key_path,
         ),
-        timeout=60,
+        # Generous ceiling: on a full first boot the generic-base SSH targets
+        # (image-free apt installs of openssh-server started under systemd) can
+        # take well past a minute to have sshd accepting connections while ~30
+        # other containers initialize concurrently -- the heaviest target (Kali,
+        # apt-installing openssh plus the offensive toolset) was observed still
+        # coming up past 180s on a loaded host. The wait returns as soon as SSH
+        # answers, so a quick target costs nothing; the ceiling only governs how
+        # long a genuinely slow first boot is given before the advisory warning.
+        timeout=300,
         interval=5,
         service_name=f"SSH ({name})",
         progress=ctx.progress,

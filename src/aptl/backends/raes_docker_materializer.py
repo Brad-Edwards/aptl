@@ -16,7 +16,10 @@ the admission boundary and translates into the RAES `LabResult` envelope.
 from __future__ import annotations
 
 import base64
+import io
 import shlex
+import tarfile
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
@@ -26,6 +29,7 @@ from aptl.backends.raes_materializer import (
     EnsureDirectoryOp,
     EnsureUserOp,
     InstallDependencyManifestOp,
+    PlacePackArtifactOp,
     PlaceProjectContentOp,
 )
 from aptl.backends.raes_package_managers import (
@@ -156,6 +160,34 @@ class DockerMaterializationExecutor:
         parent = str(PurePosixPath(op.dest_path).parent)
         self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
         self._copy_in(container, str(source), op.dest_path, op.is_directory)
+
+    def place_pack_artifact(
+        self, node_address: str, op: PlacePackArtifactOp
+    ) -> None:
+        if self._scenario_root is None or self._copy_in is None:
+            raise MaterializationCommandError(
+                f"pack content placement needs a staged pack root on {node_address}"
+            )
+        from raes_env_packs import resolve_pack_artifact
+
+        resolved = resolve_pack_artifact(str(self._scenario_root), op.artifact_id)
+        if getattr(resolved.identity, "digest", None) != op.artifact_digest:
+            raise MaterializationCommandError(
+                f"pack content digest mismatch on {node_address}: {op.artifact_id}"
+            )
+        container = self._container_for(node_address)
+        parent = str(PurePosixPath(op.dest_path).parent)
+        self._require_ok(node_address, ["mkdir", "-p", parent], "prep content dir")
+        with tempfile.TemporaryDirectory() as staging:
+            if op.is_directory:
+                staged = Path(staging) / "tree"
+                staged.mkdir()
+                with tarfile.open(fileobj=io.BytesIO(resolved.data), mode="r:*") as archive:
+                    archive.extractall(staged, filter="data")
+            else:
+                staged = Path(staging) / PurePosixPath(op.dest_path).name
+                staged.write_bytes(resolved.data)
+            self._copy_in(container, str(staged), op.dest_path, op.is_directory)
 
     def install_dependency_manifest(
         self, node_address: str, op: InstallDependencyManifestOp

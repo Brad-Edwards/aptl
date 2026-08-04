@@ -17,6 +17,13 @@ from aptl.backends._compose_profile_index import (
 from aptl.core.config import AptlConfig
 
 CORE_PROFILES = ("otel",)
+# Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
+# older in-tree scenario node names to their docker-compose service names so
+# node->service binding resolves for the legacy compose path. An env-pack never
+# reaches here: it ships no docker-compose.yml, so load_compose_profile_index
+# returns an empty index (ADR-048) and node service identity is derived from the
+# realization DTOs. This table is never the primary decision source and retires
+# with the in-tree docker-compose.yml (task #8); it is not extended.
 APTL_SERVICE_ALIASES = {
     "db": frozenset({"customer-db", "postgres"}),
     "kali": frozenset({"red-workbench"}),

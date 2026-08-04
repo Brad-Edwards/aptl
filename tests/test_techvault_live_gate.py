@@ -10,6 +10,7 @@ boot is the integration-marked, ``APTL_LIVE_GATE``-gated test at the bottom.
 import functools
 import json
 import os
+import tempfile
 import types
 from pathlib import Path
 
@@ -37,9 +38,14 @@ from aptl.validation.techvault_live_gate import (
     LiveGateState,
     validate_live_deployment,
 )
+from tests.helpers import techvault_scenario_bundle
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCENARIO = PROJECT_ROOT / "scenarios" / "techvault-operational.sdl.yaml"
+# The default TechVault scenario now ships as the bundled env-pack (#875); stage
+# it once for the module and drive the live gate from its validated SDL.
+SCENARIO = techvault_scenario_bundle(
+    Path(tempfile.mkdtemp(prefix="aptl-live-gate-"))
+).sdl_path
 
 
 # --------------------------------------------------------------------------- #
@@ -624,7 +630,7 @@ def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
 
     The observability collector here is a real example: it is a genuine part of
     the range, and the correct response is for the scenario to declare it, which
-    techvault-operational now does.
+    the default TechVault scenario now does.
     """
 
     state = _readiness_state(
@@ -872,7 +878,7 @@ def test_run_archive_writes_manifest_through_redacting_boundary():
         "participant-episode-history-event-stream-v1",
         "participant-behavior-history-event-stream-v1",
     ]
-    assert manifest["scenario"]["name"] == "techvault-operational"
+    assert manifest["scenario"]["name"] == "techvault"
 
 
 def test_run_archive_roundtrips_to_local_store(tmp_path):

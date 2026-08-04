@@ -132,3 +132,92 @@ def test_realize_nodes_fails_closed_on_first_failure():
     result = realize_nodes([_node()], _BrokenBackend())
     assert result is not None and result.success is False
     assert "techvault.analyst-box" in (result.error or "")
+
+
+def _named_node(name: str) -> NodeRealization:
+    node = _node()
+    return NodeRealization(
+        address=f"techvault.{name}",
+        name=name,
+        aliases=(),
+        profiles=(),
+        backend_services=(),
+        container_name=None,
+        services=(),
+        networks=(),
+        static_addresses=(),
+        os="linux",
+        runtime=node.runtime,
+    )
+
+
+class _ThreadSafeBackend(_FakeBackend):
+    """`_FakeBackend` whose shared observation state is lock-guarded."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        import threading
+
+        self._lock = threading.Lock()
+
+    def container_exec(self, name, cmd, *, timeout=None):
+        with self._lock:
+            return super().container_exec(name, cmd, timeout=timeout)
+
+    def start_base_container(self, spec):
+        with self._lock:
+            super().start_base_container(spec)
+
+
+def test_realize_nodes_materializes_multiple_nodes():
+    backend = _ThreadSafeBackend()
+    nodes = [_named_node(f"box-{i}") for i in range(4)]
+
+    assert realize_nodes(nodes, backend) is None
+    assert len(backend.started) == 4
+    assert {spec.container_name for spec in backend.started} == {
+        f"aptl-box-{i}" for i in range(4)
+    }
+
+
+def test_realize_nodes_runs_nodes_concurrently():
+    """A barrier that only releases when all nodes are in flight proves the
+    materialization actually runs in parallel; a serial loop would time out."""
+    import threading
+
+    node_count = 4
+    barrier = threading.Barrier(node_count)
+
+    class _BarrierBackend(_ThreadSafeBackend):
+        def start_base_container(self, spec):
+            # Every node must reach here before any proceeds; a serial loop
+            # would leave the barrier one party short and raise on timeout.
+            barrier.wait(timeout=10)
+            super().start_base_container(spec)
+
+    backend = _BarrierBackend()
+    nodes = [_named_node(f"box-{i}") for i in range(node_count)]
+
+    assert realize_nodes(nodes, backend) is None
+    assert len(backend.started) == node_count
+
+
+def test_realize_nodes_returns_first_failure_in_declared_order():
+    """When multiple nodes fail concurrently, the surfaced error is the first in
+    declared node order, independent of which finished first."""
+
+    class _SecondFailsFasterBackend(_ThreadSafeBackend):
+        def start_base_container(self, spec):
+            if spec.container_name == "aptl-box-0":
+                import time
+
+                time.sleep(0.2)  # first-in-order fails later
+            raise RuntimeError(f"boom {spec.container_name}")
+
+    nodes = [_named_node("box-0"), _named_node("box-1")]
+    result = realize_nodes(nodes, _SecondFailsFasterBackend())
+
+    assert result is not None
+    assert result.success is False
+    # Deterministic: box-0 is first in declared order even though box-1 failed first.
+    assert "techvault.box-0" in (result.error or "")

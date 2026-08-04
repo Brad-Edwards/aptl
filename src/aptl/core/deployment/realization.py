@@ -11,8 +11,11 @@ if TYPE_CHECKING:
 
 ImageRealizationMode = Literal["pull", "build"]
 StatefulConsumerAccessMode = Literal["read_only", "read_write"]
-GeneratedArtifactKind = Literal["certificate_bundle", "rendered_config"]
+GeneratedArtifactKind = Literal[
+    "certificate_bundle", "rendered_config", "ssh_key_bundle"
+]
 GeneratedArtifactLifecycle = Literal["regenerate_on_change", "reuse_valid"]
+GeneratedArtifactOutputDisposition = Literal["consumer_selected", "producer_private"]
 ResourceSensitivity = Literal["public", "restricted", "secret"]
 VolumeLifecycle = Literal["retain", "ephemeral"]
 VolumeAccessMode = Literal["read_write_once", "read_write_many", "read_only_many"]
@@ -177,7 +180,12 @@ class DeploymentNodeRealization(object):
 
 
 ContentSourceKind = Literal[
-    "inline-text", "project-file", "project-directory", "empty-directory"
+    "inline-text",
+    "project-file",
+    "project-directory",
+    "empty-directory",
+    "pack-file",
+    "pack-directory",
 ]
 
 
@@ -187,11 +195,16 @@ class DeploymentContentRealization(object):
 
     ``source_kind`` records how the content is materialized: ``inline-text``
     (bounded text carried on the placement itself), ``project-file`` /
-    ``project-directory`` (a checked-in, project-contained source path), or
+    ``project-directory`` (a checked-in, project-contained source path),
     ``empty-directory`` (an explicit empty-directory declaration with no
-    source). ``source_relpath`` is project-relative and only set for the two
-    project-sourced kinds; ``inline_text`` is only set for ``inline-text``.
-    Both are mutually exclusive by construction in the interpreter.
+    source), or ``pack-file`` / ``pack-directory`` (bytes resolved from a
+    validated env-pack by opaque ``artifact_id`` + ``sha256`` ``artifact_digest``
+    through ``resolve_pack_artifact``; a ``pack-directory`` artifact is an
+    ``application/x-tar`` archive extracted at the destination). ``source_relpath``
+    is project-relative and only set for the two project-sourced kinds;
+    ``inline_text`` is only set for ``inline-text``; ``artifact_id`` /
+    ``artifact_digest`` / ``media_type`` are only set for the two pack kinds.
+    These are mutually exclusive by construction in the interpreter.
     """
 
     address: str
@@ -202,6 +215,9 @@ class DeploymentContentRealization(object):
     source_kind: ContentSourceKind
     source_relpath: str | None = None
     inline_text: str | None = None
+    artifact_id: str | None = None
+    artifact_digest: str | None = None
+    media_type: str | None = None
     sensitive: bool = False
 
     def details(self) -> dict[str, object]:
@@ -213,6 +229,8 @@ class DeploymentContentRealization(object):
             "dest_relpath": self.dest_relpath,
             "source_kind": self.source_kind,
             "source_relpath": self.source_relpath,
+            "artifact_id": self.artifact_id,
+            "artifact_digest": self.artifact_digest,
             "sensitive": self.sensitive,
         }
 
@@ -257,13 +275,20 @@ class DeploymentAccountRealization(object):
 
 @dataclass(frozen=True)
 class DeploymentStatefulConsumer(object):
-    """One resolved node mount for a generated artifact or persistent volume."""
+    """One resolved node mount for a generated artifact or persistent volume.
+
+    ``selected_outputs`` names the generated-artifact outputs this consumer
+    receives; empty for persistent volumes and for generated artifacts that
+    expose every consumer-selectable output. A ``producer_private`` output is
+    never selectable and never mounted, regardless of this list.
+    """
 
     target_address: str
     node_name: str
     service_name: str
     mount_destination: str
     access_mode: StatefulConsumerAccessMode
+    selected_outputs: tuple[str, ...] = ()
 
     def details(self) -> dict[str, object]:
         return {
@@ -272,22 +297,31 @@ class DeploymentStatefulConsumer(object):
             "service_name": self.service_name,
             "mount_destination": self.mount_destination,
             "access_mode": self.access_mode,
+            "selected_outputs": list(self.selected_outputs),
         }
 
 
 @dataclass(frozen=True)
 class DeploymentGeneratedArtifactOutput(object):
-    """One declared output from a backend-owned generated artifact."""
+    """One declared output from a backend-owned generated artifact.
+
+    ``disposition`` is ``producer_private`` for material that must stay on the
+    producer and never be mounted into any consumer (a CA private key, the
+    control-plane SSH key), or ``consumer_selected`` for material a consumer may
+    receive by naming it in its ``selected_outputs``.
+    """
 
     name: str
     path: str
     sensitivity: ResourceSensitivity
+    disposition: GeneratedArtifactOutputDisposition = "consumer_selected"
 
     def details(self) -> dict[str, object]:
         return {
             "name": self.name,
             "path": self.path,
             "sensitivity": self.sensitivity,
+            "disposition": self.disposition,
         }
 
 

@@ -16,10 +16,10 @@ from raes_contracts.planning import PlannedResource
 from aptl.backends.raes_artifact_mechanisms import is_dynamic_composition_requirement
 
 from aptl.backends._raes_image_policy import (
-    _ALLOWED_SOURCE_IMAGE_REFS,
     _DIGEST_RE,
     _PROJECT_DOCKERFILE_PATH_RE,
     _allowed_digest_pinned_ref,
+    _allowed_exact_tag_ref,
     _is_compose_owned_source,
     _local_build_ref,
     _policy_diagnostic,
@@ -384,11 +384,11 @@ def _pull_image(
 ) -> DeploymentImageRealization | None:
     """Resolve allowed pull policies into an image operation."""
 
-    policy_rule = "allowed-source"
-    image_ref = _ALLOWED_SOURCE_IMAGE_REFS.get((source.name, source.version))
+    policy_rule = "allowed-digest"
+    image_ref = _allowed_digest_pinned_ref(source.name, source.version)
     if image_ref is None:
-        policy_rule = "allowed-digest"
-        image_ref = _allowed_digest_pinned_ref(source.name, source.version)
+        policy_rule = "allowed-source"
+        image_ref = _allowed_exact_tag_ref(source.name, source.version)
     if image_ref is not None:
         return DeploymentImageRealization(
             address=address,

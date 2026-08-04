@@ -34,6 +34,11 @@ def append_dependency_closure(
     """Expand profiles required by selected RAES and Compose dependencies."""
 
     selected_profiles = set(public_start_profiles(config))
+    # An env-pack ships no compose file, so the profile index is empty; the
+    # realized nodes carry their own service identity (issue #875). This alias
+    # index lets node-to-node dependencies resolve against realized services
+    # instead of only the static compose index.
+    node_alias_index = _node_service_alias_index(nodes)
     service_by_address = _service_by_node_address(nodes, profile_index, diagnostics)
     selected_node_addresses = {
         node.address
@@ -51,6 +56,7 @@ def append_dependency_closure(
             selected_node_addresses,
             networks,
             profile_index,
+            node_alias_index,
             diagnostics,
         )
     )
@@ -70,6 +76,31 @@ def append_dependency_closure(
     profiles.update(profile_index.profiles_for_services(set(closure_services)))
 
 
+def _node_service_alias_index(
+    nodes: list[NodeRealization],
+) -> dict[str, set[str]]:
+    """Return a normalized alias -> realized-service map built from the nodes.
+
+    Env-pack nodes derive their own Compose service identity (issue #875) rather
+    than being looked up in a static compose file, so a node-to-node dependency
+    resolves through this map when the profile index is empty. In-tree scenarios
+    populate the index, which stays the primary source; this only adds matches.
+    """
+
+    index: dict[str, set[str]] = {}
+    for node in nodes:
+        services = set(node.backend_services)
+        if not services:
+            continue
+        alias_sources = set(node.aliases) | {node.address, node.name} | services
+        aliases: set[str] = set()
+        for source in alias_sources:
+            aliases.update(_dependency_reference_aliases(source))
+        for alias in aliases:
+            index.setdefault(alias, set()).update(services)
+    return index
+
+
 def _service_by_node_address(
     nodes: list[NodeRealization],
     profile_index: ComposeProfileIndex,
@@ -79,7 +110,9 @@ def _service_by_node_address(
 
     service_by_address: dict[str, str] = {}
     for node in nodes:
-        matches = profile_index.service_names_for_aliases(set(node.aliases))
+        matches = profile_index.service_names_for_aliases(set(node.aliases)) or set(
+            node.backend_services
+        )
         if len(matches) > 1:
             diagnostics.append(
                 diagnostic(
@@ -102,6 +135,7 @@ def _raes_dependency_services(
     selected_node_addresses: set[str],
     networks: list[NetworkRealization],
     profile_index: ComposeProfileIndex,
+    node_alias_index: dict[str, set[str]],
     diagnostics: list[Diagnostic],
 ) -> set[str]:
     """Resolve selected RAES node dependencies to Compose service names."""
@@ -122,6 +156,7 @@ def _raes_dependency_services(
                 dependency,
                 network_aliases,
                 profile_index,
+                node_alias_index,
             )
             if is_network:
                 continue
@@ -169,15 +204,20 @@ def _dependency_service_matches(
     dependency: str,
     network_aliases: set[str],
     profile_index: ComposeProfileIndex,
+    node_alias_index: dict[str, set[str]],
 ) -> tuple[bool, set[str]]:
     """Return whether a dependency is a network and its Compose service matches."""
 
     is_network = _is_network_dependency(dependency, network_aliases)
     matches: set[str] = set()
     if not is_network:
-        matches = profile_index.service_names_for_aliases(
-            _dependency_reference_aliases(dependency)
-        )
+        dependency_aliases = _dependency_reference_aliases(dependency)
+        matches = set(profile_index.service_names_for_aliases(dependency_aliases))
+        if not matches:
+            # Env-pack path (issue #875): resolve the dependency against the
+            # realized nodes' own service identities when no compose index does.
+            for alias in dependency_aliases:
+                matches.update(node_alias_index.get(alias, set()))
     return is_network, matches
 
 

@@ -6,7 +6,7 @@ Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 import json
 import re
 from pathlib import Path, PurePosixPath
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
@@ -54,7 +54,7 @@ class ContainerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Defaults match the full DEFAULT_RAES_SCENARIO (techvault-operational) that
+    # Defaults match the full TechVault env-pack scenario that
     # `aptl lab start` provisions when no scenario is given, so a plain
     # `aptl lab init` + `aptl lab start` brings up the complete lab the
     # walkthrough documents. With soc/enterprise/dns/fileshare off, Compose only
@@ -108,8 +108,14 @@ class ScenarioSourceConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    identity: str = "techvault-operational"
+    identity: str = "techvault"
     root: str | None = None
+    # ``env-pack`` (the default since #875) resolves the scenario from the
+    # bundled ``raes-env-packs`` pack named by ``identity``, staged and validated
+    # before use, with no host paths in the document. ``project-tree`` is the
+    # legacy path that resolves it from the APTL checkout and requires an explicit
+    # scenario. The operator selects the source; the backend never switches it.
+    source: Literal["project-tree", "env-pack"] = "env-pack"
 
     @field_validator("identity")
     @classmethod

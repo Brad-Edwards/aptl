@@ -122,14 +122,19 @@ fix_shuffle_backend() {
 wait_misp() {
     _present aptl-misp || return 0
     local i
-    for i in $(seq 1 60); do
+    # Wait for AUTHENTICATED readiness, not just the login page: MISP's admin key
+    # + Redis-backed auth come up several minutes after the HTTP listener, and
+    # the MISP seed step needs the key to authenticate. Polling /users/view/me
+    # with the canonical key is exactly the readiness the seed depends on.
+    for i in $(seq 1 90); do
         if docker exec aptl-misp curl -ks -o /dev/null -w '%{http_code}' --max-time 8 \
-            https://localhost:443/users/login 2>/dev/null | grep -q '^200$'; then
-            log "MISP is serving"; return 0
+            -H "Authorization: ${MISP_API_KEY}" -H 'Accept: application/json' \
+            https://localhost:443/users/view/me 2>/dev/null | grep -q '^200$'; then
+            log "MISP API is authenticating"; return 0
         fi
         sleep 10
     done
-    log "WARNING: MISP not serving after 600s"
+    log "WARNING: MISP API not authenticating after 900s"
 }
 
 wait_shuffle() {

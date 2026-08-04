@@ -80,7 +80,7 @@ class _Manager:
     def __init__(self, target):
         self.target = target
 
-    def plan(self, scenario):
+    def plan(self, scenario, artifact_availability=None):
         return types.SimpleNamespace(provisioning=object())
 
 

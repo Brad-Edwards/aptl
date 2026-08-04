@@ -186,6 +186,11 @@ class _RunContext(object):
     """
 
     scenario_path: Path
+    # The selector the boot resolves (``None`` -> configured env-pack). Distinct
+    # from ``scenario_path`` (the resolved staged SDL used for parse/digest): the
+    # env-pack's content artifacts resolve through the pack resolver, not a
+    # project-tree path, so the boot must not be handed the staged path (#875).
+    boot_scenario_path: Path | None
     project_dir: Path
     config: AptlConfig
     options: LiveGateOptions
@@ -219,6 +224,10 @@ def validate_live_deployment(
     # exists -- the gate must validate the same scenario the lab actually boots.
     from aptl.backends.raes import resolve_scenario_bundle
 
+    # The parse/compile/matrix/digest layers validate the exact SDL the env-pack
+    # stages; the boot instead resolves the env-pack itself (config-driven), so it
+    # keeps the original selector.
+    boot_scenario_path = scenario_path
     scenario_path = resolve_scenario_bundle(project_dir, scenario_path, config).sdl_path
     run_id = opts.run_id or uuid.uuid4().hex
     state = LiveGateState()
@@ -254,6 +263,7 @@ def validate_live_deployment(
     if inputs_passed:
         ctx = _RunContext(
             scenario_path=scenario_path,
+            boot_scenario_path=boot_scenario_path,
             project_dir=project_dir,
             config=config,
             options=opts,
@@ -281,13 +291,16 @@ def _run_live_checks(
     """
     # 2b. RAES-driven boot — clean up, boot via orchestrate_lab_start, and tie
     #    the realization matrix to RAES resource addresses (anti-preset).
+    # The boot resolves the env-pack itself (config-driven); it must not receive
+    # the resolved staged SDL path, or the pack's content artifacts resolve as a
+    # project tree and admission fails as unavailable-exact-artifact (#875).
     boot_check = checks.check_raes_driven_boot(
         scenario,
         project_dir=ctx.project_dir,
         config=ctx.config,
         options=ctx.options,
         state=state,
-        scenario_path=ctx.scenario_path,
+        scenario_path=ctx.boot_scenario_path,
     )
     results.append(boot_check)
     if not boot_check.passed:

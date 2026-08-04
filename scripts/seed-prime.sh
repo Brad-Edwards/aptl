@@ -80,6 +80,18 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
+# Apply the temporary env-pack SOAR fixups before waiting on health. The frozen
+# TechVault env-pack realizes MISP, misp-redis, and shuffle-backend without the
+# runtime env they need, so recreate them with the recovered working config
+# first (see scripts/envpack-soar-fixups.sh + OpenRAE/env-packs#280/#281). This
+# blocks until the recreated services are serving so the steps below find them
+# up; a failure here surfaces as the individual seed-step errors, not a hard
+# stop.
+export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
+    "$SCRIPT_DIR/envpack-soar-fixups.sh" || echo "  WARNING: env-pack SOAR fixups reported issues"
+fi
+
 # SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
 # at https://localhost:3443. The readiness gate waits for
 # `aptl-shuffle-frontend` (which has a healthcheck post-SEC-006)

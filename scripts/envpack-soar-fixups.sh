@@ -1,0 +1,137 @@
+#!/bin/bash
+# =============================================================================
+# TEMPORARY env-pack SOAR fixups
+# =============================================================================
+# The frozen TechVault env-pack realizes MISP, misp-redis, and shuffle-backend
+# WITHOUT the runtime environment they need, so they boot broken:
+#
+#   - misp-redis runs with no password, but MISP connects with
+#     auth=redispassword -> Redis unreachable -> API-key auth fails.
+#   - MISP has no MYSQL_*/ADMIN_*/BASE_URL env and its lab cert is mounted at
+#     the wrong path -> no DB, no admin key, self-signed cert.
+#   - shuffle-backend has no SHUFFLE_OPENSEARCH_* env -> it verifies TLS against
+#     the opensearch demo cert and never connects to its datastore.
+#
+# This recreates those three containers with the configuration recovered from
+# the pre-ACES docker-compose.yml (which ran these services for months). It is
+# idempotent: a container already carrying the fix is left untouched, so this is
+# safe to run on every boot. It buys us out of the env-pack release cycle; it
+# does not change the scenario.
+#
+# Root fixes tracked upstream (remove this script when they ship):
+#   MISP  -> OpenRAE/env-packs#280 ; retire per Brad-Edwards/aptl#912
+#   Shuffle -> OpenRAE/env-packs#281 ; retire per Brad-Edwards/aptl#913
+# =============================================================================
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="${APTL_PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+CERT_BASE="$PROJECT_DIR/config/soc_certs"
+# Same canonical key MISP's server (ADMIN_KEY) and the seed client share.
+MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+
+command -v docker >/dev/null 2>&1 || exit 0
+
+_present()  { docker inspect "$1" >/dev/null 2>&1; }
+_net()      { docker inspect "$1" -f '{{range $n,$c := .NetworkSettings.Networks}}{{$n}}{{end}}' 2>/dev/null; }
+_image()    { docker inspect "$1" -f '{{.Config.Image}}' 2>/dev/null; }
+_has_env()  { docker inspect "$1" -f '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q "^$2="; }
+
+log() { echo "[envpack-soar-fixups] $*"; }
+
+# --- misp-redis: restore the password MISP expects --------------------------
+fix_misp_redis() {
+    _present aptl-misp-redis || return 0
+    # If AUTH is already required, redis-cli ping without a password says NOAUTH.
+    if docker exec aptl-misp-redis redis-cli ping 2>&1 | grep -qi 'NOAUTH'; then
+        return 0
+    fi
+    log "misp-redis has no password; recreating with --requirepass"
+    local img net
+    img="$(_image aptl-misp-redis)"; net="$(_net aptl-misp-redis)"
+    docker rm -f aptl-misp-redis >/dev/null 2>&1 || true
+    docker run -d --name aptl-misp-redis --restart unless-stopped \
+        --network "$net" --network-alias aptl-misp-redis --network-alias misp-redis \
+        "$img" redis-server --requirepass redispassword >/dev/null
+}
+
+# --- MISP: full working env + correct cert path + fresh init ----------------
+fix_misp() {
+    _present aptl-misp || return 0
+    _has_env aptl-misp MYSQL_HOST && return 0
+    log "MISP missing DB/admin env; recreating with working configuration"
+    local img net
+    img="$(_image aptl-misp)"; net="$(_net aptl-misp)"
+    docker rm -f aptl-misp >/dev/null 2>&1 || true
+    # Fresh schema so the admin key (ADMIN_KEY) is applied at init.
+    docker exec aptl-misp-db mysql -uroot -pmisp_root_password \
+        -e 'DROP DATABASE IF EXISTS misp; CREATE DATABASE misp;' >/dev/null 2>&1 || true
+    docker volume rm aptl_misp_config aptl_misp_data >/dev/null 2>&1 || true
+    docker run -d --name aptl-misp --restart unless-stopped \
+        --network "$net" --network-alias aptl-misp --network-alias misp \
+        -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
+        -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
+        -e BASE_URL=https://localhost -e REDIS_HOST=misp-redis \
+        -v aptl_misp_config:/var/www/MISP/app/Config -v aptl_misp_data:/var/www/MISP/app/files \
+        -v "$CERT_BASE/misp/server.pem":/etc/nginx/certs/cert.pem:ro \
+        -v "$CERT_BASE/misp/server.key":/etc/nginx/certs/key.pem:ro \
+        "$img" >/dev/null
+}
+
+# --- shuffle-backend: restore opensearch env (incl. intra-cluster skip-ssl) --
+fix_shuffle_backend() {
+    _present aptl-shuffle-backend || return 0
+    _has_env aptl-shuffle-backend SHUFFLE_OPENSEARCH_URL && return 0
+    log "shuffle-backend missing opensearch env; recreating with working configuration"
+    local img net
+    img="$(_image aptl-shuffle-backend)"; net="$(_net aptl-shuffle-backend)"
+    docker rm -f aptl-shuffle-backend >/dev/null 2>&1 || true
+    docker run -d --name aptl-shuffle-backend --restart unless-stopped \
+        --network "$net" --network-alias aptl-shuffle-backend --network-alias shuffle-backend \
+        -e SHUFFLE_APP_SDK_TIMEOUT=120 \
+        -e SHUFFLE_DEFAULT_USERNAME=admin -e SHUFFLE_DEFAULT_PASSWORD=ShuffleAdmin2024! \
+        -e SHUFFLE_DEFAULT_APIKEY=31a211c4-ea5c-4a49-b022-5e2434e758a7 \
+        -e SHUFFLE_OPENSEARCH_URL=https://shuffle-opensearch:9200 \
+        -e SHUFFLE_OPENSEARCH_USERNAME=admin -e SHUFFLE_OPENSEARCH_PASSWORD=StrongPassword123! \
+        -e SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true \
+        -v aptl_shuffle_data:/shuffle-database -v /var/run/docker.sock:/var/run/docker.sock \
+        "$img" >/dev/null
+    # The frontend proxies to the backend; bounce it so it re-resolves the new one.
+    docker restart aptl-shuffle-frontend >/dev/null 2>&1 || true
+}
+
+# --- readiness waits so the seed steps find the services up -----------------
+wait_misp() {
+    _present aptl-misp || return 0
+    local i
+    for i in $(seq 1 60); do
+        if docker exec aptl-misp curl -ks -o /dev/null -w '%{http_code}' --max-time 8 \
+            https://localhost:443/users/login 2>/dev/null | grep -q '^200$'; then
+            log "MISP is serving"; return 0
+        fi
+        sleep 10
+    done
+    log "WARNING: MISP not serving after 600s"
+}
+
+wait_shuffle() {
+    _present aptl-shuffle-backend || return 0
+    local i
+    for i in $(seq 1 30); do
+        if docker exec aptl-shuffle-backend wget -qO- --timeout=6 \
+            --header="Authorization: Bearer 31a211c4-ea5c-4a49-b022-5e2434e758a7" \
+            http://localhost:5001/api/v1/getenvironments 2>/dev/null | grep -q 'Shuffle'; then
+            log "Shuffle backend is serving"; return 0
+        fi
+        sleep 10
+    done
+    log "WARNING: shuffle-backend not serving after 300s"
+}
+
+log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
+fix_misp_redis
+fix_misp
+fix_shuffle_backend
+wait_misp
+wait_shuffle
+log "done"

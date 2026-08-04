@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:17.358990Z
 updated_at: 2026-03-21T07:50:17.358990Z
 ---
 
-# RNG-003 — Snapshot/Restore for Mid-Scenario Checkpointing
+# RNG-003: Snapshot/Restore for Mid-Scenario Checkpointing
 
 ## Statement
 
@@ -21,4 +21,4 @@ SCN-005 captures range snapshots but only for metadata (versions, rules inventor
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#453` (RNG-003 — Snapshot/Restore for Mid-Scenario Checkpointing)
+- DOCUMENTS → GITHUB_ISSUE `#453` (RNG-003: Snapshot/Restore for Mid-Scenario Checkpointing)

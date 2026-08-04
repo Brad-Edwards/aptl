@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:36.167211Z
 updated_at: 2026-07-20T05:59:40.442552Z
 ---
 
-# OBS-002 — Experiment Correlation Identity and Clock Context
+# OBS-002: Experiment Correlation Identity and Clock Context
 
 ## Statement
 
@@ -21,7 +21,7 @@ Reliable action-to-observation linkage requires both identity and clock evidence
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#447` (OBS-002 — Experiment correlation identity and clock context)
+- DOCUMENTS → GITHUB_ISSUE `#447` (OBS-002: Experiment correlation identity and clock context)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/correlation/models.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/core/correlation/clock.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/core/correlation/identity.py`

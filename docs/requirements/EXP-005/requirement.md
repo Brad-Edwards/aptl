@@ -9,7 +9,7 @@ created_at: 2026-03-24T02:42:00.205125Z
 updated_at: 2026-07-27T15:37:03.190777Z
 ---
 
-# EXP-005 — Safe Experimental Parameter Binding and Provenance
+# EXP-005: Safe Experimental Parameter Binding and Provenance
 
 ## Statement
 
@@ -21,7 +21,7 @@ Parameterized experiments are essential, but prompt templating and provider beha
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#441` (EXP-005 — Safe experimental parameter binding and provenance)
+- DOCUMENTS → GITHUB_ISSUE `#441` (EXP-005: Safe experimental parameter binding and provenance)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/bindings.py` (Canonical experiment parameter binding)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/admission.py` (Experiment admission integration)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/admission_artifacts.py` (Admission participant manifest resolution)

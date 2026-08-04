@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:44.776757Z
 updated_at: 2026-03-20T06:18:11.648865Z
 ---
 
-# CLI-005 — Scenario Start/Stop/List Commands
+# CLI-005: Scenario Start/Stop/List Commands
 
 ## Statement
 

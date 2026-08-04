@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:50.020663Z
 updated_at: 2026-03-20T06:18:11.648886Z
 ---
 
-# CLI-006 — CLI/Core Separation for Reuse
+# CLI-006: CLI/Core Separation for Reuse
 
 ## Statement
 

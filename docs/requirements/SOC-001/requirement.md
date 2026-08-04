@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:37.711456Z
 updated_at: 2026-03-20T06:18:11.649144Z
 ---
 
-# SOC-001 — Suricata Network IDS
+# SOC-001: Suricata Network IDS
 
 ## Statement
 
@@ -30,6 +30,6 @@ Wazuh monitors host-level logs but is blind to network traffic. Suricata fills t
 - TESTS → TEST `tests/test_misp_suricata_sync.py` (MISP→Suricata sync service unit tests)
 - IMPLEMENTS → GITHUB_ISSUE `250` (Issue #250: MISP-to-Suricata IOC sync)
 - IMPLEMENTS → ADR `docs/adrs/adr-019-suricata-ids-only-prevention-via-wazuh-ar.md` (ADR-019: Suricata stays IDS-only; prevention via Wazuh AR)
-- IMPLEMENTS → GITHUB_ISSUE `247` (Issue #247: Switch Suricata to inline IPS — closed via ADR-019 (IDS-only retained))
+- IMPLEMENTS → GITHUB_ISSUE `247` (Issue #247: Switch Suricata to inline IPS: closed via ADR-019 (IDS-only retained))
 - IMPLEMENTS → DOCUMENTATION `docs/components/default-defensive-posture.md` (Default defensive posture: Suricata IDS section)
-- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251 — document default defensive posture)
+- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251: document default defensive posture)

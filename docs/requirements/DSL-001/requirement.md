@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:20.057307Z
 updated_at: 2026-05-19T05:11:45.570071Z
 ---
 
-# DSL-001 — Formal Scenario Specification Language
+# DSL-001: Formal Scenario Specification Language
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:51:57.272559Z
 updated_at: 2026-03-21T07:51:57.272559Z
 ---
 
-# INT-003 — MITRE ATLAS Coverage for AI Agent Attack Techniques
+# INT-003: MITRE ATLAS Coverage for AI Agent Attack Techniques
 
 ## Statement
 
@@ -21,4 +21,4 @@ ATLAS defines 14+ AI agent attack techniques not covered by ATT&CK. As APTL is i
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#493` (INT-003 — MITRE ATLAS Coverage for AI Agent Attack Techniques)
+- DOCUMENTS → GITHUB_ISSUE `#493` (INT-003: MITRE ATLAS Coverage for AI Agent Attack Techniques)

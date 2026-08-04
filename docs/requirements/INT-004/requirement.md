@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:00.878032Z
 updated_at: 2026-03-21T07:52:00.878032Z
 ---
 
-# INT-004 — STIX/TAXII Threat Intelligence Consumption
+# INT-004: STIX/TAXII Threat Intelligence Consumption
 
 ## Statement
 
@@ -21,4 +21,4 @@ MISP is deployed but STIX/TAXII integration enables consuming from any CTI sourc
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#494` (INT-004 — STIX/TAXII Threat Intelligence Consumption)
+- DOCUMENTS → GITHUB_ISSUE `#494` (INT-004: STIX/TAXII Threat Intelligence Consumption)

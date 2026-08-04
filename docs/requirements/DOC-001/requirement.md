@@ -9,7 +9,7 @@ created_at: 2026-06-11T15:09:12.689452Z
 updated_at: 2026-06-11T15:09:30.834369Z
 ---
 
-# DOC-001 — Accurate, Style-Linted, Published Documentation
+# DOC-001: Accurate, Style-Linted, Published Documentation
 
 ## Statement
 

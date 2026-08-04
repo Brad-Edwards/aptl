@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:09.322834Z
 updated_at: 2026-03-20T06:18:11.649332Z
 ---
 
-# ENT-003 — PostgreSQL Database with Sensitive Data
+# ENT-003: PostgreSQL Database with Sensitive Data
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:17.662104Z
 updated_at: 2026-03-20T06:18:11.649395Z
 ---
 
-# ENT-006 — Developer Linux Workstation
+# ENT-006: Developer Linux Workstation
 
 ## Statement
 

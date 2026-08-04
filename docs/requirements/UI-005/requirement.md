@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:54.875473Z
 updated_at: 2026-03-21T06:50:09.082290Z
 ---
 
-# UI-005 — SSE + WebSocket Real-Time Architecture
+# UI-005: SSE + WebSocket Real-Time Architecture
 
 ## Statement
 
@@ -17,7 +17,7 @@ The web UI shall use Server-Sent Events (SSE) for one-way streams (container sta
 
 ## Rationale
 
-SSE is simpler for the common one-way streaming case and handles reconnection gracefully. SIEM alert streaming and log tailing are removed — humans use Wazuh Dashboard for alert investigation and docker logs for tailing.
+SSE is simpler for the common one-way streaming case and handles reconnection gracefully. SIEM alert streaming and log tailing are removed; humans use Wazuh Dashboard for alert investigation and docker logs for tailing.
 
 ## Traceability
 

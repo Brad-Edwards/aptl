@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:40.743285Z
 updated_at: 2026-03-20T06:18:11.649166Z
 ---
 
-# SOC-002 — MISP Threat Intelligence Platform
+# SOC-002: MISP Threat Intelligence Platform
 
 ## Statement
 
@@ -30,4 +30,4 @@ Without threat intelligence, Wazuh alerts contain raw event data but no context.
 - TESTS → TEST `tests/test_misp_suricata_sync.py` (MISP→Suricata sync service unit tests)
 - IMPLEMENTS → GITHUB_ISSUE `250` (Issue #250: MISP-to-Suricata IOC sync)
 - IMPLEMENTS → DOCUMENTATION `docs/components/default-defensive-posture.md` (Default defensive posture: MISP IOCs section)
-- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251 — document default defensive posture)
+- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251: document default defensive posture)

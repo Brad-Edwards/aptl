@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:40.330915Z
 updated_at: 2026-03-20T06:18:11.648822Z
 ---
 
-# CLI-003 — Deterministic 12-Step Startup Sequence
+# CLI-003: Deterministic 12-Step Startup Sequence
 
 ## Statement
 

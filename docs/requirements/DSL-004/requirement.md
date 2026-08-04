@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:31.235076Z
 updated_at: 2026-03-21T07:52:31.235076Z
 ---
 
-# DSL-004 — Scenario Composition (Atomic to Campaigns)
+# DSL-004: Scenario Composition (Atomic to Campaigns)
 
 ## Statement
 
@@ -17,8 +17,8 @@ The scenario DSL shall support composition: combining atomic scenarios into camp
 
 ## Rationale
 
-Monolithic scenario files don't scale. Composition enables building complex campaigns from tested atomic units, sharing common patterns (e.g. initial access, lateral movement) across different exercises.
+Monolithic scenario files don't scale. Composition enables building complex campaigns from tested atomic units, sharing common patterns (for example, initial access, lateral movement) across different exercises.
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#433` (DSL-004 — Scenario Composition (Atomic to Campaigns))
+- DOCUMENTS → GITHUB_ISSUE `#433` (DSL-004: Scenario Composition (Atomic to Campaigns))

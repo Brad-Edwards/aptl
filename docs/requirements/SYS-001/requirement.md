@@ -9,11 +9,11 @@ created_at: 2026-03-20T06:05:22.525771Z
 updated_at: 2026-03-20T06:18:11.648196Z
 ---
 
-# SYS-001 — Platform Deployment and Lifecycle
+# SYS-001: Platform Deployment and Lifecycle
 
 ## Statement
 
-The system shall provide a self-contained, locally-deployable purple team lab environment that starts, stops, and manages its lifecycle without external cloud dependencies.
+The system shall provide a self-contained, locally deployable purple team lab environment that starts, stops, and manages its lifecycle without external cloud dependencies.
 
 ## Rationale
 

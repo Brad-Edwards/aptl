@@ -9,7 +9,7 @@ created_at: 2026-03-24T02:44:23.438740Z
 updated_at: 2026-06-25T01:41:02.775104Z
 ---
 
-# DSL-008 — APTL Realization of ACES Infrastructure Topology
+# DSL-008: APTL Realization of ACES Infrastructure Topology
 
 ## Statement
 
@@ -21,7 +21,7 @@ After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declara
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#422` (DSL-008 — Infrastructure Topology Declaration in Scenario DSL)
+- DOCUMENTS → GITHUB_ISSUE `#422` (DSL-008: Infrastructure Topology Declaration in Scenario DSL)
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/techvault_live_gate.py` (Live conformance gate: validate the running lab satisfies ACES declarations)
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/_live_gate_readiness.py` (Node-readiness / declared-health conformance comparison against the running range)
 - TESTS → TEST `tests/test_techvault_live_gate.py` (Tests for live conformance gate incl. declared-health readiness enforcement)

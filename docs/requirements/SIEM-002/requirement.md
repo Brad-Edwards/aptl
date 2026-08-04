@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:20.003858Z
 updated_at: 2026-03-20T06:18:11.649036Z
 ---
 
-# SIEM-002 — Network-Level Log Forwarding via Syslog
+# SIEM-002: Network-Level Log Forwarding via Syslog
 
 ## Statement
 

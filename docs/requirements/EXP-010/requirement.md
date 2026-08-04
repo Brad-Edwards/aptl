@@ -9,7 +9,7 @@ created_at: 2026-07-11T02:30:43.480323Z
 updated_at: 2026-07-20T22:36:07.446940Z
 ---
 
-# EXP-010 — Capture Plan Admission and Evidence Acquisition
+# EXP-010: Capture Plan Admission and Evidence Acquisition
 
 ## Statement
 
@@ -21,7 +21,7 @@ A research apparatus must know before a trial whether it can observe what the pr
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/aptl#752` (EXP-010 — Capture plan admission and evidence acquisition)
+- DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/aptl#752` (EXP-010: Capture plan admission and evidence acquisition)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/capture_registry.py` (Collector registry: deterministic capture-requirement match + observation projection)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/capture_mapping.py` (bind_capture_requirements: registry-backed fail-closed admission entry point)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/trial_plan.py` (Capture bindings pinned into the canonical trial-plan bytes (schema v2))
@@ -39,7 +39,7 @@ A research apparatus must know before a trial whether it can observe what the pr
 - IMPLEMENTS → CODE_FILE `src/aptl/core/evidence/_persist.py` (Per-outcome persistence: media check, structured redaction, limit enforcement, evidence ledger)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/evidence/protocol.py` (Narrow Collector protocol + immutable CollectorContext/RunScope (no controller/store/paths))
 - IMPLEMENTS → CODE_FILE `src/aptl/core/evidence/adapters/sources.py` (Windowed-query collector framework distinguishing source failure from legitimate emptiness)
-- IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/capture_registrations.py` (The 5 trusted built-in collector registrations — turns manifest observation on)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/experiment/capture_registrations.py` (The 5 trusted built-in collector registrations: turns manifest observation on)
 - IMPLEMENTS → PULL_REQUEST `Brad-Edwards/aptl#811` (EXP-010 PR 2 of 2: evidence acquisition)
 - TESTS → TEST `tests/test_evidence_coordinator.py` (Coordinator: terminal dispositions, reverse-order stop, limit enforcement, key scoping, trial-body lifecycle)
 - TESTS → TEST `tests/test_evidence_records.py` (Evidence records: identity determinism + ACES conformance round-trip + loss disclosure)

@@ -9,11 +9,11 @@ created_at: 2026-03-20T06:09:16.688302Z
 updated_at: 2026-03-20T06:18:11.648633Z
 ---
 
-# NET-001 — Four Docker Bridge Networks
+# NET-001: Four Docker Bridge Networks
 
 ## Statement
 
-The system shall define four Docker bridge networks: Security (172.20.0.0/24) for SOC tools, DMZ (172.20.1.0/24) for externally-reachable services, Internal (172.20.2.0/24) for enterprise services, and Red Team (172.20.4.0/24) for the attack platform.
+The system shall define four Docker bridge networks: Security (172.20.0.0/24) for SOC tools, DMZ (172.20.1.0/24) for externally reachable services, Internal (172.20.2.0/24) for enterprise services, and Red Team (172.20.4.0/24) for the attack platform.
 
 ## Rationale
 

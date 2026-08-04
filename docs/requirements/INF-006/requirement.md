@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:07.001355Z
 updated_at: 2026-03-20T06:18:11.648589Z
 ---
 
-# INF-006 — Environment-Based Credential Management
+# INF-006: Environment-Based Credential Management
 
 ## Statement
 

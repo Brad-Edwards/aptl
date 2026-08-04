@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:43.754595Z
 updated_at: 2026-03-20T06:18:11.649195Z
 ---
 
-# SOC-003 — TheHive Case Management
+# SOC-003: TheHive Case Management
 
 ## Statement
 

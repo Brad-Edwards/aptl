@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:43.180827Z
 updated_at: 2026-03-21T06:19:18.012426Z
 ---
 
-# UI-001 — Interactive Scenario Workbench View
+# UI-001: Interactive Scenario Workbench View
 
 ## Statement
 
@@ -28,5 +28,5 @@ The workbench replaces the multi-window terminal workflow.
 - IMPLEMENTS → GITHUB_ISSUE `223` (UI-001: Interactive Scenario Workbench View)
 - IMPLEMENTS → CODE_FILE `web/src/lib/components/workbench/` (Workbench block components (9 components))
 - IMPLEMENTS → CODE_FILE `web/src/lib/markdown.ts` (Markdown renderer (marked + DOMPurify))
-- IMPLEMENTS → CODE_FILE `src/aptl/api/scenario_projection.py` (Workbench block projection (build_workbench_blocks) — moved backend from web buildBlockSequence)
+- IMPLEMENTS → CODE_FILE `src/aptl/api/scenario_projection.py` (Workbench block projection (build_workbench_blocks): moved backend from web buildBlockSequence)
 - TESTS → TEST `tests/test_scenario_detail.py` (Workbench block projection tests (replaces web buildBlockSequence tests))

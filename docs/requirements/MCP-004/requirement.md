@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:02.801120Z
 updated_at: 2026-03-20T06:18:11.649629Z
 ---
 
-# MCP-004 — SSH MCP Servers for Container Access
+# MCP-004: SSH MCP Servers for Container Access
 
 ## Statement
 

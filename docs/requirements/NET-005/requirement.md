@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:30.552320Z
 updated_at: 2026-03-20T06:18:11.648754Z
 ---
 
-# NET-005 — Zone Isolation via Multi-Homing Only
+# NET-005: Zone Isolation via Multi-Homing Only
 
 ## Statement
 

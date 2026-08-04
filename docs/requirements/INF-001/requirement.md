@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:08:50.601173Z
 updated_at: 2026-03-20T06:18:11.648478Z
 ---
 
-# INF-001 — Docker Compose Declarative Deployment
+# INF-001: Docker Compose Declarative Deployment
 
 ## Statement
 

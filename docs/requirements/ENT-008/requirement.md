@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:22.991248Z
 updated_at: 2026-03-20T06:18:11.649437Z
 ---
 
-# ENT-008 — Docker-Mailserver Email Service
+# ENT-008: Docker-Mailserver Email Service
 
 ## Statement
 

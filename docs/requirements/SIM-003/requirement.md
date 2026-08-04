@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:21.665922Z
 updated_at: 2026-03-21T07:53:21.665922Z
 ---
 
-# SIM-003 — Abstract Simulation Model
+# SIM-003: Abstract Simulation Model
 
 ## Statement
 
@@ -21,4 +21,4 @@ Full emulation is slow (CyGIL training took days for small networks). CyberBattl
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#486` (SIM-003 — Abstract Simulation Model)
+- DOCUMENTS → GITHUB_ISSUE `#486` (SIM-003: Abstract Simulation Model)

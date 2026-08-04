@@ -9,11 +9,11 @@ created_at: 2026-03-21T07:53:40.464228Z
 updated_at: 2026-03-22T04:01:17.309848Z
 ---
 
-# DEP-001 — Cloud-Native Deployment Abstraction
+# DEP-001: Cloud-Native Deployment Abstraction
 
 ## Statement
 
-The platform shall provide a deployment abstraction layer enabling deployment beyond a single Docker host — supporting container orchestration, cloud VMs, or hybrid models — without requiring changes to scenario definitions or MCP server configurations.
+The platform shall provide a deployment abstraction layer enabling deployment beyond a single Docker host (supporting container orchestration, cloud VMs, or hybrid models) without requiring changes to scenario definitions or MCP server configurations.
 
 ## Rationale
 

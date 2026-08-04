@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:59.691468Z
 updated_at: 2026-03-20T06:18:11.649608Z
 ---
 
-# MCP-003 — Stateful SSH Sessions with Command Queuing
+# MCP-003: Stateful SSH Sessions with Command Queuing
 
 ## Statement
 

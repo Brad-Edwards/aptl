@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:23.625763Z
 updated_at: 2026-05-19T05:13:24.200961Z
 ---
 
-# DSL-002 — Control Flow Primitives in Scenario DSL
+# DSL-002: Control Flow Primitives in Scenario DSL
 
 ## Statement
 

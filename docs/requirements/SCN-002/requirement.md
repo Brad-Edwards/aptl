@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:17.729530Z
 updated_at: 2026-03-20T06:18:11.649715Z
 ---
 
-# SCN-002 — MITRE ATT&CK Technique Mapping
+# SCN-002: MITRE ATT&CK Technique Mapping
 
 ## Statement
 

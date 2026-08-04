@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:05.021257Z
 updated_at: 2026-03-21T07:53:05.021257Z
 ---
 
-# REP-005 — Environment Seeding (Pre-Planted Artifacts)
+# REP-005: Environment Seeding (Pre-Planted Artifacts)
 
 ## Statement
 
@@ -21,4 +21,4 @@ ENT-009 describes static misconfigurations baked into containers. Declarative se
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#479` (REP-005 — Environment Seeding (Pre-Planted Artifacts))
+- DOCUMENTS → GITHUB_ISSUE `#479` (REP-005: Environment Seeding (Pre-Planted Artifacts))

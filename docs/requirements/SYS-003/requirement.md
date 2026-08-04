@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:29.691371Z
 updated_at: 2026-03-20T06:18:11.648274Z
 ---
 
-# SYS-003 — TechVault Enterprise Target Infrastructure
+# SYS-003: TechVault Enterprise Target Infrastructure
 
 ## Statement
 

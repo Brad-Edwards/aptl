@@ -9,7 +9,7 @@ created_at: 2026-07-25T22:39:26.836288Z
 updated_at: 2026-07-26T00:06:36.824860Z
 ---
 
-# APP-2 — Versioned participant profile conformance
+# APP-2: Versioned participant profile conformance
 
 ## Statement
 

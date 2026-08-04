@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:12.887986Z
 updated_at: 2026-03-20T06:18:11.648994Z
 ---
 
-# SEC-005 — .env Credential Isolation from Version Control
+# SEC-005: .env Credential Isolation from Version Control
 
 ## Statement
 

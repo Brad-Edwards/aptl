@@ -9,7 +9,7 @@ created_at: 2026-07-11T02:30:43.593978Z
 updated_at: 2026-07-11T02:30:43.593978Z
 ---
 
-# EXP-011 — Apparatus Readiness and Validity Gate
+# EXP-011: Apparatus Readiness and Validity Gate
 
 ## Statement
 
@@ -21,4 +21,4 @@ Cyber-range configuration and measurement health affect validity. A self-test an
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/aptl#753` (EXP-011 — Apparatus readiness and validity gate)
+- DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/aptl#753` (EXP-011: Apparatus readiness and validity gate)

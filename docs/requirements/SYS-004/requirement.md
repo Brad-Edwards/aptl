@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:32.723808Z
 updated_at: 2026-03-20T06:18:11.648299Z
 ---
 
-# SYS-004 — Red Team Attack Platform
+# SYS-004: Red Team Attack Platform
 
 ## Statement
 

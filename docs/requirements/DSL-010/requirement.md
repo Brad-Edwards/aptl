@@ -9,7 +9,7 @@ created_at: 2026-06-25T05:25:22.533709Z
 updated_at: 2026-07-15T05:35:45.871777Z
 ---
 
-# DSL-010 — APTL ParticipantRuntime: live-action conformance for reference emulation backend
+# DSL-010: APTL ParticipantRuntime: live-action conformance for reference emulation backend
 
 ## Statement
 
@@ -29,9 +29,9 @@ Extends DSL-008. APTL on origin/main already realizes ACES SDL onto real Docker 
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/techvault_gate.py` (TechVault static gate orchestrator (participant runtime))
 - IMPLEMENTS → CODE_FILE `src/aptl/validation/techvault_live_gate.py` (TechVault live gate orchestrator (participant runtime))
 - TESTS → TEST `tests/test_curated_live_proof.py` (Curated live proof driver tests)
-- TESTS → TEST `tests/test_techvault_live_gate.py` (TechVault live gate tests — participant runtime)
-- TESTS → TEST `tests/test_techvault_static_gate.py` (TechVault static gate tests — participant runtime)
-- IMPLEMENTS → GITHUB_ISSUE `554` (DSL-010 — APTL ParticipantRuntime: live-action conformance for reference emulation backend (RUN-314))
+- TESTS → TEST `tests/test_techvault_live_gate.py` (TechVault live gate tests: participant runtime)
+- TESTS → TEST `tests/test_techvault_static_gate.py` (TechVault static gate tests: participant runtime)
+- IMPLEMENTS → GITHUB_ISSUE `554` (DSL-010: APTL ParticipantRuntime: live-action conformance for reference emulation backend (RUN-314))
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_manifest.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_participant_actions.py`

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:15.338215Z
 updated_at: 2026-03-20T06:18:11.649374Z
 ---
 
-# ENT-005 — Rocky Linux Victim Server
+# ENT-005: Rocky Linux Victim Server
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:54:04.079705Z
 updated_at: 2026-07-11T02:30:30.167645Z
 ---
 
-# DEP-007 — Experiment Resource Budgets and Enforcement
+# DEP-007: Experiment Resource Budgets and Enforcement
 
 ## Statement
 
@@ -21,4 +21,4 @@ A single-user instrument still needs bounded unattended execution. Generic enfor
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#469` (DEP-007 — Experiment resource budgets and enforcement)
+- DOCUMENTS → GITHUB_ISSUE `#469` (DEP-007: Experiment resource budgets and enforcement)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:31.195451Z
 updated_at: 2026-03-20T06:18:11.649805Z
 ---
 
-# SCN-006 — Run Archive Packaging and S3 Export
+# SCN-006: Run Archive Packaging and S3 Export
 
 ## Statement
 

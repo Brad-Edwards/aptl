@@ -9,11 +9,11 @@ created_at: 2026-03-21T03:56:18.575009Z
 updated_at: 2026-03-21T03:57:22.319321Z
 ---
 
-# INF-010 — Declarative Range Definition
+# INF-010: Declarative Range Definition
 
 ## Statement
 
-The system shall provide a single declarative range definition that describes the containers in a lab topology — including their names, network addresses, exposed services, SSH access parameters, and roles. All components that need to know about containers (orchestration, terminal access, snapshots, UI, health checks) shall derive their behavior from this definition rather than maintaining independent hardcoded maps.
+The system shall provide a single declarative range definition that describes the containers in a lab topology, including their names, network addresses, exposed services, SSH access parameters, and roles. All components that need to know about containers (orchestration, terminal access, snapshots, UI, health checks) shall derive their behavior from this definition rather than maintaining independent hardcoded maps.
 
 ## Rationale
 
@@ -21,4 +21,4 @@ Container SSH parameters, port mappings, and service endpoints are currently dup
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#500` (INF-010 — Declarative Range Definition)
+- DOCUMENTS → GITHUB_ISSUE `#500` (INF-010: Declarative Range Definition)

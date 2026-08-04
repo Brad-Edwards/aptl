@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:51.226199Z
 updated_at: 2026-03-20T06:18:11.649566Z
 ---
 
-# MCP-001 — Shared MCP Server Library
+# MCP-001: Shared MCP Server Library
 
 ## Statement
 

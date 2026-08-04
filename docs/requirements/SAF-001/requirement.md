@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:49.548287Z
 updated_at: 2026-03-22T01:30:23.591877Z
 ---
 
-# SAF-001 — Kill Switch for All Agent and MCP Operations
+# SAF-001: Kill Switch for All Agent and MCP Operations
 
 ## Statement
 

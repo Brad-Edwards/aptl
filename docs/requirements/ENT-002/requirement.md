@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:05.880770Z
 updated_at: 2026-03-20T06:18:11.649310Z
 ---
 
-# ENT-002 — Samba Active Directory Domain Controller
+# ENT-002: Samba Active Directory Domain Controller
 
 ## Statement
 

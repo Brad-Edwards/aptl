@@ -9,7 +9,7 @@ created_at: 2026-07-25T20:27:41.068600Z
 updated_at: 2026-07-26T01:35:18.580567Z
 ---
 
-# APP-1 — Scenario-independent appliance boundary materialization
+# APP-1: Scenario-independent appliance boundary materialization
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:02.367863Z
 updated_at: 2026-03-20T06:18:11.649290Z
 ---
 
-# ENT-001 — Flask Web Application with OWASP Vulnerabilities
+# ENT-001: Flask Web Application with OWASP Vulnerabilities
 
 ## Statement
 

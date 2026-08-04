@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:32.168003Z
 updated_at: 2026-03-22T00:06:14.737359Z
 ---
 
-# OBS-001-DUP-1 — OpenTelemetry Integration
+# OBS-001-DUP-1: OpenTelemetry Integration
 
 ## Statement
 

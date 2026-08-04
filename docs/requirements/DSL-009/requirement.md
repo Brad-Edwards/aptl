@@ -9,11 +9,11 @@ created_at: 2026-03-31T02:56:37.902697Z
 updated_at: 2026-03-31T02:56:37.902697Z
 ---
 
-# DSL-009 — Simulated User Behavior Profiles in SDL
+# DSL-009: Simulated User Behavior Profiles in SDL
 
 ## Statement
 
-The SDL shall provide a way to declare normal user activity patterns — browsing, email, login schedules, file access, and other baseline traffic — so that scenario authors can specify what realistic background behavior looks like alongside adversarial and defensive activity.
+The SDL shall provide a way to declare normal user activity patterns (browsing, email, login schedules, file access, and other baseline traffic) so that scenario authors can specify what realistic background behavior looks like alongside adversarial and defensive activity.
 
 ## Rationale
 
@@ -21,4 +21,4 @@ The SDL currently has no first-class mechanism for user simulation. Injects mode
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#436` (DSL-009 — Simulated User Behavior Profiles in SDL)
+- DOCUMENTS → GITHUB_ISSUE `#436` (DSL-009: Simulated User Behavior Profiles in SDL)

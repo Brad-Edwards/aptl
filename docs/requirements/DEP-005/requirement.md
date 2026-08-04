@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:54.736473Z
 updated_at: 2026-03-21T07:53:54.736473Z
 ---
 
-# DEP-005 — Federation Support
+# DEP-005: Federation Support
 
 ## Statement
 
@@ -21,4 +21,4 @@ NATO Locked Shields federates 40+ countries' ranges. Springer 2026 research iden
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#490` (DEP-005 — Federation Support)
+- DOCUMENTS → GITHUB_ISSUE `#490` (DEP-005: Federation Support)

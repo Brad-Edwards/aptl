@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:43.004884Z
 updated_at: 2026-03-21T07:49:43.004884Z
 ---
 
-# DET-002 — Closed-Loop Detection Rule Auto-Generation
+# DET-002: Closed-Loop Detection Rule Auto-Generation
 
 ## Statement
 
@@ -21,4 +21,4 @@ CTEM requires closed-loop: attack → check detection → generate rule for gap 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#431` (DET-002 — Closed-Loop Detection Rule Auto-Generation)
+- DOCUMENTS → GITHUB_ISSUE `#431` (DET-002: Closed-Loop Detection Rule Auto-Generation)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:49.871180Z
 updated_at: 2026-03-20T06:18:11.649243Z
 ---
 
-# SOC-005 — Shuffle SOAR with Pre-Built Playbooks
+# SOC-005: Shuffle SOAR with Pre-Built Playbooks
 
 ## Statement
 

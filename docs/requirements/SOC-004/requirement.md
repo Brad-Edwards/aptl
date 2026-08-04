@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:46.140823Z
 updated_at: 2026-03-20T06:18:11.649219Z
 ---
 
-# SOC-004 — Cortex Enrichment Engine
+# SOC-004: Cortex Enrichment Engine
 
 ## Statement
 

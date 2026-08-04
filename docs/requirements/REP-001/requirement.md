@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:48.239319Z
 updated_at: 2026-06-25T16:18:21.506620Z
 ---
 
-# REP-001 — ACES-Aligned Run Reproducibility Record
+# REP-001: ACES-Aligned Run Reproducibility Record
 
 ## Statement
 
@@ -21,13 +21,13 @@ The TechVault cutover moved scenario and experiment meaning to ACES. Reproducibi
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#423` (REP-001 — Experiment Manifest for Reproducibility)
-- IMPLEMENTS → CODE_FILE `src/aptl/core/lab.py` (Lab lifecycle — triggers repro record capture on run start/stop)
-- IMPLEMENTS → CODE_FILE `src/aptl/core/snapshot.py` (Snapshot capture — provides scenario snapshot identity for repro record)
-- TESTS → TEST `tests/test_lab.py` (Lab lifecycle tests — covers repro record capture invocation paths)
-- TESTS → TEST `tests/test_runstore.py` (Run store tests — covers run archive/storage that backs repro record persistence)
-- TESTS → TEST `tests/test_snapshot.py` (Snapshot tests — covers snapshot identity fields consumed by repro record)
-- IMPLEMENTS → GITHUB_ISSUE `423` (Issue #423: REP-001 — ACES-aligned run reproducibility record)
+- DOCUMENTS → GITHUB_ISSUE `#423` (REP-001: Experiment Manifest for Reproducibility)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/lab.py` (Lab lifecycle: triggers repro record capture on run start/stop)
+- IMPLEMENTS → CODE_FILE `src/aptl/core/snapshot.py` (Snapshot capture: provides scenario snapshot identity for repro record)
+- TESTS → TEST `tests/test_lab.py` (Lab lifecycle tests: covers repro record capture invocation paths)
+- TESTS → TEST `tests/test_runstore.py` (Run store tests: covers run archive/storage that backs repro record persistence)
+- TESTS → TEST `tests/test_snapshot.py` (Snapshot tests: covers snapshot identity fields consumed by repro record)
+- IMPLEMENTS → GITHUB_ISSUE `423` (Issue #423: REP-001: ACES-aligned run reproducibility record)
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes_repro.py`
 - IMPLEMENTS → CODE_FILE `src/aptl/backends/raes.py`
 - IMPLEMENTS → ADR `docs/adrs/adr-044-raes-aligned-run-reproducibility-record.md`

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:12.614043Z
 updated_at: 2026-03-20T06:18:11.649352Z
 ---
 
-# ENT-004 — SMB File Server with Open Shares
+# ENT-004: SMB File Server with Open Shares
 
 ## Statement
 

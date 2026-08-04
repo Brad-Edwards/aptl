@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:38.812913Z
 updated_at: 2026-05-17T22:16:20.764656Z
 ---
 
-# OBS-003 — Agent Reasoning Traces
+# OBS-003: Agent Reasoning Traces
 
 ## Statement
 
@@ -22,12 +22,12 @@ Current tracing records tool invocations but not the reasoning behind them. Unde
 ## Traceability
 
 - IMPLEMENTS → GITHUB_ISSUE `228` (OBS-003: Agent Reasoning Traces)
-- TESTS → TEST `tests/test_consistency.py` (TestKaliContainerLifecycle — default-run consistency checks that the kali service sets init: true and the healthcheck is not the bare port-22 probe)
+- TESTS → TEST `tests/test_consistency.py` (TestKaliContainerLifecycle: default-run consistency checks that the kali service sets init: true and the healthcheck is not the bare port-22 probe)
 - DOCUMENTS → GITHUB_ISSUE `304` (Await remote SSH channel close in PersistentSession.close before harvest)
 - DOCUMENTS → GITHUB_ISSUE `305` (Privileged capture writer: take Kali captures out of the kali user's reach)
 - TESTS → TEST `mcp/aptl-mcp-common/tests/runs.test.ts` (Per-run dir helpers + createPtyTeeWriter + writer.flush drain)
 - IMPLEMENTS → ADR `docs/adrs/adr-033-agent-reasoning-trace-boundary.md` (ADR-033: Red-Side Behavioural Capture and Non-Contamination Boundary)
-- IMPLEMENTS → ADR `docs/adrs/adr-027-red-team-structured-logging.md` (ADR-027 (amended): Red Team Structured Logging Boundary — SIEM transport superseded by ADR-033)
+- IMPLEMENTS → ADR `docs/adrs/adr-027-red-team-structured-logging.md` (ADR-027 (amended): Red Team Structured Logging Boundary: SIEM transport superseded by ADR-033)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/runstore.py` (Session-scoped subdirectory helpers + resolve_active_run_dir)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/session.py` (Writes/clears trace-context.json on scenario lifecycle)
 - IMPLEMENTS → CODE_FILE `src/aptl/utils/redaction.py` (Scoped APTL_EXPERIMENT_NO_REDACT accessor + impacket -hashes redaction)
@@ -52,9 +52,9 @@ Current tracing records tool invocations but not the reasoning behind them. Unde
 - TESTS → TEST `mcp/aptl-mcp-common/tests/tools-handlers.test.ts` (assertSessionIdContract rejection across handlers + close_session/close_all_sessions envelope)
 - TESTS → TEST `mcp/mcp-red/tests/capture.test.ts` (Per-run tool-call JSONL routing + result-content content-equality + experimentalRedact)
 - TESTS → TEST `mcp/mcp-red/tests/logger.test.ts` (localOcsfJsonlSink + defaultRedTeamSinks + sink-error return-value contract)
-- IMPLEMENTS → CODE_FILE `containers/kali-capture/writer.py` (Kali capture sidecar writer daemon — connection-owned per-session typescript + tcpdump, abstract-socket RPC (ADR-041))
-- IMPLEMENTS → CODE_FILE `containers/kali/scripts/aptl-capture-client` (Kali-side capture RPC client — ping gate + single connection-owned transcript stream to the sidecar (ADR-041))
-- TESTS → TEST `tests/test_kali_capture_writer.py` (Unit tests for the capture sidecar writer — id/frame validation, connection ownership, reopen-refuse, pcap lifecycle)
-- TESTS → TEST `tests/test_kali_capture_compose.py` (Compose-consistency tests for the ADR-041 boundary — no kali mount, sidecar caps/namespaces/ports)
+- IMPLEMENTS → CODE_FILE `containers/kali-capture/writer.py` (Kali capture sidecar writer daemon: connection-owned per-session typescript + tcpdump, abstract-socket RPC (ADR-041))
+- IMPLEMENTS → CODE_FILE `containers/kali/scripts/aptl-capture-client` (Kali-side capture RPC client: ping gate + single connection-owned transcript stream to the sidecar (ADR-041))
+- TESTS → TEST `tests/test_kali_capture_writer.py` (Unit tests for the capture sidecar writer: id/frame validation, connection ownership, reopen-refuse, pcap lifecycle)
+- TESTS → TEST `tests/test_kali_capture_compose.py` (Compose-consistency tests for the ADR-041 boundary: no kali mount, sidecar caps/namespaces/ports)
 - IMPLEMENTS → CODE_FILE `mcp/aptl-mcp-common/src/ssh-session.ts` (Continuous PTY tee + SendEnv APTL_* + boundRunId in PersistentSession (split from ssh.ts, issue #790))
 - IMPLEMENTS → CODE_FILE `scenarios/techvault-operational.sdl.yaml` (kali node runtime: capsh CAP_AUDIT_CONTROL drop + AcceptEnv/ForceCommand capture-wrapper bootstrap (containers/kali Dockerfile/entrypoint/healthcheck retired, issue #581))

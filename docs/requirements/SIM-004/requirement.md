@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:25.174643Z
 updated_at: 2026-07-11T02:30:30.746064Z
 ---
 
-# SIM-004 — Campaign Pause, Resume, and Controlled Re-execution
+# SIM-004: Campaign Pause, Resume, and Controlled Re-execution
 
 ## Statement
 
@@ -21,4 +21,4 @@ Campaign-level control and auditable re-execution are achievable and useful. Con
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#499` (SIM-004 — Campaign pause, resume, and controlled re-execution)
+- DOCUMENTS → GITHUB_ISSUE `#499` (SIM-004: Campaign pause, resume, and controlled re-execution)

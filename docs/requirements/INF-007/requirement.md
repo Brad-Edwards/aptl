@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:09.921003Z
 updated_at: 2026-03-20T06:18:11.648611Z
 ---
 
-# INF-007 — Pre-Flight System Requirements Check
+# INF-007: Pre-Flight System Requirements Check
 
 ## Statement
 

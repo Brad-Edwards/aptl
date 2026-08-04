@@ -9,7 +9,7 @@ created_at: 2026-07-26T01:55:57.080310Z
 updated_at: 2026-07-26T04:44:22.303558Z
 ---
 
-# APP-3 — Signed disposable appliance release envelope
+# APP-3: Signed disposable appliance release envelope
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:43.388542Z
 updated_at: 2026-03-21T07:52:43.388542Z
 ---
 
-# DSL-007 — Cleanup and Rollback Definitions in Scenarios
+# DSL-007: Cleanup and Rollback Definitions in Scenarios
 
 ## Statement
 
@@ -21,4 +21,4 @@ Without cleanup definitions, environments must be fully rebuilt between runs. At
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#435` (DSL-007 — Cleanup and Rollback Definitions in Scenarios)
+- DOCUMENTS → GITHUB_ISSUE `#435` (DSL-007: Cleanup and Rollback Definitions in Scenarios)

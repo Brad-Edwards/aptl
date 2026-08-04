@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:06.719135Z
 updated_at: 2026-03-20T06:18:11.648929Z
 ---
 
-# SEC-002 — Python Test Suite (587+ Tests)
+# SEC-002: Python Test Suite (587+ Tests)
 
 ## Statement
 

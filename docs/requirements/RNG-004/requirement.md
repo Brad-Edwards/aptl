@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:20.970774Z
 updated_at: 2026-03-21T07:50:20.970774Z
 ---
 
-# RNG-004 — Multi-Domain AD Forest Topologies
+# RNG-004: Multi-Domain AD Forest Topologies
 
 ## Statement
 
@@ -21,4 +21,4 @@ ENT-002 provides a single domain (TECHVAULT.LOCAL). Real enterprises use forests
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#497` (RNG-004 — Multi-Domain AD Forest Topologies)
+- DOCUMENTS → GITHUB_ISSUE `#497` (RNG-004: Multi-Domain AD Forest Topologies)

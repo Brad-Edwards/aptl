@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:24.962267Z
 updated_at: 2026-03-20T06:18:11.649759Z
 ---
 
-# SCN-004 — Automated SOC Tool Data Collectors
+# SCN-004: Automated SOC Tool Data Collectors
 
 ## Statement
 

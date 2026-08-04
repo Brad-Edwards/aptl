@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:46.382430Z
 updated_at: 2026-03-20T07:02:02.190281Z
 ---
 
-# UI-002 — Minimal Lab Home Landing Page
+# UI-002: Minimal Lab Home Landing Page
 
 ## Statement
 

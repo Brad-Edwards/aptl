@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:13.382989Z
 updated_at: 2026-03-21T07:50:13.382989Z
 ---
 
-# RNG-002 — Multi-Node and Cloud Deployment
+# RNG-002: Multi-Node and Cloud Deployment
 
 ## Statement
 
@@ -21,4 +21,4 @@ Single-host deployment limits scenario complexity, concurrent user count, and pr
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#480` (RNG-002 — Multi-Node and Cloud Deployment)
+- DOCUMENTS → GITHUB_ISSUE `#480` (RNG-002: Multi-Node and Cloud Deployment)

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:39.348426Z
 updated_at: 2026-03-21T07:52:39.348426Z
 ---
 
-# DSL-006 — CACAO and Attack Flow Alignment
+# DSL-006: CACAO and Attack Flow Alignment
 
 ## Statement
 
@@ -21,4 +21,4 @@ Proprietary formats create ecosystem lock-in. CACAO v2.0 is the ratified OASIS s
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#471` (DSL-006 — CACAO and Attack Flow Alignment)
+- DOCUMENTS → GITHUB_ISSUE `#471` (DSL-006: CACAO and Attack Flow Alignment)

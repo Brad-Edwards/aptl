@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:23.648268Z
 updated_at: 2026-03-20T06:18:11.649058Z
 ---
 
-# SIEM-003 — OpenSearch-Based Alert Storage and Query
+# SIEM-003: OpenSearch-Based Alert Storage and Query
 
 ## Statement
 

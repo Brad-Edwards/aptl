@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:41.912584Z
 updated_at: 2026-03-21T07:50:41.912584Z
 ---
 
-# OBS-004 — Real-Time Observability Dashboard During Scenarios
+# OBS-004: Real-Time Observability Dashboard During Scenarios
 
 ## Statement
 
@@ -21,4 +21,4 @@ Currently all analysis is post-hoc. Operators need real-time visibility into wha
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#475` (OBS-004 — Real-Time Observability Dashboard During Scenarios)
+- DOCUMENTS → GITHUB_ISSUE `#475` (OBS-004: Real-Time Observability Dashboard During Scenarios)

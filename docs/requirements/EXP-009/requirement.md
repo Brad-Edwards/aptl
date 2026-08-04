@@ -9,7 +9,7 @@ created_at: 2026-03-24T03:20:03.458480Z
 updated_at: 2026-07-29T00:16:58.337413Z
 ---
 
-# EXP-009 — ACES Archival Run and Evidence Record Production
+# EXP-009: ACES Archival Run and Evidence Record Production
 
 ## Statement
 
@@ -21,7 +21,7 @@ The principal output of a scientific instrument is trustworthy evidence with dur
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#444` (EXP-009 — ACES archival run and evidence record production)
+- DOCUMENTS → GITHUB_ISSUE `#444` (EXP-009: ACES archival run and evidence record production)
 - IMPLEMENTS → CODE_FILE `src/aptl/core/archival/coordinator.py` (Terminal-attempt archive coordinator (compose + validate + atomic seal, exactly once))
 - IMPLEMENTS → CODE_FILE `src/aptl/core/archival/run_record.py` (Public RAES experiment-run/v1 composition + cross-artifact validation (the seal gate))
 - IMPLEMENTS → CODE_FILE `src/aptl/core/archival/seal.py` (Atomic seal marker + closed inventory + byte/RAES-artifact identity join)

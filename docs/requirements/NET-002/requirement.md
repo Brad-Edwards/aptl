@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:20.578789Z
 updated_at: 2026-03-20T06:18:11.648655Z
 ---
 
-# NET-002 — Static IP Addresses for All Containers
+# NET-002: Static IP Addresses for All Containers
 
 ## Statement
 

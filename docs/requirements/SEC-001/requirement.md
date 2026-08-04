@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:59.029893Z
 updated_at: 2026-03-20T06:18:11.648907Z
 ---
 
-# SEC-001 — SonarCloud Integration
+# SEC-001: SonarCloud Integration
 
 ## Statement
 

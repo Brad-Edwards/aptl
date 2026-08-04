@@ -9,7 +9,7 @@ created_at: 2026-05-03T04:29:19.070721Z
 updated_at: 2026-05-03T06:31:43.762340Z
 ---
 
-# CLI-007 — Configuration Inspection Command
+# CLI-007: Configuration Inspection Command
 
 ## Statement
 
@@ -17,11 +17,11 @@ The CLI shall provide an `aptl config show` command that pretty-prints the resol
 
 ## Rationale
 
-CLI-002 covers configuration *validation* but not inspection. Users currently have no way to see the resolved configuration the CLI will use — including defaulted fields — without reading the source. UAT smoke testing (issue #138) flagged `aptl config show` as a stubbed command with no requirement backing it. SYS-006 (Python CLI Control Plane) lists "configuration" as a CLI responsibility but does not mandate a specific show subcommand. Splitting `config show` from CLI-002 keeps the validation requirement focused on its single concern and aligns the CLI subcommand surface with explicit requirements.
+CLI-002 covers configuration *validation* but not inspection. Users currently have no way to see the resolved configuration the CLI will use (including defaulted fields) without reading the source. UAT smoke testing (issue #138) flagged `aptl config show` as a stubbed command with no requirement backing it. SYS-006 (Python CLI Control Plane) lists "configuration" as a CLI responsibility but does not mandate a specific show subcommand. Splitting `config show` from CLI-002 keeps the validation requirement focused on its single concern and aligns the CLI subcommand surface with explicit requirements.
 
 ## Traceability
 
 - IMPLEMENTS → CODE_FILE `src/aptl/cli/config.py` (aptl config show command)
 - IMPLEMENTS → CODE_FILE `src/aptl/cli/_common.py` (resolve_config_for_cli helper)
 - TESTS → TEST `tests/test_cli_config.py` (CLI config validate/show tests)
-- IMPLEMENTS → GITHUB_ISSUE `138` (Issue 138 — implement stubbed CLI commands)
+- IMPLEMENTS → GITHUB_ISSUE `138` (Issue 138: implement stubbed CLI commands)

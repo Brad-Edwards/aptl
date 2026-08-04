@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:26.342040Z
 updated_at: 2026-03-20T06:18:11.649080Z
 ---
 
-# SIEM-004 — Web-Based SIEM Dashboard
+# SIEM-004: Web-Based SIEM Dashboard
 
 ## Statement
 

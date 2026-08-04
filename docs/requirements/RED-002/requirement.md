@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:34.461380Z
 updated_at: 2026-03-20T06:18:11.649503Z
 ---
 
-# RED-002 — Kali Multi-Network Access
+# RED-002: Kali Multi-Network Access
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-24T02:42:00.083510Z
 updated_at: 2026-07-11T02:30:29.959282Z
 ---
 
-# EXP-004 — Provider-Neutral Participant and Resource Usage Metering
+# EXP-004: Provider-Neutral Participant and Resource Usage Metering
 
 ## Statement
 
@@ -21,4 +21,4 @@ Resource and participant usage are relevant apparatus observations, but provider
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#440` (EXP-004 — Provider-neutral participant and resource usage metering)
+- DOCUMENTS → GITHUB_ISSUE `#440` (EXP-004: Provider-neutral participant and resource usage metering)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:49.163849Z
 updated_at: 2026-03-21T03:52:23.815068Z
 ---
 
-# UI-003 — xterm.js Terminal for Container SSH
+# UI-003: xterm.js Terminal for Container SSH
 
 ## Statement
 

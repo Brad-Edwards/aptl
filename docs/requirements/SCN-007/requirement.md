@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:34.196096Z
 updated_at: 2026-03-20T06:18:11.649825Z
 ---
 
-# SCN-007 — Objective-Based Scoring with Hints
+# SCN-007: Objective-Based Scoring with Hints
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:53.237748Z
 updated_at: 2026-03-20T06:18:11.649268Z
 ---
 
-# SOC-006 — End-to-End SOC Workflow Integration
+# SOC-006: End-to-End SOC Workflow Integration
 
 ## Statement
 
@@ -22,7 +22,7 @@ The value is in the integration of individual tools.
 ## Traceability
 
 - IMPLEMENTS → ADR `docs/adrs/adr-008-soc-stack-integration.md` (ADR-008: SOC Stack Integration)
-- IMPLEMENTS → GITHUB_ISSUE `249` (Issue #249 — closes the SOC integration loop (Wazuh detects → manager fires AR → in-process agent enforces))
-- IMPLEMENTS → CONFIG `config/wazuh_cluster/wazuh_manager.conf` (Wazuh manager — AR commands and active-response blocks tying detections to dispatched commands (SOC integration loop))
+- IMPLEMENTS → GITHUB_ISSUE `249` (Issue #249: closes the SOC integration loop (Wazuh detects → manager fires AR → in-process agent enforces))
+- IMPLEMENTS → CONFIG `config/wazuh_cluster/wazuh_manager.conf` (Wazuh manager: AR commands and active-response blocks tying detections to dispatched commands (SOC integration loop))
 - IMPLEMENTS → DOCUMENTATION `docs/components/default-defensive-posture.md` (Default defensive posture: SOC stack overview (Shuffle, TheHive, Wazuh integration))
-- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251 — document default defensive posture)
+- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251: document default defensive posture)

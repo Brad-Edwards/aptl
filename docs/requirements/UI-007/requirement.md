@@ -9,7 +9,7 @@ created_at: 2026-06-23T04:29:41.235038Z
 updated_at: 2026-06-23T04:30:19.228370Z
 ---
 
-# UI-007 — Web GUI Design Specification
+# UI-007: Web GUI Design Specification
 
 ## Statement
 
@@ -21,6 +21,6 @@ A web GUI built without an explicit design specification accretes ad-hoc pages (
 
 ## Traceability
 
-- IMPLEMENTS → GITHUB_ISSUE `540` (UI-007 — Design the APTL web GUI)
+- IMPLEMENTS → GITHUB_ISSUE `540` (UI-007: Design the APTL web GUI)
 - IMPLEMENTS → DOCUMENTATION `docs/specs/web-gui-design.md` (APTL Web GUI Design Specification)
 - IMPLEMENTS → DOCUMENTATION `docs/specs/web-gui-design-preflight.md` (Web GUI Design Preflight Guardrails)

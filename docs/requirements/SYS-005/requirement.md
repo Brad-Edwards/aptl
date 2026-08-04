@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:35.105398Z
 updated_at: 2026-03-20T06:18:11.648321Z
 ---
 
-# SYS-005 — Security Operations Center Stack
+# SYS-005: Security Operations Center Stack
 
 ## Statement
 

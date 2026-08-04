@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:26.135719Z
 updated_at: 2026-03-20T06:18:11.648248Z
 ---
 
-# SYS-002 — Network Segmentation Architecture
+# SYS-002: Network Segmentation Architecture
 
 ## Statement
 

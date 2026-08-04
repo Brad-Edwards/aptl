@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:52.367303Z
 updated_at: 2026-03-21T07:52:52.367303Z
 ---
 
-# REP-002 — Infrastructure-as-Code Abstraction
+# REP-002: Infrastructure-as-Code Abstraction
 
 ## Statement
 
@@ -21,4 +21,4 @@ INF-010 (DRAFT) addresses container metadata but docker-compose.yml still mixes 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#451` (REP-002 — Infrastructure-as-Code Abstraction)
+- DOCUMENTS → GITHUB_ISSUE `#451` (REP-002: Infrastructure-as-Code Abstraction)

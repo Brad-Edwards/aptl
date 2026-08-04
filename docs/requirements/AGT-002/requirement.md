@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:00.755641Z
 updated_at: 2026-06-22T01:20:43.682776Z
 ---
 
-# AGT-002 — ACES-Aligned Multi-Agent Coordination
+# AGT-002: ACES-Aligned Multi-Agent Coordination
 
 ## Statement
 
@@ -21,4 +21,4 @@ Purple-team research still requires simultaneous offense and defense, but the co
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#420` (AGT-002 — Multi-Agent Coordination (Red + Blue Concurrent))
+- DOCUMENTS → GITHUB_ISSUE `#420` (AGT-002: Multi-Agent Coordination (Red + Blue Concurrent))

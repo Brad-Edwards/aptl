@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:51.673615Z
 updated_at: 2026-03-21T07:49:51.673615Z
 ---
 
-# DET-004 — CTEM Workflow Alignment
+# DET-004: CTEM Workflow Alignment
 
 ## Statement
 
@@ -21,4 +21,4 @@ CTEM is Gartner's recommended framework for continuous security validation. Alig
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#492` (DET-004 — CTEM Workflow Alignment)
+- DOCUMENTS → GITHUB_ISSUE `#492` (DET-004: CTEM Workflow Alignment)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:41.310533Z
 updated_at: 2026-03-20T06:18:11.648434Z
 ---
 
-# SYS-008 — Scenario Engine and Research Instrumentation
+# SYS-008: Scenario Engine and Research Instrumentation
 
 ## Statement
 

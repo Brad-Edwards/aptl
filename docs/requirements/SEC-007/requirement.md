@@ -8,7 +8,7 @@ created_at: 2026-05-16T22:39:15.372783Z
 updated_at: 2026-05-16T22:39:56.079002Z
 ---
 
-# SEC-007 — Vetted-Author-Only Conversation Surface
+# SEC-007: Vetted-Author-Only Conversation Surface
 
 ## Statement
 

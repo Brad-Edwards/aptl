@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:01.207689Z
 updated_at: 2026-03-20T06:18:11.648546Z
 ---
 
-# INF-004 — Memory Limits for All Containers
+# INF-004: Memory Limits for All Containers
 
 ## Statement
 

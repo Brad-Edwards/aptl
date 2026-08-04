@@ -9,7 +9,7 @@ created_at: 2026-06-23T04:29:46.901590Z
 updated_at: 2026-06-23T04:30:19.228396Z
 ---
 
-# UI-008 — Web GUI Implementation as a Shipped Surface
+# UI-008: Web GUI Implementation as a Shipped Surface
 
 ## Statement
 
@@ -21,4 +21,4 @@ The MVP frontend is not bundled into `aptl web serve` and carried security findi
 
 ## Traceability
 
-- IMPLEMENTS → GITHUB_ISSUE `541` (UI-008 — Implement the APTL web GUI)
+- IMPLEMENTS → GITHUB_ISSUE `541` (UI-008: Implement the APTL web GUI)

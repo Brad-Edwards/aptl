@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:20.616177Z
 updated_at: 2026-03-20T06:18:11.649416Z
 ---
 
-# ENT-007 — Internal BIND9 DNS Server
+# ENT-007: Internal BIND9 DNS Server
 
 ## Statement
 

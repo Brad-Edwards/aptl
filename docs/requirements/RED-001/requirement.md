@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:29.787033Z
 updated_at: 2026-03-20T06:18:11.649482Z
 ---
 
-# RED-001 — Kali Linux Container with Offensive Tools
+# RED-001: Kali Linux Container with Offensive Tools
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:04.733391Z
 updated_at: 2026-06-28T17:13:17.532880Z
 ---
 
-# AGT-003 — Persistent Cross-Session Agent Memory
+# AGT-003: Persistent Cross-Session Agent Memory
 
 ## Statement
 
@@ -21,4 +21,4 @@ PentAGI uses long-term memory for multi-session campaigns. Without persistence, 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#425` (AGT-003 — Persistent Cross-Session Agent Memory)
+- DOCUMENTS → GITHUB_ISSUE `#425` (AGT-003: Persistent Cross-Session Agent Memory)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:21.335980Z
 updated_at: 2026-03-20T06:18:11.649737Z
 ---
 
-# SCN-003 — Run Lifecycle Management
+# SCN-003: Run Lifecycle Management
 
 ## Statement
 

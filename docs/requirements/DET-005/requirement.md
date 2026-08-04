@@ -9,11 +9,11 @@ created_at: 2026-03-21T07:49:55.662255Z
 updated_at: 2026-03-21T07:49:55.662255Z
 ---
 
-# DET-005 — Cross-Source Detection Correlation
+# DET-005: Cross-Source Detection Correlation
 
 ## Statement
 
-The platform shall correlate detections across multiple sources (e.g. Wazuh host-based alert + Suricata network alert) within configurable time windows to identify multi-signal attack patterns that no single source would detect.
+The platform shall correlate detections across multiple sources (for example, Wazuh host-based alert + Suricata network alert) within configurable time windows to identify multi-signal attack patterns that no single source would detect.
 
 ## Rationale
 
@@ -21,4 +21,4 @@ SOC-006 describes end-to-end workflow integration but not automated cross-source
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#470` (DET-005 — Cross-Source Detection Correlation)
+- DOCUMENTS → GITHUB_ISSUE `#470` (DET-005: Cross-Source Detection Correlation)

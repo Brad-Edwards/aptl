@@ -9,7 +9,7 @@ created_at: 2026-03-24T02:42:29.070052Z
 updated_at: 2026-07-29T00:16:18.402084Z
 ---
 
-# EXP-008 — Portable Research Evidence Bundle Export
+# EXP-008: Portable Research Evidence Bundle Export
 
 ## Statement
 
@@ -21,7 +21,7 @@ Researchers need interoperable evidence, not an APTL opinion about analysis or p
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#472` (EXP-008 — Portable research evidence bundle export)
+- DOCUMENTS → GITHUB_ISSUE `#472` (EXP-008: Portable research evidence bundle export)
 - TESTS → TEST `tests/test_evidence_bundle_fuzz.py`
 - IMPLEMENTS → GITHUB_ISSUE `472`
 - IMPLEMENTS → CODE_FILE `src/aptl/core/evidence_bundle/build.py`

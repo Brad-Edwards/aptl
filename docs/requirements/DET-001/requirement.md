@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:39.006043Z
 updated_at: 2026-03-21T07:49:39.006043Z
 ---
 
-# DET-001 — Detection-as-Code with Sigma Rule Support
+# DET-001: Detection-as-Code with Sigma Rule Support
 
 ## Statement
 
@@ -21,4 +21,4 @@ Hand-written XML rules don't benefit from the 3,000+ community Sigma rules. pySi
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#430` (DET-001 — Detection-as-Code with Sigma Rule Support)
+- DOCUMENTS → GITHUB_ISSUE `#430` (DET-001: Detection-as-Code with Sigma Rule Support)

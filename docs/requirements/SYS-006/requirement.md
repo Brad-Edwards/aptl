@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:37.300399Z
 updated_at: 2026-03-20T06:18:11.648386Z
 ---
 
-# SYS-006 — Python CLI Control Plane
+# SYS-006: Python CLI Control Plane
 
 ## Statement
 

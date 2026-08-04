@@ -9,11 +9,11 @@ created_at: 2026-03-21T07:49:59.117046Z
 updated_at: 2026-05-03T03:24:20.586939Z
 ---
 
-# DET-006 — Portable Detection Rule Formats
+# DET-006: Portable Detection Rule Formats
 
 ## Statement
 
-Detection rules shall be expressible in portable, vendor-neutral formats — at minimum Sigma for log-based detections, YARA for file/memory indicators, and Snort/Suricata-compatible format for network signatures — enabling rule sharing and cross-platform use.
+Detection rules shall be expressible in portable, vendor-neutral formats (at minimum Sigma for log-based detections, YARA for file/memory indicators, and Snort/Suricata-compatible format for network signatures), enabling rule sharing and cross-platform use.
 
 ## Rationale
 

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:07.965122Z
 updated_at: 2026-03-21T07:52:07.965122Z
 ---
 
-# INT-006 — Cortex MCP Server
+# INT-006: Cortex MCP Server
 
 ## Statement
 
@@ -21,4 +21,4 @@ Cortex is deployed (SOC-004) but has no MCP server, making it the only SOC tool 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#474` (INT-006 — Cortex MCP Server)
+- DOCUMENTS → GITHUB_ISSUE `#474` (INT-006: Cortex MCP Server)

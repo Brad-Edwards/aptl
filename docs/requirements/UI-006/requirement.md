@@ -9,7 +9,7 @@ created_at: 2026-06-23T04:29:36.514981Z
 updated_at: 2026-06-23T04:30:19.228322Z
 ---
 
-# UI-006 — Web GUI Product Scope
+# UI-006: Web GUI Product Scope
 
 ## Statement
 
@@ -21,4 +21,4 @@ The existing web frontend is a paused MVP spike (UI-001 workbench, UI-003 termin
 
 ## Traceability
 
-- IMPLEMENTS → GITHUB_ISSUE `539` (UI-006 — Scope the APTL web GUI as a product surface)
+- IMPLEMENTS → GITHUB_ISSUE `539` (UI-006: Scope the APTL web GUI as a product surface)

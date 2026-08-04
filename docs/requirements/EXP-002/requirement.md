@@ -9,7 +9,7 @@ created_at: 2026-03-24T02:41:59.832639Z
 updated_at: 2026-07-20T03:49:54.664825Z
 ---
 
-# EXP-002 — ACES Experiment Specification Admission and Trial Planning
+# EXP-002: ACES Experiment Specification Admission and Trial Planning
 
 ## Statement
 

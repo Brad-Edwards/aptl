@@ -9,7 +9,7 @@ created_at: 2026-03-22T05:36:30.464088Z
 updated_at: 2026-07-11T02:30:28.880925Z
 ---
 
-# EXP-001 — Durable Experiment Execution and Fault Recovery
+# EXP-001: Durable Experiment Execution and Fault Recovery
 
 ## Statement
 
@@ -21,4 +21,4 @@ Unattended research runs require recovery that is scientifically auditable. A du
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#437` (EXP-001 — Durable experiment execution and fault recovery)
+- DOCUMENTS → GITHUB_ISSUE `#437` (EXP-001: Durable experiment execution and fault recovery)

@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:53.921160Z
 updated_at: 2026-03-22T02:35:27.417368Z
 ---
 
-# SAF-002 — Network Egress Firewall on Docker Networks
+# SAF-002: Network Egress Firewall on Docker Networks
 
 ## Statement
 

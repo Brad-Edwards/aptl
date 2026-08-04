@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:33.141793Z
 updated_at: 2026-03-20T06:18:11.648778Z
 ---
 
-# CLI-001 — Lab Start/Stop/Status Commands
+# CLI-001: Lab Start/Stop/Status Commands
 
 ## Statement
 

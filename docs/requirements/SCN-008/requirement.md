@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:37.730012Z
 updated_at: 2026-03-20T06:18:11.649847Z
 ---
 
-# SCN-008 — Append-Only Event Timeline
+# SCN-008: Append-Only Event Timeline
 
 ## Statement
 

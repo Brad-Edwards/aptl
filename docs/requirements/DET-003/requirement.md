@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:49:47.972448Z
 updated_at: 2026-03-21T07:49:47.972448Z
 ---
 
-# DET-003 — Live SIEM Query Execution from Web UI
+# DET-003: Live SIEM Query Execution from Web UI
 
 ## Statement
 
@@ -21,4 +21,4 @@ The query infrastructure exists in the backend (collectors.py) and the UI compon
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#421` (DET-003 — Live SIEM Query Execution from Web UI)
+- DOCUMENTS → GITHUB_ISSUE `#421` (DET-003: Live SIEM Query Execution from Web UI)

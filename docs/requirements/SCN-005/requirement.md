@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:30.377377Z
 updated_at: 2026-03-20T06:18:11.649782Z
 ---
 
-# SCN-005 — Lab State Range Snapshots
+# SCN-005: Lab State Range Snapshots
 
 ## Statement
 

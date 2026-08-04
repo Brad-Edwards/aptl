@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:51:53.417167Z
 updated_at: 2026-03-21T07:51:53.417167Z
 ---
 
-# INT-002 — Atomic Red Team Import
+# INT-002: Atomic Red Team Import
 
 ## Statement
 
@@ -21,4 +21,4 @@ ART is the largest open-source library of executable ATT&CK tests. Importing it 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#445` (INT-002 — Atomic Red Team Import)
+- DOCUMENTS → GITHUB_ISSUE `#445` (INT-002: Atomic Red Team Import)

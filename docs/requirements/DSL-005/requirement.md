@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:35.252096Z
 updated_at: 2026-03-21T07:52:35.252096Z
 ---
 
-# DSL-005 — Pre/Post-Conditions and Assertions in Scenarios
+# DSL-005: Pre/Post-Conditions and Assertions in Scenarios
 
 ## Statement
 
@@ -21,4 +21,4 @@ SCN-009 validates only container/profile presence. Semantic pre/post-conditions 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#434` (DSL-005 — Pre/Post-Conditions and Assertions in Scenarios)
+- DOCUMENTS → GITHUB_ISSUE `#434` (DSL-005: Pre/Post-Conditions and Assertions in Scenarios)

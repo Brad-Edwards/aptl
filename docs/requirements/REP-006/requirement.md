@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:08.566586Z
 updated_at: 2026-07-11T02:30:30.938535Z
 ---
 
-# REP-006 — Comparable Precondition Inspection Between Runs
+# REP-006: Comparable Precondition Inspection Between Runs
 
 ## Statement
 
@@ -21,4 +21,4 @@ Researchers need to know what changed before interpreting differing results. A f
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#496` (REP-006 — Comparable precondition inspection between runs)
+- DOCUMENTS → GITHUB_ISSUE `#496` (REP-006: Comparable precondition inspection between runs)

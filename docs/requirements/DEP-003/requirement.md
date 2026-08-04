@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:53:48.031381Z
 updated_at: 2026-06-28T17:23:29.158157Z
 ---
 
-# DEP-003 — Ephemeral Environment Lifecycle
+# DEP-003: Ephemeral Environment Lifecycle
 
 ## Statement
 
@@ -28,4 +28,4 @@ Manual provisioning and teardown doesn't scale for training programs, CI/CD inte
 - IMPLEMENTS → ADR `docs/adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md` (ADR-045: Ephemeral Lifecycle Policy Enforcement)
 - TESTS → TEST `tests/test_lifecycle_policy.py` (Unit tests: evaluators, state, enforce_once/run_monitor (DEP-003))
 - TESTS → TEST `tests/test_cli_lifecycle.py` (CLI wiring tests for lifecycle commands (DEP-003))
-- IMPLEMENTS → GITHUB_ISSUE `467` (DEP-003 — Ephemeral Environment Lifecycle)
+- IMPLEMENTS → GITHUB_ISSUE `467` (DEP-003: Ephemeral Environment Lifecycle)

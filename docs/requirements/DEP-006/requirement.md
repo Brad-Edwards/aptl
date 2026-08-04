@@ -9,11 +9,11 @@ created_at: 2026-03-21T07:54:00.192209Z
 updated_at: 2026-03-21T07:54:00.192209Z
 ---
 
-# DEP-006 — Isolation Tier Selection
+# DEP-006: Isolation Tier Selection
 
 ## Statement
 
-The platform shall support selecting isolation tiers per-component: standard container (runc), hardened container (gVisor), microVM (Kata/Firecracker), or full VM — based on the security requirements and performance needs of each component.
+The platform shall support selecting isolation tiers per-component: standard container (runc), hardened container (gVisor), microVM (Kata/Firecracker), or full VM, based on the security requirements and performance needs of each component.
 
 ## Rationale
 
@@ -21,4 +21,4 @@ Container escape is a real risk (CVE-2021-30465 etc.). gVisor provides best isol
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#491` (DEP-006 — Isolation Tier Selection)
+- DOCUMENTS → GITHUB_ISSUE `#491` (DEP-006: Isolation Tier Selection)

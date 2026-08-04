@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:48:56.306563Z
 updated_at: 2026-06-22T01:20:43.180956Z
 ---
 
-# AGT-001 — ACES-Aligned Agent Orchestration Layer
+# AGT-001: ACES-Aligned Agent Orchestration Layer
 
 ## Statement
 
@@ -21,4 +21,4 @@ After SCN-010, APTL should not grow a second scenario or agent semantics layer. 
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#419` (AGT-001 — Agent Orchestration / ReAct Planning Layer)
+- DOCUMENTS → GITHUB_ISSUE `#419` (AGT-001: Agent Orchestration / ReAct Planning Layer)

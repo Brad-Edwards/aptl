@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:39.709305Z
 updated_at: 2026-03-20T06:18:11.648412Z
 ---
 
-# SYS-007 — Model Context Protocol Server Layer
+# SYS-007: Model Context Protocol Server Layer
 
 ## Statement
 

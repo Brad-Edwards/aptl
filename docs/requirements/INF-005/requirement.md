@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:03.791280Z
 updated_at: 2026-03-20T06:18:11.648568Z
 ---
 
-# INF-005 — Automated SSL Certificate Generation
+# INF-005: Automated SSL Certificate Generation
 
 ## Statement
 

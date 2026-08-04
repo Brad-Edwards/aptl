@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:08:57.534805Z
 updated_at: 2026-03-20T06:18:11.648524Z
 ---
 
-# INF-003 — Health Checks for All Containers
+# INF-003: Health Checks for All Containers
 
 ## Statement
 

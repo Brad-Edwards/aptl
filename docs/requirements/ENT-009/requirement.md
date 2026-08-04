@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:27.492322Z
 updated_at: 2026-03-20T06:18:11.649459Z
 ---
 
-# ENT-009 — Intentional Security Misconfigurations
+# ENT-009: Intentional Security Misconfigurations
 
 ## Statement
 

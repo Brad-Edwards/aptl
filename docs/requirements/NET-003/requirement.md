@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:24.291706Z
 updated_at: 2026-03-20T06:18:11.648677Z
 ---
 
-# NET-003 — Multi-Network Container Attachment
+# NET-003: Multi-Network Container Attachment
 
 ## Statement
 

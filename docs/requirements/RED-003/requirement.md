@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:36.047595Z
 updated_at: 2026-03-20T06:18:11.649525Z
 ---
 
-# RED-003 — Reverse Engineering Container
+# RED-003: Reverse Engineering Container
 
 ## Statement
 

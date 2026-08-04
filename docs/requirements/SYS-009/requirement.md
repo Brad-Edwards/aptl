@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:43.487932Z
 updated_at: 2026-03-20T06:18:11.648456Z
 ---
 
-# SYS-009 — Code Quality and Security Practices
+# SYS-009: Code Quality and Security Practices
 
 ## Statement
 
@@ -23,4 +23,4 @@ A security training lab that has poor code quality or leaks credentials undermin
 
 - IMPLEMENTS → CONFIG `eslint.config.js` (Root ESLint flat config: per-function TypeScript complexity gate (issue #286))
 - IMPLEMENTS → CONFIG `.pre-commit-config.yaml` (ts-complexity pre-commit hook (TypeScript complexity gate, issue #286))
-- DOCUMENTS → ADR `ADR-010` (ADR-010 SonarCloud quality — TypeScript complexity gate section + backlog)
+- DOCUMENTS → ADR `ADR-010` (ADR-010 SonarCloud quality: TypeScript complexity gate section + backlog)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:05:45.592919Z
 updated_at: 2026-03-21T06:50:33.807675Z
 ---
 
-# SYS-010 — Notebook-Style Web User Interface
+# SYS-010: Notebook-Style Web User Interface
 
 ## Statement
 
@@ -17,7 +17,7 @@ The system shall provide an interactive workbench web UI (SvelteKit frontend + F
 
 ## Rationale
 
-The CLI has limitations for multi-step scenario execution and data visualization. A web UI provides a unified experience while sharing the core domain logic via the FastAPI backend importing src/aptl/core/. Open-ended SIEM exploration is deferred to Wazuh Dashboard — the APTL UI adds value only where it provides scenario-specific context that Wazuh cannot.
+The CLI has limitations for multi-step scenario execution and data visualization. A web UI provides a unified experience while sharing the core domain logic via the FastAPI backend importing src/aptl/core/. Open-ended SIEM exploration is deferred to Wazuh Dashboard; the APTL UI adds value only where it provides scenario-specific context that Wazuh cannot.
 
 ## Traceability
 

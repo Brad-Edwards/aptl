@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:08:53.928647Z
 updated_at: 2026-03-20T06:18:11.648501Z
 ---
 
-# INF-002 — Profile-Based Selective Deployment
+# INF-002: Profile-Based Selective Deployment
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:11:54.699669Z
 updated_at: 2026-03-20T06:18:11.649587Z
 ---
 
-# MCP-002 — Config-Driven Server Factory
+# MCP-002: Config-Driven Server Factory
 
 ## Statement
 

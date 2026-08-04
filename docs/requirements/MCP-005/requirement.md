@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:06.806135Z
 updated_at: 2026-03-20T06:18:11.649650Z
 ---
 
-# MCP-005 — REST API MCP Servers for SOC Tools
+# MCP-005: REST API MCP Servers for SOC Tools
 
 ## Statement
 

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:10.821388Z
 updated_at: 2026-03-20T06:18:11.649672Z
 ---
 
-# MCP-006 — TypeScript Typed MCP Tool Arguments
+# MCP-006: TypeScript Typed MCP Tool Arguments
 
 ## Statement
 

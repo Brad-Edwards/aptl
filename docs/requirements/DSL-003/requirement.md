@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:28.159023Z
 updated_at: 2026-03-21T07:52:28.159023Z
 ---
 
-# DSL-003 — Variable System and Runtime Substitution
+# DSL-003: Variable System and Runtime Substitution
 
 ## Statement
 
@@ -21,4 +21,4 @@ Without variables, every scenario is hardcoded to specific IPs, credentials, and
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#432` (DSL-003 — Variable System and Runtime Substitution)
+- DOCUMENTS → GITHUB_ISSUE `#432` (DSL-003: Variable System and Runtime Substitution)

@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:12:40.178955Z
 updated_at: 2026-03-20T06:18:11.649875Z
 ---
 
-# SCN-009 — Scenario Prerequisite Validation
+# SCN-009: Scenario Prerequisite Validation
 
 ## Statement
 

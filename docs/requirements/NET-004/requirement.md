@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:09:26.893568Z
 updated_at: 2026-03-20T06:18:11.648724Z
 ---
 
-# NET-004 — Internal DNS for Cross-Zone Resolution
+# NET-004: Internal DNS for Cross-Zone Resolution
 
 ## Statement
 

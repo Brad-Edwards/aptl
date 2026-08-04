@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:52:04.691079Z
 updated_at: 2026-03-21T07:52:04.691079Z
 ---
 
-# INT-005 — Sigma Rule Pipeline
+# INT-005: Sigma Rule Pipeline
 
 ## Statement
 
@@ -21,4 +21,4 @@ pySigma has a Wazuh backend. The 3,000+ community Sigma rules represent years of
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#446` (INT-005 — Sigma Rule Pipeline)
+- DOCUMENTS → GITHUB_ISSUE `#446` (INT-005: Sigma Rule Pipeline)

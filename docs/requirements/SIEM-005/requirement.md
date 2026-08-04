@@ -9,7 +9,7 @@ created_at: 2026-03-20T06:10:29.907684Z
 updated_at: 2026-03-20T06:18:11.649102Z
 ---
 
-# SIEM-005 — Custom Detection Rules and Decoders
+# SIEM-005: Custom Detection Rules and Decoders
 
 ## Statement
 
@@ -23,4 +23,4 @@ Default Wazuh rules do not detect application-specific attacks in the TechVault 
 
 - IMPLEMENTS → ADR `docs/adrs/adr-002-wazuh-siem.md` (ADR-002: Wazuh SIEM)
 - IMPLEMENTS → DOCUMENTATION `docs/components/default-defensive-posture.md` (Default defensive posture: Wazuh detection rules section)
-- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251 — document default defensive posture)
+- IMPLEMENTS → GITHUB_ISSUE `251` (Issue 251: document default defensive posture)

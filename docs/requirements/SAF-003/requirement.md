@@ -9,7 +9,7 @@ created_at: 2026-03-21T07:50:57.939809Z
 updated_at: 2026-03-21T07:50:57.939809Z
 ---
 
-# SAF-003 — Tiered Autonomy Levels
+# SAF-003: Tiered Autonomy Levels
 
 ## Statement
 
@@ -21,4 +21,4 @@ NVIDIA recommends tiered isolation. Different use cases (training, research, ben
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#455` (SAF-003 — Tiered Autonomy Levels)
+- DOCUMENTS → GITHUB_ISSUE `#455` (SAF-003: Tiered Autonomy Levels)

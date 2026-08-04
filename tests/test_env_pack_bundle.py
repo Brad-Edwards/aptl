@@ -136,6 +136,41 @@ def test_concurrent_staging_of_one_root_each_gets_a_valid_isolated_tree(
     assert all(staging in p.parents for p in results)
 
 
+def test_staging_excludes_installer_bytecode_from_the_pack(tmp_path: Path) -> None:
+    """A pip install byte-compiles the pack's .py files in place; staging must
+    not carry the resulting __pycache__/*.pyc, or the env-packs exact-inventory
+    gate rejects the staged tree (the manifest never lists bytecode). uv does not
+    compile, so this only bites under pip -- i.e. in CI (issue #875).
+    """
+
+    import compileall
+    import shutil as _shutil
+
+    from aptl.core.scenario_bundle import env_pack_bundle as _bundle
+
+    # A real, valid source pack copied out of the installed package, then
+    # byte-compiled in place exactly as pip would on install.
+    installed = Path(
+        str(
+            __import__("importlib.resources", fromlist=["files"]).files("raes_env_packs")
+            / "resources"
+            / "packs"
+            / "techvault"
+        )
+    )
+    source = tmp_path / "src" / "techvault"
+    _shutil.copytree(installed, source)
+    compileall.compile_dir(str(source), quiet=1)
+    assert list(source.rglob("__pycache__")), "precondition: source has bytecode"
+
+    bundle = _bundle(tmp_path / "staged", "techvault", source_pack=source)
+
+    # The staged tree carries no bytecode and passes env-packs' own gate.
+    assert not list(bundle.root.rglob("__pycache__"))
+    assert not list(bundle.root.rglob("*.pyc"))
+    assert bundle.sdl_path.is_file()
+
+
 def test_a_changed_source_pack_is_restaged_not_reused(tmp_path: Path) -> None:
     """A new pack release (different set digest) re-stages; it is not reused.
 

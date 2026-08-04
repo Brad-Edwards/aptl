@@ -221,8 +221,16 @@ def _stage_and_validate(
     staged = staging_root / token / identity
     # copytree copies file *contents* (not hardlinks), so every staged member is
     # a singly-linked regular file, and the tree is fresh, so its inventory is
-    # exactly the pack's.
-    shutil.copytree(source_pack, staged)
+    # exactly the pack's -- except that a pip install (unlike uv) byte-compiles
+    # the pack's shipped .py files in place, so the installed source carries
+    # __pycache__/*.pyc the manifest never lists. Those are installer artifacts,
+    # not pack content; excluding them keeps the staged inventory exactly the
+    # manifest's, so the env-packs exact-inventory gate passes (issue #875).
+    shutil.copytree(
+        source_pack,
+        staged,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
     _validate_staged_pack(staged, identity)
 
     sdl_path = staged / "sdl" / f"{identity}.sdl.yaml"

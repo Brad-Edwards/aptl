@@ -22,10 +22,10 @@ APT=(sudo -E apt-get -o DPkg::Lock::Timeout=600 -y)
 "${APT[@]}" update >/tmp/rdp-apt.log 2>&1
 # xfce4 (light desktop) + xfce4-terminal + xrdp + dbus-x11 for the session.
 "${APT[@]}" install xrdp xorgxrdp xfce4 xfce4-terminal dbus-x11 >>/tmp/rdp-apt.log 2>&1
-# Browser for the SOC web UIs. On Ubuntu 24.04 `firefox` is a snap; fall back to
-# the native epiphany-browser .deb if the snap path is unavailable.
-"${APT[@]}" install firefox >>/tmp/rdp-apt.log 2>&1 \
-  || "${APT[@]}" install epiphany-browser >>/tmp/rdp-apt.log 2>&1 || true
+# Browser for the SOC web UIs. Use the NATIVE epiphany-browser .deb, not the
+# Firefox snap: snap apps take 30-60s+ to first-launch from squashfs in an xrdp
+# session (reads as "the box is frozen"). Native = instant.
+"${APT[@]}" install epiphany-browser >>/tmp/rdp-apt.log 2>&1 || true
 
 # xfce pulls in avahi-daemon (mDNS on UDP :5353), which collides with the aptl
 # `dns` node's port and breaks `aptl lab start` on a fresh boot. Not needed for
@@ -70,6 +70,12 @@ sudo chown -R "$RDP_USER:$RDP_USER" "/home/$RDP_USER/Desktop"
 # heavy and reads as "the box is slow" even when it is idle. Cap to 16bpp and
 # disable compositing -- the single biggest lag win.
 sudo sed -i 's/^max_bpp=.*/max_bpp=16/' /etc/xrdp/xrdp.ini
+# xrdp's default TCP send/recv buffers are 32KB, which starves throughput and is
+# the top-reported cause of laggy window dragging over anything but a fast LAN
+# (neutrinolabs/xrdp #1483/#2135/#2393). Bump to 4MB.
+if ! grep -q '^tcp_send_buffer_bytes' /etc/xrdp/xrdp.ini; then
+    sudo sed -i '/^tcp_nodelay=true/a tcp_send_buffer_bytes=4194304\ntcp_recv_buffer_bytes=4194304' /etc/xrdp/xrdp.ini
+fi
 sudo -u "$RDP_USER" mkdir -p "/home/$RDP_USER/.config/xfce4/xfconf/xfce-perchannel-xml"
 sudo -u "$RDP_USER" tee "/home/$RDP_USER/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml" >/dev/null <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>

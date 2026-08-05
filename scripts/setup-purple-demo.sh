@@ -63,7 +63,7 @@ cat > /home/ubuntu/.config/autostart/wazuh.desktop <<'DESK'
 [Desktop Entry]
 Type=Application
 Name=Wazuh Dashboard
-Exec=firefox https://localhost/
+Exec=epiphany-browser https://localhost/
 X-GNOME-Autostart-enabled=true
 DESK
 chown -R ubuntu:ubuntu /home/ubuntu/.config/autostart

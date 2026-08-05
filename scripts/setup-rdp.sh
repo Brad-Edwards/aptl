@@ -66,6 +66,20 @@ DESK
 sudo chmod +x "/home/$RDP_USER/Desktop/Start-Claude-Agent.desktop" 2>/dev/null || true
 sudo chown -R "$RDP_USER:$RDP_USER" "/home/$RDP_USER/Desktop"
 
+# Responsiveness over internet RDP: 32bpp at 1080p with the xfce compositor is
+# heavy and reads as "the box is slow" even when it is idle. Cap to 16bpp and
+# disable compositing -- the single biggest lag win.
+sudo sed -i 's/^max_bpp=.*/max_bpp=16/' /etc/xrdp/xrdp.ini
+sudo -u "$RDP_USER" mkdir -p "/home/$RDP_USER/.config/xfce4/xfconf/xfce-perchannel-xml"
+sudo -u "$RDP_USER" tee "/home/$RDP_USER/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml" >/dev/null <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>
+XML
+
 sudo systemctl enable xrdp >/dev/null 2>&1
 sudo systemctl restart xrdp
 

@@ -1,9 +1,28 @@
+#!/bin/bash
+# =============================================================================
+# setup-purple-demo.sh -- configure a range host as a purple-team demo seat.
+# =============================================================================
+# Splits the 7 MCP servers into a red set (attacker) and a blue set (SOC), runs
+# a Claude Code agent for each in its own tmux session, and wires the xfce
+# desktop so an RDP login lands on:
+#   - a terminal with two tabs, RED (aptl-red) and BLUE (the SOC tools), each
+#     already at a Claude prompt, and
+#   - Firefox open to the Wazuh dashboard.
+#
+# Prereqs on the box: the agent layer (node + claude + built MCPs), and Claude
+# already onboarded for ~/aptl3 (hasCompletedOnboarding / hasTrustDialogAccepted
+# in ~/.claude.json + bypass-permissions accepted) so the agents launch straight
+# to a prompt without interactive dialogs. Run after the lab is provisioned.
+# =============================================================================
 set -uo pipefail
+
 cd /home/ubuntu/aptl3
 M=/home/ubuntu/aptl3/mcp
 BEDROCK='export CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=us-east-2 ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-6 ANTHROPIC_SMALL_FAST_MODEL=us.anthropic.claude-sonnet-4-6'
+RED_CMD="claude --mcp-config /home/ubuntu/aptl3/red.mcp.json --strict-mcp-config --dangerously-skip-permissions"
+BLUE_CMD="claude --mcp-config /home/ubuntu/aptl3/blue.mcp.json --strict-mcp-config --dangerously-skip-permissions"
 
-echo "=== write red/blue MCP configs ==="
+echo "=== red/blue MCP configs ==="
 cat > red.mcp.json <<JSON
 {"mcpServers":{
   "aptl-red":{"command":"node","args":["$M/mcp-red/build/index.js"]}
@@ -19,34 +38,34 @@ cat > blue.mcp.json <<JSON
   "aptl-soar":{"command":"node","args":["$M/mcp-soar/build/index.js"]}
 }}
 JSON
-echo "red: $(python3 -c 'import json;print(list(json.load(open("red.mcp.json"))["mcpServers"]))')"
-echo "blue: $(python3 -c 'import json;print(list(json.load(open("blue.mcp.json"))["mcpServers"]))')"
 
-echo "=== (re)create tmux session 'purple' with red + blue Claude windows ==="
+echo "=== two tmux sessions: red + blue, each running a Claude ==="
+tmux kill-session -t red 2>/dev/null || true
+tmux kill-session -t blue 2>/dev/null || true
 tmux kill-session -t purple 2>/dev/null || true
-tmux new-session -d -s purple -n red -x 220 -y 50
-tmux send-keys -t purple:red "cd ~/aptl3 && $BEDROCK && clear && echo '### RED TEAM (attacker: aptl-red / kali) ###' && claude --mcp-config ~/aptl3/red.mcp.json --dangerously-skip-permissions" Enter
-tmux new-window -t purple -n blue
-tmux send-keys -t purple:blue "cd ~/aptl3 && $BEDROCK && clear && echo '### BLUE TEAM (SOC: wazuh/indexer/suricata/misp/thehive/shuffle) ###' && claude --mcp-config ~/aptl3/blue.mcp.json --dangerously-skip-permissions" Enter
-tmux select-window -t purple:red
-echo "tmux sessions:"; tmux ls
+tmux new-session -d -s red -x 200 -y 50
+tmux send-keys -t red "cd ~/aptl3 && $BEDROCK && clear && echo '### RED TEAM (attacker: aptl-red / kali) ###' && $RED_CMD" Enter
+tmux new-session -d -s blue -x 200 -y 50
+tmux send-keys -t blue "cd ~/aptl3 && $BEDROCK && clear && echo '### BLUE TEAM (SOC: wazuh/indexer/suricata/misp/thehive/shuffle) ###' && $BLUE_CMD" Enter
+# clear any first-run MCP-approval prompt
+sleep 16; tmux send-keys -t red Enter; tmux send-keys -t blue Enter
 
-echo "=== xfce autostart: Firefox -> Wazuh; + terminal attaching tmux 'purple' ==="
+echo "=== xfce autostart: two-tab terminal (RED|BLUE) + Firefox -> Wazuh ==="
 mkdir -p /home/ubuntu/.config/autostart
-cat > /home/ubuntu/.config/autostart/wazuh.desktop <<DESK
+cat > /home/ubuntu/.config/autostart/purple-terminal.desktop <<'DESK'
+[Desktop Entry]
+Type=Application
+Name=Purple Team Terminals
+Exec=xfce4-terminal --maximize --tab --title=RED --command="bash -lc 'tmux attach -t red'" --tab --title=BLUE --command="bash -lc 'tmux attach -t blue'"
+X-GNOME-Autostart-enabled=true
+DESK
+cat > /home/ubuntu/.config/autostart/wazuh.desktop <<'DESK'
 [Desktop Entry]
 Type=Application
 Name=Wazuh Dashboard
 Exec=firefox https://localhost/
 X-GNOME-Autostart-enabled=true
 DESK
-cat > /home/ubuntu/.config/autostart/purple-terminal.desktop <<DESK
-[Desktop Entry]
-Type=Application
-Name=Purple Team Terminals
-Exec=xfce4-terminal --maximize --title="APTL Purple (red|blue)" -e "bash -lc 'tmux attach -t purple'"
-X-GNOME-Autostart-enabled=true
-DESK
 chown -R ubuntu:ubuntu /home/ubuntu/.config/autostart
 
-echo "DEMO_SETUP_DONE"
+echo "PURPLE_SETUP_DONE"

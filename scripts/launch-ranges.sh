@@ -77,7 +77,7 @@ screen mode id:i:2
 use multimon:i:0
 desktopwidth:i:1920
 desktopheight:i:1080
-session bpp:i:32
+session bpp:i:16
 compression:i:1
 keyboardhook:i:2
 audiocapturemode:i:0

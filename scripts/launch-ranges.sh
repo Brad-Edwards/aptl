@@ -1,29 +1,25 @@
 #!/bin/bash
 # =============================================================================
-# launch-ranges.sh -- spin up N Arsenal ranges from the baked AMI and write a
-# per-range .rdp file (gitignored) under ranges/.
+# launch-ranges.sh -- spin up N Arsenal ranges from the baked v3 AMI, each with
+# a unique human-typable passphrase, and write a plain-text credentials sheet.
 # =============================================================================
 # Usage:
-#   scripts/launch-ranges.sh <AMI_ID> <COUNT> [RDP_CIDR]
+#   scripts/launch-ranges.sh <AMI_ID> <COUNT>
 #
-#   AMI_ID    the baked Arsenal AMI (has all fixes + RDP + aptl-range.service).
-#   COUNT     how many ranges to launch (e.g. 12 per wave, or 36).
-#   RDP_CIDR  optional; if given, opens tcp/3389 to that CIDR on the SG so
-#             participants can RDP in. Use the venue/office CIDR, or 0.0.0.0/0
-#             for open access (internet-exposed RDP -- password is the only
-#             gate; acceptable only for a short, disposable workshop).
+# Each range auto-provisions on boot (aptl-range.service): rebuilds the lab,
+# brings up Guacamole, applies the per-range passphrase (injected via EC2
+# user-data), and starts the red/blue Claude agents. Only Guacamole (TLS, 9443)
+# is internet-facing; RDP/SSH are not public.
 #
-# Each range auto-provisions on boot via aptl-range.service (aptl lab start +
-# env-pack fixups). Ranges take ~8-12 min after launch to be fully ready; the
-# .rdp files are written as soon as the instances have public IPs.
+# Participants connect in a browser to  https://<ip>:9443/guacamole  and log in
+# as  guacadmin / <that range's passphrase>, then open "Kali Range Desktop".
 #
-# Output (gitignored): ranges/seat-NN.rdp, ranges/INDEX.txt, ranges/README.txt
+# Output (gitignored): ranges/CREDENTIALS.txt (plain text, no markdown).
 # =============================================================================
 set -euo pipefail
 
-AMI="${1:?usage: launch-ranges.sh <AMI_ID> <COUNT> [RDP_CIDR]}"
-COUNT="${2:?usage: launch-ranges.sh <AMI_ID> <COUNT> [RDP_CIDR]}"
-RDP_CIDR="${3:-}"
+AMI="${1:?usage: launch-ranges.sh <AMI_ID> <COUNT>}"
+COUNT="${2:?usage: launch-ranges.sh <AMI_ID> <COUNT>}"
 
 PROFILE="${AWS_PROFILE:-aws-dev}"
 REGION="${AWS_REGION:-us-east-2}"
@@ -32,83 +28,81 @@ SG="${APTL_SG:-sg-084f884447d4e4888}"
 SUBNET="${APTL_SUBNET:-subnet-005fbc9f68acb0fe3}"
 TYPE="${APTL_TYPE:-m6a.4xlarge}"
 IAM="${APTL_IAM:-aptl-arsenal-bedrock}"
-RDP_USER="${APTL_RDP_USER:-ubuntu}"
-RDP_PASS="${APTL_RDP_PASS:-AptlArsenal!2026}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$REPO_ROOT/ranges"
 mkdir -p "$OUT"
+CREDS="$OUT/CREDENTIALS.txt"
 
 aws() { command aws --profile "$PROFILE" --region "$REGION" "$@"; }
 
-if [ -n "$RDP_CIDR" ]; then
-    echo "Opening tcp/3389 to $RDP_CIDR on $SG ..."
-    aws ec2 authorize-security-group-ingress --group-id "$SG" \
-        --protocol tcp --port 3389 --cidr "$RDP_CIDR" >/dev/null 2>&1 \
-        && echo "  added." || echo "  (rule already present or failed; check manually)"
-fi
+# Human-typable but secure passphrase: 4 short words + 2 digits, e.g.
+# harbor-quartz-meadow-cobalt-58. ~150-word list; the words avoid ambiguity.
+gen_pass() {
+    python3 - <<'PY'
+import secrets
+W=("amber anchor apple arbor arrow autumn badge basil beacon birch bison bloom "
+   "bracket branch brave breeze bridge bright bronze brook cactus canyon carbon "
+   "cedar chalk cherry cinder clover cobalt comet copper coral cotton crane crater "
+   "crest cyan dawn delta denim desert diamond dune ember falcon fern fjord flint "
+   "forest fox garnet ginger glacier granite grove harbor hazel heron hickory "
+   "hollow indigo iris ivory jade jasmine juniper kelp lagoon lantern larch laurel "
+   "lemon lilac linen lotus lunar lynx maple marble meadow mesa mineral mint misty "
+   "moss nectar nimbus north oak ocean olive onyx opal orbit otter pebble pewter "
+   "pine plum polar poppy prairie quartz quill raven reef ridge river robin rowan "
+   "ruby rustic saffron sage sapphire scarlet shale silver slate sparrow spruce "
+   "storm summit sunset tamarind teal thistle thunder timber topaz tundra umber "
+   "valley velvet violet walnut willow winter wren zephyr zinc").split()
+print("-".join(secrets.choice(W) for _ in range(4)) + "-%02d" % secrets.randbelow(100))
+PY
+}
 
 echo "Launching $COUNT range(s) from $AMI ..."
-IDS=$(aws ec2 run-instances \
-    --image-id "$AMI" --count "$COUNT" --instance-type "$TYPE" \
-    --key-name "$KEY" --security-group-ids "$SG" --subnet-id "$SUBNET" \
-    --iam-instance-profile "Name=$IAM" \
-    --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=${APTL_ROOT_GB:-150},VolumeType=gp3}" \
-    --tag-specifications \
-      'ResourceType=instance,Tags=[{Key=Name,Value=aptl-arsenal-seat},{Key=aptl-workshop,Value=arsenal-2026}]' \
-    --query 'Instances[].InstanceId' --output text)
-
-echo "Launched: $IDS"
 : > "$OUT/INDEX.txt"
+{
+  echo "APTL Arsenal - Range Credentials"
+  echo "AMI: $AMI"
+  echo "Generated (UTC stamp applied by launcher)"
+  echo
+  echo "HOW TO CONNECT (each participant):"
+  echo "  1. Open the Guacamole URL for your seat in a browser."
+  echo "  2. Log in with username guacadmin and your seat passphrase below."
+  echo "  3. Open the connection named: Kali Range Desktop"
+  echo "  Accept the browser certificate warning (self-signed lab TLS)."
+  echo "  Allow ~8-12 minutes after launch before a seat is fully ready."
+  echo
+  echo "SOC tool logins (same on every seat, also on each desktop as SOC_ACCESS.md):"
+  echo "  Wazuh    https://localhost/         admin / SecretPassword"
+  echo "  TheHive  https://localhost:9000/    aptl-svc@thehive.local / AptlService2024!"
+  echo "  MISP     https://localhost:8443/    admin@admin.test / admin"
+  echo "  Shuffle  https://localhost:3443/    admin / ShuffleAdmin2024!"
+  echo
+  echo "SEATS:"
+} > "$CREDS"
 
 i=1
-for id in $IDS; do
+while [ "$i" -le "$COUNT" ]; do
     seat=$(printf "seat-%02d" "$i")
-    echo "[$seat] $id waiting for public IP ..."
+    pass="$(gen_pass)"
+    ud="APTL_RANGE_PASS=$pass"
+    id=$(aws ec2 run-instances \
+        --image-id "$AMI" --count 1 --instance-type "$TYPE" \
+        --key-name "$KEY" --security-group-ids "$SG" --subnet-id "$SUBNET" \
+        --iam-instance-profile "Name=$IAM" \
+        --user-data "$ud" \
+        --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=${APTL_ROOT_GB:-150},VolumeType=gp3}" \
+        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=aptl-arsenal-$seat},{Key=aptl-workshop,Value=arsenal-2026}]" \
+        --query 'Instances[0].InstanceId' --output text)
+    echo "[$seat] $id launching ..."
     aws ec2 wait instance-running --instance-ids "$id"
     ip=$(aws ec2 describe-instances --instance-ids "$id" \
         --query 'Reservations[].Instances[].PublicIpAddress' --output text)
-    aws ec2 create-tags --resources "$id" --tags "Key=Name,Value=aptl-arsenal-$seat" >/dev/null 2>&1 || true
-
-    cat > "$OUT/$seat.rdp" <<RDP
-full address:s:$ip:3389
-username:s:$RDP_USER
-screen mode id:i:2
-use multimon:i:0
-desktopwidth:i:1920
-desktopheight:i:1080
-session bpp:i:16
-compression:i:1
-keyboardhook:i:2
-audiocapturemode:i:0
-redirectclipboard:i:1
-prompt for credentials:i:1
-authentication level:i:0
-negotiate security layer:i:1
-RDP
-    echo "$seat  $id  $ip" | tee -a "$OUT/INDEX.txt"
+    echo "$seat  $id  $ip  $pass" | tee -a "$OUT/INDEX.txt"
+    printf "  %s\n    URL:        https://%s:9443/guacamole\n    Login:      guacadmin / %s\n    Instance:   %s\n\n" \
+        "$seat" "$ip" "$pass" "$id" >> "$CREDS"
     i=$((i + 1))
 done
 
-cat > "$OUT/README.txt" <<TXT
-APTL Arsenal ranges -- $(date -u)
-AMI: $AMI
-
-Connect: open the matching seat-NN.rdp in an RDP client.
-  RDP user:     $RDP_USER
-  RDP password: $RDP_PASS
-
-Each range auto-provisions on boot (aptl lab start + env-pack fixups); allow
-~8-12 min after launch before the SOC stack + kali are fully ready. Progress on
-the box: /tmp/provision-range.log (look for RANGE_PROVISION_OK).
-
-Inside the desktop: open a terminal in ~/aptl3 and run 'claude' to drive the
-MCP agent; open the browser to the Wazuh dashboard for the SOC UI.
-
-Instances: see INDEX.txt. Terminate with:
-  aws --profile $PROFILE --region $REGION ec2 terminate-instances --instance-ids <ids>
-TXT
-
 echo
-echo "Wrote $((i - 1)) .rdp file(s) to $OUT/ (gitignored). RDP password: $RDP_PASS"
-echo "Ranges are still provisioning; give them ~8-12 min before connecting."
+echo "Wrote $((i - 1)) seat(s) to $CREDS (gitignored)."
+echo "Ranges are provisioning; give them ~8-12 min before connecting."

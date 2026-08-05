@@ -34,6 +34,13 @@ sudo sysctl -w vm.max_map_count=262144 >/dev/null
 # shellcheck disable=SC1091
 source .venv/bin/activate 2>/dev/null || true
 
+# -1. Re-assert the RDP login password. cloud-init locks the default user's
+#     password on a fresh clone's first boot, overriding what the AMI baked, so
+#     RDP auth fails ("login failed for user ubuntu"). This runs after cloud-init.
+echo "--- set RDP password ---"
+echo "${APTL_RDP_USER:-ubuntu}:${APTL_RDP_PASS:-AptlArsenal!2026}" | sudo chpasswd || true
+sudo passwd -u "${APTL_RDP_USER:-ubuntu}" >/dev/null 2>&1 || true
+
 # 0. Free UDP :5353 for the aptl `dns` node. The RDP desktop pulls in
 #    avahi-daemon (mDNS on 5353); on a fresh boot it wins the port before the
 #    lab starts, so the dns container cannot bind and the whole realization

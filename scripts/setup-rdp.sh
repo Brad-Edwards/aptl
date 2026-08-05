@@ -27,6 +27,12 @@ APT=(sudo -E apt-get -o DPkg::Lock::Timeout=600 -y)
 "${APT[@]}" install firefox >>/tmp/rdp-apt.log 2>&1 \
   || "${APT[@]}" install epiphany-browser >>/tmp/rdp-apt.log 2>&1 || true
 
+# xfce pulls in avahi-daemon (mDNS on UDP :5353), which collides with the aptl
+# `dns` node's port and breaks `aptl lab start` on a fresh boot. Not needed for
+# the workshop -- mask it so it never grabs the port.
+sudo systemctl disable --now avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+sudo systemctl mask avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+
 # Session: xfce for the RDP user.
 echo "xfce4-session" | sudo tee "/home/$RDP_USER/.xsession" >/dev/null
 sudo chown "$RDP_USER:$RDP_USER" "/home/$RDP_USER/.xsession"

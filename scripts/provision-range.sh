@@ -34,6 +34,14 @@ sudo sysctl -w vm.max_map_count=262144 >/dev/null
 # shellcheck disable=SC1091
 source .venv/bin/activate 2>/dev/null || true
 
+# 0. Free UDP :5353 for the aptl `dns` node. The RDP desktop pulls in
+#    avahi-daemon (mDNS on 5353); on a fresh boot it wins the port before the
+#    lab starts, so the dns container cannot bind and the whole realization
+#    fails (BaseSubstrateOp on node dns). avahi is not needed here -- mask it.
+echo "--- free :5353 (mask avahi) ---"
+sudo systemctl disable --now avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+sudo systemctl mask avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
+
 # 1. Clean any lab state captured into the AMI so we build fresh from images.
 echo "--- clean-slate baked lab state ---"
 pkill -f 'aptl lab start' 2>/dev/null || true

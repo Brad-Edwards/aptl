@@ -86,7 +86,10 @@ bash scripts/seed-prime.sh || echo "WARN: seed-prime reported issues"
 #     guacd -> xrdp on localhost) share it, and the guac RDP connection is kept
 #     in sync so guacd can still log in.
 echo "--- per-range secure init ---"
-UD="$(curl -s -m5 http://169.254.169.254/latest/user-data 2>/dev/null || true)"
+# IMDSv2 requires a session token; a plain GET returns 401 and yields no
+# user-data (which would silently fall back to the default passphrase).
+_imds_tok="$(curl -s -m5 -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' 2>/dev/null || true)"
+UD="$(curl -s -m5 -H "X-aws-ec2-metadata-token: ${_imds_tok}" http://169.254.169.254/latest/user-data 2>/dev/null || true)"
 RANGE_PASS="$(printf '%s\n' "$UD" | sed -n 's/^APTL_RANGE_PASS=//p' | head -1)"
 RANGE_PASS="${RANGE_PASS:-AptlArsenal!2026}"
 echo "ubuntu:${RANGE_PASS}" | sudo chpasswd || true

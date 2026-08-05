@@ -80,27 +80,38 @@ echo "Launching $COUNT range(s) from $AMI ..."
   echo "SEATS:"
 } > "$CREDS"
 
+# Phase 1: launch all instances (each with its own passphrase via user-data),
+# no per-instance wait -- they boot and provision in parallel.
+declare -A SEAT_ID SEAT_PASS
 i=1
 while [ "$i" -le "$COUNT" ]; do
     seat=$(printf "seat-%02d" "$i")
     pass="$(gen_pass)"
-    ud="APTL_RANGE_PASS=$pass"
     id=$(aws ec2 run-instances \
         --image-id "$AMI" --count 1 --instance-type "$TYPE" \
         --key-name "$KEY" --security-group-ids "$SG" --subnet-id "$SUBNET" \
         --iam-instance-profile "Name=$IAM" \
-        --user-data "$ud" \
+        --user-data "APTL_RANGE_PASS=$pass" \
+        --metadata-options "HttpTokens=optional,HttpEndpoint=enabled" \
         --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=${APTL_ROOT_GB:-150},VolumeType=gp3}" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=aptl-arsenal-$seat},{Key=aptl-workshop,Value=arsenal-2026}]" \
         --query 'Instances[0].InstanceId' --output text)
-    echo "[$seat] $id launching ..."
-    aws ec2 wait instance-running --instance-ids "$id"
+    SEAT_ID[$seat]="$id"; SEAT_PASS[$seat]="$pass"
+    echo "[$seat] $id launched"
+    i=$((i + 1))
+done
+
+# Phase 2: wait for them all to reach running (batched), then collect public IPs.
+echo "Waiting for all $COUNT instance(s) to reach running ..."
+aws ec2 wait instance-running --instance-ids ${SEAT_ID[@]}
+for i in $(seq 1 "$COUNT"); do
+    seat=$(printf "seat-%02d" "$i")
+    id="${SEAT_ID[$seat]}"; pass="${SEAT_PASS[$seat]}"
     ip=$(aws ec2 describe-instances --instance-ids "$id" \
         --query 'Reservations[].Instances[].PublicIpAddress' --output text)
     echo "$seat  $id  $ip  $pass" | tee -a "$OUT/INDEX.txt"
     printf "  %s\n    URL:        https://%s:9443/guacamole\n    Login:      guacadmin / %s\n    Instance:   %s\n\n" \
         "$seat" "$ip" "$pass" "$id" >> "$CREDS"
-    i=$((i + 1))
 done
 
 echo

@@ -80,6 +80,47 @@ aptl lab start || echo "WARN: aptl lab start returned non-zero (kali readiness '
 echo "--- re-assert env-pack fixups (idempotent) ---"
 bash scripts/seed-prime.sh || echo "WARN: seed-prime reported issues"
 
+# 4b. Per-range identity + agent desktop. The range passphrase is passed via EC2
+#     user-data at launch (`APTL_RANGE_PASS=...`); fall back to a default for a
+#     manual boot. Guacamole (browser entry) and the ubuntu OS account (used by
+#     guacd -> xrdp on localhost) share it, and the guac RDP connection is kept
+#     in sync so guacd can still log in.
+echo "--- per-range secure init ---"
+UD="$(curl -s -m5 http://169.254.169.254/latest/user-data 2>/dev/null || true)"
+RANGE_PASS="$(printf '%s\n' "$UD" | sed -n 's/^APTL_RANGE_PASS=//p' | head -1)"
+RANGE_PASS="${RANGE_PASS:-AptlArsenal!2026}"
+echo "ubuntu:${RANGE_PASS}" | sudo chpasswd || true
+sudo passwd -u ubuntu >/dev/null 2>&1 || true
+
+if [ -f /home/ubuntu/guac/docker-compose.yml ]; then
+    echo "--- guac stack ---"
+    docker compose -p guac -f /home/ubuntu/guac/docker-compose.yml up -d >/dev/null 2>&1 || true
+    for _ in $(seq 1 25); do
+        [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/guacamole/ 2>/dev/null)" = "200" ] && break
+        sleep 3
+    done
+    # keep the guac RDP connection password in sync with the ubuntu account
+    docker exec guac-postgres psql -U guacamole -d guacamole_db -c \
+      "UPDATE guacamole_connection_parameter SET parameter_value='${RANGE_PASS}' WHERE parameter_name='password' AND connection_id IN (SELECT connection_id FROM guacamole_connection WHERE connection_name='Kali Range Desktop');" >/dev/null 2>&1 || true
+    # set the guacadmin web password from the default baked value (once)
+    T="$(curl -s -X POST http://localhost:8090/guacamole/api/tokens -d 'username=guacadmin&password=guacadmin' | python3 -c 'import sys,json;print(json.load(sys.stdin).get("authToken",""))' 2>/dev/null)"
+    if [ -n "$T" ]; then
+        curl -s -o /dev/null -X PUT "http://localhost:8090/guacamole/api/session/data/postgresql/users/guacadmin/password?token=${T}" \
+          -H 'Content-Type: application/json' -d "{\"oldPassword\":\"guacadmin\",\"newPassword\":\"${RANGE_PASS}\"}"
+        echo "guac web password set from user-data"
+    else
+        echo "guac web password already non-default (left as-is)"
+    fi
+fi
+
+# Recreate the red/blue Claude tmux sessions. The baked ~/.claude.json carries
+# the completed onboarding + folder-trust + bypass acceptance, so the agents
+# launch straight to a prompt with no interactive dialogs.
+if [ -x scripts/setup-purple-demo.sh ]; then
+    echo "--- purple team sessions ---"
+    bash scripts/setup-purple-demo.sh >/tmp/purple-setup.log 2>&1 || echo "WARN: purple setup issues (see /tmp/purple-setup.log)"
+fi
+
 # 5. Verify the range is actually usable.
 echo "--- verify ---"
 UP=$(docker ps -q --filter name=aptl- | wc -l)

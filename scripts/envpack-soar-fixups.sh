@@ -88,7 +88,7 @@ fix_misp() {
         --network "$net" --network-alias aptl-misp --network-alias misp \
         -e MYSQL_HOST=misp-db -e MYSQL_DATABASE=misp -e MYSQL_USER=misp -e MYSQL_PASSWORD=misp_db_password \
         -e ADMIN_EMAIL=admin@admin.test -e ADMIN_PASSWORD=admin -e ADMIN_KEY="$MISP_API_KEY" \
-        -e BASE_URL=https://localhost -e REDIS_HOST=misp-redis \
+        -e BASE_URL=https://localhost:8443 -e REDIS_HOST=misp-redis \
         -v aptl_misp_config:/var/www/MISP/app/Config -v aptl_misp_data:/var/www/MISP/app/files \
         -v "$CERT_BASE/misp/server.pem":/etc/nginx/certs/cert.pem:ro \
         -v "$CERT_BASE/misp/server.key":/etc/nginx/certs/key.pem:ro \

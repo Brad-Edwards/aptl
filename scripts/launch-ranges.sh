@@ -53,7 +53,7 @@ IDS=$(aws ec2 run-instances \
     --image-id "$AMI" --count "$COUNT" --instance-type "$TYPE" \
     --key-name "$KEY" --security-group-ids "$SG" --subnet-id "$SUBNET" \
     --iam-instance-profile "Name=$IAM" \
-    --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=100,VolumeType=gp3}' \
+    --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=${APTL_ROOT_GB:-150},VolumeType=gp3}" \
     --tag-specifications \
       'ResourceType=instance,Tags=[{Key=Name,Value=aptl-arsenal-seat},{Key=aptl-workshop,Value=arsenal-2026}]' \
     --query 'Instances[].InstanceId' --output text)

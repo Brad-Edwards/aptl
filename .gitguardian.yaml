@@ -22,3 +22,23 @@ secret:
     # A scenario honeypot credential, never a real secret.
     - name: techvault-honeypot-db-password
       match: "techvault_db_pass"
+    # Deterministic SOC-stack lab fixture credentials for the disposable,
+    # single-user local TechVault range. Identical to the values in the
+    # checked-in docker-compose.yml the SOC services have always run with; the
+    # temporary env-pack SOAR fixup (scripts/envpack-soar-fixups.sh) and the seed
+    # scripts must use exactly these to match the realized containers. Lab
+    # defaults, never real secrets.
+    - name: techvault-misp-redis-fixture-password
+      match: "redispassword"
+    - name: techvault-misp-db-fixture-password
+      match: "misp_db_password"
+    - name: techvault-misp-db-fixture-root-password
+      match: "misp_root_password"
+    - name: techvault-shuffle-opensearch-fixture-password
+      match: "StrongPassword123!"
+    - name: techvault-shuffle-fixture-admin-password
+      match: "ShuffleAdmin2024!"
+    - name: techvault-shuffle-fixture-api-key
+      match: "31a211c4-ea5c-4a49-b022-5e2434e758a7"
+    - name: techvault-misp-fixture-api-key
+      match: "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"

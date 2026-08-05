@@ -59,11 +59,15 @@ Name=Purple Team Terminals
 Exec=xfce4-terminal --maximize --tab --title=RED --command="bash -lc 'tmux attach -t red'" --tab --title=BLUE --command="bash -lc 'tmux attach -t blue'"
 X-GNOME-Autostart-enabled=true
 DESK
-cat > /home/ubuntu/.config/autostart/wazuh.desktop <<'DESK'
+# Open a ready browser window on login (navigates nowhere), so participants
+# land on the desktop with a browser already up and don't wait on a first launch.
+rm -f /home/ubuntu/.config/autostart/wazuh.desktop
+cat > /home/ubuntu/.config/autostart/browser.desktop <<'DESK'
 [Desktop Entry]
 Type=Application
-Name=Wazuh Dashboard
-Exec=epiphany-browser https://localhost/
+Name=Browser
+Comment=Open a ready browser window (no navigation)
+Exec=firefox about:blank
 X-GNOME-Autostart-enabled=true
 DESK
 chown -R ubuntu:ubuntu /home/ubuntu/.config/autostart

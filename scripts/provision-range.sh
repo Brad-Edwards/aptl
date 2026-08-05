@@ -102,15 +102,17 @@ if [ -f /home/ubuntu/guac/docker-compose.yml ]; then
     # keep the guac RDP connection password in sync with the ubuntu account
     docker exec guac-postgres psql -U guacamole -d guacamole_db -c \
       "UPDATE guacamole_connection_parameter SET parameter_value='${RANGE_PASS}' WHERE parameter_name='password' AND connection_id IN (SELECT connection_id FROM guacamole_connection WHERE connection_name='Kali Range Desktop');" >/dev/null 2>&1 || true
-    # set the guacadmin web password from the default baked value (once)
-    T="$(curl -s -X POST http://localhost:8090/guacamole/api/tokens -d 'username=guacadmin&password=guacadmin' | python3 -c 'import sys,json;print(json.load(sys.stdin).get("authToken",""))' 2>/dev/null)"
-    if [ -n "$T" ]; then
-        curl -s -o /dev/null -X PUT "http://localhost:8090/guacamole/api/session/data/postgresql/users/guacadmin/password?token=${T}" \
-          -H 'Content-Type: application/json' -d "{\"oldPassword\":\"guacadmin\",\"newPassword\":\"${RANGE_PASS}\"}"
-        echo "guac web password set from user-data"
-    else
-        echo "guac web password already non-default (left as-is)"
-    fi
+    # Set the guacadmin web password to the range passphrase via SQL (robust: no
+    # dependency on the previous password). Guacamole hashes as
+    # SHA-256(password + UPPERCASE_HEX(salt)).
+    python3 - "$RANGE_PASS" <<'PY' | docker exec -i guac-postgres psql -U guacamole -d guacamole_db >/dev/null 2>&1 && echo "guac web password set (SQL)" || echo "WARN: guac password set failed"
+import sys, os, hashlib
+pw = sys.argv[1]
+salt = os.urandom(32)
+h = hashlib.sha256(pw.encode() + salt.hex().upper().encode()).hexdigest()
+print("UPDATE guacamole_user SET password_hash=decode('%s','hex'), password_salt=decode('%s','hex'), password_date=now() "
+      "WHERE entity_id=(SELECT entity_id FROM guacamole_entity WHERE name='guacadmin' AND type='USER');" % (h, salt.hex()))
+PY
 fi
 
 # Recreate the red/blue Claude tmux sessions. The baked ~/.claude.json carries

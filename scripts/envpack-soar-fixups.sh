@@ -151,10 +151,45 @@ wait_shuffle() {
     log "WARNING: shuffle-backend not serving after 300s"
 }
 
+# --- MCP participant endpoints ----------------------------------------------
+# The participant MCP servers connect to https://localhost:{8443 MISP, 9000
+# TheHive, 3443 Shuffle} and verify strictly (verify_ssl + ca_cert_path
+# lab-ca.pem). The env-pack publishes only wazuh 9200/55000 + dashboard 443, so
+# those three MCP smoke checks (threatintel/cases/soar) have nothing to reach.
+# The pre-#875 compose published all three on 127.0.0.1. Republish them with a
+# small TLS-terminating socat proxy that serves a lab-CA localhost certificate
+# (so verification passes) and forwards to each backend: MISP already serves a
+# localhost-SAN lab cert (TCP passthrough); TheHive serves plain HTTP (terminate
+# TLS, forward plaintext); Shuffle serves its own cert (terminate + re-originate,
+# ignoring the backend cert). This restores documented plumbing without changing
+# the access model or recreating the heavy TheHive/Shuffle-frontend containers.
+fix_mcp_endpoints() {
+    _present aptl-thehive || return 0
+    local net cert key
+    net="$(_net aptl-thehive)"
+    cert="$CERT_BASE/misp/server.pem"   # lab-CA-signed, SAN includes localhost
+    key="$CERT_BASE/misp/server.key"
+    if [ ! -f "$cert" ] || [ ! -f "$key" ]; then
+        log "localhost cert missing; skipping MCP endpoint proxy"; return 0
+    fi
+    log "publishing MCP HTTPS endpoints (MISP:8443, TheHive:9000, Shuffle:3443) via TLS proxy"
+    docker rm -f aptl-mcp-endpoints >/dev/null 2>&1 || true
+    local socat_script
+    socat_script='socat TCP-LISTEN:8443,fork,reuseaddr TCP:misp:443 & socat OPENSSL-LISTEN:9000,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 TCP:thehive:9000 & socat OPENSSL-LISTEN:3443,fork,reuseaddr,cert=/certs/localhost.pem,key=/certs/localhost.key,verify=0 OPENSSL-CONNECT:shuffle-frontend:443,verify=0 & wait'
+    docker run -d --name aptl-mcp-endpoints --restart unless-stopped \
+        --label com.docker.compose.project=aptl \
+        --label com.docker.compose.service=mcp-endpoints \
+        --network "$net" \
+        -p 127.0.0.1:8443:8443 -p 127.0.0.1:9000:9000 -p 127.0.0.1:3443:3443 \
+        -v "$cert":/certs/localhost.pem:ro -v "$key":/certs/localhost.key:ro \
+        --entrypoint /bin/sh alpine/socat -c "$socat_script" >/dev/null
+}
+
 log "applying temporary env-pack SOAR fixups (see header for tracking issues)"
 fix_misp_redis
 fix_misp
 fix_shuffle_backend
 wait_misp
 wait_shuffle
+fix_mcp_endpoints
 log "done"

@@ -54,10 +54,9 @@ def _invert(outcome: str) -> str:
     return outcome
 
 
-def _corroborated_subject(subject: str, snapshot: RuntimeSnapshot) -> tuple[str, str] | None:
-    """Return ``(field_schema_digest, boundary_ref)`` if ``subject`` is an observed
-    content-placement corroborating the ``service_materialization`` concern, else
-    ``None`` (APTL cannot observe this subject's proposition).
+def _service_materialization_binding(subject: str, snapshot: RuntimeSnapshot) -> Mapping[str, Any] | None:
+    """Return ``subject``'s ``service_materialization`` binding if it is an observed
+    content-placement bound to :data:`INTERFACE_PROFILE`, else ``None``.
     """
 
     entry = snapshot.entries.get(subject)
@@ -65,7 +64,19 @@ def _corroborated_subject(subject: str, snapshot: RuntimeSnapshot) -> tuple[str,
         return None
     payload = entry.payload if isinstance(entry.payload, Mapping) else {}
     binding = payload.get("service_materialization")
-    if not isinstance(binding, Mapping) or binding.get("interface_profile") != INTERFACE_PROFILE:
+    if isinstance(binding, Mapping) and binding.get("interface_profile") == INTERFACE_PROFILE:
+        return binding
+    return None
+
+
+def _corroborated_subject(subject: str, snapshot: RuntimeSnapshot) -> tuple[str, str] | None:
+    """Return ``(field_schema_digest, boundary_ref)`` if ``subject`` is an observed
+    content-placement corroborating the ``service_materialization`` concern, else
+    ``None`` (APTL cannot observe this subject's proposition).
+    """
+
+    binding = _service_materialization_binding(subject, snapshot)
+    if binding is None:
         return None
     digest = binding.get("canonical_field_schema_digest")
     boundaries = _string_tuple(binding.get("observation_boundary_addresses"))

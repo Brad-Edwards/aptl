@@ -85,7 +85,8 @@ class ComposeSeedExecutionMixin(object):
                 f"Seeding named volume '{seed.volume_suffix}' failed"
             )
 
-    def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
+    @staticmethod
+    def _build_seed_script(seed: NamedVolumeSeed) -> str:
         """Build the fixed-path copy script for one seed.
 
         Only fixed container paths and validated relpaths enter shell text.

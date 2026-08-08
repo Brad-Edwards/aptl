@@ -34,11 +34,29 @@ sudo sysctl -w vm.max_map_count=262144 >/dev/null
 # shellcheck disable=SC1091
 source .venv/bin/activate 2>/dev/null || true
 
+# -2. Resolve the range passphrase once, up front, so the early RDP unlock
+#     below and the later guac/RDP sync (step 4b) use the same value.
+#     Preference order: APTL_RDP_PASS/APTL_RANGE_PASS (explicit override) ->
+#     EC2 user-data (`APTL_RANGE_PASS=...`, IMDSv2) -> a freshly generated
+#     password for a manual boot. There is no fixed fallback: this script is
+#     public, and a constant default becomes a known credential for any range
+#     that ends up guac-exposed without user-data.
+echo "--- resolve range passphrase ---"
+# IMDSv2 requires a session token; a plain GET returns 401 and yields no
+# user-data.
+_imds_tok="$(curl -s -m5 -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' 2>/dev/null || true)"
+UD="$(curl -s -m5 -H "X-aws-ec2-metadata-token: ${_imds_tok}" http://169.254.169.254/latest/user-data 2>/dev/null || true)"
+RANGE_PASS="${APTL_RDP_PASS:-${APTL_RANGE_PASS:-$(printf '%s\n' "$UD" | sed -n 's/^APTL_RANGE_PASS=//p' | head -1)}}"
+if [ -z "$RANGE_PASS" ]; then
+    RANGE_PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)"
+    echo "no range passphrase supplied; generated one for this boot (also captured in $LOG): $RANGE_PASS"
+fi
+
 # -1. Re-assert the RDP login password. cloud-init locks the default user's
 #     password on a fresh clone's first boot, overriding what the AMI baked, so
 #     RDP auth fails ("login failed for user ubuntu"). This runs after cloud-init.
 echo "--- set RDP password ---"
-echo "${APTL_RDP_USER:-ubuntu}:${APTL_RDP_PASS:-AptlArsenal!2026}" | sudo chpasswd || true
+echo "${APTL_RDP_USER:-ubuntu}:${RANGE_PASS}" | sudo chpasswd || true
 sudo passwd -u "${APTL_RDP_USER:-ubuntu}" >/dev/null 2>&1 || true
 
 # 0. Free UDP :5353 for the aptl `dns` node. The RDP desktop pulls in
@@ -80,18 +98,12 @@ aptl lab start || echo "WARN: aptl lab start returned non-zero (kali readiness '
 echo "--- re-assert env-pack fixups (idempotent) ---"
 bash scripts/seed-prime.sh || echo "WARN: seed-prime reported issues"
 
-# 4b. Per-range identity + agent desktop. The range passphrase is passed via EC2
-#     user-data at launch (`APTL_RANGE_PASS=...`); fall back to a default for a
-#     manual boot. Guacamole (browser entry) and the ubuntu OS account (used by
-#     guacd -> xrdp on localhost) share it, and the guac RDP connection is kept
-#     in sync so guacd can still log in.
+# 4b. Per-range identity + agent desktop. Re-assert the passphrase resolved
+#     above (cloud-init or an earlier step may have drifted it) and sync
+#     Guacamole (browser entry) and the ubuntu OS account (used by
+#     guacd -> xrdp on localhost) to match, keeping the guac RDP connection in
+#     sync so guacd can still log in.
 echo "--- per-range secure init ---"
-# IMDSv2 requires a session token; a plain GET returns 401 and yields no
-# user-data (which would silently fall back to the default passphrase).
-_imds_tok="$(curl -s -m5 -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' 2>/dev/null || true)"
-UD="$(curl -s -m5 -H "X-aws-ec2-metadata-token: ${_imds_tok}" http://169.254.169.254/latest/user-data 2>/dev/null || true)"
-RANGE_PASS="$(printf '%s\n' "$UD" | sed -n 's/^APTL_RANGE_PASS=//p' | head -1)"
-RANGE_PASS="${RANGE_PASS:-AptlArsenal!2026}"
 echo "ubuntu:${RANGE_PASS}" | sudo chpasswd || true
 sudo passwd -u ubuntu >/dev/null 2>&1 || true
 

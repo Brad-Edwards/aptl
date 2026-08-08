@@ -42,3 +42,11 @@ secret:
       match: "31a211c4-ea5c-4a49-b022-5e2434e758a7"
     - name: techvault-misp-fixture-api-key
       match: "JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw"
+    # scripts/envpack-soar-fixups.sh (#889) recreates aptl-misp-redis and
+    # aptl-misp with the same lab defaults docker-compose.yml has always run
+    # with, restated on new lines the scanner treats as fresh occurrences.
+    # Same lab defaults, same non-secret rationale as the entries above.
+    - name: envpack-soar-fixups-misp-redis-password
+      match: "redispassword"
+    - name: envpack-soar-fixups-misp-db-root-password
+      match: "misp_root_password"

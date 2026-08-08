@@ -456,6 +456,30 @@ def _requires_live_realization_harness(case: object) -> bool:
     )
 
 
+def _report_failure_diagnostic(
+    report: BackendConformanceReport,
+    tolerated_cases: list[object],
+    blocking_cases: list[object],
+    report_codes: list[str],
+) -> str | None:
+    """Return the target-conformance failure diagnostic, or ``None`` if fully tolerated.
+
+    Suppresses the failure only when it is fully explained by tolerated
+    live-realization cases; any other failed report still fails the gate.
+    """
+
+    if report.passed:
+        return None
+    fully_tolerated = bool(tolerated_cases) and not blocking_cases and not report_codes
+    if fully_tolerated:
+        return None
+    codes = (
+        ", ".join(report_codes + [f"case:{case.name}" for case in blocking_cases])
+        or "unknown"
+    )
+    return f"target conformance failed (diagnostics: {codes})"
+
+
 def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[str]:
     """Turn a target conformance report into gate diagnostics."""
     diagnostics: list[str] = []
@@ -463,16 +487,9 @@ def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[st
     tolerated_cases = [case for case in failing_cases if _requires_live_realization_harness(case)]
     blocking_cases = [case for case in failing_cases if case not in tolerated_cases]
     report_codes = sorted({d.code for d in report.diagnostics})
-    if not report.passed:
-        # Suppress the failure only when it is fully explained by tolerated
-        # live-realization cases; any other failed report still fails the gate.
-        fully_tolerated = bool(tolerated_cases) and not blocking_cases and not report_codes
-        if not fully_tolerated:
-            codes = (
-                ", ".join(report_codes + [f"case:{case.name}" for case in blocking_cases])
-                or "unknown"
-            )
-            diagnostics.append(f"target conformance failed (diagnostics: {codes})")
+    failure = _report_failure_diagnostic(report, tolerated_cases, blocking_cases, report_codes)
+    if failure is not None:
+        diagnostics.append(failure)
     if report.unsupported_contract_gaps:
         diagnostics.append(
             "manifest missing required contracts: "

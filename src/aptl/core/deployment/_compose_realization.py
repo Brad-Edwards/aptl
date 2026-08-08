@@ -24,10 +24,8 @@ from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
-from aptl.core.deployment._compose_service_health import wait_for_realized_health
-from aptl.core.deployment._service_index_materialization import (
-    MATERIALIZATION_TIMEOUT,
-    materialize_search_index_schema,
+from aptl.core.deployment._compose_service_index_realization import (
+    ComposeRealizationServiceIndexMixin,
 )
 from aptl.core.deployment._compose_stateful_realization import (
     ComposeStatefulRealizationMixin,
@@ -73,6 +71,7 @@ class ComposeRealizationMixin(
     ComposeRealizationAccountMixin,
     ComposeRealizationModelMixin,
     ComposeRealizationPostStartMixin,
+    ComposeRealizationServiceIndexMixin,
     ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
@@ -369,87 +368,6 @@ class ComposeRealizationMixin(
             persistent_volumes=realization.persistent_volumes,
         )
         return node_result if node_result is not None else LabResult(success=True)
-
-    def _materialize_service_index_schemas(
-        self,
-        realization: DeploymentRealizationSpec,
-        *,
-        build: bool,
-        compose_files: tuple[Path, ...] | None,
-        exclude_services: tuple[str, ...],
-        scenario_root: Path,
-    ) -> LabResult | None:
-        """Materialize and prove ADR-088 search-index schemas before the workload.
-
-        Returns ``None`` when there is nothing to do or every schema materialized
-        and read back cleanly; a fail-closed :class:`LabResult` otherwise. The
-        target service and its ``depends_on`` closure are started first and
-        observed healthy, then each declared portable field schema is ensured on
-        the service through its native interface and proven by a fresh native
-        readback whose portable projection reproduces the declared digest. Only
-        after every schema is proven does the caller start the general workload,
-        so a consumer such as Cortex never races the initial state it needs.
-        """
-
-        schemas = realization.service_index_schemas
-        if not schemas:
-            return None
-
-        node_by_address = {node.address: node for node in realization.nodes}
-        target_containers: dict[str, str] = {}
-        target_services: set[str] = set()
-        for schema in schemas:
-            node = node_by_address.get(schema.target_address)
-            if node is None or not node.service_name or not node.container_name:
-                return LabResult(
-                    success=False,
-                    error=(
-                        "service materialization target "
-                        f"'{schema.target_address}' is not a realizable node service"
-                    ),
-                )
-            target_services.add(node.service_name)
-            target_containers[schema.address] = node.container_name
-
-        start = self._start_realized_services(
-            list(realization.profiles),
-            build=build,
-            compose_files=compose_files,
-            exclude_services=exclude_services,
-            only_services=tuple(sorted(target_services)),
-            scenario_root=scenario_root,
-        )
-        if not start.success:
-            return start
-
-        health = wait_for_realized_health(self, sorted(set(target_containers.values())))
-        if health:
-            return LabResult(success=False, error="; ".join(health[:5]))
-
-        evidence: dict[str, dict[str, object]] = {}
-        for schema in schemas:
-            container = target_containers[schema.address]
-
-            def _run_script(script: str, _container: str = container) -> object:
-                return self.container_exec_with_input(
-                    _container, ["sh", "-s"], script, timeout=MATERIALIZATION_TIMEOUT
-                )
-
-            result = materialize_search_index_schema(_run_script, schema)
-            if not result.ok:
-                return LabResult(
-                    success=False,
-                    error=(
-                        f"service materialization failed for {schema.address} "
-                        f"(reason={result.reason})"
-                    ),
-                )
-            evidence[schema.address] = result.evidence()
-
-        # Stash the safe portable readback evidence for observation (SEM-218);
-        # never the raw native response.
-        self._service_index_materialization_evidence = evidence
-        return None
 
     def _realize_published_ports(
         self,

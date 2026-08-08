@@ -100,7 +100,8 @@ def test_readback_fails_closed_on_absent_typeless_or_weakened_field(observed: di
     declared = sis.canonical_field_schema_digest(_CORTEX_FIELDS)
     ok, _projection, reason = sis.verify_readback(observed, _CORTEX_FIELDS, declared_digest=declared)
     assert ok is False
-    assert reason is not None and needle in reason
+    assert reason is not None
+    assert needle in reason
 
 
 def test_readback_proves_matching_native_schema() -> None:

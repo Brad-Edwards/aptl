@@ -45,11 +45,33 @@ _TIME_DOMAIN = "scenario_time"
 
 
 def _invert(outcome: str) -> str:
+    """Flip a ``true``/``false`` outcome string; any other value passes through."""
+
     if outcome == _TRUE:
         return _FALSE
     if outcome == _FALSE:
         return _TRUE
     return outcome
+
+
+def _corroborated_subject(subject: str, snapshot: RuntimeSnapshot) -> tuple[str, str] | None:
+    """Return ``(field_schema_digest, boundary_ref)`` if ``subject`` is an observed
+    content-placement corroborating the ``service_materialization`` concern, else
+    ``None`` (APTL cannot observe this subject's proposition).
+    """
+
+    entry = snapshot.entries.get(subject)
+    if entry is None or entry.resource_type != _CONTENT_PLACEMENT:
+        return None
+    payload = entry.payload if isinstance(entry.payload, Mapping) else {}
+    binding = payload.get("service_materialization")
+    if not isinstance(binding, Mapping) or binding.get("interface_profile") != INTERFACE_PROFILE:
+        return None
+    digest = binding.get("canonical_field_schema_digest")
+    boundaries = _string_tuple(binding.get("observation_boundary_addresses"))
+    if not isinstance(digest, str) or not digest or not boundaries:
+        return None
+    return digest, boundaries[0]
 
 
 def _service_content_subject_outcome(
@@ -72,32 +94,87 @@ def _service_content_subject_outcome(
     digest = ""
     boundary_ref = ""
     for subject in subjects:
-        entry = snapshot.entries.get(subject)
-        if entry is None or entry.resource_type != _CONTENT_PLACEMENT:
+        corroboration = _corroborated_subject(subject, snapshot)
+        if corroboration is None:
             return None
-        payload = entry.payload if isinstance(entry.payload, Mapping) else {}
-        binding = payload.get("service_materialization")
-        if not isinstance(binding, Mapping):
-            return None
-        if binding.get("interface_profile") != INTERFACE_PROFILE:
-            return None
-        subject_digest = binding.get("canonical_field_schema_digest")
-        if not isinstance(subject_digest, str) or not subject_digest:
-            return None
-        boundaries = _string_tuple(binding.get("observation_boundary_addresses"))
-        if not boundaries:
-            return None
-        digest = subject_digest
-        boundary_ref = boundaries[0]
+        digest, boundary_ref = corroboration
     return _TRUE, digest, boundary_ref
 
 
 def _string_tuple(raw: object) -> tuple[str, ...]:
+    """Coerce a string or list/tuple of values into a tuple of non-empty strings."""
+
     if isinstance(raw, str):
         return (raw,) if raw else ()
     if isinstance(raw, (list, tuple)):
         return tuple(str(v) for v in raw if str(v))
     return ()
+
+
+def _split_plan_operations(
+    plan: EvaluationPlan,
+) -> tuple[dict[str, Mapping[str, Any]], dict[str, Mapping[str, Any]]]:
+    """Split ``plan``'s actionable operations into propositions and assertions, keyed by address."""
+
+    propositions: dict[str, Mapping[str, Any]] = {}
+    assertions: dict[str, Mapping[str, Any]] = {}
+    for op in plan.actionable_operations:
+        if op.resource_type == "proposition" and isinstance(op.payload, Mapping):
+            propositions[op.address] = op.payload
+        elif op.resource_type == "assertion" and isinstance(op.payload, Mapping):
+            assertions[op.address] = op.payload
+    return propositions, assertions
+
+
+def _project_assertion_result(
+    assertion_address: str,
+    apayload: Mapping[str, Any],
+    propositions: Mapping[str, Mapping[str, Any]],
+    snapshot: RuntimeSnapshot,
+) -> dict[str, Any] | None:
+    """Project one assertion's truth-result envelope, or ``None`` if APTL can't corroborate it."""
+
+    proposition_address = apayload.get("proposition_address")
+    ppayload = propositions.get(proposition_address) if isinstance(proposition_address, str) else None
+    if ppayload is None or ppayload.get("evaluation_basis") != _OBSERVED_STATE:
+        return None
+    corroborated = _service_content_subject_outcome(
+        _string_tuple(ppayload.get("subject_addresses")), snapshot
+    )
+    if corroborated is None:
+        return None
+    outcome, field_schema_digest, boundary_ref = corroborated
+    polarity = apayload.get("polarity", _POSITIVE)
+    polarity = polarity if polarity in (_POSITIVE, "negative") else _POSITIVE
+    assertion_outcome = outcome if polarity == _POSITIVE else _invert(outcome)
+    evidence_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
+    result: dict[str, Any] = {
+        "schema_version": "proposition-truth-result/v1",
+        "result_id": f"aptl:{assertion_address}",
+        "proposition_address": proposition_address,
+        "assertion_address": assertion_address,
+        "assertion_polarity": polarity,
+        "proposition_outcome": outcome,
+        "assertion_outcome": assertion_outcome,
+        "evaluation_basis": _OBSERVED_STATE,
+        "probe_binding": {
+            "binding_id": f"aptl:{assertion_address}",
+            "implementation_id": _READBACK_IMPLEMENTATION_ID,
+            "implementation_version": APTL_RAES_TARGET_VERSION,
+            "artifact_digest": field_schema_digest,
+            "backend_manifest_ref": _BACKEND_MANIFEST_REF,
+            "proposition_address": proposition_address,
+            "capability_refs": [_SERVICE_INDEX_SCHEMA_CAPABILITY],
+        },
+        "temporal_context": {
+            "boundary_ref": boundary_ref,
+            "time_domain": _TIME_DOMAIN,
+            "clock_authority": _BACKEND_MANIFEST_REF,
+        },
+    }
+    if evidence_refs:
+        result["evidence_refs"] = list(evidence_refs)
+    return result
 
 
 def project_proposition_truth_results(
@@ -110,55 +187,10 @@ def project_proposition_truth_results(
     contract requires it).
     """
 
-    propositions: dict[str, Mapping[str, Any]] = {}
-    assertions: dict[str, Mapping[str, Any]] = {}
-    for op in plan.actionable_operations:
-        if op.resource_type == "proposition" and isinstance(op.payload, Mapping):
-            propositions[op.address] = op.payload
-        elif op.resource_type == "assertion" and isinstance(op.payload, Mapping):
-            assertions[op.address] = op.payload
-
+    propositions, assertions = _split_plan_operations(plan)
     results: dict[str, dict[str, Any]] = {}
     for assertion_address, apayload in assertions.items():
-        proposition_address = apayload.get("proposition_address")
-        ppayload = propositions.get(proposition_address) if isinstance(proposition_address, str) else None
-        if ppayload is None or ppayload.get("evaluation_basis") != _OBSERVED_STATE:
-            continue
-        corroborated = _service_content_subject_outcome(
-            _string_tuple(ppayload.get("subject_addresses")), snapshot
-        )
-        if corroborated is None:
-            continue
-        outcome, field_schema_digest, boundary_ref = corroborated
-        polarity = apayload.get("polarity", _POSITIVE)
-        polarity = polarity if polarity in (_POSITIVE, "negative") else _POSITIVE
-        assertion_outcome = outcome if polarity == _POSITIVE else _invert(outcome)
-        evidence_refs = _string_tuple(ppayload.get("evidence_requirement_refs"))
-        result: dict[str, Any] = {
-            "schema_version": "proposition-truth-result/v1",
-            "result_id": f"aptl:{assertion_address}",
-            "proposition_address": proposition_address,
-            "assertion_address": assertion_address,
-            "assertion_polarity": polarity,
-            "proposition_outcome": outcome,
-            "assertion_outcome": assertion_outcome,
-            "evaluation_basis": _OBSERVED_STATE,
-            "probe_binding": {
-                "binding_id": f"aptl:{assertion_address}",
-                "implementation_id": _READBACK_IMPLEMENTATION_ID,
-                "implementation_version": APTL_RAES_TARGET_VERSION,
-                "artifact_digest": field_schema_digest,
-                "backend_manifest_ref": _BACKEND_MANIFEST_REF,
-                "proposition_address": proposition_address,
-                "capability_refs": [_SERVICE_INDEX_SCHEMA_CAPABILITY],
-            },
-            "temporal_context": {
-                "boundary_ref": boundary_ref,
-                "time_domain": _TIME_DOMAIN,
-                "clock_authority": _BACKEND_MANIFEST_REF,
-            },
-        }
-        if evidence_refs:
-            result["evidence_refs"] = list(evidence_refs)
-        results[assertion_address] = result
+        result = _project_assertion_result(assertion_address, apayload, propositions, snapshot)
+        if result is not None:
+            results[assertion_address] = result
     return results

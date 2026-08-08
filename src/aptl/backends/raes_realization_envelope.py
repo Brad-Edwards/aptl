@@ -51,6 +51,8 @@ _CONCERNS = (
 
 
 def _configuration_payload(provisioner: ProvisionerCapabilities) -> dict[str, object]:
+    """Build the realizer configuration payload, digested in place below."""
+
     configuration: dict[str, object] = {
         "mode": APTL_ENVELOPE_MODE,
         "configuration_digest": _PLACEHOLDER_DIGEST,

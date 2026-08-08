@@ -109,6 +109,24 @@ def desired_native_mapping(
     }
 
 
+def _project_field(field: str, properties: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """Project one declared field's native type to its portable semantic, or a failure reason."""
+
+    entry = properties.get(field)
+    if not isinstance(entry, Mapping):
+        return None, f"declared field '{field}' is absent from the native index mapping"
+    native_type = entry.get("type")
+    if not isinstance(native_type, str) or not native_type:
+        return None, f"declared field '{field}' has no concrete native type"
+    portable = _NATIVE_TYPE_TO_PORTABLE.get(native_type)
+    reason = (
+        None
+        if portable is not None
+        else f"declared field '{field}' native type '{native_type}' is not projectable to a portable semantic"
+    )
+    return portable, reason
+
+
 def project_observed_properties(
     properties: Mapping[str, object],
     declared_fields: Iterable[str],
@@ -123,18 +141,9 @@ def project_observed_properties(
 
     projection: dict[str, str] = {}
     for field in declared_fields:
-        entry = properties.get(field)
-        if not isinstance(entry, Mapping):
-            return None, f"declared field '{field}' is absent from the native index mapping"
-        native_type = entry.get("type")
-        if not isinstance(native_type, str) or not native_type:
-            return None, f"declared field '{field}' has no concrete native type"
-        portable = _NATIVE_TYPE_TO_PORTABLE.get(native_type)
-        if portable is None:
-            return (
-                None,
-                f"declared field '{field}' native type '{native_type}' is not projectable to a portable semantic",
-            )
+        portable, reason = _project_field(field, properties)
+        if reason is not None:
+            return None, reason
         projection[field] = portable
     return projection, None
 

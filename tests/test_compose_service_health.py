@@ -169,4 +169,5 @@ def test_unhealthy_reasons_reports_a_stopped_container():
         _Backend(), ["aptl-stopped", "aptl-wazuh-manager"]
     )
     joined = " ".join(reasons)
-    assert "aptl-stopped" in joined and "not running" in joined
+    assert "aptl-stopped" in joined
+    assert "not running" in joined

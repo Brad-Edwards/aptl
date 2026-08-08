@@ -35,9 +35,14 @@ import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aptl.backends import raes_service_index_schema as sis
+
+if TYPE_CHECKING:
+    from aptl.core.deployment.realization import (
+        DeploymentServiceSearchIndexSchemaRealization,
+    )
 
 # Adapter/configuration binding from the portable content address (canonical
 # ``content.<id>`` identity) to the concrete native index name. This is the one
@@ -75,6 +80,19 @@ _API_READINESS_INTERVAL = 3.0
 RunScript = Callable[[str], Any]
 
 
+class _MaterializationFailure(Exception):
+    """Internal control-flow signal carrying a portable failure reason.
+
+    Raised by the native-exec helper steps below and caught once, at the top of
+    :func:`materialize_search_index_schema`, so each step reports its own
+    failure without every caller re-threading a reason string back up.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 @dataclass(frozen=True)
 class ServiceIndexMaterializationResult:
     """Outcome of one native materialization + readback attempt.
@@ -101,6 +119,15 @@ class ServiceIndexMaterializationResult:
         }
 
 
+@dataclass(frozen=True)
+class _ExecResult:
+    """One ``run_script`` call, split into its HTTP body/status and exit code."""
+
+    body: str
+    http_code: int | None
+    returncode: int
+
+
 def native_index_name(content_name: str) -> str | None:
     """Return the adapter-configured native index name for a content address."""
 
@@ -108,6 +135,8 @@ def native_index_name(content_name: str) -> str | None:
 
 
 def _render_get_mapping_script(index: str) -> str:
+    """Render the stdin script that fetches ``index``'s current mapping."""
+
     # Body then a final line with the HTTP status, so the caller can distinguish
     # 404 (absent) from 200 without the status entering host argv.
     return (
@@ -117,6 +146,8 @@ def _render_get_mapping_script(index: str) -> str:
 
 
 def _render_put_index_script(index: str, mapping_json: str) -> str:
+    """Render the stdin script that creates ``index`` with ``mapping_json``."""
+
     # mapping_json is canonical JSON (double quotes only, no single quotes), so
     # single-quote embedding is injection-safe.
     return (
@@ -143,13 +174,149 @@ def _split_body_and_code(stdout: str) -> tuple[str, int | None]:
 
 
 def _index_section(parsed: Mapping[str, Any], index: str) -> Mapping[str, Any] | None:
+    """Return ``parsed[index]`` if it is itself a mapping, else ``None``."""
+
     section = parsed.get(index)
     return section if isinstance(section, Mapping) else None
 
 
+def _safe_json(text: str) -> Any | None:
+    """Parse JSON, returning ``None`` instead of raising on invalid input."""
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _exec_script(run_script: RunScript, script: str) -> _ExecResult:
+    """Run ``script`` via ``run_script`` and split its stdout into an ``_ExecResult``."""
+
+    result = run_script(script)
+    body, code = _split_body_and_code(getattr(result, "stdout", "") or "")
+    return _ExecResult(
+        body=body, http_code=code, returncode=int(getattr(result, "returncode", 1) or 0)
+    )
+
+
+def _wait_for_native_api(
+    run_script: RunScript,
+    index: str,
+    *,
+    sleep: Callable[[float], None],
+    time_source: Callable[[], float],
+    readiness_timeout: float,
+    readiness_interval: float,
+) -> _ExecResult:
+    """Poll the mapping endpoint until the native API answers an HTTP status.
+
+    The container healthcheck passing does not mean Elasticsearch is serving
+    HTTP yet, so a non-zero exec (docker exec not ready, or curl connection
+    refused) is treated as not-ready and retried until ``readiness_timeout`` is
+    exhausted, rather than failing the first query and forcing a whole-plan
+    retry.
+    """
+
+    deadline = time_source() + readiness_timeout
+    while True:
+        result = _exec_script(run_script, _render_get_mapping_script(index))
+        if result.returncode == 0 and result.http_code is not None:
+            return result
+        if time_source() >= deadline:
+            raise _MaterializationFailure("native-query-failed")
+        sleep(readiness_interval)
+
+
+def _check_ownership(body: str, index: str, address: str) -> None:
+    """Raise unless the existing index at ``index`` is owned by ``address``."""
+
+    existing = _safe_json(body)
+    if not isinstance(existing, Mapping):
+        raise _MaterializationFailure("native-response-unparsable")
+    section = _index_section(existing, index)
+    mappings = section.get("mappings") if isinstance(section, Mapping) else None
+    meta = mappings.get("_meta") if isinstance(mappings, Mapping) else None
+    owner, _owned_digest = sis.owner_marker(meta if isinstance(meta, Mapping) else {})
+    if owner != address:
+        raise _MaterializationFailure("unowned-collision")
+
+
+def _create_index(
+    run_script: RunScript, index: str, address: str, fields: Mapping[str, str], digest: str
+) -> None:
+    """Create ``index`` with the declared portable schema, raising on failure."""
+
+    mapping_body = sis.desired_native_mapping(
+        fields, owner_address=address, field_schema_digest=digest
+    )
+    result = _exec_script(
+        run_script, _render_put_index_script(index, json.dumps(mapping_body, separators=(",", ":")))
+    )
+    if result.returncode != 0 or result.http_code not in (200, 201):
+        raise _MaterializationFailure("native-create-failed")
+
+
+def _ensure_index_exists(
+    run_script: RunScript,
+    index: str,
+    address: str,
+    fields: Mapping[str, str],
+    digest: str,
+    probe: _ExecResult,
+) -> None:
+    """Ensure ``index`` exists and is owned by ``address``, creating it if absent."""
+
+    if probe.http_code == 200:
+        _check_ownership(probe.body, index, address)
+    elif probe.http_code == 404:
+        _create_index(run_script, index, address, fields, digest)
+    else:
+        raise _MaterializationFailure("native-unexpected-status")
+
+
+def _parse_readback_properties(result: _ExecResult, index: str) -> Mapping[str, Any]:
+    """Extract index ``properties`` from a readback exec result, raising on failure."""
+
+    if result.returncode != 0 or result.http_code != 200:
+        raise _MaterializationFailure("native-readback-failed")
+    observed = _safe_json(result.body)
+    if not isinstance(observed, Mapping):
+        raise _MaterializationFailure("native-response-unparsable")
+    section = _index_section(observed, index)
+    mappings = section.get("mappings") if isinstance(section, Mapping) else None
+    properties = mappings.get("properties") if isinstance(mappings, Mapping) else None
+    if not isinstance(properties, Mapping):
+        raise _MaterializationFailure("native-readback-missing-properties")
+    return properties
+
+
+def _read_and_verify_schema(
+    run_script: RunScript, index: str, fields: Mapping[str, str], digest: str
+) -> dict[str, str]:
+    """Fresh native readback (proof), projected and verified against ``digest``."""
+
+    result = _exec_script(run_script, _render_get_mapping_script(index))
+    properties = _parse_readback_properties(result, index)
+    ok, projection, reason = sis.verify_readback(properties, fields, declared_digest=digest)
+    if not ok:
+        raise _MaterializationFailure(reason or "native-readback-mismatch")
+    return projection or {}
+
+
+def _validate_native_index(content_name: str) -> tuple[str | None, str | None]:
+    """Resolve and validate the native index name for ``content_name``, or a reject reason."""
+
+    index = native_index_name(content_name)
+    if index is None:
+        return None, "no-native-index-binding"
+    if _NATIVE_INDEX_RE.fullmatch(index) is None:
+        return None, "native-index-name-unsafe"
+    return index, None
+
+
 def materialize_search_index_schema(
     run_script: RunScript,
-    realization: Any,
+    realization: DeploymentServiceSearchIndexSchemaRealization,
     *,
     sleep: Callable[[float], None] = time.sleep,
     time_source: Callable[[], float] = time.monotonic,
@@ -170,81 +337,34 @@ def materialize_search_index_schema(
     fields = realization.field_semantics_map()
     digest = realization.field_schema_digest
 
-    def _fail(reason: str) -> ServiceIndexMaterializationResult:
+    index, reason = _validate_native_index(content_name)
+    if reason is not None:
         return ServiceIndexMaterializationResult(
             ok=False, address=address, content_name=content_name, reason=reason
         )
 
-    index = native_index_name(content_name)
-    if index is None:
-        return _fail("no-native-index-binding")
-    if _NATIVE_INDEX_RE.fullmatch(index) is None:
-        return _fail("native-index-name-unsafe")
-
-    def _exec(script: str) -> tuple[str, int | None, int]:
-        result = run_script(script)
-        body, code = _split_body_and_code(getattr(result, "stdout", "") or "")
-        return body, code, int(getattr(result, "returncode", 1) or 0)
-
-    # 1. Existence + ownership check (reject-unowned-collision), once the target
-    # service's native API accepts queries. The container healthcheck passing does
-    # not mean Elasticsearch is serving HTTP yet, so retry the mapping query until
-    # it answers with an HTTP status (200/404/...) or the readiness budget is
-    # exhausted -- rather than failing the first query and forcing a whole-plan
-    # retry. A non-zero exec (docker exec not ready, or curl connection refused)
-    # is a not-ready signal, never a materialization verdict.
-    deadline = time_source() + readiness_timeout
-    while True:
-        body, http_code, rc = _exec(_render_get_mapping_script(index))
-        if rc == 0 and http_code is not None:
-            break
-        if time_source() >= deadline:
-            return _fail("native-query-failed")
-        sleep(readiness_interval)
-    if http_code == 200:
-        try:
-            existing = json.loads(body)
-        except json.JSONDecodeError:
-            return _fail("native-response-unparsable")
-        section = _index_section(existing, index) if isinstance(existing, Mapping) else None
-        mappings = section.get("mappings") if isinstance(section, Mapping) else None
-        meta = mappings.get("_meta") if isinstance(mappings, Mapping) else None
-        owner, _owned_digest = sis.owner_marker(meta if isinstance(meta, Mapping) else {})
-        if owner != address:
-            return _fail("unowned-collision")
-        # Owned index: fall through to a fresh readback (idempotent re-entry).
-    elif http_code == 404:
-        mapping_body = sis.desired_native_mapping(
-            fields, owner_address=address, field_schema_digest=digest
-        )
-        _pbody, put_code, put_rc = _exec(
-            _render_put_index_script(index, json.dumps(mapping_body, separators=(",", ":")))
-        )
-        if put_rc != 0 or put_code not in (200, 201):
-            return _fail("native-create-failed")
-    else:
-        return _fail("native-unexpected-status")
-
-    # 2. Fresh native readback (proof) — always after any mutation.
-    rbody, rcode, rrc = _exec(_render_get_mapping_script(index))
-    if rrc != 0 or rcode != 200:
-        return _fail("native-readback-failed")
     try:
-        observed = json.loads(rbody)
-    except json.JSONDecodeError:
-        return _fail("native-response-unparsable")
-    section = _index_section(observed, index) if isinstance(observed, Mapping) else None
-    mappings = section.get("mappings") if isinstance(section, Mapping) else None
-    properties = mappings.get("properties") if isinstance(mappings, Mapping) else None
-    if not isinstance(properties, Mapping):
-        return _fail("native-readback-missing-properties")
-    ok, projection, reason = sis.verify_readback(properties, fields, declared_digest=digest)
-    if not ok:
-        return _fail(reason or "native-readback-mismatch")
+        probe = _wait_for_native_api(
+            run_script,
+            index,
+            sleep=sleep,
+            time_source=time_source,
+            readiness_timeout=readiness_timeout,
+            readiness_interval=readiness_interval,
+        )
+        # 1. Existence + ownership check (reject-unowned-collision), then 2. a
+        # fresh native readback (proof) — always after any mutation.
+        _ensure_index_exists(run_script, index, address, fields, digest, probe)
+        projection = _read_and_verify_schema(run_script, index, fields, digest)
+    except _MaterializationFailure as failure:
+        return ServiceIndexMaterializationResult(
+            ok=False, address=address, content_name=content_name, reason=failure.reason
+        )
+
     return ServiceIndexMaterializationResult(
         ok=True,
         address=address,
         content_name=content_name,
-        projection=projection or {},
+        projection=projection,
         field_schema_digest=digest,
     )

@@ -23,7 +23,6 @@ from raes.scenario import Scenario
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
 from aptl.validation._gate_no_start_backend import _NoStartBackend
 from aptl.validation._gate_raes_cli import (

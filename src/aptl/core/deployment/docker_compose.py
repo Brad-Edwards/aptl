@@ -7,7 +7,7 @@ import json
 import os
 import subprocess
 from collections.abc import Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
@@ -21,10 +21,7 @@ from aptl.core.deployment._compose_realization import ComposeRealizationMixin
 from aptl.core.deployment._compose_seed_attribution import (
     ComposeSeedAttributionMixin,
 )
-from aptl.core.deployment._compose_seed_safety import (
-    assert_safe_relpath,
-    redacted_stderr_hint,
-)
+from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment._compose_boundary import (
     DEFAULT_BOUNDARY_HELPER_IMAGE,
@@ -33,20 +30,19 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
-from aptl.core.seed_spec import NamedVolumeSeed
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
 _DOCKER_TIMEOUT = 30
-_SEED_TIMEOUT = 600
 
 
 class DockerComposeBackend(
     ComposeQueryMixin,
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
+    ComposeSeedExecutionMixin,
     ComposeBaseSubstrateMixin,
     ComposeImageFetchMixin,
 ):
@@ -77,6 +73,11 @@ class DockerComposeBackend(
         ) = None
         self._boundary_receipts: dict[str, dict[str, object]] = {}
         self._boundary_helper_image = DEFAULT_BOUNDARY_HELPER_IMAGE
+        # ADR-088 phased startup (issue #889): safe portable readback evidence
+        # from each proven service-search-index-schema materialization, keyed by
+        # content-placement address. Consumed by realization observation to
+        # disclose the concern only after real corroboration (SEM-218).
+        self._service_index_materialization_evidence: dict[str, dict[str, object]] = {}
 
     @property
     def project_dir(self) -> Path:
@@ -244,6 +245,7 @@ class DockerComposeBackend(
         *,
         build: bool = True,
         exclude_services: tuple[str, ...] = (),
+        only_services: tuple[str, ...] = (),
         scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services via docker compose up.
@@ -255,6 +257,13 @@ class DockerComposeBackend(
                 mixed realization): everything else in the active profiles
                 starts normally, but a node the generic materializer already
                 realized directly must not also start as a Compose container.
+            only_services: When non-empty, bring up only these Compose services
+                (and their ``depends_on`` closure), leaving the rest of the
+                active profiles unstarted. Used by the ADR-088 phased startup
+                (issue #889) to bring the materialization target service up and
+                prove its initial state before the general workload — which
+                consumes that state — is admitted. Do not race a materializer
+                against an unrestricted ``compose up``.
             scenario_root: Bundle root the scenario's Compose model and build
                 contexts resolve against (issue #874). ``None`` is the legacy
                 direct path over the engine's own in-tree compose.
@@ -274,6 +283,9 @@ class DockerComposeBackend(
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
+        # Positional service names must follow the options: `compose up -d <svc>`
+        # starts only the named services plus their depends_on closure.
+        cmd.extend(only_services)
 
         log.info("Starting lab with profiles: %s", profiles)
         log.debug("Command: %s", " ".join(cmd))
@@ -370,119 +382,3 @@ class DockerComposeBackend(
             Tuple of (success, error_message).
         """
         return kill_compose_lab(self, profiles, timeout=_DOCKER_TIMEOUT)
-
-    def seed_named_volumes(
-        self,
-        seeds: Sequence[NamedVolumeSeed],
-        *,
-        seeder_image: str,
-    ) -> None:
-        """Materialize checked-in source into Compose named volumes (ADR-043).
-
-        See :meth:`DeploymentBackend.seed_named_volumes`. Each seed is
-        retired-then-copied by short-lived root containers run through the
-        backend's own ``_run`` so this stays a narrow, typed operation
-        rather than a generic Docker passthrough.
-        """
-        # Validate every declared relpath before the first Docker command so
-        # an unsafe seed can never cause any container or volume side effect.
-        for seed in seeds:
-            for seed_file in seed.files:
-                assert_safe_relpath(seed_file.src)
-                assert_safe_relpath(seed_file.dest)
-        for seed in seeds:
-            self._ensure_labeled_seed_volume(seed)
-            self._retire_legacy_seed_path(seed, seeder_image)
-            self._seed_one_named_volume(seed, seeder_image)
-
-    def _seed_one_named_volume(self, seed: NamedVolumeSeed, seeder_image: str) -> None:
-        """Copy a seed's files into its project-scoped named volume."""
-        # Project scoping (ADR-037): the real volume name is derived from
-        # the configured compose project, never set as an explicit global.
-        volume = f"{self._project_name}_{seed.volume_suffix}"
-        cmd = [
-            "docker",
-            "run",
-            *(["--pull=never"] if self._offline_staged else []),
-            "--rm",
-            "--user",
-            "0:0",
-            "--entrypoint",
-            "/bin/sh",
-            "-v",
-            f"{seed.source_dir}:/src:ro",
-            "-v",
-            f"{volume}:/dest",
-            seeder_image,
-            "-c",
-            self._build_seed_script(seed),
-        ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
-        if result.returncode != 0:
-            log.error(
-                "Seed of volume %s failed (exit %s)%s",
-                seed.volume_suffix,
-                result.returncode,
-                redacted_stderr_hint(result.stderr),
-            )
-            raise BackendSeedError(
-                f"Seeding named volume '{seed.volume_suffix}' failed"
-            )
-
-    def _build_seed_script(self, seed: NamedVolumeSeed) -> str:
-        """Build the fixed-path copy script for one seed.
-
-        Only fixed container paths and validated relpaths enter shell text.
-        """
-        parts = ["set -e"]
-        for seed_file in seed.files:
-            assert_safe_relpath(seed_file.src)
-            assert_safe_relpath(seed_file.dest)
-            dest_dir = PurePosixPath(seed_file.dest).parent
-            if dest_dir.name:
-                parts.append(f"mkdir -p /dest/{dest_dir}")
-            parts.append(f"cp -a /src/{seed_file.src} /dest/{seed_file.dest}")
-        return "; ".join(parts)
-
-    @staticmethod
-    def _assert_safe_relpath(relpath: str) -> None:
-        """Preserve the validation seam shared with content realization."""
-
-        assert_safe_relpath(relpath)
-
-    def _retire_legacy_seed_path(
-        self, seed: NamedVolumeSeed, seeder_image: str
-    ) -> None:
-        """Remove a seed's pre-ADR-043 legacy host bind dir, if present.
-
-        A root container mounts the parent and removes one validated child.
-        """
-        legacy = seed.legacy_retire_path
-        if legacy is None:
-            return
-        name = legacy.name
-        assert_safe_relpath(name)
-        cmd = [
-            "docker",
-            "run",
-            *(["--pull=never"] if self._offline_staged else []),
-            "--rm",
-            "--user",
-            "0:0",
-            "--entrypoint",
-            "rm",
-            "-v",
-            f"{legacy.parent}:/legacy",
-            seeder_image,
-            "-rf",
-            f"/legacy/{name}",
-        ]
-        result = self._run(cmd, timeout=_SEED_TIMEOUT)
-        if result.returncode != 0:
-            log.error(
-                "Retire of legacy seed path %s failed (exit %s)%s",
-                legacy,
-                result.returncode,
-                redacted_stderr_hint(result.stderr),
-            )
-            raise BackendSeedError(f"Retiring legacy seed path '{name}' failed")

@@ -77,6 +77,7 @@ _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
 _OS_FAMILY_PATH = CONCERN_PAYLOAD_PATH["os-family"]
 _CONTENT_TYPE_PATH = CONCERN_PAYLOAD_PATH["content-type"]
 _DOMAIN_TOPOLOGY_PATH = CONCERN_PAYLOAD_PATH["domain-topology"]
+_SERVICE_INDEX_SCHEMA_PATH = CONCERN_PAYLOAD_PATH["service-search-index-schema-materialization"]
 
 
 def observe_realization(
@@ -124,6 +125,11 @@ def observe_realization(
         for placement in realization.placements
         if placement.dataset is not None
     }
+    placement_service_index_schemas = {
+        placement.address: placement.service_index_schema
+        for placement in realization.placements
+        if placement.service_index_schema is not None
+    }
     project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
     realized_networks = _realized_network_names(backend, project_name)
 
@@ -153,6 +159,12 @@ def observe_realization(
                 volumes.get(address),
                 node_containers,
                 project_name,
+            )
+        elif address in placement_service_index_schemas:
+            observations[address] = _observe_service_content(
+                backend,
+                address,
+                resource.payload,
             )
         else:
             observations[address] = _observe_placement(
@@ -307,3 +319,51 @@ def _observe_placement(
                 concerns[_CONTENT_TYPE_PATH] = content_type
             observed = ObservedResource(realized=True, concerns=concerns)
     return observed
+
+
+def _observe_service_content(
+    backend: "DeploymentBackend",
+    address: str,
+    resource_payload: object,
+) -> ObservedResource:
+    """Observe an ADR-088 service-search-index-schema materialization.
+
+    The materializer established the declared portable field schema on the target
+    service and proved it by a fresh native readback during realization (issue
+    #889), disclosing a safe portable receipt keyed by this content address. The
+    exact ``service_materialization`` concern is emitted only when that
+    corroboration is present; absence yields no concern, so the RAES
+    non-approximation gate rejects an unproven materialization rather than
+    accepting planned state (SEM-218). The receipt carries the portable field
+    projection, digest, and readback strength — never a raw native response.
+    """
+
+    evidence_by_address = getattr(backend, "_service_index_materialization_evidence", {})
+    receipt = (
+        evidence_by_address.get(address)
+        if isinstance(evidence_by_address, Mapping)
+        else None
+    )
+    binding = (
+        resource_payload.get("service_materialization")
+        if isinstance(resource_payload, Mapping)
+        else None
+    )
+    if receipt is None or not isinstance(binding, Mapping):
+        return ObservedResource(realized=False)
+    # A service-materialization content-placement also compiles the ordinary
+    # content-type EXACT concern (its ``spec.type`` — here ``dataset``). This
+    # observer is the sole realization report for the address, so it must emit
+    # that concern alongside the materialization concern; otherwise the
+    # non-approximation gate reads content-type as an unrealized (omitted) exact
+    # requirement and rejects the placement (issue #889).
+    spec = resource_payload.get("spec") if isinstance(resource_payload, Mapping) else None
+    content_type = spec.get("type") if isinstance(spec, Mapping) else None
+    concerns: dict[tuple[str, ...], object] = {_SERVICE_INDEX_SCHEMA_PATH: dict(binding)}
+    if isinstance(content_type, str) and content_type:
+        concerns[_CONTENT_TYPE_PATH] = content_type
+    return ObservedResource(
+        realized=True,
+        concerns=concerns,
+        evidence=dict(receipt),
+    )

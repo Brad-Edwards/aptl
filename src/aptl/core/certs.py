@@ -64,6 +64,16 @@ def ensure_ssl_certs(
     certs_dir = project_dir / _CERTS_SUBDIR
     root_ca = certs_dir / _ROOT_CA
 
+    # An image baked with a prior lab running can leave certs_dir owned by root
+    # (see _reclaim_certs_dir). On native Linux the generator runs as the host
+    # UID and the host must be able to widen the mounted files, so reclaim a
+    # foreign-owned directory up front -- moving it aside makes root_ca absent
+    # and forces a clean, producer-owned regeneration instead of reusing (and
+    # failing to widen) unreadable root-owned certs.
+    native_user = _native_linux_user()
+    if native_user is not None:
+        _reclaim_certs_dir(certs_dir, native_user[0])
+
     if certs_dir.exists() and root_ca.exists():
         alias_error = _ensure_manager_root_ca_alias(certs_dir)
         if alias_error is not None:
@@ -201,12 +211,63 @@ def _run_cert_generator(
     return failure
 
 
+def _reclaim_certs_dir(certs_dir: Path, uid: int) -> None:
+    """Ensure ``certs_dir`` exists and is owned by the invoking user (``uid``).
+
+    The generator runs as the host UID via Compose ``--user``, so it can only
+    write into a directory that user owns (or that is world-writable). An image
+    baked with a prior lab running can leave this directory owned by root -- an
+    earlier boot that predates the ``--user`` fix, or Docker creating the
+    bind-mount source as root before any generator ran. ``mkdir(exist_ok=True)``
+    would silently accept that root-owned directory; the generator then fails to
+    ``cp`` its certs in (permission denied on the directory), and the
+    realization reports the cert artifact as "missing declared output".
+
+    Because the invoking user owns the parent directory, it may atomically
+    rename the foreign-owned directory aside even without owning it, then
+    recreate a fresh, owned directory so generation writes producer-owned certs
+    from a clean slate. The renamed-aside directory is left in place (its
+    root-owned contents are not ours to remove) under a hidden, clearly labelled
+    name.
+    """
+    try:
+        st = certs_dir.stat()
+    except FileNotFoundError:
+        certs_dir.mkdir(parents=True, exist_ok=True)
+        return
+    if st.st_uid == uid:
+        return
+    parent = certs_dir.parent
+    aside = None
+    for n in range(1000):
+        candidate = parent / f".{certs_dir.name}.foreign-{st.st_uid}.{n}"
+        if not candidate.exists():
+            aside = candidate
+            break
+    if aside is None:
+        raise OSError(f"could not find a free name to move aside {certs_dir}")
+    log.warning(
+        "Generated cert directory %s is owned by uid %d, not the invoking user "
+        "(uid %d); moving it aside to %s and recreating. This usually means the "
+        "image was baked with a prior lab running.",
+        certs_dir,
+        st.st_uid,
+        uid,
+        aside.name,
+    )
+    os.rename(certs_dir, aside)
+    certs_dir.mkdir(parents=True, exist_ok=True)
+
+
 def _cert_generator_command(project_dir: Path, certs_dir: Path) -> list[str]:
     """Build the isolated Docker Compose command for the cert generator.
 
     On native Linux Docker, the generator runs as the invoking host UID/GID
     (``--user``) so its output is producer-owned; the bind-mount source is
-    pre-created by the host user so Docker does not create it as root first.
+    pre-created by the host user so Docker does not create it as root first. Any
+    directory left root-owned by a prior baked lab has already been reclaimed by
+    :func:`ensure_ssl_certs` before this point, so ``exist_ok`` here only ever
+    finds a fresh, host-owned directory.
     """
     user = _native_linux_user()
     if user is not None:

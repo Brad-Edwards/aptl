@@ -73,37 +73,9 @@ def container_running(info: dict[str, Any]) -> bool:
     return bool(state.get("Running")) if isinstance(state, dict) else False
 
 
-def container_completed_one_shot(info: dict[str, Any]) -> bool:
-    """Return whether a container ran to completion by design.
-
-    True only for a container whose restart policy is ``no`` (or absent) that has
-    exited with code 0. A run-to-completion helper -- the Cortex Elasticsearch
-    index initializer creates its index and stops -- has reached its final,
-    realized state precisely by exiting, so it must count as settled rather than
-    hang the health wait forever on a "not running" container. A service
-    configured to stay up never matches, and a non-zero exit is a real failure,
-    so neither is masked.
-    """
-
-    host_config = info.get("HostConfig")
-    policy = ""
-    if isinstance(host_config, dict):
-        restart = host_config.get("RestartPolicy")
-        if isinstance(restart, dict):
-            policy = str(restart.get("Name", ""))
-    if policy not in ("", "no"):
-        return False
-    state = info.get("State")
-    if not isinstance(state, dict):
-        return False
-    return state.get("Status") == "exited" and state.get("ExitCode") == 0
-
-
 def container_settled(info: dict[str, Any]) -> bool:
     """Return whether a container has reached its final, realized state."""
 
-    if container_completed_one_shot(info):
-        return True
     if not container_running(info):
         return False
     health = container_health(info)
@@ -121,11 +93,6 @@ def unhealthy_container_reasons(
         info = backend.container_inspect(name)
         if not info:
             reasons.append(f"container {name!r} was never created")
-        elif container_completed_one_shot(info):
-            # Ran to completion by design (restart "no", exit 0) -- settled, not
-            # a failure. Without this the health wait reports a one-shot as "not
-            # running" and never succeeds.
-            continue
         elif not container_running(info):
             reasons.append(f"container {name!r} is not running")
         else:

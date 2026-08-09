@@ -41,6 +41,7 @@ from aptl.backends.raes_realization_values import (
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentContentRealization,
+    DeploymentServiceSearchIndexSchemaRealization,
 )
 
 PLACEMENT_RESOURCE_TYPES = frozenset(
@@ -120,8 +121,10 @@ def _realize_placement(
             ],
         )
 
-    content, dataset, account, resource_diagnostics = _realize_placement_resource(
-        resource, payload, target_address, node_by_address, project_dir
+    content, dataset, account, service_index_schema, resource_diagnostics = (
+        _realize_placement_resource(
+            resource, payload, target_address, node_by_address, project_dir
+        )
     )
     return (
         PlacementRealization(
@@ -133,6 +136,7 @@ def _realize_placement(
             content=content,
             dataset=dataset,
             account=account,
+            service_index_schema=service_index_schema,
         ),
         resource_diagnostics,
     )
@@ -148,6 +152,7 @@ def _realize_placement_resource(
     DeploymentContentRealization | None,
     ParticipantDatasetRealization | None,
     DeploymentAccountRealization | None,
+    DeploymentServiceSearchIndexSchemaRealization | None,
     list[Diagnostic],
 ]:
     """Lower a resolved content/account placement into typed backend input.
@@ -174,6 +179,7 @@ def _realize_placement_resource(
     content: DeploymentContentRealization | None = None
     dataset: ParticipantDatasetRealization | None = None
     account: DeploymentAccountRealization | None = None
+    service_index_schema: DeploymentServiceSearchIndexSchemaRealization | None = None
     diagnostics: list[Diagnostic] = []
     if resource.resource_type == "content-placement":
         spec = payload.get("spec")
@@ -203,6 +209,8 @@ def _realize_placement_resource(
             )
         if isinstance(resolved_content, ParticipantDatasetRealization):
             dataset = resolved_content
+        elif isinstance(resolved_content, DeploymentServiceSearchIndexSchemaRealization):
+            service_index_schema = resolved_content
         else:
             content = resolved_content
     elif resource.resource_type == "account-placement":
@@ -212,4 +220,4 @@ def _realize_placement_resource(
             target_address=target_address,
             target_service=target_service,
         )
-    return content, dataset, account, diagnostics
+    return content, dataset, account, service_index_schema, diagnostics

@@ -23,6 +23,7 @@ from raes_runtime.manager import RuntimeManager
 from raes.scenario import Scenario
 
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
+from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_realization import interpret_provisioning_plan
 from aptl.core.collectors import collect_suricata_eve, collect_wazuh_alerts
 from aptl.core.deployment import get_backend
@@ -89,14 +90,30 @@ def _compute_realization(
     """Interpret the scenario's provisioning plan, returning (realization, diags)."""
     try:
         backend = get_backend(config, project_dir)
-        # Live probe over the in-tree scenario: bundle root is the project dir.
+        # Config-driven bundle: the configured env-pack when selected, else the
+        # in-tree scenario (issue #875). Scenario content anchors to the bundle
+        # root; component build contexts always resolve from the engine checkout
+        # (an env-pack ships none), so component_root stays project_dir (ADR-051).
         bundle = resolve_scenario_bundle(project_dir, None, config)
         target = create_aptl_runtime_target(
             project_dir=project_dir, config=config, backend=backend, bundle=bundle
         )
-        execution_plan = RuntimeManager(target).plan(scenario)
+        # Gather artifact availability at the backend trust boundary before
+        # planning, exactly as `aptl lab start` does (`_plan_scenario`): the image
+        # policy trusts a node's source image only against verified availability,
+        # so a real-backend plan without it rejects every imaged node as
+        # ``untrusted-image``.
+        availability = artifact_availability_for_scenario(
+            scenario, backend, scenario_root=bundle.root, component_root=project_dir
+        )
+        execution_plan = RuntimeManager(target).plan(
+            scenario, artifact_availability=availability
+        )
         realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning, config=config, bundle=bundle
+            plan=execution_plan.provisioning,
+            config=config,
+            bundle=bundle,
+            component_root=project_dir,
         )
     # broad-except: RAES planning/interpretation surfaces diverse error types.
     except Exception as exc:

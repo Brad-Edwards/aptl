@@ -22,7 +22,16 @@ log = get_logger("deployment.docker_compose")
 # Bound for snapshot / host-inventory probes. A stalled docker daemon
 # (especially the SSH transport) must not hang `aptl lab status --json`
 # or the lab-start snapshot step indefinitely.
-_HOST_INVENTORY_TIMEOUT = 15
+# A single `docker inspect` / host-inventory read is normally sub-second, but the
+# realization-observation pass runs it against every container right after a
+# clean `aptl lab start` — when the docker daemon is at its busiest pulling
+# base images, building components, and starting ~30 containers with their JVMs.
+# Under that first-boot load `docker inspect` can take tens of seconds, and a
+# 15s cap made observation raise BackendTimeoutError and fail the SEM-218 gate
+# for a container that was actually healthy (issue #889 fresh-machine boot). The
+# cap only exists to stop a genuinely stalled daemon hanging observation forever,
+# so it is set generously; a healthy daemon always answers well within it.
+_HOST_INVENTORY_TIMEOUT = 90
 # A single netns-joining sidecar read is a cheap kernel-table dump; bound it so a
 # stalled daemon cannot hang realization observation.
 _LISTENER_SIDECAR_TIMEOUT = 30
@@ -353,6 +362,27 @@ class ComposeQueryMixin(object):
     ) -> subprocess.CompletedProcess:
         argv = ["docker", "exec", name, *cmd]
         return self._run(argv, timeout=timeout)
+
+    def container_exec_with_input(
+        self,
+        name: str,
+        cmd: list[str],
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> subprocess.CompletedProcess:
+        """Exec ``cmd`` in a container with non-secret structured stdin.
+
+        The interactive ``-i`` flag keeps stdin open so a fixed helper (e.g.
+        ``sh -s``) reads its script/body from ``payload`` rather than the host
+        argv. Used by the ADR-088 service-materialization provider so native
+        index names, endpoints, and request bodies never enter host process
+        argv (issue #889). Shares the selected-daemon behaviour of every other
+        exec: the SSH backend inherits it unchanged over ``DOCKER_HOST``.
+        """
+
+        argv = ["docker", "exec", "-i", name, *cmd]
+        return self._run_with_input(argv, payload, timeout=timeout)
 
     def container_restart(self, name: str, *, timeout: int | None = None) -> None:
         """Restart a container by name via ``docker restart``.

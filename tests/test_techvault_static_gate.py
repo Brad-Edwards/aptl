@@ -750,7 +750,15 @@ def test_operational_scenario_content_and_accounts_are_honest():
         p for p in placements if p["resource_type"] == "account-placement"
     ]
     assert content_placements
-    assert all("content" in p for p in content_placements)
+    # A content-placement lowers to exactly one typed realization: an ordinary
+    # file/directory ("content"), a logical evidence dataset ("dataset"), or (ADR-088,
+    # issue #889) a service-search-index-schema materialization
+    # ("service_index_schema") -- the Cortex job index is realized honestly.
+    assert all(
+        "content" in p or "dataset" in p or "service_index_schema" in p
+        for p in content_placements
+    )
+    assert any("service_index_schema" in p for p in content_placements)
     assert account_placements
     assert all("account" in p for p in account_placements)
 

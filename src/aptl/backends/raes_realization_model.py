@@ -20,6 +20,7 @@ from aptl.core.deployment.realization import (
     DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
     DeploymentServicePort,
+    DeploymentServiceSearchIndexSchemaRealization,
 )
 
 
@@ -130,6 +131,7 @@ class PlacementRealization(object):
     content: DeploymentContentRealization | None = None
     dataset: "ParticipantDatasetRealization | None" = None
     account: DeploymentAccountRealization | None = None
+    service_index_schema: DeploymentServiceSearchIndexSchemaRealization | None = None
 
     def details(self) -> dict[str, object]:
         details: dict[str, object] = {
@@ -145,6 +147,8 @@ class PlacementRealization(object):
             details["dataset"] = self.dataset.details()
         if self.account is not None:
             details["account"] = self.account.details()
+        if self.service_index_schema is not None:
+            details["service_index_schema"] = self.service_index_schema.details()
         return details
 
 
@@ -217,6 +221,11 @@ class AptlRealization(object):
                 placement.account
                 for placement in self.placements
                 if placement.account is not None
+            ),
+            service_index_schemas=tuple(
+                placement.service_index_schema
+                for placement in self.placements
+                if placement.service_index_schema is not None
             ),
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,

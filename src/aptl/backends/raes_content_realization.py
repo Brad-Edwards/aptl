@@ -51,6 +51,9 @@ from aptl.backends._raes_content_spec import (
 from aptl.backends._raes_dataset_content import (
     _resolve_dataset_content,
 )
+from aptl.backends._raes_service_index_placement import (
+    resolve_service_search_index_schema as _resolve_service_search_index_schema,
+)
 from aptl.backends.raes_content_source_policy import forbidden_source_reason
 from aptl.backends.raes_realization_model import ParticipantDatasetRealization
 from aptl.backends.raes_realization_values import (
@@ -60,8 +63,14 @@ from aptl.backends.raes_realization_values import (
     optional_string as _optional_string,
     placement_spec as _placement_spec,
 )
+from aptl.backends.raes_service_index_schema import (
+    INTERFACE_PROFILE as _SEARCH_INDEX_SCHEMA_PROFILE,
+)
 from aptl.core.credentials import PathContainmentError, _resolve_within_project
-from aptl.core.deployment.realization import DeploymentContentRealization
+from aptl.core.deployment.realization import (
+    DeploymentContentRealization,
+    DeploymentServiceSearchIndexSchemaRealization,
+)
 
 # Backend services APTL knows how to plant content into, and the
 # project-scoped named-volume key (docker-compose.yml `volumes:` key,
@@ -106,7 +115,10 @@ def resolve_content_placement(
     target_service: str | None,
     project_dir: Path,
 ) -> tuple[
-    DeploymentContentRealization | ParticipantDatasetRealization | None,
+    DeploymentContentRealization
+    | ParticipantDatasetRealization
+    | DeploymentServiceSearchIndexSchemaRealization
+    | None,
     list[Diagnostic],
 ]:
     """Lower one content-placement resource or return fail-closed diagnostics."""
@@ -117,6 +129,25 @@ def resolve_content_placement(
         or _optional_string(payload, "name")
         or resource.address
     )
+
+    # ADR-088 service-target materialization (#889): a content-placement carrying
+    # a service_materialization binding is initial *service* state, not a node
+    # file/dataset placement. The search-index-schema profile lowers to a typed
+    # native materialization the backend realizes through the service's native
+    # interface and proves by fresh readback. Dispatch it before the ordinary
+    # file/dataset paths, which would otherwise reject its item-less dataset.
+    binding = payload.get("service_materialization")
+    if (
+        isinstance(binding, Mapping)
+        and binding.get("interface_profile") == _SEARCH_INDEX_SCHEMA_PROFILE
+    ):
+        return _resolve_service_search_index_schema(
+            resource=resource,
+            binding=binding,
+            content_name=content_name,
+            target_address=target_address,
+        )
+
     inputs, reason = _content_placement_inputs(spec, target_service)
 
     content: DeploymentContentRealization | ParticipantDatasetRealization | None = None

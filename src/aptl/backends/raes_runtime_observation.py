@@ -165,10 +165,31 @@ def _observe_environment(
     records: list[dict[str, object]] = []
     for variable in declared:
         name = getattr(variable, "name", "")
-        if not name or name not in realized:
+        if not name:
             continue
         record = variable.model_dump(mode="json", by_alias=True)
         classification = record.get("value_classification")
+        declared_value = record.get("value")
+        if classification not in _PROTECTED and not declared_value:
+            # A valueless non-secret variable is faithfully realized as "no value"
+            # when the container omits it or carries it empty (a plain variable
+            # the author left without a value is optional/operator-set) -- disclose
+            # it as declared so a faithful realization matches. But a NON-empty
+            # realized value is an undeclared operator value (an out-of-band `.env`
+            # entry the scenario never authored): disclose it so the
+            # non-approximation gate rejects the divergence rather than treating a
+            # valueless declaration as a wildcard.
+            realized_value = realized.get(name)
+            if realized_value:
+                record["value"] = realized_value
+            records.append(record)
+            continue
+        if name not in realized:
+            # A variable that must carry a realized value — an authored non-secret
+            # value, or an operator-supplied secret — but is absent from the
+            # container is not realized: omit it so the non-approximation gate
+            # rejects the exact declaration rather than reading an echo.
+            continue
         # A protected value is presence-only; its raw material is never read.
         record["value"] = "" if classification in _PROTECTED else realized[name]
         records.append(record)

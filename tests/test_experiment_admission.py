@@ -122,6 +122,7 @@ def _synthetic_manifests() -> tuple[BackendManifest, ProcessorManifest]:
         orchestrator=real_backend.orchestrator,
         evaluator=real_backend.evaluator,
         participant_runtime=real_backend.participant_runtime,
+        realization_envelope=real_backend.realization_envelope,
     )
     test_processor = ProcessorManifest(
         name="test-processor",

@@ -38,6 +38,12 @@ _COMPONENT_PROFILE: dict[str, str] = {
     "thehive-cassandra": "soc",
     "thehive-es": "soc",
     "cortex": "soc",
+    # Retained for the legacy in-tree docker-compose.yml (a still-live, separately
+    # tested static stack distinct from the ADR-088 env-pack conversion, #889):
+    # its ``cortex-index-init`` one-shot service and scripts/cortex-index-init.sh
+    # are still real and still exercised by scripts/cortex-apikey.sh. Only the
+    # env-pack-declared TechVault pack retired the one-shot; this entry must stay
+    # for test_component_profiles.py's compose/grouping parity check.
     "cortex-index-init": "soc",
     "shuffle-backend": "soc",
     "shuffle-frontend": "soc",

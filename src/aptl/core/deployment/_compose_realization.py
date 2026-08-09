@@ -24,6 +24,9 @@ from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
+from aptl.core.deployment._compose_service_index_realization import (
+    ComposeRealizationServiceIndexMixin,
+)
 from aptl.core.deployment._compose_stateful_realization import (
     ComposeStatefulRealizationMixin,
 )
@@ -68,6 +71,7 @@ class ComposeRealizationMixin(
     ComposeRealizationAccountMixin,
     ComposeRealizationModelMixin,
     ComposeRealizationPostStartMixin,
+    ComposeRealizationServiceIndexMixin,
     ComposeStatefulRealizationMixin,
 ):
     """Realize typed scenario specs through Docker Compose."""
@@ -193,7 +197,23 @@ class ComposeRealizationMixin(
             )
 
         def _start() -> LabResult:
-            """Start the realized services and return the final realization result."""
+            """Start the realized services and return the final realization result.
+
+            ADR-088 phased startup (issue #889): any service-search-index-schema
+            materialization runs first — its target service is brought up and
+            proven by fresh native readback before the general workload, which
+            consumes that initial state, is admitted.
+            """
+
+            phase = self._materialize_service_index_schemas(
+                realization,
+                build=build and not self._offline_staged,
+                compose_files=compose_files,
+                exclude_services=excluded_services,
+                scenario_root=scenario_root,
+            )
+            if phase is not None and not phase.success:
+                return phase
 
             start_result = self._start_realized_services(
                 profiles,

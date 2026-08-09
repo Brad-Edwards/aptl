@@ -13,7 +13,17 @@ from aptl.core.deployment.realization import (
 )
 from aptl.core.lab_types import LabResult
 
-_IMAGE_REALIZATION_TIMEOUT = 600
+# Ceiling for a single image-realization docker operation (build / pull / inspect).
+# A cold `docker build` on a fresh machine is the long pole: on a clean box a
+# single component build step (the AD image's package install) alone measured
+# ~745s, so the whole cold build exceeds ~800s — and a modest local dev machine
+# (the lab's primary target) can be markedly slower still. The prior 600s cap
+# failed a clean `aptl lab start` on a fresh machine (BackendTimeoutError mid
+# `docker build`). This is set generously so a legitimately slow cold build or a
+# large base-image pull never trips it; a docker op that genuinely exceeds this
+# is a broken environment, not a too-tight timeout. Inspect/tag ops finish in
+# well under a second, so the higher cap is harmless for them.
+_IMAGE_REALIZATION_TIMEOUT = 2400
 _IMAGE_OVERRIDE_RELATIVE_PATH = Path(".aptl") / "realization" / "compose-images.yml"
 # Digest domain prefix every locally read image id / manifest digest carries.
 _SHA256_PREFIX = "sha256:"
@@ -392,6 +402,7 @@ class ComposeRealizationImageMixin:
         build: bool,
         compose_files: tuple[Path, ...],
         exclude_services: tuple[str, ...] = (),
+        only_services: tuple[str, ...] = (),
         scenario_root: Path | None = None,
     ) -> LabResult:
         """Start lab services using a generated realization override."""
@@ -407,6 +418,7 @@ class ComposeRealizationImageMixin:
         cmd.append("-d")
         for service in exclude_services:
             cmd += ["--scale", f"{service}=0"]
+        cmd.extend(only_services)
         result = self._run(cmd)
         if result.returncode != 0:
             return LabResult(success=False, error=result.stderr)
@@ -419,6 +431,7 @@ class ComposeRealizationImageMixin:
         build: bool,
         compose_files: tuple[Path, ...] | None,
         exclude_services: tuple[str, ...] = (),
+        only_services: tuple[str, ...] = (),
         scenario_root: Path,
     ) -> LabResult:
         """Start services with the generated override when one exists.
@@ -426,7 +439,11 @@ class ComposeRealizationImageMixin:
         ``exclude_services`` (ADR-048 mixed realization) scales those Compose
         service names to zero: they were already realized directly by the
         generic materializer and must not also start as Compose containers.
-        ``scenario_root`` is the bundle root Compose resolves against.
+        ``only_services`` (ADR-088 phased startup, issue #889) brings up only
+        those Compose services and their ``depends_on`` closure, leaving the
+        general workload unstarted until service materialization has proven the
+        initial state it depends on. ``scenario_root`` is the bundle root Compose
+        resolves against.
         """
 
         if compose_files is None:
@@ -434,6 +451,7 @@ class ComposeRealizationImageMixin:
                 profiles,
                 build=build,
                 exclude_services=exclude_services,
+                only_services=only_services,
                 scenario_root=scenario_root,
             )
         return self._start_with_compose_files(
@@ -441,5 +459,6 @@ class ComposeRealizationImageMixin:
             build=build,
             compose_files=compose_files,
             exclude_services=exclude_services,
+            only_services=only_services,
             scenario_root=scenario_root,
         )

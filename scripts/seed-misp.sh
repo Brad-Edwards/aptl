@@ -31,22 +31,20 @@ ENV_FILE="$PROJECT_DIR/.env"
 source "$SCRIPT_DIR/aptl-env.sh"
 aptl_load_env_key "$ENV_FILE" MISP_API_KEY
 
-MISP_URL="${MISP_URL:-https://localhost:8443}"
-# SEC-006 / ADR-034: MISP now serves a lab-CA-signed certificate.
-# The seed script verifies against the lab CA bundle by default; the
-# previous ``-k`` (insecure) flag was a workaround for self-signed
-# MISP certs and is no longer the right posture.
-MISP_CACERT="${MISP_CACERT:-${APTL_PROJECT_DIR:-.}/config/soc_certs/lab-ca.pem}"
+# The env-pack exposes MISP only on the container network (its web tier serves
+# HTTPS on :443 there; the pre-#875 host 8443 binding is gone). Reach it from
+# inside the container over loopback, mirroring the Cortex/TheHive seed paths.
+# The connection is container-internal (localhost -> the same container), so TLS
+# verification is moot and we use -k -- MISP's edge certificate is an env-pack
+# concern tracked in OpenRAE/env-packs#280, not this in-network seed path.
+MISP_CONTAINER="${MISP_CONTAINER:-aptl-misp}"
+MISP_URL="${MISP_URL:-https://localhost:443}"
 EVENT_INFO="APTL Lab - Known Threat Actors"
+CURL_OPTS=(-ks --max-time 30)
 
-if [ -f "$MISP_CACERT" ]; then
-    CURL_OPTS=(-s --cacert "$MISP_CACERT" --max-time 30)
-else
-    # Fallback for environments without the lab CA materialized (e.g.
-    # CI smoke tests against a separately-managed MISP). Stays insecure
-    # rather than failing closed because the script's contract is
-    # best-effort seeding.
-    CURL_OPTS=(-ks --max-time 30)
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: docker is required to reach MISP on the container network" >&2
+    exit 1
 fi
 
 # ---------------------------------------------------------------------------
@@ -76,7 +74,7 @@ misp_api() {
         args+=(-d "${data}")
     fi
 
-    curl "${args[@]}" "${MISP_URL}${endpoint}"
+    docker exec "$MISP_CONTAINER" curl "${args[@]}" "${MISP_URL}${endpoint}"
 }
 
 misp_search_event_field() {

@@ -49,6 +49,19 @@ from raes_contracts.contracts import (
     LiteralBindingValueModel,
 )
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
+from raes_contracts.realization_envelope import (
+    BackendRealizationEnvelopeModel,
+    ConcernDisposition,
+    EnvelopeScope,
+    IntegerBoundsModel,
+    RealizationConcern,
+    RealizationConcernDisclosureModel,
+    RealizationEnvelopeModel,
+    RealizerConfigurationModel,
+    TransformationKind,
+    realization_envelope_digest,
+    realizer_configuration_digest,
+)
 from raes_contracts.vocabulary import (
     ObservationStrength,
     ParticipantFeatureSupportLevel,
@@ -108,6 +121,7 @@ _BASE_SUPPORTED_CONTRACT_VERSIONS = frozenset(
         "operation-receipt-v1",
         "operation-status-v1",
         "runtime-snapshot-v1",
+        "realization-envelope-v1",
         "workflow-result-envelope-v1",
         "workflow-history-event-stream-v1",
         "evaluation-result-envelope-v1",
@@ -232,6 +246,9 @@ _PROVISIONER = ProvisionerCapabilities(
     supported_generated_artifact_kinds=frozenset(
         {"certificate_bundle", "rendered_config", "ssh_key_bundle"}
     ),
+    supported_service_materialization_profiles=frozenset(
+        {"service-search-index-schema-v1"}
+    ),
     supports_persistent_volumes=True,
 )
 
@@ -269,9 +286,16 @@ _REALIZATION_SUPPORT = (
         domain="runtime-realization",
         support_mode=RealizationSupportMode.OPEN_REALIZATION,
         supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
-        supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
+        supported_exact_requirement_kinds=frozenset(
+            {"declared-capability-match", "service-search-index-schema-materialization"}
+        ),
         disclosure_kinds=frozenset(
-            {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
+            {
+                "backend-manifest-v2",
+                "operation-status-v1",
+                "realization-envelope-v1",
+                "runtime-snapshot-v1",
+            }
         ),
         # Per-concern observation capability (raes 3.3.0). Only concerns raes
         # compiles with a non-null verification_scope need one; today that is
@@ -286,6 +310,12 @@ _REALIZATION_SUPPORT = (
             "forwarding-agents": RealizationObservationCapability(
                 verification_scope=RealizationVerificationScope.CONFIGURATION,
                 observation_strength=ObservationStrength.DAEMON_OBSERVED,
+            ),
+            "service-search-index-schema-materialization": (
+                RealizationObservationCapability(
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
             ),
         },
         artifact_mechanisms=list(aptl_artifact_mechanisms()),
@@ -315,6 +345,130 @@ _CONCEPT_BINDINGS = (
         family="identities",
     ),
 )
+
+
+def _realization_disclosure(
+    concern: RealizationConcern,
+    disposition: ConcernDisposition,
+    observation_strength: ObservationStrength,
+    mechanism: str,
+    transformations: tuple[TransformationKind, ...] = (),
+) -> RealizationConcernDisclosureModel:
+    return RealizationConcernDisclosureModel(
+        concern=concern,
+        disposition=disposition,
+        observation_strength=observation_strength,
+        mechanism=mechanism,
+        transformations=list(transformations),
+    )
+
+
+def _realizer_configuration() -> RealizerConfigurationModel:
+    payload: dict[str, object] = {
+        "mode": "docker-compose-local-ssh",
+        "configuration_digest": f"sha256:{'0' * 64}",
+        "architecture": "typed-raes-realization",
+        "image_policy": "digest-pinned-or-component-build",
+        "network_policy": "project-scoped-compose-networks",
+        "supported_node_types": sorted(_PROVISIONER.supported_node_types),
+        "supported_os_families": sorted(_PROVISIONER.supported_os_families),
+        "supported_content_types": sorted(_PROVISIONER.supported_content_types),
+        "supported_account_features": sorted(_PROVISIONER.supported_account_features),
+        "supported_domain_profiles": sorted(_PROVISIONER.supported_domain_profiles),
+        "supports_acls": _PROVISIONER.supports_acls,
+        "memory_mib": IntegerBoundsModel(minimum=512).model_dump(mode="json"),
+        "vcpus": IntegerBoundsModel(minimum=1).model_dump(mode="json"),
+    }
+    payload["configuration_digest"] = realizer_configuration_digest(payload)
+    return RealizerConfigurationModel.model_validate(payload)
+
+
+def _backend_realization_envelope() -> BackendRealizationEnvelopeModel:
+    expression = RealizationEnvelopeModel(
+        id="aptl-full-remote-control-plane",
+        scope=EnvelopeScope.SCENARIO,
+        domains={},
+        bindings=[],
+        closure=[],
+        contract_id="realization-envelope-v1",
+    )
+    configuration = _realizer_configuration()
+    concerns = [
+        _realization_disclosure(
+            RealizationConcern.TOPOLOGY,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "docker-compose-network-readback",
+        ),
+        _realization_disclosure(
+            RealizationConcern.ARCHITECTURE,
+            ConcernDisposition.TRANSFORMED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "aptl-realization-model",
+            (TransformationKind.BOUNDED_NORMALIZATION,),
+        ),
+        _realization_disclosure(
+            RealizationConcern.IMAGE,
+            ConcernDisposition.TRANSFORMED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "artifact-readback",
+            (TransformationKind.IMAGE_SUBSTITUTION,),
+        ),
+        _realization_disclosure(
+            RealizationConcern.RESOURCE_ALLOCATION,
+            ConcernDisposition.TRANSFORMED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "compose-resource-policy",
+            (TransformationKind.BOUNDED_NORMALIZATION,),
+        ),
+        _realization_disclosure(
+            RealizationConcern.NETWORK,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "docker-network-readback",
+        ),
+        _realization_disclosure(
+            RealizationConcern.CONTENT_PLACEMENT,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "content-and-service-native-readback",
+        ),
+        _realization_disclosure(
+            RealizationConcern.ACCOUNT_PLACEMENT,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.GUEST_OBSERVED,
+            "account-provider-readback",
+        ),
+        _realization_disclosure(
+            RealizationConcern.FEATURE_BINDING,
+            ConcernDisposition.DESCRIPTOR_ONLY,
+            ObservationStrength.DRIVER_REPORTED,
+            "planner-placement-binding",
+        ),
+        _realization_disclosure(
+            RealizationConcern.SERVICE,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "service-health-and-listener-readback",
+        ),
+        _realization_disclosure(
+            RealizationConcern.ACL,
+            ConcernDisposition.REALIZED,
+            ObservationStrength.DAEMON_OBSERVED,
+            "nftables-readback",
+        ),
+    ]
+    payload = {
+        "id": "aptl-full-remote-control-plane",
+        "expression": expression.model_dump(mode="json"),
+        "configuration": configuration.model_dump(mode="json"),
+        "concerns": [concern.model_dump(mode="json") for concern in concerns],
+    }
+    payload["digest"] = realization_envelope_digest(payload)
+    return BackendRealizationEnvelopeModel.model_validate(payload)
+
+
+_REALIZATION_ENVELOPE = _backend_realization_envelope()
 
 
 def create_aptl_manifest() -> BackendManifest:
@@ -350,6 +504,7 @@ def create_aptl_manifest() -> BackendManifest:
         orchestrator=_ORCHESTRATOR,
         evaluator=_EVALUATOR,
         participant_runtime=_PARTICIPANT_RUNTIME,
+        realization_envelope=_REALIZATION_ENVELOPE,
         **capability_options,
     )
 

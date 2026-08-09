@@ -60,7 +60,12 @@ if TYPE_CHECKING:
     from raes.runtime_configuration import RuntimeConfiguration
 
     from aptl.core.deployment.backend import DeploymentBackend
-    from aptl.core.deployment.realization import DeploymentContentRealization
+    from aptl.core.deployment.realization import (
+        DeploymentContentRealization,
+        DeploymentNodeRealization,
+        DeploymentServiceMaterializationObservation,
+        DeploymentServiceMaterializationRealization,
+    )
 
 # Compose defaults the project name to "aptl"; a backend that scopes to a
 # different project exposes its own ``project_name``.
@@ -76,6 +81,9 @@ _REALIZED_SWITCH_TYPE = "switch"
 _NODE_TYPE_PATH = CONCERN_PAYLOAD_PATH["node-type"]
 _OS_FAMILY_PATH = CONCERN_PAYLOAD_PATH["os-family"]
 _CONTENT_TYPE_PATH = CONCERN_PAYLOAD_PATH["content-type"]
+_SERVICE_SCHEMA_PATH = CONCERN_PAYLOAD_PATH[
+    "service-search-index-schema-materialization"
+]
 _DOMAIN_TOPOLOGY_PATH = CONCERN_PAYLOAD_PATH["domain-topology"]
 
 
@@ -124,6 +132,12 @@ def observe_realization(
         for placement in realization.placements
         if placement.dataset is not None
     }
+    placement_service_materializations = {
+        placement.address: placement.service_materialization
+        for placement in realization.placements
+        if placement.service_materialization is not None
+    }
+    deployment_nodes = realization.deployment_spec(sorted(realization.profiles)).nodes
     project_name = getattr(backend, "project_name", _DEFAULT_PROJECT_NAME)
     realized_networks = _realized_network_names(backend, project_name)
 
@@ -161,6 +175,8 @@ def observe_realization(
                 placement_targets.get(address),
                 placement_content.get(address),
                 placement_datasets.get(address),
+                placement_service_materializations.get(address),
+                deployment_nodes,
             )
     return observations
 
@@ -272,6 +288,8 @@ def _observe_placement(
     target_address: str | None,
     content: DeploymentContentRealization | None,
     dataset: ParticipantDatasetRealization | None,
+    service_materialization: "DeploymentServiceMaterializationRealization | None",
+    deployment_nodes: tuple["DeploymentNodeRealization", ...],
 ) -> ObservedResource:
     """Observe a node-scoped placement through the node that received it.
 
@@ -284,7 +302,11 @@ def _observe_placement(
     """
 
     observed: ObservedResource
-    if dataset is not None:
+    if service_materialization is not None:
+        observed = _observe_service_materialization(
+            backend, service_materialization, deployment_nodes
+        )
+    elif dataset is not None:
         observed = ObservedResource(
             realized=True,
             concerns={_CONTENT_TYPE_PATH: "dataset"},
@@ -307,3 +329,29 @@ def _observe_placement(
                 concerns[_CONTENT_TYPE_PATH] = content_type
             observed = ObservedResource(realized=True, concerns=concerns)
     return observed
+
+
+def _observe_service_materialization(
+    backend: "DeploymentBackend",
+    service_materialization: "DeploymentServiceMaterializationRealization",
+    deployment_nodes: tuple["DeploymentNodeRealization", ...],
+) -> ObservedResource:
+    observer = getattr(backend, "observe_service_materialization", None)
+    if observer is None:
+        return ObservedResource(realized=False)
+    readback: DeploymentServiceMaterializationObservation = observer(
+        service_materialization, deployment_nodes
+    )
+    if not readback.realized or readback.binding is None:
+        return ObservedResource(
+            realized=False,
+            evidence=dict(readback.evidence or {}),
+        )
+    return ObservedResource(
+        realized=True,
+        concerns={
+            _CONTENT_TYPE_PATH: "dataset",
+            _SERVICE_SCHEMA_PATH: dict(readback.binding),
+        },
+        evidence=dict(readback.evidence or {}),
+    )

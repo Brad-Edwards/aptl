@@ -495,3 +495,4 @@ class TestSSHConnection:
         assert "-p" in cmd
         assert "2022" in " ".join(str(x) for x in cmd)
         assert "labadmin@localhost" in cmd
+        assert "UserKnownHostsFile=/dev/null" in cmd

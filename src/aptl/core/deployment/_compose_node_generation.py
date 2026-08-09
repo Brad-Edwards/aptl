@@ -206,12 +206,10 @@ def _container_config(container: object) -> dict[str, object]:
     if _truthy(getattr(container, "privileged", None)):
         config["privileged"] = True
     if _truthy(getattr(container, "autoremove", None)):
-        # A node declaring autoremove is a one-shot (an init job that runs to
-        # completion and exits, e.g. an index bootstrap). Compose has no --rm,
-        # so the run-once intent is expressed as restart: "no"; without this
-        # the base "unless-stopped" policy restarts the finished job forever
-        # (issue #875).
-        config["restart"] = "no"
+        raise ValueError(
+            "runtime.container.autoremove is not a supported declared VM "
+            "lifecycle in the Docker Compose backend"
+        )
     return config
 
 

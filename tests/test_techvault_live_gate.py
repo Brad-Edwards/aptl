@@ -647,15 +647,8 @@ def test_readiness_fails_on_a_container_no_declared_node_accounts_for():
     assert any("no declared node accounts for it" in d for d in check.diagnostics)
 
 
-def test_readiness_treats_a_completed_one_shot_as_ready_not_failed():
-    """A run-to-completion container that exited 0 did its job; it is not down.
-
-    cortex-index-init creates an Elasticsearch index and stops by design
-    (restart: "no"). Requiring every declared node to be "Up" would flag it as a
-    readiness failure forever. The restart policy -- which APTL itself wrote into
-    compose -- is what distinguishes this from a service that died, so no
-    container is named in an allowance list.
-    """
+def test_readiness_fails_a_completed_declared_container():
+    """A declared VM node must be running; completed containers are not ready."""
 
     state = _readiness_state(
         [_node("webapp", ["dmz"]), _node("cortex-index-init", ["dmz"])],
@@ -671,15 +664,12 @@ def test_readiness_treats_a_completed_one_shot_as_ready_not_failed():
     )
     check = lgc.check_defensive_stack_readiness(state=state)
 
-    assert check.passed, check.diagnostics
+    assert not check.passed
+    assert any("cortex-index-init" in d for d in check.diagnostics)
 
 
 def test_readiness_still_fails_a_service_that_exited():
-    """The one-shot exception must not mask a real service that died.
-
-    A container configured to stay up (unless-stopped) that has exited is a
-    genuine failure, exit code notwithstanding.
-    """
+    """A container configured to stay up that exited is a genuine failure."""
 
     state = _readiness_state(
         [_node("webapp", ["dmz"])],
@@ -697,8 +687,8 @@ def test_readiness_still_fails_a_service_that_exited():
     assert not check.passed
 
 
-def test_readiness_still_fails_a_one_shot_that_errored():
-    """A one-shot that exited non-zero failed its job and must be reported."""
+def test_readiness_still_fails_a_restart_no_container_that_errored():
+    """A non-running declared container is a readiness failure."""
 
     state = _readiness_state(
         [_node("webapp", ["dmz"]), _node("cortex-index-init", ["dmz"])],

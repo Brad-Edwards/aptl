@@ -619,6 +619,9 @@ def test_manifest_provisioner_declares_only_realized_capabilities():
     assert provisioner.supported_account_features == frozenset(
         {"disabled", "groups", "mail", "spn"}
     )
+    assert provisioner.supported_service_materialization_profiles == frozenset(
+        {"service-search-index-schema-v1"}
+    )
     assert provisioner.supports_accounts is True
     assert provisioner.supports_acls is True
 
@@ -634,11 +637,45 @@ def test_manifest_realization_support_matches_exercised_concerns():
         {"os-family", "source-artifact"}
     )
     assert support.supported_exact_requirement_kinds == frozenset(
-        {"declared-capability-match"}
+        {
+            "declared-capability-match",
+            "service-search-index-schema-materialization",
+        }
     )
     assert support.disclosure_kinds == frozenset(
-        {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
+        {
+            "backend-manifest-v2",
+            "operation-status-v1",
+            "realization-envelope-v1",
+            "runtime-snapshot-v1",
+        }
     )
+    service_capability = support.observation_capabilities[
+        "service-search-index-schema-materialization"
+    ]
+    assert service_capability.verification_scope == "configuration"
+    assert service_capability.observation_strength == "daemon-observed"
+
+
+def test_manifest_publishes_realization_envelope_for_native_readback():
+    """The service-materialization claim is backed by a whole-backend envelope."""
+    from raes_contracts.realization_envelope import (
+        ConcernDisposition,
+        ObservationStrength,
+        RealizationConcern,
+    )
+
+    from aptl.backends.raes_manifest import create_aptl_manifest
+
+    manifest = create_aptl_manifest()
+    envelope = manifest.realization_envelope
+
+    assert envelope is not None
+    assert "realization-envelope-v1" in manifest.supported_contract_versions
+    by_concern = {item.concern: item for item in envelope.concerns}
+    content = by_concern[RealizationConcern.CONTENT_PLACEMENT]
+    assert content.disposition is ConcernDisposition.REALIZED
+    assert content.observation_strength is ObservationStrength.DAEMON_OBSERVED
 
 
 def test_derived_realization_fixture_exercises_manifest_constrained_claim():

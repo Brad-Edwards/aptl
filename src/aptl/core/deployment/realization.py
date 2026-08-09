@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -274,6 +275,60 @@ class DeploymentAccountRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentServiceMaterializationRealization(object):
+    """One service-owned content materialization lowered from RAES.
+
+    The compiled RAES binding remains the portable authority. This wrapper only
+    carries it through APTL's typed deployment boundary and exposes safe identity
+    properties used by backend dispatch and evidence.
+    """
+
+    address: str
+    target_address: str
+    binding: Mapping[str, object]
+
+    @property
+    def target_service_address(self) -> str:
+        value = self.binding.get("target_service_address")
+        return value if isinstance(value, str) else ""
+
+    @property
+    def interface_profile(self) -> str:
+        value = self.binding.get("interface_profile")
+        return value if isinstance(value, str) else ""
+
+    @property
+    def profile_version(self) -> str:
+        value = self.binding.get("profile_version")
+        return value if isinstance(value, str) else ""
+
+    def details(self) -> dict[str, object]:
+        field_semantics = self.binding.get("field_semantics")
+        field_count = len(field_semantics) if isinstance(field_semantics, Mapping) else 0
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "target_service_address": self.target_service_address,
+            "interface_profile": self.interface_profile,
+            "profile_version": self.profile_version,
+            "canonical_content_digest": self.binding.get("canonical_content_digest"),
+            "canonical_field_schema_digest": self.binding.get(
+                "canonical_field_schema_digest"
+            ),
+            "field_count": field_count,
+        }
+
+
+@dataclass(frozen=True)
+class DeploymentServiceMaterializationObservation(object):
+    """Independent backend readback for one service materialization."""
+
+    realized: bool
+    binding: Mapping[str, object] | None = None
+    evidence: Mapping[str, object] | None = None
+
+
+@dataclass(frozen=True)
 class DeploymentStatefulConsumer(object):
     """One resolved node mount for a generated artifact or persistent volume.
 
@@ -388,6 +443,7 @@ class DeploymentRealizationSpec(object):
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()
+    service_materializations: tuple[DeploymentServiceMaterializationRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing

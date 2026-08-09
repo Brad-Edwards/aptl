@@ -18,6 +18,9 @@ from raes_contracts.vocabulary import ObservationStrength
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 
 _FORWARDING_AGENTS_PATH = CONCERN_PAYLOAD_PATH["forwarding-agents"]
+_SERVICE_SEARCH_INDEX_SCHEMA_PATH = CONCERN_PAYLOAD_PATH[
+    "service-search-index-schema-materialization"
+]
 
 from aptl.backends.raes_observation import ObservedResource
 from aptl.utils.logging import get_logger
@@ -184,19 +187,30 @@ def _realization_observation_disclosures(
 
     disclosures: list[RealizationObservationDisclosure] = []
     for address, observed in observations.items():
-        if _FORWARDING_AGENTS_PATH not in observed.concerns:
-            continue
-        node_name = address.removeprefix("provision.node.")
-        disclosures.append(
-            RealizationObservationDisclosure(
-                address=address,
-                field_path=f"nodes.{node_name}.runtime.forwarding_agents",
-                domain="runtime-realization",
-                requirement_kind="forwarding-agents",
-                verification_scope=RealizationVerificationScope.CONFIGURATION,
-                observation_strength=ObservationStrength.DAEMON_OBSERVED,
+        if _FORWARDING_AGENTS_PATH in observed.concerns:
+            node_name = address.removeprefix("provision.node.")
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"nodes.{node_name}.runtime.forwarding_agents",
+                    domain="runtime-realization",
+                    requirement_kind="forwarding-agents",
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
             )
-        )
+        if _SERVICE_SEARCH_INDEX_SCHEMA_PATH in observed.concerns:
+            content_name = address.removeprefix("provision.content.")
+            disclosures.append(
+                RealizationObservationDisclosure(
+                    address=address,
+                    field_path=f"content.{content_name}.service_materialization",
+                    domain="runtime-realization",
+                    requirement_kind="service-search-index-schema-materialization",
+                    verification_scope=RealizationVerificationScope.CONFIGURATION,
+                    observation_strength=ObservationStrength.DAEMON_OBSERVED,
+                )
+            )
     return tuple(disclosures)
 
 
@@ -248,7 +262,10 @@ def _observed_payload(
             "forwarding-agents",
             "service-listeners",
         ),
-        "content-placement": ("content-type",),
+        "content-placement": (
+            "content-type",
+            "service-search-index-schema-materialization",
+        ),
         "generated-artifact": ("generated-artifact",),
         "persistent-volume": ("persistent-volume",),
     }.get(resource_type, ())

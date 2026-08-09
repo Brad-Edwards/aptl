@@ -68,6 +68,34 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     assert {"soc", "enterprise", "wazuh"} <= set(realization.profiles)
 
 
+def test_techvault_pack_carries_cortex_schema_as_service_materialization(tmp_path):
+    """The ADR-088 Cortex schema binding is not lowered as a local dataset."""
+
+    realization = _realize_pack(tmp_path)
+    spec = realization.deployment_spec(sorted(realization.profiles))
+
+    materializations = spec.service_materializations
+    assert [item.address for item in materializations] == [
+        "provision.content.cortex-job-index-schema"
+    ]
+    binding = materializations[0].binding
+    assert binding["interface_profile"] == "service-search-index-schema"
+    assert binding["profile_version"] == "1"
+    assert binding["target_service_address"] == (
+        "provision.node.thehive-es.service.elasticsearch"
+    )
+    assert binding["field_semantics"] == {
+        "key": "exact-token",
+        "relations": "exact-token",
+        "status": "exact-token",
+    }
+    assert all(
+        placement.content is None and placement.dataset is None
+        for placement in realization.placements
+        if placement.address == "provision.content.cortex-job-index-schema"
+    )
+
+
 def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):
     """The generated base compose renders image nodes, networks, and safe deps."""
 
@@ -472,13 +500,8 @@ def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
     assert env["DB_PASSWORD"] == "changeme123"
 
 
-def test_operational_config_marks_autoremove_node_as_run_once():
-    """A one-shot (autoremove) node gets restart: no, not the default policy.
-
-    Compose has no --rm, so an autoremove node (an init job that runs to
-    completion and exits) is expressed as restart: "no"; otherwise the base
-    unless-stopped policy restarts the finished job forever (issue #875).
-    """
+def test_operational_config_rejects_autoremove_container_nodes():
+    """Container autoremove is not a supported declared VM lifecycle."""
 
     from raes.runtime_configuration import RuntimeConfiguration
 
@@ -488,10 +511,8 @@ def test_operational_config_marks_autoremove_node_as_run_once():
         {"container": {"autoremove": True, "entrypoint": ["/bin/sh", "/init.sh"]}}
     )
 
-    config = _operational_config(runtime)
-
-    assert config["restart"] == "no"
-    assert config["entrypoint"] == ["/bin/sh", "/init.sh"]
+    with pytest.raises(ValueError, match="autoremove"):
+        _operational_config(runtime)
 
 
 def test_operational_config_is_empty_for_a_bare_node():

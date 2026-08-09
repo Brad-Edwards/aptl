@@ -38,7 +38,6 @@ _COMPONENT_PROFILE: dict[str, str] = {
     "thehive-cassandra": "soc",
     "thehive-es": "soc",
     "cortex": "soc",
-    "cortex-index-init": "soc",
     "shuffle-backend": "soc",
     "shuffle-frontend": "soc",
     "shuffle-opensearch": "soc",

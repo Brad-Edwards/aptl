@@ -13,7 +13,6 @@ from aptl.core.deployment._compose_service_health import (
     container_health,
     container_running,
     container_settled,
-    container_completed_one_shot,
     unhealthy_container_reasons,
     wait_for_realized_health,
 )
@@ -150,34 +149,26 @@ def _one_shot(*, status="exited", exit_code=0, restart="no"):
     return _info(running=False, status=status, exit_code=exit_code, restart=restart)
 
 
-def test_completed_one_shot_is_settled():
-    """A run-to-completion container (restart no, exit 0) is settled, not down.
-
-    The Cortex index initializer creates its index and exits by design. Before
-    this, the health wait treated its exited container as "not running" and never
-    succeeded -- forcing the admitted-plan retry on every single boot.
-    """
+def test_exited_restart_no_container_is_not_settled():
+    """An exited declared container is not realized based on Docker metadata."""
     info = _one_shot()
-    assert container_completed_one_shot(info) is True
-    assert container_settled(info) is True
+    assert container_settled(info) is False
 
 
-def test_a_service_that_exited_is_not_a_completed_one_shot():
+def test_a_service_that_exited_is_not_settled():
     """A stay-up service that exited is a real failure, exit code notwithstanding."""
     info = _info(running=False, status="exited", exit_code=0, restart="unless-stopped")
-    assert container_completed_one_shot(info) is False
     assert container_settled(info) is False
 
 
 def test_a_one_shot_that_errored_is_not_settled():
     """A one-shot that exited non-zero failed its job."""
     info = _one_shot(exit_code=1)
-    assert container_completed_one_shot(info) is False
     assert container_settled(info) is False
 
 
-def test_unhealthy_reasons_skips_a_completed_one_shot():
-    """A completed one-shot must not appear as a health failure reason."""
+def test_unhealthy_reasons_report_exited_restart_no_container():
+    """A declared container that exited is a health failure reason."""
     from aptl.core.deployment._compose_service_health import unhealthy_container_reasons
 
     class _Backend:
@@ -189,4 +180,4 @@ def test_unhealthy_reasons_skips_a_completed_one_shot():
     reasons = unhealthy_container_reasons(
         _Backend(), ["aptl-cortex-index-init", "aptl-wazuh-manager"]
     )
-    assert reasons == []
+    assert reasons == ["container 'aptl-cortex-index-init' is not running"]

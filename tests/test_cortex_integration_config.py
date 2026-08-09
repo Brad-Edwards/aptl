@@ -9,7 +9,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = PROJECT_ROOT / "docker-compose.yml"
 CORTEX_CONF_PATH = PROJECT_ROOT / "config" / "cortex" / "application.conf"
 THEHIVE_CORTEX_ENV_PATH = PROJECT_ROOT / "config" / "cortex" / "thehive-cortex.env"
-CORTEX_INDEX_INIT_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-index-init.sh"
 CORTEX_APIKEY_SCRIPT = PROJECT_ROOT / "scripts" / "cortex-apikey.sh"
 SEED_PRIME_SCRIPT = PROJECT_ROOT / "scripts" / "seed-prime.sh"
 
@@ -51,25 +50,14 @@ def test_thehive_compose_enables_cortex_connector():
     assert thehive["depends_on"]["cortex"]["condition"] == "service_healthy"
 
 
-def test_cortex_compose_precreates_key_auth_index_mapping():
+def test_cortex_compose_uses_native_service_materialization_for_index_mapping():
     services = _compose()["services"]
-    index_init = services["cortex-index-init"]
     cortex = services["cortex"]
 
-    assert index_init["image"] == services["thehive-es"]["image"]
-    assert index_init["restart"] == "no"
-    assert index_init["entrypoint"] == ["/bin/sh", "/usr/local/bin/cortex-index-init.sh"]
-    assert "./scripts/cortex-index-init.sh:/usr/local/bin/cortex-index-init.sh:ro" in index_init["volumes"]
-    assert index_init["depends_on"]["thehive-es"]["condition"] == "service_healthy"
-    assert cortex["depends_on"]["cortex-index-init"]["condition"] == "service_completed_successfully"
-
-    text = CORTEX_INDEX_INIT_SCRIPT.read_text(encoding="utf-8")
-    assert 'INDEX="${CORTEX_INDEX:-cortex_6}"' in text
-    assert '"relations":{"type":"keyword"}' in text
-    assert '"status":{"type":"keyword"}' in text
-    assert '"key":{"type":"keyword"}' in text
-    assert '"count":' in text
-    assert "lacks keyword key-auth mappings" in text
+    assert "cortex-index-init" not in services
+    assert cortex["depends_on"] == {
+        "thehive-es": {"condition": "service_healthy"},
+    }
 
 
 def test_cortex_seed_script_matches_thehive_fixture_key():
@@ -78,8 +66,8 @@ def test_cortex_seed_script_matches_thehive_fixture_key():
 
     assert f'CORTEX_API_KEY="${{CORTEX_API_KEY:-{fixture_key}}}"' in text
     assert '"roles": ["read", "analyze", "orgadmin"]' in text
-    assert 'CORTEX_INDEX="${CORTEX_INDEX:-cortex_6}"' in text
-    assert 'sh -s < "$SCRIPT_DIR/cortex-index-init.sh"' in text
+    assert "CORTEX_INDEX" not in text
+    assert "cortex-index-init.sh" not in text
     assert "/api/organization" in text
     assert "/api/user" in text
 

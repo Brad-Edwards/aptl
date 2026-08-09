@@ -23,6 +23,9 @@ from aptl.core.deployment._compose_node_generation import STATIC_COMPOSE_FILENAM
 from aptl.core.deployment._compose_post_start import (
     ComposeRealizationPostStartMixin,
 )
+from aptl.core.deployment._compose_service_materialization import (
+    ComposeServiceMaterializationMixin,
+)
 from aptl.core.deployment._compose_port_realization import published_port_conflicts
 from aptl.core.deployment._compose_stateful_realization import (
     ComposeStatefulRealizationMixin,
@@ -66,6 +69,7 @@ class ComposeRealizationMixin(
     ComposeRealizationNetworkMixin,
     ComposeRealizationContentMixin,
     ComposeRealizationAccountMixin,
+    ComposeServiceMaterializationMixin,
     ComposeRealizationModelMixin,
     ComposeRealizationPostStartMixin,
     ComposeStatefulRealizationMixin,
@@ -204,6 +208,17 @@ class ComposeRealizationMixin(
             )
             return self._realization_result(start_result, realization)
 
+        def _service_materializations() -> LabResult | None:
+            """Realize native service state before dependent services start."""
+
+            return self._realize_service_materializations(
+                realization,
+                profiles,
+                build=build,
+                compose_files=compose_files,
+                scenario_root=scenario_root,
+            )
+
         # Each step realizes one stage and returns a fail-closed LabResult, or
         # None to fall through to the next stage. The last stage always
         # returns, so the pipeline always ends in a concrete result.
@@ -216,6 +231,7 @@ class ComposeRealizationMixin(
             lambda: self._realize_networks_and_boundaries(realization),
             lambda: self._realize_content(realization, scenario_root),
             _compose_model,
+            _service_materializations,
             _start,
         )
         for step in steps:

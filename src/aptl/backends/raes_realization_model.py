@@ -20,6 +20,7 @@ from aptl.core.deployment.realization import (
     DeploymentPersistentVolumeRealization,
     DeploymentRealizationSpec,
     DeploymentServicePort,
+    DeploymentServiceMaterializationRealization,
 )
 
 
@@ -130,6 +131,7 @@ class PlacementRealization(object):
     content: DeploymentContentRealization | None = None
     dataset: "ParticipantDatasetRealization | None" = None
     account: DeploymentAccountRealization | None = None
+    service_materialization: DeploymentServiceMaterializationRealization | None = None
 
     def details(self) -> dict[str, object]:
         details: dict[str, object] = {
@@ -145,6 +147,8 @@ class PlacementRealization(object):
             details["dataset"] = self.dataset.details()
         if self.account is not None:
             details["account"] = self.account.details()
+        if self.service_materialization is not None:
+            details["service_materialization"] = self.service_materialization.details()
         return details
 
 
@@ -218,6 +222,11 @@ class AptlRealization(object):
                 for placement in self.placements
                 if placement.account is not None
             ),
+            service_materializations=tuple(
+                placement.service_materialization
+                for placement in self.placements
+                if placement.service_materialization is not None
+            ),
             generated_artifacts=self.generated_artifacts,
             persistent_volumes=self.persistent_volumes,
         )
@@ -240,6 +249,10 @@ class AptlRealization(object):
             "node": len(self.nodes),
             "generated-artifact": len(self.generated_artifacts),
             "persistent-volume": len(self.persistent_volumes),
+            "service-materialization": sum(
+                placement.service_materialization is not None
+                for placement in self.placements
+            ),
         }
         return {
             "profiles": sorted(self.profiles),

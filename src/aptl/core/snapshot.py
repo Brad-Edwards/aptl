@@ -180,13 +180,7 @@ def _row_to_snapshot(
 
 
 def container_restart_policy(backend: "DeploymentBackend", name: str) -> str:
-    """Return a container's Docker restart-policy name, or empty on failure.
-
-    Read from ``HostConfig.RestartPolicy.Name``. A run-to-completion helper is
-    created with ``restart: "no"`` and legitimately exits; a service is created
-    with ``always``/``unless-stopped`` and must stay up. Readiness needs to tell
-    those apart without an allowance list naming particular containers.
-    """
+    """Return a container's Docker restart-policy name, or empty on failure."""
     try:
         info = backend.container_inspect(name)
     # inspect shells out; absence is not fatal.

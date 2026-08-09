@@ -196,6 +196,8 @@ def test_ssh_connection(host: str, port: int, user: str, key_path: Path) -> bool
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
                 "BatchMode=yes",
                 "-p",
                 str(port),

@@ -18,7 +18,9 @@ from raes_contracts.planning import (
     ProvisionOp,
     RuntimeDomain,
 )
+from raes_contracts.runtime_state import RuntimeSnapshot
 
+from aptl.backends.raes_diagnostics import snapshot_after_apply
 from aptl.backends.raes_observation import observe_realization
 from aptl.backends.raes_realization_model import (
     AptlRealization,
@@ -31,6 +33,8 @@ from aptl.core.deployment.realization import (
     DeploymentGeneratedArtifactRealization,
     DeploymentImageRealization,
     DeploymentPersistentVolumeRealization,
+    DeploymentServiceMaterializationObservation,
+    DeploymentServiceMaterializationRealization,
     DeploymentStatefulConsumer,
 )
 from aptl.core.deployment.realization import DeploymentContentRealization
@@ -1030,6 +1034,114 @@ def test_content_probe_timeout_omits_concern_without_echoing_plan(tmp_path):
     assert observation.concerns == {}
 
 
+def _service_materialization_fixture():
+    address = "provision.content.cortex-job-index-schema"
+    target_address = "provision.node.thehive-es"
+    binding = {
+        "canonical_content_digest": (
+            "sha256:dcb95473071eba666890cefef3c6dab8c35de373a28e268c0b474c83f6e12152"
+        ),
+        "canonical_field_schema_digest": (
+            "sha256:2d0661b00c76f58086aacece2f7a11612713f64f5b49952ec1bc5e53b3a42e37"
+        ),
+        "field_semantics": {
+            "key": "exact-token",
+            "relations": "exact-token",
+            "status": "exact-token",
+        },
+        "interface_profile": "service-search-index-schema",
+        "profile_version": "1",
+        "target_service_address": "provision.node.thehive-es.service.elasticsearch",
+    }
+    payload = {
+        "name": "cortex-job-index-schema",
+        "target_address": target_address,
+        "spec": {"type": "file"},
+        "service_materialization": binding,
+    }
+    resource = PlannedResource(
+        address=address,
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload=payload,
+    )
+    plan = ProvisioningPlan(
+        resources={address: resource},
+        operations=[
+            ProvisionOp(
+                action=ChangeAction.CREATE,
+                address=address,
+                resource_type=resource.resource_type,
+                payload=payload,
+            )
+        ],
+    )
+    materialization = DeploymentServiceMaterializationRealization(
+        address=address,
+        target_address=target_address,
+        binding=binding,
+    )
+    placement = PlacementRealization(
+        address=address,
+        resource_type="content-placement",
+        name="cortex-job-index-schema",
+        target_address=target_address,
+        target_node="thehive-es",
+        service_materialization=materialization,
+    )
+    realization = AptlRealization(
+        profiles=frozenset({"soc"}),
+        nodes=(_node_realization("thehive-es", "aptl-thehive-es"),),
+        networks=(),
+        placements=(placement,),
+        diagnostics=(),
+    )
+    return address, binding, plan, realization
+
+
+class _ServiceMaterializationBackend(_Backend):
+    def __init__(
+        self,
+        observation: DeploymentServiceMaterializationObservation,
+    ) -> None:
+        super().__init__()
+        self.observation = observation
+        self.observed_node_addresses: tuple[str, ...] = ()
+
+    def observe_service_materialization(self, materialization, nodes):
+        self.observed_node_addresses = tuple(node.address for node in nodes)
+        return self.observation
+
+
+def test_service_materialization_snapshot_uses_native_readback(tmp_path):
+    address, binding, plan, realization = _service_materialization_fixture()
+    backend = _ServiceMaterializationBackend(
+        DeploymentServiceMaterializationObservation(
+            realized=True,
+            binding=binding,
+            evidence={"mechanism": "elasticsearch-mapping-readback"},
+        )
+    )
+
+    observations = observe_realization(backend, realization, plan, scenario_root=tmp_path)
+    snapshot = snapshot_after_apply(plan, RuntimeSnapshot(), observations)
+
+    assert observations[address].realized is True
+    assert backend.observed_node_addresses == ("provision.node.thehive-es",)
+    payload = snapshot.entries[address].payload
+    assert payload["spec"]["type"] == "dataset"
+    assert payload["service_materialization"] == binding
+    disclosures = [
+        item
+        for item in snapshot.realization_observations
+        if item.requirement_kind == "service-search-index-schema-materialization"
+    ]
+    assert len(disclosures) == 1
+    assert disclosures[0].field_path == (
+        "content.cortex-job-index-schema.service_materialization"
+    )
+
+
 def _image_free_content_placement_fixture():
     """Same shape as _content_placement_fixture but with no named volume
     (ADR-048): the generic materializer places content directly into the
@@ -1447,13 +1559,8 @@ def test_bind_delivered_content_type_read_from_the_daemon_not_the_container(tmp_
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_bind_delivered_content_type_observed_on_an_exited_one_shot(tmp_path):
-    """An exited run-to-completion node cannot be exec'd but is still realized.
-
-    The Cortex index initializer places its script by bind mount and exits 0 by
-    design. Exec against a stopped container fails outright, so the only honest
-    readback is the daemon's own mount record (issue #875).
-    """
+def test_bind_delivered_content_type_not_observed_on_an_exited_container(tmp_path):
+    """An exited container is not a realized VM placement target."""
 
     address, plan, realization = _bind_content_placement_fixture(
         container="aptl-cortex-index-init", dest="usr/local/bin/cortex-index-init.sh"
@@ -1480,8 +1587,8 @@ def test_bind_delivered_content_type_observed_on_an_exited_one_shot(tmp_path):
         backend, realization, plan, scenario_root=tmp_path
     )[address]
 
-    assert observation.realized is True
-    assert observation.concerns == {("spec", "type"): "file"}
+    assert observation.realized is False
+    assert observation.concerns == {}
 
 
 def test_bind_delivered_directory_content_type_is_reported_as_directory(tmp_path):
@@ -1538,14 +1645,8 @@ def test_bind_source_probe_failure_omits_the_content_type(tmp_path):
     assert observation.concerns == {}
 
 
-def test_container_realized_accepts_a_completed_one_shot():
-    """A run-to-completion init container is realized, not unrealized (#866).
-
-    The Cortex Elasticsearch index initializer creates its index and exits 0 by
-    design. Before this, the RAES realization gate read its exited container as
-    an unrealized node and rejected the whole apply for a node-type requirement
-    the container actually satisfied -- which forced `aptl lab start` to fail.
-    """
+def test_container_realized_rejects_a_completed_container():
+    """A realized VM container must be running."""
 
     from aptl.backends._raes_observation_helpers import container_realized
 
@@ -1553,7 +1654,7 @@ def test_container_realized_accepts_a_completed_one_shot():
         "State": {"Running": False, "Status": "exited", "ExitCode": 0},
         "HostConfig": {"RestartPolicy": {"Name": "no"}},
     }
-    assert container_realized(one_shot) is True
+    assert container_realized(one_shot) is False
 
     # A stay-up service that exited is still a real failure.
     dead_service = {
@@ -1562,7 +1663,7 @@ def test_container_realized_accepts_a_completed_one_shot():
     }
     assert container_realized(dead_service) is False
 
-    # A one-shot that errored failed its job.
+    # A restart:no container that errored is also unrealized.
     errored = {
         "State": {"Running": False, "Status": "exited", "ExitCode": 1},
         "HostConfig": {"RestartPolicy": {"Name": "no"}},
@@ -1570,5 +1671,8 @@ def test_container_realized_accepts_a_completed_one_shot():
     assert container_realized(errored) is False
 
     # A running healthy service is realized as before.
-    running = {"State": {"Running": True}, "HostConfig": {"RestartPolicy": {"Name": "always"}}}
+    running = {
+        "State": {"Running": True},
+        "HostConfig": {"RestartPolicy": {"Name": "always"}},
+    }
     assert container_realized(running) is True

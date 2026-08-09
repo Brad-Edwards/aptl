@@ -275,12 +275,7 @@ def _service_selected(service_def: object, selected_profiles: set[str]) -> bool:
     if not isinstance(service_def, Mapping):
         return False
     profiles = _service_profiles(service_def)
-    return bool(profiles & selected_profiles) and not _is_one_shot(service_def)
-
-
-def _is_one_shot(service_def: Mapping[str, object]) -> bool:
-    """Return whether Compose marks a service as a non-steady-state task."""
-    return str(service_def.get("restart", "")).lower() in {"no", "false"}
+    return bool(profiles & selected_profiles)
 
 
 def _normalized_service_aliases(

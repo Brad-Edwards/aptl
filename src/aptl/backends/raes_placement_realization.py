@@ -41,6 +41,7 @@ from aptl.backends.raes_realization_values import (
 from aptl.core.deployment.realization import (
     DeploymentAccountRealization,
     DeploymentContentRealization,
+    DeploymentServiceMaterializationRealization,
 )
 
 PLACEMENT_RESOURCE_TYPES = frozenset(
@@ -120,7 +121,13 @@ def _realize_placement(
             ],
         )
 
-    content, dataset, account, resource_diagnostics = _realize_placement_resource(
+    (
+        content,
+        dataset,
+        account,
+        service_materialization,
+        resource_diagnostics,
+    ) = _realize_placement_resource(
         resource, payload, target_address, node_by_address, project_dir
     )
     return (
@@ -133,6 +140,7 @@ def _realize_placement(
             content=content,
             dataset=dataset,
             account=account,
+            service_materialization=service_materialization,
         ),
         resource_diagnostics,
     )
@@ -148,6 +156,7 @@ def _realize_placement_resource(
     DeploymentContentRealization | None,
     ParticipantDatasetRealization | None,
     DeploymentAccountRealization | None,
+    DeploymentServiceMaterializationRealization | None,
     list[Diagnostic],
 ]:
     """Lower a resolved content/account placement into typed backend input.
@@ -174,8 +183,17 @@ def _realize_placement_resource(
     content: DeploymentContentRealization | None = None
     dataset: ParticipantDatasetRealization | None = None
     account: DeploymentAccountRealization | None = None
+    service_materialization: DeploymentServiceMaterializationRealization | None = None
     diagnostics: list[Diagnostic] = []
     if resource.resource_type == "content-placement":
+        binding = payload.get("service_materialization")
+        if isinstance(binding, Mapping):
+            service_materialization = DeploymentServiceMaterializationRealization(
+                address=resource.address,
+                target_address=target_address,
+                binding=dict(binding),
+            )
+            return content, dataset, account, service_materialization, diagnostics
         spec = payload.get("spec")
         is_dataset = isinstance(spec, Mapping) and spec.get("type") == "dataset"
         if (
@@ -212,4 +230,4 @@ def _realize_placement_resource(
             target_address=target_address,
             target_service=target_service,
         )
-    return content, dataset, account, diagnostics
+    return content, dataset, account, service_materialization, diagnostics

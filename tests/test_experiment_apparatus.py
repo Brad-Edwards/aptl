@@ -259,6 +259,7 @@ def _synthetic_mutually_compatible_manifests():
         orchestrator=real_backend.orchestrator,
         evaluator=real_backend.evaluator,
         participant_runtime=real_backend.participant_runtime,
+        realization_envelope=real_backend.realization_envelope,
     )
     test_processor = ProcessorManifest(
         name="test-processor",
@@ -478,6 +479,7 @@ class TestCheckApparatusAdmissionUncertifiedApparatusOverride:
             orchestrator=real_backend.orchestrator,
             evaluator=real_backend.evaluator,
             participant_runtime=real_backend.participant_runtime,
+            realization_envelope=real_backend.realization_envelope,
         )
         test_processor = ProcessorManifest(
             name="test-processor",

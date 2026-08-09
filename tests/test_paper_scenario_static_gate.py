@@ -70,20 +70,29 @@ def _paper_plan():
     return scenario, model, RuntimeManager(target).plan(scenario), config
 
 
-def _assert_paper_scoring_chain_is_not_supported(plan) -> None:
-    # ADR-073 removes the deprecated `metrics`/`evaluations`/`tlos`/`goals`/
-    # `scoring` chain from the authored SDL surface entirely, so the planner no
-    # longer emits diagnostics for it. Objective success is now authored via
-    # `propositions:`/`assertions:` (consumed structurally by
-    # `objectives.*.success.assertions`), but APTL's evaluator manifest
-    # deliberately narrows its declared runtime-evaluated surface to
-    # `conditions`/`objectives` only (issue #749) -- it does not claim to
-    # evaluate raw `propositions`/`assertions` sections itself.
+def _assert_paper_scoring_chain_admitted_not_projected(plan) -> None:
+    # ADR-069 §3 assigns the backend evaluator the job of projecting
+    # objective/proposition/terminal-condition facts, so APTL declares the
+    # `propositions`/`assertions` sections (issue #889 supersedes the #749
+    # narrowing, which was an under-declaration: APTL already evaluates
+    # objectives, which are composed of these). The paper's boolean observed-
+    # state scoring chain is therefore admitted with no evaluator diagnostics.
+    #
+    # But APTL projects a proposition-truth result only for an assertion it can
+    # genuinely corroborate: the ADR-088 service-materialization readback on the
+    # `api_response` channel. The paper's propositions are evidenced on the
+    # participant/`log` channels APTL does not yet project from, so APTL
+    # fabricates no truth for them -- their truth stays unresolved. (RAES's
+    # plan-time admission does not yet check a proposition's evidence channels
+    # against the evaluator's supported set; that granularity gap is filed
+    # upstream, and is why admission alone cannot bound this.)
+    from raes_contracts.runtime_state import RuntimeSnapshot
+
+    from aptl.backends._raes_proposition_truth import project_proposition_truth_results
+
     diagnostics = {(d.code, d.address) for d in plan.diagnostics}
-    assert diagnostics == {
-        ("evaluator.unsupported-section", "evaluation.propositions"),
-        ("evaluator.unsupported-section", "evaluation.assertions"),
-    }
+    assert diagnostics == set()
+    assert project_proposition_truth_results(plan.evaluation, RuntimeSnapshot()) == {}
 
 
 def test_paper_scenario_compiles_with_participant_runtime_artifacts():
@@ -124,7 +133,7 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
         "participant.observation-boundary.paper-agent-view"
         in model.observation_boundaries
     )
-    _assert_paper_scoring_chain_is_not_supported(plan)
+    _assert_paper_scoring_chain_admitted_not_projected(plan)
     assert not (
         PROJECT_ROOT / "src/aptl/backends/raes_paper_participant_actions.py"
     ).exists()
@@ -132,7 +141,7 @@ def test_paper_scenario_compiles_with_participant_runtime_artifacts():
 
 def test_paper_scenario_content_surface_realizes_with_no_rejection():
     _scenario, _model, plan, config = _paper_plan()
-    _assert_paper_scoring_chain_is_not_supported(plan)
+    _assert_paper_scoring_chain_admitted_not_projected(plan)
 
     realization = interpret_provisioning_plan(
         plan=plan.provisioning,

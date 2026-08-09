@@ -592,7 +592,7 @@ def test_create_aptl_manifest_is_canonical_backend_manifest_v2():
     assert manifest.has_evaluator is True
     assert manifest.evaluator is not None
     assert manifest.evaluator.supported_sections == frozenset(
-        {"conditions", "objectives"}
+        {"conditions", "objectives", "propositions", "assertions"}
     )
     assert manifest.evaluator.supports_scoring is False
     assert manifest.evaluator.supports_objectives is True
@@ -634,7 +634,10 @@ def test_manifest_realization_support_matches_exercised_concerns():
         {"os-family", "source-artifact"}
     )
     assert support.supported_exact_requirement_kinds == frozenset(
-        {"declared-capability-match"}
+        {
+            "declared-capability-match",
+            "service-search-index-schema-materialization",
+        }
     )
     assert support.disclosure_kinds == frozenset(
         {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
@@ -756,7 +759,16 @@ def test_aptl_target_passes_provisioning_only_conformance():
         reference_scenario=CONFORMANCE_SCENARIO,
     )
 
-    assert report.passed is True, [d.code for d in report.diagnostics]
+    # The realization-envelope constructive case is live-harness-only and is
+    # proven at the live lab-boot gate (issue #889); the static target must pass
+    # every other conformance case. This mirrors the backend-conformance gate's
+    # own toleration in _gate_checks._target_conformance_diagnostics.
+    from aptl.validation._gate_checks import _target_conformance_diagnostics
+
+    assert _target_conformance_diagnostics(report) == [], (
+        report.passed,
+        [d.code for d in report.diagnostics],
+    )
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
 
@@ -784,16 +796,35 @@ def test_aptl_target_passes_orchestration_evaluation_conformance():
         reference_scenario=CONFORMANCE_SCENARIO,
     )
 
-    assert report.passed is True, [d.code for d in report.diagnostics]
+    # The realization-envelope constructive case is live-harness-only and is
+    # proven at the live lab-boot gate (issue #889); the static target must pass
+    # every other conformance case. This mirrors the backend-conformance gate's
+    # own toleration in _gate_checks._target_conformance_diagnostics.
+    from aptl.validation._gate_checks import _target_conformance_diagnostics
+
+    assert _target_conformance_diagnostics(report) == [], (
+        report.passed,
+        [d.code for d in report.diagnostics],
+    )
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
-    assert all(case.passed for case in report.cases), [
+    from aptl.validation._gate_checks import _requires_live_realization_harness
+
+    assert all(
+        case.passed
+        for case in report.cases
+        if not _requires_live_realization_harness(case)
+    ), [
         (case.name, [d.message for d in case.diagnostics])
         for case in report.cases
-        if not case.passed
+        if not case.passed and not _requires_live_realization_harness(case)
     ]
     case_names = {case.name for case in report.cases}
-    assert {"target-provisioning", "target-snapshot"} <= case_names
+    # With a realization envelope declared, target realization is covered by the
+    # realization-envelope conformance cases; RAES supersedes the legacy
+    # target-provisioning / target-snapshot adapter probes (the temporary
+    # runner-parameter bridge) with the envelope design (#667/#668, issue #889).
+    assert "realization-envelope-constructive" in case_names
 
 
 def test_aptl_target_passes_full_remote_control_plane_conformance():
@@ -819,16 +850,35 @@ def test_aptl_target_passes_full_remote_control_plane_conformance():
         reference_scenario=CONFORMANCE_SCENARIO,
     )
 
-    assert report.passed is True, [d.code for d in report.diagnostics]
+    # The realization-envelope constructive case is live-harness-only and is
+    # proven at the live lab-boot gate (issue #889); the static target must pass
+    # every other conformance case. This mirrors the backend-conformance gate's
+    # own toleration in _gate_checks._target_conformance_diagnostics.
+    from aptl.validation._gate_checks import _target_conformance_diagnostics
+
+    assert _target_conformance_diagnostics(report) == [], (
+        report.passed,
+        [d.code for d in report.diagnostics],
+    )
     assert report.unsupported_contract_gaps == ()
     assert report.unsupported_capability_gaps == ()
-    assert all(case.passed for case in report.cases), [
+    from aptl.validation._gate_checks import _requires_live_realization_harness
+
+    assert all(
+        case.passed
+        for case in report.cases
+        if not _requires_live_realization_harness(case)
+    ), [
         (case.name, [d.message for d in case.diagnostics])
         for case in report.cases
-        if not case.passed
+        if not case.passed and not _requires_live_realization_harness(case)
     ]
     case_names = {case.name for case in report.cases}
-    assert {"target-provisioning", "target-snapshot"} <= case_names
+    # With a realization envelope declared, target realization is covered by the
+    # realization-envelope conformance cases; RAES supersedes the legacy
+    # target-provisioning / target-snapshot adapter probes (the temporary
+    # runner-parameter bridge) with the envelope design (#667/#668, issue #889).
+    assert "realization-envelope-constructive" in case_names
 
 
 def test_participant_runtime_lifecycle_updates_control_plane_snapshot(tmp_path):

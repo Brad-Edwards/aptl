@@ -270,7 +270,7 @@ def test_the_techvault_verifier_is_a_separate_distribution():
         entry_point.name: entry_point
         for entry_point in metadata.entry_points(group=ENTRY_POINT_GROUP)
     }
-    techvault = entry_points.get("techvault-operational")
+    techvault = entry_points.get("techvault")
     if techvault is None:
         pytest.skip("aptl-techvault-verifier is not installed in this environment")
 

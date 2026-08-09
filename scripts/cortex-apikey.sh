@@ -14,11 +14,13 @@ set -euo pipefail
 # authenticate, reset the lab volume or provision the key manually.
 # =============================================================================
 
-CORTEX_URL="${CORTEX_URL:-http://localhost:9001}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# The env-pack exposes Cortex only on the container network -- 9001 is not
+# host-published -- so every API call runs inside the Cortex container, where the
+# service listens on localhost. (Pre-#875 the checked-in compose host-published
+# 9001 as a convenience port; the env-pack no longer does, so a host
+# `localhost:9001` probe here failed and SOC seeding aborted.)
 CORTEX_CONTAINER="${CORTEX_CONTAINER:-aptl-cortex}"
-CORTEX_ES_URL_IN_CONTAINER="${CORTEX_ES_URL_IN_CONTAINER:-http://thehive-es:9200}"
-CORTEX_INDEX="${CORTEX_INDEX:-cortex_6}"
+CORTEX_URL="${CORTEX_URL:-http://localhost:9001}"
 ORG_NAME="${CORTEX_ORG_NAME:-APTL}"
 ORG_DESCRIPTION="${CORTEX_ORG_DESCRIPTION:-APTL Purple Team Lab}"
 ORG_USER="${CORTEX_ORG_USER:-aptl-svc@cortex.local}"
@@ -27,27 +29,25 @@ ORG_USER_PASS="${CORTEX_ORG_USER_PASS:-AptlCortexService2026!}"
 CORTEX_API_KEY="${CORTEX_API_KEY:-aptlcortexlabapikey2026purple}"
 export ORG_NAME ORG_DESCRIPTION ORG_USER ORG_USER_NAME ORG_USER_PASS CORTEX_API_KEY
 
+# Reach the Cortex API from inside its container. This mirrors the SOC seed's
+# Wazuh path, which also drives its client through `docker exec` rather than a
+# host binding.
+_cortex_curl() {
+    docker exec "$CORTEX_CONTAINER" curl "$@" 2>/dev/null
+}
+
 _curl_json() {
-    curl -sf -H "Content-Type: application/json" "$@" 2>/dev/null
+    _cortex_curl -sf -H "Content-Type: application/json" "$@"
 }
 
 _curl_key() {
-    curl -sf -H "Authorization: Bearer ${CORTEX_API_KEY}" "$@" 2>/dev/null
+    _cortex_curl -sf -H "Authorization: Bearer ${CORTEX_API_KEY}" "$@"
 }
 
-_ensure_cortex_index_mapping() {
-    if ! command -v docker >/dev/null 2>&1; then
-        return 0
-    fi
-    if ! docker inspect "$CORTEX_CONTAINER" >/dev/null 2>&1; then
-        return 0
-    fi
-
-    docker exec -i \
-        -e CORTEX_ES_URL="$CORTEX_ES_URL_IN_CONTAINER" \
-        -e CORTEX_INDEX="$CORTEX_INDEX" \
-        "$CORTEX_CONTAINER" sh -s < "$SCRIPT_DIR/cortex-index-init.sh"
-}
+if ! command -v docker >/dev/null 2>&1; then
+    echo "ERROR: docker is required to reach Cortex on the container network" >&2
+    exit 1
+fi
 
 # 1. Wait for the API surface that does not require Elasticsearch/auth.
 max_wait=300
@@ -65,9 +65,10 @@ if [ "$elapsed" -ge "$max_wait" ]; then
     exit 1
 fi
 
-# 2. Ensure key-auth fields are exact-match keyword mappings before the first
-# org/user document creates the Cortex index.
-_ensure_cortex_index_mapping
+# 2. The cortex_6 key-auth index is declared ADR-088 initial service state,
+# materialized on thehive-es before Cortex starts (#889). The seed neither
+# creates, modifies, nor deletes it -- it must never be able to drop the
+# owner-protected declared index -- so there is no index step here.
 
 # 3. Fast path: the fixture key already works.
 if _curl_key "${CORTEX_URL}/api/user/current" >/dev/null; then

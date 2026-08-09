@@ -248,7 +248,14 @@ def _observed_payload(
             "forwarding-agents",
             "service-listeners",
         ),
-        "content-placement": ("content-type",),
+        # ADR-088 (#889): a content-placement carrying a service materialization
+        # exposes the service-search-index-schema-materialization concern, which
+        # the gate replaces with the corroborated observation (or removes when
+        # unproven, so planned state is never accepted).
+        "content-placement": (
+            "content-type",
+            "service-search-index-schema-materialization",
+        ),
         "generated-artifact": ("generated-artifact",),
         "persistent-volume": ("persistent-volume",),
     }.get(resource_type, ())

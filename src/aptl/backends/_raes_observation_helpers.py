@@ -11,7 +11,6 @@ from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
 from aptl.core.deployment._compose_service_health import (
-    container_completed_one_shot,
     container_health,
     container_running,
 )
@@ -226,20 +225,12 @@ def _transitional_state(info: Mapping[str, Any]) -> bool:
 def container_realized(info: Mapping[str, Any]) -> bool:
     """Return whether an inspected container has reached its realized state.
 
-    A running, healthy container is realized. So is a run-to-completion helper
-    that has exited 0 by design (restart ``no``): its node type and OS family are
-    exactly what was declared, and exiting is its intended terminal state. The
-    Cortex Elasticsearch index initializer is one -- without this the RAES
-    realization gate reads its exited container as an unrealized node and rejects
-    the whole apply for a ``node-type`` requirement it actually satisfied. A
-    service that merely exited never matches (its restart policy is not ``no``),
-    and a non-zero exit is a real failure.
+    A running, healthy container is realized. A container that merely exited
+    never matches, and a non-zero exit is a real failure.
     """
 
     if not info:
         return False
-    if container_completed_one_shot(info):
-        return True
     health = container_health(info)
     return container_running(info) and (not health or health == "healthy")
 

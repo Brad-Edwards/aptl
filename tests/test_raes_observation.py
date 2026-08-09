@@ -1447,41 +1447,37 @@ def test_bind_delivered_content_type_read_from_the_daemon_not_the_container(tmp_
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_bind_delivered_content_type_observed_on_an_exited_one_shot(tmp_path):
-    """An exited run-to-completion node cannot be exec'd but is still realized.
+def test_bind_delivered_content_placement_is_unrealized_on_a_stopped_container(tmp_path):
+    """A stopped target container is never realized, bind mount aside.
 
-    The Cortex index initializer places its script by bind mount and exits 0 by
-    design. Exec against a stopped container fails outright, so the only honest
-    readback is the daemon's own mount record (issue #875).
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer, replaced by the native
+    service-search-index-schema materializer), so there is no longer a one-shot
+    exemption: a placement whose target container is not running is unrealized.
     """
 
     address, plan, realization = _bind_content_placement_fixture(
-        container="aptl-cortex-index-init", dest="usr/local/bin/cortex-index-init.sh"
+        container="aptl-stopped", dest="etc/otelcol/config.yaml"
     )
     backend = _Backend(
-        containers=("aptl-cortex-index-init",),
+        containers=("aptl-stopped",),
         running=False,
         health=None,
-        mounts={
-            "aptl-cortex-index-init": [
-                _content_bind("/usr/local/bin/cortex-index-init.sh")
-            ]
-        },
+        mounts={"aptl-stopped": [_content_bind("/etc/otelcol/config.yaml")]},
         bind_source_types={_BIND_SOURCE: "file"},
     )
     backend.container_inspect = lambda name: {
         "State": {"Running": False, "Status": "exited", "ExitCode": 0},
         "HostConfig": {"RestartPolicy": {"Name": "no"}},
         "Platform": "linux",
-        "Mounts": [_content_bind("/usr/local/bin/cortex-index-init.sh")],
+        "Mounts": [_content_bind("/etc/otelcol/config.yaml")],
     }
 
     observation = observe_realization(
         backend, realization, plan, scenario_root=tmp_path
     )[address]
 
-    assert observation.realized is True
-    assert observation.concerns == {("spec", "type"): "file"}
+    assert observation.realized is False
 
 
 def test_bind_delivered_directory_content_type_is_reported_as_directory(tmp_path):
@@ -1538,22 +1534,21 @@ def test_bind_source_probe_failure_omits_the_content_type(tmp_path):
     assert observation.concerns == {}
 
 
-def test_container_realized_accepts_a_completed_one_shot():
-    """A run-to-completion init container is realized, not unrealized (#866).
+def test_container_realized_rejects_any_stopped_container():
+    """A stopped container is never realized, restart policy or exit code aside.
 
-    The Cortex Elasticsearch index initializer creates its index and exits 0 by
-    design. Before this, the RAES realization gate read its exited container as
-    an unrealized node and rejected the whole apply for a node-type requirement
-    the container actually satisfied -- which forced `aptl lab start` to fail.
+    ADR-088 (issue #889) retired APTL's only run-to-completion service (the
+    Cortex Elasticsearch index initializer), so there is no longer a one-shot
+    exemption in realization observation.
     """
 
     from aptl.backends._raes_observation_helpers import container_realized
 
-    one_shot = {
+    exited_no_restart = {
         "State": {"Running": False, "Status": "exited", "ExitCode": 0},
         "HostConfig": {"RestartPolicy": {"Name": "no"}},
     }
-    assert container_realized(one_shot) is True
+    assert container_realized(exited_no_restart) is False
 
     # A stay-up service that exited is still a real failure.
     dead_service = {
@@ -1561,13 +1556,6 @@ def test_container_realized_accepts_a_completed_one_shot():
         "HostConfig": {"RestartPolicy": {"Name": "unless-stopped"}},
     }
     assert container_realized(dead_service) is False
-
-    # A one-shot that errored failed its job.
-    errored = {
-        "State": {"Running": False, "Status": "exited", "ExitCode": 1},
-        "HostConfig": {"RestartPolicy": {"Name": "no"}},
-    }
-    assert container_realized(errored) is False
 
     # A running healthy service is realized as before.
     running = {"State": {"Running": True}, "HostConfig": {"RestartPolicy": {"Name": "always"}}}

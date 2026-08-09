@@ -236,6 +236,51 @@ class DeploymentContentRealization(object):
 
 
 @dataclass(frozen=True)
+class DeploymentServiceSearchIndexSchemaRealization(object):
+    """One ADR-088 ``service-search-index-schema`` materialization lowered from a
+    RAES content-placement that carries a ``service_materialization`` binding.
+
+    The portable logical store is the canonical content ``address`` bound to the
+    exact ``target_service_address``; the concrete native index name is resolved
+    from the backend adapter configuration, never authored in SDL (ADR-088 keeps
+    native ids out of the portable contract). ``field_semantics`` maps portable
+    top-level field names to the closed portable semantic set
+    (``exact-token`` / ``full-text`` / ``integer`` / ``temporal`` / ``boolean``);
+    the backend projects each to a native field type, materializes the schema
+    through the service's native interface, and proves it by fresh native
+    readback whose portable projection reproduces ``field_schema_digest`` (the
+    RAES-compiled ``canonical_field_schema_digest``).
+
+    ``field_semantics`` is a name-sorted tuple of ``(field, semantic)`` pairs so
+    the record stays hashable/immutable; :meth:`field_semantics_map` returns the
+    mapping the provider consumes.
+    """
+
+    address: str
+    target_address: str
+    target_service_address: str
+    content_name: str
+    field_semantics: tuple[tuple[str, str], ...]
+    field_schema_digest: str
+
+    def field_semantics_map(self) -> dict[str, str]:
+        return dict(self.field_semantics)
+
+    def details(self) -> dict[str, object]:
+        # Portable identifiers, the declared semantics, and the digest only — no
+        # native index name, endpoint, query, or response body crosses this
+        # record (ADR-088 / issue #889 redaction boundary).
+        return {
+            "address": self.address,
+            "target_address": self.target_address,
+            "target_service_address": self.target_service_address,
+            "content_name": self.content_name,
+            "field_semantics": dict(self.field_semantics),
+            "field_schema_digest": self.field_schema_digest,
+        }
+
+
+@dataclass(frozen=True)
 class DeploymentAccountRealization(object):
     """One account-placement identity lowered from a RAES account resource.
 
@@ -388,6 +433,7 @@ class DeploymentRealizationSpec(object):
     images: tuple[DeploymentImageRealization, ...] = ()
     content: tuple[DeploymentContentRealization, ...] = ()
     accounts: tuple[DeploymentAccountRealization, ...] = ()
+    service_index_schemas: tuple[DeploymentServiceSearchIndexSchemaRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
     # ADR-048 image-free materialization is no longer a whole-spec flag: routing

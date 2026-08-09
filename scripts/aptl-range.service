@@ -1,0 +1,25 @@
+# systemd oneshot that provisions an APTL Arsenal range on first boot of an AMI
+# clone. Install on the AMI with:
+#   sudo cp scripts/aptl-range.service /etc/systemd/system/aptl-range.service
+#   sudo systemctl enable aptl-range.service
+# On boot it runs scripts/provision-range.sh as the ubuntu user once Docker is
+# up. Progress/result: /tmp/provision-range.log (look for RANGE_PROVISION_OK).
+# Re-run manually any time with: sudo systemctl start aptl-range.service
+[Unit]
+Description=APTL Arsenal range provisioning (aptl lab start + env-pack fixups)
+Wants=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/aptl3
+# Give the full stack (Wazuh/Elasticsearch startup + seed) generous headroom.
+TimeoutStartSec=1800
+ExecStart=/bin/bash /home/ubuntu/aptl3/scripts/provision-range.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -15,7 +15,7 @@ dependencies = []
 # The seam. APTL core registers nothing in this group; a scenario gains
 # verification by installing a distribution like this one.
 [project.entry-points."aptl.scenario_verifiers"]
-techvault-operational = "aptl_techvault_verifier:verifier"
+techvault = "aptl_techvault_verifier:verifier"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aptl_techvault_verifier"]

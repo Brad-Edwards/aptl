@@ -279,7 +279,18 @@ def _service_selected(service_def: object, selected_profiles: set[str]) -> bool:
 
 
 def _is_one_shot(service_def: Mapping[str, object]) -> bool:
-    """Return whether Compose marks a service as a non-steady-state task."""
+    """Return whether Compose marks a service as a non-steady-state task.
+
+    ADR-088 (issue #889) retired the env-pack-declared TechVault operational
+    scenario's only one-shot (the Cortex Elasticsearch index initializer,
+    replaced by the native service-search-index-schema materializer), but the
+    legacy in-tree ``docker-compose.yml`` still declares a real
+    ``cortex-index-init`` one-shot service (``restart: "no"``) that
+    ``scripts/cortex-apikey.sh`` and the static gate's steady-state parity
+    checks (``test_techvault_static_gate.py``,
+    ``test_component_profiles.py``) still depend on. This stays until that
+    legacy stack is retired too.
+    """
     return str(service_def.get("restart", "")).lower() in {"no", "false"}
 
 

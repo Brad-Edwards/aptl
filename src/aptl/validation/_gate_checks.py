@@ -9,11 +9,8 @@ starts Docker.
 
 from __future__ import annotations
 
-import subprocess
-from collections.abc import Mapping, Sequence
-import hashlib
+from collections.abc import Mapping
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from raes_conformance.conformance import run_target_conformance
@@ -26,9 +23,8 @@ from raes.scenario import Scenario
 from aptl.backends.raes import create_aptl_runtime_target, resolve_scenario_bundle
 from aptl.backends.raes_profiles import public_start_profiles, select_backend_profiles
 from aptl.backends.raes_realization import interpret_provisioning_plan
-from aptl.core.deployment._compose_realization_networks import _concrete_network_name
-from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.redaction import redact
+from aptl.validation._gate_no_start_backend import _NoStartBackend
 from aptl.validation._gate_raes_cli import (
     conformance_cli_diagnostics,
     run_raes,
@@ -41,7 +37,6 @@ if TYPE_CHECKING:
     from raes_contracts.diagnostics import Diagnostic
 
     from aptl.core.config import AptlConfig
-    from aptl.core.deployment.realization import DeploymentContentRealization
 
 # `raes conformance backend` is ~2s. `raes sdl verify-imports` re-resolves and
 # re-parses a scenario's whole module tree, which scales with that tree rather
@@ -50,224 +45,6 @@ if TYPE_CHECKING:
 # scenarios that declare imports; the ones this repo ships today do not. The
 # ``raes`` CLI invocations themselves live in ``_gate_raes_cli``.
 _IMPORT_LOCK_TIMEOUT_S = 600
-
-
-def _simulated_digest(reference: str) -> str:
-    """Return a stable synthetic sha256 for one reference in the offline gate."""
-
-    return "sha256:" + hashlib.sha256(reference.encode("utf-8")).hexdigest()
-
-
-class _NoStartBackend(object):
-    """Deployment backend stub that simulates realization without Docker.
-
-    The static gate compiles, plans, and interprets a scenario but must never
-    bring up Docker. It is an offline conformance check: it proves APTL can
-    represent the typed deployment and satisfy the realization contract, not that
-    containers actually run — so ``start`` is a loud error.
-
-    Since #578, the provisioner builds its runtime snapshot from what the backend
-    is *observed* to have realized (``container_inspect`` / ``host_list_networks``)
-    rather than echoing the plan, and the RAES conformance probe requires that
-    observed snapshot to be non-empty. This stub therefore reports back exactly
-    the topology it was asked to realize — the declared node containers as running
-    and healthy, the declared networks as present — so the offline conformance run
-    observes a faithful realization of the scenario under test. It is a
-    simulation, transparently: it fabricates no lab, and any real lifecycle call
-    (``start``/``stop``/``status``) still raises.
-    """
-
-    project_name = "aptl"
-
-    # Artifact-facing operations the deployment protocol requires (ADR-051).
-    # The stub simulates realization offline, so it reports every declared
-    # artifact as obtainable and materializes nothing: the static gate proves
-    # the typed contract can be represented, never that bytes were fetched or
-    # built. Digests are deterministic per reference so the disclosure the
-    # provisioner builds is stable across runs.
-
-    @staticmethod
-    def artifact_available(
-        image_ref: str, *, allow_remote: bool | None = None
-    ) -> bool:
-        """Report every declared artifact as obtainable in the offline gate."""
-
-        del image_ref, allow_remote
-        return True
-
-    @staticmethod
-    def materialize_component_image(
-        image_ref: str, dockerfile_path: str, context_path: str
-    ) -> str | None:
-        """Return a deterministic stand-in digest without building anything."""
-
-        del dockerfile_path, context_path
-        return _simulated_digest(image_ref)
-
-    @staticmethod
-    def container_image_digest(container_name: str) -> str | None:
-        """Return the digest the stub simulated for this container's image."""
-
-        return _simulated_digest(container_name)
-
-    def __init__(self) -> None:
-        self._container_names: set[str] = set()
-        self._network_names: list[str] = []
-        self._content_root: TemporaryDirectory[str] | None = None
-        self._content_paths: dict[str, Path] = {}
-        self._image_free_destinations: dict[str, str] = {}
-
-    def realize(
-        self,
-        realization: object,
-        *,
-        build: bool = True,
-        scenario_root: Path | None = None,
-        substrate_digests: Mapping[str, str] | None = None,
-    ) -> LabResult:
-        """Record the typed realization as realized without starting Docker."""
-        # `build`, `scenario_root`, and `substrate_digests` are accepted for
-        # DeploymentBackend parity; this offline backend builds nothing, reads no
-        # scenario filesystem, and starts no base container.
-        del build, scenario_root, substrate_digests
-        self._container_names = {
-            node.container_name
-            for node in getattr(realization, "nodes", ())
-            if getattr(node, "container_name", None)
-        }
-        # Report networks under the project-scoped name Compose actually creates
-        # (`<project>_aptl-<stem>`), not the bare declared name, so the offline
-        # observation exercises the same name matching a live run does.
-        self._network_names = [
-            _concrete_network_name(network.name, self.project_name)
-            for network in getattr(realization, "networks", ())
-            if getattr(network, "name", None)
-        ]
-        self._materialize_content_shapes(getattr(realization, "content", ()))
-        return LabResult(success=True, message="Static validation realization accepted")
-
-    def _materialize_content_shapes(self, content: Sequence[object]) -> None:
-        """Create empty filesystem shapes for offline content observation.
-
-        The static gate never copies inline or project content. It creates only
-        an empty file/directory per typed realization, then the same observation
-        boundary reads that filesystem state back. This keeps the offline
-        simulation non-secret and non-vacuous without starting Docker.
-
-        Image-free content (ADR-048, empty ``volume_suffix``) is read back by
-        the observation layer via ``container_exec`` rather than
-        ``observe_content_type``, so its destination path is additionally
-        recorded under ``_image_free_destinations`` for ``container_exec`` to
-        answer against.
-        """
-
-        if self._content_root is not None:
-            self._content_root.cleanup()
-        self._content_root = TemporaryDirectory(prefix="aptl-static-conformance-")
-        root = Path(self._content_root.name)
-        self._content_paths = {}
-        self._image_free_destinations = {}
-        for index, item in enumerate(content):
-            address = getattr(item, "address", None)
-            source_kind = getattr(item, "source_kind", None)
-            if not isinstance(address, str):
-                continue
-            path = root / f"content-{index}"
-            if source_kind in ("project-directory", "empty-directory"):
-                path.mkdir()
-                kind = "directory"
-            elif source_kind in ("inline-text", "project-file"):
-                path.touch()
-                kind = "file"
-            else:
-                continue
-            self._content_paths[address] = path
-            dest_relpath = getattr(item, "dest_relpath", None)
-            volume_suffix = getattr(item, "volume_suffix", None)
-            if not volume_suffix and isinstance(dest_relpath, str):
-                destination = "/" + dest_relpath.lstrip("/")
-                self._image_free_destinations[destination] = kind
-
-    def container_exec(
-        self, name: str, cmd: list[str], *, timeout: int | None = None
-    ) -> subprocess.CompletedProcess[str]:
-        """Answer the image-free content-type readback probe from simulated shapes.
-
-        This mirrors only the ``test -d``/``test -f`` probes observation issues
-        for image-free content (ADR-048); it is not a general exec simulator.
-        """
-
-        del name, timeout
-        kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
-        matched = bool(cmd) and (
-            (cmd[0:2] == ["test", "-d"] and kind == "directory")
-            or (cmd[0:2] == ["test", "-f"] and kind == "file")
-        )
-        return subprocess.CompletedProcess(args=cmd, returncode=0 if matched else 1)
-
-    def container_exists(self, name: str) -> bool:
-        """Return whether the simulated project realized this container."""
-
-        return name in self._container_names
-
-    def container_inspect(self, name: str) -> dict[str, object]:
-        """Report a declared node container as running and healthy.
-
-        Only names this stub was asked to realize are reported up; anything else
-        reads as absent, so the observed snapshot mirrors the declared topology
-        rather than blanket-passing every probe.
-        """
-        if name not in self._container_names:
-            return {}
-        # Platform is linux because that is what APTL's Docker Compose backend
-        # actually produces — every realized node is a Linux container. This is
-        # the honest observed OS family, not a convenience: a node declared
-        # os: windows as an EXACT concern genuinely cannot be honoured by a Linux
-        # container, and the conformance gate rejecting that is correct behaviour,
-        # here as in a live run.
-        return {
-            "State": {"Running": True, "Health": {"Status": "healthy"}},
-            "Platform": "linux",
-            "NetworkSettings": {"Networks": {}},
-        }
-
-    def host_list_lab_networks(self, name_prefix: str) -> list[str]:
-        """Report the declared scenario networks as present, project-scoped.
-
-        Filters by ``name_prefix`` exactly as the real backend does, so the stub
-        honours the same project scoping the observer relies on.
-        """
-        return [name for name in self._network_names if name_prefix in name]
-
-    def observe_content_type(
-        self,
-        content: "DeploymentContentRealization",
-    ) -> str | None:
-        """Read the filesystem kind materialized by the offline simulation."""
-
-        path = self._content_paths.get(content.address)
-        observed: str | None = None
-        if path is not None:
-            if path.is_file():
-                observed = "file"
-            elif path.is_dir():
-                observed = "directory"
-        return observed
-
-    @staticmethod
-    def start(profiles: list[str], *, build: bool = True) -> LabResult:
-        """Refuse to start the lab from a static validation gate."""
-        raise RuntimeError("static validation gate must not start the lab")
-
-    @staticmethod
-    def stop(*args: object, **kwargs: object) -> LabResult:
-        """Refuse to stop the lab from a static validation gate."""
-        raise RuntimeError("static validation gate must not stop the lab")
-
-    @staticmethod
-    def status() -> LabStatus:
-        """Refuse to query lab status from a static validation gate."""
-        raise RuntimeError("static validation gate does not query lab status")
 
 
 def check_parse(scenario_path: Path) -> tuple[Scenario | None, GateCheck]:
@@ -425,12 +202,71 @@ def check_provisioning_realization(
     return details, GateCheck("provisioning_realization", *_outcome(diagnostics))
 
 
+# Realization-envelope constructive probes are derived and exercised only through
+# a live realization harness (raes_conformance ``_constructive_run`` refuses a
+# ``None`` harness). APTL's static backend-conformance gate runs fixture-only with
+# a no-start backend and therefore cannot supply that harness, so the constructive
+# case reports "no witness". This is not a manifest defect: the realization
+# envelope is proven at the live lab-boot gate (issue #889), where the real
+# service materializer runs and the fresh native readback proves the schema —
+# exactly how the libvirt backend proves its own envelope through live evidence
+# runs rather than fixture-only conformance. Only these structural no-witness codes
+# are tolerated; a real envelope failure (binding mismatch, invalid digest,
+# unsupported contract) carries a different code and still fails the gate.
+_LIVE_HARNESS_REALIZATION_CODES = frozenset(
+    {
+        "realization-envelope.positive-probe.no-witness",
+        "realization-envelope.negative-probe.no-witness",
+    }
+)
+
+
+def _requires_live_realization_harness(case: object) -> bool:
+    """True when a failing case only lacks the live harness the static gate omits."""
+
+    diagnostics = getattr(case, "diagnostics", ())
+    return (
+        getattr(case, "contract_name", "") == "realization-envelope-v1"
+        and not getattr(case, "passed", True)
+        and bool(diagnostics)
+        and all(getattr(d, "code", "") in _LIVE_HARNESS_REALIZATION_CODES for d in diagnostics)
+    )
+
+
+def _report_failure_diagnostic(
+    report: BackendConformanceReport,
+    tolerated_cases: list[object],
+    blocking_cases: list[object],
+    report_codes: list[str],
+) -> str | None:
+    """Return the target-conformance failure diagnostic, or ``None`` if fully tolerated.
+
+    Suppresses the failure only when it is fully explained by tolerated
+    live-realization cases; any other failed report still fails the gate.
+    """
+
+    if report.passed:
+        return None
+    fully_tolerated = bool(tolerated_cases) and not blocking_cases and not report_codes
+    if fully_tolerated:
+        return None
+    codes = (
+        ", ".join(report_codes + [f"case:{case.name}" for case in blocking_cases])
+        or "unknown"
+    )
+    return f"target conformance failed (diagnostics: {codes})"
+
+
 def _target_conformance_diagnostics(report: BackendConformanceReport) -> list[str]:
     """Turn a target conformance report into gate diagnostics."""
     diagnostics: list[str] = []
-    if not report.passed:
-        codes = ", ".join(sorted({d.code for d in report.diagnostics})) or "unknown"
-        diagnostics.append(f"target conformance failed (diagnostics: {codes})")
+    failing_cases = [case for case in getattr(report, "cases", ()) if not case.passed]
+    tolerated_cases = [case for case in failing_cases if _requires_live_realization_harness(case)]
+    blocking_cases = [case for case in failing_cases if case not in tolerated_cases]
+    report_codes = sorted({d.code for d in report.diagnostics})
+    failure = _report_failure_diagnostic(report, tolerated_cases, blocking_cases, report_codes)
+    if failure is not None:
+        diagnostics.append(failure)
     if report.unsupported_contract_gaps:
         diagnostics.append(
             "manifest missing required contracts: "

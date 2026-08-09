@@ -53,9 +53,9 @@ class TechVaultVerifier(object):
     attacker node produce evidence in the defensive stack.
     """
 
-    plugin_id = "techvault-operational"
+    plugin_id = "techvault"
     extension_api_version = EXTENSION_API_VERSION
-    scenario_identity = "techvault-operational"
+    scenario_identity = "techvault"
     #: Empty: this verifier tracks the scenario as it evolves in-tree rather than
     #: pinning a digest that every scenario edit would invalidate. A verifier
     #: shipped independently of the scenario should pin, and the seam records

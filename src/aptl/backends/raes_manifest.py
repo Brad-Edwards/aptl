@@ -49,6 +49,7 @@ from raes_contracts.contracts import (
     LiteralBindingValueModel,
 )
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
+from aptl.backends.raes_realization_envelope import build_aptl_realization_envelope
 from raes_contracts.vocabulary import (
     ObservationStrength,
     ParticipantFeatureSupportLevel,
@@ -108,6 +109,10 @@ _BASE_SUPPORTED_CONTRACT_VERSIONS = frozenset(
         "operation-receipt-v1",
         "operation-status-v1",
         "runtime-snapshot-v1",
+        # Required to publish the realization-envelope-v1 disclosure that backs
+        # the manifest's independent-native-readback claim for ADR-088 service
+        # materialization (#889).
+        "realization-envelope-v1",
         "workflow-result-envelope-v1",
         "workflow-history-event-stream-v1",
         "evaluation-result-envelope-v1",
@@ -163,11 +168,26 @@ _ORCHESTRATOR = OrchestratorCapabilities(
 # the portable evaluation result/history contracts. RAES ADR-073 moves graded
 # scoring out of the authored SDL surface, so the manifest deliberately does not
 # claim support for the OCR scoring chain (`metrics`/`evaluations`/`tlos`/`goals`).
+#
+# ADR-088 service materialization (#889) declares its readback proof as a
+# boolean observed-state postcondition on the exact content subject, evidenced
+# through the native service's api_response. APTL evaluates exactly that shape
+# by fresh native readback, so it declares the propositions/assertions sections
+# and the boolean/all/api_response support the readback uses — not a general
+# proposition-evaluation engine.
 _EVALUATOR = EvaluatorCapabilities(
     name="aptl-rte-evaluator",
-    supported_sections=frozenset({"conditions", "objectives"}),
+    supported_sections=frozenset(
+        {"conditions", "objectives", "propositions", "assertions"}
+    ),
     supports_scoring=False,
     supports_objectives=True,
+    supported_predicate_families=frozenset({"boolean"}),
+    supported_quantifiers=frozenset({"all"}),
+    supported_truth_outcomes=frozenset({"true", "false", "unknown", "unsupported"}),
+    supported_evidence_channels=frozenset({"api_response"}),
+    supported_time_domains=frozenset({"scenario_time"}),
+    preserves_binding_provenance=True,
 )
 
 # Participant runtime capability declaration. APTL realizes the bounded
@@ -216,6 +236,15 @@ _PROVISIONER = ProvisionerCapabilities(
     # domain profile an explicit admission capability rather than inferring it
     # from account fields.
     supported_domain_profiles=frozenset({"active_directory"}),
+    # ADR-088 service materialization (#889, OpenRAE/rae#1011). APTL advertises
+    # the search-index-schema profile only because it ships an operational native
+    # materializer + fresh-readback path (aptl.core.deployment._service_index_
+    # materialization) and discloses the corroborated concern through the
+    # per-concern observation capability below; a manifest claim alone is never
+    # sufficient.
+    supported_service_materialization_profiles=frozenset(
+        {"service-search-index-schema-v1"}
+    ),
     # RAES ACLs pass through the typed realization surface to separate,
     # owner-scoped nftables tables. The backend rejects unsupported dual-stack
     # inputs, applies replacements atomically, and reads back every rule before
@@ -234,6 +263,15 @@ _PROVISIONER = ProvisionerCapabilities(
     ),
     supports_persistent_volumes=True,
 )
+
+# APTL's digest-valid realization-envelope-v1 disclosure. Its ``content-placement``
+# concern is disclosed REALIZED at ``daemon-observed`` strength: APTL reads content
+# realization back off the daemon (never a planned-state echo), and for an ADR-088
+# service materialization that readback is the fresh native schema readback proving
+# the portable field-schema digest (#889). RAES's service-materialization admission
+# requires this independent-native-readback disclosure before it will admit an exact
+# ``service-search-index-schema-materialization`` requirement.
+_REALIZATION_ENVELOPE = build_aptl_realization_envelope(_PROVISIONER)
 
 # What APTL realizes from a provisioning plan, and how. APTL matches declared
 # capabilities against its provisioner support and discloses the result through
@@ -269,7 +307,17 @@ _REALIZATION_SUPPORT = (
         domain="runtime-realization",
         support_mode=RealizationSupportMode.OPEN_REALIZATION,
         supported_constraint_kinds=frozenset({"os-family", "source-artifact"}),
-        supported_exact_requirement_kinds=frozenset({"declared-capability-match"}),
+        # ``service-search-index-schema-materialization`` (ADR-088, #889) is an
+        # exact requirement kind APTL genuinely realizes through the native ES
+        # materializer and reads back through the service's native interface, so
+        # it is declared on the exact branch alongside the existing
+        # node/content declared-capability-match kind.
+        supported_exact_requirement_kinds=frozenset(
+            {
+                "declared-capability-match",
+                "service-search-index-schema-materialization",
+            }
+        ),
         disclosure_kinds=frozenset(
             {"backend-manifest-v2", "operation-status-v1", "runtime-snapshot-v1"}
         ),
@@ -345,6 +393,7 @@ def create_aptl_manifest() -> BackendManifest:
         supported_contract_versions=supported_contract_versions,
         compatible_processors=_COMPATIBLE_PROCESSORS,
         realization_support=_REALIZATION_SUPPORT,
+        realization_envelope=_REALIZATION_ENVELOPE,
         concept_bindings=_CONCEPT_BINDINGS,
         provisioner=_PROVISIONER,
         orchestrator=_ORCHESTRATOR,

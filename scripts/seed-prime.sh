@@ -80,6 +80,39 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[0/6] Waiting for SOC tools to be healthy..."
 
+# Apply the temporary env-pack SOAR fixups before waiting on health. The frozen
+# TechVault env-pack realizes MISP, misp-redis, and shuffle-backend without the
+# runtime env they need, so recreate them with the recovered working config
+# first (see scripts/envpack-soar-fixups.sh + OpenRAE/env-packs#280/#281). This
+# blocks until the recreated services are serving so the steps below find them
+# up; a failure here surfaces as the individual seed-step errors, not a hard
+# stop.
+export MISP_API_KEY="${MISP_API_KEY:-JHxBbGPnAtyut0FTwkeuhVFnbMksGRCRwsE0V9Xw}"
+if [ -x "$SCRIPT_DIR/envpack-soar-fixups.sh" ]; then
+    "$SCRIPT_DIR/envpack-soar-fixups.sh" || echo "  WARNING: env-pack SOAR fixups reported issues"
+fi
+
+# Apply the temporary env-pack Suricata content fixups. The frozen env-pack
+# materializes suricata-local-rules as a header-only file (0 signatures) and
+# suricata.yaml with an incomplete address-groups/port-groups block, so the
+# authored 46-rule corpus never loads and ~10 rules fail on undefined vars.
+# This restores the authored corpus + complete vars from config/suricata/ and
+# reloads the sensor (see scripts/envpack-suricata-fixups.sh).
+if [ -x "$SCRIPT_DIR/envpack-suricata-fixups.sh" ]; then
+    "$SCRIPT_DIR/envpack-suricata-fixups.sh" || echo "  WARNING: env-pack Suricata fixups reported issues"
+fi
+
+# Apply the temporary env-pack Kali capture-wrapper fixup. The frozen env-pack
+# ships a fail-closed ForceCommand wrapper that denies every SSH session unless
+# a control-plane APTL_CAPTURE_CAPABILITY token is present, but nothing in this
+# realization provisions that token, so kali is 100% unusable (lab readiness
+# reports "SSH to kali not ready"; kali_run_command is denied). This relaxes the
+# wrapper to run shells when no capability is provisioned (capture is preserved
+# when it is). See scripts/envpack-kali-fixups.sh.
+if [ -x "$SCRIPT_DIR/envpack-kali-fixups.sh" ]; then
+    "$SCRIPT_DIR/envpack-kali-fixups.sh" || echo "  WARNING: env-pack Kali fixups reported issues"
+fi
+
 # SEC-006 / ADR-034: seed-shuffle.sh now talks to the HTTPS frontend
 # at https://localhost:3443. The readiness gate waits for
 # `aptl-shuffle-frontend` (which has a healthcheck post-SEC-006)

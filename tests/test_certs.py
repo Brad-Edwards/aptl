@@ -233,6 +233,99 @@ class TestEnsureSSLCerts:
         generator_cmd = mock_run.call_args_list[0][0][0]
         assert "--user" in generator_cmd
 
+    def test_reclaim_creates_output_dir_when_missing(self, tmp_path):
+        """A missing cert dir is simply created for the invoking user."""
+        from aptl.core.certs import _reclaim_certs_dir
+
+        config = tmp_path / "config"
+        config.mkdir()
+        certs_dir = config / "wazuh_indexer_ssl_certs"
+
+        _reclaim_certs_dir(certs_dir, uid=os.getuid() if os.name == "posix" else 0)
+
+        assert certs_dir.is_dir()
+
+    def test_reclaim_leaves_owned_dir_untouched(self, tmp_path):
+        """A dir already owned by the invoker keeps its contents."""
+        from aptl.core.certs import _reclaim_certs_dir
+
+        config = tmp_path / "config"
+        config.mkdir()
+        certs_dir = config / "wazuh_indexer_ssl_certs"
+        certs_dir.mkdir()
+        (certs_dir / "keep.pem").write_text("mine")
+
+        _reclaim_certs_dir(certs_dir, uid=certs_dir.stat().st_uid)
+
+        assert (certs_dir / "keep.pem").read_text() == "mine"
+        assert not list(config.glob(".wazuh_indexer_ssl_certs.foreign-*"))
+
+    def test_reclaim_moves_foreign_owned_dir_aside(self, tmp_path):
+        """A root-owned dir baked into the image is moved aside and recreated.
+
+        The generator runs as the host uid via ``--user`` and cannot populate a
+        directory it does not own; this reclaim restores a clean, owned slate so
+        generation does not fail with a cryptic "missing declared output".
+        Passing a uid that differs from the real owner simulates the baked
+        root-owned directory without requiring a chown (tests are not root).
+        """
+        from aptl.core.certs import _reclaim_certs_dir
+
+        config = tmp_path / "config"
+        config.mkdir()
+        certs_dir = config / "wazuh_indexer_ssl_certs"
+        certs_dir.mkdir()
+        (certs_dir / "stale.pem").write_text("baked-root-owned")
+        owner_uid = certs_dir.stat().st_uid
+
+        _reclaim_certs_dir(certs_dir, uid=owner_uid + 1)
+
+        # A fresh, empty, owned directory is recreated in place...
+        assert certs_dir.is_dir()
+        assert not (certs_dir / "stale.pem").exists()
+        # ...and the foreign-owned original is preserved aside, not deleted.
+        asides = list(config.glob(".wazuh_indexer_ssl_certs.foreign-*"))
+        assert len(asides) == 1
+        assert (asides[0] / "stale.pem").read_text() == "baked-root-owned"
+
+    def test_foreign_owned_certs_are_regenerated_not_reused(self, tmp_path, mocker):
+        """A root-owned cert dir with certs is reclaimed and regenerated.
+
+        This is the AMI-baked-with-a-running-lab case: ``root-ca.pem`` is
+        present, so the fast path would normally *reuse* it and only try to
+        widen perms (which fails EPERM on the root-owned dir, leaving the
+        realization to fail downstream with "missing declared output"). The
+        top-of-function reclaim must instead move the foreign-owned dir aside and
+        force a clean, producer-owned regeneration. Mocking the invoking uid to
+        differ from the real owner simulates root ownership without a chown.
+        """
+        if os.name != "posix":
+            pytest.skip("native-Linux uid/gid ownership repair is POSIX-only")
+        from aptl.core.certs import ensure_ssl_certs
+
+        config = tmp_path / "config"
+        config.mkdir()
+        certs_dir = config / "wazuh_indexer_ssl_certs"
+        certs_dir.mkdir()
+        (certs_dir / "root-ca.pem").write_text("stale-root-owned")
+        owner_uid = certs_dir.stat().st_uid
+
+        mocker.patch(
+            "aptl.core.certs.hostenv.needs_host_ownership_fix", return_value=True
+        )
+        mocker.patch("aptl.core.certs.os.getuid", return_value=owner_uid + 1)
+        mocker.patch("aptl.core.certs.os.getgid", return_value=owner_uid + 1)
+        _successful_generator(mocker, certs_dir)
+
+        result = ensure_ssl_certs(tmp_path)
+
+        assert result.success is True
+        assert result.generated is True  # regenerated, not reused
+        assert (certs_dir / "root-ca.pem").read_text() == "fake-cert"
+        asides = list(config.glob(".wazuh_indexer_ssl_certs.foreign-*"))
+        assert len(asides) == 1
+        assert (asides[0] / "root-ca.pem").read_text() == "stale-root-owned"
+
     def test_docker_desktop_generator_does_not_request_host_uid(self, tmp_path, mocker):
         """Docker Desktop should rely on file sharing, not POSIX uid/gid."""
         from aptl.core.certs import ensure_ssl_certs

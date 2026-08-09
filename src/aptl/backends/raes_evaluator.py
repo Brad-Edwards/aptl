@@ -14,9 +14,17 @@ for each supported observable evaluation resource, records a truthful
 ``EvaluationExecutionState`` and then advances conditions and objectives from
 the runtime snapshot supplied by the RAES control plane. Conditions observe
 provisioning entries, and objectives report pass/fail from their compiled
-condition dependencies. SDL ``metrics``/``evaluations``/``tlos``/``goals`` are
-outside APTL's declared evaluator surface after RAES ADR-073 and fail closed if
-present in an evaluation plan. ``stop()`` clears evaluation state.
+condition dependencies.
+
+Propositions and assertions are admitted as snapshot entries, and their portable
+truth is projected into ``proposition_truth_results`` — the backend evaluator's
+ADR-069 §3 responsibility. APTL's first concrete slice (issue #889) projects the
+ADR-088 service-materialization readback: a boolean observed-state postcondition
+corroborated by the realized ``service_materialization`` concern in the snapshot.
+An assertion APTL cannot observe gets no truth result — never a fabricated one.
+SDL ``metrics``/``evaluations``/``tlos``/``goals`` remain outside APTL's declared
+evaluator surface after RAES ADR-073 and fail closed if present. ``stop()``
+clears evaluation state.
 
 This keeps the full remote-control-plane evaluation claim honest: APTL
 publishes the evaluation result/history *contract* surface and the
@@ -42,6 +50,13 @@ from aptl.backends._raes_evaluator_engine import (
     register_evaluation,
     utc_now,
 )
+from aptl.backends._raes_proposition_truth import project_proposition_truth_results
+
+# Proposition and assertion truth is carried in ``proposition_truth_results``,
+# not the condition/objective ``EvaluationResultContract`` path (ADR-069 §3).
+# These ops are admitted as snapshot entries and their truth is projected
+# separately for the observed-state assertions APTL can corroborate (issue #889).
+_PROPOSITION_RESOURCE_TYPES = frozenset({"proposition", "assertion"})
 
 
 @dataclass
@@ -151,12 +166,33 @@ def _register_supported_operation(
         _register_observable_operation(registration, op)
 
 
+def _register_admitted_operation(registration: _EvaluationRegistration, op: object) -> None:
+    """Admit a proposition/assertion op as a snapshot entry (no result contract).
+
+    Truth for these is projected into ``proposition_truth_results`` after the
+    condition/objective outcomes are driven, not through the result-contract
+    path, so they are recorded here as admitted entries only.
+    """
+    registration.entries[op.address] = SnapshotEntry(
+        address=op.address,
+        domain=RuntimeDomain.EVALUATION,
+        resource_type=op.resource_type,
+        payload=op.payload,
+        ordering_dependencies=op.ordering_dependencies,
+        refresh_dependencies=op.refresh_dependencies,
+        status="admitted",
+    )
+    registration.changed.append(op.address)
+
+
 def _apply_operation(registration: _EvaluationRegistration, op: object) -> None:
     """Apply one evaluation operation to mutable registration state."""
     if op.action == ChangeAction.DELETE:
         _delete_registered_operation(registration, op)
     elif op.resource_type in UNSUPPORTED_SCORING_RESOURCE_TYPES:
         registration.diagnostics.append(_unsupported_scoring_diagnostic(op))
+    elif op.resource_type in _PROPOSITION_RESOURCE_TYPES:
+        _register_admitted_operation(registration, op)
     else:
         _register_supported_operation(registration, op)
 
@@ -221,12 +257,17 @@ class AptlEvaluator(object):
             address: [dict(event) for event in events]
             for address, events in registration.history.items()
         }
+        # ADR-069 §3 / issue #889: project truth for the observed-state assertions
+        # APTL can corroborate (the service-materialization readback), reading the
+        # realized service_materialization concern from the provisioning snapshot.
+        truth_results = project_proposition_truth_results(plan, working_snapshot)
         return ApplyResult(
             success=True,
             snapshot=working_snapshot.with_entries(
                 registration.entries,
                 evaluation_results=results,
                 evaluation_history=registration.history,
+                proposition_truth_results=truth_results,
             ),
             changed_addresses=registration.changed,
         )

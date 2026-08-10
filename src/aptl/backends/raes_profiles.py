@@ -14,9 +14,13 @@ from aptl.backends._compose_profile_index import (
     normalize_identifier,
     normalized_identifier_aliases,
 )
-from aptl.core.config import AptlConfig
+from aptl.core.config import AptlConfig, ContainerSettings
 
 CORE_PROFILES = ("otel",)
+# The finite vocabulary a deployment-serving provider may assign. Container
+# toggles and backend-owned always-on profiles are the only authorities; the
+# separate web lifecycle is intentionally absent.
+OPERATOR_GROUP_VOCABULARY = tuple((*ContainerSettings.model_fields, *CORE_PROFILES))
 # Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
 # older in-tree scenario node names to their docker-compose service names so
 # node->service binding resolves for the legacy compose path. An env-pack never
@@ -127,24 +131,6 @@ def node_aliases(address: str, payload: Mapping[str, Any]) -> set[str]:
         aliases.update(normalized_identifier_aliases(value))
         aliases.update(_terminal_address_aliases(value))
     return aliases
-
-
-def explicit_compose_profile_hints(payload: Mapping[str, Any]) -> frozenset[str]:
-    """Extract explicit APTL Compose profile hints from RAES payload data."""
-    hints: set[str] = set()
-    for parent in _iter_profile_hint_parents(payload):
-        hints.update(profile_values(parent.get("compose_profiles")))
-        hints.update(profile_values(parent.get("compose_profile")))
-    return frozenset(hints)
-
-
-def profile_values(raw: object) -> set[str]:
-    """Normalize a scalar or iterable profile hint into strings."""
-    if isinstance(raw, str):
-        return {raw} if raw.strip() else set()
-    if isinstance(raw, list | tuple | set | frozenset):
-        return {str(value) for value in raw if str(value).strip()}
-    return set()
 
 
 def configured_profiles(config: AptlConfig) -> list[str]:
@@ -287,9 +273,8 @@ def _is_one_shot(service_def: Mapping[str, object]) -> bool:
     legacy in-tree ``docker-compose.yml`` still declares a real
     ``cortex-index-init`` one-shot service (``restart: "no"``) that
     ``scripts/cortex-apikey.sh`` and the static gate's steady-state parity
-    checks (``test_techvault_static_gate.py``,
-    ``test_component_profiles.py``) still depend on. This stays until that
-    legacy stack is retired too.
+    checks (``test_techvault_static_gate.py``) still depend on. This stays until
+    that legacy stack is retired too.
     """
     return str(service_def.get("restart", "")).lower() in {"no", "false"}
 
@@ -426,21 +411,3 @@ def _terminal_address_aliases(raw: str) -> set[str]:
     if "." not in raw:
         return set()
     return normalized_identifier_aliases(raw.rsplit(".", 1)[-1])
-
-
-def _iter_profile_hint_parents(
-    payload: Mapping[str, Any],
-) -> list[Mapping[str, Any]]:
-    """Return payload mappings that can contain APTL profile hints."""
-    parents: list[Mapping[str, Any]] = []
-    for parent_key in ("runtime", "aptl"):
-        parent = payload.get(parent_key)
-        if isinstance(parent, Mapping):
-            parents.append(parent)
-    spec = payload.get("spec")
-    if isinstance(spec, Mapping):
-        for parent_key in ("runtime", "aptl"):
-            parent = spec.get(parent_key)
-            if isinstance(parent, Mapping):
-                parents.append(parent)
-    return parents

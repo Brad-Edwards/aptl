@@ -22,8 +22,6 @@ import ipaddress
 from pathlib import Path
 
 import yaml
-
-from aptl.backends._component_profiles import component_profiles
 from aptl.core.deployment._compose_realization_networks import _compose_network_key
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
@@ -83,9 +81,8 @@ def _render_service(
         "container_name": node.container_name or f"aptl-{node.name}",
         "restart": "unless-stopped",
     }
-    profiles = component_profiles(node.name)
-    if profiles:
-        service["profiles"] = sorted(profiles)
+    if node.profiles:
+        service["profiles"] = sorted(node.profiles)
     netns_container = _network_namespace_container(node)
     if netns_container:
         # This node joins another node's network namespace (OBS-003: the

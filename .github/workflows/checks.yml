@@ -69,6 +69,7 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
@@ -115,6 +116,7 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Python portable suite without lab integration
         run: python -m pytest ${{ matrix.pytest_args }}
       - name: CLI import and help smoke
@@ -144,6 +146,7 @@ jobs:
       - run: |
           pip install --require-hashes -r requirements/dev.txt
           pip install -e . --no-deps --no-build-isolation
+          pip install -e ./plugins/aptl-techvault-pack-interaction --no-deps --no-build-isolation
       - name: Generate lab SSH keys
         # issue #581: the operational scenario's content: now declares the
         # SSH-reachable targets' authorized_keys (SEC #417), sourced from the

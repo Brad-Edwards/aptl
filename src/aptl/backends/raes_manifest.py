@@ -49,6 +49,7 @@ from raes_contracts.contracts import (
     LiteralBindingValueModel,
 )
 from aptl.backends.raes_artifact_mechanisms import aptl_artifact_mechanisms
+from aptl.backends.identity import APTL_RAES_TARGET_NAME, APTL_RAES_TARGET_VERSION
 from aptl.backends.raes_realization_envelope import build_aptl_realization_envelope
 from raes_contracts.vocabulary import (
     ObservationStrength,
@@ -69,8 +70,6 @@ from aptl.core.experiment.capture_registry import (
     OBSERVATION_EVIDENCE_CONTRACTS,
 )
 
-APTL_RAES_TARGET_NAME = "aptl"
-APTL_RAES_TARGET_VERSION = "0.1.0"
 APTL_EXPERIMENT_ACTION_TIMEOUT_TARGET = (
     "participant-runtime.action-timeout-seconds"
 )

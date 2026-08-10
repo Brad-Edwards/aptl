@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -67,6 +67,10 @@ class AptlProvisioner(object):
     # exact id rather than resolving the mutable tag a second time at apply
     # (issue #876 cycle-6 review). None for a scenario with no artifact demand.
     artifact_availability: ArtifactAvailabilityContext | None = None
+    _cached_plan: object | None = field(default=None, init=False, repr=False)
+    _cached_realization: AptlRealization | None = field(
+        default=None, init=False, repr=False
+    )
 
     def validate(self, plan: object) -> list[Diagnostic]:
         """Validate that the RAES provisioning plan is APTL-realizable."""
@@ -80,7 +84,7 @@ class AptlProvisioner(object):
                 )
             ]
 
-        return list(self._realize_plan(plan).diagnostics)
+        return list(self.realize_plan(plan).diagnostics)
 
     def apply(self, plan: object, snapshot: object) -> ApplyResult:
         """Apply a RAES provisioning plan via APTL's deployment backend."""
@@ -95,7 +99,7 @@ class AptlProvisioner(object):
             diagnostics=diagnostics,
         )
         if isinstance(plan, ProvisioningPlan):
-            realization = self._realize_plan(plan)
+            realization = self.realize_plan(plan)
             diagnostics = list(realization.diagnostics)
             if not has_error(diagnostics):
                 result = self._apply_valid_plan(
@@ -317,14 +321,25 @@ class AptlProvisioner(object):
             for service_name, dependencies in sorted(gaps.items())
         ]
 
-    def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
-        """Interpret a RAES plan against APTL's supported contract."""
-        return interpret_provisioning_plan(
+    def realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
+        """Interpret one plan once, reusing its exact serving interaction."""
+
+        if plan is self._cached_plan and self._cached_realization is not None:
+            return self._cached_realization
+        realization = interpret_provisioning_plan(
             plan=plan,
             config=self.config,
             bundle=self.bundle,
             component_root=self.project_dir,
         )
+        self._cached_plan = plan
+        self._cached_realization = realization
+        return realization
+
+    def _realize_plan(self, plan: ProvisioningPlan) -> AptlRealization:
+        """Backward-compatible private route to the cached interpreter."""
+
+        return self.realize_plan(plan)
 
     @staticmethod
     def _invalid_plan_diagnostics(plan: object) -> list[Diagnostic]:

@@ -23,6 +23,7 @@ import pytest
 
 from aptl.core.scenario_bundle import (
     EnvPackError,
+    PackIdentity,
     PathContainmentError,
     ScenarioSourceKind,
     env_pack_bundle,
@@ -39,6 +40,13 @@ def test_env_pack_bundle_stages_and_validates_the_bundled_techvault_pack(
 
     assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
     assert bundle.identity == "techvault"
+    assert bundle.pack_identity == PackIdentity(
+        pack_id="techvault",
+        pack_version="0.1.0",
+        set_digest=(
+            "sha256:f1c807f70540ca68c640cde72e8b5606b928f4ec40cc00a44d7fd37d6bbfd55f"
+        ),
+    )
     # The bundle roots at the staged copy, never at the installed package.
     assert staging in bundle.root.parents or bundle.root.parent == staging
     assert bundle.sdl_path == bundle.root / "sdl" / "techvault.sdl.yaml"

@@ -34,4 +34,5 @@ class AcesStartOutcome:
     selected_profiles: list[str]
     scenario_path: Path | None
     manifest_payload: dict[str, Any] = field(default_factory=dict)
+    pack_interaction_evidence: dict[str, Any] = field(default_factory=dict)
     retryable: bool = False

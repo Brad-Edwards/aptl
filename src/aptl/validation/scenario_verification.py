@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from aptl.backends.identity import BackendIdentity
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
@@ -108,16 +110,6 @@ class ScenarioIdentity(object):
     identity: str
     content_digest: str
     source_kind: str = ""
-
-
-@dataclass(frozen=True)
-class BackendIdentity(object):
-    """Which backend realized the range, and under which capability profile."""
-
-    target_name: str
-    target_version: str
-    profile: str
-    provider: str = ""
 
 
 @dataclass(frozen=True)

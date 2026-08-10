@@ -1,11 +1,12 @@
 """Issue #875: the TechVault env-pack interprets into a clean APTL realization.
 
 This is the integration guard for the realization engine that consumes a pack
-with no ``docker-compose.yml``: profile membership comes from the APTL component
-grouping, node service identity is derived from the node, node-to-node
-dependencies resolve against realized services, and component builds resolve from
-the engine checkout (``component_root``), not the bundle. A regression in any of
-those re-introduces provisioner diagnostics that block the boot.
+with no ``docker-compose.yml``: profile membership comes from the installed
+TechVault/APTL serving provider, node service identity is derived from the node,
+node-to-node dependencies resolve against realized services, and component
+builds resolve from the engine checkout (``component_root``), not the bundle. A
+regression in any of those re-introduces provisioner diagnostics that block the
+boot.
 """
 
 from __future__ import annotations
@@ -66,6 +67,14 @@ def test_techvault_pack_realizes_without_provisioner_diagnostics(tmp_path):
     assert codes == [], f"unexpected realization diagnostics: {codes}"
     assert len(realization.nodes) >= 30
     assert {"soc", "enterprise", "wazuh"} <= set(realization.profiles)
+    evidence = realization.pack_interaction_evidence(sorted(realization.profiles))
+    assert evidence["pack"]["pack_id"] == "techvault"
+    assert evidence["provider"]["provider_id"] == "techvault-aptl-serving"
+    assert evidence["provider"]["distribution"] == (
+        "aptl-techvault-pack-interaction"
+    )
+    assert evidence["provider"]["entry_point"] == "techvault.aptl"
+    assert evidence["provider"]["mapping_digest"].startswith("sha256:")
 
 
 def test_generated_compose_covers_image_nodes_networks_and_ordering(tmp_path):

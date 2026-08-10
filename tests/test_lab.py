@@ -3087,6 +3087,9 @@ class TestStartupClassificationWiring:
             realization_details={"nodes": [{"name": "techvault.victim"}]},
             selected_profiles=["victim", "otel"],
             scenario_path=tmp_path / "scenarios" / "demo.sdl.yaml",
+            pack_interaction_evidence={
+                "provider": {"mapping_digest": "sha256:" + "a" * 64}
+            },
         )
         ctx = _LabStartContext(
             project_dir=tmp_path,
@@ -3156,6 +3159,9 @@ class TestStartupClassificationWiring:
             "victim",
             "otel",
         ]
+        assert manifest["backend_evidence"]["pack_interaction"]["provider"][
+            "mapping_digest"
+        ].startswith("sha256:")
         assert run_id in run_store.list_runs()
 
     def test_resolve_run_target_mints_validatable_run_id(self, tmp_path):

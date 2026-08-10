@@ -111,6 +111,7 @@ def participant_action_specs_from_runtime_model(
     bundle: ScenarioBundle,
     config: AptlConfig,
     spec_factory: Callable[..., object],
+    realization: AptlRealization | None = None,
 ) -> dict[str, object]:
     """Build participant action specs from compiled runtime binding content.
 
@@ -120,10 +121,14 @@ def participant_action_specs_from_runtime_model(
     """
 
     context = _BindingContext(
-        realization=interpret_provisioning_plan(
-            plan=provisioning_plan,
-            config=config,
-            bundle=bundle,
+        realization=(
+            realization
+            if realization is not None
+            else interpret_provisioning_plan(
+                plan=provisioning_plan,
+                config=config,
+                bundle=bundle,
+            )
         ),
         profile_index=load_compose_profile_index(bundle.root),
         provisioning_plan=provisioning_plan,

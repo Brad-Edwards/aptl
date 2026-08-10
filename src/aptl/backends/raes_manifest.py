@@ -289,7 +289,7 @@ _REALIZATION_ENVELOPE = build_aptl_realization_envelope(_PROVISIONER)
 # (SEM-218 I4). ``support_mode`` is OPEN_REALIZATION because APTL now supports the
 # generic ``dynamic-composition`` route (issue #876): it composes a node's runtime
 # onto a pinned substrate and reads every declared runtime concern back off the
-# realized container (raes 3.1.0 lowers those concerns, RAESystem/rae#985). The
+# realized container (raes 3.1.0 lowers those concerns, OpenRAE/rae#985). The
 # mode is the most-open posture for the domain; the exact and constrained branches
 # still apply independently through the per-kind support sets below.
 #

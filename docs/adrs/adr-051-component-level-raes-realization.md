@@ -226,7 +226,7 @@ upstream work against `Brad-Edwards/aces`; until it lands, the ownership above i
 explicit rather than assumed.
 
 > **Update (2026-07-30, issue #876).** That upstream work has landed. raes 3.1.0
-> (RAESystem/rae#985) lowers `runtime.environment`, `runtime.mounts` (bind/tmpfs),
+> (OpenRAE/rae#985) lowers `runtime.environment`, `runtime.mounts` (bind/tmpfs),
 > `runtime.linux_capabilities`, `runtime.network.published_ports`,
 > `runtime.forwarding_agents`, and `runtime.service_listeners` into the SEM-218
 > realization concern registry, so RAES now owns their admission

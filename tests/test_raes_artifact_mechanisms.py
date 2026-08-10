@@ -135,7 +135,7 @@ def test_manifest_declares_only_mechanisms_backed_by_readback():
         "dynamic-composition",
     }
     # dynamic-composition is backed now: raes 3.1.0 lowers the runtime concerns
-    # (RAESystem/rae#985) and APTL reads each declared dimension back off the
+    # (OpenRAE/rae#985) and APTL reads each declared dimension back off the
     # realized container (issue #876), satisfying the I4 precondition.
     assert "dynamic-composition" in declared
 

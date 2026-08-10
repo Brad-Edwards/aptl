@@ -60,7 +60,7 @@ def test_provider_preserves_intentionally_unprofiled_components() -> None:
 
 
 def test_unknown_component_fails_instead_of_returning_a_partial_mapping() -> None:
+    context = _context("provision.node.misp", "provision.node.not-in-techvault")
+
     with pytest.raises(ValueError, match="unsupported-component-address"):
-        TechVaultPackInteraction().resolve(
-            _context("provision.node.misp", "provision.node.not-in-techvault")
-        )
+        TechVaultPackInteraction().resolve(context)

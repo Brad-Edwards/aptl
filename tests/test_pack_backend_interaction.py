@@ -189,9 +189,10 @@ def test_exact_provider_is_loaded_once_and_host_metadata_is_recorded(monkeypatch
 )
 def test_malformed_provider_mapping_fails_closed(monkeypatch, memberships) -> None:
     _install(monkeypatch, _EntryPoint("techvault.aptl", _Provider(memberships)))
+    context = _context()
 
     with pytest.raises(PackBackendInteractionError, match="mapping-invalid"):
-        resolve_pack_backend_interaction(_context())
+        resolve_pack_backend_interaction(context)
 
 
 def test_ambiguous_compatible_providers_fail_before_resolving(monkeypatch) -> None:
@@ -204,9 +205,10 @@ def test_ambiguous_compatible_providers_fail_before_resolving(monkeypatch) -> No
     first = _EntryPoint("techvault.aptl", first_provider)
     second = _EntryPoint("techvault.aptl", second_provider)
     _install(monkeypatch, first, second)
+    context = _context()
 
     with pytest.raises(PackBackendInteractionError, match="provider-ambiguous"):
-        resolve_pack_backend_interaction(_context())
+        resolve_pack_backend_interaction(context)
 
     assert first.loaded is second.loaded is True
     assert first_provider.calls == second_provider.calls == 0
@@ -217,9 +219,10 @@ def test_a_broken_exact_provider_never_falls_back(monkeypatch) -> None:
         monkeypatch,
         _EntryPoint("techvault.aptl", RuntimeError("credential=do-not-report")),
     )
+    context = _context()
 
     with pytest.raises(PackBackendInteractionError, match="provider-load-failed") as exc:
-        resolve_pack_backend_interaction(_context())
+        resolve_pack_backend_interaction(context)
 
     assert "credential" not in str(exc.value)
 
@@ -243,9 +246,10 @@ def test_a_broken_exact_provider_never_falls_back(monkeypatch) -> None:
 )
 def test_malformed_provider_contract_fails_closed(monkeypatch, provider) -> None:
     _install(monkeypatch, _EntryPoint("techvault.aptl", provider))
+    context = _context()
 
     with pytest.raises(PackBackendInteractionError, match="provider-malformed"):
-        resolve_pack_backend_interaction(_context())
+        resolve_pack_backend_interaction(context)
 
 
 def test_provider_resolve_exception_fails_closed(monkeypatch) -> None:
@@ -256,9 +260,10 @@ def test_provider_resolve_exception_fails_closed(monkeypatch) -> None:
         monkeypatch,
         _EntryPoint("techvault.aptl", _provider_contract(resolve=fail)),
     )
+    context = _context()
 
     with pytest.raises(PackBackendInteractionError, match="provider-resolve-failed") as exc:
-        resolve_pack_backend_interaction(_context())
+        resolve_pack_backend_interaction(context)
 
     assert "credential" not in str(exc.value)
 
@@ -266,11 +271,10 @@ def test_provider_resolve_exception_fails_closed(monkeypatch) -> None:
 def test_invalid_context_fails_before_discovery(monkeypatch) -> None:
     entry_point = _EntryPoint("techvault.aptl", RuntimeError("must not load"))
     _install(monkeypatch, entry_point)
+    context = _context("provision.node.b", "provision.node.a")
 
     with pytest.raises(PackBackendInteractionError, match="context-invalid"):
-        resolve_pack_backend_interaction(
-            _context("provision.node.b", "provision.node.a")
-        )
+        resolve_pack_backend_interaction(context)
 
     assert entry_point.loaded is False
 

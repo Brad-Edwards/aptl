@@ -1722,14 +1722,14 @@ def test_start_raes_scenario_passes_runtime_parameters_to_raes_planner(
     mocker, tmp_path
 ):
     from aptl.backends import raes
-    from aptl.backends import raes_realization
+    from aptl.backends import raes_pack_interaction
 
     _write_compose(tmp_path, {"aptl-victim": ["victim"]})
     scenario = object()
     mocker.patch("aptl.backends.raes.parse_sdl_file", return_value=scenario)
     calls: dict[str, object] = {}
     interaction_resolver = mocker.spy(
-        raes_realization, "resolve_pack_backend_interaction"
+        raes_pack_interaction, "resolve_pack_backend_interaction"
     )
 
     class FakeRuntimeManager(_FakeRuntimeManager):

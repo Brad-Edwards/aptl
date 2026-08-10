@@ -47,7 +47,8 @@ def _load_hatch_build() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "hatch_build", REPO_ROOT / "hatch_build.py"
     )
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

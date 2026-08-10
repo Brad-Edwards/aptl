@@ -73,7 +73,7 @@ def test_pack_mapping_replaces_authored_hints_and_labels_exact_addresses(
     from aptl.backends.raes_realization import interpret_provisioning_plan
 
     monkeypatch.setattr(
-        "aptl.backends.raes_realization.resolve_pack_backend_interaction",
+        "aptl.backends.raes_pack_interaction.resolve_pack_backend_interaction",
         lambda context: _resolved(
             ComponentGroupMembership("provision.node.a", ("soc",)),
             ComponentGroupMembership("provision.node.b", ()),
@@ -135,7 +135,7 @@ def test_provider_can_change_only_group_fields(monkeypatch, tmp_path) -> None:
         )
     )
     monkeypatch.setattr(
-        "aptl.backends.raes_realization.resolve_pack_backend_interaction",
+        "aptl.backends.raes_pack_interaction.resolve_pack_backend_interaction",
         lambda context: next(assignments),
     )
 
@@ -169,7 +169,7 @@ def test_disabled_assigned_group_rejects_before_backend_mutation(monkeypatch, tm
     from aptl.backends.raes_provisioner import AptlProvisioner
 
     monkeypatch.setattr(
-        "aptl.backends.raes_realization.resolve_pack_backend_interaction",
+        "aptl.backends.raes_pack_interaction.resolve_pack_backend_interaction",
         lambda context: _resolved(
             ComponentGroupMembership("provision.node.a", ("soc",)),
         ),
@@ -207,7 +207,7 @@ def test_interaction_context_carries_the_selected_deployment_transport(
         return _resolved(ComponentGroupMembership("provision.node.a", ()))
 
     monkeypatch.setattr(
-        "aptl.backends.raes_realization.resolve_pack_backend_interaction", resolve
+        "aptl.backends.raes_pack_interaction.resolve_pack_backend_interaction", resolve
     )
 
     interpret_provisioning_plan(
@@ -235,7 +235,7 @@ def test_one_plan_resolves_the_provider_once_across_validate_and_apply(
         return _resolved(ComponentGroupMembership("provision.node.a", ()))
 
     monkeypatch.setattr(
-        "aptl.backends.raes_realization.resolve_pack_backend_interaction", resolve
+        "aptl.backends.raes_pack_interaction.resolve_pack_backend_interaction", resolve
     )
     provisioner = AptlProvisioner(
         project_dir=tmp_path,

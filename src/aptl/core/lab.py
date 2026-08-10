@@ -269,7 +269,7 @@ SURICATA_IMAGE = "jasonish/suricata:7.0"
 # All known Docker Compose profiles. Used as fallback when config is
 # unavailable (e.g. stop_lab, kill switch).  Keep in sync with
 # docker-compose.yml profile definitions.
-ALL_KNOWN_PROFILES = list(OPERATOR_GROUP_VOCABULARY)
+ALL_KNOWN_PROFILES = OPERATOR_GROUP_VOCABULARY
 
 
 def docker_client() -> "DockerClient":

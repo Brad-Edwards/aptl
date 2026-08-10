@@ -20,7 +20,7 @@ CORE_PROFILES = ("otel",)
 # The finite vocabulary a deployment-serving provider may assign. Container
 # toggles and backend-owned always-on profiles are the only authorities; the
 # separate web lifecycle is intentionally absent.
-OPERATOR_GROUP_VOCABULARY = tuple((*ContainerSettings.model_fields, *CORE_PROFILES))
+OPERATOR_GROUP_VOCABULARY = (*ContainerSettings.model_fields, *CORE_PROFILES)
 # Legacy in-tree fallback ONLY (issue #875, SDL-authority class). These map
 # older in-tree scenario node names to their docker-compose service names so
 # node->service binding resolves for the legacy compose path. An env-pack never

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from importlib import metadata
 from time import monotonic
-from typing import Any
 
 from aptl.backends.pack_interaction import (
     ENTRY_POINT_GROUP,
@@ -33,16 +32,22 @@ class PackBackendInteractionError(RuntimeError):
 
 
 def _entry_points() -> list[metadata.EntryPoint]:
+    """Return installed deployment-serving interaction entry points."""
+
     return list(metadata.entry_points(group=ENTRY_POINT_GROUP))
 
 
 def _selector(context: PackBackendInteractionContext) -> str:
+    """Return the exact pack/backend family selector for ``context``."""
+
     return f"{context.pack.pack_id}.{context.backend.target_name}"
 
 
 def _mapping_digest(
     memberships: tuple[ComponentGroupMembership, ...],
 ) -> str:
+    """Derive the stable identity of a validated membership mapping."""
+
     return derive_identity(
         "pack-serving",
         {
@@ -58,6 +63,8 @@ def _mapping_digest(
 
 
 def _validate_context(context: PackBackendInteractionContext) -> None:
+    """Reject contexts whose bounded collections are not canonical."""
+
     addresses = context.component_addresses
     groups = context.operator_groups
     if (
@@ -71,12 +78,68 @@ def _validate_context(context: PackBackendInteractionContext) -> None:
 
 
 def _sequence(provider: object, name: str) -> tuple[str, ...]:
+    """Read one required tuple-of-strings provider metadata field."""
+
     value = getattr(provider, name, None)
     if not isinstance(value, tuple) or any(
         not isinstance(item, str) or not item for item in value
     ):
         raise PackBackendInteractionError("provider-malformed")
     return value
+
+
+def _provider_id(provider: object) -> str:
+    """Return a provider's validated, evidence-safe identifier."""
+
+    provider_id = getattr(provider, "provider_id", "")
+    if not isinstance(provider_id, str) or _SAFE_ID.fullmatch(provider_id) is None:
+        raise PackBackendInteractionError("provider-malformed")
+    return provider_id
+
+
+def _extension_api_version(provider: object) -> str:
+    """Return a provider's required extension API version."""
+
+    value = getattr(provider, "extension_api_version", None)
+    if not isinstance(value, str) or not value:
+        raise PackBackendInteractionError("provider-malformed")
+    return value
+
+
+def _scalar_claim_matches(
+    provider: object,
+    context: PackBackendInteractionContext,
+    extension_api_version: str,
+) -> bool:
+    """Return whether scalar provider metadata claims this context."""
+
+    observed = (
+        extension_api_version,
+        getattr(provider, "supported_pack_id", None),
+        getattr(provider, "backend_target_name", None),
+    )
+    expected = (
+        EXTENSION_API_VERSION,
+        context.pack.pack_id,
+        context.backend.target_name,
+    )
+    return observed == expected
+
+
+def _sequence_claim_matches(
+    provider: object, context: PackBackendInteractionContext
+) -> bool:
+    """Return whether bounded version, digest, profile, and transport claims match."""
+
+    checks = (
+        context.pack.pack_version in _sequence(provider, "supported_pack_versions"),
+        context.pack.set_digest in _sequence(provider, "supported_pack_set_digests"),
+        context.backend.target_version in _sequence(provider, "backend_target_versions"),
+        context.backend.profile in _sequence(provider, "backend_profiles"),
+    )
+    transports = _sequence(provider, "backend_transports")
+    transport_matches = not transports or context.backend.transport in transports
+    return all(checks) and transport_matches
 
 
 def _compatible_provider_id(
@@ -90,29 +153,11 @@ def _compatible_provider_id(
     providers can therefore coexist without suppressing the default.
     """
 
-    provider_id = getattr(provider, "provider_id", "")
-    if not isinstance(provider_id, str) or _SAFE_ID.fullmatch(provider_id) is None:
-        raise PackBackendInteractionError("provider-malformed")
-    extension_api_version = getattr(provider, "extension_api_version", None)
-    if not isinstance(extension_api_version, str) or not extension_api_version:
-        raise PackBackendInteractionError("provider-malformed")
-    if extension_api_version != EXTENSION_API_VERSION:
+    provider_id = _provider_id(provider)
+    extension_api_version = _extension_api_version(provider)
+    if not _scalar_claim_matches(provider, context, extension_api_version):
         return None
-    if getattr(provider, "supported_pack_id", None) != context.pack.pack_id:
-        return None
-    if getattr(provider, "backend_target_name", None) != context.backend.target_name:
-        return None
-
-    checks = (
-        context.pack.pack_version in _sequence(provider, "supported_pack_versions"),
-        context.pack.set_digest in _sequence(provider, "supported_pack_set_digests"),
-        context.backend.target_version in _sequence(provider, "backend_target_versions"),
-        context.backend.profile in _sequence(provider, "backend_profiles"),
-    )
-    transports = _sequence(provider, "backend_transports")
-    if transports and context.backend.transport not in transports:
-        return None
-    if not all(checks):
+    if not _sequence_claim_matches(provider, context):
         return None
     if not callable(getattr(provider, "resolve", None)):
         raise PackBackendInteractionError("provider-malformed")
@@ -120,8 +165,10 @@ def _compatible_provider_id(
 
 
 def _load(entry_point: metadata.EntryPoint) -> object:
+    """Load one selector candidate and contain all provider exceptions."""
+
     try:
-        target: Any = entry_point.load()
+        target = entry_point.load()
         if isinstance(target, type) or (
             callable(target) and not callable(getattr(target, "resolve", None))
         ):
@@ -136,9 +183,39 @@ def _load(entry_point: metadata.EntryPoint) -> object:
     return target
 
 
+def _validated_membership(
+    membership: ComponentGroupMembership,
+    expected: set[str],
+    seen: set[str],
+    allowed_groups: set[str],
+) -> ComponentGroupMembership:
+    """Copy one exact membership after validating address and group bounds."""
+
+    address = membership.component_address
+    groups = membership.groups
+    if address not in expected or address in seen:
+        raise PackBackendInteractionError("mapping-invalid")
+    if (
+        not isinstance(groups, tuple)
+        or any(
+            not isinstance(group, str) or group not in allowed_groups
+            for group in groups
+        )
+        or len(set(groups)) != len(groups)
+    ):
+        raise PackBackendInteractionError("mapping-invalid")
+    seen.add(address)
+    return ComponentGroupMembership(
+        component_address=address,
+        groups=tuple(sorted(groups)),
+    )
+
+
 def _validate_result(
     result: object, context: PackBackendInteractionContext
 ) -> tuple[ComponentGroupMembership, ...]:
+    """Validate and immutably copy one provider's total mapping."""
+
     if not isinstance(result, PackBackendInteractionResult):
         raise PackBackendInteractionError("mapping-invalid")
     memberships = result.memberships
@@ -152,29 +229,15 @@ def _validate_result(
     copied: list[ComponentGroupMembership] = []
     allowed_groups = set(context.operator_groups)
     for membership in memberships:
-        address = membership.component_address
-        groups = membership.groups
-        if (
-            address not in expected
-            or address in seen
-            or not isinstance(groups, tuple)
-            or any(not isinstance(group, str) or group not in allowed_groups for group in groups)
-            or len(set(groups)) != len(groups)
-        ):
-            raise PackBackendInteractionError("mapping-invalid")
-        seen.add(address)
-        copied.append(
-            ComponentGroupMembership(
-                component_address=address,
-                groups=tuple(sorted(groups)),
-            )
-        )
+        copied.append(_validated_membership(membership, expected, seen, allowed_groups))
     if seen != expected:
         raise PackBackendInteractionError("mapping-invalid")
     return tuple(sorted(copied))
 
 
 def _default(context: PackBackendInteractionContext) -> ResolvedPackBackendInteraction:
+    """Return the pack-agnostic all-unprofiled total mapping."""
+
     memberships = tuple(
         ComponentGroupMembership(address, ()) for address in context.component_addresses
     )

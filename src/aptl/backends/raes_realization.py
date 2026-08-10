@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -28,20 +27,8 @@ from aptl.backends._raes_realization_diagnostics import (
     _invalid_payload_diagnostics,
 )
 from aptl.backends.raes_base_substrate import base_container_spec
-from aptl.backends.identity import (
-    APTL_RAES_TARGET_NAME,
-    APTL_RAES_TARGET_PROFILE,
-    APTL_RAES_TARGET_VERSION,
-    BackendIdentity,
-)
-from aptl.backends.pack_interaction import (
-    PackBackendInteractionContext,
-    ResolvedPackBackendInteraction,
-)
-from aptl.backends.pack_interaction_discovery import (
-    PackBackendInteractionError,
-    resolve_pack_backend_interaction,
-)
+from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
+from aptl.backends.raes_pack_interaction import apply_pack_interaction
 from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
     resolve_node_image,
@@ -52,10 +39,8 @@ from aptl.backends.raes_placement_realization import (
 )
 from aptl.backends.raes_profiles import (
     ComposeProfileIndex,
-    OPERATOR_GROUP_VOCABULARY,
     load_compose_profile_index,
     node_aliases,
-    public_start_profiles,
 )
 from aptl.backends.raes_realization_networks import (
     append_network_topology_diagnostics,
@@ -128,7 +113,7 @@ def interpret_provisioning_plan(
     )
     pack_interaction: ResolvedPackBackendInteraction | None = None
     if bundle.pack_identity is not None:
-        nodes, pack_interaction = _apply_pack_interaction(
+        nodes, pack_interaction = apply_pack_interaction(
             nodes,
             bundle,
             config,
@@ -185,64 +170,6 @@ def interpret_provisioning_plan(
         pack_identity=bundle.pack_identity,
         pack_interaction=pack_interaction,
     )
-
-
-def _apply_pack_interaction(
-    nodes: list[NodeRealization],
-    bundle: ScenarioBundle,
-    config: AptlConfig,
-    diagnostics: list[Diagnostic],
-) -> tuple[list[NodeRealization], ResolvedPackBackendInteraction | None]:
-    """Apply one total serving-label mapping to already-lowered nodes.
-
-    This runs only after RAES has admitted one provisioning plan and APTL has
-    lowered its fixed node inventory. The provider can therefore label exact
-    addresses, but cannot create, suppress, or otherwise realize a resource.
-    """
-
-    pack_identity = bundle.pack_identity
-    if pack_identity is None:
-        return nodes, None
-    context = PackBackendInteractionContext(
-        pack=pack_identity,
-        backend=BackendIdentity(
-            target_name=APTL_RAES_TARGET_NAME,
-            target_version=APTL_RAES_TARGET_VERSION,
-            profile=APTL_RAES_TARGET_PROFILE,
-            transport=config.deployment.provider,
-        ),
-        component_addresses=tuple(sorted(node.address for node in nodes)),
-        operator_groups=OPERATOR_GROUP_VOCABULARY,
-    )
-    try:
-        resolved = resolve_pack_backend_interaction(context)
-    except PackBackendInteractionError as exc:
-        diagnostics.append(
-            diagnostic(
-                f"aptl.provisioner.pack-interaction-{exc.code}",
-                PROVISIONING_ADDRESS,
-                "The installed pack/backend serving interaction could not be resolved.",
-            )
-        )
-        return nodes, None
-
-    labelled = [
-        replace(node, profiles=resolved.groups_for(node.address)) for node in nodes
-    ]
-    enabled = set(public_start_profiles(config))
-    for node in labelled:
-        if node.profiles and enabled.isdisjoint(node.profiles):
-            diagnostics.append(
-                diagnostic(
-                    "aptl.provisioner.pack-interaction-group-disabled",
-                    node.address,
-                    (
-                        "The component is assigned only to disabled operator groups: "
-                        f"{', '.join(node.profiles)}."
-                    ),
-                )
-            )
-    return labelled, resolved
 
 
 def _append_unresolved_node_profile_diagnostics(

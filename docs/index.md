@@ -61,6 +61,8 @@ run from source instead, use a virtualenv editable install
 
 ### Scenario Authoring
 - [Authoring Boundary](sdl/index.md): Current RAES-owned scenario handoff
+- [RAES SDL & runtime (OpenRAE/rae)](https://github.com/OpenRAE/rae): Companion repo owning SDL shape and semantics
+- [Pack definitions & authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs): Companion repo for the environment-pack format, templates, schemas, and authoring support
 - [Curated RAES Variants](sdl/techvault-curated-variants.md): Supported startup catalog variants
 - [TechVault Static Validation Gate](raes/techvault-static-validation-gate.md): Current static scenario gate
 - [TechVault Live Validation Gate](raes/techvault-live-validation-gate.md): Current runtime realization gate

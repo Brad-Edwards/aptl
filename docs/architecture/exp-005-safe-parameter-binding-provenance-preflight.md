@@ -111,7 +111,7 @@ runtime and implementation-manifest boundary:
   the artifact identity and digest, and rejects duplicate owners. No package,
   environment, or ambient filesystem lookup supplies a manifest.
 - Provider and participant construction remain owned by #557 /
-  `RAESystem/rae#251`, not EXP-005.
+  `OpenRAE/rae#251`, not EXP-005.
 
 ### APTL apparatus configuration
 

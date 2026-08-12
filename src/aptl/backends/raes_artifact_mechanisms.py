@@ -118,7 +118,7 @@ _ENV_PACK_COPY_PROFILE_BODY: dict[str, Any] = {
 }
 
 
-# Generic runtime composition (ADR-051 route 3, RAESystem/rae#985). APTL composes
+# Generic runtime composition (ADR-051 route 3, OpenRAE/rae#985). APTL composes
 # a node's declared runtime shape onto a pinned generic OS substrate and proves
 # the composition by independently reading every declared runtime realization
 # concern back off the realized container. raes 3.1.0 lowers runtime-environment,
@@ -446,7 +446,7 @@ def aptl_artifact_mechanisms() -> tuple[ArtifactMechanismCapability, ...]:
     """Return every artifact mechanism APTL can materialize and verify.
 
     ``dynamic-composition`` is advertised now that raes 3.1.0 lowers the runtime
-    realization concerns (RAESystem/rae#985) and APTL composes a node onto a
+    realization concerns (OpenRAE/rae#985) and APTL composes a node onto a
     generic substrate and reads every declared runtime concern back by
     read-after-write (issue #876) — so the SEM-218 I4 precondition
     "materialize *and* independently read back" holds for it.

@@ -223,9 +223,9 @@ def _launch_installed_provider(
         error = participant_binding_error(
             "decision-only provider exposed action tools", evidence
         )
-        if cleanup_error is None:
-            raise error
-        raise error from cleanup_error
+        if isinstance(cleanup_error, Exception):
+            raise error from cleanup_error
+        raise error
     return ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=handle,

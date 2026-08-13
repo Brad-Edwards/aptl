@@ -41,6 +41,10 @@ from aptl.validation.participant_readiness_reports import (
     persist_failed_readiness_report,
 )
 from aptl.workbench.process import AgentExecutionError
+from aptl.workbench.participant_source_binding import (
+    CredentialBindingEvidence,
+    evidence_from_error,
+)
 
 if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
@@ -93,6 +97,7 @@ class _TrajectoryOutcome:
     selected_actions: tuple[str, ...]
     terminal_outcomes: tuple[Mapping[str, object], ...]
     diagnostics: tuple[str, ...]
+    credential_binding: Mapping[str, object] | None = None
 
 
 class _ReadinessFailure(ValueError):
@@ -127,12 +132,18 @@ def validate_participant_agency_readiness(
             str(exc),
         )
     try:
-        provider, cleanup = _resolve_selection_provider(request, selected_run_id)
+        provider, cleanup, credential_evidence = _resolve_selection_provider(
+            request, selected_run_id
+        )
     except (OSError, RuntimeError, ValueError) as exc:
+        binding_evidence = evidence_from_error(exc)
         diagnostic = (
             "installed participant model is not configured"
             if str(exc).startswith("installed participant model is not configured")
-            else type(exc).__name__
+            else (str(exc) if binding_evidence is not None else type(exc).__name__)
+        )
+        evidence = (
+            binding_evidence.to_payload() if binding_evidence is not None else None
         )
         return persist_failed_readiness_report(
             request.run_store,
@@ -142,8 +153,14 @@ def validate_participant_agency_readiness(
             request.behavior_name,
             context.participant_address,
             f"participant decision provider is unavailable: {diagnostic}",
+            credential_binding=evidence,
         )
-    trajectory = _run_readiness_trajectory(context, provider, cleanup)
+    trajectory = _run_readiness_trajectory(
+        context,
+        provider,
+        cleanup,
+        credential_evidence,
+    )
     return _terminate_and_persist(context, trajectory)
 
 
@@ -237,11 +254,15 @@ def _prepare_readiness_context(
 def _resolve_selection_provider(
     request: ParticipantReadinessRequest,
     run_id: str,
-) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
+) -> tuple[
+    ParticipantSelectionProvider,
+    Callable[[], None],
+    CredentialBindingEvidence | None,
+]:
     """Resolve an override or launch one admitted decision-only provider."""
 
     if request.provider_override is not None:
-        return request.provider_override, _noop
+        return request.provider_override, _noop, None
     return _selection_provider(
         request.provider_name,
         config=request.config,
@@ -254,6 +275,7 @@ def _run_readiness_trajectory(
     context: _ReadinessContext,
     provider: ParticipantSelectionProvider,
     cleanup: Callable[[], None],
+    credential_evidence: CredentialBindingEvidence | None,
 ) -> _TrajectoryOutcome:
     """Execute the bounded number of turns and retain terminal outcomes."""
 
@@ -286,11 +308,32 @@ def _run_readiness_trajectory(
             f"participant readiness trajectory failed: {type(exc).__name__}"
         )
     finally:
-        cleanup()
+        try:
+            cleanup()
+        except (OSError, RuntimeError, ValueError):
+            if credential_evidence is not None:
+                credential_evidence.local_cleanup = "failed"
+            diagnostics.append("participant provider cleanup failed")
+        if (
+            credential_evidence is not None
+            and credential_evidence.isolation != "controls-enforced"
+        ):
+            diagnostics.append("participant credential isolation was not verified")
+        if (
+            credential_evidence is not None
+            and credential_evidence.local_cleanup != "succeeded"
+            and "participant provider cleanup failed" not in diagnostics
+        ):
+            diagnostics.append("participant credential cleanup was not verified")
     return _TrajectoryOutcome(
         selected_actions=tuple(selected_actions),
         terminal_outcomes=tuple(terminal_outcomes),
         diagnostics=tuple(diagnostics),
+        credential_binding=(
+            credential_evidence.to_payload()
+            if credential_evidence is not None
+            else None
+        ),
     )
 
 
@@ -384,6 +427,7 @@ def _terminate_and_persist(
         scenario_source_sha256=context.authority.scenario_source_sha256,
         compiled_model_sha256=context.authority.compiled_model_sha256,
         episode_terminal_reason=terminal_reason.value,
+        credential_binding=trajectory.credential_binding,
     )
     context.request.run_store.write_json(
         context.run_id,

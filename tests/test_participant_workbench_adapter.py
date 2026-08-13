@@ -21,6 +21,10 @@ from aptl.workbench.credentials import (
     EphemeralCredentialBroker,
     WorkbenchCredentialError,
 )
+from aptl.workbench.participant_source_binding import (
+    ProcessEnvironmentCredentialResolver,
+    evidence_from_error,
+)
 from aptl.workbench.codex_agent import CodexManagedAgentAdapter
 from aptl.workbench.profiles import ProfileId, profile_for, render_profile_config
 from aptl.workbench.runtime import DecisionAgentLaunch, ProfileLaunch
@@ -98,6 +102,136 @@ def test_ephemeral_broker_rejects_missing_or_placeholder_credentials(
 
     with pytest.raises(WorkbenchCredentialError, match="INDEXER_PASSWORD"):
         broker.prepare(ProfileId.BLUE, "a" * 32, ("INDEXER_PASSWORD",))
+
+
+def test_configured_source_is_mapped_to_delivery_without_ambient_fallback() -> None:
+    from aptl.core.config import ProcessEnvironmentCredentialSource
+
+    configured_secret = "configured-secret-value"
+    ambient_secret = "unselected-native-secret"
+    resolver = ProcessEnvironmentCredentialResolver(
+        {
+            "APTL_SELECTED_CLAUDE": configured_secret,
+            "ANTHROPIC_API_KEY": ambient_secret,
+        }
+    )
+
+    binding, evidence = resolver.acquire(
+        "claude",
+        "a" * 32,
+        source=ProcessEnvironmentCredentialSource(
+            kind="process-environment",
+            variable="APTL_SELECTED_CLAUDE",
+        ),
+        delivery_alias="ANTHROPIC_API_KEY",
+    )
+
+    assert binding == {"ANTHROPIC_API_KEY": configured_secret}
+    payload = evidence.to_payload()
+    assert payload["source_kind"] == "process-environment"
+    assert payload["acquisition"] == "succeeded"
+    assert payload["acquisition_observed_at"] is not None
+    assert payload["local_cleanup"] == "pending"
+    assert payload["expiry"] == "unknown"
+    assert payload["renewal"] == "unsupported"
+    assert payload["upstream_revocation"] == "unsupported-by-aptl"
+    assert payload["config_ref"] == ("experiment.participant_credential_sources.claude")
+    rendered = repr(payload)
+    assert configured_secret not in rendered
+    assert ambient_secret not in rendered
+    assert "APTL_SELECTED_CLAUDE" not in rendered
+
+
+def test_missing_configured_source_never_uses_provider_native_ambient_value() -> None:
+    from aptl.core.config import ProcessEnvironmentCredentialSource
+
+    native_secret = "native-ambient-secret"
+    resolver = ProcessEnvironmentCredentialResolver(
+        {"ANTHROPIC_API_KEY": native_secret}
+    )
+
+    with pytest.raises(WorkbenchCredentialError) as raised:
+        resolver.acquire(
+            "claude",
+            "a" * 32,
+            source=ProcessEnvironmentCredentialSource(
+                kind="process-environment",
+                variable="APTL_SELECTED_CLAUDE",
+            ),
+            delivery_alias="ANTHROPIC_API_KEY",
+        )
+
+    assert str(raised.value) == "configured participant credential is unavailable"
+    evidence = evidence_from_error(raised.value)
+    assert evidence is not None
+    payload = evidence.to_payload()
+    assert payload["acquisition"] == "source-unavailable"
+    assert native_secret not in repr(payload)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "CHANGE_ME", "bad\x00value", "x" * 65_537],
+)
+def test_configured_source_rejects_invalid_material_without_disclosure(
+    value: str,
+) -> None:
+    from aptl.core.config import ProcessEnvironmentCredentialSource
+
+    resolver = ProcessEnvironmentCredentialResolver({"APTL_SELECTED_CODEX": value})
+
+    with pytest.raises(WorkbenchCredentialError) as raised:
+        resolver.acquire(
+            "codex",
+            "a" * 32,
+            source=ProcessEnvironmentCredentialSource(
+                kind="process-environment",
+                variable="APTL_SELECTED_CODEX",
+            ),
+            delivery_alias="CODEX_API_KEY",
+        )
+
+    assert "APTL_SELECTED_CODEX" not in str(raised.value)
+    if value:
+        assert value not in str(raised.value)
+    evidence = evidence_from_error(raised.value)
+    assert evidence is not None
+    assert evidence.to_payload()["acquisition"] in {
+        "source-unavailable",
+        "source-invalid",
+    }
+
+
+def test_configured_sources_are_isolated_by_provider_and_run() -> None:
+    from aptl.core.config import ProcessEnvironmentCredentialSource
+
+    resolver = ProcessEnvironmentCredentialResolver(
+        {
+            "APTL_CLAUDE": "claude-secret",
+            "APTL_CODEX": "codex-secret",
+        }
+    )
+    claude, _ = resolver.acquire(
+        "claude",
+        "claude-run",
+        source=ProcessEnvironmentCredentialSource(
+            kind="process-environment", variable="APTL_CLAUDE"
+        ),
+        delivery_alias="ANTHROPIC_API_KEY",
+    )
+    codex, _ = resolver.acquire(
+        "codex",
+        "codex-run",
+        source=ProcessEnvironmentCredentialSource(
+            kind="process-environment", variable="APTL_CODEX"
+        ),
+        delivery_alias="CODEX_API_KEY",
+    )
+
+    assert claude == {"ANTHROPIC_API_KEY": "claude-secret"}
+    assert codex == {"CODEX_API_KEY": "codex-secret"}
+    assert "CODEX_API_KEY" not in claude
+    assert "ANTHROPIC_API_KEY" not in codex
 
 
 def test_renderer_emits_a_standard_strict_mcp_config_with_trace_handoff(
@@ -213,6 +347,10 @@ def test_claude_adapter_uses_fixed_argv_minimal_env_and_stdin(
     assert invocation.env["ANTHROPIC_API_KEY"] == "model-secret"
     assert "UNSELECTED_BLUE_SECRET" not in invocation.env
     assert invocation.env["CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"] == "1"
+    assert Path(invocation.env["HOME"]).is_relative_to(tmp_path / "work")
+    assert Path(invocation.env["XDG_CONFIG_HOME"]).is_relative_to(tmp_path / "work")
+    assert Path(invocation.env["CLAUDE_CONFIG_DIR"]).is_relative_to(tmp_path / "work")
+    assert invocation.env["HOME"] != str(Path.home())
     assert "--bare" in invocation.argv
     assert "--strict-mcp-config" in invocation.argv
     assert "--no-session-persistence" in invocation.argv
@@ -339,6 +477,12 @@ def test_claude_decision_launch_has_no_mcp_or_action_tools(
     invocation = runner.invocations[0]
     assert invocation.env["ANTHROPIC_API_KEY"] == "model-secret"
     assert "OPENAI_API_KEY" not in invocation.env
+    assert adapter.credential_isolation_controls(handle) == (
+        "minimal-child-environment",
+        "private-home",
+        "private-claude-config",
+        "claude-bare-api-key-mode",
+    )
     assert _option_value(invocation.argv, "--tools") == ""
     assert _option_value(invocation.argv, "--model") == ("claude-sonnet-4-5-20250929")
     assert json.loads(_option_value(invocation.argv, "--json-schema")) == {
@@ -404,6 +548,16 @@ def test_codex_decision_launch_is_ephemeral_read_only_and_config_isolated(
     assert "ANTHROPIC_API_KEY" not in invocation.env
     assert "OPENAI_API_KEY" not in invocation.env
     assert "CODEX_HOME" in invocation.env
+    assert Path(invocation.env["HOME"]).is_relative_to(tmp_path / "work")
+    assert Path(invocation.env["XDG_CONFIG_HOME"]).is_relative_to(tmp_path / "work")
+    assert invocation.env["HOME"] != str(Path.home())
+    assert adapter.credential_isolation_controls(handle) == (
+        "minimal-child-environment",
+        "private-home",
+        "private-codex-home",
+        "codex-user-config-disabled",
+        "codex-ephemeral-mode",
+    )
     assert invocation.argv[-1] == "-"
     assert _option_value(invocation.argv, "--model") == "gpt-5-nano-2025-08-07"
     output_schema = Path(_option_value(invocation.argv, "--output-schema"))

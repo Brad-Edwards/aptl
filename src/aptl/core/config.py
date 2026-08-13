@@ -3,6 +3,7 @@
 Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 """
 
+import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -16,6 +17,7 @@ log = get_logger("config")
 
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
+_CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
     "claude": re.compile(r"^claude-[a-z0-9-]+-\d{8}$", flags=re.ASCII),
     "codex": re.compile(
@@ -293,6 +295,55 @@ class InstalledParticipantModels(BaseModel):
         return model
 
 
+class ProcessEnvironmentCredentialSource(BaseModel):
+    """Select one exact parent-process variable without storing its value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["process-environment"]
+    variable: str = Field(strict=True, min_length=1, max_length=128)
+
+    @field_validator("variable")
+    @classmethod
+    def validate_variable(cls, value: str) -> str:
+        """Admit one bounded POSIX-style environment variable locator."""
+
+        if not _CREDENTIAL_SOURCE_VARIABLE_PATTERN.fullmatch(value):
+            raise ValueError("participant credential source variable is invalid")
+        return value
+
+    def descriptor_digest(self) -> str:
+        """Identify this non-secret descriptor without publishing its locator."""
+
+        payload = json.dumps(
+            self.model_dump(mode="json"),
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+class InstalledParticipantCredentialSources(BaseModel):
+    """Closed configured credential-source selections for installed providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    claude: ProcessEnvironmentCredentialSource | None = None
+    codex: ProcessEnvironmentCredentialSource | None = None
+
+    def source_for(self, provider: str) -> ProcessEnvironmentCredentialSource:
+        """Return one explicitly configured source or fail closed."""
+
+        if provider not in {"claude", "codex"}:
+            raise ValueError("unknown installed participant provider")
+        source = getattr(self, provider)
+        if source is None:
+            raise ValueError(
+                f"installed participant credential source is not configured for {provider}"
+            )
+        return source
+
+
 class ExperimentSettings(BaseModel):
     """Strict non-secret apparatus settings approved for experiment binding."""
 
@@ -306,6 +357,9 @@ class ExperimentSettings(BaseModel):
     )
     participant_models: InstalledParticipantModels = Field(
         default_factory=InstalledParticipantModels
+    )
+    participant_credential_sources: InstalledParticipantCredentialSources = Field(
+        default_factory=InstalledParticipantCredentialSources
     )
 
 

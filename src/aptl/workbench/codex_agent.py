@@ -65,6 +65,8 @@ class CodexManagedAgentAdapter:
             raise AgentExecutionError("agent limits are invalid")
         self._executable = _admitted_executable(codex_executable)
         self._work_dir = _prepare_work_dir(work_dir)
+        self._private_home = _prepare_work_dir(self._work_dir / "home")
+        self._xdg_config_home = _prepare_work_dir(self._private_home / ".config")
         self._codex_home = _prepare_work_dir(self._work_dir / "codex-home")
         self._runner = runner or BoundedProcessRunner()
         self._timeout_seconds = timeout_seconds
@@ -76,7 +78,7 @@ class CodexManagedAgentAdapter:
         launch: AgentLaunch,
         credentials: Mapping[str, str],
     ) -> object:
-        """Create a decision-only handle backed by a minimal credential lease."""
+        """Create a decision-only handle backed by a minimal binding."""
 
         if not isinstance(launch, DecisionAgentLaunch):
             raise AgentExecutionError("Codex adapter supports decision-only launches")
@@ -88,9 +90,11 @@ class CodexManagedAgentAdapter:
             raise AgentExecutionError("agent model selection is invalid") from exc
         credential = credentials.get(_MODEL_CREDENTIAL)
         if not credential or contains_placeholder(credential):
-            raise AgentExecutionError("agent credential lease is incomplete")
+            raise AgentExecutionError("agent credential binding is incomplete")
         environment = {
             **_BASE_ENVIRONMENT,
+            "HOME": str(self._private_home),
+            "XDG_CONFIG_HOME": str(self._xdg_config_home),
             "CODEX_HOME": str(self._codex_home),
             _MODEL_CREDENTIAL: credential,
         }
@@ -107,6 +111,30 @@ class CodexManagedAgentAdapter:
             raise AgentExecutionError("agent profile is closed")
         active.ready = True
         return {}
+
+    def credential_isolation_controls(self, handle: object) -> tuple[str, ...]:
+        """Return only the credential controls this adapter actually enforces."""
+
+        active = _require_handle(handle)
+        if active.closed:
+            raise AgentExecutionError("credential isolation controls are unavailable")
+        expected = {
+            **_BASE_ENVIRONMENT,
+            "HOME": str(self._private_home),
+            "XDG_CONFIG_HOME": str(self._xdg_config_home),
+            "CODEX_HOME": str(self._codex_home),
+        }
+        if any(active.environment.get(name) != value for name, value in expected.items()):
+            raise AgentExecutionError("credential isolation controls are incomplete")
+        if set(active.environment) != {*expected, _MODEL_CREDENTIAL}:
+            raise AgentExecutionError("credential isolation controls are incomplete")
+        return (
+            "minimal-child-environment",
+            "private-home",
+            "private-codex-home",
+            "codex-user-config-disabled",
+            "codex-ephemeral-mode",
+        )
 
     def respond(
         self,

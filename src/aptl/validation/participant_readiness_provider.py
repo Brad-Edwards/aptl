@@ -16,7 +16,17 @@ from aptl.backends.raes_participant_provider import (
 )
 from aptl.workbench.agent import ClaudeCodeManagedAgentAdapter, _admitted_executable
 from aptl.workbench.codex_agent import CodexManagedAgentAdapter
-from aptl.workbench.credentials import EphemeralCredentialBroker
+from aptl.workbench.credentials import (
+    EphemeralCredentialBroker,
+    WorkbenchCredentialError,
+)
+from aptl.workbench.participant_source_binding import (
+    CredentialBindingEvidence,
+    ProcessEnvironmentCredentialResolver,
+    configured_source_evidence,
+    observe_local_cleanup,
+    participant_binding_error,
+)
 from aptl.workbench.runtime import DecisionAgentLaunch
 
 if TYPE_CHECKING:
@@ -28,6 +38,21 @@ _PROVIDER_VERSION_ENVIRONMENT = {
 }
 _INSTALLED_VERSION_UNAVAILABLE = "installed participant provider version is unavailable"
 MAX_INSTALLED_PARTICIPANT_PROMPT_CHARS = 32_768
+_REQUIRED_ISOLATION_CONTROLS = {
+    "claude": (
+        "minimal-child-environment",
+        "private-home",
+        "private-claude-config",
+        "claude-bare-api-key-mode",
+    ),
+    "codex": (
+        "minimal-child-environment",
+        "private-home",
+        "private-codex-home",
+        "codex-user-config-disabled",
+        "codex-ephemeral-mode",
+    ),
+}
 
 
 def build_selection_provider(
@@ -36,7 +61,11 @@ def build_selection_provider(
     config: AptlConfig,
     project_dir: Path,
     run_id: str,
-) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
+) -> tuple[
+    ParticipantSelectionProvider,
+    Callable[[], None],
+    CredentialBindingEvidence | None,
+]:
     """Build one deterministic or admitted installed selection provider."""
 
     if provider_name == "deterministic":
@@ -44,23 +73,61 @@ def build_selection_provider(
             DeterministicSelectionProvider,
         )
 
-        return DeterministicSelectionProvider(), _noop
+        return DeterministicSelectionProvider(), _noop, None
     model = config.experiment.participant_models.model_for(provider_name)
+    try:
+        source = config.experiment.participant_credential_sources.source_for(
+            provider_name
+        )
+    except ValueError as exc:
+        evidence = CredentialBindingEvidence(
+            provider=provider_name,
+            run_id=run_id,
+            source_kind=None,
+            descriptor_sha256=None,
+            config_ref=(f"experiment.participant_credential_sources.{provider_name}"),
+            delivery_contract=f"aptl.{provider_name}-credential-environment/v1",
+            acquisition="source-not-configured",
+        )
+        raise participant_binding_error(
+            "installed participant credential source is not configured", evidence
+        ) from exc
+    evidence = configured_source_evidence(provider_name, source, run_id)
     discovered_executable = shutil.which(provider_name)
     if discovered_executable is None:
-        raise ValueError(
-            f"installed participant provider is unavailable: {provider_name}"
+        evidence.acquisition = "not-requested"
+        raise participant_binding_error(
+            "installed participant provider is unavailable", evidence
         )
-    executable = _admitted_executable(Path(discovered_executable))
-    version = installed_version(executable)
+    try:
+        executable = _admitted_executable(Path(discovered_executable))
+        version = installed_version(executable)
+    except (OSError, RuntimeError, ValueError) as exc:
+        evidence.acquisition = "not-requested"
+        raise participant_binding_error(str(exc), evidence) from exc
     work_dir = project_dir / ".aptl" / "participant-agents" / run_id / provider_name
     credential_name = (
         "ANTHROPIC_API_KEY" if provider_name == "claude" else "CODEX_API_KEY"
     )
-    broker = EphemeralCredentialBroker(
-        {credential_name: os.environ.get(credential_name, "")}
+    resolver = ProcessEnvironmentCredentialResolver(os.environ)
+    acquired, evidence = resolver.acquire(
+        provider_name,
+        run_id,
+        source=source,
+        delivery_alias=credential_name,
+        evidence=evidence,
     )
-    lease = broker.prepare_named(provider_name, run_id, (credential_name,))
+    broker = EphemeralCredentialBroker(acquired)
+    try:
+        binding = broker.prepare_named(provider_name, run_id, (credential_name,))
+    except WorkbenchCredentialError as exc:
+        evidence.acquisition = "binding-conflict"
+        observe_local_cleanup(evidence, succeeded=True)
+        raise participant_binding_error(
+            "configured participant credential binding failed", evidence
+        ) from exc
+    adapter: ClaudeCodeManagedAgentAdapter | CodexManagedAgentAdapter | None = None
+    handle: object | None = None
     try:
         adapter = _launch_adapter(provider_name, executable, work_dir)
         handle = adapter.launch(
@@ -69,18 +136,40 @@ def build_selection_provider(
                 run_id=run_id,
                 model=model,
             ),
-            lease,
+            binding,
         )
+        controls = adapter.credential_isolation_controls(handle)
+        if controls != _REQUIRED_ISOLATION_CONTROLS[provider_name]:
+            raise ValueError("installed participant credential isolation is incomplete")
+        evidence.isolation_controls_applied = controls
+        evidence.isolation = "controls-enforced"
         inventory = adapter.list_tools(handle)
-    except (OSError, RuntimeError, ValueError):
-        broker.destroy_named(provider_name, run_id)
-        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        evidence.isolation = "failed"
+        _discard_failed_launch(
+            adapter,
+            handle,
+            broker,
+            provider_name,
+            run_id,
+            evidence,
+        )
+        raise participant_binding_error(
+            "installed participant provider launch failed", evidence
+        ) from exc
     if inventory:
-        try:
-            adapter.close(handle)
-        finally:
-            broker.destroy_named(provider_name, run_id)
-        raise ValueError("decision-only provider exposed action tools")
+        evidence.isolation = "failed"
+        cleanup_error = _discard_failed_launch(
+            adapter,
+            handle,
+            broker,
+            provider_name,
+            run_id,
+            evidence,
+        )
+        raise participant_binding_error(
+            "decision-only provider exposed action tools", evidence
+        ) from cleanup_error
     provider = ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=handle,
@@ -91,14 +180,43 @@ def build_selection_provider(
     )
 
     def cleanup() -> None:
-        """Close the provider and destroy its credential lease."""
+        """Close the provider and remove APTL's local credential binding."""
 
+        cleanup_error: Exception | None = None
         try:
             provider.close()
+        except (OSError, RuntimeError, ValueError) as exc:
+            cleanup_error = exc
         finally:
             broker.destroy_named(provider_name, run_id)
+            observe_local_cleanup(evidence, succeeded=cleanup_error is None)
+        if cleanup_error is not None:
+            raise participant_binding_error(
+                "installed participant provider cleanup failed", evidence
+            ) from cleanup_error
 
-    return provider, cleanup
+    return provider, cleanup, evidence
+
+
+def _discard_failed_launch(
+    adapter: ClaudeCodeManagedAgentAdapter | CodexManagedAgentAdapter | None,
+    handle: object | None,
+    broker: EphemeralCredentialBroker,
+    provider_name: str,
+    run_id: str,
+    evidence: CredentialBindingEvidence,
+) -> Exception | None:
+    """Close a partial launch and preserve a secret-free cleanup outcome."""
+
+    cleanup_error: Exception | None = None
+    if adapter is not None and handle is not None:
+        try:
+            adapter.close(handle)
+        except (OSError, RuntimeError, ValueError) as exc:
+            cleanup_error = exc
+    broker.destroy_named(provider_name, run_id)
+    observe_local_cleanup(evidence, succeeded=cleanup_error is None)
+    return cleanup_error
 
 
 def _launch_adapter(

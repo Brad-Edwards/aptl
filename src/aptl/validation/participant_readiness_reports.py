@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from aptl.validation.participant_readiness_models import (
@@ -37,6 +38,7 @@ def persist_failed_readiness_report(
     behavior: str,
     participant_address: str,
     *diagnostics: str,
+    credential_binding: Mapping[str, object] | None = None,
 ) -> ParticipantReadinessReport:
     """Persist one failed bounded-participant readiness report."""
 
@@ -50,6 +52,7 @@ def persist_failed_readiness_report(
         selected_actions=(),
         completed_turns=0,
         diagnostics=tuple(diagnostics),
+        credential_binding=credential_binding,
     )
     run_store.write_json(
         run_id,

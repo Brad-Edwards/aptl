@@ -89,6 +89,16 @@ non-secret provider selection in `aptl.json`:
     "participant_models": {
       "claude": "claude-sonnet-4-5-20250929",
       "codex": "gpt-5-nano-2025-08-07"
+    },
+    "participant_credential_sources": {
+      "claude": {
+        "kind": "process-environment",
+        "variable": "APTL_PARTICIPANT_CLAUDE_CREDENTIAL"
+      },
+      "codex": {
+        "kind": "process-environment",
+        "variable": "APTL_PARTICIPANT_CODEX_CREDENTIAL"
+      }
     }
   }
 }
@@ -105,11 +115,36 @@ each distinct range schema from a private, create-once file inside the run
 directory. APTL still parses the result independently and resolves the alias
 only against the complete delivered solicitation.
 
-The installed-provider modes use one provider-specific, non-placeholder
-credential lease:
+The source descriptor is non-secret; the variable it names holds the secret.
+Set only the source needed for the provider being qualified, then validate the
+same materialized project used by either a PyPI installation or repository
+checkout:
 
-- Claude Code: `ANTHROPIC_API_KEY`
-- Codex CLI: `CODEX_API_KEY`
+```bash
+export APTL_PARTICIPANT_CLAUDE_CREDENTIAL='<provider credential>'
+export APTL_PARTICIPANT_CODEX_CREDENTIAL='<provider credential>'
+
+aptl config validate --project-dir /path/to/lab
+aptl config show --project-dir /path/to/lab
+```
+
+`aptl lab init` writes an empty `participant_credential_sources` map and tells
+the operator that installed-participant sources are not configured. This is
+the safe default: deterministic readiness and ordinary lab startup need no
+model credential. The operator must add and confirm the descriptor before an
+installed-provider run. APTL reads exactly that configured variable, maps it to
+the selected adapter's provider-native delivery alias, and does not fall back
+to `ANTHROPIC_API_KEY`, `CODEX_API_KEY`, saved product login state, or user
+configuration. Missing, empty, placeholder, NUL-bearing, oversized, malformed,
+or unavailable sources fail before provider launch without printing the
+locator or value.
+
+The initial `process-environment` source proves explicit source selection,
+bounded local possession, private product-state isolation, and local reference
+cleanup. It does not prove delegation, issuer expiry, renewal, secure erasure,
+or upstream revocation. See
+[ADR-052](../adrs/adr-052-configured-participant-credential-sourcing.md) for the
+research, threat model, alternatives, and future resolver seam.
 
 The child receives no action tools, MCP servers, shell, Docker, SSH, browser,
 or backend handle. It only chooses one complete candidate from the delivered
@@ -151,10 +186,20 @@ red, and blue episodes for that installed implementation. Missing or unsafe
 executables, credentials, malformed output, timeouts, and out-of-surface
 selections fail with redacted readiness evidence.
 
-The root `aptl.participant-readiness-suite-report/v2` identifies the installed
-provider and model. Each child
-`aptl.participant-readiness-report/v2` does the same, including failures before
-the first turn. Successful and rejected solicitations write
+The root `aptl.participant-agency-qualification/v3` identifies the installed
+provider and model. Each child `aptl.participant-agency-readiness/v3` does the
+same, including failures before the first turn, and carries a
+`participant_source_binding` projection. The projection records the provider,
+source and resolver kinds, descriptor digest, config reference, delivery
+contract, the exact adapter isolation controls applied, acquisition/isolation
+results and observation times, honest expiry/renewal/revocation support, and
+local cleanup result and observation time. It excludes the
+variable locator, value, secret-derived data, account identity, raw provider
+errors, and private paths. The safe effective-config identity similarly stores
+only locator-free `participant_source_descriptors`. An installed trajectory is
+not passing unless local cleanup is `succeeded`.
+
+Successful and rejected solicitations write
 `aptl.participant-control-evidence/v2` records that join the provider/model pair
 to the RAES implementation manifest, implementation selection, and canonical
 configuration ref/digest. These records are the proof that the qualified CLI

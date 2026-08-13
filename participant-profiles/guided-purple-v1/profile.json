@@ -13,7 +13,7 @@
   },
   "config": {
     "path": "participant-profiles/guided-purple-v1/aptl.json",
-    "sha256": "77b204f81901d9a0b49572a0b1fa06d583419445a34f908d7e04b62a62520043"
+    "sha256": "eca39978d2f457b65e5779e373af706bd22b1614d63d158424a6da143349f0bc"
   },
   "readiness": {
     "path": "participant-profiles/guided-purple-v1/readiness.json",
@@ -29,7 +29,7 @@
     "asset_lock_schema": "aptl.participant-asset-lock/v1",
     "qualification_report_schema": "aptl.participant-qualification/v1",
     "asset_lock_ref": "participant-profiles/guided-purple-v1/asset-lock.json",
-    "asset_lock_sha256": "f79371a5c4e6a0ec1b27ed3c5f841c3cec9b2fa08844a58d093b3da5634736ed",
+    "asset_lock_sha256": "cf4e1386c263594b87a62ed201b97644c9db8a36f0ad9725bc42e77b63d4a7e0",
     "qualification_report_ref": "release/qualification/guided-purple-v1.json"
   },
   "budgets": {

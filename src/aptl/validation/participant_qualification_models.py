@@ -48,7 +48,7 @@ class ParticipantQualificationReport:
         """Serialize the secret-free qualification report."""
 
         return {
-            "schema": "aptl.participant-agency-qualification/v2",
+            "schema": "aptl.participant-agency-qualification/v3",
             "passed": self.passed,
             "run_id": self.run_id,
             "scenario_source_sha256": self.scenario_source_sha256,

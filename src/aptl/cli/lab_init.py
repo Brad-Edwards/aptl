@@ -45,6 +45,17 @@ def init(
     )
     if result.config_created:
         typer.echo(f"    wrote default {result.target_dir / 'aptl.json'}")
+        typer.echo(
+            "    Installed participant credentials are not configured by default."
+        )
+        typer.echo(
+            "    To use Claude or Codex readiness, confirm an explicit "
+            "experiment.participant_credential_sources entry in aptl.json."
+        )
+        typer.echo(
+            '    Source shape: {"kind":"process-environment",'
+            '"variable":"APTL_PARTICIPANT_CLAUDE_CREDENTIAL"}'
+        )
     typer.echo("\nNext steps:")
     typer.echo(f"    cd {result.target_dir}")
     typer.echo("    aptl lab start")

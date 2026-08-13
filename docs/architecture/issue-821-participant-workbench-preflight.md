@@ -6,6 +6,11 @@ is the delivery-boundary decision; ADR-029, ADR-033, ADR-034, ADR-039 through
 ADR-042, and DSL-010 remain authoritative for secrets, evidence, TLS,
 browser/operator controls, Kali capture, and RAES participant runtime.
 
+[ADR-052](../adrs/adr-052-configured-participant-credential-sourcing.md)
+supersedes this note's credential lifecycle wording. Profile close always
+cleans up local possession; it claims upstream revocation only when the
+configured source provides and successfully executes that operation.
+
 No new ADR is needed. The remaining ambiguity is profile isolation: a client
 that merely hides a tool, while its process can read another profile's config
 or credentials, does not satisfy this issue.
@@ -53,8 +58,9 @@ or credentials, does not satisfy this issue.
   It is injected after boot through the ADR-049 bootstrap boundary, never
   placed in images, static assets, URLs, browser storage, profile JSON, MCP
   config, command lines, environment dumps, logs, captures, or support
-  bundles. Normal profile close revokes/destroys session state after ordered
-  agent/MCP shutdown and telemetry/evidence flush; guest replacement remains
+  bundles. Normal profile close cleans up session state after ordered agent/MCP
+  shutdown and telemetry/evidence flush; upstream revocation is source-specific
+  under ADR-052. Guest replacement remains
   the security reset after compromise.
 - Participant-visible bookmarks are non-secret presentation data for only
   permitted appliance gateway routes. They must not contain host-loopback

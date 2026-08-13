@@ -212,7 +212,7 @@ def _launch_installed_provider(
         ) from exc
     if inventory:
         evidence.isolation = "failed"
-        cleanup_error = _discard_failed_launch(
+        _discard_failed_launch(
             adapter,
             handle,
             broker,
@@ -220,12 +220,9 @@ def _launch_installed_provider(
             launch.run_id,
             evidence,
         )
-        error = participant_binding_error(
+        raise participant_binding_error(
             "decision-only provider exposed action tools", evidence
-        )
-        if isinstance(cleanup_error, Exception):
-            raise error from cleanup_error
-        raise error
+        ) from None
     return ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=handle,

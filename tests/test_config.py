@@ -226,8 +226,9 @@ class TestExperimentSettings:
         assert claude.kind == "process-environment"
         assert claude.variable == "APTL_PARTICIPANT_CLAUDE_CREDENTIAL"
         assert claude.descriptor_digest().startswith("sha256:")
+        default_sources = ExperimentSettings().participant_credential_sources
         with pytest.raises(ValueError, match="not configured"):
-            ExperimentSettings().participant_credential_sources.source_for("codex")
+            default_sources.source_for("codex")
         with pytest.raises(ValueError, match="unknown installed participant provider"):
             settings.participant_credential_sources.source_for("other")
 

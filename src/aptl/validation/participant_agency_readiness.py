@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,6 +31,9 @@ from aptl.validation.participant_readiness_materialization import (
 from aptl.validation.participant_readiness_models import (
     ParticipantReadinessReport as ParticipantReadinessReport,
     ParticipantReadinessRequest as ParticipantReadinessRequest,
+)
+from aptl.validation.participant_readiness_outcomes import (
+    record_positive_terminal_outcome,
 )
 from aptl.validation.participant_readiness_provider import (
     build_selection_provider,
@@ -72,9 +75,6 @@ BEHAVIOR_ADDRESSES = {
     ),
     "blue-response": ("participant.behavior-specification.apply-bounded-response"),
 }
-_TERMINAL_ACTION_STATUSES = frozenset(
-    {"succeeded", "failed", "partial_success", "rejected", "withheld"}
-)
 _INSTALLED_VERSION_UNAVAILABLE = "installed participant provider version is unavailable"
 
 
@@ -118,18 +118,14 @@ def validate_participant_agency_readiness(
     _validate_readiness_request(request)
     selected_run_id = request.run_id or f"participant-readiness-{uuid4().hex}"
     request.run_store.create_run(selected_run_id)
-    selected_model = configured_readiness_model(request)
     try:
         context = _prepare_readiness_context(request, selected_run_id)
     except _ReadinessFailure as exc:
         return persist_failed_readiness_report(
-            request.run_store,
+            request,
             selected_run_id,
-            request.provider_name,
-            selected_model,
-            request.behavior_name,
             exc.participant_address,
-            str(exc),
+            (str(exc),),
         )
     try:
         provider, cleanup, credential_evidence = _resolve_selection_provider(
@@ -137,22 +133,19 @@ def validate_participant_agency_readiness(
         )
     except (OSError, RuntimeError, ValueError) as exc:
         binding_evidence = evidence_from_error(exc)
-        diagnostic = (
-            "installed participant model is not configured"
-            if str(exc).startswith("installed participant model is not configured")
-            else (str(exc) if binding_evidence is not None else type(exc).__name__)
-        )
+        diagnostic = type(exc).__name__
+        if str(exc).startswith("installed participant model is not configured"):
+            diagnostic = "installed participant model is not configured"
+        elif binding_evidence is not None:
+            diagnostic = str(exc)
         evidence = (
             binding_evidence.to_payload() if binding_evidence is not None else None
         )
         return persist_failed_readiness_report(
-            request.run_store,
+            request,
             selected_run_id,
-            request.provider_name,
-            selected_model,
-            request.behavior_name,
             context.participant_address,
-            f"participant decision provider is unavailable: {diagnostic}",
+            (f"participant decision provider is unavailable: {diagnostic}",),
             credential_binding=evidence,
         )
     trajectory = _run_readiness_trajectory(
@@ -374,7 +367,7 @@ def _run_readiness_turn(
         context.participant_address
     ][-1]
     action_result = terminal.get("action_result")
-    return _record_positive_terminal_outcome(
+    return record_positive_terminal_outcome(
         selected_action=outcome.selected_action_contract_address,
         action_result=action_result if isinstance(action_result, Mapping) else None,
         terminal_status=(
@@ -437,56 +430,6 @@ def _terminate_and_persist(
     return report
 
 
-def _record_positive_terminal_outcome(
-    *,
-    selected_action: str,
-    action_result: Mapping[str, object] | None,
-    terminal_status: object,
-    admission_diagnostics: Sequence[object],
-    selected_actions: list[str],
-    terminal_outcomes: list[Mapping[str, object]],
-    diagnostics: list[str],
-) -> bool:
-    """Retain a typed outcome and enforce the positive-readiness contract."""
-
-    accepted = True
-    if (
-        not isinstance(terminal_status, str)
-        or terminal_status not in _TERMINAL_ACTION_STATUSES
-        or action_result is None
-    ):
-        diagnostics.append(
-            "admitted participant action did not publish a typed terminal outcome"
-        )
-        accepted = False
-    else:
-        selected_actions.append(selected_action)
-        terminal_outcomes.append(
-            {
-                "action_contract_address": selected_action,
-                "status": terminal_status,
-                "failure_class": action_result.get("failure_class"),
-            }
-        )
-    if accepted and terminal_status != "succeeded":
-        diagnostics.append(
-            "positive participant readiness requires a succeeded "
-            f"terminal outcome; observed {terminal_status}"
-        )
-        accepted = False
-    publication_failed = any(
-        getattr(diagnostic, "code", None)
-        == "aptl.participant-runtime.evidence-publication-failed"
-        for diagnostic in admission_diagnostics
-    )
-    if accepted and publication_failed:
-        diagnostics.append(
-            "accepted participant action evidence was not fully published"
-        )
-        accepted = False
-    return accepted
-
-
 def _verify_live_materialization(
     backend: DeploymentBackend,
     realization: AptlRealization,
@@ -502,7 +445,11 @@ def _selection_provider(
     config: AptlConfig,
     project_dir: Path,
     run_id: str,
-) -> tuple[ParticipantSelectionProvider, Callable[[], None]]:
+) -> tuple[
+    ParticipantSelectionProvider,
+    Callable[[], None],
+    CredentialBindingEvidence | None,
+]:
     """Build one deterministic or admitted installed selection provider."""
 
     return build_selection_provider(

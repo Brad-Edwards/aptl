@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,7 +30,7 @@ from aptl.workbench.participant_source_binding import (
 from aptl.workbench.runtime import DecisionAgentLaunch
 
 if TYPE_CHECKING:
-    from aptl.core.config import AptlConfig
+    from aptl.core.config import AptlConfig, ProcessEnvironmentCredentialSource
 
 _PROVIDER_VERSION_ENVIRONMENT = {
     "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -75,6 +75,34 @@ def build_selection_provider(
 
         return DeterministicSelectionProvider(), _noop, None
     model = config.experiment.participant_models.model_for(provider_name)
+    source, evidence = _configured_source(provider_name, config, run_id)
+    executable, version = _admitted_provider(provider_name, evidence)
+    work_dir = project_dir / ".aptl" / "participant-agents" / run_id / provider_name
+    broker, binding = _configured_binding(provider_name, run_id, source, evidence)
+    launch = DecisionAgentLaunch(
+        provider=provider_name,
+        run_id=run_id,
+        model=model,
+    )
+    provider = _launch_installed_provider(
+        launch,
+        executable,
+        work_dir,
+        version,
+        binding,
+        broker,
+        evidence,
+    )
+    return provider, _cleanup_callback(provider, broker, run_id, evidence), evidence
+
+
+def _configured_source(
+    provider_name: str,
+    config: AptlConfig,
+    run_id: str,
+) -> tuple[ProcessEnvironmentCredentialSource, CredentialBindingEvidence]:
+    """Return the selected source with evidence for pre-acquisition failure."""
+
     try:
         source = config.experiment.participant_credential_sources.source_for(
             provider_name
@@ -92,7 +120,15 @@ def build_selection_provider(
         raise participant_binding_error(
             "installed participant credential source is not configured", evidence
         ) from exc
-    evidence = configured_source_evidence(provider_name, source, run_id)
+    return source, configured_source_evidence(provider_name, source, run_id)
+
+
+def _admitted_provider(
+    provider_name: str,
+    evidence: CredentialBindingEvidence,
+) -> tuple[Path, str]:
+    """Admit the installed executable and resolve its stable version."""
+
     discovered_executable = shutil.which(provider_name)
     if discovered_executable is None:
         evidence.acquisition = "not-requested"
@@ -105,7 +141,17 @@ def build_selection_provider(
     except (OSError, RuntimeError, ValueError) as exc:
         evidence.acquisition = "not-requested"
         raise participant_binding_error(str(exc), evidence) from exc
-    work_dir = project_dir / ".aptl" / "participant-agents" / run_id / provider_name
+    return executable, version
+
+
+def _configured_binding(
+    provider_name: str,
+    run_id: str,
+    source: ProcessEnvironmentCredentialSource,
+    evidence: CredentialBindingEvidence,
+) -> tuple[EphemeralCredentialBroker, Mapping[str, str]]:
+    """Resolve one source and place it in the incumbent binding owner."""
+
     credential_name = (
         "ANTHROPIC_API_KEY" if provider_name == "claude" else "CODEX_API_KEY"
     )
@@ -126,20 +172,27 @@ def build_selection_provider(
         raise participant_binding_error(
             "configured participant credential binding failed", evidence
         ) from exc
+    return broker, binding
+
+
+def _launch_installed_provider(
+    launch: DecisionAgentLaunch,
+    executable: Path,
+    work_dir: Path,
+    version: str,
+    binding: Mapping[str, str],
+    broker: EphemeralCredentialBroker,
+    evidence: CredentialBindingEvidence,
+) -> ManagedAgentSelectionProvider:
+    """Launch one adapter only after source acquisition and verify isolation."""
+
     adapter: ClaudeCodeManagedAgentAdapter | CodexManagedAgentAdapter | None = None
     handle: object | None = None
     try:
-        adapter = _launch_adapter(provider_name, executable, work_dir)
-        handle = adapter.launch(
-            DecisionAgentLaunch(
-                provider=provider_name,
-                run_id=run_id,
-                model=model,
-            ),
-            binding,
-        )
+        adapter = _launch_adapter(launch.provider, executable, work_dir)
+        handle = adapter.launch(launch, binding)
         controls = adapter.credential_isolation_controls(handle)
-        if controls != _REQUIRED_ISOLATION_CONTROLS[provider_name]:
+        if controls != _REQUIRED_ISOLATION_CONTROLS[launch.provider]:
             raise ValueError("installed participant credential isolation is incomplete")
         evidence.isolation_controls_applied = controls
         evidence.isolation = "controls-enforced"
@@ -150,8 +203,8 @@ def build_selection_provider(
             adapter,
             handle,
             broker,
-            provider_name,
-            run_id,
+            launch.provider,
+            launch.run_id,
             evidence,
         )
         raise participant_binding_error(
@@ -163,21 +216,33 @@ def build_selection_provider(
             adapter,
             handle,
             broker,
-            provider_name,
-            run_id,
+            launch.provider,
+            launch.run_id,
             evidence,
         )
-        raise participant_binding_error(
+        error = participant_binding_error(
             "decision-only provider exposed action tools", evidence
-        ) from cleanup_error
-    provider = ManagedAgentSelectionProvider(
+        )
+        if cleanup_error is None:
+            raise error
+        raise error from cleanup_error
+    return ManagedAgentSelectionProvider(
         adapter=adapter,
         handle=handle,
-        provider_name=provider_name,
-        model=model,
-        implementation_name=f"aptl-installed-{provider_name}",
+        provider_name=launch.provider,
+        model=launch.model,
+        implementation_name=f"aptl-installed-{launch.provider}",
         implementation_version=version,
     )
+
+
+def _cleanup_callback(
+    provider: ManagedAgentSelectionProvider,
+    broker: EphemeralCredentialBroker,
+    run_id: str,
+    evidence: CredentialBindingEvidence,
+) -> Callable[[], None]:
+    """Build cleanup that always drops the local binding and records outcome."""
 
     def cleanup() -> None:
         """Close the provider and remove APTL's local credential binding."""
@@ -188,14 +253,14 @@ def build_selection_provider(
         except (OSError, RuntimeError, ValueError) as exc:
             cleanup_error = exc
         finally:
-            broker.destroy_named(provider_name, run_id)
+            broker.destroy_named(provider.provider_name, run_id)
             observe_local_cleanup(evidence, succeeded=cleanup_error is None)
         if cleanup_error is not None:
             raise participant_binding_error(
                 "installed participant provider cleanup failed", evidence
             ) from cleanup_error
 
-    return provider, cleanup, evidence
+    return cleanup
 
 
 def _discard_failed_launch(

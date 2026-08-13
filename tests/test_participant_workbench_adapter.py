@@ -149,15 +149,16 @@ def test_missing_configured_source_never_uses_provider_native_ambient_value() ->
     resolver = ProcessEnvironmentCredentialResolver(
         {"ANTHROPIC_API_KEY": native_secret}
     )
+    source = ProcessEnvironmentCredentialSource(
+        kind="process-environment",
+        variable="APTL_SELECTED_CLAUDE",
+    )
 
     with pytest.raises(WorkbenchCredentialError) as raised:
         resolver.acquire(
             "claude",
             "a" * 32,
-            source=ProcessEnvironmentCredentialSource(
-                kind="process-environment",
-                variable="APTL_SELECTED_CLAUDE",
-            ),
+            source=source,
             delivery_alias="ANTHROPIC_API_KEY",
         )
 
@@ -179,15 +180,16 @@ def test_configured_source_rejects_invalid_material_without_disclosure(
     from aptl.core.config import ProcessEnvironmentCredentialSource
 
     resolver = ProcessEnvironmentCredentialResolver({"APTL_SELECTED_CODEX": value})
+    source = ProcessEnvironmentCredentialSource(
+        kind="process-environment",
+        variable="APTL_SELECTED_CODEX",
+    )
 
     with pytest.raises(WorkbenchCredentialError) as raised:
         resolver.acquire(
             "codex",
             "a" * 32,
-            source=ProcessEnvironmentCredentialSource(
-                kind="process-environment",
-                variable="APTL_SELECTED_CODEX",
-            ),
+            source=source,
             delivery_alias="CODEX_API_KEY",
         )
 

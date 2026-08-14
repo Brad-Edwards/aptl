@@ -156,6 +156,7 @@ The victim and kali containers publish no host ports; use
 
 ## Preflights
 
+- [Issue #909 Runtime-Limit Ownership](issue-909-runtime-limit-ownership-preflight.md)
 - [Issue #874 Scenario-Bundle Realization Roots](issue-874-scenario-bundle-realization-roots-preflight.md)
 - [Issue #878 Scenario Verification Plugin Seam](issue-878-scenario-verification-plugin-seam-preflight.md)
 - [Issue #866 TechVault Component Realization](issue-866-techvault-realization-contract-preflight.md)

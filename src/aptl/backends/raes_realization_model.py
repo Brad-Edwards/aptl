@@ -22,6 +22,8 @@ from aptl.core.deployment.realization import (
     DeploymentServicePort,
     DeploymentServiceSearchIndexSchemaRealization,
 )
+from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
+from aptl.core.scenario_bundle import PackIdentity
 
 
 @dataclass(frozen=True)
@@ -190,6 +192,10 @@ class AptlRealization(object):
     acls: tuple[DeploymentAclRealization, ...] = ()
     generated_artifacts: tuple[DeploymentGeneratedArtifactRealization, ...] = ()
     persistent_volumes: tuple[DeploymentPersistentVolumeRealization, ...] = ()
+    # Serving interaction evidence is intentionally separate from details(),
+    # which is embedded in portable RAES realization state.
+    pack_identity: PackIdentity | None = None
+    pack_interaction: ResolvedPackBackendInteraction | None = None
 
     def deployment_spec(self, profiles: list[str]) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
@@ -267,6 +273,23 @@ class AptlRealization(object):
             ],
         }
 
+    def pack_interaction_evidence(
+        self, selected_profiles: list[str]
+    ) -> dict[str, object]:
+        """Return non-portable backend evidence for the serving interaction."""
+
+        if self.pack_identity is None or self.pack_interaction is None:
+            return {}
+        return {
+            "pack": {
+                "pack_id": self.pack_identity.pack_id,
+                "pack_version": self.pack_identity.pack_version,
+                "set_digest": self.pack_identity.set_digest,
+            },
+            "provider": self.pack_interaction.evidence(),
+            "selected_profiles": list(selected_profiles),
+        }
+
 
 def _single_or_none(values: tuple[str, ...]) -> str | None:
     """Return the only value from a tuple, or ``None`` for empty/ambiguous."""
@@ -302,4 +325,5 @@ def _deployment_node_realization(
         os_version=node.os_version,
         runtime=node.runtime,
         dynamic_composition=node.dynamic_composition,
+        profiles=node.profiles,
     )

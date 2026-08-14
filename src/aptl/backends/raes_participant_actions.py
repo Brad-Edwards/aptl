@@ -29,6 +29,7 @@ from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.utils.redaction import redact
 
 if TYPE_CHECKING:
+    from aptl.backends.raes_realization_model import AptlRealization
     from aptl.core.deployment.backend import DeploymentBackend
 
 PARTICIPANT_ACTION_ADDRESS = "participant.behavior.techvault.kali-victim-ssh-probe"
@@ -135,6 +136,7 @@ def participant_action_specs_from_runtime_model(
     provisioning_plan: ProvisioningPlan,
     bundle: ScenarioBundle,
     config: AptlConfig,
+    realization: AptlRealization | None = None,
 ) -> dict[str, ParticipantActionSpec]:
     """Return APTL action bindings declared by compiled runtime artifacts."""
 
@@ -146,6 +148,7 @@ def participant_action_specs_from_runtime_model(
             bundle=bundle,
             config=config,
             spec_factory=ParticipantActionSpec,
+            realization=realization,
         ),
     )
 

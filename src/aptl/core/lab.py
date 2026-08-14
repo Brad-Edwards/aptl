@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import icontract
 import yaml
 
+from aptl.backends.raes_profiles import OPERATOR_GROUP_VOCABULARY
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.soc_ca import ensure_soc_certs
 from aptl.core.config import AptlConfig, find_config, load_config
@@ -268,18 +269,7 @@ SURICATA_IMAGE = "jasonish/suricata:7.0"
 # All known Docker Compose profiles. Used as fallback when config is
 # unavailable (e.g. stop_lab, kill switch).  Keep in sync with
 # docker-compose.yml profile definitions.
-ALL_KNOWN_PROFILES = [
-    "wazuh",
-    "victim",
-    "kali",
-    "reverse",
-    "enterprise",
-    "soc",
-    "mail",
-    "fileshare",
-    "dns",
-    "otel",
-]
+ALL_KNOWN_PROFILES = OPERATOR_GROUP_VOCABULARY
 
 
 def docker_client() -> "DockerClient":
@@ -2116,6 +2106,9 @@ def _write_run_record(ctx: _LabStartContext) -> None:
         final_snapshot=final_snapshot,
         realization_details=_safe_dict(getattr(outcome, "realization_details", {})),
         selected_profiles=_safe_list(getattr(outcome, "selected_profiles", [])),
+        pack_interaction_evidence=_safe_dict(
+            getattr(outcome, "pack_interaction_evidence", {})
+        ),
         scenario_path=getattr(outcome, "scenario_path", None),
         scenario_display_name=_scenario_display_name(
             getattr(outcome, "scenario_path", None)

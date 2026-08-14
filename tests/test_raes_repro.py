@@ -21,6 +21,7 @@ _DEFAULTS: dict = dict(
     final_snapshot=None,  # replaced in _dummy_record to allow module-level dict
     realization_details={"profiles": ["wazuh"]},
     selected_profiles=["wazuh"],
+    pack_interaction_evidence={},
     scenario_path=None,
     scenario_display_name="techvault-operational",
     range_snapshot_dict={"timestamp": "2026-01-01T00:00:00Z", "containers": []},
@@ -117,6 +118,29 @@ class TestReproRecord:
         )
         assert record["backend_evidence"]["tool_versions"]["python"] == "3.11"
         assert record["backend_evidence"]["tool_versions"]["aptl"] == "0.2.0"
+
+    def test_pack_interaction_is_backend_evidence_not_portable_realization(self):
+        evidence = {
+            "pack": {
+                "pack_id": "techvault",
+                "pack_version": "0.1.0",
+                "set_digest": "sha256:" + "a" * 64,
+            },
+            "provider": {
+                "provider_id": "techvault-aptl-serving",
+                "extension_api_version": "1",
+                "distribution": "aptl-techvault-pack-interaction",
+                "distribution_version": "0.1.0",
+                "entry_point": "techvault.aptl",
+                "mapping_digest": "sha256:" + "b" * 64,
+            },
+            "selected_profiles": ["soc", "otel"],
+        }
+
+        record = _dummy_record(pack_interaction_evidence=evidence)
+
+        assert record["backend_evidence"]["pack_interaction"] == evidence
+        assert "pack_interaction" not in record["raes"]["realization"]
 
     def test_schema_version(self):
         record = _dummy_record()

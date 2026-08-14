@@ -177,6 +177,10 @@ class DeploymentNodeRealization(object):
     # (never a pull, never a moved tag) when the node authored an open
     # dynamic-composition source.
     dynamic_composition: bool = False
+    # Deployment-serving membership is resolved once by the pack/backend
+    # interaction seam and copied through the DTO. Renderers never rediscover it
+    # from component names.
+    profiles: tuple[str, ...] = ()
 
 
 ContentSourceKind = Literal[

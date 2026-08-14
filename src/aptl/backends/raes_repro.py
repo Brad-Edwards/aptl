@@ -59,6 +59,7 @@ class RunRecordInputs:
     final_snapshot: RuntimeSnapshot
     realization_details: dict[str, Any]
     selected_profiles: list[str]
+    pack_interaction_evidence: dict[str, Any]
     scenario_path: Path | None
     scenario_display_name: str
     range_snapshot_dict: dict[str, Any]
@@ -106,6 +107,7 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
         },
         "backend_evidence": {
             "selected_profiles": inputs.selected_profiles,
+            "pack_interaction": inputs.pack_interaction_evidence,
             "range_snapshot": inputs.range_snapshot_dict,
             "config_digests": inputs.config_digests,
             "container_image_digests": inputs.container_image_digests,

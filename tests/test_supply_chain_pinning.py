@@ -154,11 +154,11 @@ def test_pip_installs_are_hash_pinned_or_local(source: Path) -> None:
     """Every pip install resolves by hash, or installs only this project's own code.
 
     `--require-hashes -r <file>` verifies each third-party artifact against
-    ``requirements/*.txt``. The two local forms - an editable `-e . --no-deps`
-    and a `dist/*.whl --no-deps` artifact this same job just built - pull nothing
-    from a registry, so they carry no third-party supply-chain risk. `--no-deps`
-    is what makes that true: without it pip would resolve the project's
-    dependencies off-lock.
+    ``requirements/*.txt``. The local forms - an editable root or a bounded
+    ``./plugins/<safe-name>`` path with ``--no-deps``, and a ``dist/*.whl
+    --no-deps`` artifact this same job just built - pull nothing from a registry,
+    so they carry no third-party supply-chain risk. ``--no-deps`` is what makes
+    that true: without it pip would resolve dependencies off-lock.
 
     A fourth form is accepted: a closed offline install (`--no-index` plus an
     exact `==` pin), used by the appliance guest provisioner. `--no-index` means
@@ -180,8 +180,13 @@ def test_pip_installs_are_hash_pinned_or_local(source: Path) -> None:
             if not _PIP_INSTALL.search(command):
                 continue
             hashed = "--require-hashes" in command
-            local_source = re.search(r"\s-e\s+\.(\s|$|\\)", command) or re.search(
-                r"\sdist/\S*\.whl(\s|$|\\)", command
+            local_source = (
+                re.search(r"\s-e\s+\.(\s|$|\\)", command)
+                or re.search(
+                    r"\s-e\s+\./plugins/[a-z0-9][a-z0-9-]*(\s|$|\\)",
+                    command,
+                )
+                or re.search(r"\sdist/\S*\.whl(\s|$|\\)", command)
             )
             closed_offline = "--no-index" in command and "==" in command
             if not (hashed or closed_offline or (local_source and "--no-deps" in command)):
@@ -277,7 +282,10 @@ def test_source_builds_do_not_re_open_an_unhashed_resolver(source: Path) -> None
             continue
         for command in re.split(r"&&|\|\|", stripped):
             # An editable/source install of this project.
-            if re.search(r"pip\s+install\b", command) and re.search(r"\s-e\s+\.(\s|$)", command):
+            local_editable = re.search(r"\s-e\s+\.(\s|$)", command) or re.search(
+                r"\s-e\s+\./plugins/[a-z0-9][a-z0-9-]*(\s|$)", command
+            )
+            if re.search(r"pip\s+install\b", command) and local_editable:
                 if "--no-build-isolation" not in command:
                     offenders.append(command.strip())
             # A wheel/sdist build of this project.

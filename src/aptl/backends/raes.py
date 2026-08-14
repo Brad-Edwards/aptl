@@ -210,13 +210,6 @@ def _plan_scenario(
     # resolver (issue #874 / #875).
     bundle = resolve_scenario_bundle(project_dir, scenario_path, config)
     scenario = parse_sdl_file(bundle.sdl_path)
-    target = create_aptl_runtime_target(
-        project_dir=project_dir,
-        config=config,
-        backend=backend,
-        bundle=bundle,
-    )
-    manager = RuntimeManager(target)
     # Artifact availability is a trusted input to planning, gathered at the
     # backend trust boundary before the single admitted plan() call (ADR-051); a
     # no-op for a scenario that authors no artifact_requirement. The scenario's
@@ -225,6 +218,14 @@ def _plan_scenario(
     availability = artifact_availability_for_scenario(
         scenario, backend, scenario_root=bundle.root, component_root=project_dir
     )
+    target = create_aptl_runtime_target(
+        project_dir=project_dir,
+        config=config,
+        backend=backend,
+        bundle=bundle,
+        artifact_availability=availability,
+    )
+    manager = RuntimeManager(target)
     execution_plan = (
         manager.plan(
             scenario,
@@ -234,22 +235,22 @@ def _plan_scenario(
         if parameters is not None
         else manager.plan(scenario, artifact_availability=availability)
     )
+    provisioner = target.provisioner
+    realization = (
+        provisioner.realize_plan(execution_plan.provisioning)
+        if isinstance(provisioner, AptlProvisioner)
+        else None
+    )
     participant_action_specs = participant_action_specs_from_runtime_model(
         execution_plan.model,
         provisioning_plan=execution_plan.provisioning,
         bundle=bundle,
         config=config,
-    )
-    target = create_aptl_runtime_target(
-        project_dir=project_dir,
-        config=config,
-        backend=backend,
-        participant_action_specs=participant_action_specs,
-        bundle=bundle,
-        artifact_availability=availability,
+        realization=realization,
     )
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):
+        participant_runtime.action_specs.update(participant_action_specs)
         participant_runtime.plan_authority = ParticipantPlanAuthority(
             execution_plan,
             bundle.sdl_path,
@@ -318,9 +319,11 @@ def _run_execution_plan(
             selected_profiles=[],
             scenario_path=scenario_path,
         )
-    realization_details, selected_profiles = interpret_realization(
-        target, execution_plan
-    )
+    (
+        realization_details,
+        selected_profiles,
+        pack_interaction_evidence,
+    ) = interpret_realization(target, execution_plan)
     participant_runtime = target.participant_runtime
     if isinstance(participant_runtime, AptlParticipantRuntime):
         authority = participant_runtime.plan_authority
@@ -343,6 +346,7 @@ def _run_execution_plan(
             realization_details=realization_details,
             selected_profiles=selected_profiles,
             scenario_path=scenario_path,
+            pack_interaction_evidence=pack_interaction_evidence,
             retryable=retryable,
         )
     return AcesStartOutcome(
@@ -354,6 +358,7 @@ def _run_execution_plan(
         realization_details=realization_details,
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
+        pack_interaction_evidence=pack_interaction_evidence,
     )
 
 

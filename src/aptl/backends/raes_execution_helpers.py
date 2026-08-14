@@ -8,7 +8,6 @@ from raes_runtime.registry import RuntimeTarget
 
 from aptl.backends.raes_profiles import select_backend_profiles
 from aptl.backends.raes_provisioner import AptlProvisioner
-from aptl.backends.raes_realization import interpret_provisioning_plan
 
 if TYPE_CHECKING:
     from raes_processor.models import ExecutionPlan
@@ -29,21 +28,19 @@ def evaluation_results(
 def interpret_realization(
     target: RuntimeTarget,
     execution_plan: ExecutionPlan,
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], dict[str, Any]]:
     """Interpret one provisioning plan into details and backend profiles."""
 
     details: dict[str, Any] = {}
     profiles: list[str] = []
+    pack_interaction_evidence: dict[str, Any] = {}
     provisioner = target.provisioner
     if isinstance(provisioner, AptlProvisioner):
-        realization = interpret_provisioning_plan(
-            plan=execution_plan.provisioning,
-            config=provisioner.config,
-            bundle=provisioner.bundle,
-        )
+        realization = provisioner.realize_plan(execution_plan.provisioning)
         details = realization.details()
         profiles = select_backend_profiles(
             provisioner.config,
             realization.profiles,
         )
-    return details, profiles
+        pack_interaction_evidence = realization.pack_interaction_evidence(profiles)
+    return details, profiles, pack_interaction_evidence

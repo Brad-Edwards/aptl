@@ -60,6 +60,15 @@ class ScenarioSourceKind(str, Enum):
 
 
 @dataclass(frozen=True)
+class PackIdentity:
+    """Content-bound identity returned by env-packs' public validation gate."""
+
+    pack_id: str
+    pack_version: str
+    set_digest: str
+
+
+@dataclass(frozen=True)
 class ScenarioBundle:
     """One scenario APTL has been handed, and the root its content resolves against.
 
@@ -72,6 +81,7 @@ class ScenarioBundle:
     root: Path
     sdl_path: Path
     source_kind: ScenarioSourceKind = ScenarioSourceKind.PROJECT_TREE
+    pack_identity: PackIdentity | None = None
 
     def read_asset(self, relative_path: str | Path) -> bytes:
         """Read one bundle-relative asset, refusing anything outside the bundle.
@@ -238,7 +248,7 @@ def _stage_and_validate(
         staged,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
-    _validate_staged_pack(staged, identity)
+    pack_identity = _validate_staged_pack(staged, identity)
 
     sdl_path = staged / "sdl" / f"{identity}.sdl.yaml"
     if not sdl_path.is_file():
@@ -250,10 +260,11 @@ def _stage_and_validate(
         root=staged.resolve(),
         sdl_path=sdl_path.resolve(),
         source_kind=ScenarioSourceKind.ENV_PACK,
+        pack_identity=pack_identity,
     )
 
 
-def _validate_staged_pack(staged: Path, identity: str) -> None:
+def _validate_staged_pack(staged: Path, identity: str) -> PackIdentity:
     """Run env-packs' own gates on the staged pack, failing closed on rejection.
 
     env-packs owns the pack format and its content-identity model; APTL must not
@@ -278,15 +289,26 @@ def _validate_staged_pack(staged: Path, identity: str) -> None:
             f"({count} diagnostic(s)); refusing to realize"
         )
     try:
-        validate_pack_content_manifest(str(staged))
+        manifest = validate_pack_content_manifest(str(staged))
     except PackDigestError as exc:
         raise EnvPackError(
             f"env-pack {identity!r} content manifest is invalid: {exc}"
+        ) from exc
+    try:
+        return PackIdentity(
+            pack_id=str(manifest.parent_ref.ref_id),
+            pack_version=str(manifest.manifest_version),
+            set_digest=str(manifest.set_digest),
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise EnvPackError(
+            f"env-pack {identity!r} returned no validated content identity"
         ) from exc
 
 
 __all__ = [
     "EnvPackError",
+    "PackIdentity",
     "PathContainmentError",
     "ScenarioBundle",
     "ScenarioSourceKind",

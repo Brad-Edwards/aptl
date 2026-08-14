@@ -41,6 +41,7 @@ def test_in_tree_resolver_anchors_content_to_the_project():
 
     assert bundle.root == _PROJECT
     assert bundle.source_kind is ScenarioSourceKind.PROJECT_TREE
+    assert bundle.pack_identity is None
 
 
 def test_assets_resolve_against_the_bundle_root(tmp_path):

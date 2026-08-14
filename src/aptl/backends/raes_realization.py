@@ -21,13 +21,14 @@ from aptl.backends.raes_dependency_closure import append_dependency_closure
 from aptl.backends.raes_acl_realization import realize_acls
 from raes.runtime_configuration import RuntimeConfiguration
 
-from aptl.backends._component_profiles import component_profiles
 from aptl.backends._raes_realization_diagnostics import (
     _append_node_profile_diagnostic,
     _append_profile_diagnostics,
     _invalid_payload_diagnostics,
 )
 from aptl.backends.raes_base_substrate import base_container_spec
+from aptl.backends.pack_interaction import ResolvedPackBackendInteraction
+from aptl.backends.raes_pack_interaction import apply_pack_interaction
 from aptl.backends.raes_image_realization import (
     node_source_is_dynamic_composition,
     resolve_node_image,
@@ -38,7 +39,6 @@ from aptl.backends.raes_placement_realization import (
 )
 from aptl.backends.raes_profiles import (
     ComposeProfileIndex,
-    explicit_compose_profile_hints,
     load_compose_profile_index,
     node_aliases,
 )
@@ -111,6 +111,19 @@ def interpret_provisioning_plan(
         config,
         diagnostics,
     )
+    pack_interaction: ResolvedPackBackendInteraction | None = None
+    if bundle.pack_identity is not None:
+        nodes, pack_interaction = apply_pack_interaction(
+            nodes,
+            bundle,
+            config,
+            diagnostics,
+        )
+        profiles = {profile for node in nodes for profile in node.profiles}
+    else:
+        _append_unresolved_node_profile_diagnostics(
+            payload_resources, nodes, diagnostics
+        )
     append_dependency_closure(
         payload_resources,
         nodes,
@@ -138,7 +151,7 @@ def interpret_provisioning_plan(
         nodes,
         diagnostics,
     )
-    if not _all_nodes_image_free(nodes):
+    if bundle.pack_identity is None and not _all_nodes_image_free(nodes):
         _append_profile_diagnostics(profiles, config, diagnostics)
 
     return AptlRealization(
@@ -154,7 +167,25 @@ def interpret_provisioning_plan(
         persistent_volumes=tuple(
             sorted(persistent_volumes, key=lambda item: item.address)
         ),
+        pack_identity=bundle.pack_identity,
+        pack_interaction=pack_interaction,
     )
+
+
+def _append_unresolved_node_profile_diagnostics(
+    resources: list[PlannedResource],
+    nodes: list[NodeRealization],
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Preserve legacy static-Compose diagnostics for project-tree scenarios."""
+
+    resources_by_address = {resource.address: resource for resource in resources}
+    for node in nodes:
+        if node.profiles or _is_materializable_node(node):
+            continue
+        resource = resources_by_address.get(node.address)
+        if resource is not None:
+            _append_node_profile_diagnostic(resource, diagnostics)
 
 
 def _load_profile_index(
@@ -231,8 +262,6 @@ def _realize_nodes_and_networks(
             )
             nodes.append(node)
             profiles.update(node.profiles)
-            if not node.profiles and not _is_materializable_node(node):
-                _append_node_profile_diagnostic(resource, diagnostics)
         elif resource.resource_type == "network":
             networks.append(_realize_network(resource, payload))
     return nodes, networks, profiles
@@ -282,20 +311,14 @@ def _realize_node(
     """
 
     aliases = node_aliases(resource.address, payload)
-    profile_hints = explicit_compose_profile_hints(payload)
     backend_services = profile_index.service_names_for_aliases(aliases)
     node_name = resource.address.rsplit(".", 1)[-1]
-    # APTL operator packaging (issue #895): the component -> start-profile
-    # grouping. For an in-tree scenario this equals the profiles the static
-    # compose index already carries, so the union is idempotent. For an
-    # env-pack there is no compose file to index, so this is the only source
-    # of a node's profile membership (issue #875).
-    profiles = (
-        profile_hints
-        | profile_index.profiles_for_aliases(aliases)
-        | profile_index.profiles_for_services(set(backend_services))
-        | component_profiles(node_name)
-    )
+    # Project-tree scenarios retain their static Compose membership. A pack
+    # has no static Compose model, so this remains empty until the exact
+    # pack/backend interaction is resolved after all nodes have been lowered.
+    profiles = profile_index.profiles_for_aliases(
+        aliases
+    ) | profile_index.profiles_for_services(set(backend_services))
     if not profiles and _is_raes_conformance_probe_node(resource, payload):
         backend_services = _conformance_probe_services(profile_index, config)
         profiles = profile_index.profiles_for_services(set(backend_services))

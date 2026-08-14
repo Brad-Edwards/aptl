@@ -189,7 +189,8 @@ nav:
     - ADR-048 APTL Image-Free, Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
     - ADR-049 Sealed Disposable Lab Appliance: adrs/adr-049-sealed-disposable-lab-appliance.md
     - ADR-051 Component-Level RAES Realization: adrs/adr-051-component-level-raes-realization.md
-    - ADR-052 Pack-Backend Deployment-Serving Interaction Seam: adrs/adr-052-pack-backend-deployment-serving-interaction-seam.md
+    - ADR-052 Configured Participant Credential Sourcing: adrs/adr-052-configured-participant-credential-sourcing.md
+    - ADR-053 Pack-Backend Deployment-Serving Interaction Seam: adrs/adr-053-pack-backend-deployment-serving-interaction-seam.md
 
 extra:
   social:

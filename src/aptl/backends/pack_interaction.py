@@ -1,4 +1,4 @@
-"""Provider-neutral deployment-serving interaction contract (ADR-052).
+"""Provider-neutral deployment-serving interaction contract (ADR-053).
 
 The seam assigns already-admitted component addresses to APTL's finite
 operator groups. It cannot add, remove, configure, or materialize components.

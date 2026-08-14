@@ -316,6 +316,7 @@ def _installed_provider_checks(
                 ),
                 details={
                     "model": trajectory.model,
+                    "source_binding": trajectory.credential_binding,
                     "completed_turns": trajectory.completed_turns,
                     "terminal_statuses": [
                         outcome["status"] for outcome in trajectory.terminal_outcomes

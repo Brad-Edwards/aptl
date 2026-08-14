@@ -148,9 +148,7 @@ class TestExperimentSettings:
         assert settings.participant_models.model_for("claude") == (
             "claude-sonnet-4-5-20250929"
         )
-        assert (
-            settings.participant_models.model_for("codex") == "gpt-5-nano-2025-08-07"
-        )
+        assert settings.participant_models.model_for("codex") == "gpt-5-nano-2025-08-07"
         default_models = ExperimentSettings().participant_models
         with pytest.raises(ValueError, match="not configured"):
             default_models.model_for("codex")
@@ -207,6 +205,74 @@ class TestExperimentSettings:
 
         with pytest.raises(ValidationError):
             ExperimentSettings(participant_models={provider: model})
+
+    def test_participant_credential_sources_are_explicit_and_provider_closed(self):
+        from aptl.core.config import ExperimentSettings
+
+        settings = ExperimentSettings(
+            participant_credential_sources={
+                "claude": {
+                    "kind": "process-environment",
+                    "variable": "APTL_PARTICIPANT_CLAUDE_CREDENTIAL",
+                },
+                "codex": {
+                    "kind": "process-environment",
+                    "variable": "APTL_PARTICIPANT_CODEX_CREDENTIAL",
+                },
+            }
+        )
+
+        claude = settings.participant_credential_sources.source_for("claude")
+        assert claude.kind == "process-environment"
+        assert claude.variable == "APTL_PARTICIPANT_CLAUDE_CREDENTIAL"
+        assert claude.descriptor_digest().startswith("sha256:")
+        default_sources = ExperimentSettings().participant_credential_sources
+        with pytest.raises(ValueError, match="not configured"):
+            default_sources.source_for("codex")
+        with pytest.raises(ValueError, match="unknown installed participant provider"):
+            settings.participant_credential_sources.source_for("other")
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            {"kind": "unknown", "variable": "APTL_PARTICIPANT_CREDENTIAL"},
+            {"kind": "process-environment"},
+            {"kind": "process-environment", "variable": ""},
+            {"kind": "process-environment", "variable": "lowercase"},
+            {"kind": "process-environment", "variable": "1INVALID"},
+            {"kind": "process-environment", "variable": "BAD-NAME"},
+            {"kind": "process-environment", "variable": "A" * 129},
+            {
+                "kind": "process-environment",
+                "variable": "APTL_PARTICIPANT_CREDENTIAL",
+                "fallback": "ANTHROPIC_API_KEY",
+            },
+            {
+                "kind": "process-environment",
+                "variable": "APTL_PARTICIPANT_CREDENTIAL",
+                "value": "must-never-be-configured-here",
+            },
+            "APTL_PARTICIPANT_CREDENTIAL",
+        ],
+    )
+    def test_rejects_invalid_participant_credential_source(self, source):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(participant_credential_sources={"claude": source})
+
+    def test_rejects_unknown_participant_credential_provider(self):
+        from aptl.core.config import ExperimentSettings
+
+        with pytest.raises(ValidationError):
+            ExperimentSettings(
+                participant_credential_sources={
+                    "other": {
+                        "kind": "process-environment",
+                        "variable": "APTL_PARTICIPANT_OTHER_CREDENTIAL",
+                    }
+                }
+            )
 
 
 class TestAptlConfig:

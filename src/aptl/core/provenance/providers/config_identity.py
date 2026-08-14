@@ -38,7 +38,7 @@ CONFIG_PROVIDER_ID = "config-identity"
 
 #: Versioned identity of the safe projection shape. Adding or removing an
 #: allowlisted field bumps this so an archived identity is never reinterpreted.
-SAFE_CONFIG_SCHEMA_VERSION = "aptl-safe-config-identity/v1"
+SAFE_CONFIG_SCHEMA_VERSION = "aptl-safe-config-identity/v2"
 
 #: Identity domain for the configuration projection.
 _DOMAIN = "config"
@@ -52,7 +52,9 @@ def _containers_projection(config: object) -> dict[str, object]:
     dumped = containers.model_dump()
     # Every field of ContainerSettings is a first-party boolean toggle
     # (ADR-025 strict schema), so this stays a closed, non-secret surface.
-    return {key: value for key, value in sorted(dumped.items()) if isinstance(value, bool)}
+    return {
+        key: value for key, value in sorted(dumped.items()) if isinstance(value, bool)
+    }
 
 
 def _participant_models_projection(config: object) -> dict[str, object]:
@@ -65,6 +67,33 @@ def _participant_models_projection(config: object) -> dict[str, object]:
         "claude": getattr(models, "claude", None),
         "codex": getattr(models, "codex", None),
     }
+
+
+def _participant_credential_sources_projection(
+    config: object,
+) -> dict[str, object]:
+    """Return locator-free identities for configured participant sources."""
+
+    experiment = getattr(config, "experiment", None)
+    sources = (
+        getattr(experiment, "participant_credential_sources", None)
+        if experiment
+        else None
+    )
+    if sources is None:
+        return {}
+    projection: dict[str, object] = {}
+    for provider in ("claude", "codex"):
+        source = getattr(sources, provider, None)
+        projection[provider] = (
+            None
+            if source is None
+            else {
+                "kind": source.kind,
+                "descriptor_sha256": source.descriptor_digest(),
+            }
+        )
+    return projection
 
 
 def safe_config_projection(config: object) -> dict[str, object]:
@@ -95,6 +124,9 @@ def safe_config_projection(config: object) -> dict[str, object]:
             experiment, "participant_action_timeout_seconds", None
         ),
         "participant_models": _participant_models_projection(config),
+        "participant_source_descriptors": (
+            _participant_credential_sources_projection(config)
+        ),
         "lifecycle_policy_declared": lifecycle is not None,
     }
 
@@ -128,9 +160,13 @@ class ConfigIdentityProvider:
             raise _degraded.absent()
         try:
             projection: Mapping[str, object] = safe_config_projection(self._config)
-            leaf = ProvenanceLeaf("effective-config", derive_identity(_DOMAIN, projection))
+            leaf = ProvenanceLeaf(
+                "effective-config", derive_identity(_DOMAIN, projection)
+            )
         except (TypeError, ValueError, AttributeError) as exc:
-            log.warning("run-provenance: safe config projection could not be identified")
+            log.warning(
+                "run-provenance: safe config projection could not be identified"
+            )
             raise _degraded.owner_failure() from exc
         if context.expired():
             raise _degraded.deadline()

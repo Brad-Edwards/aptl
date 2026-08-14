@@ -25,6 +25,16 @@
         "participant_models": {
             "claude": "claude-sonnet-4-5-20250929",
             "codex": "gpt-5-nano-2025-08-07"
+        },
+        "participant_credential_sources": {
+            "claude": {
+                "kind": "process-environment",
+                "variable": "APTL_PARTICIPANT_CLAUDE_CREDENTIAL"
+            },
+            "codex": {
+                "kind": "process-environment",
+                "variable": "APTL_PARTICIPANT_CODEX_CREDENTIAL"
+            }
         }
     }
 }

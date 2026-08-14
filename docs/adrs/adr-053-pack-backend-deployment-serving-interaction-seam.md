@@ -1,4 +1,4 @@
-# ADR-052: Pack-Backend Deployment-Serving Interaction Seam
+# ADR-053: Pack-Backend Deployment-Serving Interaction Seam
 
 ## Status
 

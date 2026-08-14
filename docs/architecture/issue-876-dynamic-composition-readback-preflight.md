@@ -8,7 +8,7 @@ second SEM-218 disclosure gate.
 > **Update (2026-07-30).** The preflight below was written against raes 2.0.0,
 > where the six runtime dimensions were not RAES-lowered concerns and the
 > boundary anticipated a backend-owned attestation feeding artifact satisfaction.
-> raes 3.1.0 (RAESystem/rae#985) instead lowers those dimensions into the
+> raes 3.1.0 (OpenRAE/rae#985) instead lowers those dimensions into the
 > realization concern registry, so the delivered design is a plain observe-and-
 > disclose: the "provider-owned runtime observation adapter" described here is
 > `aptl.backends.raes_runtime_observation`, and it discloses each observed concern

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
 
 from aptl.validation.participant_readiness_models import (
     ParticipantReadinessReport,
     ParticipantReadinessRequest,
 )
-
-if TYPE_CHECKING:
-    from aptl.core.runstore import RunStorageBackend
 
 
 def configured_readiness_model(
@@ -30,28 +27,27 @@ def configured_readiness_model(
 
 
 def persist_failed_readiness_report(
-    run_store: RunStorageBackend,
+    request: ParticipantReadinessRequest,
     run_id: str,
-    provider: str,
-    model: str | None,
-    behavior: str,
     participant_address: str,
-    *diagnostics: str,
+    diagnostics: tuple[str, ...],
+    credential_binding: Mapping[str, object] | None = None,
 ) -> ParticipantReadinessReport:
     """Persist one failed bounded-participant readiness report."""
 
     report = ParticipantReadinessReport(
         passed=False,
         run_id=run_id,
-        provider=provider,
-        model=model,
-        behavior=behavior,
+        provider=request.provider_name,
+        model=configured_readiness_model(request),
+        behavior=request.behavior_name,
         participant_address=participant_address,
         selected_actions=(),
         completed_turns=0,
-        diagnostics=tuple(diagnostics),
+        diagnostics=diagnostics,
+        credential_binding=credential_binding,
     )
-    run_store.write_json(
+    request.run_store.write_json(
         run_id,
         "participant/readiness-report.json",
         report.to_payload(),

@@ -46,6 +46,11 @@ from aptl.validation import participant_readiness_provider
 from aptl.validation.participant_agency_qualification import (
     validate_participant_agency_qualification,
 )
+from aptl.workbench.credentials import WorkbenchCredentialError
+from aptl.workbench.participant_source_binding import (
+    CredentialBindingEvidence,
+    evidence_from_error,
+)
 
 PROJECT_ROOT = Path(__file__).parents[1]
 SCENARIO = PROJECT_ROOT / "scenarios/bounded-participant-agency-techvault.sdl.yaml"
@@ -1603,10 +1608,17 @@ def test_provider_executable_is_admitted_before_version_probe(
         "run",
         unexpected_run,
     )
+    monkeypatch.setenv("APTL_SELECTED_CLAUDE", "model-secret")
 
     config = AptlConfig(
         experiment={
-            "participant_models": {"claude": "claude-sonnet-4-5-20250929"}
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"},
+            "participant_credential_sources": {
+                "claude": {
+                    "kind": "process-environment",
+                    "variable": "APTL_SELECTED_CLAUDE",
+                }
+            },
         }
     )
     with pytest.raises(ValueError, match="untrusted provider executable"):
@@ -1654,6 +1666,274 @@ def test_provider_version_probe_uses_only_minimal_environment(
     assert captured["stdin"] is subprocess.DEVNULL
 
 
+def test_installed_provider_uses_only_the_configured_credential_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_secret = "configured-claude-secret"
+    ambient_secret = "unselected-native-secret"
+    captured: dict[str, object] = {}
+
+    class _Adapter:
+        def launch(self, launch: object, credentials: object) -> object:
+            captured["launch"] = launch
+            captured["credentials"] = dict(credentials)  # type: ignore[arg-type]
+            return object()
+
+        def list_tools(self, _handle: object) -> dict[str, object]:
+            return {}
+
+        def credential_isolation_controls(self, _handle: object) -> tuple[str, ...]:
+            return (
+                "minimal-child-environment",
+                "private-home",
+                "private-claude-config",
+                "claude-bare-api-key-mode",
+            )
+
+        def close(self, _handle: object) -> None:
+            captured["closed"] = True
+
+    monkeypatch.setenv("APTL_SELECTED_CLAUDE", configured_secret)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", ambient_secret)
+    monkeypatch.setattr(
+        participant_readiness_provider.shutil,
+        "which",
+        lambda _name: str(tmp_path / "claude"),
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_admitted_executable",
+        lambda path: path,
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "installed_version",
+        lambda _path: "1.2.3",
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_launch_adapter",
+        lambda *_args: _Adapter(),
+    )
+    config = AptlConfig(
+        experiment={
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"},
+            "participant_credential_sources": {
+                "claude": {
+                    "kind": "process-environment",
+                    "variable": "APTL_SELECTED_CLAUDE",
+                }
+            },
+        }
+    )
+
+    provider, cleanup, evidence = (
+        participant_readiness_provider.build_selection_provider(
+            "claude",
+            config=config,
+            project_dir=tmp_path,
+            run_id="configured-provider",
+        )
+    )
+
+    assert provider.provider_name == "claude"
+    assert captured["credentials"] == {"ANTHROPIC_API_KEY": configured_secret}
+    assert ambient_secret not in repr(captured["credentials"])
+    assert evidence is not None
+    assert evidence.to_payload()["acquisition"] == "succeeded"
+    assert evidence.to_payload()["isolation"] == "controls-enforced"
+    cleanup()
+    assert captured["closed"] is True
+    assert evidence.to_payload()["local_cleanup"] == "succeeded"
+
+
+def test_installed_provider_fails_closed_when_isolation_controls_are_incomplete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _Adapter:
+        def launch(self, _launch: object, _credentials: object) -> object:
+            return object()
+
+        def credential_isolation_controls(self, _handle: object) -> tuple[str, ...]:
+            return ("minimal-child-environment",)
+
+        def list_tools(self, _handle: object) -> dict[str, object]:
+            captured["inventory_attempted"] = True
+            return {}
+
+        def close(self, _handle: object) -> None:
+            captured["closed"] = True
+
+    monkeypatch.setenv("APTL_SELECTED_CLAUDE", "configured-claude-secret")
+    monkeypatch.setattr(
+        participant_readiness_provider.shutil,
+        "which",
+        lambda _name: str(tmp_path / "claude"),
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_admitted_executable",
+        lambda path: path,
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "installed_version",
+        lambda _path: "1.2.3",
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_launch_adapter",
+        lambda *_args: _Adapter(),
+    )
+    config = AptlConfig(
+        experiment={
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"},
+            "participant_credential_sources": {
+                "claude": {
+                    "kind": "process-environment",
+                    "variable": "APTL_SELECTED_CLAUDE",
+                }
+            },
+        }
+    )
+
+    with pytest.raises(
+        WorkbenchCredentialError,
+        match="installed participant provider launch failed",
+    ) as raised:
+        participant_readiness_provider.build_selection_provider(
+            "claude",
+            config=config,
+            project_dir=tmp_path,
+            run_id="incomplete-isolation",
+        )
+
+    evidence = evidence_from_error(raised.value)
+    assert evidence is not None
+    assert evidence.to_payload()["isolation"] == "failed"
+    assert evidence.to_payload()["isolation_controls_applied"] == []
+    assert evidence.to_payload()["local_cleanup"] == "succeeded"
+    assert captured["closed"] is True
+    assert "inventory_attempted" not in captured
+
+
+def test_tool_inventory_rejection_preserves_cleanup_failure_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Adapter:
+        def launch(self, _launch: object, _credentials: object) -> object:
+            return object()
+
+        def credential_isolation_controls(self, _handle: object) -> tuple[str, ...]:
+            return (
+                "minimal-child-environment",
+                "private-home",
+                "private-claude-config",
+                "claude-bare-api-key-mode",
+            )
+
+        def list_tools(self, _handle: object) -> dict[str, tuple[str, ...]]:
+            return {"unexpected": ("action_tool",)}
+
+        def close(self, _handle: object) -> None:
+            raise OSError("provider-secret cleanup detail")
+
+    monkeypatch.setenv("APTL_SELECTED_CLAUDE", "configured-claude-secret")
+    monkeypatch.setattr(
+        participant_readiness_provider.shutil,
+        "which",
+        lambda _name: str(tmp_path / "claude"),
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_admitted_executable",
+        lambda path: path,
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "installed_version",
+        lambda _path: "1.2.3",
+    )
+    monkeypatch.setattr(
+        participant_readiness_provider,
+        "_launch_adapter",
+        lambda *_args: _Adapter(),
+    )
+    config = AptlConfig(
+        experiment={
+            "participant_models": {"claude": "claude-sonnet-4-5-20250929"},
+            "participant_credential_sources": {
+                "claude": {
+                    "kind": "process-environment",
+                    "variable": "APTL_SELECTED_CLAUDE",
+                }
+            },
+        }
+    )
+
+    with pytest.raises(
+        WorkbenchCredentialError,
+        match="decision-only provider exposed action tools",
+    ) as raised:
+        participant_readiness_provider.build_selection_provider(
+            "claude",
+            config=config,
+            project_dir=tmp_path,
+            run_id="tool-inventory-cleanup-failure",
+        )
+
+    evidence = evidence_from_error(raised.value)
+    assert evidence is not None
+    assert evidence.to_payload()["acquisition"] == "succeeded"
+    assert evidence.to_payload()["isolation"] == "failed"
+    assert evidence.to_payload()["local_cleanup"] == "failed"
+    assert "provider-secret cleanup detail" not in repr(evidence.to_payload())
+    assert "configured-claude-secret" not in repr(evidence.to_payload())
+
+
+def test_missing_configured_source_fails_before_executable_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    discovery_attempted = False
+
+    def unexpected_discovery(_name: str) -> str | None:
+        nonlocal discovery_attempted
+        discovery_attempted = True
+        return None
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "unselected-native-secret")
+    monkeypatch.setattr(
+        participant_readiness_provider.shutil,
+        "which",
+        unexpected_discovery,
+    )
+    config = AptlConfig(
+        experiment={"participant_models": {"claude": "claude-sonnet-4-5-20250929"}}
+    )
+
+    with pytest.raises(ValueError) as raised:
+        participant_readiness_provider.build_selection_provider(
+            "claude",
+            config=config,
+            project_dir=tmp_path,
+            run_id="missing-source",
+        )
+
+    assert (
+        str(raised.value) == "installed participant credential source is not configured"
+    )
+    evidence = evidence_from_error(raised.value)
+    assert evidence is not None
+    assert evidence.to_payload()["acquisition"] == "source-not-configured"
+    assert discovery_attempted is False
+
+
 def test_readiness_runner_is_explicitly_pre_capture(
     tmp_path: Path,
 ) -> None:
@@ -1696,7 +1976,7 @@ def test_readiness_runner_is_explicitly_pre_capture(
             / "participant/readiness-report.json"
         ).read_text()
     )
-    assert payload["schema"] == "aptl.participant-agency-readiness/v2"
+    assert payload["schema"] == "aptl.participant-agency-readiness/v3"
     assert payload["model"] is None
 
 
@@ -1746,9 +2026,199 @@ def test_missing_installed_model_fails_before_provider_launch_with_evidence(
             / "participant/readiness-report.json"
         ).read_text()
     )
-    assert payload["schema"] == "aptl.participant-agency-readiness/v2"
+    assert payload["schema"] == "aptl.participant-agency-readiness/v3"
     assert payload["provider"] == "codex"
     assert payload["model"] is None
+
+
+def test_cleanup_failure_is_secret_free_evidence_and_fails_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = CredentialBindingEvidence(
+        provider="claude",
+        run_id="cleanup-failure",
+        source_kind="process-environment",
+        descriptor_sha256="sha256:" + "a" * 64,
+        config_ref="experiment.participant_credential_sources.claude",
+        delivery_contract="aptl.claude-credential-environment/v1",
+        acquisition="succeeded",
+        isolation="controls-enforced",
+        isolation_controls_applied=(
+            "minimal-child-environment",
+            "private-home",
+            "private-claude-config",
+            "claude-bare-api-key-mode",
+        ),
+        local_cleanup="pending",
+    )
+
+    def failing_cleanup() -> None:
+        raise OSError("synthetic secret-like cleanup detail")
+
+    monkeypatch.setattr(
+        participant_agency_readiness,
+        "_resolve_selection_provider",
+        lambda *_args: (
+            DeterministicSelectionProvider(),
+            failing_cleanup,
+            evidence,
+        ),
+    )
+    store = LocalRunStore(tmp_path / "runs")
+
+    report = validate_participant_agency_readiness(
+        ParticipantReadinessRequest(
+            project_dir=PROJECT_ROOT,
+            config=AptlConfig(lab={"name": "test"}),
+            run_store=store,
+            provider_name="claude",
+            behavior_name="green-normal-session",
+            turns=1,
+            run_id="cleanup-failure",
+            backend=_StatefulBackend(),
+        )
+    )
+
+    assert report.passed is False
+    assert report.credential_binding is not None
+    assert report.credential_binding["local_cleanup"] == "failed"
+    assert report.diagnostics[-1] == "participant provider cleanup failed"
+    payload = json.loads(
+        (
+            store.get_run_path("cleanup-failure") / "participant/readiness-report.json"
+        ).read_text()
+    )
+    assert payload["schema"] == "aptl.participant-agency-readiness/v3"
+    assert payload["participant_source_binding"]["local_cleanup"] == "failed"
+    assert "synthetic secret-like cleanup detail" not in repr(payload)
+
+
+def test_successful_readiness_persists_secret_free_source_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = CredentialBindingEvidence(
+        provider="claude",
+        run_id="source-lifecycle-success",
+        source_kind="process-environment",
+        descriptor_sha256="sha256:" + "b" * 64,
+        config_ref="experiment.participant_credential_sources.claude",
+        delivery_contract="aptl.claude-credential-environment/v1",
+        acquisition="succeeded",
+        isolation="controls-enforced",
+        isolation_controls_applied=(
+            "minimal-child-environment",
+            "private-home",
+            "private-claude-config",
+            "claude-bare-api-key-mode",
+        ),
+        local_cleanup="pending",
+    )
+
+    def successful_cleanup() -> None:
+        evidence.local_cleanup = "succeeded"
+
+    monkeypatch.setattr(
+        participant_agency_readiness,
+        "_resolve_selection_provider",
+        lambda *_args: (
+            DeterministicSelectionProvider(),
+            successful_cleanup,
+            evidence,
+        ),
+    )
+    store = LocalRunStore(tmp_path / "runs")
+
+    report = validate_participant_agency_readiness(
+        ParticipantReadinessRequest(
+            project_dir=PROJECT_ROOT,
+            config=AptlConfig(lab={"name": "test"}),
+            run_store=store,
+            provider_name="claude",
+            behavior_name="green-normal-session",
+            turns=1,
+            run_id="source-lifecycle-success",
+            backend=_StatefulBackend(),
+        )
+    )
+
+    assert report.passed is True
+    payload = json.loads(
+        (
+            store.get_run_path("source-lifecycle-success")
+            / "participant/readiness-report.json"
+        ).read_text()
+    )
+    binding = payload["participant_source_binding"]
+    assert binding == evidence.to_payload()
+    assert binding["acquisition"] == "succeeded"
+    assert binding["local_cleanup"] == "succeeded"
+    assert binding["expiry"] == "unknown"
+    assert binding["renewal"] == "unsupported"
+    assert binding["upstream_revocation"] == "unsupported-by-aptl"
+    assert "APTL_PARTICIPANT_CLAUDE_CREDENTIAL" not in repr(payload)
+    assert "model-secret" not in repr(payload)
+
+
+@pytest.mark.parametrize(
+    ("isolation", "local_cleanup", "expected_diagnostic"),
+    [
+        (
+            "not-verified",
+            "succeeded",
+            "participant credential isolation was not verified",
+        ),
+        (
+            "controls-enforced",
+            "pending",
+            "participant credential cleanup was not verified",
+        ),
+    ],
+)
+def test_readiness_fails_closed_when_credential_evidence_is_not_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    isolation: str,
+    local_cleanup: str,
+    expected_diagnostic: str,
+) -> None:
+    evidence = CredentialBindingEvidence(
+        provider="claude",
+        run_id="unverified-credential-evidence",
+        source_kind="process-environment",
+        descriptor_sha256="sha256:" + "c" * 64,
+        config_ref="experiment.participant_credential_sources.claude",
+        delivery_contract="aptl.claude-credential-environment/v1",
+        acquisition="succeeded",
+        isolation=isolation,
+        local_cleanup=local_cleanup,
+    )
+    monkeypatch.setattr(
+        participant_agency_readiness,
+        "_resolve_selection_provider",
+        lambda *_args: (
+            DeterministicSelectionProvider(),
+            lambda: None,
+            evidence,
+        ),
+    )
+
+    report = validate_participant_agency_readiness(
+        ParticipantReadinessRequest(
+            project_dir=PROJECT_ROOT,
+            config=AptlConfig(lab={"name": "test"}),
+            run_store=LocalRunStore(tmp_path / "runs"),
+            provider_name="claude",
+            behavior_name="green-normal-session",
+            turns=1,
+            run_id="unverified-credential-evidence",
+            backend=_StatefulBackend(),
+        )
+    )
+
+    assert report.passed is False
+    assert expected_diagnostic in report.diagnostics
 
 
 def test_positive_readiness_rejects_a_failed_native_terminal_outcome(
@@ -1825,5 +2295,5 @@ def test_full_qualification_covers_all_actions_and_boundary_challenges(
             / "participant/readiness-suite-report.json"
         ).read_text()
     )
-    assert payload["schema"] == "aptl.participant-agency-qualification/v2"
+    assert payload["schema"] == "aptl.participant-agency-qualification/v3"
     assert payload["installed_model"] is None

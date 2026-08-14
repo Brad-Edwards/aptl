@@ -8,6 +8,10 @@ architecture guidance, not an implementation plan. No new ADR is needed:
 ADR-029, ADR-033, ADR-044, ADR-046, and ADR-049 already own the relevant
 runtime, secret, evidence, and appliance boundaries.
 
+[ADR-052](../adrs/adr-052-configured-participant-credential-sourcing.md)
+supersedes this note's broker/lease terminology; transport remains separate
+from configured credential sourcing and provider delivery.
+
 ## Architecture decisions
 
 - Keep the authoritative decision surface unchanged. RAES remains the source of
@@ -75,7 +79,7 @@ branch in scenario logic.
 | RAES shape and binding | The bounded transport starts from already validated delivered candidates. Before admission, provider output must resolve to one delivered `ParticipantDecisionSurfaceSelectionV2Model`, after which the existing RAES binder re-checks `delivery_ref`, `proposal_ref`, `argument_shape_ref`, apparatus refs, and governed arguments. |
 | Solicitation parser / hostile-output gate | Treat provider output as hostile. Keep the current bounded outer envelope, JSON parsing, and strict closed-world membership check in `AptlParticipantRuntime.solicit_selection()`. Add bounded-transport parsing there or immediately adjacent, not in native handlers. Raw provider text never becomes action authority. |
 | Config and env shape | No scenario, profile, API, or operator config field should define candidate compaction rules or provider-visible mappings. If a durable ceiling must vary by provider, keep it in the existing closed provider registry/adapter construction path, not `AptlConfig`, `.env`, or participant-visible payloads, unless a genuine repo-wide setting is later justified. |
-| Secret handling | Reuse the existing `EphemeralCredentialBroker`, fixed argv, stdin prompt delivery, and redacted diagnostics. Compact transport must not move credentials, hidden evaluator truth, backend handles, or extra topology into provider-visible prompt content. |
+| Secret handling | Reuse the ADR-052 workbench credential boundary, fixed argv, stdin prompt delivery, and redacted diagnostics. Compact transport must not move credentials, hidden evaluator truth, backend handles, or extra topology into provider-visible prompt content. |
 | OS/process exposure | Prompt bytes still flow over stdin to the admitted executable. Do not place compacted candidate maps, fingerprints used as credentials, or prompt payloads in argv, filenames, URLs, or environment variables. Existing work-dir, timeout, and output-cap limits remain in force. |
 | Error envelopes | Prompt-bound overflow, malformed alias selection, ambiguous alias mapping, and out-of-range selection are solicitation failures surfaced through the existing participant operation failure path and control evidence. Do not leak raw provider output, parser traces, or the full prompt body in diagnostics. |
 | Persistence and evidence | Preserve `solicitation_fingerprint()` over the authoritative full delivered solicitation and retain the selected delivered candidate digest/ref. If compact transport metadata is persisted, record it as supplemental transport evidence tied to the same run/episode/solicitation ids, never as a replacement authority. |

@@ -34,6 +34,12 @@ def test_lab_init_success(fake_bundle: Path, tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Initialized lab project" in result.output
     assert "aptl lab start" in result.output
+    assert (
+        "Installed participant credentials are not configured by default"
+        in result.output
+    )
+    assert "participant_credential_sources" in result.output
+    assert "APTL_PARTICIPANT_CLAUDE_CREDENTIAL" in result.output
     assert (target / "docker-compose.yml").is_file()
     assert (target / "aptl.json").is_file()
 

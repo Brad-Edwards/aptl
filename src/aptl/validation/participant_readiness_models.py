@@ -48,12 +48,13 @@ class ParticipantReadinessReport:
     compiled_model_sha256: str = ""
     episode_terminal_reason: str = ""
     official_capture_started: bool = False
+    credential_binding: Mapping[str, object] | None = None
 
     def to_payload(self) -> dict[str, object]:
         """Serialize the readiness outcome without provider secrets."""
 
         return {
-            "schema": "aptl.participant-agency-readiness/v2",
+            "schema": "aptl.participant-agency-readiness/v3",
             "passed": self.passed,
             "run_id": self.run_id,
             "provider": self.provider,
@@ -68,6 +69,11 @@ class ParticipantReadinessReport:
             "compiled_model_sha256": self.compiled_model_sha256 or None,
             "episode_terminal_reason": self.episode_terminal_reason or None,
             "official_capture_started": self.official_capture_started,
+            "participant_source_binding": (
+                dict(self.credential_binding)
+                if self.credential_binding is not None
+                else None
+            ),
         }
 
     def render(self) -> str:
@@ -96,5 +102,16 @@ class ParticipantReadinessReport:
             ),
             "official capture: not started",
         ]
+        if self.credential_binding is not None:
+            lines.extend(
+                (
+                    "credential source: "
+                    f"{self.credential_binding.get('source_kind') or 'not configured'}",
+                    "credential acquisition: "
+                    f"{self.credential_binding.get('acquisition')}",
+                    "credential local cleanup: "
+                    f"{self.credential_binding.get('local_cleanup')}",
+                )
+            )
         lines.extend(f"diagnostic: {item}" for item in self.diagnostics)
         return "\n".join(lines)

@@ -16,6 +16,13 @@ RAES 2.0.0 is the minimum participant-contract baseline for this work. Its
 issue-909 exact-cut first-turn semantics supersede the earlier RAES 1.1
 projection assumptions in prior issue discussion.
 
+[ADR-052](../adrs/adr-052-configured-participant-credential-sourcing.md)
+supersedes this note's `EphemeralCredentialBroker`, credential-lease, expiry,
+cleanup, and revocation wording. The existing workbench credential module
+remains the sole implementation boundary, but a copied static value is only a
+configured credential binding with temporary local possession and cleanup; it
+is not a lease or upstream revocation.
+
 ADR-049 supersedes the issue's historical physical-host assumption for
 supported participant delivery. The participant runtime, coding agent, MCP
 processes, credentials, and evidence store run in the appliance management
@@ -74,10 +81,10 @@ of the supported participant isolation boundary.
 - Reuse the existing provider-neutral `ManagedAgentAdapter`,
   `ClaudeCodeManagedAgentAdapter`, `CodexManagedAgentAdapter`,
   `BoundedProcessRunner`,
-  `EphemeralCredentialBroker`, strict MCP profile renderer, inventory verifier,
+  existing workbench credential boundary, strict MCP profile renderer, inventory verifier,
   and workbench lifecycle/locking patterns. Issue #557 adds the RAES
   participant-binding orchestration around that boundary; it does not add a
-  parallel adapter protocol, subprocess runner, credential lease, provider
+  parallel adapter protocol, subprocess runner, credential broker, provider
   exception hierarchy, MCP launcher, or transcript store.
 - The governed behavior is agent-driven only when the selected implementation
   is actually invoked inside the participant operation and the trusted APTL
@@ -126,7 +133,8 @@ mapping, host working directory, evidence directory, or backend handle.
 Claude Code and Codex CLI use this same seam. A closed, code-owned provider
 mapping selects the injected `ManagedAgentAdapter`, executable policy,
 provider-specific credential alias, manifest identity, and non-secret
-configuration digest. The shared credential broker leases only the selected
+configuration digest. The shared credential boundary resolves only the source
+selected by validated APTL configuration and delivers only the selected
 provider's alias. A further provider adds one adapter and mapping; it does not
 add a scenario-name branch, dynamic entry-point loader, new RAES DTO,
 credential broker, or changes to deployment/control-plane plumbing. Provider
@@ -151,7 +159,7 @@ allowlisted typed deployment/MCP operation.
 | Runtime lifecycle | `BaseParticipantRuntime.initialize()` and `admit_action()` remain distinct; APTL supplies native realization through `_model_action()`. Episode lifecycle is not workbench profile, Compose, scenario, or appliance lifecycle. The RAES base snapshot projection supersedes APTL's duplicate lifecycle storage helpers. |
 | Installed-agent execution | `ManagedAgentAdapter`, `ClaudeCodeManagedAgentAdapter`, `_admitted_executable()`, `_read_private_config()`, `_assert_config_unchanged()`, `BoundedProcessRunner`, and the applicable `WorkbenchRuntime` lifecycle/locking patterns own executable admission, strict config, exact tool inventory, no-shell execution, process-group teardown, and single-active-launch cleanup. Ownership and mode admission precedes every executable invocation, including version discovery; version discovery receives a fixed credential-free environment. `ProfileLaunch` and `ProfileId` do not grant action authority. |
 | Configuration | Signed appliance settings and `ApplianceWorkbenchSettings` own trusted executable/payload paths in supported delivery. A closed implementation registry owns provider id, executable setting, required secret aliases, manifest, and limits. Durable developer-local non-secret settings, if required, pass through strict `AptlConfig` / Pydantic validation under ADR-025. None of these shapes may accept free-form command/args, environment maps, prompts, tokens, arbitrary tool lists, arbitrary URLs, or `PATH`-selected executables. |
-| Environment and secrets | `EphemeralCredentialBroker`, `contains_placeholder()`, ADR-029, and appliance bootstrap own the model/service credential lease. Existing lab secrets continue through `load_dotenv()`, `env_vars_from_dict()`, and `find_placeholder_env_values()`; do not widen Wazuh-oriented `EnvVars` into agent config. The child receives a minimal explicit lease, never APTL/SOC ambient environment. |
+| Environment and secrets | ADR-052, the existing workbench credential module, `contains_placeholder()`, ADR-029, and appliance bootstrap own configured source acquisition, provider delivery, lifecycle facts, and cleanup. Existing lab secrets continue through `load_dotenv()`, `env_vars_from_dict()`, and `find_placeholder_env_values()`; do not widen Wazuh-oriented `EnvVars` into agent config. The child receives a minimal explicit binding, never an unselected APTL/SOC or product credential. |
 | Host process and filesystem exposure | Reuse the workbench's absolute resolved executable checks, owner/mode checks, private `0700` work directory, no-follow bounded `0600` config reads/writes, fixed argv, stdin task input, combined output cap, and whole-process-group timeout teardown. A fixed minimal child `PATH` is acceptable; `PATH` must never select the coding-agent executable. |
 | Deployment and MCP surfaces | `DeploymentBackend` remains the owner of container operations. Resolve targets only from `AptlRealization`, then verify project membership with `container_exists()` before any typed action. Approved MCP paths retain `aptl-mcp-common` JSON Schemas, handler assertions, exact `tools/list` verification, endpoint-origin/TLS checks, SSH lifecycle, telemetry, capture, and redaction. No adapter calls raw Docker, Compose, SSH, curl, or an unscoped container. |
 | Visibility and evaluator separation | The compiled RAES observation boundary and implementation exposure policy are the source of visible/disclosed/evidence refs. `project_for_participant()` is the evidence-side incumbent. Wazuh records, evaluator diagnostics, internal endpoint identities, negative checks, backend commands, and implementation internals stay evaluator/control-plane-only unless the compiled boundary explicitly projects them. |
@@ -209,11 +217,11 @@ directory.
   event-limit, endpoint, method, classification, and response choices.
   Evidence is staged during native execution and published only after the
   RAES base runtime accepts the typed outcome and history transition.
-- Model and service credentials use the existing ephemeral, selected lease.
+- Model and service credentials use the ADR-052 configured source and binding.
   They never enter argv, stdin task content, SDL, MCP config values, proof JSON,
   logs, diagnostics, snapshots, transcripts, or evidence. Because the current
   adapter uses a child environment, the management compartment must prevent
-  participant/sibling process inspection; teardown clears the in-memory lease
+  participant/sibling process inspection; teardown clears the in-memory binding
   and generated config. Prefer a provider-supported descriptor/file/keychain
   channel later without changing the shared adapter contract.
 - The adapter transcript is a structured invocation lifecycle record, not a
@@ -281,7 +289,7 @@ directory.
   BC-10 with structured no-effect evidence. Passing it never starts official
   capture. Adding `--provider claude` or `--provider codex` also runs bounded
   installed-provider green, red, and blue episodes; the provider-specific
-  credential lease remains mandatory.
+  configured credential binding remains mandatory.
 - The live proof asserts evaluator-only Wazuh and negative-boundary material is
   absent from agent input and the participant projection. Evaluator evidence
   may be checked independently, but does not prove the participant observed it.
@@ -319,8 +327,8 @@ the participant runtime file:
 
 - Do not create a second installed-agent abstraction beside
   `ManagedAgentAdapter`, a second subprocess runner beside
-  `BoundedProcessRunner`, or a second credential broker beside
-  `EphemeralCredentialBroker`.
+  `BoundedProcessRunner`, or a second credential broker beside the existing
+  workbench credential owner governed by ADR-052.
 - Do not keep APTL's hand-written participant lifecycle/behavior commit path
   beside `BaseParticipantRuntime`, and do not bypass its native-outcome checks
   by appending events after an agent turn.

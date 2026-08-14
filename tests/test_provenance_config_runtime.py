@@ -97,6 +97,25 @@ class TestSafeConfigProjection:
         projection = safe_config_projection(config)
         assert projection["participant_models"]["claude"] == "claude-opus-4-5-20251101"
 
+    def test_participant_credential_source_identity_excludes_locator(self):
+        config = AptlConfig(
+            experiment={
+                "participant_credential_sources": {
+                    "claude": {
+                        "kind": "process-environment",
+                        "variable": "PRIVATE_SOURCE_LOCATOR",
+                    }
+                }
+            }
+        )
+
+        projection = safe_config_projection(config)
+
+        source = projection["participant_source_descriptors"]["claude"]
+        assert source["kind"] == "process-environment"
+        assert source["descriptor_sha256"].startswith("sha256:")
+        assert "PRIVATE_SOURCE_LOCATOR" not in repr(projection)
+
     def test_projection_never_contains_a_secret_shaped_value(self):
         from aptl.utils.redaction import redact
 
@@ -114,13 +133,17 @@ class TestSafeConfigProjection:
         # A dump would surface the raw nested section names. ``containers`` is
         # excluded from this list deliberately: the projection legitimately
         # owns that key, but it holds flat boolean toggles rather than the model.
-        for raw_section in ("lab", "deployment", "run_storage", "experiment", "lifecycle_policy"):
+        for raw_section in (
+            "lab",
+            "deployment",
+            "run_storage",
+            "experiment",
+            "lifecycle_policy",
+        ):
             assert raw_section not in projection
         for value in projection.values():
             assert not isinstance(value, BaseModel)
-        assert all(
-            isinstance(flag, bool) for flag in projection["containers"].values()
-        )
+        assert all(isinstance(flag, bool) for flag in projection["containers"].values())
 
     def test_projection_still_carries_the_fields_it_promises(self):
         """Guards the exclusion test above from passing on an empty projection."""
@@ -140,12 +163,16 @@ class TestConfigIdentityProvider:
     """Config identity is one leaf derived from the safe projection."""
 
     def test_collects_a_single_config_identity_leaf(self):
-        result = ConfigIdentityProvider(AptlConfig()).collect(_context(CONFIG_PROVIDER_ID))
+        result = ConfigIdentityProvider(AptlConfig()).collect(
+            _context(CONFIG_PROVIDER_ID)
+        )
         assert result.status is ProvenanceStatus.COLLECTED
         assert [leaf.logical_id for leaf in result.leaves] == ["effective-config"]
 
     def test_changing_one_safe_field_changes_the_identity(self):
-        base = ConfigIdentityProvider(AptlConfig()).collect(_context(CONFIG_PROVIDER_ID))
+        base = ConfigIdentityProvider(AptlConfig()).collect(
+            _context(CONFIG_PROVIDER_ID)
+        )
         changed = ConfigIdentityProvider(
             AptlConfig(lab=LabSettings(name="other-lab"))
         ).collect(_context(CONFIG_PROVIDER_ID))
@@ -168,8 +195,12 @@ class TestConfigIdentityProvider:
         assert result.status is ProvenanceStatus.UNAVAILABLE
 
     def test_identity_is_stable_across_collections(self):
-        first = ConfigIdentityProvider(AptlConfig()).collect(_context(CONFIG_PROVIDER_ID))
-        second = ConfigIdentityProvider(AptlConfig()).collect(_context(CONFIG_PROVIDER_ID))
+        first = ConfigIdentityProvider(AptlConfig()).collect(
+            _context(CONFIG_PROVIDER_ID)
+        )
+        second = ConfigIdentityProvider(AptlConfig()).collect(
+            _context(CONFIG_PROVIDER_ID)
+        )
         assert first.leaves == second.leaves
 
 
@@ -203,23 +234,32 @@ class _StubSnapshot:
         self.containers = containers or [_StubContainer("aptl-victim")]
 
     def to_dict(self):
-        return {"timestamp": self.timestamp, "containers": [c.name for c in self.containers]}
+        return {
+            "timestamp": self.timestamp,
+            "containers": [c.name for c in self.containers],
+        }
 
 
 class TestRuntimeFactsProvider:
     """Image identities and tool versions, with volatile data kept out."""
 
     def test_collects_image_digest_and_tool_version_leaves(self):
-        result = RuntimeFactsProvider(_StubSnapshot()).collect(_context(RUNTIME_PROVIDER_ID))
+        result = RuntimeFactsProvider(_StubSnapshot()).collect(
+            _context(RUNTIME_PROVIDER_ID)
+        )
         assert result.status is ProvenanceStatus.COLLECTED
         names = {leaf.logical_id for leaf in result.leaves}
         assert "image/aptl-victim" in names
         assert "tool-versions" in names
 
     def test_a_changed_image_digest_changes_only_that_leaf(self):
-        before = RuntimeFactsProvider(_StubSnapshot()).collect(_context(RUNTIME_PROVIDER_ID))
+        before = RuntimeFactsProvider(_StubSnapshot()).collect(
+            _context(RUNTIME_PROVIDER_ID)
+        )
         after = RuntimeFactsProvider(
-            _StubSnapshot(containers=[_StubContainer("aptl-victim", "sha256:" + "0" * 64)])
+            _StubSnapshot(
+                containers=[_StubContainer("aptl-victim", "sha256:" + "0" * 64)]
+            )
         ).collect(_context(RUNTIME_PROVIDER_ID))
         before_ids = {leaf.logical_id: leaf.digest for leaf in before.leaves}
         after_ids = {leaf.logical_id: leaf.digest for leaf in after.leaves}
@@ -270,11 +310,15 @@ class TestRuntimeFactsProvider:
         assert result.status is ProvenanceStatus.TRUNCATED
 
     def test_payload_records_the_range_snapshot_identity(self):
-        result = RuntimeFactsProvider(_StubSnapshot()).collect(_context(RUNTIME_PROVIDER_ID))
+        result = RuntimeFactsProvider(_StubSnapshot()).collect(
+            _context(RUNTIME_PROVIDER_ID)
+        )
         assert result.payload["range_snapshot_identity"].startswith("sha256:")
 
     def test_tool_versions_are_recorded(self):
-        result = RuntimeFactsProvider(_StubSnapshot()).collect(_context(RUNTIME_PROVIDER_ID))
+        result = RuntimeFactsProvider(_StubSnapshot()).collect(
+            _context(RUNTIME_PROVIDER_ID)
+        )
         assert result.payload["tool_versions"]["aptl"] == "0.2.0"
         assert result.payload["tool_versions"]["raes"] == "2.0.0"
 

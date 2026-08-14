@@ -15,7 +15,7 @@ There are four distinct owners. Their contracts must not be conflated.
 | Concern | Owner | APTL boundary |
 | --- | --- | --- |
 | Portable attack-path, workflow, capture, evidence, and inventory semantics | RAES | APTL consumes the published RAES SDL, contract models, compiler, planner, diagnostics, and controlled vocabulary. It does not mirror them in an APTL schema or taxonomy. |
-| Environment-pack format, templates, schemas, validation, release tooling, and adoption guidance | `RAESystem/env-packs` | The companion repository defines how a RAES environment pack is shaped and validated. It does not own the particular experiment, scenario, or execution a downstream user creates with that format. |
+| Environment-pack format, templates, schemas, validation, release tooling, and adoption guidance | `OpenRAE/env-packs` | The companion repository defines how a RAES environment pack is shaped and validated. It does not own the particular experiment, scenario, or execution a downstream user creates with that format. |
 | Particular scenario content, experiment design, and execution choices | Downstream scenario or experiment owner | The downstream owner chooses and authors the specific RAES scenario or experiment within the published format and capability constraints. It cannot use that choice to select APTL container names, Compose fragments, host paths, `.env` keys, credentials, shell commands, collector implementations, or backend-specific persistence paths. |
 | Runtime realization, lab lifecycle, source acquisition, backend observation, and APTL-local evidence persistence | APTL | APTL lowers an admitted RAES execution plan through the existing runtime target and `DeploymentBackend`, then records backend evidence through the existing snapshot/run-store boundaries. |
 
@@ -27,7 +27,7 @@ Specifically:
   participant execution, and observed runtime effects through its declared
   backend capabilities. APTL must not recreate a pack-specific attack-path
   executor, static scenario branch, or local semantic model.
-- **Environment-pack format:** `RAESystem/env-packs` owns the reusable pack
+- **Environment-pack format:** `OpenRAE/env-packs` owns the reusable pack
   format, templates, schemas, validation, release tooling, and adoption
   guidance. It does not select a particular scenario, experiment, participant,
   or execution for a downstream user.
@@ -54,9 +54,9 @@ Specifically:
 
 This note is the APTL reference follow-up for issue #589. The cross-repository
 follow-ups already named by the issue remain the authorities for their scopes:
-[RAES #629](https://github.com/RAESystem/rae/issues/629) for semantic
+[RAES #629](https://github.com/OpenRAE/rae/issues/629) for semantic
 capture/inventory ownership and
-[env-packs #138](https://github.com/RAESystem/env-packs/issues/138) for the
+[env-packs #138](https://github.com/OpenRAE/env-packs/issues/138) for the
 environment-pack format reference. There is no APTL asset migration to create:
 the former APTL capture/parity surfaces were intentionally removed under
 #690/#757.

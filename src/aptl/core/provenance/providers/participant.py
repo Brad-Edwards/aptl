@@ -41,11 +41,12 @@ def _selection_projection(apparatus: object) -> dict[str, object]:
     """Return one participant's accepted selection identity.
 
     Provider and model are non-secret identity. Credentials never appear here:
-    the participant credential path is an ephemeral broker
-    (``EphemeralCredentialBroker``), and nothing in that path is read.
+    no credential material from the workbench binding path is read.
     """
     return {
-        "implementation_selection_ref": getattr(apparatus, "implementation_selection_ref", None),
+        "implementation_selection_ref": getattr(
+            apparatus, "implementation_selection_ref", None
+        ),
         "manifest_ref": getattr(apparatus, "manifest_ref", None),
         "provider": getattr(apparatus, "provider", None),
         "model": getattr(apparatus, "model", None),

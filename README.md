@@ -132,6 +132,8 @@ The scenario environment is whatever the SDL scenario defines. The default `tech
 
 Scenarios are [Reproducible Agentic Environments SDL](docs/sdl/index.md) documents under `scenarios/`. `aptl lab scenarios` lists the catalog; `aptl lab start --scenario <id>` (or `--scenario-path <file>`) selects one. The Compose profiles that come up are **realized from the nodes the SDL declares**—the topology follows the scenario's content, including dependency closure, rather than a preset keyed off its name.
 
+The SDL language and the reusable environment-pack format live in the RAES companion repositories—[OpenRAE/rae](https://github.com/OpenRAE/rae) (SDL and semantics) and [OpenRAE/env-packs](https://github.com/OpenRAE/env-packs) (pack definitions, templates, schemas, and authoring support). APTL consumes those definitions and realizes them as a running Docker lab; the lab lifecycle and runtime stay APTL-owned.
+
 The catalog ships the operational default plus four curated slices:
 
 | Scenario id | Boots | Omits |
@@ -186,7 +188,7 @@ Access at <http://localhost:5173> (dev) or <http://localhost:3000> (prod). The A
 
 **Components:** [Wazuh SIEM](docs/components/wazuh-siem.md) · [Kali Red Team](docs/components/kali-redteam.md) · [Victim Containers](docs/components/victim-containers.md) · [Reverse Engineering](docs/components/reverse-engineering-container.md) · [MCP Integration](docs/components/mcp-integration.md) · [Default Defensive Posture](docs/components/default-defensive-posture.md)
 
-**Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
+**Scenarios & SDL:** [SDL Reference](docs/sdl/index.md) · [Curated TechVault Variants](docs/sdl/techvault-curated-variants.md) · [Pack authoring (OpenRAE/env-packs)](https://github.com/OpenRAE/env-packs) · [SOC Architecture Spec](docs/specs/soc-feature-spec.md)
 
 **Reference:** [TechVault Scenario Overview](docs/reference/techvault-scenario-overview.md) · [TechVault Company Profile](docs/reference/techvault-company-profile.md) · [TechVault OSINT Readiness](docs/reference/techvault-osint-readiness.md) · [Container Template Guide](docs/containers/victim-template-guide.md)
 

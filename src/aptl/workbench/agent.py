@@ -114,15 +114,21 @@ class ClaudeCodeManagedAgentAdapter:
             raise AgentExecutionError("agent limits are invalid")
         self._executable = _admitted_executable(claude_executable)
         self._work_dir = _prepare_work_dir(work_dir)
+        self._private_home = _prepare_work_dir(self._work_dir / "home")
+        self._xdg_config_home = _prepare_work_dir(self._private_home / ".config")
+        self._claude_config_dir = _prepare_work_dir(self._xdg_config_home / "claude")
         self._runner = runner or BoundedProcessRunner()
         self._inventory_probe = inventory_probe
         self._timeout_seconds = timeout_seconds
         self._max_output_bytes = max_output_bytes
         self._max_prompt_chars = max_prompt_chars
 
-    @staticmethod
-    def launch(launch: AgentLaunch, credentials: Mapping[str, str]) -> object:
-        """Admit a generated strict config and create a minimal secret lease."""
+    def launch(
+        self,
+        launch: AgentLaunch,
+        credentials: Mapping[str, str],
+    ) -> object:
+        """Admit a generated strict config and create a minimal binding."""
         if isinstance(launch, DecisionAgentLaunch) and launch.provider != "claude":
             raise AgentExecutionError("agent launch provider does not match adapter")
         try:
@@ -136,11 +142,16 @@ class ClaudeCodeManagedAgentAdapter:
             servers, config_sha256 = _load_server_config(launch.client_config_path)
         required_aliases = _credential_aliases(servers)
         admitted = (_MODEL_CREDENTIAL, *sorted(required_aliases))
-        environment = dict(_BASE_ENVIRONMENT)
+        environment = {
+            **_BASE_ENVIRONMENT,
+            "HOME": str(self._private_home),
+            "XDG_CONFIG_HOME": str(self._xdg_config_home),
+            "CLAUDE_CONFIG_DIR": str(self._claude_config_dir),
+        }
         for name in admitted:
             value = credentials.get(name)
             if not value or contains_placeholder(value):
-                raise AgentExecutionError("agent credential lease is incomplete")
+                raise AgentExecutionError("agent credential binding is incomplete")
             environment[name] = value
         return _ClaudeHandle(
             launch,
@@ -171,6 +182,29 @@ class ClaudeCodeManagedAgentAdapter:
         active.inventory = inventory
         active.ready = True
         return inventory
+
+    def credential_isolation_controls(self, handle: object) -> tuple[str, ...]:
+        """Return only the credential controls this adapter actually enforces."""
+
+        active = _require_handle(handle)
+        if active.closed or not isinstance(active.launch, DecisionAgentLaunch):
+            raise AgentExecutionError("credential isolation controls are unavailable")
+        expected = {
+            **_BASE_ENVIRONMENT,
+            "HOME": str(self._private_home),
+            "XDG_CONFIG_HOME": str(self._xdg_config_home),
+            "CLAUDE_CONFIG_DIR": str(self._claude_config_dir),
+        }
+        if any(active.environment.get(name) != value for name, value in expected.items()):
+            raise AgentExecutionError("credential isolation controls are incomplete")
+        if set(active.environment) != {*expected, _MODEL_CREDENTIAL}:
+            raise AgentExecutionError("credential isolation controls are incomplete")
+        return (
+            "minimal-child-environment",
+            "private-home",
+            "private-claude-config",
+            "claude-bare-api-key-mode",
+        )
 
     def respond(
         self,
@@ -425,7 +459,7 @@ def _credential_aliases(servers: dict[str, dict[str, object]]) -> set[str]:
 def _server_environment(
     server: dict[str, object], credentials: Mapping[str, str]
 ) -> dict[str, str]:
-    """Resolve one MCP server's environment from its credential lease."""
+    """Resolve one MCP server's environment from its credential binding."""
     environment = {"PATH": _BASE_ENVIRONMENT["PATH"]}
     for name, value in server["env"].items():
         if value.startswith("${") and value.endswith("}"):

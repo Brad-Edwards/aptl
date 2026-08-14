@@ -58,6 +58,10 @@ def test_materialize_default_config_is_valid(fake_bundle: Path, tmp_path: Path) 
     config = load_config(target / "aptl.json")
     assert config.lab.name == "aptl"
     assert "kali" in config.containers.enabled_profiles()
+    assert config.experiment.participant_credential_sources.model_dump() == {
+        "claude": None,
+        "codex": None,
+    }
 
 
 def test_materialize_refuses_conflict_without_force(
@@ -74,7 +78,9 @@ def test_materialize_force_overwrites(fake_bundle: Path, tmp_path: Path) -> None
     materialize(target)
     (target / "docker-compose.yml").write_text("stale\n", encoding="utf-8")
     materialize(target, force=True)
-    assert (target / "docker-compose.yml").read_text(encoding="utf-8") == "services: {}\n"
+    assert (target / "docker-compose.yml").read_text(
+        encoding="utf-8"
+    ) == "services: {}\n"
 
 
 def test_materialize_can_skip_config(fake_bundle: Path, tmp_path: Path) -> None:
@@ -95,6 +101,8 @@ def test_default_config_json_round_trips(tmp_path: Path) -> None:
     path.write_text(assets.default_config_json(), encoding="utf-8")
     config = load_config(path)
     assert config.deployment.provider == "docker-compose"
+    payload = path.read_text(encoding="utf-8")
+    assert '"participant_credential_sources": {}' in payload
 
 
 def test_resolve_within_rejects_escape(tmp_path: Path) -> None:
@@ -177,7 +185,9 @@ def test_bundled_labdata_dir_none_on_lookup_error(
 
 def test_iter_source_files_checkout_uses_git(tmp_path: Path) -> None:
     # Against the real repo (a git checkout), the git path is taken.
-    rels = {p.as_posix() for p in assets._iter_source_files(REPO_ROOT, from_bundle=False)}
+    rels = {
+        p.as_posix() for p in assets._iter_source_files(REPO_ROOT, from_bundle=False)
+    }
     assert "docker-compose.yml" in rels
     assert not any("soc_certs" in r for r in rels)
 
@@ -193,11 +203,17 @@ def _make_fake_checkout(root: Path) -> None:
     (root / "containers" / "kali" / "__pycache__").mkdir(parents=True)
     (root / "web" / "node_modules").mkdir(parents=True)
     (root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
-    (root / "config" / "wazuh_cluster" / "wazuh.yml").write_text("a: 1\n", encoding="utf-8")
+    (root / "config" / "wazuh_cluster" / "wazuh.yml").write_text(
+        "a: 1\n", encoding="utf-8"
+    )
     (root / "config" / "soc_certs" / "ca.key").write_text("SECRET\n", encoding="utf-8")
     (root / "config" / "lab-ssh" / "id_rsa").write_text("SECRET\n", encoding="utf-8")
-    (root / "containers" / "kali" / "Dockerfile").write_text("FROM x\n", encoding="utf-8")
-    (root / "containers" / "kali" / "__pycache__" / "x.pyc").write_text("", encoding="utf-8")
+    (root / "containers" / "kali" / "Dockerfile").write_text(
+        "FROM x\n", encoding="utf-8"
+    )
+    (root / "containers" / "kali" / "__pycache__" / "x.pyc").write_text(
+        "", encoding="utf-8"
+    )
     # A stray compiled file directly under a tracked dir (not in __pycache__)
     # must still be excluded by suffix.
     (root / "containers" / "kali" / "stale.pyc").write_text("", encoding="utf-8")

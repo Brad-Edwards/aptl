@@ -66,6 +66,8 @@ class ManagedAgentAdapter(Protocol):
 
     def list_tools(self, handle: object) -> Mapping[str, Collection[str]]: ...
 
+    def credential_isolation_controls(self, handle: object) -> tuple[str, ...]: ...
+
     def respond(
         self,
         handle: object,

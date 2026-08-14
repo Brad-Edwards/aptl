@@ -185,7 +185,7 @@ def create_participant_workbench_app(
         responses={409: {"description": "Profile teardown unavailable"}},
     )
     def close_profile() -> dict[str, str]:
-        """Close the active profile and its session-scoped credential lease."""
+        """Close the active profile and its local credential binding."""
         try:
             runtime.close()
         except WorkbenchStateError:

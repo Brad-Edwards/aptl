@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Protocol
 
 from aptl.core.deployment.errors import BackendTimeoutError
@@ -12,7 +13,10 @@ class _CleanupBackend(Protocol):
 
     _project_name: str
 
-    def _run(self, cmd: list[str], *, timeout: int): ...
+    def _run(self, cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
+        """Run one backend-scoped command."""
+
+        ...
 
 
 def _remove_labelled_containers(

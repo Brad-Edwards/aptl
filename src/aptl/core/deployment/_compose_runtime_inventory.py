@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Protocol
 
 from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
@@ -15,7 +16,10 @@ class _InventoryBackend(Protocol):
 
     _project_name: str
 
-    def _run(self, cmd: list[str], *, timeout: int): ...
+    def _run(self, cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
+        """Run one backend-scoped command."""
+
+        ...
 
 
 def _nonempty_lines(output: str) -> set[str]:

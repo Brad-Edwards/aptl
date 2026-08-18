@@ -30,6 +30,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
+from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
@@ -62,7 +63,7 @@ class DockerComposeBackend(
         offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
-        self._project_name = project_name
+        self._project_name = validate_compose_project_name(project_name)
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[

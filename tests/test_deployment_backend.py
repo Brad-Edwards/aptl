@@ -147,6 +147,18 @@ class TestDeploymentConfig:
         with pytest.raises(ValueError, match="Unknown deployment provider"):
             DeploymentConfig(provider="kubernetes")
 
+    @pytest.mark.parametrize(
+        "project_name",
+        ["", "Uppercase", "with space", "../escape", "-leading", "x" * 64],
+    )
+    def test_rejects_unsafe_compose_project_name(self, project_name):
+        with pytest.raises(ValueError, match="project_name"):
+            DeploymentConfig(project_name=project_name)
+
+    @pytest.mark.parametrize("project_name", ["a", "aptl", "range-01", "range_01"])
+    def test_accepts_bounded_compose_project_name(self, project_name):
+        assert DeploymentConfig(project_name=project_name).project_name == project_name
+
     def test_ssh_fields_default_to_none(self):
         cfg = DeploymentConfig()
         assert cfg.ssh_host is None
@@ -224,6 +236,10 @@ class TestDockerComposeBackend:
 
     def _make_backend(self, tmp_path: Path) -> DockerComposeBackend:
         return DockerComposeBackend(project_dir=tmp_path, project_name="test")
+
+    def test_rejects_unsafe_direct_project_name(self, tmp_path):
+        with pytest.raises(ValueError, match="project_name"):
+            DockerComposeBackend(project_dir=tmp_path, project_name="../other")
 
     def test_start_calls_compose_up(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -312,6 +328,48 @@ services:
 
         assert result.success is False
         assert "compose up failed" in result.error
+
+    def test_project_presence_counts_all_container_states_and_networks(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "ps", "-aq"]:
+                if "label=com.docker.compose.project=test" in cmd:
+                    return MagicMock(returncode=0, stdout="a\nb\nc\n", stderr="")
+                if "label=aptl.lifecycle.project=test" in cmd:
+                    return MagicMock(returncode=0, stdout="c\nd\n", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return MagicMock(returncode=0, stdout="n\n", stderr="")
+            raise AssertionError(cmd)
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            presence = backend.observe_project_runtime()
+
+        assert presence.present is True
+        assert presence.container_count == 4
+        assert presence.network_count == 1
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert any("label=com.docker.compose.project=test" in cmd for cmd in commands)
+        assert any("label=aptl.lifecycle.project=test" in cmd for cmd in commands)
+        assert any(
+            cmd[:3] == ["docker", "network", "ls"]
+            and "label=com.docker.compose.project=test" in cmd
+            for cmd in commands
+        )
+
+    def test_project_presence_preserves_observation_failure(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="raw daemon details"
+            )
+            presence = backend.observe_project_runtime()
+
+        assert presence.present is False
+        assert presence.error == "container observation failed"
+        assert "raw daemon details" not in presence.error
 
     def test_realize_reconciles_project_networks_after_start(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -429,9 +487,7 @@ services:
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
-                return MagicMock(
-                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
-                )
+                return MagicMock(returncode=0, stdout="test_aptl-redteam\n", stderr="")
             if cmd[:3] == ["docker", "network", "inspect"]:
                 return MagicMock(
                     returncode=0,
@@ -488,9 +544,7 @@ services:
             if cmd[:4] == ["docker", "compose", "-p", "test"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             if cmd[:3] == ["docker", "network", "ls"]:
-                return MagicMock(
-                    returncode=0, stdout="test_aptl-redteam\n", stderr=""
-                )
+                return MagicMock(returncode=0, stdout="test_aptl-redteam\n", stderr="")
             if cmd[:3] == ["docker", "network", "inspect"]:
                 return MagicMock(
                     returncode=0,
@@ -1175,7 +1229,7 @@ services:
 
         assert result.success is True
         commands = [call.args[0] for call in mock_run.call_args_list]
-        cmd = commands[0]
+        cmd = next(command for command in commands if "down" in command)
         assert cmd[2] == "-p"
         assert cmd[3] == "test"
         assert "down" in cmd
@@ -1216,9 +1270,7 @@ services:
         ls_cmd = next(cmd for cmd in commands if cmd[:3] == ["docker", "volume", "ls"])
         assert not any("--filter" in a or "label=" in a for a in ls_cmd)
 
-    def test_stop_with_volumes_removes_only_prefix_scoped_leftovers(
-        self, tmp_path
-    ):
+    def test_stop_with_volumes_removes_only_prefix_scoped_leftovers(self, tmp_path):
         backend = self._make_backend(tmp_path)
 
         def fake_run(cmd, **kwargs):
@@ -1244,16 +1296,12 @@ services:
         self, tmp_path
     ):
         backend = self._make_backend(tmp_path)
-        (tmp_path / "docker-compose.yml").write_text(
-            "volumes:\n  seeded_data:\n"
-        )
+        (tmp_path / "docker-compose.yml").write_text("volumes:\n  seeded_data:\n")
 
         def fake_run(cmd, **kwargs):
             del kwargs
             if cmd[:3] == ["docker", "volume", "ls"]:
-                return MagicMock(
-                    returncode=0, stdout="test_seeded_data\n", stderr=""
-                )
+                return MagicMock(returncode=0, stdout="test_seeded_data\n", stderr="")
             if cmd[:3] == ["docker", "volume", "rm"]:
                 return MagicMock(returncode=1, stdout="", stderr="still in use")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -1267,17 +1315,24 @@ services:
     def test_stop_removes_leftover_project_networks(self, tmp_path):
         backend = self._make_backend(tmp_path)
         network_ls_command = None
+        networks_present = True
 
         def fake_run(cmd, **kwargs):
-            nonlocal network_ls_command
+            nonlocal network_ls_command, networks_present
             del kwargs
             if cmd[:3] == ["docker", "network", "ls"]:
                 network_ls_command = cmd
                 return MagicMock(
                     returncode=0,
-                    stdout="test_aptl-dmz\ntest_aptl-isolated\n",
+                    stdout=(
+                        "test_aptl-dmz\ntest_aptl-isolated\n"
+                        if networks_present
+                        else ""
+                    ),
                     stderr="",
                 )
+            if cmd[:3] == ["docker", "network", "rm"]:
+                networks_present = False
             return MagicMock(returncode=0, stdout="", stderr="")
 
         with patch("subprocess.run", side_effect=fake_run) as mock_run:
@@ -1285,7 +1340,8 @@ services:
 
         assert result.success is True
         assert network_ls_command is not None
-        assert "label=org.aptl.realization.network=true" in network_ls_command
+        assert "label=com.docker.compose.project=test" in network_ls_command
+        assert "label=org.aptl.realization.network=true" not in network_ls_command
         commands = [call.args[0] for call in mock_run.call_args_list]
         assert ["docker", "network", "rm", "test_aptl-dmz"] in commands
         assert ["docker", "network", "rm", "test_aptl-isolated"] in commands
@@ -1300,6 +1356,83 @@ services:
             result = backend.stop([])
 
         assert result.success is False
+
+    def test_stop_continues_project_cleanup_after_compose_down_error(self, tmp_path):
+        from aptl.core.deployment._compose_stop import stop_compose_lab
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        events: list[str] = []
+
+        class Backend:
+            project_dir = tmp_path
+            project_name = "test"
+
+            def _build_command(self, action, profiles, *, compose_files=None):
+                del profiles, compose_files
+                return ["docker", "compose", action]
+
+            def _run(self, cmd, *, timeout=None):
+                del timeout
+                events.append(cmd[-1])
+                return MagicMock(returncode=1, stdout="", stderr="raw compose error")
+
+            def remove_generic_materializer_containers(self):
+                events.append("generic")
+                return []
+
+            def remove_project_containers(self):
+                events.append("containers")
+                return []
+
+            def remove_project_networks(self):
+                events.append("networks")
+                return []
+
+            def observe_project_runtime(self):
+                events.append("verify")
+                return ProjectRuntimePresence()
+
+        result = stop_compose_lab(
+            Backend(), ["wazuh"], remove_volumes=False, timeout=30
+        )
+
+        assert result.success is True
+        assert events == ["generic", "down", "containers", "networks", "verify"]
+
+    def test_stop_fails_when_project_runtime_remains_after_cleanup(self, tmp_path):
+        from aptl.core.deployment._compose_stop import stop_compose_lab
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        class Backend:
+            project_dir = tmp_path
+            project_name = "test"
+
+            def _build_command(self, action, profiles, *, compose_files=None):
+                del profiles, compose_files
+                return ["docker", "compose", action]
+
+            def _run(self, cmd, *, timeout=None):
+                del cmd, timeout
+                return MagicMock(returncode=0, stdout="", stderr="")
+
+            def remove_generic_materializer_containers(self):
+                return []
+
+            def remove_project_containers(self):
+                return []
+
+            def remove_project_networks(self):
+                return []
+
+            def observe_project_runtime(self):
+                return ProjectRuntimePresence(container_count=1)
+
+        result = stop_compose_lab(
+            Backend(), ["wazuh"], remove_volumes=False, timeout=30
+        )
+
+        assert result.success is False
+        assert "runtime artifacts remain" in result.error
 
     def test_status_parses_json_array(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1393,6 +1526,7 @@ services:
 
         first_cmd = mock_run.call_args_list[0][0][0]
         assert "kill" in first_cmd
+        assert first_cmd[:4] == ["docker", "compose", "-p", "test"]
         second_cmd = mock_run.call_args_list[1][0][0]
         assert "down" in second_cmd
 
@@ -2124,6 +2258,20 @@ class TestSSHComposeBackend:
         env = mock_run.call_args[1]["env"]
         assert env["DOCKER_HOST"] == "ssh://admin@lab.example.com"
 
+    def test_project_presence_uses_ssh_backend_environment(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            presence = backend.observe_project_runtime()
+
+        assert presence.present is False
+        assert presence.error == ""
+        assert len(mock_run.call_args_list) == 3
+        assert all(
+            call.kwargs["env"]["DOCKER_HOST"] == "ssh://admin@lab.example.com"
+            for call in mock_run.call_args_list
+        )
+
 
 # ---------------------------------------------------------------------------
 # Factory function tests
@@ -2273,22 +2421,22 @@ class TestKillBackwardCompat:
     """Verify kill_lab_containers still works without backend arg."""
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_kill_without_backend(self, mock_run):
+    def test_kill_without_backend(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        success, error = kill_lab_containers(project_dir=Path("/tmp/aptl"))
+        success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is True
 
-    def test_kill_with_backend(self):
+    def test_kill_with_backend(self, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
         mock_backend = MagicMock()
         mock_backend.kill.return_value = (True, "")
 
-        success, error = kill_lab_containers(backend=mock_backend)
+        success, error = kill_lab_containers(project_dir=tmp_path, backend=mock_backend)
 
         assert success is True
         mock_backend.kill.assert_called_once()
@@ -2576,9 +2724,7 @@ class TestSeedNamedVolumes:
         # Exactly one container: the seed copy, no retire. (The label
         # inspect is a volume query, not a container.)
         container_runs = [
-            c[0][0]
-            for c in mock_run.call_args_list
-            if c[0][0][:2] == ["docker", "run"]
+            c[0][0] for c in mock_run.call_args_list if c[0][0][:2] == ["docker", "run"]
         ]
         assert len(container_runs) == 1
         assert "test_suricata_config_seed:/dest" in container_runs[0]
@@ -3055,9 +3201,7 @@ class TestObserveBindSourceType:
         with patch.object(backend, "_run") as run:
             assert backend.observe_bind_source_type(str(a_file)) == "file"
             assert backend.observe_bind_source_type(str(a_dir)) == "directory"
-            assert (
-                backend.observe_bind_source_type(str(tmp_path / "missing")) is None
-            )
+            assert backend.observe_bind_source_type(str(tmp_path / "missing")) is None
         # A local stat never spawns a probe container, so a missing source is
         # observed as nothing without ever creating it.
         run.assert_not_called()
@@ -3077,12 +3221,15 @@ class TestObserveBindSourceType:
     ):
         backend = DockerComposeBackend(project_dir=tmp_path, project_name="test")
         source = "/remote/.aptl/realization/content/otel-collector-config/config.yaml"
-        with patch.object(
-            type(backend),
-            "supports_local_artifacts",
-            new_callable=PropertyMock,
-            return_value=False,
-        ), patch.object(backend, "_run") as run:
+        with (
+            patch.object(
+                type(backend),
+                "supports_local_artifacts",
+                new_callable=PropertyMock,
+                return_value=False,
+            ),
+            patch.object(backend, "_run") as run,
+        ):
             run.return_value = MagicMock(
                 returncode=returncode,
                 stdout="must-not-be-consumed",

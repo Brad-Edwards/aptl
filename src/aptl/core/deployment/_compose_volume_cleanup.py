@@ -6,7 +6,6 @@ import subprocess
 from collections.abc import Callable
 
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl.utils.redaction import redact
 
 DockerRun = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -50,10 +49,10 @@ def _run_volume_command(
     """Run one Docker volume command and normalize its failure."""
     try:
         result = run(command, timeout=timeout)
-    except (BackendTimeoutError, OSError) as exc:
-        return None, [f"{failure_message}: {exc}"]
+    except (BackendTimeoutError, OSError):
+        return None, [failure_message]
     if result.returncode != 0:
-        return None, [f"{failure_message}: {redact(result.stderr.strip())}"]
+        return None, [failure_message]
     return result, []
 
 

@@ -276,16 +276,17 @@ def test_materialization_recreates_a_stopped_or_wrong_image_node(tmp_path):
     )
     # Present but not running -> must recreate.
     backend.container_inspect = MagicMock(
-        return_value={"State": {"Running": False}, "Config": {"Image": "debian:12-slim"}}
+        return_value={
+            "State": {"Running": False},
+            "Config": {"Image": "debian:12-slim"},
+        }
     )
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         backend.start_base_container(spec)
 
-    assert any(
-        call.args[0][:2] == ["docker", "rm"] for call in mock_run.call_args_list
-    )
+    assert any(call.args[0][:2] == ["docker", "rm"] for call in mock_run.call_args_list)
     assert any(
         call.args[0][:2] == ["docker", "run"] for call in mock_run.call_args_list
     )
@@ -463,7 +464,9 @@ class TestDynamicCompositionImmutableStart:
             for c in mock_run.call_args_list
         )
 
-    def test_fails_closed_when_availability_did_not_verify_the_substrate(self, tmp_path):
+    def test_fails_closed_when_availability_did_not_verify_the_substrate(
+        self, tmp_path
+    ):
         # No verified digest for this address (the substrate was unobtainable at
         # availability, or changed away since): refuse to resolve the tag and
         # start nothing -- ADR-051's "a changed substrate produces no container".
@@ -495,7 +498,8 @@ class TestDynamicCompositionImmutableStart:
             backend.start_base_container(spec)
 
         assert not any(
-            call.args[0][:2] in (["docker", "rm"], ["docker", "run"], ["docker", "create"])
+            call.args[0][:2]
+            in (["docker", "rm"], ["docker", "run"], ["docker", "create"])
             for call in mock_run.call_args_list
         )
 
@@ -573,7 +577,7 @@ class TestRemoveGenericMaterializerContainers:
         with patch("subprocess.run", side_effect=fake_run):
             failures = backend.remove_generic_materializer_containers()
 
-        assert failures and "container in use" in failures[0]
+        assert failures == ["failed to remove generic-materializer containers"]
 
     def test_docker_unavailable_is_reported_not_raised(self, tmp_path):
         # kill_compose_lab's own tests hit this exact path: every subprocess
@@ -583,4 +587,4 @@ class TestRemoveGenericMaterializerContainers:
         with patch("subprocess.run", side_effect=FileNotFoundError("docker not found")):
             failures = backend.remove_generic_materializer_containers()
 
-        assert failures and "docker not found" in failures[0]
+        assert failures == ["failed to remove generic-materializer containers"]

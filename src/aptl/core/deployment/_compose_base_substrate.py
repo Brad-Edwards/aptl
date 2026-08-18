@@ -139,7 +139,9 @@ class ComposeBaseSubstrateMixin(object):
             # materialization ops run against it idempotently.
             return
         self._run(["docker", "rm", "-f", spec.container_name])
-        argv = self._base_container_create_command(spec, network_bindings, run_image_ref)
+        argv = self._base_container_create_command(
+            spec, network_bindings, run_image_ref
+        )
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
 
@@ -427,18 +429,48 @@ class ComposeBaseSubstrateMixin(object):
                 ],
                 timeout=30,
             )
+            if list_result.returncode != 0:
+                return ["failed to list generic-materializer containers"]
             names = [line for line in list_result.stdout.splitlines() if line.strip()]
             if not names:
                 return []
             result = self._run(["docker", "rm", "-f", *names], timeout=60)
-        except (BackendTimeoutError, OSError) as exc:
-            return [f"failed to remove generic-materializer containers: {exc}"]
+        except (BackendTimeoutError, OSError):
+            return ["failed to remove generic-materializer containers"]
         return (
             []
             if result.returncode == 0
-            else [
-                f"failed to remove generic-materializer containers: {result.stderr.strip()}"
+            else ["failed to remove generic-materializer containers"]
+        )
+
+    def remove_project_containers(self) -> list[str]:
+        """Force-remove residual containers carrying this project identity."""
+
+        try:
+            list_result = self._run(
+                [
+                    "docker",
+                    "ps",
+                    "-aq",
+                    "--filter",
+                    f"label=com.docker.compose.project={self._project_name}",
+                ],
+                timeout=30,
+            )
+            if list_result.returncode != 0:
+                return ["failed to list residual project containers"]
+            identifiers = [
+                line.strip() for line in list_result.stdout.splitlines() if line.strip()
             ]
+            if not identifiers:
+                return []
+            result = self._run(["docker", "rm", "-f", *identifiers], timeout=60)
+        except (BackendTimeoutError, OSError):
+            return ["failed to remove residual project containers"]
+        return (
+            []
+            if result.returncode == 0
+            else ["failed to remove residual project containers"]
         )
 
     def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:

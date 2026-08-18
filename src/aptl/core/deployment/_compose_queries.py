@@ -15,6 +15,8 @@ from aptl.core.deployment._proc_net_listeners import (
     ContainerListeners,
     parse_proc_net_listeners,
 )
+from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -66,6 +68,18 @@ def _parse_ports(ports_str: str) -> list[str]:
     if not ports_str:
         return []
     return [p.strip() for p in ports_str.split(",") if p.strip()]
+
+
+def _nonempty_lines(output: str) -> set[str]:
+    """Return the distinct identifiers from bounded line-oriented output."""
+
+    return {line.strip() for line in output.splitlines() if line.strip()}
+
+
+def _nonempty_line_count(output: str) -> int:
+    """Count bounded line-oriented Docker identifiers."""
+
+    return len(_nonempty_lines(output))
 
 
 def _parse_lab_row(line: str) -> dict[str, Any] | None:
@@ -171,6 +185,49 @@ class ComposeQueryMixin(object):
     """
 
     # Host inventory (CLI-004 / ADR-023) ----------------------------------
+
+    def observe_project_runtime(self) -> ProjectRuntimePresence:
+        """Observe all project containers and networks without conflating errors."""
+
+        try:
+            container_ids: set[str] = set()
+            for project_label in (
+                "com.docker.compose.project",
+                "aptl.lifecycle.project",
+            ):
+                containers = self._run(
+                    [
+                        "docker",
+                        "ps",
+                        "-aq",
+                        "--filter",
+                        f"label={project_label}={self._project_name}",
+                    ],
+                    timeout=_HOST_INVENTORY_TIMEOUT,
+                )
+                if containers.returncode != 0:
+                    return ProjectRuntimePresence(error="container observation failed")
+                container_ids.update(_nonempty_lines(containers.stdout))
+            networks = self._run(
+                [
+                    "docker",
+                    "network",
+                    "ls",
+                    "--filter",
+                    f"label=com.docker.compose.project={self._project_name}",
+                    "--format",
+                    "{{.ID}}",
+                ],
+                timeout=_HOST_INVENTORY_TIMEOUT,
+            )
+            if networks.returncode != 0:
+                return ProjectRuntimePresence(error="network observation failed")
+        except (BackendTimeoutError, OSError):
+            return ProjectRuntimePresence(error="runtime observation failed")
+        return ProjectRuntimePresence(
+            container_count=len(container_ids),
+            network_count=_nonempty_line_count(networks.stdout),
+        )
 
     def host_versions(self) -> dict[str, str]:
         result = {"docker": "", "compose": ""}
@@ -462,8 +519,6 @@ class ComposeQueryMixin(object):
             timeout=_LISTENER_SIDECAR_TIMEOUT,
         )
         if result.returncode != 0:
-            log.debug(
-                "listener sidecar failed for %s: %s", name, result.stderr.strip()
-            )
+            log.debug("listener sidecar failed for %s: %s", name, result.stderr.strip())
             return None
         return parse_proc_net_listeners(result.stdout)

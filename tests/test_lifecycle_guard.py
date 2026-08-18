@@ -22,6 +22,15 @@ def _hold_lifecycle_lock_in_child(project_dir: str, ready_path: str) -> None:
         time.sleep(30)
 
 
+def _enter_lifecycle_lock(project_dir: Path) -> None:
+    """Acquire and immediately release the lifecycle lock for exception tests."""
+
+    from aptl.core.lifecycle_guard import lifecycle_mutation_lock
+
+    with lifecycle_mutation_lock(project_dir):
+        pass
+
+
 def test_lifecycle_mutation_lock_is_reentrant_per_thread(tmp_path: Path) -> None:
     from aptl.core.lifecycle_guard import lifecycle_mutation_lock
 
@@ -88,8 +97,7 @@ def test_lifecycle_mutation_lock_rejects_a_second_thread(tmp_path: Path) -> None
     assert acquired.wait(timeout=5)
     try:
         with pytest.raises(LifecycleBusyError, match="lifecycle owner"):
-            with lifecycle_mutation_lock(tmp_path):
-                pytest.fail("a second lifecycle owner must not enter")
+            _enter_lifecycle_lock(tmp_path)
     finally:
         release.set()
         holder.join(timeout=5)
@@ -114,8 +122,7 @@ def test_process_death_releases_lifecycle_ownership(tmp_path: Path) -> None:
             time.sleep(0.01)
         assert ready_path.exists()
         with pytest.raises(LifecycleBusyError, match="lifecycle owner"):
-            with lifecycle_mutation_lock(tmp_path):
-                pytest.fail("the live child process must retain lifecycle ownership")
+            _enter_lifecycle_lock(tmp_path)
         holder.terminate()
         holder.join(timeout=5)
         assert not holder.is_alive()
@@ -174,8 +181,7 @@ def test_windows_lock_rejects_a_junctioned_state_directory(tmp_path: Path) -> No
     )
 
     with pytest.raises(LifecycleLockUnavailableError):
-        with lifecycle_mutation_lock(tmp_path):
-            pytest.fail("a junctioned lifecycle root must not be followed")
+        _enter_lifecycle_lock(tmp_path)
     assert not (outside / "lifecycle").exists()
 
 
@@ -192,8 +198,7 @@ def test_lifecycle_mutation_lock_rejects_symlinked_state_directory(
     (tmp_path / ".aptl").symlink_to(outside, target_is_directory=True)
 
     with pytest.raises(LifecycleLockUnavailableError):
-        with lifecycle_mutation_lock(tmp_path):
-            pytest.fail("a symlinked lifecycle root must not be followed")
+        _enter_lifecycle_lock(tmp_path)
 
 
 def test_start_fails_busy_before_dotenv_hydration(tmp_path: Path) -> None:

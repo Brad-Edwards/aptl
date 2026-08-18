@@ -20,18 +20,35 @@ from aptl.core.config import find_config
 from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.utils.pathsafe import PathContainmentError, open_dir_contained_nofollow
 
-try:  # pragma: no cover - platform-specific import
+# Platform-specific import.
+try:
     import fcntl
-except ModuleNotFoundError:  # pragma: no cover - Windows
+# Windows has no POSIX flock module.
+except ModuleNotFoundError:
     fcntl = None
 
-try:  # pragma: no cover - platform-specific import
+# Platform-specific import.
+try:
     import msvcrt
-except ModuleNotFoundError:  # pragma: no cover - POSIX
+# POSIX has no Microsoft C runtime module.
+except ModuleNotFoundError:
     msvcrt = None
 
 _LIFECYCLE_DIR = ".aptl/lifecycle"
 _LOCK_FILE = ".lock"
+_WIN_DIRECTORY_ACCESS = 0x00100187
+_WIN_FILE_ACCESS = 0x00100183
+_WIN_SHARE_ALL = 0x00000007
+_WIN_OPEN_EXISTING = 3
+_WIN_OPEN_IF = 3
+_WIN_ROOT_OPEN_FLAGS = 0x02200000
+_WIN_OBJECT_CASE_INSENSITIVE = 0x00000040
+_WIN_SYNC_OPEN_REPARSE = 0x00200020
+_WIN_DIRECTORY_OBJECT = 0x00000001
+_WIN_FILE_OBJECT = 0x00000040
+_WIN_FILE_ATTRIBUTE_NORMAL = 0x00000080
+_WIN_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_WIN_FILE_ATTRIBUTE_TAG_INFO = 9
 
 
 class LifecycleLockUnavailableError(RuntimeError):
@@ -40,6 +57,8 @@ class LifecycleLockUnavailableError(RuntimeError):
 
 @dataclass
 class _HeldLifecycleLock:
+    """One process-local reference to an owned operating-system lock."""
+
     fd: int
     depth: int
 
@@ -71,53 +90,73 @@ def lifecycle_mutation_lock(project_dir: Path) -> Iterator[Path]:
 
     root = canonical_lifecycle_project_root(project_dir)
     key = (str(root), threading.get_ident())
-    with _HELD_LOCKS_GUARD:
-        held = _HELD_LOCKS.get(key)
-        if held is not None:
-            held.depth += 1
-            reused = True
-        else:
-            reused = False
-
+    reused = _increment_reentrant_lock(key)
     if not reused:
-        fd: int | None = None
-        try:
-            fd = _open_lock_fd(root)
-            _try_lock(fd)
-        except LifecycleBusyError:
-            if fd is not None:
-                os.close(fd)
-            raise
-        except (PathContainmentError, OSError) as exc:
-            if fd is not None:
-                os.close(fd)
-            raise LifecycleLockUnavailableError(
-                "safe lifecycle ownership is unavailable"
-            ) from exc
-        except BaseException:
-            if fd is not None:
-                os.close(fd)
-            raise
-        assert fd is not None
+        fd = _acquire_lock_fd(root)
         with _HELD_LOCKS_GUARD:
             _HELD_LOCKS[key] = _HeldLifecycleLock(fd=fd, depth=1)
 
     try:
         yield root
     finally:
-        with _HELD_LOCKS_GUARD:
-            entry = _HELD_LOCKS[key]
-            entry.depth -= 1
-            if entry.depth == 0:
-                _unlock(entry.fd)
-                os.close(entry.fd)
-                del _HELD_LOCKS[key]
+        _release_lock(key)
+
+
+def _increment_reentrant_lock(key: tuple[str, int]) -> bool:
+    """Increment and report an existing same-thread ownership record."""
+
+    with _HELD_LOCKS_GUARD:
+        held = _HELD_LOCKS.get(key)
+        if held is not None:
+            held.depth += 1
+    return held is not None
+
+
+def _acquire_lock_fd(root: Path) -> int:
+    """Open and acquire a new OS lock, closing the descriptor on failure."""
+
+    fd: int | None = None
+    try:
+        fd = _open_lock_fd(root)
+        _try_lock(fd)
+    except LifecycleBusyError:
+        _close_if_open(fd)
+        raise
+    except (PathContainmentError, OSError) as exc:
+        _close_if_open(fd)
+        raise LifecycleLockUnavailableError(
+            "safe lifecycle ownership is unavailable"
+        ) from exc
+    except BaseException:
+        _close_if_open(fd)
+        raise
+    assert fd is not None
+    return fd
+
+
+def _close_if_open(fd: int | None) -> None:
+    """Close ``fd`` only when acquisition progressed far enough to open it."""
+
+    if fd is not None:
+        os.close(fd)
+
+
+def _release_lock(key: tuple[str, int]) -> None:
+    """Drop one reentrant depth and release the OS lock at depth zero."""
+
+    with _HELD_LOCKS_GUARD:
+        entry = _HELD_LOCKS[key]
+        entry.depth -= 1
+        if entry.depth == 0:
+            _unlock(entry.fd)
+            os.close(entry.fd)
+            del _HELD_LOCKS[key]
 
 
 def _open_lock_fd(project_dir: Path) -> int:
     """Open the fixed owner-only lock without following a POSIX symlink."""
 
-    if os.name == "nt":  # pragma: no cover - exercised on Windows CI
+    if os.name == "nt":
         return _open_windows_lock_fd(project_dir)
 
     lifecycle_fd = open_dir_contained_nofollow(project_dir, _LIFECYCLE_DIR, create=True)
@@ -158,7 +197,8 @@ def _open_windows_lock_fd(project_dir: Path) -> int:
         )
         _windows_reject_reparse_point(lock_handle)
         fd = _windows_handle_to_fd(lock_handle)
-        lock_handle = None  # the C runtime descriptor now owns the handle
+        # The C runtime descriptor now owns the handle.
+        lock_handle = None
     finally:
         if lock_handle is not None:
             _windows_close_handle(lock_handle)
@@ -192,11 +232,11 @@ def _windows_open_root_handle(project_dir: Path) -> int:
 
     handle = create_file(
         str(project_dir),
-        0x00100187,  # SYNCHRONIZE | read/write attributes | add/list children
-        0x00000007,  # FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+        _WIN_DIRECTORY_ACCESS,
+        _WIN_SHARE_ALL,
         None,
-        3,  # OPEN_EXISTING
-        0x02200000,  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+        _WIN_OPEN_EXISTING,
+        _WIN_ROOT_OPEN_FLAGS,
         None,
     )
     invalid_handle = ctypes.c_void_p(-1).value
@@ -214,6 +254,8 @@ def _windows_open_relative_handle(
     from ctypes import wintypes
 
     class UnicodeString(ctypes.Structure):
+        """Windows UNICODE_STRING used by descriptor-relative opens."""
+
         _fields_ = [
             ("Length", wintypes.USHORT),
             ("MaximumLength", wintypes.USHORT),
@@ -221,6 +263,8 @@ def _windows_open_relative_handle(
         ]
 
     class ObjectAttributes(ctypes.Structure):
+        """Windows OBJECT_ATTRIBUTES binding for a relative child name."""
+
         _fields_ = [
             ("Length", wintypes.ULONG),
             ("RootDirectory", wintypes.HANDLE),
@@ -231,9 +275,13 @@ def _windows_open_relative_handle(
         ]
 
     class IoStatusValue(ctypes.Union):
+        """Status-or-pointer union embedded in IO_STATUS_BLOCK."""
+
         _fields_ = [("Status", ctypes.c_long), ("Pointer", wintypes.LPVOID)]
 
     class IoStatusBlock(ctypes.Structure):
+        """Windows IO_STATUS_BLOCK returned by NtCreateFile."""
+
         _anonymous_ = ("value",)
         _fields_ = [("value", IoStatusValue), ("Information", ctypes.c_size_t)]
 
@@ -248,7 +296,7 @@ def _windows_open_relative_handle(
         Length=ctypes.sizeof(ObjectAttributes),
         RootDirectory=wintypes.HANDLE(parent_handle),
         ObjectName=ctypes.pointer(object_name),
-        Attributes=0x00000040,  # OBJ_CASE_INSENSITIVE
+        Attributes=_WIN_OBJECT_CASE_INSENSITIVE,
         SecurityDescriptor=None,
         SecurityQualityOfService=None,
     )
@@ -271,18 +319,19 @@ def _windows_open_relative_handle(
         wintypes.ULONG,
     )
     nt_create_file.restype = ctypes.c_long
-    options = 0x00200020 | (0x00000001 if directory else 0x00000040)
-    desired_access = 0x00100187 if directory else 0x00100183
+    object_type = _WIN_DIRECTORY_OBJECT if directory else _WIN_FILE_OBJECT
+    options = _WIN_SYNC_OPEN_REPARSE | object_type
+    desired_access = _WIN_DIRECTORY_ACCESS if directory else _WIN_FILE_ACCESS
     status = nt_create_file(
         ctypes.byref(handle),
         desired_access,
         ctypes.byref(attributes),
         ctypes.byref(io_status),
         None,
-        0x00000080,  # FILE_ATTRIBUTE_NORMAL
-        0x00000007,
-        3,  # FILE_OPEN_IF
-        options,  # synchronous, open-reparse, and expected object type
+        _WIN_FILE_ATTRIBUTE_NORMAL,
+        _WIN_SHARE_ALL,
+        _WIN_OPEN_IF,
+        options,
         None,
         0,
     )
@@ -301,6 +350,8 @@ def _windows_reject_reparse_point(handle: int) -> None:
     from ctypes import wintypes
 
     class FileAttributeTagInfo(ctypes.Structure):
+        """Windows FILE_ATTRIBUTE_TAG_INFO response structure."""
+
         _fields_ = [
             ("FileAttributes", wintypes.DWORD),
             ("ReparseTag", wintypes.DWORD),
@@ -318,19 +369,19 @@ def _windows_reject_reparse_point(handle: int) -> None:
     info = FileAttributeTagInfo()
     if not get_info(
         wintypes.HANDLE(handle),
-        9,  # FileAttributeTagInfo
+        _WIN_FILE_ATTRIBUTE_TAG_INFO,
         ctypes.byref(info),
         ctypes.sizeof(info),
     ):
         raise ctypes.WinError(ctypes.get_last_error())
-    if info.FileAttributes & 0x00000400:  # FILE_ATTRIBUTE_REPARSE_POINT
+    if info.FileAttributes & _WIN_FILE_ATTRIBUTE_REPARSE_POINT:
         raise OSError("lifecycle lock path contains a reparse point")
 
 
 def _windows_handle_to_fd(handle: int) -> int:
     """Transfer an owned Windows file handle to a Python descriptor."""
 
-    if msvcrt is None:  # pragma: no cover - guarded by the Windows call site
+    if msvcrt is None:
         raise OSError("Windows descriptor support is unavailable")
     flags = os.O_RDWR | getattr(os, "O_BINARY", 0)
     return msvcrt.open_osfhandle(handle, flags)
@@ -356,10 +407,12 @@ def _try_lock(fd: int) -> None:
     try:
         if fcntl is not None:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        elif msvcrt is not None:  # pragma: no cover - Windows
+        # Windows uses a one-byte Microsoft C runtime lock.
+        elif msvcrt is not None:
             os.lseek(fd, 0, os.SEEK_SET)
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        else:  # pragma: no cover - unsupported runtime
+        # Fail closed on an unsupported Python runtime.
+        else:
             raise OSError("no cross-process file-lock implementation is available")
     except OSError as exc:
         if exc.errno not in (None, errno.EACCES, errno.EAGAIN):
@@ -374,6 +427,7 @@ def _unlock(fd: int) -> None:
 
     if fcntl is not None:
         fcntl.flock(fd, fcntl.LOCK_UN)
-    elif msvcrt is not None:  # pragma: no cover - Windows
+    # Windows uses a one-byte Microsoft C runtime lock.
+    elif msvcrt is not None:
         os.lseek(fd, 0, os.SEEK_SET)
         msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)

@@ -289,23 +289,33 @@ def kill_lab_containers(
     resolved_dir = Path(project_dir) if project_dir is not None else Path(".")
     try:
         with lifecycle_mutation_lock(resolved_dir) as project_root:
-            resolved_backend, error = _kill_backend(project_root, backend)
-            if error:
-                return False, error
-            assert resolved_backend is not None
-            return resolved_backend.kill(list(ALL_KNOWN_PROFILES))
+            result = _kill_lab_containers_owned(project_root, backend)
     except LifecycleBusyError:
-        return (
+        result = (
             False,
             "[lifecycle-owner-busy] Another lab lifecycle operation is active; "
             "wait for it to finish before retrying container kill.",
         )
     except LifecycleLockUnavailableError:
-        return (
+        result = (
             False,
             "[lifecycle-lock-unavailable] Container kill blocked because safe "
             "project lifecycle ownership could not be established.",
         )
+    return result
+
+
+def _kill_lab_containers_owned(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"],
+) -> tuple[bool, str]:
+    """Kill project containers while the caller owns the lifecycle lock."""
+
+    resolved_backend, error = _kill_backend(project_dir, backend)
+    if error:
+        return False, error
+    assert resolved_backend is not None
+    return resolved_backend.kill(list(ALL_KNOWN_PROFILES))
 
 
 def _kill_backend(
@@ -314,23 +324,27 @@ def _kill_backend(
 ) -> tuple[Optional["DeploymentBackend"], str]:
     """Resolve the configured backend without guessing an invalid identity."""
 
-    if backend is not None:
-        return backend, ""
-    from aptl.core.deployment import get_backend
-    from aptl.core.deployment.docker_compose import DockerComposeBackend
+    resolved_backend = backend
+    error = ""
+    if resolved_backend is None:
+        from aptl.core.deployment import get_backend
+        from aptl.core.deployment.docker_compose import DockerComposeBackend
 
-    config_path = find_config(project_dir)
-    if config_path is None:
-        return DockerComposeBackend(project_dir=project_dir), ""
-    try:
-        config = load_config(config_path)
-    except (FileNotFoundError, ValueError):
-        return (
-            None,
-            "[lifecycle-invalid-configuration] Container kill blocked: invalid "
-            "configuration; refusing to guess the deployment project identity.",
-        )
-    return get_backend(config, project_dir), ""
+        config_path = find_config(project_dir)
+        if config_path is None:
+            resolved_backend = DockerComposeBackend(project_dir=project_dir)
+        else:
+            try:
+                config = load_config(config_path)
+            except (FileNotFoundError, ValueError):
+                error = (
+                    "[lifecycle-invalid-configuration] Container kill blocked: "
+                    "invalid configuration; refusing to guess the deployment "
+                    "project identity."
+                )
+            else:
+                resolved_backend = get_backend(config, project_dir)
+    return resolved_backend, error
 
 
 def clear_session(state_dir: Path) -> bool:

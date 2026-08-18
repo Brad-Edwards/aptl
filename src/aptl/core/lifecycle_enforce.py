@@ -32,7 +32,6 @@ from aptl.core.lab_types import (
     StartupOutcome,
 )
 from aptl.core.lifecycle_policy import (
-    LifecycleBusyError,
     LifecycleDecision,
     LifecycleState,
     _parse_iso,

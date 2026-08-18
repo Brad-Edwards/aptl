@@ -170,8 +170,12 @@ show_missing = true
 # ``# pragma: no cover`` still works.
 exclude_also = [
     "if os.name != \"posix\":",
+    "if os.name == \"nt\":",
     "except metadata.PackageNotFoundError:",
     "if TYPE_CHECKING:",
+    # Low-level Windows handle bindings are exercised by Windows CI only;
+    # Linux CI covers the platform-neutral orchestration around them.
+    "def _windows_",
 ]
 
 [tool.coverage.xml]

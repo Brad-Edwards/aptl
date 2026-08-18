@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
 if TYPE_CHECKING:
@@ -403,75 +403,6 @@ class ComposeBaseSubstrateMixin(object):
             raise BackendSeedError(
                 f"failed to copy project content into container {container}"
             )
-
-    def remove_generic_materializer_containers(self) -> list[str]:
-        """Force-remove every container the generic materializer started (ADR-048).
-
-        `docker compose down` only tears down containers Compose itself
-        started; a node the generic materializer realized directly (a plain
-        `docker run`) is invisible to it, so stopping the lab would otherwise
-        leave those containers running - attached to the very networks/
-        volumes the rest of cleanup needs to remove, failing that cleanup
-        outright. Discovered by ``aptl.lifecycle.project``, the label
-        ``start_base_container`` sets on every one of its containers, never
-        by name pattern. Returns one failure message per container that
-        could not be removed, empty when clean.
-        """
-
-        try:
-            list_result = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "-aq",
-                    "--filter",
-                    f"label=aptl.lifecycle.project={self._project_name}",
-                ],
-                timeout=30,
-            )
-            if list_result.returncode != 0:
-                return ["failed to list generic-materializer containers"]
-            names = [line for line in list_result.stdout.splitlines() if line.strip()]
-            if not names:
-                return []
-            result = self._run(["docker", "rm", "-f", *names], timeout=60)
-        except (BackendTimeoutError, OSError):
-            return ["failed to remove generic-materializer containers"]
-        return (
-            []
-            if result.returncode == 0
-            else ["failed to remove generic-materializer containers"]
-        )
-
-    def remove_project_containers(self) -> list[str]:
-        """Force-remove residual containers carrying this project identity."""
-
-        try:
-            list_result = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "-aq",
-                    "--filter",
-                    f"label=com.docker.compose.project={self._project_name}",
-                ],
-                timeout=30,
-            )
-            if list_result.returncode != 0:
-                return ["failed to list residual project containers"]
-            identifiers = [
-                line.strip() for line in list_result.stdout.splitlines() if line.strip()
-            ]
-            if not identifiers:
-                return []
-            result = self._run(["docker", "rm", "-f", *identifiers], timeout=60)
-        except (BackendTimeoutError, OSError):
-            return ["failed to remove residual project containers"]
-        return (
-            []
-            if result.returncode == 0
-            else ["failed to remove residual project containers"]
-        )
 
     def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:
         """Bind image-free nodes to admitted networks before they are created."""

@@ -380,7 +380,8 @@ class TestPreexistingRangeAdmission:
 
         result = _step_reject_preexisting_range(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "lifecycle-range-present" in result.error
         assert "aptl lab stop" in result.error
 
@@ -397,7 +398,8 @@ class TestPreexistingRangeAdmission:
 
         result = _step_reject_preexisting_range(ctx)
 
-        assert result is not None and "lifecycle-range-present" in result.error
+        assert result is not None
+        assert "lifecycle-range-present" in result.error
 
     def test_presence_observation_failure_blocks_start(self, tmp_path):
         from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
@@ -411,7 +413,8 @@ class TestPreexistingRangeAdmission:
 
         result = _step_reject_preexisting_range(ctx)
 
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "lifecycle-observation-failed" in result.error
         assert "docker stderr" not in result.error.lower()
 

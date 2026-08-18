@@ -51,7 +51,8 @@ def enforce(
     or provision a due scheduled range. Designed to be driven by a systemd
     timer or cron entry. A no-op when no ``lifecycle_policy`` is configured.
     """
-    from aptl.core.lifecycle_enforce import LifecycleBusyError, enforce_once
+    from aptl.core.lifecycle_enforce import enforce_once
+    from aptl.core.lifecycle_policy import LifecycleBusyError
 
     try:
         result = enforce_once(project_dir, grace_minutes=grace_minutes)
@@ -84,7 +85,8 @@ def monitor(
     systemd timer / cron. Holds the project lifecycle lock for its whole run,
     so a second monitor (or a one-shot ``enforce``) cannot act concurrently.
     """
-    from aptl.core.lifecycle_enforce import LifecycleBusyError, run_monitor
+    from aptl.core.lifecycle_enforce import run_monitor
+    from aptl.core.lifecycle_policy import LifecycleBusyError
 
     try:
         results = run_monitor(

@@ -523,35 +523,57 @@ def clean_boot_lab(
     """
     try:
         with lifecycle_mutation_lock(project_dir) as project_root:
-            if progress is not None:
-                progress("Stopping the existing lab before clean boot.")
-            stop_result = stop_lab(
-                remove_volumes=remove_volumes,
-                project_dir=project_root,
-                backend=backend,
-            )
-            if not stop_result.success:
-                return LabResult(
-                    success=False,
-                    error=redact(
-                        "clean-state cleanup failed; lab not booted: "
-                        f"{stop_result.error}"
-                    ),
-                    outcome=StartupOutcome.FAILED,
-                )
-
-            appliance_kwargs = {"appliance": appliance} if appliance is not None else {}
-            return orchestrate_lab_start(
+            result = _clean_boot_lab_owned(
                 project_root,
+                remove_volumes=remove_volumes,
                 skip_seed=skip_seed,
                 scenario_path=scenario_path,
+                backend=backend,
                 progress=progress,
-                **appliance_kwargs,
+                appliance=appliance,
             )
     except LifecycleBusyError:
-        return _lifecycle_busy_result("start --clean")
+        result = _lifecycle_busy_result("start --clean")
     except LifecycleLockUnavailableError:
-        return _lifecycle_lock_unavailable_result()
+        result = _lifecycle_lock_unavailable_result()
+    return result
+
+
+def _clean_boot_lab_owned(
+    project_root: Path,
+    *,
+    remove_volumes: bool,
+    skip_seed: bool,
+    scenario_path: Optional[Path],
+    backend: Optional["DeploymentBackend"],
+    progress: ProgressCallback | None,
+    appliance: ApplianceStartOptions | None,
+) -> LabResult:
+    """Clean and restart the lab while the caller owns lifecycle mutation."""
+
+    if progress is not None:
+        progress("Stopping the existing lab before clean boot.")
+    stop_result = stop_lab(
+        remove_volumes=remove_volumes,
+        project_dir=project_root,
+        backend=backend,
+    )
+    if not stop_result.success:
+        return LabResult(
+            success=False,
+            error=redact(
+                f"clean-state cleanup failed; lab not booted: {stop_result.error}"
+            ),
+            outcome=StartupOutcome.FAILED,
+        )
+    appliance_kwargs = {"appliance": appliance} if appliance is not None else {}
+    return orchestrate_lab_start(
+        project_root,
+        skip_seed=skip_seed,
+        scenario_path=scenario_path,
+        progress=progress,
+        **appliance_kwargs,
+    )
 
 
 def lab_status(

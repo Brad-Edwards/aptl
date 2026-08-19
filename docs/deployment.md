@@ -144,6 +144,22 @@ docker compose --profile wazuh --profile victim --profile kali stop
 docker compose --profile wazuh --profile victim --profile kali down -v
 ```
 
+Lifecycle mutations are single-owner per project. If a start, stop, clean boot,
+policy tick, or container kill is already running, another mutating command
+fails with `lifecycle-owner-busy` and does not remove resources from under the
+active operation. Wait for the first command to finish, or stop it and then run
+`aptl lab stop` to reset any abandoned range.
+
+Normal `aptl lab start` also refuses a free-lock project that still has labelled
+containers (including created or exited containers) or networks. Run `aptl lab
+stop` for a volume-preserving reset, or `aptl lab start --clean` for the
+explicit volume-destroying reset. Detection failures are fail-closed; repair
+the local or SSH Docker connection instead of assuming an empty range.
+
+`aptl lab start` remains in the foreground until Compose health and authenticated
+service readiness finish. Containers showing `Up` is not a successful lab
+realization and does not make it safe to start another lifecycle operation.
+
 ## Lifecycle Policy
 
 The lab can auto-teardown on a TTL or idle timeout and provision on a schedule
@@ -185,8 +201,9 @@ aptl lab monitor --interval 60
 aptl lab policy show
 ```
 
-The tick holds a per-project lock, so a manual `enforce` and a running
-`monitor` never act at once. See
+The tick uses the same per-project lock as manual/API start, stop, clean boot,
+and container kill, so policy automation cannot interleave with another lab
+mutation. See
 [ADR-045](adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md) for the
 design.
 

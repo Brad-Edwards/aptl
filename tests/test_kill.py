@@ -41,7 +41,9 @@ class TestFindMcpProcesses:
             if path == "/proc/100/cmdline":
                 m.__enter__ = lambda s: s
                 m.__exit__ = MagicMock(return_value=False)
-                m.read.return_value = b"node\x00/home/user/aptl/mcp/mcp-wazuh/build/index.js\x00"
+                m.read.return_value = (
+                    b"node\x00/home/user/aptl/mcp/mcp-wazuh/build/index.js\x00"
+                )
             elif path == "/proc/200/cmdline":
                 m.__enter__ = lambda s: s
                 m.__exit__ = MagicMock(return_value=False)
@@ -160,7 +162,9 @@ class TestFindMcpProcesses:
                 m.read.return_value = b"node\x00mcp/mcp-wazuh/build/index.js\x00"
             elif path == "/proc/999/cmdline":
                 # Own process cmdline might match if running aptl kill
-                m.read.return_value = b"python\x00aptl\x00kill\x00mcp-wazuh/build/index.js\x00"
+                m.read.return_value = (
+                    b"python\x00aptl\x00kill\x00mcp-wazuh/build/index.js\x00"
+                )
             else:
                 raise FileNotFoundError(path)
             return m
@@ -208,7 +212,11 @@ class TestKillMcpProcesses:
         from aptl.core.kill import kill_mcp_processes
 
         mock_find.return_value = [
-            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+            {
+                "pid": 100,
+                "cmdline": "node mcp-wazuh/build/index.js",
+                "name": "mcp-wazuh",
+            },
         ]
         # Process exits after SIGTERM
         mock_alive.return_value = True
@@ -232,7 +240,11 @@ class TestKillMcpProcesses:
 
         mock_sys.platform = "linux"
         mock_find.return_value = [
-            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+            {
+                "pid": 100,
+                "cmdline": "node mcp-wazuh/build/index.js",
+                "name": "mcp-wazuh",
+            },
         ]
         # Process stays alive throughout timeout (_process_exited returns False)
         mock_alive.return_value = False
@@ -265,7 +277,11 @@ class TestKillMcpProcesses:
 
         mock_sys.platform = "linux"
         mock_find.return_value = [
-            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+            {
+                "pid": 100,
+                "cmdline": "node mcp-wazuh/build/index.js",
+                "name": "mcp-wazuh",
+            },
         ]
         mock_alive.return_value = False
         killed, errors = kill_mcp_processes(
@@ -285,7 +301,11 @@ class TestKillMcpProcesses:
         from aptl.core.kill import kill_mcp_processes
 
         mock_find.return_value = [
-            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+            {
+                "pid": 100,
+                "cmdline": "node mcp-wazuh/build/index.js",
+                "name": "mcp-wazuh",
+            },
         ]
         mock_kill.side_effect = ProcessLookupError("No such process")
 
@@ -300,7 +320,11 @@ class TestKillMcpProcesses:
         from aptl.core.kill import kill_mcp_processes
 
         mock_find.return_value = [
-            {"pid": 100, "cmdline": "node mcp-wazuh/build/index.js", "name": "mcp-wazuh"},
+            {
+                "pid": 100,
+                "cmdline": "node mcp-wazuh/build/index.js",
+                "name": "mcp-wazuh",
+            },
         ]
         mock_kill.side_effect = PermissionError("Operation not permitted")
 
@@ -326,56 +350,55 @@ class TestKillLabContainers:
     """Tests for emergency container stop."""
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_runs_docker_compose_kill_and_down(self, mock_run):
+    def test_runs_docker_compose_kill_and_down(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        success, error = kill_lab_containers(project_dir=Path("/tmp/aptl"))
+        success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is True
         assert error == ""
-        assert mock_run.call_count == 2
+        assert mock_run.call_count >= 2
 
-        # First call: docker compose kill
-        first_cmd = mock_run.call_args_list[0][0][0]
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        first_cmd = next(command for command in commands if "kill" in command)
         assert "kill" in first_cmd
         assert "--profile" in first_cmd
 
-        # Second call: docker compose down
-        second_cmd = mock_run.call_args_list[1][0][0]
+        second_cmd = next(command for command in commands if "down" in command)
         assert "down" in second_cmd
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_includes_all_profiles(self, mock_run):
+    def test_includes_all_profiles(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
         from aptl.core.lab import ALL_KNOWN_PROFILES
 
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        kill_lab_containers()
+        kill_lab_containers(project_dir=tmp_path)
 
         first_cmd = mock_run.call_args_list[0][0][0]
         for profile in ALL_KNOWN_PROFILES:
             assert profile in first_cmd
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_handles_docker_failure(self, mock_run):
+    def test_handles_docker_failure(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
         mock_run.side_effect = FileNotFoundError("docker not found")
 
-        success, error = kill_lab_containers()
+        success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is False
         assert "docker compose kill failed" in error
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_uses_project_dir_as_cwd(self, mock_run):
+    def test_uses_project_dir_as_cwd(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
-        project = Path("/my/project")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        project = tmp_path
 
         kill_lab_containers(project_dir=project)
 
@@ -383,44 +406,60 @@ class TestKillLabContainers:
             assert c[1]["cwd"] == project
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_subprocess_calls_have_timeout(self, mock_run):
-        from aptl.core.kill import _DOCKER_TIMEOUT, kill_lab_containers
+    def test_subprocess_calls_have_timeout(self, mock_run, tmp_path):
+        from aptl.core.deployment.docker_compose import _DOCKER_TIMEOUT
+        from aptl.core.kill import kill_lab_containers
 
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        kill_lab_containers()
+        kill_lab_containers(project_dir=tmp_path)
 
-        for c in mock_run.call_args_list:
-            assert c[1]["timeout"] == _DOCKER_TIMEOUT
+        lifecycle_calls = [
+            call
+            for call in mock_run.call_args_list
+            if "kill" in call.args[0] or "down" in call.args[0]
+        ]
+        assert lifecycle_calls
+        assert all(
+            call.kwargs["timeout"] == _DOCKER_TIMEOUT for call in lifecycle_calls
+        )
+        assert all(call.kwargs["timeout"] > 0 for call in mock_run.call_args_list)
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_handles_timeout_expired(self, mock_run):
+    def test_handles_timeout_expired(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="docker", timeout=30)
 
-        success, error = kill_lab_containers()
+        success, error = kill_lab_containers(project_dir=tmp_path)
 
         assert success is False
 
     @patch("aptl.core.kill.subprocess.run")
-    def test_down_failure_is_non_fatal_when_kill_succeeded(self, mock_run):
+    def test_down_failure_is_non_fatal_when_kill_succeeded(self, mock_run, tmp_path):
         from aptl.core.kill import kill_lab_containers
 
         def run_side_effect(cmd, **kwargs):
+            del kwargs
             m = MagicMock()
             if "kill" in cmd:
                 m.returncode = 0
                 m.stderr = ""
-            else:
-                # docker compose down fails
+                m.stdout = ""
+            elif "down" in cmd:
                 m.returncode = 1
                 m.stderr = "network not found"
+                m.stdout = ""
+            else:
+                # Bounded project cleanup and final observation prove absence.
+                m.returncode = 0
+                m.stderr = ""
+                m.stdout = ""
             return m
 
         mock_run.side_effect = run_side_effect
 
-        success, error = kill_lab_containers()
+        success, error = kill_lab_containers(project_dir=tmp_path)
 
         # kill succeeded, down failure is just a warning
         assert success is True
@@ -436,11 +475,15 @@ class TestClearSession:
         state_dir = tmp_path / ".aptl"
         state_dir.mkdir()
         session_file = state_dir / "session.json"
-        session_file.write_text(json.dumps({
-            "scenario_id": "test-scenario",
-            "state": "active",
-            "started_at": "2026-03-22T00:00:00+00:00",
-        }))
+        session_file.write_text(
+            json.dumps(
+                {
+                    "scenario_id": "test-scenario",
+                    "state": "active",
+                    "started_at": "2026-03-22T00:00:00+00:00",
+                }
+            )
+        )
 
         result = clear_session(state_dir)
 
@@ -503,7 +546,7 @@ class TestExecuteKill:
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
     def test_kills_mcp_only_by_default(
-        self, mock_trace, mock_session, mock_containers, mock_mcp
+        self, mock_trace, mock_session, mock_containers, mock_mcp, tmp_path
     ):
         from aptl.core.kill import execute_kill
 
@@ -511,7 +554,7 @@ class TestExecuteKill:
         mock_session.return_value = False
         mock_trace.return_value = False
 
-        result = execute_kill(containers=False)
+        result = execute_kill(containers=False, project_dir=tmp_path)
 
         assert result.success is True
         assert result.mcp_processes_killed == 3
@@ -523,7 +566,7 @@ class TestExecuteKill:
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
     def test_kills_mcp_and_containers(
-        self, mock_trace, mock_session, mock_containers, mock_mcp
+        self, mock_trace, mock_session, mock_containers, mock_mcp, tmp_path
     ):
         from aptl.core.kill import execute_kill
 
@@ -532,7 +575,7 @@ class TestExecuteKill:
         mock_session.return_value = True
         mock_trace.return_value = True
 
-        result = execute_kill(containers=True)
+        result = execute_kill(containers=True, project_dir=tmp_path)
 
         assert result.success is True
         assert result.mcp_processes_killed == 2
@@ -546,7 +589,7 @@ class TestExecuteKill:
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
     def test_continues_on_partial_failure(
-        self, mock_trace, mock_session, mock_containers, mock_mcp
+        self, mock_trace, mock_session, mock_containers, mock_mcp, tmp_path
     ):
         from aptl.core.kill import execute_kill
 
@@ -555,7 +598,7 @@ class TestExecuteKill:
         mock_session.return_value = True
         mock_trace.return_value = True
 
-        result = execute_kill(containers=True)
+        result = execute_kill(containers=True, project_dir=tmp_path)
 
         # MCP failed but containers + session + trace succeeded
         assert result.success is True
@@ -567,14 +610,14 @@ class TestExecuteKill:
     @patch("aptl.core.kill.kill_mcp_processes")
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
-    def test_reports_all_errors(self, mock_trace, mock_session, mock_mcp):
+    def test_reports_all_errors(self, mock_trace, mock_session, mock_mcp, tmp_path):
         from aptl.core.kill import execute_kill
 
         mock_mcp.return_value = (0, ["perm denied pid=100"])
         mock_session.side_effect = RuntimeError("session broken")
         mock_trace.return_value = False
 
-        result = execute_kill(containers=False)
+        result = execute_kill(containers=False, project_dir=tmp_path)
 
         assert result.success is False
         assert len(result.errors) == 2
@@ -582,14 +625,16 @@ class TestExecuteKill:
     @patch("aptl.core.kill.kill_mcp_processes")
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
-    def test_success_when_nothing_to_kill(self, mock_trace, mock_session, mock_mcp):
+    def test_success_when_nothing_to_kill(
+        self, mock_trace, mock_session, mock_mcp, tmp_path
+    ):
         from aptl.core.kill import execute_kill
 
         mock_mcp.return_value = (0, [])
         mock_session.return_value = False
         mock_trace.return_value = False
 
-        result = execute_kill(containers=False)
+        result = execute_kill(containers=False, project_dir=tmp_path)
 
         # No actions taken but no errors either = success
         assert result.success is True
@@ -598,14 +643,16 @@ class TestExecuteKill:
     @patch("aptl.core.kill.kill_mcp_processes")
     @patch("aptl.core.kill.clear_session")
     @patch("aptl.core.kill.clean_trace_context")
-    def test_cleans_session_and_trace_context(self, mock_trace, mock_session, mock_mcp):
+    def test_cleans_session_and_trace_context(
+        self, mock_trace, mock_session, mock_mcp, tmp_path
+    ):
         from aptl.core.kill import execute_kill
 
         mock_mcp.return_value = (0, [])
         mock_session.return_value = True
         mock_trace.return_value = True
 
-        result = execute_kill(containers=False)
+        result = execute_kill(containers=False, project_dir=tmp_path)
 
         assert result.session_cleared is True
         assert result.trace_context_cleaned is True

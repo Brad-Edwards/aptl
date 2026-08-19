@@ -53,6 +53,11 @@ from aptl.core.lab_types import (
     StartupDiagnostic as StartupDiagnostic,
     StartupOutcome as StartupOutcome,
 )
+from aptl.core.lifecycle_guard import (
+    LifecycleLockUnavailableError,
+    lifecycle_mutation_lock,
+)
+from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.services import (
     ServiceResult,
     check_indexer_ready,
@@ -252,7 +257,9 @@ def admitted_stateful_artifact_ownership(
 ) -> frozenset[tuple[str, str, str, str]]:
     """Lazy RAES import for exact pre-mutation artifact ownership."""
 
-    from aptl.backends._raes_scenario_queries import admitted_stateful_artifact_ownership as _load
+    from aptl.backends._raes_scenario_queries import (
+        admitted_stateful_artifact_ownership as _load,
+    )
 
     return _load(project_dir, config, backend, scenario_path=scenario_path)
 
@@ -376,9 +383,9 @@ def stop_lab(
 ) -> LabResult:
     """Stop the lab environment.
 
-    Loads the config to determine which profiles to include in the
-    down command. If config loading fails, falls back to all known
-    profiles to ensure containers are stopped.
+    Loads the config to determine the admitted project identity and profiles.
+    A missing config falls back to the default project and known profiles for
+    recovery; an invalid present config fails closed.
 
     Args:
         remove_volumes: If True, also remove Docker volumes (-v flag).
@@ -388,9 +395,27 @@ def stop_lab(
     Returns:
         LabResult indicating success or failure.
     """
-    # Load config to get active profiles; fall back to all profiles
-    profiles: list[str] = []
     search_dir = project_dir or Path(".")
+    try:
+        with lifecycle_mutation_lock(search_dir) as project_root:
+            return _stop_lab_owned(remove_volumes, project_root, backend)
+    except LifecycleBusyError:
+        return _lifecycle_busy_result("stop")
+    except LifecycleLockUnavailableError:
+        return _lifecycle_lock_unavailable_result()
+
+
+def _stop_lab_owned(
+    remove_volumes: bool,
+    search_dir: Path,
+    backend: Optional["DeploymentBackend"],
+) -> LabResult:
+    """Run teardown while the caller owns the project lifecycle lock."""
+
+    # Load config to get active profiles; fall back to all profiles only when
+    # there is no config. An invalid present config cannot safely identify the
+    # deployment project for destructive label and volume queries.
+    profiles: list[str] = []
     config_path = find_config(search_dir)
     config: AptlConfig | None = None
     if config_path is not None:
@@ -399,6 +424,15 @@ def stop_lab(
             profiles = config.containers.enabled_profiles()
         except (FileNotFoundError, ValueError) as exc:
             log.warning("Could not load config for profiles: %s", exc)
+            if backend is None:
+                return LabResult(
+                    success=False,
+                    error=(
+                        "[lifecycle-invalid-configuration] Lab stop blocked: "
+                        "invalid configuration; refusing to guess the deployment "
+                        "project identity. Repair aptl.json and retry."
+                    ),
+                )
     if not profiles:
         profiles = list(ALL_KNOWN_PROFILES)
     # OTel stack (Collector + Tempo + Grafana) is core infrastructure the
@@ -413,6 +447,32 @@ def stop_lab(
         backend = _get_backend(search_dir, config)
 
     return backend.stop(profiles, remove_volumes=remove_volumes)
+
+
+def _lifecycle_busy_result(action: str) -> LabResult:
+    """Return the bounded public result for an overlapping mutation."""
+
+    return LabResult(
+        success=False,
+        error=(
+            "[lifecycle-owner-busy] Another lab lifecycle operation is active. "
+            f"Wait for it to finish before retrying `aptl lab {action}`."
+        ),
+        outcome=StartupOutcome.FAILED,
+    )
+
+
+def _lifecycle_lock_unavailable_result() -> LabResult:
+    """Return a bounded failure when safe lifecycle ownership is unavailable."""
+
+    return LabResult(
+        success=False,
+        error=(
+            "[lifecycle-lock-unavailable] Lab lifecycle ownership could not be "
+            "established safely. Repair the project .aptl state path and retry."
+        ),
+        outcome=StartupOutcome.FAILED,
+    )
 
 
 def clean_boot_lab(
@@ -461,11 +521,41 @@ def clean_boot_lab(
         LabResult — the boot outcome on success, or a fatal ``FAILED``
         result carrying the redacted cleanup error when teardown fails.
     """
+    try:
+        with lifecycle_mutation_lock(project_dir) as project_root:
+            result = _clean_boot_lab_owned(
+                project_root,
+                remove_volumes=remove_volumes,
+                skip_seed=skip_seed,
+                scenario_path=scenario_path,
+                backend=backend,
+                progress=progress,
+                appliance=appliance,
+            )
+    except LifecycleBusyError:
+        result = _lifecycle_busy_result("start --clean")
+    except LifecycleLockUnavailableError:
+        result = _lifecycle_lock_unavailable_result()
+    return result
+
+
+def _clean_boot_lab_owned(
+    project_root: Path,
+    *,
+    remove_volumes: bool,
+    skip_seed: bool,
+    scenario_path: Optional[Path],
+    backend: Optional["DeploymentBackend"],
+    progress: ProgressCallback | None,
+    appliance: ApplianceStartOptions | None,
+) -> LabResult:
+    """Clean and restart the lab while the caller owns lifecycle mutation."""
+
     if progress is not None:
         progress("Stopping the existing lab before clean boot.")
     stop_result = stop_lab(
         remove_volumes=remove_volumes,
-        project_dir=project_dir,
+        project_dir=project_root,
         backend=backend,
     )
     if not stop_result.success:
@@ -476,10 +566,9 @@ def clean_boot_lab(
             ),
             outcome=StartupOutcome.FAILED,
         )
-
     appliance_kwargs = {"appliance": appliance} if appliance is not None else {}
     return orchestrate_lab_start(
-        project_dir,
+        project_root,
         skip_seed=skip_seed,
         scenario_path=scenario_path,
         progress=progress,
@@ -960,6 +1049,43 @@ def _step_load_config(ctx: _LabStartContext) -> LabResult | None:
     return result
 
 
+def _step_reject_preexisting_range(ctx: _LabStartContext) -> LabResult | None:
+    """Fail normal start when project runtime residue already exists.
+
+    Presence is an admission fact, not a realization verdict. A checked
+    backend observation keeps an unavailable daemon or malformed transport
+    response distinct from a genuinely empty project.
+    """
+
+    assert ctx.backend is not None
+    presence = ctx.backend.observe_project_runtime()
+    if presence.error:
+        log.error("Lab runtime presence observation failed")
+        return LabResult(
+            success=False,
+            error=(
+                "[lifecycle-observation-failed] Lab start blocked because "
+                "existing project runtime state could not be determined. "
+                "Check the deployment backend connection and retry."
+            ),
+        )
+    if not presence.present:
+        return None
+    log.warning(
+        "Lab start blocked by project runtime residue (containers=%d networks=%d)",
+        presence.container_count,
+        presence.network_count,
+    )
+    return LabResult(
+        success=False,
+        error=(
+            "[lifecycle-range-present] An APTL range already exists for this "
+            "deployment project. Run `aptl lab stop` and retry, or use "
+            "`aptl lab start --clean` for an explicit volume-reset boot."
+        ),
+    )
+
+
 def _configure_verified_appliance_launch(
     ctx: _LabStartContext,
 ) -> LabResult | None:
@@ -1082,10 +1208,7 @@ def _scenario_is_env_pack(ctx: _LabStartContext) -> bool:
     realization from the pack, not by the host-side lab-start steps.
     """
 
-    return (
-        ctx.config is not None
-        and ctx.config.scenario.source == "env-pack"
-    )
+    return ctx.config is not None and ctx.config.scenario.source == "env-pack"
 
 
 def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
@@ -1106,7 +1229,9 @@ def _step_ensure_ssh_keys(ctx: _LabStartContext) -> LabResult | None:
         # and authorized-key projections (generated + placed during realization);
         # only the control-plane key above is host-side. Generating the legacy
         # pivot/authorized-keys here would write dead files the pack never mounts.
-        log.info("Step 3: pivot/authorized keys come from the scenario pack; skipping host generation.")
+        log.info(
+            "Step 3: pivot/authorized keys come from the scenario pack; skipping host generation."
+        )
         return None
 
     return _generate_host_side_pivot_keys(keys_dir, pivot_dir)
@@ -2487,6 +2612,7 @@ def _step_sync_mcp_config(ctx: _LabStartContext) -> LabResult | None:
 _LAB_START_STEPS = (
     _step_load_env,
     _step_load_config,
+    _step_reject_preexisting_range,
     _step_resolve_host_ports,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
@@ -2510,6 +2636,7 @@ _LAB_START_STEPS = (
 _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
     "_step_load_config": "Loading lab configuration.",
+    "_step_reject_preexisting_range": "Checking for an existing lab range.",
     "_step_resolve_host_ports": "Checking host port availability.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
@@ -2541,6 +2668,30 @@ def _emit_progress(ctx: _LabStartContext, message: str) -> None:
 
 
 def orchestrate_lab_start(
+    project_dir: Path,
+    skip_seed: bool = False,
+    scenario_path: Path | None = None,
+    progress: ProgressCallback | None = None,
+    appliance: ApplianceStartOptions | None = None,
+) -> LabResult:
+    """Own and orchestrate the complete lab startup process."""
+
+    try:
+        with lifecycle_mutation_lock(project_dir) as project_root:
+            return _orchestrate_lab_start_owned(
+                project_root,
+                skip_seed=skip_seed,
+                scenario_path=scenario_path,
+                progress=progress,
+                appliance=appliance,
+            )
+    except LifecycleBusyError:
+        return _lifecycle_busy_result("start")
+    except LifecycleLockUnavailableError:
+        return _lifecycle_lock_unavailable_result()
+
+
+def _orchestrate_lab_start_owned(
     project_dir: Path,
     skip_seed: bool = False,
     scenario_path: Path | None = None,

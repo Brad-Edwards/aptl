@@ -97,8 +97,7 @@ class ComposeRealizationNetworkMixin:
                 )
             else:
                 failures.append(
-                    result.error
-                    or f"Failed to create realized network {network.name}."
+                    result.error or f"Failed to create realized network {network.name}."
                 )
         return failures
 
@@ -439,25 +438,15 @@ class ComposeRealizationNetworkMixin:
                     "ls",
                     "--filter",
                     f"label={_COMPOSE_PROJECT_LABEL}={self._project_name}",
-                    "--filter",
-                    (
-                        f"label={_REALIZATION_NETWORK_LABEL}="
-                        f"{_REALIZATION_NETWORK_LABEL_VALUE}"
-                    ),
-                    "--filter",
-                    f"name={self._project_name}",
                     "--format",
                     "{{.Name}}",
                 ],
                 timeout=_REALIZATION_TIMEOUT,
             )
-        except (BackendTimeoutError, OSError) as exc:
-            return [f"Failed to list project networks for cleanup: {exc}"]
+        except (BackendTimeoutError, OSError):
+            return ["Failed to list project networks for cleanup"]
         if result.returncode != 0:
-            return [
-                "Failed to list project networks for cleanup: "
-                f"{result.stderr.strip()}"
-            ]
+            return ["Failed to list project networks for cleanup"]
         network_names = [
             line.strip() for line in result.stdout.splitlines() if line.strip()
         ]
@@ -467,14 +456,9 @@ class ComposeRealizationNetworkMixin:
                     ["docker", "network", "rm", network_name],
                     timeout=_REALIZATION_TIMEOUT,
                 )
-            except (BackendTimeoutError, OSError) as exc:
-                failures.append(
-                    f"Failed to remove project network {network_name}: {exc}"
-                )
+            except (BackendTimeoutError, OSError):
+                failures.append("Failed to remove a project network")
                 continue
             if result.returncode != 0:
-                failures.append(
-                    f"Failed to remove project network {network_name}: "
-                    f"{result.stderr.strip()}"
-                )
+                failures.append("Failed to remove a project network")
         return failures

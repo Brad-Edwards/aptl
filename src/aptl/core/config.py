@@ -16,6 +16,7 @@ from aptl.utils.logging import get_logger
 log = get_logger("config")
 
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+_COMPOSE_PROJECT_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
 _CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
@@ -27,6 +28,17 @@ _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
     ),
 }
 _CONFIG_FILENAMES = ["aptl.json"]
+
+
+def validate_compose_project_name(value: str) -> str:
+    """Return a bounded Compose project token or raise ``ValueError``."""
+
+    if not _COMPOSE_PROJECT_NAME_PATTERN.fullmatch(value):
+        raise ValueError(
+            "deployment.project_name must be 1-63 lowercase letters, "
+            "digits, hyphens, or underscores and start with a letter or digit"
+        )
+    return value
 
 
 class LabSettings(BaseModel):
@@ -180,6 +192,13 @@ class DeploymentConfig(BaseModel):
                 f"Supported: {', '.join(sorted(allowed))}"
             )
         return v
+
+    @field_validator("project_name")
+    @classmethod
+    def validate_project_name(cls, value: str) -> str:
+        """Validate the identity used by Compose and destructive label queries."""
+
+        return validate_compose_project_name(value)
 
 
 _TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

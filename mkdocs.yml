@@ -93,6 +93,7 @@ nav:
     - "Issue #866 TechVault Component Realization Preflight": architecture/issue-866-techvault-realization-contract-preflight.md
     - "Issue #874 Scenario-Bundle Realization Roots Preflight": architecture/issue-874-scenario-bundle-realization-roots-preflight.md
     - "Issue #878 Scenario Verification Plugin Seam Preflight": architecture/issue-878-scenario-verification-plugin-seam-preflight.md
+    - "Issue #905 Lab Lifecycle Robustness Preflight": architecture/issue-905-lab-lifecycle-robustness-preflight.md
   - Deployment: deployment.md
   - Components:
     - Wazuh SIEM: components/wazuh-siem.md

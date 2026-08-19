@@ -16,8 +16,12 @@ from aptl.core.deployment._compose_build_dedupe import (
 )
 from aptl.core.deployment._compose_image_fetch import ComposeImageFetchMixin
 from aptl.core.deployment._compose_lifecycle import kill_compose_lab
+from aptl.core.deployment._compose_project_cleanup import ComposeProjectCleanupMixin
 from aptl.core.deployment._compose_queries import ComposeQueryMixin
 from aptl.core.deployment._compose_realization import ComposeRealizationMixin
+from aptl.core.deployment._compose_runtime_inventory import (
+    ComposeRuntimeInventoryMixin,
+)
 from aptl.core.deployment._compose_seed_attribution import (
     ComposeSeedAttributionMixin,
 )
@@ -30,6 +34,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
+from aptl.core.config import validate_compose_project_name
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
@@ -39,11 +44,13 @@ _DOCKER_TIMEOUT = 30
 
 
 class DockerComposeBackend(
+    ComposeRuntimeInventoryMixin,
     ComposeQueryMixin,
     ComposeRealizationMixin,
     ComposeSeedAttributionMixin,
     ComposeSeedExecutionMixin,
     ComposeBaseSubstrateMixin,
+    ComposeProjectCleanupMixin,
     ComposeImageFetchMixin,
 ):
     """Docker Compose deployment backend.
@@ -62,7 +69,7 @@ class DockerComposeBackend(
         offline_staged: bool = False,
     ) -> None:
         self._project_dir = project_dir
-        self._project_name = project_name
+        self._project_name = validate_compose_project_name(project_name)
         self._offline_staged = offline_staged
         self._appliance_boundary: (
             tuple[
@@ -272,7 +279,9 @@ class DockerComposeBackend(
             LabResult indicating success or failure.
         """
         build = build and not self._offline_staged
-        compose_files = self._start_compose_files(build=build, scenario_root=scenario_root)
+        compose_files = self._start_compose_files(
+            build=build, scenario_root=scenario_root
+        )
         cmd = self._build_command(
             "up", profiles, compose_files=compose_files, scenario_root=scenario_root
         )
@@ -311,11 +320,7 @@ class DockerComposeBackend(
 
         root = scenario_root if scenario_root is not None else self._project_dir
         override = write_duplicate_build_override(root) if build else None
-        return (
-            (root / "docker-compose.yml", override)
-            if override is not None
-            else None
-        )
+        return (root / "docker-compose.yml", override) if override is not None else None
 
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         """Stop lab services via docker compose down.

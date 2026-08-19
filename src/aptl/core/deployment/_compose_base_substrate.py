@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from aptl.core.deployment._compose_realization_networks import (
     _match_managed_network,
 )
-from aptl.core.deployment.errors import BackendSeedError, BackendTimeoutError
+from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import DeploymentNetworkAttachment
 
 if TYPE_CHECKING:
@@ -139,7 +139,9 @@ class ComposeBaseSubstrateMixin(object):
             # materialization ops run against it idempotently.
             return
         self._run(["docker", "rm", "-f", spec.container_name])
-        argv = self._base_container_create_command(spec, network_bindings, run_image_ref)
+        argv = self._base_container_create_command(
+            spec, network_bindings, run_image_ref
+        )
         result = self._run(argv, timeout=180)
         self._complete_base_container_start(spec, network_bindings, result)
 
@@ -401,45 +403,6 @@ class ComposeBaseSubstrateMixin(object):
             raise BackendSeedError(
                 f"failed to copy project content into container {container}"
             )
-
-    def remove_generic_materializer_containers(self) -> list[str]:
-        """Force-remove every container the generic materializer started (ADR-048).
-
-        `docker compose down` only tears down containers Compose itself
-        started; a node the generic materializer realized directly (a plain
-        `docker run`) is invisible to it, so stopping the lab would otherwise
-        leave those containers running - attached to the very networks/
-        volumes the rest of cleanup needs to remove, failing that cleanup
-        outright. Discovered by ``aptl.lifecycle.project``, the label
-        ``start_base_container`` sets on every one of its containers, never
-        by name pattern. Returns one failure message per container that
-        could not be removed, empty when clean.
-        """
-
-        try:
-            list_result = self._run(
-                [
-                    "docker",
-                    "ps",
-                    "-aq",
-                    "--filter",
-                    f"label=aptl.lifecycle.project={self._project_name}",
-                ],
-                timeout=30,
-            )
-            names = [line for line in list_result.stdout.splitlines() if line.strip()]
-            if not names:
-                return []
-            result = self._run(["docker", "rm", "-f", *names], timeout=60)
-        except (BackendTimeoutError, OSError) as exc:
-            return [f"failed to remove generic-materializer containers: {exc}"]
-        return (
-            []
-            if result.returncode == 0
-            else [
-                f"failed to remove generic-materializer containers: {result.stderr.strip()}"
-            ]
-        )
 
     def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:
         """Bind image-free nodes to admitted networks before they are created."""

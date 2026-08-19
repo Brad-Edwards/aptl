@@ -12,7 +12,23 @@ today both backends back them with the docker CLI but the Protocol stays
 Docker-shape-agnostic.
 """
 
+from dataclasses import dataclass
 from typing import Any, Protocol
+
+
+@dataclass(frozen=True)
+class ProjectRuntimePresence:
+    """Checked project-owned runtime inventory used by lifecycle admission."""
+
+    container_count: int = 0
+    network_count: int = 0
+    error: str = ""
+
+    @property
+    def present(self) -> bool:
+        """Whether at least one project container or network exists."""
+
+        return self.container_count > 0 or self.network_count > 0
 
 
 class HostInventoryBackend(Protocol):
@@ -26,6 +42,15 @@ class HostInventoryBackend(Protocol):
             version string as reported by the daemon, or empty string
             on probe failure (missing binary, daemon down, etc.).
         """
+        ...
+
+    def observe_project_runtime(self) -> ProjectRuntimePresence:
+        """Return checked project container/network presence.
+
+        ``error`` is non-empty when absence could not be proved. Implementations
+        must include stopped/created containers and project-owned networks.
+        """
+
         ...
 
     def host_list_lab_containers(self) -> list[dict[str, Any]]:

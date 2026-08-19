@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from aptl.core.deployment.errors import BackendTimeoutError
+from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
 from aptl.utils.logging import get_logger
 
 log = get_logger("deployment.docker_compose")
@@ -39,6 +40,12 @@ class _ComposeLifecycleBackend(Protocol):
     def remove_generic_materializer_containers(self) -> list[str]:
         """Force-remove containers the generic materializer started directly."""
 
+    def remove_project_containers(self) -> list[str]:
+        """Force-remove residual project-labelled containers."""
+
+    def observe_project_runtime(self) -> ProjectRuntimePresence:
+        """Return checked residual project container/network presence."""
+
 
 def kill_compose_lab(
     backend: _ComposeLifecycleBackend,
@@ -61,6 +68,7 @@ def kill_compose_lab(
     )
     _run_compose_down(backend, profiles, timeout=timeout)
     container_failures = backend.remove_generic_materializer_containers()
+    container_failures += backend.remove_project_containers()
     if container_failures:
         log.warning(
             "generic-materializer container cleanup failed: %s",
@@ -73,7 +81,12 @@ def kill_compose_lab(
             "; ".join(network_failures[:5]),
         )
 
-    error = _kill_error(kill_error, container_failures + network_failures, kill_ok)
+    verification_failures = _kill_verification_failures(backend)
+    error = _kill_error(
+        kill_error,
+        container_failures + network_failures + verification_failures,
+        kill_ok,
+    )
     success = not error
     if success:
         log.info("All lab containers stopped")
@@ -88,10 +101,7 @@ def _run_compose_kill(
 ) -> tuple[bool, str]:
     """Run docker compose kill and return its success state and hard error."""
 
-    kill_cmd = ["docker", "compose"]
-    for profile in profiles:
-        kill_cmd.extend(["--profile", profile])
-    kill_cmd.append("kill")
+    kill_cmd = backend._build_command("kill", profiles)
 
     log.info("Running: %s", " ".join(kill_cmd))
     kill_ok = False
@@ -100,11 +110,11 @@ def _run_compose_kill(
         result = backend._run(kill_cmd, timeout=timeout)
         kill_ok = result.returncode == 0
         if not kill_ok:
-            log.warning("docker compose kill stderr: %s", result.stderr.strip())
+            log.warning("docker compose kill returned non-zero")
     except BackendTimeoutError:
         log.warning("docker compose kill timed out after %ds", timeout)
-    except OSError as exc:
-        error = f"docker compose kill failed: {exc}"
+    except OSError:
+        error = "docker compose kill failed"
         log.error(error)
     return kill_ok, error
 
@@ -122,11 +132,11 @@ def _run_compose_down(
     try:
         result = backend._run(down_cmd, timeout=timeout)
         if result.returncode != 0:
-            log.warning("docker compose down stderr: %s", result.stderr.strip())
+            log.warning("docker compose down returned non-zero")
     except BackendTimeoutError:
         log.warning("docker compose down timed out after %ds", timeout)
-    except OSError as exc:
-        log.warning("docker compose down failed: %s", exc)
+    except OSError:
+        log.warning("docker compose down failed")
 
 
 def _kill_error(
@@ -139,6 +149,25 @@ def _kill_error(
     error = kill_error
     if not error and network_failures:
         error = "; ".join(network_failures[:5])
+    # A non-zero Compose kill is recoverable when the bounded down/residual
+    # cleanup path proves the project runtime absent. The terminal runtime fact
+    # is authoritative; raw Compose stderr is not exposed.
     if not error and not kill_ok:
-        error = "docker compose kill returned non-zero"
+        log.info("Compose kill returned non-zero but cleanup verified absence")
     return error
+
+
+def _kill_verification_failures(
+    backend: _ComposeLifecycleBackend,
+) -> list[str]:
+    """Require checked proof that emergency cleanup removed project runtime."""
+
+    presence = backend.observe_project_runtime()
+    if presence.error:
+        return ["failed to verify emergency project cleanup"]
+    if presence.present:
+        return [
+            "project runtime artifacts remain after emergency cleanup "
+            f"(containers={presence.container_count}, networks={presence.network_count})"
+        ]
+    return []

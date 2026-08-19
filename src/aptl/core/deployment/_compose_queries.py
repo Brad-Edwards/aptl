@@ -462,8 +462,6 @@ class ComposeQueryMixin(object):
             timeout=_LISTENER_SIDECAR_TIMEOUT,
         )
         if result.returncode != 0:
-            log.debug(
-                "listener sidecar failed for %s: %s", name, result.stderr.strip()
-            )
+            log.debug("listener sidecar failed for %s: %s", name, result.stderr.strip())
             return None
         return parse_proc_net_listeners(result.stdout)

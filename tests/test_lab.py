@@ -245,30 +245,30 @@ class TestLabStop:
                 return cmd_args
         raise AssertionError("docker compose down was not called")
 
-    def test_stop_calls_compose_down(self, mock_subprocess):
+    def test_stop_calls_compose_down(self, mock_subprocess, tmp_path):
         """stop_lab should invoke docker compose down."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        result = stop_lab()
+        result = stop_lab(project_dir=tmp_path)
 
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "down" in cmd_args
 
-    def test_stop_with_volumes_flag(self, mock_subprocess):
+    def test_stop_with_volumes_flag(self, mock_subprocess, tmp_path):
         """stop_lab with remove_volumes=True should pass -v flag."""
         from aptl.core.lab import stop_lab
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
-        stop_lab(remove_volumes=True)
+        stop_lab(remove_volumes=True, project_dir=tmp_path)
 
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "-v" in cmd_args
 
-    def test_stop_returns_failure_on_error(self, mock_subprocess):
+    def test_stop_returns_failure_on_error(self, mock_subprocess, tmp_path):
         """If docker compose down fails, stop_lab returns failure."""
         from aptl.core.lab import stop_lab
 
@@ -276,7 +276,7 @@ class TestLabStop:
             returncode=1, stdout="", stderr="Cannot stop"
         )
 
-        result = stop_lab()
+        result = stop_lab(project_dir=tmp_path)
 
         assert result.success is False
 
@@ -318,6 +318,22 @@ class TestLabStop:
         assert "victim" in cmd_args
         assert "wazuh" in cmd_args
 
+    def test_stop_refuses_invalid_present_config_identity(
+        self, mock_subprocess, tmp_path
+    ):
+        """Teardown must not guess the default project when aptl.json is invalid."""
+        from aptl.core.lab import stop_lab
+
+        (tmp_path / "aptl.json").write_text(
+            '{"lab":{"name":"test"},"deployment":{"project_name":"../other"}}'
+        )
+
+        result = stop_lab(project_dir=tmp_path)
+
+        assert result.success is False
+        assert "invalid configuration" in result.error.lower()
+        mock_subprocess.assert_not_called()
+
     def test_stop_always_includes_otel_profile(self, mock_subprocess, tmp_path):
         """stop_lab must tear down every profile start_lab always brings up.
 
@@ -348,6 +364,69 @@ class TestLabStop:
         assert result.success is True
         cmd_args = self._compose_down_args(mock_subprocess)
         assert "otel" in cmd_args
+
+
+class TestPreexistingRangeAdmission:
+    def test_running_created_or_exited_container_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            container_count=1,
+            network_count=0,
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "lifecycle-range-present" in result.error
+        assert "aptl lab stop" in result.error
+
+    def test_network_only_residue_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            container_count=0,
+            network_count=1,
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert "lifecycle-range-present" in result.error
+
+    def test_presence_observation_failure_blocks_start(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence(
+            error="container observation failed"
+        )
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert "lifecycle-observation-failed" in result.error
+        assert "docker stderr" not in result.error.lower()
+
+    def test_absent_project_allows_start_to_continue(self, tmp_path):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        backend = MagicMock()
+        backend.observe_project_runtime.return_value = ProjectRuntimePresence()
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        assert _step_reject_preexisting_range(ctx) is None
 
 
 class TestCleanBootLab:
@@ -1309,6 +1388,13 @@ class TestOrchestrateLabStart:
             "aptl.core.deployment.docker_compose."
             "DockerComposeBackend.seed_named_volumes",
         )
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        mocks["project_presence"] = mocker.patch(
+            "aptl.core.deployment.docker_compose."
+            "DockerComposeBackend.observe_project_runtime",
+            return_value=ProjectRuntimePresence(),
+        )
         # The seed step also runs the legacy source-ownership repair, which
         # now probes hostenv (docker info). Stub it so the orchestration
         # tests stay hermetic (#678).
@@ -1830,9 +1916,7 @@ class TestStatefulArtifactOwnership:
         assert result is None
         assert ctx.stateful_artifact_ownership == frozenset()
 
-    def test_admission_error_fails_before_legacy_mutation(
-        self, tmp_path, monkeypatch
-    ):
+    def test_admission_error_fails_before_legacy_mutation(self, tmp_path, monkeypatch):
         from aptl.core.config import AptlConfig
         from aptl.core.lab import _LabStartContext, _load_stateful_artifact_ownership
 
@@ -2032,9 +2116,7 @@ class TestSyncCredentialsStep:
         )
 
         ctx = self._ctx(mocker, tmp_path)
-        ctx.stateful_artifact_ownership = frozenset(
-            {_WAZUH_MANAGER_CONFIG_OWNERSHIP}
-        )
+        ctx.stateful_artifact_ownership = frozenset({_WAZUH_MANAGER_CONFIG_OWNERSHIP})
         dashboard = mocker.patch("aptl.core.lab.sync_dashboard_config")
         manager = mocker.patch("aptl.core.lab.sync_manager_config")
 
@@ -2241,9 +2323,7 @@ class TestResolveHostPortsStep:
             host_ip="127.0.0.1",
             remapped=True,
         )
-        mocker.patch(
-            "aptl.core.host_ports.resolve_host_ports", return_value=[remapped]
-        )
+        mocker.patch("aptl.core.host_ports.resolve_host_ports", return_value=[remapped])
         mocker.patch("aptl.core.host_ports.project_port_bindings", return_value={})
         progress = MagicMock()
 
@@ -2666,9 +2746,7 @@ class TestStartupClassificationWiring:
             "https://localhost:20015"
         )
 
-    def test_wait_for_services_falls_back_to_9200_when_no_remap(
-        self, tmp_path, mocker
-    ):
+    def test_wait_for_services_falls_back_to_9200_when_no_remap(self, tmp_path, mocker):
         """No entry for wazuh.indexer in `ctx.resolved_ports` (the common
         case where 9200 was free) keeps the historical URL."""
         from aptl.core.lab import _step_wait_for_services
@@ -2928,9 +3006,7 @@ class TestStartupClassificationWiring:
         wait_mock.assert_not_called()
         assert ctx.diagnostics == []
 
-    def test_test_ssh_skips_profile_alias_without_declared_ssh(
-        self, tmp_path, mocker
-    ):
+    def test_test_ssh_skips_profile_alias_without_declared_ssh(self, tmp_path, mocker):
         """An image-free Kali node need not inherit the appliance's sshd."""
         from aptl.core.lab import _step_test_ssh
 
@@ -3692,9 +3768,7 @@ class TestLabOrchestrationContracts:
         assert start_raes.call_args.kwargs["before_backend_retry"] is not None
         sleep.assert_called_once_with(60)
 
-    def test_start_containers_reuses_profiles_from_raes_outcome(
-        self, mocker, tmp_path
-    ):
+    def test_start_containers_reuses_profiles_from_raes_outcome(self, mocker, tmp_path):
         from raes_contracts.runtime_state import RuntimeSnapshot
 
         from aptl.backends.raes import AcesStartOutcome
@@ -3913,9 +3987,7 @@ class TestLabOrchestrationContracts:
         start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
-    def test_start_containers_watchdog_swallows_exec_failures(
-        self, mocker, tmp_path
-    ):
+    def test_start_containers_watchdog_swallows_exec_failures(self, mocker, tmp_path):
         """A nonzero exec probe (or non-int stdout) blocks the restart —
         we do not know the process state, so refuse to restart rather
         than guess wrong."""
@@ -3940,9 +4012,7 @@ class TestLabOrchestrationContracts:
         start_raes.assert_called_once()
         backend.container_restart.assert_not_called()
 
-    def test_start_containers_watchdog_swallows_restart_failure(
-        self, mocker, tmp_path
-    ):
+    def test_start_containers_watchdog_swallows_restart_failure(self, mocker, tmp_path):
         """`container_restart` raising is logged and swallowed — the
         retry proceeds regardless."""
         from aptl.core.lab import _step_start_containers

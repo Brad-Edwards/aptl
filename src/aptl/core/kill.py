@@ -16,10 +16,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypedDict
 
-from aptl.core.deployment.docker_compose import (
-    _DOCKER_TIMEOUT,
+from aptl.core.config import find_config, load_config
+from aptl.core.lab import ALL_KNOWN_PROFILES
+from aptl.core.lifecycle_guard import (
+    LifecycleLockUnavailableError,
+    lifecycle_mutation_lock,
 )
-from aptl.core.lab import ALL_KNOWN_PROFILES, build_compose_command
+from aptl.core.lifecycle_policy import LifecycleBusyError
 from aptl.core.session import ScenarioSession
 from aptl.utils.logging import get_logger
 
@@ -41,6 +44,7 @@ class McpProcess(TypedDict):
     pid: int
     cmdline: str
     name: str
+
 
 MCP_SERVER_NAMES = [
     "mcp-wazuh",
@@ -250,8 +254,11 @@ def kill_mcp_processes(
         log.info("No MCP server processes found")
         return 0, []
 
-    log.info("Found %d MCP server process(es): %s", len(processes),
-             ", ".join(f"{p['name']}(pid={p['pid']})" for p in processes))
+    log.info(
+        "Found %d MCP server process(es): %s",
+        len(processes),
+        ", ".join(f"{p['name']}(pid={p['pid']})" for p in processes),
+    )
 
     pids_to_track, errors = _sigterm_processes(processes)
     survivors = _await_graceful_exit(pids_to_track, timeout, time_source, sleep)
@@ -268,9 +275,9 @@ def kill_lab_containers(
 ) -> tuple[bool, str]:
     """Emergency-stop all lab containers.
 
-    Uses the deployment backend's kill method for immediate shutdown.
-    Falls back to direct Docker Compose subprocess calls if no backend
-    is provided.
+    Uses the configured deployment backend's kill method for immediate
+    shutdown. A missing config uses the bounded default Compose backend;
+    an invalid present config fails closed rather than guessing identity.
 
     Args:
         project_dir: Working directory for Docker Compose.
@@ -279,67 +286,65 @@ def kill_lab_containers(
     Returns:
         Tuple of (success, error_message).
     """
-    profiles = list(ALL_KNOWN_PROFILES)
+    resolved_dir = Path(project_dir) if project_dir is not None else Path(".")
+    try:
+        with lifecycle_mutation_lock(resolved_dir) as project_root:
+            result = _kill_lab_containers_owned(project_root, backend)
+    except LifecycleBusyError:
+        result = (
+            False,
+            "[lifecycle-owner-busy] Another lab lifecycle operation is active; "
+            "wait for it to finish before retrying container kill.",
+        )
+    except LifecycleLockUnavailableError:
+        result = (
+            False,
+            "[lifecycle-lock-unavailable] Container kill blocked because safe "
+            "project lifecycle ownership could not be established.",
+        )
+    return result
 
-    if backend is not None:
-        return backend.kill(profiles)
 
-    # Fallback: direct Docker Compose calls (for backward compat and
-    # cases where config is unavailable)
-    return _kill_via_compose(project_dir, profiles)
-
-
-def _kill_via_compose(
-    project_dir: Optional[Path],
-    profiles: list[str],
+def _kill_lab_containers_owned(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"],
 ) -> tuple[bool, str]:
-    """Emergency-stop lab containers via direct ``docker compose`` calls."""
-    kwargs: dict[str, object] = {
-        "capture_output": True,
-        "text": True,
-        "timeout": _DOCKER_TIMEOUT,
-    }
-    if project_dir is not None:
-        kwargs["cwd"] = project_dir
+    """Kill project containers while the caller owns the lifecycle lock."""
 
-    # Phase 1: docker compose kill (immediate SIGKILL)
-    kill_cmd = ["docker", "compose"]
-    for profile in profiles:
-        kill_cmd.extend(["--profile", profile])
-    kill_cmd.append("kill")
+    resolved_backend, error = _kill_backend(project_dir, backend)
+    if error:
+        return False, error
+    assert resolved_backend is not None
+    return resolved_backend.kill(list(ALL_KNOWN_PROFILES))
 
-    log.info("Running: %s", " ".join(kill_cmd))
-    kill_ok = False
-    try:
-        result = subprocess.run(kill_cmd, **kwargs)
-        kill_ok = result.returncode == 0
-        if not kill_ok:
-            log.warning("docker compose kill stderr: %s", result.stderr.strip())
-    except subprocess.TimeoutExpired:
-        log.warning("docker compose kill timed out after %ds", _DOCKER_TIMEOUT)
-    except OSError as exc:
-        msg = f"docker compose kill failed: {exc}"
-        log.error(msg)
-        return False, msg
 
-    # Phase 2: docker compose down (cleanup).  Treat non-zero exit as
-    # a warning — the important work (SIGKILL) already happened above.
-    down_cmd = build_compose_command("down", profiles=profiles)
-    log.info("Running: %s", " ".join(down_cmd))
-    try:
-        result = subprocess.run(down_cmd, **kwargs)
-        if result.returncode != 0:
-            log.warning("docker compose down stderr: %s", result.stderr.strip())
-    except subprocess.TimeoutExpired:
-        log.warning("docker compose down timed out after %ds", _DOCKER_TIMEOUT)
-    except OSError as exc:
-        log.warning("docker compose down failed: %s", exc)
+def _kill_backend(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"],
+) -> tuple[Optional["DeploymentBackend"], str]:
+    """Resolve the configured backend without guessing an invalid identity."""
 
-    if not kill_ok:
-        return False, "docker compose kill returned non-zero"
+    resolved_backend = backend
+    error = ""
+    if resolved_backend is None:
+        from aptl.core.deployment import get_backend
+        from aptl.core.deployment.docker_compose import DockerComposeBackend
 
-    log.info("All lab containers stopped")
-    return True, ""
+        config_path = find_config(project_dir)
+        if config_path is None:
+            resolved_backend = DockerComposeBackend(project_dir=project_dir)
+        else:
+            try:
+                config = load_config(config_path)
+            except (FileNotFoundError, ValueError):
+                error = (
+                    "[lifecycle-invalid-configuration] Container kill blocked: "
+                    "invalid configuration; refusing to guess the deployment "
+                    "project identity."
+                )
+            else:
+                resolved_backend = get_backend(config, project_dir)
+    return resolved_backend, error
 
 
 def clear_session(state_dir: Path) -> bool:
@@ -384,6 +389,31 @@ def execute_kill(
     containers: bool = False,
     project_dir: Optional[Path] = None,
 ) -> KillResult:
+    """Execute the full kill switch under the shared project mutation owner."""
+
+    resolved_dir = Path(project_dir) if project_dir else Path(".")
+    try:
+        with lifecycle_mutation_lock(resolved_dir) as project_root:
+            return _execute_kill_owned(containers, project_root)
+    except LifecycleBusyError:
+        return KillResult(
+            success=False,
+            errors=[
+                "[lifecycle-owner-busy] Another lab lifecycle operation is active; "
+                "the kill switch did not mutate project state."
+            ],
+        )
+    except LifecycleLockUnavailableError:
+        return KillResult(
+            success=False,
+            errors=[
+                "[lifecycle-lock-unavailable] The kill switch could not establish "
+                "safe project lifecycle ownership."
+            ],
+        )
+
+
+def _execute_kill_owned(containers: bool, resolved_dir: Path) -> KillResult:
     """Execute the emergency kill switch.
 
     Runs each step independently so that a failure in one does not
@@ -396,7 +426,6 @@ def execute_kill(
     Returns:
         KillResult with details of what was done.
     """
-    resolved_dir = Path(project_dir) if project_dir else Path(".")
     state_dir = resolved_dir / ".aptl"
     errors: list[str] = []
 
@@ -444,7 +473,9 @@ def execute_kill(
 
     # Success if any step accomplished something, or if there was simply
     # nothing to kill (no errors).
-    any_action = mcp_killed > 0 or containers_stopped or session_cleared or trace_cleaned
+    any_action = (
+        mcp_killed > 0 or containers_stopped or session_cleared or trace_cleaned
+    )
     success = any_action or len(errors) == 0
 
     result = KillResult(
@@ -458,6 +489,10 @@ def execute_kill(
 
     log.info(
         "Kill switch complete: mcp=%d containers=%s session=%s trace=%s errors=%d",
-        mcp_killed, containers_stopped, session_cleared, trace_cleaned, len(errors),
+        mcp_killed,
+        containers_stopped,
+        session_cleared,
+        trace_cleaned,
+        len(errors),
     )
     return result

@@ -5,9 +5,10 @@ policy:
 
 # Open the dev -> main promotion PR with the standardized title (issue #852).
 #
-# The title matters: `chore(main): promote dev` satisfies tools/check_pr_title.py,
-# which is why `pr-title-lint.yml` can gate `main` instead of exempting it, and
-# `chore` is a no-release type so the promotion never computes a bump of its own.
+# The title matters: `chore(main): promote dev` is the preferred explicit title,
+# and `chore` is a no-release type so the promotion never computes a bump of its
+# own. The guard also recognizes GitHub's default branch title for the exact
+# same-repository branch pair, so web-created promotions are not fragile.
 #
 # The merge method matters more. Release Please derives the version and
 # CHANGELOG.md from the Conventional Commit subjects on `main`; squashing the

@@ -6,6 +6,7 @@ run it stdlib-only; these tests exercise its policy as a first-class contract.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -19,6 +20,29 @@ sys.path.insert(0, str(_REPO_ROOT / "tools"))
 import check_pr_title  # noqa: E402
 
 validate_pr_title = check_pr_title.validate_pr_title
+
+
+def _pull_request_event(
+    *,
+    title: str = "Dev",
+    base_repo: str = "Brad-Edwards/aptl",
+    head_repo: str = "Brad-Edwards/aptl",
+    base_ref: str = "main",
+    head_ref: str = "dev",
+) -> dict[str, object]:
+    return {
+        "pull_request": {
+            "title": title,
+            "base": {"ref": base_ref, "repo": {"full_name": base_repo}},
+            "head": {"ref": head_ref, "repo": {"full_name": head_repo}},
+        }
+    }
+
+
+def _run_with_event(tmp_path: Path, event: dict[str, object]) -> int:
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(event), encoding="utf-8")
+    return check_pr_title.main(["--event-path", str(event_path)])
 
 
 @pytest.mark.parametrize(
@@ -95,3 +119,27 @@ def test_accepts_every_title_the_release_path_emits(title: str, origin: str) -> 
     release path, and it should break here first.
     """
     assert validate_pr_title(title) == [], f"would block {origin}"
+
+
+def test_accepts_platform_title_for_exact_same_repo_promotion(tmp_path: Path) -> None:
+    assert _run_with_event(tmp_path, _pull_request_event()) == 0
+
+
+@pytest.mark.parametrize(
+    ("override", "value"),
+    [
+        ("base_repo", "someone/aptl"),
+        ("head_repo", "someone/aptl"),
+        ("base_ref", "dev"),
+        ("head_ref", "dev-copy"),
+    ],
+)
+def test_rejects_platform_title_for_promotion_near_misses(
+    tmp_path: Path, override: str, value: str
+) -> None:
+    assert _run_with_event(tmp_path, _pull_request_event(**{override: value})) == 1
+
+
+def test_exact_promotion_does_not_exempt_an_arbitrary_title(tmp_path: Path) -> None:
+    event = _pull_request_event(title="ship whatever")
+    assert _run_with_event(tmp_path, event) == 1

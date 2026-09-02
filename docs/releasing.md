@@ -27,9 +27,14 @@ make devmain
 ```
 
 That creates a `dev` → `main` PR titled `chore(main): promote dev`. The title is
-fixed rather than free-form for two reasons: it satisfies the PR-title guard (so
-`main` needs no exemption from it), and `chore` is a no-release type, so the
-promotion never computes a version bump of its own.
+fixed rather than free-form because it is unambiguous and `chore` is a
+no-release type, so the promotion never computes a version bump of its own.
+
+GitHub's web and API flows can instead generate the branch title `Dev`. The
+PR-title guard accepts that fallback only when the event identifies the exact
+same-repository `dev` → `main` branch pair. Forks, differently named heads,
+other base branches, and arbitrary titles remain subject to the normal
+Conventional Commit policy.
 
 **Merge the promotion with a merge commit. Do not squash it.** This is the one
 place in the workflow where squashing is wrong. release-please computes the

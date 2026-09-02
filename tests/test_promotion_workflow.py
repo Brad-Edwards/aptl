@@ -2,17 +2,17 @@
 
 Two halves of one contract:
 
-* `make devmain` opens the promotion PR with a title the PR-title guard accepts.
-* `pr-title-lint.yml` actually runs on `main`, not just `dev`.
+* `make devmain` opens the preferred promotion PR with a conventional title.
+* `pr-title-lint.yml` runs on `main` and recognizes only the exact branch-pair
+  fallback pinned in `test_pr_title_guard.py`.
+* the substantive checks workflow continues to run for promotions.
 
 They are tested together because each is what justifies the other. The workflow
-previously exempted `main` on the stated grounds that "a `dev`->`main` promotion
-PR carries a non-conventional (merge/promotion) title and would always fail this
-check". Standardizing the title through the Make target removes that premise; if
-the target's title ever drifts away from the guard's policy, the exemption's
-reasoning quietly becomes true again and `main` PRs start failing. So the title
-the target emits is asserted against the *real* validator rather than against a
-copy of its regex.
+previously exempted `main` on the stated grounds that a promotion would carry a
+non-conventional title. The Make target avoids that failure by construction,
+while the event-aware fallback covers other creation paths without exempting
+ordinary PRs. The target's title is asserted against the *real* validator rather
+than against a copy of its regex.
 
 Note what this does NOT claim: a workflow trigger makes the check run, not merge.
 Whether `PR title lint` blocks a merge is live branch-protection configuration,
@@ -30,6 +30,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "pr-title-lint.yml"
+CHECKS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "checks.yml"
 MAKEFILE = REPO_ROOT / "Makefile"
 
 # Reuse the repository's single title validator rather than reimplementing its
@@ -142,3 +143,26 @@ def test_pr_title_lint_reads_the_title_without_shell_interpolation() -> None:
         "the title must reach the checker via $GITHUB_EVENT_PATH, never a "
         "workflow expression interpolated into a shell command"
     )
+
+
+def test_substantive_checks_stay_enabled_for_promotions() -> None:
+    """Promotion title handling must not bypass the repository's real gates."""
+    workflow = yaml.safe_load(CHECKS_WORKFLOW.read_text(encoding="utf-8"))
+    branches = workflow[True]["pull_request"]["branches"]
+    assert set(branches) == {"main", "dev"}
+
+    expected_jobs = {
+        "pre-commit",
+        "docs",
+        "python-tests",
+        "python-cross-platform",
+        "mcp-tests",
+        "web-tests",
+        "dependency-audit",
+        "trivy-fs",
+        "trivy-iac",
+        "trivy-image",
+        "osv-scanner",
+        "sonarcloud",
+    }
+    assert expected_jobs <= set(workflow["jobs"])

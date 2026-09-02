@@ -8,12 +8,12 @@ name: PR Title Lint
 # Runs on PRs targeting BOTH `main` and `dev` (issue #852). `main` was previously
 # exempt on the grounds that a `dev`->`main` promotion PR "carries a
 # non-conventional (merge/promotion) title and would always fail this check".
-# That was never a necessity: `make devmain` opens the promotion with
-# `chore(main): promote dev`, which this guard accepts and which release-please
-# treats as a no-release type. Every title that reaches `main` is now checked —
-# the promotion, and release-please's own `chore(main): release X.Y.Z`.
-# `tests/test_promotion_workflow.py` pins both halves so the exemption cannot
-# quietly return.
+# `make devmain` remains the preferred path and opens the promotion with
+# `chore(main): promote dev`, which release-please treats as a no-release type.
+# The checker also accepts GitHub's default `Dev` title only when trusted event
+# fields identify the exact same-repository `dev` -> `main` branch pair. Every
+# other title targeting `main` or `dev` still follows the normal policy.
+# `tests/test_pr_title_guard.py` pins the exact exception and its near-misses.
 #
 # Note the merge-commit subject GitHub writes for a merged promotion
 # (`Merge pull request #N from ...`) is NOT a PR title and is not checked here;

@@ -99,7 +99,8 @@ def test_realize_node_fails_closed_when_state_unverifiable():
             return super().container_exec(name, cmd, timeout=timeout)
 
     result = realize_node(_node(), _SilentBackend())
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "curl" in (result.error or "")
 
 
@@ -130,7 +131,8 @@ def test_realize_nodes_fails_closed_on_first_failure():
             raise RuntimeError("cannot start base")
 
     result = realize_nodes([_node()], _BrokenBackend())
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     assert "techvault.analyst-box" in (result.error or "")
 
 

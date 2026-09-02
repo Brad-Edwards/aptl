@@ -277,7 +277,8 @@ class TestMatchIsDeterministic:
         forward = CollectorRegistry((first, second)).match(spec, requirement)
         reverse = CollectorRegistry((second, first)).match(spec, requirement)
 
-        assert forward is not None and reverse is not None
+        assert forward is not None
+        assert reverse is not None
         # Both cover; ID-sorted selection picks "aaa" regardless of insertion order.
         assert forward.registration_id == reverse.registration_id == "aptl.collector.aaa"
 
@@ -404,5 +405,6 @@ class TestProjectionIsOrderCanonical:
         registration = _covering_registration(media_types=frozenset({"application/json", "text/plain"}))
         forward = _bind_reference(registration, expected_media_types=["application/json", "text/plain"])
         reverse = _bind_reference(registration, expected_media_types=["text/plain", "application/json"])
-        assert forward is not None and reverse is not None
+        assert forward is not None
+        assert reverse is not None
         assert forward.binding_projection() == reverse.binding_projection()

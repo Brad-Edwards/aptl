@@ -77,9 +77,11 @@ class TestDeterminism:
             infos = tar.getmembers()
         assert [i.name for i in infos] == sorted(i.name for i in infos)
         for info in infos:
-            assert info.uid == 0 and info.gid == 0
+            assert info.uid == 0
+            assert info.gid == 0
             assert info.mtime == 0
-            assert info.uname == "root" and info.gname == "root"
+            assert info.uname == "root"
+            assert info.gname == "root"
 
 
 class TestSourceIntegrity:

@@ -2331,7 +2331,8 @@ class TestResolveHostPortsStep:
 
         notes = " ".join(c.args[0] for c in progress.call_args_list)
         assert "wazuh.dashboard" in notes
-        assert "443" in notes and "20009" in notes
+        assert "443" in notes
+        assert "20009" in notes
 
 
 class TestSeedSuricataVolumesStep:
@@ -4202,7 +4203,7 @@ class TestLabOrchestrationContracts:
         ctx = self._ctx(tmp_path)  # env stays None
         try:
             _step_sync_credentials(ctx)
-            assert False, "expected ViolationError"
+            pytest.fail("expected ViolationError")
         except icontract.ViolationError as exc:
             text = str(exc)
             # The label must be a narrow, attributable string the CLI can
@@ -4244,7 +4245,7 @@ class TestLabOrchestrationContracts:
 
         try:
             _step_test_ssh(ctx)
-            assert False, "expected ViolationError"
+            pytest.fail("expected ViolationError")
         except icontract.ViolationError as exc:
             text = str(exc)
             # Narrow description survives.

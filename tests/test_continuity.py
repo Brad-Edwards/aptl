@@ -726,7 +726,8 @@ class TestAuditAndRevert:
         first = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
         second = audit_and_revert(backend, ["victim"], kali_ips=kali_ips)
 
-        assert first.events == [] and second.events == []
+        assert first.events == []
+        assert second.events == []
         # Each invocation does exactly one audit call per target; no
         # phantom delete attempts.
         assert all(c.cmd[:2] == ["iptables", "-S"] for c in backend.calls)
@@ -1001,7 +1002,8 @@ class TestDefaultTargets:
             node = scenario.nodes.get(node_name)
             if node is not None and node.runtime is not None:
                 caps = node.runtime.linux_capabilities
-                assert caps is not None and "CAP_NET_ADMIN" in caps.add, (
+                assert caps is not None
+                assert "CAP_NET_ADMIN" in caps.add, (
                     f"{target}'s SDL node must declare "
                     "runtime.linux_capabilities.add: [CAP_NET_ADMIN]; iptables "
                     "audit will fail there otherwise. Either add the "
@@ -1152,4 +1154,5 @@ class TestContinuityIntegration:
         first = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
         second = audit_and_revert(backend, [_LIVE_TARGET], kali_ips=kali_ips)
 
-        assert first.events == [] and second.events == []
+        assert first.events == []
+        assert second.events == []

@@ -16,7 +16,8 @@ PROXY = Path(__file__).parents[1] / "containers" / "appliance-egress-proxy" / "p
 @pytest.fixture(scope="module")
 def proxy():
     spec = importlib.util.spec_from_file_location("appliance_egress_proxy", PROXY)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

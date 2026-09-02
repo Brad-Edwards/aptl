@@ -719,7 +719,8 @@ class TestWazuhActiveResponseSource:
             f"Wrapper failed to short-circuit on whitelisted 172.20.4.30; "
             f"rc={result.returncode}, stderr={result.stderr[:200]}"
         )
-        assert log.exists() and "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
+        assert log.exists()
+        assert "SKIPPED for whitelisted 172.20.4.30" in log.read_text(), (
             f"Log file missing or no SKIPPED entry; contents: "
             f"{log.read_text() if log.exists() else '<no file>'}"
         )

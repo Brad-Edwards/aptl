@@ -20,7 +20,8 @@ class TestExtraction:
         node_spec = {"os": "linux", "os_version": "debian12"}
         assert _node_os(node_spec) == "linux"
         assert _node_os_version(node_spec) == "debian12"
-        assert _node_os(None) == "" and _node_os_version(None) == ""
+        assert _node_os(None) == ""
+        assert _node_os_version(None) == ""
 
     def test_runtime_reconstructed_as_typed_model(self):
         node_spec = {

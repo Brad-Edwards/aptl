@@ -112,7 +112,8 @@ class TestEnsureGenericBaseImage:
                 "aptl/generic-systemd-base-debian:latest"
             )
 
-        assert failures and "aptl/generic-systemd-base-debian:latest" in failures[0]
+        assert failures
+        assert "aptl/generic-systemd-base-debian:latest" in failures[0]
 
 
 def test_start_base_container_carries_the_compose_project_ownership_label(tmp_path):

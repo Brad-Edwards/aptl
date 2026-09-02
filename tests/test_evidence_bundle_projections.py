@@ -136,7 +136,8 @@ class TestParquetTypeFidelity:
         table = _read_parquet(member.content)
         assert str(table.schema.field("retained_content_bytes").type) == "int64"
         values = table.column("retained_content_bytes").to_pylist()
-        assert big in values and None in values
+        assert big in values
+        assert None in values
 
     def test_out_of_int64_uses_exact_decimal_string(self, tmp_path: Path) -> None:
         records = _records()
@@ -222,7 +223,8 @@ class TestParquetDeterminismAndEvolution:
     ) -> None:
         run = run_projections(["parquet"], _ctx(tmp_path))
         descriptor = run.descriptors[0]
-        assert descriptor.mapping_id and descriptor.mapping_version
+        assert descriptor.mapping_id
+        assert descriptor.mapping_version
         assert descriptor.target_schema_version == "aptl-evidence-bundle-parquet/v1"
         assert descriptor.field_maps
 

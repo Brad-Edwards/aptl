@@ -30,6 +30,8 @@ import dataclasses
 import hashlib
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import pytest
 import yaml
@@ -837,7 +839,8 @@ class TestAdmitExperimentDeterminism:
             ),
         )
 
-        assert first.admitted and second.admitted
+        assert first.admitted
+        assert second.admitted
         assert first.plan.source_set_digest != second.plan.source_set_digest
         assert first.plan.plan_id != second.plan.plan_id
 
@@ -849,38 +852,42 @@ class TestFuzzAdmitExperimentDeterminism:
 
     @given(target_run_count=st.integers(min_value=1, max_value=30))
     @settings(max_examples=20, deadline=None)
-    def test_repeated_admission_is_deterministic_across_random_flat_counts(self, tmp_path_factory, target_run_count):
+    def test_repeated_admission_is_deterministic_across_random_flat_counts(self, target_run_count):
         bundle, backend, processor = _capability_only_bundle(
             spec_id=f"spec-fuzz-{target_run_count}", target_run_count=target_run_count
         )
-        store = LocalRunStore(tmp_path_factory.mktemp("store"))
+        # hypothesis runs many examples in one function call, so a fresh store
+        # per example comes from a context manager rather than a function-scoped
+        # tmp_path fixture (which hypothesis rejects) or a session-scoped factory.
+        with tempfile.TemporaryDirectory() as store_dir:
+            store = LocalRunStore(Path(store_dir))
 
-        first = admit_experiment(
-            experiment_root=bundle.experiment_root,
-            artifact_source=bundle.artifact_source,
-            run_store=store,
-            policy=default_admission_policy(),
-            environment=AdmissionEnvironment(
-                backend_manifest=backend,
-                processor_manifest=processor,
-            ),
-        )
-        second = admit_experiment(
-            experiment_root=bundle.experiment_root,
-            artifact_source=bundle.artifact_source,
-            run_store=store,
-            policy=default_admission_policy(),
-            environment=AdmissionEnvironment(
-                backend_manifest=backend,
-                processor_manifest=processor,
-            ),
-        )
+            first = admit_experiment(
+                experiment_root=bundle.experiment_root,
+                artifact_source=bundle.artifact_source,
+                run_store=store,
+                policy=default_admission_policy(),
+                environment=AdmissionEnvironment(
+                    backend_manifest=backend,
+                    processor_manifest=processor,
+                ),
+            )
+            second = admit_experiment(
+                experiment_root=bundle.experiment_root,
+                artifact_source=bundle.artifact_source,
+                run_store=store,
+                policy=default_admission_policy(),
+                environment=AdmissionEnvironment(
+                    backend_manifest=backend,
+                    processor_manifest=processor,
+                ),
+            )
 
-        assert first.admitted is True
-        assert second.admitted is True
-        assert first.plan_digest == second.plan_digest
-        assert len(first.trial_ids) == target_run_count
-        assert len(set(first.trial_ids)) == target_run_count
+            assert first.admitted is True
+            assert second.admitted is True
+            assert first.plan_digest == second.plan_digest
+            assert len(first.trial_ids) == target_run_count
+            assert len(set(first.trial_ids)) == target_run_count
 
 
 # ---------------------------------------------------------------------------

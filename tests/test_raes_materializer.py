@@ -40,7 +40,8 @@ from aptl.backends.raes_materializer import (
 class TestBaseImageForOs:
     def test_linux_resolves_to_a_fixed_generic_base(self):
         image = base_image_for_os("linux", "")
-        assert isinstance(image, str) and image
+        assert isinstance(image, str)
+        assert image
         # The same os/version always maps to the same base (deterministic).
         assert base_image_for_os("linux", "") == image
 
@@ -241,7 +242,8 @@ class TestPackageFamilyBaseSelection:
         deb = base_image_for_os("linux", "", runs_services=True, family="debian")
         rhel = base_image_for_os("linux", "", runs_services=True, family="rhel")
         assert deb != rhel
-        assert "debian" in deb and "debian" not in rhel
+        assert "debian" in deb
+        assert "debian" not in rhel
 
     def test_unknown_family_fails_closed(self):
         with pytest.raises(UnsupportedOsFamilyError):

@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from aptl.core.runstore import LocalRunStore, RunStoreConflictError
 
 
@@ -445,22 +447,20 @@ class TestSessionScopedHelpers:
 
     def test_session_id_validation_rejects_path_traversal(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")
-        import pytest as _pytest
 
         for bad in ["../escape", "sess/with/slash", "sess..", ".."]:
-            with _pytest.raises(ValueError):
+            with pytest.raises(ValueError):
                 store.kali_side_session_dir("run-A", bad)
-            with _pytest.raises(ValueError):
+            with pytest.raises(ValueError):
                 store.mcp_session_jsonl("run-A", bad)
 
     def test_run_id_validation_rejects_path_traversal(self, tmp_path):
         store = LocalRunStore(tmp_path / "runs")
-        import pytest as _pytest
 
         for bad in ["../escape", "run/with/slash", ".."]:
-            with _pytest.raises(ValueError):
+            with pytest.raises(ValueError):
                 store.mcp_side_dir(bad)
-            with _pytest.raises(ValueError):
+            with pytest.raises(ValueError):
                 store.kali_side_session_dir(bad, "sess-1")
 
 

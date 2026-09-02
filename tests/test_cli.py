@@ -1075,7 +1075,8 @@ class TestLabContinuityAuditCommand:
 
         assert result.exit_code == 0
         parsed = json_mod.loads(result.stdout)
-        assert isinstance(parsed, list) and len(parsed) == 1
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
         assert parsed[0]["target"] == "aptl-victim"
         assert parsed[0]["action"] == "REVERTED"
 

@@ -97,9 +97,12 @@ def test_unhealthy_container_reasons_enumerates_each_failure():
     reasons = unhealthy_container_reasons(backend, ["aptl-a", "aptl-b", "aptl-c", "aptl-d"])
     joined = " ".join(reasons)
     assert "aptl-a" not in joined
-    assert "not running" in joined and "aptl-b" in joined
-    assert "unhealthy" in joined and "aptl-c" in joined
-    assert "was never created" in joined and "aptl-d" in joined
+    assert "not running" in joined
+    assert "aptl-b" in joined
+    assert "unhealthy" in joined
+    assert "aptl-c" in joined
+    assert "was never created" in joined
+    assert "aptl-d" in joined
 
 
 def test_wait_returns_empty_when_no_containers():

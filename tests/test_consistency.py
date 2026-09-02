@@ -262,7 +262,8 @@ class TestKaliContainerLifecycle:
         in issue #293, now a property of image selection, not a Compose
         `init: true` flag)."""
         kali = self._kali_node(techvault_sdl)
-        assert kali.runtime is not None and kali.runtime.service_manager_units, (
+        assert kali.runtime is not None
+        assert kali.runtime.service_manager_units, (
             "kali must declare at least one service_manager_units entry "
             "(ADR-033 §2 / issue #293): with none, the materializer selects "
             "the non-service base image, which has no PID-1 reaper."

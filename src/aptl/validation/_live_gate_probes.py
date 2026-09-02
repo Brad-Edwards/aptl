@@ -86,7 +86,7 @@ def _find_container(
 
 def _compute_realization(
     scenario: Scenario, project_dir: Path, config: "AptlConfig"
-) -> tuple["AptlRealization | None", list[str]]:
+) -> tuple[AptlRealization | None, list[str]]:
     """Interpret the scenario's provisioning plan, returning (realization, diags)."""
     try:
         backend = get_backend(config, project_dir)

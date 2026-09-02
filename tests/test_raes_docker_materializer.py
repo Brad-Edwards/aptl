@@ -70,7 +70,9 @@ class TestPackages:
         _executor(fake).install_packages("techvault.wazuh-manager", "apt", ("wazuh-manager",))
         container, argv = fake.calls[-1]
         assert container == "aptl-wazuh-manager"
-        assert "apt-get" in argv and "install" in argv and "wazuh-manager" in argv
+        assert "apt-get" in argv
+        assert "install" in argv
+        assert "wazuh-manager" in argv
 
     def test_install_nonzero_raises_translatable_command_error(self):
         fake = _FakeExec(lambda c, a: (100, "E: Unable to locate package"))
@@ -146,8 +148,11 @@ class TestIdentity:
         fake = _FakeExec()
         _executor(fake).ensure_group("n.node", "wazuh", 1000)
         argv = fake.calls[-1][1]
-        assert argv[0] == "groupadd" and "-f" in argv and argv[-1] == "wazuh"
-        assert "-g" in argv and "1000" in argv
+        assert argv[0] == "groupadd"
+        assert "-f" in argv
+        assert argv[-1] == "wazuh"
+        assert "-g" in argv
+        assert "1000" in argv
 
     def test_ensure_user_skips_creation_when_user_exists(self):
         # id -u returns 0 -> user already present -> no useradd.
@@ -163,7 +168,8 @@ class TestIdentity:
         )
         useradd = next(argv for argv in fake.argvs() if argv[0] == "useradd")
         assert useradd[-1] == "wazuh"
-        assert "/bin/bash" in useradd and "wazuh" in useradd  # shell + group
+        assert "/bin/bash" in useradd
+        assert "wazuh" in useradd  # shell + group
 
     def test_observe_local_user_and_group_from_returncode(self):
         present = _executor(_FakeExec(lambda c, a: (0, "")))

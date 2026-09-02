@@ -903,8 +903,10 @@ class TestRunRecordSchemaCompatibility:
     def test_v1_and_v2_records_produce_identical_projections(self):
         v1_manifest, orchestration = _minimal_run(schema_version="aptl.run-record/v1")
         v2_manifest, _ = _minimal_run(schema_version="aptl.run-record/v2")
-        assert "aces" in v1_manifest and "raes" not in v1_manifest
-        assert "raes" in v2_manifest and "aces" not in v2_manifest
+        assert "aces" in v1_manifest
+        assert "raes" not in v1_manifest
+        assert "raes" in v2_manifest
+        assert "aces" not in v2_manifest
 
         v1_projection = _build(v1_manifest, orchestration)
         v2_projection = _build(v2_manifest, orchestration)

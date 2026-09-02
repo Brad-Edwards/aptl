@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import tarfile
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -330,16 +331,19 @@ from hypothesis import strategies as st  # noqa: E402
 class TestFuzzPersistenceDeterminism:
     @given(run_suffix=st.integers(min_value=0, max_value=10_000))
     @settings(max_examples=15, deadline=None)
-    def test_repeated_persist_of_the_same_archive_is_byte_identical(self, tmp_path_factory, run_suffix):
-        tmp_path = tmp_path_factory.mktemp(f"persist-fuzz-{run_suffix}")
-        store = LocalRunStore(tmp_path / "runs")
-        run_id = f"run-fuzz-{run_suffix}"
-        _write_run_archive(store, run_id)
+    def test_repeated_persist_of_the_same_archive_is_byte_identical(self, run_suffix):
+        # hypothesis runs many examples in one function call, so a fresh store
+        # per example comes from a context manager rather than a function-scoped
+        # tmp_path fixture (which hypothesis rejects) or a session-scoped factory.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            store = LocalRunStore(Path(tmp_dir) / "runs")
+            run_id = f"run-fuzz-{run_suffix}"
+            _write_run_archive(store, run_id)
 
-        first = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
-        second = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
+            first = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
+            second = build_and_persist_correlation(run_id=run_id, run_store=store, clock_provider=_FIXED_CLOCK)
 
-        assert first.canonical_bytes == second.canonical_bytes
+            assert first.canonical_bytes == second.canonical_bytes
 
 
 class TestPersistRunCorrelationBestEffort:

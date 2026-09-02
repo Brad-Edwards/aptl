@@ -198,7 +198,9 @@ def test_live_gate_report_passed_failures_categories_and_render():
     assert report.failures() == (bad,)
     assert report.failure_categories() == (CATEGORY_KALI_REACHABILITY,)
     text = report.render()
-    assert "FAIL" in text and "unreachable" in text and "failing layers" in text
+    assert "FAIL" in text
+    assert "unreachable" in text
+    assert "failing layers" in text
     assert LiveGateReport("s", "p", "r", (ok,)).passed is True
 
 
@@ -351,7 +353,8 @@ def test_check_static_prerequisite_passes_and_parses(monkeypatch):
         SCENARIO, project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions()
     )
     assert scenario == "SCENARIO-OBJ"
-    assert check.passed and check.category == CATEGORY_RAES_SPECIFICATION
+    assert check.passed
+    assert check.category == CATEGORY_RAES_SPECIFICATION
 
 
 def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
@@ -361,7 +364,8 @@ def test_check_static_prerequisite_blocks_on_static_failure(monkeypatch):
     scenario, check = lgc.check_static_prerequisite(
         SCENARIO, project_dir=PROJECT_ROOT, config=_config(), options=LiveGateOptions()
     )
-    assert scenario is None and not check.passed
+    assert scenario is None
+    assert not check.passed
     assert any("static gate failed" in d for d in check.diagnostics)
 
 
@@ -380,7 +384,8 @@ def test_check_raes_driven_boot_happy_populates_state(monkeypatch):
         options=LiveGateOptions(),
         state=state,
     )
-    assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert state.realization_details["nodes"]
     assert state.selected_profiles == ["dmz", "soc"]
     assert state.snapshot["containers"]
@@ -399,7 +404,8 @@ def test_check_raes_driven_boot_fails_on_interpretation_error(monkeypatch):
         options=LiveGateOptions(),
         state=state,
     )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INTERPRETATION
+    assert not check.passed
+    assert check.category == CATEGORY_BACKEND_INTERPRETATION
 
 
 def test_check_raes_driven_boot_fails_on_empty_realization(monkeypatch):
@@ -426,7 +432,8 @@ def test_check_raes_driven_boot_fails_on_boot_failed(monkeypatch):
         options=LiveGateOptions(),
         state=state,
     )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert not check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
@@ -451,7 +458,8 @@ def test_check_raes_driven_boot_skips_cleanup_and_reboot_when_requested(monkeypa
     # Non-destructive: no clean boot (cleanup+reboot), but the running lab is
     # still snapshotted and the realization matrix is still computed.
     assert boots == []
-    assert check.passed and state.snapshot["containers"]
+    assert check.passed
+    assert state.snapshot["containers"]
 
 
 def test_check_raes_driven_boot_fails_when_clean_boot_fails(monkeypatch):
@@ -474,7 +482,8 @@ def test_check_raes_driven_boot_fails_when_clean_boot_fails(monkeypatch):
         options=LiveGateOptions(),
         state=state,
     )
-    assert not check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert not check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
     assert any("public lab start failed" in d for d in check.diagnostics)
 
 
@@ -514,7 +523,8 @@ def test_boot_inputs_pass_for_default_scenario_and_profile():
     check = lgc.check_boot_inputs_match_public_path(
         SCENARIO, project_dir=PROJECT_ROOT, options=LiveGateOptions()
     )
-    assert check.passed and check.category == CATEGORY_BACKEND_INSTANTIATION
+    assert check.passed
+    assert check.category == CATEGORY_BACKEND_INSTANTIATION
 
 
 def test_boot_inputs_pass_for_custom_scenario_when_profile_matches():
@@ -869,7 +879,8 @@ def test_run_archive_roundtrips_to_local_store(tmp_path):
     assert check.passed
     manifest_path = tmp_path / "rid" / "live-gate" / "manifest.json"
     written = manifest_path.read_text()
-    assert "raes_provenance" in written and "realization" in written
+    assert "raes_provenance" in written
+    assert "realization" in written
     # Regression guard: the validation outcome key must survive the run-archive
     # redaction boundary (a `passed` key would be masked as [REDACTED]).
     reloaded = json.loads(written)

@@ -182,7 +182,8 @@ def test_ambiguous_platform_anchor_fails_before_mutation(tmp_path) -> None:
 
     result = backend._realize_platform_boundary()
 
-    assert result is not None and result.success is False
+    assert result is not None
+    assert result.success is False
     backend.realize_boundary.assert_not_called()
 
 

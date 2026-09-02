@@ -2331,7 +2331,8 @@ class TestResolveHostPortsStep:
 
         notes = " ".join(c.args[0] for c in progress.call_args_list)
         assert "wazuh.dashboard" in notes
-        assert "443" in notes and "20009" in notes
+        assert "443" in notes
+        assert "20009" in notes
 
 
 class TestSeedSuricataVolumesStep:
@@ -4200,16 +4201,15 @@ class TestLabOrchestrationContracts:
         from aptl.core.lab import _step_sync_credentials
 
         ctx = self._ctx(tmp_path)  # env stays None
-        try:
+        with pytest.raises(icontract.ViolationError) as exc_info:
             _step_sync_credentials(ctx)
-            assert False, "expected ViolationError"
-        except icontract.ViolationError as exc:
-            text = str(exc)
-            # The label must be a narrow, attributable string the CLI can
-            # grep for; raw `EnvVars(...)` repr must not appear.
-            assert "EnvVars(" not in text
-            assert "api_password" not in text
-            assert "INDEXER_PASSWORD" not in text
+
+        text = str(exc_info.value)
+        # The label must be a narrow, attributable string the CLI can
+        # grep for; raw `EnvVars(...)` repr must not appear.
+        assert "EnvVars(" not in text
+        assert "api_password" not in text
+        assert "INDEXER_PASSWORD" not in text
 
     def test_violation_with_secret_bearing_ctx_stays_narrow(self, tmp_path):
         """Tougher property (codex cycle 2 finding #1): when a contract
@@ -4242,21 +4242,20 @@ class TestLabOrchestrationContracts:
             # ssh_key_path stays None — triggers the contract.
         )
 
-        try:
+        with pytest.raises(icontract.ViolationError) as exc_info:
             _step_test_ssh(ctx)
-            assert False, "expected ViolationError"
-        except icontract.ViolationError as exc:
-            text = str(exc)
-            # Narrow description survives.
-            assert "ssh_key_is_ready" in text
-            # None of the secret-shaped env values leak.
-            assert "indexer-secret-do-not-leak" not in text
-            assert "api-secret-do-not-leak" not in text
-            assert "cluster-key-do-not-leak" not in text
-            # Nor does any context repr framing.
-            assert "_LabStartContext(" not in text
-            assert "EnvVars(" not in text
-            assert "ctx was" not in text
+
+        text = str(exc_info.value)
+        # Narrow description survives.
+        assert "ssh_key_is_ready" in text
+        # None of the secret-shaped env values leak.
+        assert "indexer-secret-do-not-leak" not in text
+        assert "api-secret-do-not-leak" not in text
+        assert "cluster-key-do-not-leak" not in text
+        # Nor does any context repr framing.
+        assert "_LabStartContext(" not in text
+        assert "EnvVars(" not in text
+        assert "ctx was" not in text
 
 
 class TestOrchestrateLabStartContractMapping:

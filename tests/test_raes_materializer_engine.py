@@ -134,7 +134,8 @@ class TestMaterializeNode:
                 pass  # runs but materializes nothing; observation stays empty
 
         result = materialize_node("techvault.wazuh-manager", ops, _SilentInstall())
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "techvault.wazuh-manager" in (result.error or "")
         assert "wazuh-manager" in (result.error or "")
 
@@ -146,7 +147,8 @@ class TestMaterializeNode:
                 pass  # never becomes active
 
         result = materialize_node("techvault.wazuh-manager", ops, _SilentStart())
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "wazuh-manager.service" in (result.error or "")
 
     def test_backend_error_translates_to_labresult_not_exception(self):
@@ -158,7 +160,8 @@ class TestMaterializeNode:
 
         # No exception escapes; a fail-closed LabResult naming the node is returned.
         result = materialize_node("techvault.wazuh-manager", ops, _Broken())
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "techvault.wazuh-manager" in (result.error or "")
         # The raw internal detail is not echoed verbatim into the envelope.
         assert "hunter2" not in (result.error or "")
@@ -200,7 +203,8 @@ class TestMaterializeNode:
                 pass  # runs but materializes nothing
 
         result = materialize_node("techvault.dns", ops, _SilentDirectory())
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "/var/log/named" in (result.error or "")
 
     def test_dependency_manifest_is_materialized_and_verified(self):
@@ -232,7 +236,8 @@ class TestMaterializeNode:
                 pass  # runs but materializes nothing
 
         result = materialize_node("techvault.sync", ops, _SilentInstall())
-        assert result is not None and result.success is False
+        assert result is not None
+        assert result.success is False
         assert "/app/pyproject.toml" in (result.error or "")
 
     def test_empty_runtime_only_needs_base_substrate(self):

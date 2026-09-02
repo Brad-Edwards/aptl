@@ -189,7 +189,8 @@ def test_variant_selection_is_content_driven_not_name_driven(variant: _Variant):
         scenario=renamed, project_dir=PROJECT_ROOT, config=variant.config
     )
 
-    assert original_check.passed and renamed_check.passed
+    assert original_check.passed
+    assert renamed_check.passed
     assert original_details.get("profiles") == renamed_details.get("profiles")
     assert frozenset(original_details.get("profiles", [])) == variant.expected_profiles
 
